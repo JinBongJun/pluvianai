@@ -29,7 +29,21 @@ export default function LoginPage() {
         router.push('/dashboard');
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'An error occurred');
+      console.error('Login error:', err);
+      let errorMessage = 'An error occurred';
+      
+      if (err.response) {
+        // Server responded with error
+        errorMessage = err.response.data?.detail || err.response.data?.message || `Server error: ${err.response.status}`;
+      } else if (err.request) {
+        // Request was made but no response received
+        errorMessage = 'Cannot connect to server. Please check if the backend is running.';
+      } else {
+        // Something else happened
+        errorMessage = err.message || 'An unexpected error occurred';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
