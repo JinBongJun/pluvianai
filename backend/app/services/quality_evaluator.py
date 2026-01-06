@@ -58,9 +58,15 @@ class QualityEvaluator:
         
         # LLM-based evaluations (simplified for MVP)
         # In production, these would use actual LLM calls
-        semantic_consistency_score = self._evaluate_semantic_consistency(response_text)
-        tone_score = self._evaluate_tone(response_text)
-        coherence_score = self._evaluate_coherence(response_text)
+        # Only calculate if advanced features are enabled
+        if use_advanced:
+            semantic_consistency_score = self._evaluate_semantic_consistency(response_text)
+            tone_score = self._evaluate_tone(response_text)
+            coherence_score = self._evaluate_coherence(response_text)
+        else:
+            semantic_consistency_score = None
+            tone_score = None
+            coherence_score = None
         
         # Calculate overall score (weighted average)
         llm_scores = [
@@ -209,7 +215,8 @@ class QualityEvaluator:
         api_calls: List[APICall],
         expected_schema: Optional[Dict[str, Any]] = None,
         required_fields: Optional[List[str]] = None,
-        db: Optional[Session] = None
+        db: Optional[Session] = None,
+        use_advanced: bool = True
     ) -> List[QualityScore]:
         """
         Evaluate multiple API calls in batch
@@ -219,7 +226,7 @@ class QualityEvaluator:
         """
         scores = []
         for api_call in api_calls:
-            score = self.evaluate(api_call, expected_schema, required_fields)
+            score = self.evaluate(api_call, expected_schema, required_fields, use_advanced)
             scores.append(score)
             
             # Save to database if session provided

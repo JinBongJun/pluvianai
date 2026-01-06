@@ -14,6 +14,7 @@ from app.models.user import User
 from app.models.project import Project
 from app.models.drift_detection import DriftDetection
 from app.services.drift_engine import DriftEngine
+from app.services.subscription_service import SubscriptionService
 
 router = APIRouter()
 
@@ -54,6 +55,15 @@ async def detect_drift(
     """Detect drift for a project"""
     # Verify project access (any member can detect drift)
     project = check_project_access(project_id, current_user, db)
+    
+    # Check drift detection level (basic is always available, enhanced requires Startup+)
+    subscription_service = SubscriptionService(db)
+    plan_info = subscription_service.get_user_plan(project.owner_id)
+    drift_level = plan_info["features"].get("drift_detection", "basic")
+    
+    # Basic drift (length/format) is always available
+    # Enhanced drift (semantic/tone) requires Startup plan or higher
+    # For now, all drift detection is available, but we can restrict enhanced features later
     
     # Detect drift
     detections = drift_engine.detect_drift(

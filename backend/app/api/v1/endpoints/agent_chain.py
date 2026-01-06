@@ -10,6 +10,7 @@ from app.core.permissions import check_project_access
 from app.models.user import User
 from app.models.project import Project
 from app.services.agent_chain_profiler import AgentChainProfiler
+from app.services.subscription_service import SubscriptionService
 
 router = APIRouter()
 
@@ -27,6 +28,14 @@ async def profile_chain(
     """Profile agent chains"""
     # Verify project access (any member can view agent chains)
     project = check_project_access(project_id, current_user, db)
+    
+    # Check feature access (Agent Chain Profiler requires Pro plan or higher)
+    subscription_service = SubscriptionService(db)
+    if not subscription_service.check_feature_access(project.owner_id, "agent_chain_profiler"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Agent Chain Profiler requires Pro plan or higher. Please upgrade your subscription."
+        )
     
     # Profile chains
     profile = profiler.profile_chain(
@@ -49,6 +58,14 @@ async def get_agent_statistics(
     """Get statistics for all agents"""
     # Verify project access (any member can view agent chains)
     project = check_project_access(project_id, current_user, db)
+    
+    # Check feature access (Agent Chain Profiler requires Pro plan or higher)
+    subscription_service = SubscriptionService(db)
+    if not subscription_service.check_feature_access(project.owner_id, "agent_chain_profiler"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Agent Chain Profiler requires Pro plan or higher. Please upgrade your subscription."
+        )
     
     # Get agent statistics
     stats = profiler.get_agent_statistics(

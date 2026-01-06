@@ -92,6 +92,26 @@ class BackgroundTaskService:
                 chain_id=chain_id
             )
             db.add(api_call)
+            db.flush()  # Flush to get api_call.id if needed
+            
+            # Track usage for subscription limits
+            try:
+                from app.models.project import Project
+                from app.services.subscription_service import SubscriptionService
+                
+                project = db.query(Project).filter(Project.id == project_id).first()
+                if project:
+                    subscription_service = SubscriptionService(db)
+                    subscription_service.increment_usage(
+                        user_id=project.owner_id,
+                        metric_type="api_calls",
+                        amount=1,
+                        project_id=project_id
+                    )
+            except Exception as e:
+                # Log error but don't fail the API call save
+                print(f"Error tracking usage: {e}")
+            
             db.commit()
         except Exception as e:
             db.rollback()

@@ -11,6 +11,7 @@ from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole
 from app.core.logging_config import logger
 from app.services.cache_service import cache_service
+from app.middleware.usage_middleware import check_team_member_limit
 from app.models.user import User
 from app.models.project import Project
 from app.models.project_member import ProjectMember
@@ -96,6 +97,14 @@ async def add_project_member(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User is already the project owner"
+        )
+    
+    # Check team member limit
+    can_add, error_msg = check_team_member_limit(current_user.id, project_id, db)
+    if not can_add:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error_msg or "Team member limit reached. Please upgrade your plan."
         )
     
     # Check if user is already a member

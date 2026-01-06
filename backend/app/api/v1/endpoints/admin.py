@@ -20,7 +20,7 @@ async def init_database(db: Session = Depends(get_db)):
         # Import all models to ensure they are registered
         from app.models import (
             User, Project, ProjectMember, APIKey, APICall,
-            QualityScore, DriftDetection, Alert
+            QualityScore, DriftDetection, Alert, Subscription, Usage
         )
         
         # Create all tables
@@ -31,7 +31,8 @@ async def init_database(db: Session = Depends(get_db)):
             "message": "Database initialized successfully",
             "tables_created": [
                 "users", "projects", "project_members", "api_keys",
-                "api_calls", "quality_scores", "drift_detections", "alerts"
+                "api_calls", "quality_scores", "drift_detections", "alerts",
+                "subscriptions", "usage"
             ]
         }
     except Exception as e:

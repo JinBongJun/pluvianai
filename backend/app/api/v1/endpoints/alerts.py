@@ -13,6 +13,7 @@ from app.models.user import User
 from app.models.project import Project
 from app.models.alert import Alert
 from app.services.alert_service import AlertService
+from app.services.subscription_service import SubscriptionService
 
 router = APIRouter()
 alert_service = AlertService()
@@ -81,17 +82,27 @@ async def send_alert(
             detail="Alert not found"
         )
     
-    # Verify project ownership
-    project = db.query(Project).filter(
-        Project.id == alert.project_id,
-        Project.owner_id == current_user.id
-    ).first()
+    # Verify project access
+    project = check_project_access(alert.project_id, current_user, db)
     
-    if not project:
+    # Check alert feature access
+    subscription_service = SubscriptionService(db)
+    plan_info = subscription_service.get_user_plan(project.owner_id)
+    alerts_feature = plan_info["features"].get("alerts", False)
+    
+    if not alerts_feature:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
+            detail="Alerts are not available on your current plan. Please upgrade to Indie plan or higher."
         )
+    
+    # Check channel access (Indie: email only, Startup+: full)
+    if channels:
+        if alerts_feature == "email" and any(ch not in ["email"] for ch in channels):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Slack/Discord alerts require Startup plan or higher. Indie plan supports email only."
+            )
     
     # Send alert
     results = await alert_service.send_alert(alert, channels)

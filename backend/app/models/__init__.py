@@ -9,6 +9,8 @@ from app.models.api_call import APICall
 from app.models.quality_score import QualityScore
 from app.models.drift_detection import DriftDetection
 from app.models.alert import Alert
+from app.models.subscription import Subscription
+from app.models.usage import Usage
 
 __all__ = [
     "User",
@@ -19,6 +21,8 @@ __all__ = [
     "QualityScore",
     "DriftDetection",
     "Alert",
+    "Subscription",
+    "Usage",
 ]
 
 

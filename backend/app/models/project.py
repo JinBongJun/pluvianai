@@ -26,6 +26,7 @@ class Project(Base):
     quality_scores = relationship("QualityScore", back_populates="project", cascade="all, delete-orphan")
     drift_detections = relationship("DriftDetection", back_populates="project", cascade="all, delete-orphan")
     alerts = relationship("Alert", back_populates="project", cascade="all, delete-orphan")
+    usage_records = relationship("Usage", back_populates="project", cascade="all, delete-orphan")
 
 
 

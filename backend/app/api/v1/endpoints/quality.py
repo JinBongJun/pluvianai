@@ -15,6 +15,7 @@ from app.models.project import Project
 from app.models.quality_score import QualityScore
 from app.models.api_call import APICall
 from app.services.quality_evaluator import QualityEvaluator
+from app.services.subscription_service import SubscriptionService
 
 router = APIRouter()
 
@@ -66,6 +67,16 @@ async def evaluate_quality(
     # Verify project access (any member can evaluate)
     project = check_project_access(project_id, current_user, db)
     
+    # Check if advanced quality checks are available
+    subscription_service = SubscriptionService(db)
+    use_advanced = subscription_service.check_feature_access(
+        project.owner_id, 
+        "quality_checks"
+    )
+    # Advanced quality checks require "advanced" level, basic checks are always available
+    plan_info = subscription_service.get_user_plan(project.owner_id)
+    use_advanced = plan_info["features"].get("quality_checks") == "advanced"
+    
     # Get API calls to evaluate
     if request.api_call_ids:
         api_calls = db.query(APICall).filter(
@@ -89,7 +100,8 @@ async def evaluate_quality(
         api_calls,
         expected_schema=request.expected_schema,
         required_fields=request.required_fields,
-        db=db
+        db=db,
+        use_advanced=use_advanced
     )
     
     return scores

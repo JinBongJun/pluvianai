@@ -11,6 +11,7 @@ from app.core.permissions import check_project_access
 from app.models.user import User
 from app.models.project import Project
 from app.services.benchmark_service import BenchmarkService
+from app.services.subscription_service import SubscriptionService
 
 router = APIRouter()
 
@@ -47,6 +48,14 @@ async def compare_models(
     """Compare models across multiple dimensions"""
     # Verify project access (any member can view benchmarks)
     project = check_project_access(project_id, current_user, db)
+    
+    # Check feature access (multi-model comparison requires Startup plan or higher)
+    subscription_service = SubscriptionService(db)
+    if not subscription_service.check_feature_access(project.owner_id, "multi_model_comparison"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Multi-model comparison requires Startup plan or higher. Please upgrade your subscription."
+        )
     
     # Compare models
     comparisons = benchmark_service.compare_models(

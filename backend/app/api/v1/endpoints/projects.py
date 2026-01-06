@@ -12,6 +12,7 @@ from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole, get_user_project_role
 from app.core.logging_config import logger
 from app.services.cache_service import cache_service
+from app.middleware.usage_middleware import check_project_limit
 from app.models.user import User
 from app.models.project import Project
 from app.models.project_member import ProjectMember
@@ -52,6 +53,14 @@ async def create_project(
 ):
     """Create a new project"""
     logger.info(f"Creating project: {project_data.name}", extra={"user_id": current_user.id})
+    
+    # Check project limit
+    can_create, error_msg = check_project_limit(current_user.id, db)
+    if not can_create:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error_msg or "Project limit reached. Please upgrade your plan."
+        )
     
     # Check for duplicate project name (same owner)
     existing = db.query(Project).filter(

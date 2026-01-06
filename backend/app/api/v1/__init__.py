@@ -2,7 +2,7 @@
 API v1 router
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, projects, project_members, api_calls, quality, drift, alerts, proxy, cost, benchmark, agent_chain, archive, admin
+from app.api.v1.endpoints import auth, projects, project_members, api_calls, quality, drift, alerts, proxy, cost, benchmark, agent_chain, archive, admin, subscription
 
 api_router = APIRouter()
 
@@ -19,4 +19,5 @@ api_router.include_router(benchmark.router, prefix="/benchmark", tags=["benchmar
 api_router.include_router(agent_chain.router, prefix="/agent-chain", tags=["agent-chain"])
 api_router.include_router(archive.router, prefix="/archive", tags=["archive"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
+api_router.include_router(subscription.router, prefix="/subscription", tags=["subscription"])
 

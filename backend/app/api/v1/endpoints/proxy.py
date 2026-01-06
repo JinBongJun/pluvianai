@@ -2,9 +2,14 @@
 Proxy endpoints for forwarding LLM API requests
 """
 import httpx
-from fastapi import APIRouter, Request, Response, HTTPException, status, Header
+from fastapi import APIRouter, Request, Response, HTTPException, status, Header, Depends
 from typing import Optional
+from sqlalchemy.orm import Session
 from app.core.config import settings
+from app.core.database import get_db
+from app.models.project import Project
+from app.services.subscription_service import SubscriptionService
+from app.middleware.usage_middleware import check_api_call_limit
 
 router = APIRouter()
 
@@ -24,6 +29,7 @@ async def proxy_request(
     x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
     x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
     x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
+    db: Session = Depends(get_db)
 ):
     """
     Proxy LLM API requests to the actual provider
@@ -36,6 +42,23 @@ async def proxy_request(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported provider: {provider}"
         )
+    
+    # Check usage limit if project ID is provided
+    if x_project_id:
+        try:
+            project_id = int(x_project_id)
+            project = db.query(Project).filter(Project.id == project_id).first()
+            if project:
+                # Check API call limit before processing
+                can_make_call, error_msg = check_api_call_limit(project.owner_id, db)
+                if not can_make_call:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=error_msg or "API call limit exceeded. Please upgrade your plan."
+                    )
+        except (ValueError, TypeError):
+            # Invalid project ID, continue without limit check
+            pass
     
     # Build target URL
     base_url = PROVIDER_URLS[provider]
