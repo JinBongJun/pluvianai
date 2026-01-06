@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { projectsAPI, qualityAPI, costAPI, apiCallsAPI, projectMembersAPI } from '@/lib/api';
+import { projectsAPI, qualityAPI, costAPI, apiCallsAPI } from '@/lib/api';
 import QualityChart from '@/components/QualityChart';
 import DriftChart from '@/components/DriftChart';
 import StatsCard from '@/components/StatsCard';
 import MemberList from '@/components/MemberList';
 import ProjectSettings from '@/components/ProjectSettings';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import { clsx } from 'clsx';
 
 export default function ProjectDetailPage() {
   const router = useRouter();
@@ -33,11 +35,10 @@ export default function ProjectDetailPage() {
 
   const loadProjectData = async () => {
     try {
-      const [projectData, qualityStats, costAnalysis, apiCalls] = await Promise.all([
+      const [projectData, qualityStats, costAnalysis] = await Promise.all([
         projectsAPI.get(projectId),
         qualityAPI.getStats(projectId, 7),
         costAPI.getAnalysis(projectId, 7),
-        apiCallsAPI.list(projectId, { limit: 1 }),
       ]);
 
       setProject(projectData);
@@ -57,75 +58,61 @@ export default function ProjectDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
+        </div>
+      </DashboardLayout>
     );
   }
 
   const canManage = userRole === 'owner' || userRole === 'admin';
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="text-sm text-gray-600 hover:text-gray-900 mb-2"
-              >
-                ← Back to Dashboard
-              </button>
-              <h1 className="text-2xl font-bold text-gray-900">{project?.name}</h1>
-            </div>
-            <button
-              onClick={() => {
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                router.push('/login');
-              }}
-              className="text-sm text-gray-600 hover:text-gray-900"
-            >
-              Logout
-            </button>
-          </div>
+    <DashboardLayout>
+      <div>
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">{project?.name}</h1>
+          {project?.description && (
+            <p className="text-gray-600 mt-2">{project.description}</p>
+          )}
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Tabs */}
         <div className="border-b border-gray-200 mb-6">
           <nav className="-mb-px flex space-x-8">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              className={clsx(
+                'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
                 activeTab === 'overview'
-                  ? 'border-blue-500 text-blue-600'
+                  ? 'border-black text-gray-900'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              )}
             >
               Overview
             </button>
             <button
               onClick={() => setActiveTab('members')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              className={clsx(
+                'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
                 activeTab === 'members'
-                  ? 'border-blue-500 text-blue-600'
+                  ? 'border-black text-gray-900'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              )}
             >
               Team Members
             </button>
             {canManage && (
               <button
                 onClick={() => setActiveTab('settings')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                className={clsx(
+                  'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
                   activeTab === 'settings'
-                    ? 'border-blue-500 text-blue-600'
+                    ? 'border-black text-gray-900'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                )}
               >
                 Settings
               </button>
@@ -161,12 +148,12 @@ export default function ProjectDetailPage() {
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg shadow p-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Quality Scores</h2>
                 <QualityChart projectId={projectId} />
               </div>
 
-              <div className="bg-white rounded-lg shadow p-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Drift Detections</h2>
                 <DriftChart projectId={projectId} />
               </div>
@@ -175,16 +162,17 @@ export default function ProjectDetailPage() {
         )}
 
         {activeTab === 'members' && (
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <MemberList projectId={projectId} canManage={canManage} />
           </div>
         )}
 
         {activeTab === 'settings' && canManage && (
-          <ProjectSettings projectId={projectId} project={project} onUpdate={loadProjectData} />
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <ProjectSettings projectId={projectId} project={project} onUpdate={loadProjectData} />
+          </div>
         )}
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }
-
