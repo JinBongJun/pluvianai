@@ -52,32 +52,18 @@ app.add_exception_handler(Exception, general_exception_handler)
 app.add_middleware(LoggingMiddleware)
 
 # CORS middleware
-# Always allow all origins for maximum compatibility with Vercel deployments
-# Vercel creates unique preview URLs for each deployment, making it impractical
-# to whitelist specific origins. In production, consider using a reverse proxy
-# or API gateway if stricter CORS control is needed.
-# Note: Railway environment variable CORS_ORIGINS is ignored to ensure compatibility
-cors_origins = settings.cors_origins_list
-if cors_origins == ["*"] or not cors_origins:
-    # Allow all origins (default behavior)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,  # Cannot use credentials with wildcard
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["*"],
-        expose_headers=["*"],
-    )
-else:
-    # Use specific origins if configured (for stricter security)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors_origins,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["*"],
-        expose_headers=["*"],
-    )
+# CRITICAL: Always allow all origins to support Vercel preview deployments
+# Vercel creates unique preview URLs for each deployment (e.g., agent-guard-xxx.vercel.app)
+# Railway environment variable CORS_ORIGINS is IGNORED - we hardcode "*" to ensure compatibility
+# In production, if stricter CORS is needed, use a reverse proxy or API gateway
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Hardcoded to always allow all origins
+    allow_credentials=False,  # Cannot use credentials with wildcard
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
 
 # Gzip compression middleware (reduce bandwidth)
 app.add_middleware(GZipMiddleware)
