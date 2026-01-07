@@ -93,7 +93,7 @@ export default function APICallDetailPage() {
     } else if (apiCall.status_code >= 400 && apiCall.status_code < 500) {
       return <Badge variant="warning">Client Error</Badge>;
     } else if (apiCall.status_code >= 500) {
-      return <Badge variant="danger">Server Error</Badge>;
+      return <Badge variant="error">Server Error</Badge>;
     } else {
       return <Badge variant="default">{apiCall.status_code}</Badge>;
     }

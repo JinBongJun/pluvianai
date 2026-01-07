@@ -140,7 +140,7 @@ export default function APICallsListPage() {
     } else if (statusCode >= 400 && statusCode < 500) {
       return <Badge variant="warning">Client Error</Badge>;
     } else {
-      return <Badge variant="danger">Server Error</Badge>;
+      return <Badge variant="error">Server Error</Badge>;
     }
   };
 

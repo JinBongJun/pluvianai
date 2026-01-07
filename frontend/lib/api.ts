@@ -251,6 +251,23 @@ export const alertsAPI = {
   },
 };
 
+// Benchmark API
+export const benchmarkAPI = {
+  compareModels: async (projectId: number, days: number = 7) => {
+    const response = await apiClient.get('/benchmark/compare', {
+      params: { project_id: projectId, days },
+    });
+    return response.data;
+  },
+  
+  getRecommendations: async (projectId: number, days: number = 7) => {
+    const response = await apiClient.get('/benchmark/recommendations', {
+      params: { project_id: projectId, days },
+    });
+    return response.data;
+  },
+};
+
 // Cost API
 export const costAPI = {
   getAnalysis: async (projectId: number, days: number = 7) => {
