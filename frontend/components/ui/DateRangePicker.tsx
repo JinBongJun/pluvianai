@@ -5,10 +5,15 @@ import { Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import Button from './Button';
 
+type Preset = {
+  label: string;
+  getRange: () => { from: Date; to: Date };
+};
+
 interface DateRangePickerProps {
   value?: { from: Date | null; to: Date | null };
   onChange: (range: { from: Date | null; to: Date | null }) => void;
-  presets?: Array<{ label: string; from: Date; to: Date }>;
+  presets?: Preset[];
   className?: string;
 }
 
@@ -154,7 +159,7 @@ export default function DateRangePicker({
     onChange({ from: null, to: null });
   };
 
-  const handlePreset = (preset: typeof defaultPresets[0]) => {
+  const handlePreset = (preset: Preset) => {
     const range = preset.getRange();
     setTempFrom(range.from);
     setTempTo(range.to);
