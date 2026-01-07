@@ -113,10 +113,10 @@ export default function NotificationCenter() {
     setIsOpen(false);
   };
 
-  const getSeverityColor = (severity: string) => {
+  const getSeverityColor = (severity: string): 'error' | 'warning' | 'default' => {
     switch (severity) {
       case 'critical':
-        return 'danger';
+        return 'error';
       case 'high':
         return 'warning';
       default:
