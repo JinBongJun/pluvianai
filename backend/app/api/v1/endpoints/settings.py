@@ -52,6 +52,11 @@ class APIKeyCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="API key name/description")
 
 
+class APIKeyUpdate(BaseModel):
+    """API key update schema"""
+    name: str = Field(..., min_length=1, max_length=100, description="New name for the API key")
+
+
 class APIKeyResponse(BaseModel):
     """API key response schema"""
     id: int
@@ -305,7 +310,7 @@ async def delete_api_key(
 @router.patch("/api-keys/{key_id}", response_model=APIKeyResponse)
 async def update_api_key(
     key_id: int,
-    name: str = Field(..., min_length=1, max_length=100),
+    update_data: APIKeyUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
