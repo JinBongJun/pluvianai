@@ -31,33 +31,86 @@ export default function ProjectDetailPage() {
       return;
     }
 
+    // Validate projectId
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      console.error('Invalid project ID:', params.projectId);
+      router.push('/dashboard');
+      return;
+    }
+
     loadProjectData();
   }, [projectId, router]);
 
   const loadProjectData = async () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/973f1af9-b9db-4390-8449-a237ac30d6a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:37',message:'loadProjectData entry',data:{projectId,projectIdType:typeof projectId},timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
+    // #endregion
     try {
-      const [projectData, qualityStats, costAnalysis, apiCallStats] = await Promise.all([
-        projectsAPI.get(projectId),
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/973f1af9-b9db-4390-8449-a237ac30d6a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:39',message:'Before Promise.all',data:{projectId},timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
+      // #endregion
+      
+      // Load data sequentially to better handle errors
+      const projectData = await projectsAPI.get(projectId);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/973f1af9-b9db-4390-8449-a237ac30d6a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:43',message:'After projectData',data:{projectData:!!projectData},timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
+      // #endregion
+      
+      // Load stats in parallel (with error handling for each)
+      const [qualityStats, costAnalysis, apiCallStats] = await Promise.allSettled([
         qualityAPI.getStats(projectId, 7),
         costAPI.getAnalysis(projectId, 7),
         apiCallsAPI.getStats(projectId, 7),
       ]);
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/973f1af9-b9db-4390-8449-a237ac30d6a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:50',message:'After Promise.allSettled',data:{qualityStats_status:qualityStats.status,costAnalysis_status:costAnalysis.status,apiCallStats_status:apiCallStats.status},timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
+      // #endregion
 
       setProject(projectData);
+      
+      // Handle stats results (use defaults if failed)
+      const qualityStatsData = qualityStats.status === 'fulfilled' ? qualityStats.value : null;
+      const costAnalysisData = costAnalysis.status === 'fulfilled' ? costAnalysis.value : null;
+      const apiCallStatsData = apiCallStats.status === 'fulfilled' ? apiCallStats.value : null;
+      
+      // Log individual errors
+      if (qualityStats.status === 'rejected') {
+        console.warn('Failed to load quality stats:', qualityStats.reason);
+      }
+      if (costAnalysis.status === 'rejected') {
+        console.warn('Failed to load cost analysis:', costAnalysis.reason);
+      }
+      if (apiCallStats.status === 'rejected') {
+        console.warn('Failed to load API call stats:', apiCallStats.reason);
+      }
+      
       // Merge quality stats with API call stats for success rate
       setStats({
-        ...qualityStats,
-        total_calls: apiCallStats.total_calls,
-        success_rate: apiCallStats.success_rate,
+        ...(qualityStatsData || {}),
+        total_calls: apiCallStatsData?.total_calls || 0,
+        success_rate: apiCallStatsData?.success_rate || 0,
       });
-      setCostData(costAnalysis);
+      setCostData(costAnalysisData || { total_cost: 0, by_model: {}, by_provider: {}, by_day: [], average_daily_cost: 0 });
       
       // Determine user role
       const role = projectData.role || 'viewer';
       setUserRole(role);
-    } catch (error) {
+    } catch (error: any) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/973f1af9-b9db-4390-8449-a237ac30d6a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:75',message:'loadProjectData error',data:{error_message:error?.message,error_status:error?.response?.status,error_data:error?.response?.data,error_response:JSON.stringify(error?.response?.data)},timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
+      // #endregion
       console.error('Failed to load project data:', error);
-      router.push('/dashboard');
+      if (error?.response?.status === 404) {
+        // Project not found, redirect to dashboard
+        router.push('/dashboard');
+      } else if (error?.response?.status === 403) {
+        // Access denied
+        router.push('/dashboard');
+      } else {
+        // Other errors - still show page but with error state
+        setLoading(false);
+      }
     } finally {
       setLoading(false);
     }

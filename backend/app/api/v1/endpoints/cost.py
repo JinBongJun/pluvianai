@@ -50,6 +50,14 @@ async def get_cost_analysis(
     db: Session = Depends(get_db)
 ):
     """Get cost analysis for a project"""
+    # #region agent log
+    import json
+    try:
+        with open('c:\\Users\\user\\Desktop\\AgentGuard\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"H1.3","location":"cost.py:45","message":"get_cost_analysis entry","data":{"project_id":project_id,"days":days,"user_id":current_user.id},"timestamp":int(__import__('time').time()*1000)})+'\n')
+    except: pass
+    # #endregion
+    
     # Verify project access (any member can view cost)
     project = check_project_access(project_id, current_user, db)
     
@@ -57,15 +65,47 @@ async def get_cost_analysis(
     end_date = datetime.utcnow()
     start_date = end_date - timedelta(days=days)
     
-    # Analyze costs
-    analysis = cost_analyzer.analyze_project_costs(
-        project_id=project_id,
-        start_date=start_date,
-        end_date=end_date,
-        db=db
-    )
+    # #region agent log
+    try:
+        with open('c:\\Users\\user\\Desktop\\AgentGuard\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"H1.1","location":"cost.py:58","message":"Before analyze_project_costs","data":{"start_date":start_date.isoformat(),"end_date":end_date.isoformat()},"timestamp":int(__import__('time').time()*1000)})+'\n')
+    except: pass
+    # #endregion
     
-    return analysis
+    try:
+        # Analyze costs
+        analysis = cost_analyzer.analyze_project_costs(
+            project_id=project_id,
+            start_date=start_date,
+            end_date=end_date,
+            db=db
+        )
+        # #region agent log
+        try:
+            with open('c:\\Users\\user\\Desktop\\AgentGuard\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"H1.1","location":"cost.py:70","message":"After analyze_project_costs success","data":{"total_cost":analysis.total_cost if analysis else None},"timestamp":int(__import__('time').time()*1000)})+'\n')
+        except: pass
+        # #endregion
+        return analysis
+    except Exception as e:
+        # #region agent log
+        try:
+            with open('c:\\Users\\user\\Desktop\\AgentGuard\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"H1.1","location":"cost.py:75","message":"analyze_project_costs error","data":{"error_type":type(e).__name__,"error_message":str(e)},"timestamp":int(__import__('time').time()*1000)})+'\n')
+        except: pass
+        # #endregion
+        # Return empty analysis on error instead of raising exception
+        from app.core.logging_config import logger
+        logger.error(f"Error analyzing costs for project {project_id}: {str(e)}")
+        return CostAnalysisResponse(
+            total_cost=0.0,
+            by_model={},
+            by_provider={},
+            by_day=[],
+            average_daily_cost=0.0,
+            period_start=start_date,
+            period_end=end_date
+        )
 
 
 @router.post("/detect-anomalies")
