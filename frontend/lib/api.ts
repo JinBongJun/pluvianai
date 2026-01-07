@@ -110,10 +110,11 @@ export const projectsAPI = {
     return response.data;
   },
   
-  create: async (name: string, description?: string) => {
+  create: async (data: { name: string; description?: string; generate_sample_data?: boolean }) => {
     const response = await apiClient.post('/projects', {
-      name,
-      description,
+      name: data.name,
+      description: data.description,
+      generate_sample_data: data.generate_sample_data,
     });
     return response.data;
   },

@@ -61,7 +61,10 @@ export default function DashboardPage() {
     }
 
     try {
-      await projectsAPI.create(newProjectName, newProjectDescription || undefined);
+      await projectsAPI.create({
+        name: newProjectName,
+        description: newProjectDescription || undefined,
+      });
       setNewProjectName('');
       setNewProjectDescription('');
       setShowCreateModal(false);
