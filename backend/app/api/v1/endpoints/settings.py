@@ -41,6 +41,11 @@ class PasswordChange(BaseModel):
     new_password: str = Field(..., min_length=8, max_length=72, description="New password (8-72 characters)")
 
 
+class AccountDelete(BaseModel):
+    """Account deletion schema"""
+    password: str = Field(..., description="Password confirmation for account deletion")
+
+
 # API Key Schemas
 class APIKeyCreate(BaseModel):
     """API key creation schema"""
@@ -139,13 +144,13 @@ async def update_profile(
 
 @router.delete("/profile", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_account(
-    password: str = Field(..., description="Password confirmation"),
+    delete_data: AccountDelete,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Delete user account (requires password confirmation)"""
     # Verify password
-    if not verify_password(password, current_user.hashed_password):
+    if not verify_password(delete_data.password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect password"
@@ -316,7 +321,7 @@ async def update_api_key(
             detail="API key not found"
         )
     
-    api_key.name = name
+    api_key.name = update_data.name
     
     try:
         db.commit()
