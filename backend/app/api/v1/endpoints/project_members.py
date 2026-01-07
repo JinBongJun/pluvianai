@@ -12,6 +12,7 @@ from app.core.permissions import check_project_access, ProjectRole
 from app.core.logging_config import logger
 from app.services.cache_service import cache_service
 from app.middleware.usage_middleware import check_team_member_limit
+from app.services.activity_logger import activity_logger
 from app.models.user import User
 from app.models.project import Project
 from app.models.project_member import ProjectMember
@@ -134,6 +135,17 @@ async def add_project_member(
         cache_service.invalidate_project_cache(project_id)
         cache_service.invalidate_user_projects_cache(user.id)
         cache_service.invalidate_user_projects_cache(current_user.id)
+        
+        # Log activity
+        activity_logger.log_activity(
+            db=db,
+            user_id=current_user.id,
+            activity_type="member_add",
+            action=f"Added member: {user.email}",
+            description=f"Added {user.email} as {member_data.role} to project",
+            project_id=project_id,
+            activity_data={"member_email": user.email, "role": member_data.role.value, "project_id": project_id}
+        )
         
         logger.info(f"Member added successfully: {user.email} to project {project_id}")
     except Exception as e:
@@ -264,6 +276,17 @@ async def update_project_member_role(
         # Invalidate cache
         cache_service.invalidate_project_cache(project_id)
         
+        # Log activity
+        activity_logger.log_activity(
+            db=db,
+            user_id=current_user.id,
+            activity_type="member_update",
+            action=f"Updated member role: {user.email if user else user_id}",
+            description=f"Changed role to {member_data.role.value}",
+            project_id=project_id,
+            activity_data={"member_user_id": user_id, "new_role": member_data.role.value, "project_id": project_id}
+        )
+        
         logger.info(f"Member role updated successfully: user {user_id} in project {project_id}")
     except Exception as e:
         db.rollback()
@@ -320,8 +343,22 @@ async def remove_project_member(
             detail="Member not found"
         )
     
+    # Get user info before deletion
+    user = db.query(User).filter(User.id == user_id).first()
+    
     db.delete(member)
     db.commit()
+    
+    # Log activity
+    activity_logger.log_activity(
+        db=db,
+        user_id=current_user.id,
+        activity_type="member_remove",
+        action=f"Removed member: {user.email if user else user_id}",
+        description=f"Removed member from project",
+        project_id=project_id,
+        activity_data={"member_user_id": user_id, "member_email": user.email if user else None, "project_id": project_id}
+    )
     
     # Invalidate cache
     cache_service.invalidate_project_cache(project_id)

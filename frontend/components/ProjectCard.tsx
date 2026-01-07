@@ -39,3 +39,4 @@ export default function ProjectCard({ project, onClick, isSelected }: ProjectCar
   );
 }
 
+

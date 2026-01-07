@@ -28,3 +28,4 @@ class ProjectMember(Base):
         Index('idx_project_member', 'project_id', 'user_id'),
     )
 
+

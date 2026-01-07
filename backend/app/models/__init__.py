@@ -11,6 +11,8 @@ from app.models.drift_detection import DriftDetection
 from app.models.alert import Alert
 from app.models.subscription import Subscription
 from app.models.usage import Usage
+from app.models.activity_log import ActivityLog
+from app.models.webhook import Webhook
 
 __all__ = [
     "User",
@@ -23,6 +25,8 @@ __all__ = [
     "Alert",
     "Subscription",
     "Usage",
+    "ActivityLog",
+    "Webhook",
 ]
 
 

@@ -32,3 +32,4 @@ class Usage(Base):
         Index('idx_usage_project_metric', 'project_id', 'metric_type', 'period_start'),
     )
 
+

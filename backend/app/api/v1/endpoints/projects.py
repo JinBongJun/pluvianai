@@ -13,6 +13,7 @@ from app.core.permissions import check_project_access, ProjectRole, get_user_pro
 from app.core.logging_config import logger
 from app.services.cache_service import cache_service
 from app.middleware.usage_middleware import check_project_limit
+from app.services.activity_logger import activity_logger
 from app.models.user import User
 from app.models.project import Project
 from app.models.project_member import ProjectMember
@@ -89,6 +90,17 @@ async def create_project(
         
         # Invalidate user's project list cache
         cache_service.invalidate_user_projects_cache(current_user.id)
+        
+        # Log activity
+        activity_logger.log_activity(
+            db=db,
+            user_id=current_user.id,
+            activity_type="project_create",
+            action=f"Created project: {project.name}",
+            description=f"Created new project '{project.name}'",
+            project_id=project.id,
+            activity_data={"project_name": project.name, "project_id": project.id}
+        )
         
         logger.info(f"Project created successfully: {project.id}")
         return project
@@ -233,6 +245,17 @@ async def update_project(
         cache_service.invalidate_project_cache(project_id)
         cache_service.invalidate_user_projects_cache(current_user.id)
         
+        # Log activity
+        activity_logger.log_activity(
+            db=db,
+            user_id=current_user.id,
+            activity_type="project_update",
+            action=f"Updated project: {project.name}",
+            description=f"Updated project '{project.name}'",
+            project_id=project_id,
+            activity_data={"project_name": project.name, "project_id": project_id, "changes": project_data.dict(exclude_unset=True)}
+        )
+        
         role = get_user_project_role(project_id, current_user.id, db)
         logger.info(f"Project updated successfully: {project_id}")
         
@@ -267,9 +290,22 @@ async def delete_project(
     
     logger.info(f"Deleting project {project_id}")
     
+    project_name = project.name  # Save name before deletion
+    
     try:
         db.delete(project)
         db.commit()
+        
+        # Log activity
+        activity_logger.log_activity(
+            db=db,
+            user_id=current_user.id,
+            activity_type="project_delete",
+            action=f"Deleted project: {project_name}",
+            description=f"Deleted project '{project_name}'",
+            project_id=None,  # Project is deleted, so no project_id
+            activity_data={"project_name": project_name, "project_id": project_id}
+        )
         
         # Invalidate cache
         cache_service.invalidate_project_cache(project_id)

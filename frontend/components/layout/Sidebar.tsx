@@ -148,7 +148,12 @@ export default function Sidebar({
         <div className="space-y-1">
           <button
             onClick={() => router.push('/settings')}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            className={clsx(
+              'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+              pathname?.startsWith('/settings')
+                ? 'bg-gray-100 text-gray-900'
+                : 'text-gray-700 hover:bg-gray-50'
+            )}
           >
             <Settings className="h-4 w-4" />
             <span>Settings</span>
@@ -165,4 +170,5 @@ export default function Sidebar({
     </div>
   );
 }
+
 

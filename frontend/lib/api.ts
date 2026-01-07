@@ -171,6 +171,13 @@ export const apiCallsAPI = {
     const response = await apiClient.get(`/api-calls/${id}`);
     return response.data;
   },
+  
+  getStats: async (projectId: number, days: number = 7) => {
+    const response = await apiClient.get('/api-calls/stats', {
+      params: { project_id: projectId, days },
+    });
+    return response.data;
+  },
 };
 
 // Quality API
@@ -228,8 +235,18 @@ export const alertsAPI = {
     return response.data;
   },
   
+  get: async (id: number) => {
+    const response = await apiClient.get(`/alerts/${id}`);
+    return response.data;
+  },
+  
   resolve: async (id: number) => {
     const response = await apiClient.post(`/alerts/${id}/resolve`);
+    return response.data;
+  },
+  
+  send: async (id: number, channels?: string[]) => {
+    const response = await apiClient.post(`/alerts/${id}/send`, { channels });
     return response.data;
   },
 };
@@ -279,6 +296,198 @@ export const subscriptionAPI = {
   
   cancel: async () => {
     const response = await apiClient.post('/subscription/cancel');
+    return response.data;
+  },
+};
+
+// Settings API
+export const settingsAPI = {
+  getProfile: async () => {
+    const response = await apiClient.get('/settings/profile');
+    return response.data;
+  },
+  
+  updateProfile: async (data: { full_name?: string }) => {
+    const response = await apiClient.patch('/settings/profile', data);
+    return response.data;
+  },
+  
+  deleteAccount: async (password: string) => {
+    await apiClient.delete('/settings/profile', {
+      data: { password },
+    });
+  },
+  
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    await apiClient.patch('/settings/password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+  },
+  
+  getAPIKeys: async () => {
+    const response = await apiClient.get('/settings/api-keys');
+    return response.data;
+  },
+  
+  createAPIKey: async (name: string) => {
+    const response = await apiClient.post('/settings/api-keys', { name });
+    return response.data;
+  },
+  
+  deleteAPIKey: async (keyId: number) => {
+    await apiClient.delete(`/settings/api-keys/${keyId}`);
+  },
+  
+  updateAPIKey: async (keyId: number, name: string) => {
+    const response = await apiClient.patch(`/settings/api-keys/${keyId}`, { name });
+    return response.data;
+  },
+  
+  getNotificationSettings: async () => {
+    const response = await apiClient.get('/settings/notifications');
+    return response.data;
+  },
+  
+  updateNotificationSettings: async (settings: any) => {
+    const response = await apiClient.patch('/settings/notifications', settings);
+    return response.data;
+  },
+};
+
+// Export API
+export const exportAPI = {
+  exportCSV: async (projectId: number, filters?: any) => {
+    const response = await apiClient.get('/export/csv', {
+      params: { project_id: projectId, ...filters },
+      responseType: 'blob',
+    });
+    
+    // Create download link
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `api-calls-${projectId}-${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+  
+  exportJSON: async (projectId: number, filters?: any, includeData: boolean = false) => {
+    const response = await apiClient.get('/export/json', {
+      params: { project_id: projectId, include_data: includeData, ...filters },
+    });
+    
+    // Download as JSON file
+    const dataStr = JSON.stringify(response.data, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = window.URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `api-calls-${projectId}-${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+};
+
+// Activity API
+export const activityAPI = {
+  list: async (params?: any) => {
+    const response = await apiClient.get('/activity', { params });
+    return response.data;
+  },
+};
+
+// Notifications API (in-app)
+export const notificationsAPI = {
+  list: async (params?: any) => {
+    const response = await apiClient.get('/notifications', { params });
+    return response.data;
+  },
+  
+  markRead: async (alertId: number) => {
+    await apiClient.patch(`/notifications/${alertId}/read`);
+  },
+  
+  delete: async (alertId: number) => {
+    await apiClient.delete(`/notifications/${alertId}`);
+  },
+  
+  getUnreadCount: async () => {
+    const response = await apiClient.get('/notifications/unread-count');
+    return response.data;
+  },
+};
+
+// Admin API
+export const adminAPI = {
+  generateSampleData: async (projectId: number) => {
+    const response = await apiClient.post('/admin/generate-sample-data', null, {
+      params: { project_id: projectId },
+    });
+    return response.data;
+  },
+};
+
+// Reports API
+export const reportsAPI = {
+  generate: async (projectId: number, params: any) => {
+    const response = await apiClient.post('/reports/generate', null, {
+      params: { project_id: projectId, ...params },
+    });
+    return response.data;
+  },
+  
+  download: async (projectId: number, params: any) => {
+    const response = await apiClient.get('/reports/download', {
+      params: { project_id: projectId, ...params },
+      responseType: 'blob',
+    });
+    
+    // Create download link
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    const format = params.format || 'json';
+    link.setAttribute('download', `report-${projectId}-${new Date().toISOString().split('T')[0]}.${format}`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+};
+
+// Webhooks API
+export const webhooksAPI = {
+  list: async (params?: any) => {
+    const response = await apiClient.get('/webhooks', { params });
+    return response.data;
+  },
+  
+  get: async (id: number) => {
+    const response = await apiClient.get(`/webhooks/${id}`);
+    return response.data;
+  },
+  
+  create: async (data: any) => {
+    const response = await apiClient.post('/webhooks', data);
+    return response.data;
+  },
+  
+  update: async (id: number, data: any) => {
+    const response = await apiClient.patch(`/webhooks/${id}`, data);
+    return response.data;
+  },
+  
+  delete: async (id: number) => {
+    await apiClient.delete(`/webhooks/${id}`);
+  },
+  
+  test: async (id: number) => {
+    const response = await apiClient.post(`/webhooks/${id}/test`);
     return response.data;
   },
 };

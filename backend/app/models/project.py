@@ -27,6 +27,8 @@ class Project(Base):
     drift_detections = relationship("DriftDetection", back_populates="project", cascade="all, delete-orphan")
     alerts = relationship("Alert", back_populates="project", cascade="all, delete-orphan")
     usage_records = relationship("Usage", back_populates="project", cascade="all, delete-orphan")
+    activity_logs = relationship("ActivityLog", back_populates="project", cascade="all, delete-orphan")
+    webhooks = relationship("Webhook", back_populates="project", cascade="all, delete-orphan")
 
 
 

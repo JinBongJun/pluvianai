@@ -2,10 +2,10 @@
 API Call endpoints with caching optimization
 """
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -121,5 +121,63 @@ async def get_api_call(
         api_call.response_data = decompress_json(api_call.response_data["compressed"]) or {}
     
     return api_call
+
+
+class APICallStatsResponse(BaseModel):
+    """API Call statistics response schema"""
+    total_calls: int
+    successful_calls: int
+    failed_calls: int
+    success_rate: float  # 0.0 to 1.0
+    period_start: datetime
+    period_end: datetime
+
+
+@router.get("/stats", response_model=APICallStatsResponse)
+async def get_api_call_stats(
+    project_id: int = Query(..., description="Project ID"),
+    days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get API call statistics including success rate for a project"""
+    # Verify project access (any member can view)
+    project = check_project_access(project_id, current_user, db)
+    
+    # Calculate date range
+    period_end = datetime.utcnow()
+    period_start = period_end - timedelta(days=days)
+    
+    # Query statistics
+    stats = db.query(
+        func.count(APICall.id).label('total_calls'),
+        func.sum(
+            func.case(
+                (func.and_(
+                    APICall.status_code >= 200,
+                    APICall.status_code < 300
+                ), 1),
+                else_=0
+            )
+        ).label('successful_calls')
+    ).filter(
+        APICall.project_id == project_id,
+        APICall.created_at >= period_start,
+        APICall.created_at <= period_end
+    ).first()
+    
+    total_calls = int(stats.total_calls) if stats.total_calls else 0
+    successful_calls = int(stats.successful_calls) if stats.successful_calls else 0
+    failed_calls = total_calls - successful_calls
+    success_rate = (successful_calls / total_calls) if total_calls > 0 else 0.0
+    
+    return APICallStatsResponse(
+        total_calls=total_calls,
+        successful_calls=successful_calls,
+        failed_calls=failed_calls,
+        success_rate=success_rate,
+        period_start=period_start,
+        period_end=period_end
+    )
 
 

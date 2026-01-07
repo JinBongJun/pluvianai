@@ -2,7 +2,7 @@
 API v1 router
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, projects, project_members, api_calls, quality, drift, alerts, proxy, cost, benchmark, agent_chain, archive, admin, subscription
+from app.api.v1.endpoints import auth, projects, project_members, api_calls, quality, drift, alerts, proxy, cost, benchmark, agent_chain, archive, admin, subscription, settings, export, activity, notifications, reports, webhooks
 
 api_router = APIRouter()
 
@@ -20,4 +20,10 @@ api_router.include_router(agent_chain.router, prefix="/agent-chain", tags=["agen
 api_router.include_router(archive.router, prefix="/archive", tags=["archive"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(subscription.router, prefix="/subscription", tags=["subscription"])
+api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
+api_router.include_router(export.router, prefix="/export", tags=["export"])
+api_router.include_router(activity.router, prefix="/activity", tags=["activity"])
+api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
+api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
+api_router.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
 

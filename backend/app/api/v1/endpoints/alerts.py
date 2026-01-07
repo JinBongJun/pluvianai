@@ -27,8 +27,13 @@ class AlertResponse(BaseModel):
     severity: str
     title: str
     message: str
+    alert_data: dict | None = None
     is_sent: bool
+    sent_at: str | None = None
+    notification_channels: list | None = None
     is_resolved: bool
+    resolved_at: str | None = None
+    resolved_by: int | None = None
     created_at: str
     
     class Config:
@@ -132,17 +137,8 @@ async def resolve_alert(
             detail="Alert not found"
         )
     
-    # Verify project ownership
-    project = db.query(Project).filter(
-        Project.id == alert.project_id,
-        Project.owner_id == current_user.id
-    ).first()
-    
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    # Verify project access (any member can resolve alerts)
+    project = check_project_access(alert.project_id, current_user, db)
     
     alert.is_resolved = True
     alert.resolved_by = current_user.id
@@ -151,6 +147,27 @@ async def resolve_alert(
     
     db.commit()
     db.refresh(alert)
+    
+    return alert
+
+
+@router.get("/{alert_id}", response_model=AlertResponse)
+async def get_alert(
+    alert_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific alert"""
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    
+    if not alert:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Alert not found"
+        )
+    
+    # Verify project access (any member can view)
+    project = check_project_access(alert.project_id, current_user, db)
     
     return alert
 

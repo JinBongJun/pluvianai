@@ -34,6 +34,10 @@ class DriftDetectionResponse(BaseModel):
     drift_score: float
     severity: str
     detected_at: datetime
+    detection_details: dict | None = None
+    affected_fields: list | None = None
+    baseline_period_start: datetime | None = None
+    baseline_period_end: datetime | None = None
     
     class Config:
         from_attributes = True
@@ -119,16 +123,7 @@ async def get_drift_detection(
             detail="Drift detection not found"
         )
     
-    # Verify project ownership
-    project = db.query(Project).filter(
-        Project.id == detection.project_id,
-        Project.owner_id == current_user.id
-    ).first()
-    
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    # Verify project access (any member can view)
+    project = check_project_access(detection.project_id, current_user, db)
     
     return detection

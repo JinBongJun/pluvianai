@@ -85,10 +85,22 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
     return <div className="text-center py-4">Loading members...</div>;
   }
 
+  const roleDescriptions = {
+    owner: 'Full control: Can delete project, manage all settings and members',
+    admin: 'Can manage settings and members, but cannot delete project',
+    member: 'Can view data and make API calls, but cannot change settings',
+    viewer: 'Read-only access: Can only view project data'
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">Team Members</h3>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Team Members</h3>
+          <p className="text-sm text-gray-500 mt-1">
+            Manage who can access this project and their permissions
+          </p>
+        </div>
         {canManage && (
           <button
             onClick={() => setShowAddModal(true)}
@@ -111,33 +123,10 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
               </p>
               <p className="text-sm text-gray-600">{member.user_email}</p>
             </div>
-            <div className="flex items-center gap-2">
-              {canManage && member.role !== 'owner' ? (
-                <>
-                  <select
-                    value={member.role}
-                    onChange={(e) =>
-                      handleUpdateRole(
-                        member.user_id,
-                        e.target.value as 'admin' | 'member' | 'viewer'
-                      )
-                    }
-                    className="text-sm border-gray-300 rounded-md"
-                  >
-                    <option value="admin">Admin</option>
-                    <option value="member">Member</option>
-                    <option value="viewer">Viewer</option>
-                  </select>
-                  <button
-                    onClick={() => handleRemoveMember(member.user_id)}
-                    className="px-3 py-1 text-sm text-red-600 hover:text-red-700"
-                  >
-                    Remove
-                  </button>
-                </>
-              ) : (
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col items-end">
                 <span
-                  className={`px-2 py-1 text-xs rounded ${
+                  className={`px-2 py-1 text-xs font-medium rounded capitalize ${
                     member.role === 'owner'
                       ? 'bg-purple-100 text-purple-700'
                       : member.role === 'admin'
@@ -146,10 +135,37 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
                       ? 'bg-green-100 text-green-700'
                       : 'bg-gray-100 text-gray-700'
                   }`}
+                  title={roleDescriptions[member.role as keyof typeof roleDescriptions]}
                 >
                   {member.role}
                 </span>
-              )}
+                {canManage && member.role !== 'owner' && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <select
+                      value={member.role}
+                      onChange={(e) =>
+                        handleUpdateRole(
+                          member.user_id,
+                          e.target.value as 'admin' | 'member' | 'viewer'
+                        )
+                      }
+                      className="text-xs border-gray-300 rounded-md px-2 py-1"
+                      title="Change role"
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="member">Member</option>
+                      <option value="viewer">Viewer</option>
+                    </select>
+                    <button
+                      onClick={() => handleRemoveMember(member.user_id)}
+                      className="px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
+                      title="Remove member"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -158,19 +174,30 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">Add Team Member</h3>
+            <h3 className="text-lg font-semibold mb-2">Add Team Member</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              The user must already have an AgentGuard account with this email address.
+            </p>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
+                  Email Address
                 </label>
                 <input
                   type="email"
                   value={newMemberEmail}
                   onChange={(e) => setNewMemberEmail(e.target.value)}
-                  className="w-full border-gray-300 rounded-md shadow-sm"
+                  className="w-full border-gray-300 rounded-md shadow-sm px-3 py-2"
                   placeholder="user@example.com"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleAddMember();
+                    }
+                  }}
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  User must be registered with this email
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -181,16 +208,23 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
                   onChange={(e) =>
                     setNewMemberRole(e.target.value as 'admin' | 'member' | 'viewer')
                   }
-                  className="w-full border-gray-300 rounded-md shadow-sm"
+                  className="w-full border-gray-300 rounded-md shadow-sm px-3 py-2"
                 >
-                  <option value="admin">Admin</option>
-                  <option value="member">Member</option>
-                  <option value="viewer">Viewer</option>
+                  <option value="admin">Admin - Manage settings and members</option>
+                  <option value="member">Member - View data and make API calls</option>
+                  <option value="viewer">Viewer - Read-only access</option>
                 </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {roleDescriptions[newMemberRole]}
+                </p>
               </div>
-              <div className="flex gap-2 justify-end">
+              <div className="flex gap-2 justify-end pt-2">
                 <button
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setNewMemberEmail('');
+                    setNewMemberRole('member');
+                  }}
                   className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
                 >
                   Cancel
@@ -199,7 +233,7 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
                   onClick={handleAddMember}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                 >
-                  Add
+                  Add Member
                 </button>
               </div>
             </div>

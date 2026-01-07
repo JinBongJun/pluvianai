@@ -3,6 +3,9 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from './Sidebar';
+import NotificationCenter from '@/components/notifications/NotificationCenter';
+import GlobalSearch from '@/components/search/GlobalSearch';
+import { useGlobalShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { Project } from '@/lib/api';
 import { projectsAPI } from '@/lib/api';
 
@@ -17,6 +20,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [userName, setUserName] = useState<string>('');
   const [userPlan, setUserPlan] = useState<string>('free');
   const [loading, setLoading] = useState(true);
+
+  useGlobalShortcuts();
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -81,6 +86,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       />
       <main className="flex-1 ml-64">
         <div className="p-8">
+          {/* Notification Center - Fixed position */}
+          <div className="fixed top-4 right-4 z-50">
+            <NotificationCenter />
+          </div>
+          {/* Global Search */}
+          <GlobalSearch />
           {children}
         </div>
       </main>

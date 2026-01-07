@@ -101,3 +101,4 @@ SELECT * FROM subscriptions;
 - DATABASE_URL 환경 변수를 확인하세요.
 - `.env` 파일이 올바른지 확인하세요.
 
+

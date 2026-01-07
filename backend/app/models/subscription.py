@@ -34,3 +34,4 @@ class Subscription(Base):
         Index('idx_subscription_plan', 'plan_type', 'status'),
     )
 
+

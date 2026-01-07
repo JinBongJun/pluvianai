@@ -87,3 +87,4 @@ def check_api_call_limit(user_id: int, db: Session) -> tuple[bool, str | None]:
     service = SubscriptionService(db)
     return service.check_usage_limit(user_id, "api_calls", 1)
 
+
