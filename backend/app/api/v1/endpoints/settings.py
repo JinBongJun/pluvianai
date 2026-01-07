@@ -2,7 +2,7 @@
 Settings endpoints for user profile, password, API keys, and notifications
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, Field
 from app.core.database import get_db
@@ -149,13 +149,13 @@ async def update_profile(
 
 @router.delete("/profile", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_account(
-    delete_data: AccountDelete,
+    password: str = Query(..., description="Password confirmation for account deletion"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Delete user account (requires password confirmation)"""
     # Verify password
-    if not verify_password(delete_data.password, current_user.hashed_password):
+    if not verify_password(password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect password"
