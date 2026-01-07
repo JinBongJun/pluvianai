@@ -52,13 +52,25 @@ app.add_exception_handler(Exception, general_exception_handler)
 app.add_middleware(LoggingMiddleware)
 
 # CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Handle wildcard origins
+cors_origins = settings.cors_origins_list
+if cors_origins == ["*"]:
+    # Allow all origins (useful for development or when using wildcards)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,  # Cannot use credentials with wildcard
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Gzip compression middleware (reduce bandwidth)
 app.add_middleware(GZipMiddleware)
