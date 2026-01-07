@@ -141,14 +141,6 @@ async def get_api_call_stats(
     db: Session = Depends(get_db)
 ):
     """Get API call statistics including success rate for a project"""
-    # #region agent log
-    import json
-    try:
-        with open('c:\\Users\\user\\Desktop\\AgentGuard\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"H1.3","location":"api_calls.py:136","message":"get_api_call_stats entry","data":{"project_id":project_id,"days":days,"user_id":current_user.id},"timestamp":int(__import__('time').time()*1000)})+'\n')
-    except: pass
-    # #endregion
-    
     # Verify project access (any member can view)
     project = check_project_access(project_id, current_user, db)
     
@@ -173,13 +165,6 @@ async def get_api_call_stats(
         APICall.created_at >= period_start,
         APICall.created_at <= period_end
     ).first()
-    
-    # #region agent log
-    try:
-        with open('c:\\Users\\user\\Desktop\\AgentGuard\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"H1.1","location":"api_calls.py:167","message":"After database query","data":{"stats_is_none":stats is None,"total_calls":int(stats.total_calls) if stats and stats.total_calls else 0},"timestamp":int(__import__('time').time()*1000)})+'\n')
-    except: pass
-    # #endregion
     
     # Handle None stats result
     if stats is None:

@@ -42,19 +42,9 @@ export default function ProjectDetailPage() {
   }, [projectId, router]);
 
   const loadProjectData = async () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/973f1af9-b9db-4390-8449-a237ac30d6a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:37',message:'loadProjectData entry',data:{projectId,projectIdType:typeof projectId},timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
-    // #endregion
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/973f1af9-b9db-4390-8449-a237ac30d6a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:39',message:'Before Promise.all',data:{projectId},timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
-      // #endregion
-      
       // Load data sequentially to better handle errors
       const projectData = await projectsAPI.get(projectId);
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/973f1af9-b9db-4390-8449-a237ac30d6a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:43',message:'After projectData',data:{projectData:!!projectData},timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
-      // #endregion
       
       // Load stats in parallel (with error handling for each)
       const [qualityStats, costAnalysis, apiCallStats] = await Promise.allSettled([
@@ -62,10 +52,6 @@ export default function ProjectDetailPage() {
         costAPI.getAnalysis(projectId, 7),
         apiCallsAPI.getStats(projectId, 7),
       ]);
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/973f1af9-b9db-4390-8449-a237ac30d6a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:50',message:'After Promise.allSettled',data:{qualityStats_status:qualityStats.status,costAnalysis_status:costAnalysis.status,apiCallStats_status:apiCallStats.status},timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
-      // #endregion
 
       setProject(projectData);
       
@@ -97,9 +83,6 @@ export default function ProjectDetailPage() {
       const role = projectData.role || 'viewer';
       setUserRole(role);
     } catch (error: any) {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/973f1af9-b9db-4390-8449-a237ac30d6a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:75',message:'loadProjectData error',data:{error_message:error?.message,error_status:error?.response?.status,error_data:error?.response?.data,error_response:JSON.stringify(error?.response?.data)},timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
-      // #endregion
       console.error('Failed to load project data:', error);
       if (error?.response?.status === 404) {
         // Project not found, redirect to dashboard
