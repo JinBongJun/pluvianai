@@ -296,13 +296,6 @@ class DriftEngine:
                 "baseline_sample": baseline_sample,
                 "current_sample": current_sample,
             }
-            affected_fields=most_missing,
-            detection_details={
-                "baseline_fields": list(baseline_fields),
-                "current_fields": list(current_fields),
-                "common_fields": list(common_fields),
-                "missing_fields": most_missing,
-            }
         )
     
     def _detect_latency_drift(
