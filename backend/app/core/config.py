@@ -27,8 +27,9 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # CORS - supports comma-separated list or single URL
-    # Default includes localhost and common Vercel patterns
-    CORS_ORIGINS: str = "http://localhost:3000,https://*.vercel.app"
+    # Use "*" to allow all origins (for development/flexibility)
+    # In production, specify exact domains for better security
+    CORS_ORIGINS: str = "*"
     
     # API Keys (for LLM providers - optional)
     OPENAI_API_KEY: Optional[str] = None
@@ -45,18 +46,11 @@ class Settings(BaseSettings):
         if isinstance(self.CORS_ORIGINS, list):
             return self.CORS_ORIGINS
         
-        origins = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
-        
-        # Handle wildcard patterns for Vercel
-        # FastAPI doesn't support wildcards directly, so we need to allow all origins
-        # if a wildcard pattern is detected, or use regex patterns
-        has_wildcard = any("*" in origin for origin in origins)
-        
-        if has_wildcard:
-            # If wildcard is present, allow all origins (for development/production flexibility)
-            # In production, you should specify exact domains
+        # If "*" is specified, return special marker
+        if self.CORS_ORIGINS.strip() == "*":
             return ["*"]
         
+        origins = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
         return origins
 
 
