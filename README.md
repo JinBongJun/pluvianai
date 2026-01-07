@@ -57,6 +57,63 @@ AgentGuard/
 3. 백엔드 접속: http://localhost:8000
 4. 프론트엔드 접속: http://localhost:3000
 
+## Zero-Config SDK 사용법
+
+AgentGuard는 코드 변경 없이 LLM API 호출을 자동으로 모니터링합니다.
+
+### Python
+
+```bash
+pip install agentguard
+```
+
+```python
+import agentguard
+
+# 한 줄로 초기화 - OpenAI SDK 자동 패칭
+agentguard.init()
+
+# 이제 모든 OpenAI 호출이 자동으로 모니터링됩니다
+from openai import OpenAI
+client = OpenAI()
+response = client.chat.completions.create(
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+### Node.js
+
+```bash
+npm install @agentguard/sdk
+```
+
+```typescript
+import agentguard from '@agentguard/sdk';
+
+// 한 줄로 초기화 - OpenAI SDK 자동 패칭
+agentguard.init();
+
+// 이제 모든 OpenAI 호출이 자동으로 모니터링됩니다
+import OpenAI from 'openai';
+const openai = new OpenAI();
+const response = await openai.chat.completions.create({
+  model: 'gpt-4',
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+```
+
+### 환경 변수
+
+```bash
+export AGENTGUARD_API_KEY="your-api-key"
+export AGENTGUARD_PROJECT_ID="123"
+export AGENTGUARD_API_URL="https://api.agentguard.dev"  # Optional
+export AGENTGUARD_AGENT_NAME="my-agent"  # Optional
+```
+
+더 자세한 내용은 [온보딩 가이드](./frontend/app/onboarding/page.tsx)를 참조하세요.
+
 ## 배포
 
 ### 프로덕션 배포 (Vercel + Railway)

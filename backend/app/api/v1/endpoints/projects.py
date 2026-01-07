@@ -25,6 +25,7 @@ class ProjectCreate(BaseModel):
     """Project creation schema"""
     name: str = Field(..., min_length=1, max_length=255, description="Project name")
     description: str | None = Field(None, max_length=1000, description="Project description")
+    generate_sample_data: bool = Field(False, description="Generate sample data for onboarding")
 
 
 class ProjectUpdate(BaseModel):
@@ -101,6 +102,21 @@ async def create_project(
             project_id=project.id,
             activity_data={"project_name": project.name, "project_id": project.id}
         )
+        
+        # Generate sample data if requested (for onboarding)
+        if project_data.generate_sample_data:
+            try:
+                from app.api.v1.endpoints.admin import generate_sample_data
+                # Generate sample data in background (non-blocking)
+                # Note: This is a simplified approach. In production, use a background task queue
+                import asyncio
+                asyncio.create_task(
+                    generate_sample_data(project.id, current_user, db)
+                )
+                logger.info(f"Sample data generation queued for project {project.id}")
+            except Exception as e:
+                # Don't fail project creation if sample data generation fails
+                logger.warning(f"Failed to generate sample data for project {project.id}: {str(e)}")
         
         logger.info(f"Project created successfully: {project.id}")
         return project

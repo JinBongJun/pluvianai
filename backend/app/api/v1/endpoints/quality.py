@@ -23,7 +23,7 @@ evaluator = QualityEvaluator()
 
 
 class QualityScoreResponse(BaseModel):
-    """Quality score response schema"""
+    """Quality score response schema with transparent breakdown"""
     id: int
     api_call_id: int
     project_id: int
@@ -33,6 +33,7 @@ class QualityScoreResponse(BaseModel):
     coherence_score: float | None
     json_valid: bool | None
     required_fields_present: bool | None
+    evaluation_details: dict | None = None  # Score breakdown and weights
     created_at: datetime
     
     class Config:

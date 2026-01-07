@@ -350,3 +350,411 @@ class CostAnalyzer:
                 stats["avg_latency"] = stats["avg_latency"] / stats["total_calls"] if stats["avg_latency"] > 0 else 0.0
         
         return list(model_stats.values())
+    
+    def recommend_optimal_model_for_task(
+        self,
+        project_id: int,
+        agent_name: Optional[str] = None,
+        days: int = 7,
+        db: Optional[Session] = None
+    ) -> Dict[str, Any]:
+        """
+        Recommend optimal model for a specific task/agent based on cost, speed, and quality
+        
+        Args:
+            project_id: Project ID
+            agent_name: Optional agent name to filter by task type
+            days: Number of days to analyze
+            db: Database session
+        
+        Returns:
+            Dictionary with recommendation:
+            - recommended_model: str
+            - current_model: str (if agent_name provided)
+            - cost_savings: float (percentage)
+            - quality_improvement: float (percentage)
+            - speed_improvement: float (percentage)
+            - roi_estimate: float (estimated monthly savings)
+        """
+        if not db:
+            raise ValueError("Database session required")
+        
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+        
+        # Build query
+        query = db.query(APICall).filter(
+            and_(
+                APICall.project_id == project_id,
+                APICall.created_at >= start_date,
+                APICall.created_at <= end_date
+            )
+        )
+        
+        if agent_name:
+            query = query.filter(APICall.agent_name == agent_name)
+        
+        api_calls = query.all()
+        
+        if not api_calls:
+            return {
+                "message": "No data available for recommendations",
+                "recommended_model": None,
+            }
+        
+        # Group by model and calculate metrics
+        model_stats: Dict[str, Dict[str, Any]] = {}
+        
+        for call in api_calls:
+            model_key = f"{call.provider}/{call.model}"
+            
+            if model_key not in model_stats:
+                model_stats[model_key] = {
+                    "model": model_key,
+                    "provider": call.provider,
+                    "model_name": call.model,
+                    "total_calls": 0,
+                    "successful_calls": 0,
+                    "total_cost": 0.0,
+                    "total_latency": 0.0,
+                    "total_input_tokens": 0,
+                    "total_output_tokens": 0,
+                }
+            
+            stats = model_stats[model_key]
+            stats["total_calls"] += 1
+            
+            if call.status_code and 200 <= call.status_code < 300:
+                stats["successful_calls"] += 1
+            
+            cost = self.calculate_cost(
+                call.provider,
+                call.model,
+                call.request_tokens or 0,
+                call.response_tokens or 0
+            )
+            stats["total_cost"] += cost
+            stats["total_input_tokens"] += call.request_tokens or 0
+            stats["total_output_tokens"] += call.response_tokens or 0
+            
+            if call.latency_ms:
+                stats["total_latency"] += call.latency_ms
+        
+        # Get quality scores for each model
+        from app.models.quality_score import QualityScore
+        quality_scores = db.query(QualityScore).join(APICall).filter(
+            and_(
+                QualityScore.project_id == project_id,
+                QualityScore.created_at >= start_date,
+                QualityScore.created_at <= end_date
+            )
+        ).all()
+        
+        for score in quality_scores:
+            call = db.query(APICall).filter(APICall.id == score.api_call_id).first()
+            if call:
+                model_key = f"{call.provider}/{call.model}"
+                if model_key in model_stats:
+                    if "quality_scores" not in model_stats[model_key]:
+                        model_stats[model_key]["quality_scores"] = []
+                    model_stats[model_key]["quality_scores"].append(score.overall_score)
+        
+        # Calculate composite scores for each model
+        model_scores = []
+        for model_key, stats in model_stats.items():
+            total_calls = stats["total_calls"]
+            
+            # Calculate averages
+            avg_cost_per_call = stats["total_cost"] / total_calls if total_calls > 0 else 0.0
+            avg_latency = stats["total_latency"] / total_calls if total_calls > 0 else 0.0
+            success_rate = (stats["successful_calls"] / total_calls * 100) if total_calls > 0 else 0.0
+            avg_quality = (
+                sum(stats.get("quality_scores", [])) / len(stats["quality_scores"])
+                if stats.get("quality_scores") else 50.0
+            )
+            
+            # Normalize metrics (0-1 scale, higher is better)
+            # Cost: inverse (lower is better)
+            cost_score = 1.0 / (1.0 + avg_cost_per_call * 100)
+            
+            # Latency: inverse (lower is better)
+            latency_score = 1.0 / (1.0 + avg_latency / 1000)
+            
+            # Quality: direct (higher is better, already 0-100)
+            quality_score = avg_quality / 100.0
+            
+            # Success rate: direct (higher is better, already percentage)
+            success_score = success_rate / 100.0
+            
+            # Composite score (weighted)
+            # For cost optimization: cost 40%, quality 30%, latency 20%, success 10%
+            composite_score = (
+                cost_score * 0.4 +
+                quality_score * 0.3 +
+                latency_score * 0.2 +
+                success_score * 0.1
+            )
+            
+            model_scores.append({
+                "model": model_key,
+                "provider": stats["provider"],
+                "model_name": stats["model_name"],
+                "composite_score": composite_score,
+                "avg_cost_per_call": avg_cost_per_call,
+                "avg_latency_ms": avg_latency,
+                "avg_quality": avg_quality,
+                "success_rate": success_rate,
+                "total_calls": total_calls,
+            })
+        
+        # Sort by composite score
+        model_scores.sort(key=lambda x: x["composite_score"], reverse=True)
+        
+        if not model_scores:
+            return {
+                "message": "No models available for comparison",
+                "recommended_model": None,
+            }
+        
+        recommended = model_scores[0]
+        
+        # Find current model if agent_name provided
+        current_model = None
+        if agent_name:
+            # Find most used model for this agent
+            agent_calls = [c for c in api_calls if c.agent_name == agent_name]
+            if agent_calls:
+                from collections import Counter
+                model_counts = Counter([f"{c.provider}/{c.model}" for c in agent_calls])
+                current_model_key = model_counts.most_common(1)[0][0]
+                current_model = next((m for m in model_scores if m["model"] == current_model_key), None)
+        
+        # Calculate improvements if current model exists
+        cost_savings = 0.0
+        quality_improvement = 0.0
+        speed_improvement = 0.0
+        roi_estimate = 0.0
+        
+        if current_model and current_model["model"] != recommended["model"]:
+            # Cost savings
+            if current_model["avg_cost_per_call"] > 0:
+                cost_savings = (1 - recommended["avg_cost_per_call"] / current_model["avg_cost_per_call"]) * 100
+            
+            # Quality improvement
+            if current_model["avg_quality"] > 0:
+                quality_improvement = ((recommended["avg_quality"] / current_model["avg_quality"]) - 1) * 100
+            
+            # Speed improvement
+            if current_model["avg_latency_ms"] > 0:
+                speed_improvement = (1 - recommended["avg_latency_ms"] / current_model["avg_latency_ms"]) * 100
+            
+            # ROI estimate (monthly savings based on current usage)
+            if current_model["total_calls"] > 0:
+                daily_calls = current_model["total_calls"] / days
+                monthly_calls = daily_calls * 30
+                current_monthly_cost = current_model["avg_cost_per_call"] * monthly_calls
+                recommended_monthly_cost = recommended["avg_cost_per_call"] * monthly_calls
+                roi_estimate = current_monthly_cost - recommended_monthly_cost
+        
+        return {
+            "recommended_model": recommended["model"],
+            "recommended_provider": recommended["provider"],
+            "recommended_model_name": recommended["model_name"],
+            "composite_score": recommended["composite_score"],
+            "current_model": current_model["model"] if current_model else None,
+            "cost_savings": cost_savings,
+            "quality_improvement": quality_improvement,
+            "speed_improvement": speed_improvement,
+            "roi_estimate": roi_estimate,
+            "all_models": model_scores[:5],  # Top 5 models
+        }
+    
+    def simulate_model_switch(
+        self,
+        project_id: int,
+        current_model: str,
+        target_model: str,
+        agent_name: Optional[str] = None,
+        days: int = 7,
+        db: Optional[Session] = None
+    ) -> Dict[str, Any]:
+        """
+        Simulate switching from one model to another
+        
+        Args:
+            project_id: Project ID
+            current_model: Current model (format: provider/model)
+            target_model: Target model (format: provider/model)
+            agent_name: Optional agent name to filter by task type
+            days: Number of days to analyze
+            db: Database session
+        
+        Returns:
+            Dictionary with simulation results:
+            - cost_change: float (percentage)
+            - quality_change: float (percentage)
+            - latency_change: float (percentage)
+            - estimated_monthly_savings: float
+            - estimated_monthly_cost: float
+            - risk_assessment: str
+        """
+        if not db:
+            raise ValueError("Database session required")
+        
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+        
+        # Parse models
+        current_provider, current_model_name = current_model.split("/", 1)
+        target_provider, target_model_name = target_model.split("/", 1)
+        
+        # Get current model usage
+        query = db.query(APICall).filter(
+            and_(
+                APICall.project_id == project_id,
+                APICall.provider == current_provider,
+                APICall.model == current_model_name,
+                APICall.created_at >= start_date,
+                APICall.created_at <= end_date
+            )
+        )
+        
+        if agent_name:
+            query = query.filter(APICall.agent_name == agent_name)
+        
+        current_calls = query.all()
+        
+        if not current_calls:
+            return {
+                "message": "No usage data for current model",
+                "error": True,
+            }
+        
+        # Calculate current metrics
+        current_total_cost = 0.0
+        current_total_latency = 0.0
+        current_total_calls = len(current_calls)
+        current_total_input_tokens = 0
+        current_total_output_tokens = 0
+        
+        for call in current_calls:
+            cost = self.calculate_cost(
+                call.provider,
+                call.model,
+                call.request_tokens or 0,
+                call.response_tokens or 0
+            )
+            current_total_cost += cost
+            current_total_input_tokens += call.request_tokens or 0
+            current_total_output_tokens += call.response_tokens or 0
+            if call.latency_ms:
+                current_total_latency += call.latency_ms
+        
+        current_avg_cost = current_total_cost / current_total_calls if current_total_calls > 0 else 0.0
+        current_avg_latency = current_total_latency / current_total_calls if current_total_calls > 0 else 0.0
+        
+        # Get current quality scores
+        from app.models.quality_score import QualityScore
+        current_quality_scores = db.query(QualityScore).join(APICall).filter(
+            and_(
+                QualityScore.project_id == project_id,
+                APICall.provider == current_provider,
+                APICall.model == current_model_name,
+                QualityScore.created_at >= start_date,
+                QualityScore.created_at <= end_date
+            )
+        ).all()
+        
+        current_avg_quality = (
+            sum([s.overall_score for s in current_quality_scores]) / len(current_quality_scores)
+            if current_quality_scores else 50.0
+        )
+        
+        # Simulate target model costs
+        target_total_cost = 0.0
+        for call in current_calls:
+            # Use same token counts but different pricing
+            cost = self.calculate_cost(
+                target_provider,
+                target_model_name,
+                call.request_tokens or 0,
+                call.response_tokens or 0
+            )
+            target_total_cost += cost
+        
+        target_avg_cost = target_total_cost / current_total_calls if current_total_calls > 0 else 0.0
+        
+        # Estimate target latency (use historical data if available, otherwise use pricing as proxy)
+        target_calls = db.query(APICall).filter(
+            and_(
+                APICall.project_id == project_id,
+                APICall.provider == target_provider,
+                APICall.model == target_model_name,
+                APICall.created_at >= start_date,
+                APICall.created_at <= end_date
+            )
+        ).all()
+        
+        if target_calls:
+            target_total_latency = sum([c.latency_ms for c in target_calls if c.latency_ms])
+            target_avg_latency = target_total_latency / len(target_calls) if target_calls else current_avg_latency
+        else:
+            # Estimate based on model tier (rough approximation)
+            # Higher tier models typically have lower latency
+            target_avg_latency = current_avg_latency * 0.9  # Assume 10% improvement for now
+        
+        # Estimate target quality (use historical data if available)
+        target_quality_scores = db.query(QualityScore).join(APICall).filter(
+            and_(
+                QualityScore.project_id == project_id,
+                APICall.provider == target_provider,
+                APICall.model == target_model_name,
+                QualityScore.created_at >= start_date,
+                QualityScore.created_at <= end_date
+            )
+        ).all()
+        
+        if target_quality_scores:
+            target_avg_quality = sum([s.overall_score for s in target_quality_scores]) / len(target_quality_scores)
+        else:
+            # Estimate based on model tier
+            target_avg_quality = current_avg_quality * 1.05  # Assume 5% improvement for now
+        
+        # Calculate changes
+        cost_change = ((target_avg_cost / current_avg_cost) - 1) * 100 if current_avg_cost > 0 else 0.0
+        quality_change = ((target_avg_quality / current_avg_quality) - 1) * 100 if current_avg_quality > 0 else 0.0
+        latency_change = ((target_avg_latency / current_avg_latency) - 1) * 100 if current_avg_latency > 0 else 0.0
+        
+        # Estimate monthly metrics
+        daily_calls = current_total_calls / days
+        monthly_calls = daily_calls * 30
+        current_monthly_cost = current_avg_cost * monthly_calls
+        target_monthly_cost = target_avg_cost * monthly_calls
+        estimated_monthly_savings = current_monthly_cost - target_monthly_cost
+        
+        # Risk assessment
+        risk_factors = []
+        if cost_change > 20:
+            risk_factors.append("High cost increase")
+        if quality_change < -10:
+            risk_factors.append("Significant quality decrease")
+        if latency_change > 30:
+            risk_factors.append("Significant latency increase")
+        if not target_calls:
+            risk_factors.append("No historical data for target model")
+        
+        risk_level = "low" if not risk_factors else ("medium" if len(risk_factors) <= 2 else "high")
+        
+        return {
+            "current_model": current_model,
+            "target_model": target_model,
+            "cost_change": cost_change,
+            "quality_change": quality_change,
+            "latency_change": latency_change,
+            "estimated_monthly_savings": estimated_monthly_savings,
+            "estimated_monthly_cost": target_monthly_cost,
+            "current_monthly_cost": current_monthly_cost,
+            "risk_assessment": risk_level,
+            "risk_factors": risk_factors,
+            "recommendation": "recommended" if estimated_monthly_savings > 0 and quality_change >= -5 and latency_change <= 20 else "not_recommended",
+        }

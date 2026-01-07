@@ -166,6 +166,19 @@ class DriftEngine:
         else:
             severity = "medium"
         
+        # Collect evidence: sample responses showing the change
+        baseline_sample = None
+        current_sample = None
+        if baseline_calls:
+            baseline_sample = (baseline_calls[0].response_text or "")[:200]  # First 200 chars
+        if current_calls:
+            current_sample = (current_calls[0].response_text or "")[:200]  # First 200 chars
+        
+        # Generate evidence message
+        evidence = f"Average response length changed from {baseline_avg:.0f} to {current_avg:.0f} characters ({change_pct * 100:.1f}% change)."
+        if baseline_sample and current_sample:
+            evidence += f" Example baseline: '{baseline_sample[:50]}...' Example current: '{current_sample[:50]}...'"
+        
         return DriftDetection(
             detection_type="length",
             current_value=current_avg,
@@ -178,6 +191,9 @@ class DriftEngine:
                 "current_count": len(current_lengths),
                 "baseline_avg": baseline_avg,
                 "current_avg": current_avg,
+                "evidence": evidence,
+                "baseline_sample": baseline_sample,
+                "current_sample": current_sample,
             }
         )
     
@@ -244,6 +260,25 @@ class DriftEngine:
         field_counter = Counter(missing_fields)
         most_missing = [field for field, count in field_counter.most_common(5)]
         
+        # Collect evidence: sample responses showing structure changes
+        baseline_sample = None
+        current_sample = None
+        if baseline_calls:
+            baseline_data = baseline_calls[0].response_data
+            if isinstance(baseline_data, dict):
+                baseline_sample = list(baseline_data.keys())[:5]  # First 5 fields
+        if current_calls:
+            current_data = current_calls[0].response_data
+            if isinstance(current_data, dict):
+                current_sample = list(current_data.keys())[:5]  # First 5 fields
+        
+        # Generate evidence message
+        evidence = f"JSON structure validity decreased from {len(baseline_fields)} to {len(current_fields)} fields ({change_pct * 100:.1f}% change)."
+        if most_missing:
+            evidence += f" Missing fields: {', '.join(most_missing[:3])}."
+        if baseline_sample and current_sample:
+            evidence += f" Baseline fields: {', '.join(baseline_sample)}. Current fields: {', '.join(current_sample)}."
+        
         return DriftDetection(
             detection_type="structure",
             current_value=len(current_fields),
@@ -251,6 +286,16 @@ class DriftEngine:
             change_percentage=change_pct * 100,
             drift_score=drift_score,
             severity=severity,
+            affected_fields=most_missing,
+            detection_details={
+                "baseline_fields": list(baseline_fields),
+                "current_fields": list(current_fields),
+                "missing_fields": most_missing,
+                "overlap_ratio": overlap_ratio,
+                "evidence": evidence,
+                "baseline_sample": baseline_sample,
+                "current_sample": current_sample,
+            }
             affected_fields=most_missing,
             detection_details={
                 "baseline_fields": list(baseline_fields),
