@@ -54,7 +54,7 @@ export default function GlobalSearch() {
 
         // Search projects
         try {
-          const projects = await projectsAPI.list({ search: query });
+          const projects = await projectsAPI.list(query);
           projects.forEach((project: any) => {
             if (project.name.toLowerCase().includes(searchLower) ||
                 (project.description && project.description.toLowerCase().includes(searchLower))) {
