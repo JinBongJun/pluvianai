@@ -173,8 +173,16 @@ export const apiCallsAPI = {
   },
   
   getStats: async (projectId: number, days: number = 7) => {
+    // Validate projectId
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    // Validate days
+    if (days < 1 || days > 30) {
+      days = 7; // Default to 7 if invalid
+    }
     const response = await apiClient.get('/api-calls/stats', {
-      params: { project_id: projectId, days },
+      params: { project_id: Number(projectId), days: Number(days) },
     });
     return response.data;
   },

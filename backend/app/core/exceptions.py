@@ -70,9 +70,17 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle validation errors"""
     errors = exc.errors()
+    # Extract more detailed error messages
+    error_messages = []
+    for error in errors:
+        loc = " -> ".join(str(loc) for loc in error.get("loc", []))
+        msg = error.get("msg", "Validation error")
+        error_type = error.get("type", "unknown")
+        error_messages.append(f"{loc}: {msg} (type: {error_type})")
+    
     logger.warning(
-        f"ValidationError: {errors}",
-        extra={"path": request.url.path, "method": request.method}
+        f"ValidationError: {error_messages}",
+        extra={"path": request.url.path, "method": request.method, "query_params": dict(request.query_params)}
     )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -80,6 +88,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "error": True,
             "message": "Validation error",
             "details": errors,
+            "error_messages": error_messages,
             "status_code": 422
         }
     )
