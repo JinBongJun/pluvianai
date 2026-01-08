@@ -103,7 +103,7 @@ export default function ProjectDetailPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-primary-200 border-t-primary-600"></div>
         </div>
       </DashboardLayout>
     );
@@ -116,7 +116,7 @@ export default function ProjectDetailPage() {
       <div>
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">{project?.name}</h1>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">{project?.name}</h1>
           {project?.description && (
             <p className="text-gray-600 mt-2">{project.description}</p>
           )}
@@ -128,10 +128,10 @@ export default function ProjectDetailPage() {
             <button
               onClick={() => setActiveTab('overview')}
               className={clsx(
-                'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
+                'py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200',
                 activeTab === 'overview'
-                  ? 'border-black text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-primary-600 text-gray-900'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-primary-300'
               )}
             >
               Overview
@@ -166,10 +166,10 @@ export default function ProjectDetailPage() {
             <button
               onClick={() => setActiveTab('members')}
               className={clsx(
-                'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
+                'py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200',
                 activeTab === 'members'
-                  ? 'border-black text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-primary-600 text-gray-900'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-primary-300'
               )}
             >
               Team Members
@@ -178,10 +178,10 @@ export default function ProjectDetailPage() {
               <button
                 onClick={() => setActiveTab('settings')}
                 className={clsx(
-                  'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
+                  'py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200',
                   activeTab === 'settings'
-                    ? 'border-black text-gray-900'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-primary-600 text-gray-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-primary-300'
                 )}
               >
                 Settings
@@ -218,12 +218,12 @@ export default function ProjectDetailPage() {
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Quality Scores</h2>
                 <QualityChart projectId={projectId} />
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Drift Detections</h2>
                 <DriftChart projectId={projectId} />
               </div>
@@ -233,13 +233,13 @@ export default function ProjectDetailPage() {
 
 
         {activeTab === 'members' && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <MemberList projectId={projectId} canManage={canManage} />
           </div>
         )}
 
         {activeTab === 'settings' && canManage && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <ProjectSettings projectId={projectId} project={project} onUpdate={loadProjectData} />
           </div>
         )}

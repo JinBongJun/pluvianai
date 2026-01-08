@@ -42,4 +42,3 @@ class Webhook(Base):
         Index('idx_webhook_user_active', 'user_id', 'is_active'),
         Index('idx_webhook_project_active', 'project_id', 'is_active'),
     )
-

@@ -162,4 +162,3 @@ SELECT plan_type, COUNT(*) FROM subscriptions GROUP BY plan_type;
    DROP TABLE IF EXISTS subscriptions;
    ```
 
-

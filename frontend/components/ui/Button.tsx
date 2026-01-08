@@ -18,11 +18,11 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           'inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none',
           {
             // Variants
-            'bg-black text-white hover:bg-gray-800 focus:ring-black': variant === 'primary',
+            'bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 shadow-lg shadow-primary-500/50 focus:ring-primary-500 transition-all duration-200 hover:shadow-xl hover:shadow-primary-500/60': variant === 'primary',
             'bg-gray-100 text-gray-900 hover:bg-gray-200 focus:ring-gray-500': variant === 'secondary',
             'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-500': variant === 'ghost',
-            'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500': variant === 'danger',
-            'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-gray-500': variant === 'outline',
+            'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 shadow-lg shadow-red-500/50': variant === 'danger',
+            'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-primary-300 focus:ring-primary-500': variant === 'outline',
             // Sizes
             'px-3 py-1.5 text-sm': size === 'sm',
             'px-4 py-2 text-sm': size === 'md',

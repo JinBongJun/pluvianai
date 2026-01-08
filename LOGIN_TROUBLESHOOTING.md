@@ -102,4 +102,3 @@ curl -X POST "https://your-backend-url.up.railway.app/api/v1/auth/login" \
 3. Vercel 환경 변수 확인
 4. Railway 백엔드 상태 확인
 
-

@@ -34,4 +34,3 @@ class ActivityLogger:
 
 
 activity_logger = ActivityLogger()
-

@@ -56,4 +56,3 @@ logger.addHandler(error_handler)
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
-

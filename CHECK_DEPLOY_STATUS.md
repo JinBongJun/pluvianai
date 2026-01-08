@@ -95,4 +95,3 @@ Vercel Deployments 페이지에서:
 2. Vercel 대시보드에서 새 배포 확인
 3. 배포가 없으면 Deploy Hook 재생성
 
-

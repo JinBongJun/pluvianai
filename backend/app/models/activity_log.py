@@ -35,4 +35,3 @@ class ActivityLog(Base):
         Index('idx_activity_user_created', 'user_id', 'created_at'),
         Index('idx_activity_project_created', 'project_id', 'created_at'),
     )
-

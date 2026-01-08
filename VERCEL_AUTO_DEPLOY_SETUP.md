@@ -134,4 +134,3 @@ GitHub Secrets에 `VERCEL_DEPLOY_HOOK_URL` 추가
 2. Vercel 대시보드에서 빌드 로그 확인
 3. `frontend/package.json`의 의존성 확인
 
-

@@ -48,14 +48,14 @@ export default function Sidebar({
   };
 
   return (
-    <div className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 flex flex-col">
+    <div className="fixed left-0 top-0 h-screen w-64 bg-gradient-to-b from-slate-900 to-slate-800 border-r border-slate-700 flex flex-col shadow-xl">
       {/* Logo/Header */}
-      <div className="px-4 py-4 border-b border-gray-200">
+      <div className="px-4 py-4 border-b border-slate-700">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 bg-black rounded flex items-center justify-center">
+          <div className="h-8 w-8 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center shadow-lg shadow-primary-500/50">
             <span className="text-white font-bold text-sm">AG</span>
           </div>
-          <span className="font-semibold text-gray-900">AgentGuard</span>
+          <span className="font-semibold text-white">AgentGuard</span>
         </div>
       </div>
 
@@ -66,10 +66,10 @@ export default function Sidebar({
           <button
             onClick={() => router.push('/dashboard')}
             className={clsx(
-              'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+              'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
               isActive('/dashboard')
-                ? 'bg-gray-100 text-gray-900'
-                : 'text-gray-700 hover:bg-gray-50'
+                ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/50'
+                : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
             )}
           >
             <LayoutDashboard className="h-5 w-5" />
@@ -80,7 +80,7 @@ export default function Sidebar({
           <div>
             <button
               onClick={() => setIsProjectsOpen(!isProjectsOpen)}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700/50 hover:text-white transition-all duration-200"
             >
               <div className="flex items-center gap-3">
                 <Folder className="h-5 w-5" />
@@ -105,20 +105,23 @@ export default function Sidebar({
                       key={project.id}
                       onClick={() => router.push(`/dashboard/${project.id}`)}
                       className={clsx(
-                        'w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors text-left',
+                        'w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 text-left',
                         isProjectActive(project.id)
-                          ? 'bg-gray-100 text-gray-900 font-medium'
-                          : 'text-gray-600 hover:bg-gray-50'
+                          ? 'bg-primary-600/20 text-white font-medium border-l-2 border-primary-500'
+                          : 'text-slate-400 hover:bg-slate-700/50 hover:text-white'
                       )}
                     >
-                      <div className="h-2 w-2 rounded-full bg-gray-400" />
+                      <div className={clsx(
+                        'h-2 w-2 rounded-full transition-colors',
+                        isProjectActive(project.id) ? 'bg-primary-400' : 'bg-slate-500'
+                      )} />
                       <span className="truncate">{project.name}</span>
                     </button>
                   ))
                 )}
                 <button
                   onClick={() => router.push('/dashboard?create=true')}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-gray-500 hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:bg-slate-700/50 hover:text-primary-400 transition-all duration-200"
                 >
                   <span className="text-lg leading-none">+</span>
                   <span>New Project</span>
@@ -130,14 +133,14 @@ export default function Sidebar({
       </nav>
 
       {/* User Section */}
-      <div className="border-t border-gray-200 p-4">
+      <div className="border-t border-slate-700 p-4">
         <div className="flex items-center gap-3 mb-3">
           <Avatar name={userName} email={userEmail} size="sm" />
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-gray-900 truncate">
+            <div className="text-sm font-medium text-white truncate">
               {userName || userEmail || 'User'}
             </div>
-            <div className="text-xs text-gray-500 truncate">{userEmail}</div>
+            <div className="text-xs text-slate-400 truncate">{userEmail}</div>
           </div>
         </div>
         <div className="flex items-center gap-2 mb-3">
@@ -149,10 +152,10 @@ export default function Sidebar({
           <button
             onClick={() => router.push('/settings')}
             className={clsx(
-              'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+              'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200',
               pathname?.startsWith('/settings')
-                ? 'bg-gray-100 text-gray-900'
-                : 'text-gray-700 hover:bg-gray-50'
+                ? 'bg-primary-600/20 text-white border-l-2 border-primary-500'
+                : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
             )}
           >
             <Settings className="h-4 w-4" />
@@ -160,7 +163,7 @@ export default function Sidebar({
           </button>
           <button
             onClick={onLogout}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-300 hover:bg-slate-700/50 hover:text-white transition-all duration-200"
           >
             <LogOut className="h-4 w-4" />
             <span>Logout</span>

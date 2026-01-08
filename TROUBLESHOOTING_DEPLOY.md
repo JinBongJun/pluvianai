@@ -105,4 +105,3 @@ Vercel Deployments 페이지에서:
 2. Deploy Hook URL 수동 테스트
 3. 필요시 Hook 재생성
 
-

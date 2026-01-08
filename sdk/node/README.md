@@ -83,4 +83,3 @@ await agentguard.trackCall(
 ## License
 
 MIT
-

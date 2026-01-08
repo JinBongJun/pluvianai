@@ -123,4 +123,3 @@ export default function ExportButton({ projectId, filters, className }: ExportBu
     </>
   );
 }
-

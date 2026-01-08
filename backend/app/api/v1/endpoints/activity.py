@@ -74,4 +74,3 @@ async def list_activity_logs(
         )
         for log in logs
     ]
-

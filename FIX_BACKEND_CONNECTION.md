@@ -79,4 +79,3 @@ https://your-railway-backend-url.up.railway.app/docs
 
 Swagger UI가 열리면 백엔드는 정상 작동 중입니다.
 
-

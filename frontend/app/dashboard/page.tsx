@@ -93,7 +93,7 @@ export default function DashboardPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-primary-200 border-t-primary-600"></div>
         </div>
       </DashboardLayout>
     );
@@ -105,8 +105,8 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Projects</h1>
-            <p className="text-gray-600 mt-1">Manage your LLM monitoring projects</p>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">Projects</h1>
+            <p className="text-gray-600 mt-2">Manage your LLM monitoring projects</p>
           </div>
           <Button onClick={() => setShowCreateModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
@@ -130,16 +130,21 @@ export default function DashboardPage() {
 
         {/* Projects Grid */}
         {filteredProjects.length === 0 && projects.length > 0 ? (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
             <p className="text-gray-600">No projects found matching "{searchQuery}"</p>
           </div>
         ) : projects.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-            <p className="text-gray-600 mb-4">No projects yet. Create your first project to get started.</p>
-            <Button onClick={() => setShowCreateModal(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Project
-            </Button>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+            <div className="max-w-md mx-auto">
+              <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center">
+                <Plus className="h-8 w-8 text-primary-600" />
+              </div>
+              <p className="text-gray-600 mb-6 text-lg">No projects yet. Create your first project to get started.</p>
+              <Button onClick={() => setShowCreateModal(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Project
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

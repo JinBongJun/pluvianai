@@ -5,14 +5,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 255, 255, 255;
+  --foreground-rgb: 15, 23, 42;
+  --background-start-rgb: 248, 250, 252;
   --background-end-rgb: 255, 255, 255;
+  --primary-color: 139, 92, 246; /* Purple #8B5CF6 */
+  --primary-dark: 124, 58, 237; /* Purple-600 */
 }
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-start-rgb));
+  background: linear-gradient(to bottom, rgb(var(--background-start-rgb)), rgb(var(--background-end-rgb)));
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

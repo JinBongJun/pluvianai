@@ -40,4 +40,3 @@ export default function Toast({ message, type = 'info', onClose, duration = 3000
   );
 }
 
-

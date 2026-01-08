@@ -115,4 +115,3 @@ CORS_ORIGINS=https://your-app.vercel.app
 - Railway에서 `DATABASE_URL` 확인
 - PostgreSQL 서비스 상태 확인
 
-

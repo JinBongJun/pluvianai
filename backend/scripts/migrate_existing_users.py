@@ -60,4 +60,3 @@ def migrate_existing_users():
 if __name__ == "__main__":
     migrate_existing_users()
 
-
