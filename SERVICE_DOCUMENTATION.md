@@ -21,6 +21,12 @@
 13. [보안 및 인증](#13-보안-및-인증)
 14. [성능 최적화](#14-성능-최적화)
 15. [리스크 분석 및 해결 전략](#15-리스크-분석-및-해결-전략)
+16. [추가 정보](#16-추가-정보)
+17. [개발 및 테스트](#17-개발-및-테스트)
+18. [로깅 및 모니터링](#18-로깅-및-모니터링)
+19. [제한 사항 및 향후 계획](#19-제한-사항-및-향후-계획)
+20. [연락처 및 지원](#20-연락처-및-지원)
+21. [SDK 사용 가이드](#21-sdk-사용-가이드)
 
 ---
 
@@ -1520,7 +1526,318 @@ APICall 데이터
 
 ---
 
-## 15. 추가 정보
+## 15. 리스크 분석 및 해결 전략
+
+AgentGuard 서비스의 리스크 분석과 해결책은 `RISK_ANALYSIS.md` 파일에 상세히 문서화되어 있습니다. 이 섹션에서는 구현된 해결책들을 중심으로 설명합니다.
+
+### 15.1 종합 평가
+
+| 평가 항목 | 위험도 | 생존 가능성 |
+|---------|--------|------------|
+| 시장 타이밍 | 낮음 | 매우 높음 |
+| 경쟁 리스크 | 중간 | 충분히 승산 있음 |
+| 기술 난이도 | 중간~높음 | 1인 개발 가능 |
+| 수익성 | 매우 높음 | B2B SaaS 안정적 |
+| 도입 장벽 | 중간 | 해결책으로 극복 가능 |
+| 장기 지속성 | 높음 | 기업이 바꾸기 어려운 devtool |
+
+**종합 점수: 87/100** — 성공 가능성이 매우 높은 편
+
+### 15.2 리스크 1: AI 모델 안정화로 인한 필요성 감소
+
+#### 문제
+AgentGuard의 핵심 가치는 Drift Detection, Quality Monitoring, JSON Validator 등 "불안정성 문제 해결"에 초점을 맞추고 있습니다. AI 모델이 안정화되면 필요성이 감소할 수 있습니다.
+
+#### 구현된 해결책
+
+**1. 비용 최적화 플랫폼 강화**
+- **파일**: `backend/app/services/cost_analyzer.py`
+- **기능**:
+  - `recommend_optimal_model_for_task()`: Task별 최적 모델 추천
+    - 비용, 속도, 품질, 성공률을 종합하여 최적 모델 추천
+    - Agent별로 다른 모델 추천 가능
+    - ROI 추정치 제공
+  - `simulate_model_switch()`: 모델 전환 시뮬레이션
+    - 현재 모델 → 타겟 모델 전환 시 비용/품질/속도 변화 예측
+    - 월간 절감액 계산
+    - 리스크 평가 (cost increase, quality drop, latency increase)
+    - 추천 여부 자동 판단
+
+**2. 멀티 모델 벤치마크 강화**
+- **파일**: `backend/app/services/benchmark_service.py`
+- **기능**:
+  - `compare_models()`: 여러 모델 종합 비교
+    - 품질 점수, 비용, 지연시간, 성공률을 종합한 recommendation_score 계산
+    - 가중치: 품질 40%, 비용 30%, 지연시간 20%, 성공률 10%
+  - `get_real_time_comparison()`: 실시간 모델 비교
+    - 특정 모델들을 선택하여 실시간 비교
+    - 각 메트릭별 최고 모델 자동 선정 (best_for_cost, best_for_quality, best_for_speed, best_overall)
+
+**3. API 엔드포인트**
+- `/api/v1/cost/recommend-optimal-model`: Task별 최적 모델 추천
+- `/api/v1/cost/simulate-switch`: 모델 전환 시뮬레이션
+- `/api/v1/benchmark/compare`: 모델 비교
+- `/api/v1/benchmark/recommendations`: 모델 추천
+
+### 15.3 리스크 2: 초기 사용자 데이터 부족
+
+#### 문제
+대부분의 devtool SaaS는 초기에 사용자가 데이터를 보내지 않아 빈 대시보드로 인한 사용자 이탈이 발생합니다.
+
+#### 구현된 해결책
+
+**1. Zero-Config SDK 구현**
+
+**Python SDK**
+- **파일**: `sdk/python/agentguard/__init__.py`
+- **기능**:
+  ```python
+  import agentguard
+  agentguard.init()  # 한 줄로 초기화
+  # 이제 모든 OpenAI 호출이 자동으로 모니터링됨
+  ```
+  - OpenAI Python SDK 자동 monkey patch
+  - `openai.ChatCompletion.create` 자동 래핑
+  - `openai.OpenAI` 클래스 자동 패칭
+  - 환경 변수 지원 (`AGENTGUARD_API_KEY`, `AGENTGUARD_PROJECT_ID`)
+  - Non-blocking API 호출 (fire-and-forget)
+
+**Node.js SDK**
+- **파일**: `sdk/node/src/index.ts`
+- **기능**:
+  ```typescript
+  import agentguard from '@agentguard/sdk';
+  agentguard.init();  // 한 줄로 초기화
+  // 이제 모든 OpenAI 호출이 자동으로 모니터링됨
+  ```
+  - OpenAI Node.js SDK 자동 래핑
+  - TypeScript 타입 지원
+  - 환경 변수 지원
+  - Non-blocking API 호출
+
+**2. 온보딩 시 자동 샘플 데이터 생성**
+- **파일**: `backend/app/api/v1/endpoints/admin.py`
+- **기능**: `generate_sample_data()` 엔드포인트
+  - **50개 API 호출** 생성:
+    - 30개 정상 호출 (다양한 모델, 에이전트)
+    - 10개 JSON 검증 오류
+    - 5개 서버 오류
+    - 5개 고지연 호출
+  - **30개 품질 점수** 생성 (점수 breakdown 포함)
+  - **5개 드리프트 감지** 생성 (근거 포함):
+    - Length drift (길이 변화)
+    - Structure drift (구조 변화)
+    - Semantic drift (의미 변화)
+    - Latency drift (지연시간 변화)
+    - Quality drift (품질 변화)
+  - **3개 알림** 생성 (다양한 시나리오)
+
+**3. 프로젝트 생성 시 샘플 데이터 옵션**
+- **파일**: `backend/app/api/v1/endpoints/projects.py`
+- **기능**: `ProjectCreate` 모델에 `generate_sample_data` 필드 추가
+  - 프로젝트 생성 시 `generate_sample_data: true` 옵션으로 자동 샘플 데이터 생성
+  - 온보딩 플로우에서 자동으로 활성화
+
+**4. 60초 설치 온보딩 플로우**
+- **파일**: `frontend/app/onboarding/page.tsx`
+- **기능**: 단계별 온보딩 가이드
+  - **Step 1: Welcome** - 프로젝트 생성
+  - **Step 2: Install** - SDK 설치 (Python/Node.js 선택)
+  - **Step 3: Configure** - 환경 변수 또는 코드 초기화
+  - **Step 4: Test** - 테스트 API 호출 예시
+  - **Step 5: Complete** - 완료 및 대시보드 이동
+- **특징**:
+  - 코드 복사 버튼
+  - 언어 선택 (Python/Node.js)
+  - 단계별 진행 표시
+  - 샘플 데이터 자동 생성 옵션
+
+### 15.4 리스크 3: 경쟁사 기능 카피 위험
+
+#### 문제
+Langfuse, HoneyHive, DeepEval 같은 경쟁사가 기능을 카피할 수 있습니다.
+
+#### 구현된 해결책
+
+**1. Real-time Drift Detection 개선**
+- **파일**: `backend/app/services/drift_engine.py`
+- **개선 사항**:
+  - 더 정확한 baseline 계산 (7일 평균)
+  - 다차원 drift 감지:
+    - Length drift (응답 길이 변화)
+    - Structure drift (JSON 구조 변화)
+    - Semantic drift (의미 변화)
+    - Latency drift (지연시간 변화)
+    - Quality drift (품질 점수 변화)
+  - 에이전트별 drift 추적
+  - 구체적 근거 자동 수집 (Before/After 예시)
+
+**2. Multi-model Evaluator 강화**
+- **파일**: `backend/app/services/quality_evaluator.py`
+- **기능**: `evaluate_parallel()`
+  - 여러 모델에 동시에 같은 prompt 입력
+  - 상대적 점수 제공 (0-100 정규화)
+  - 각 모델별 rank 제공
+  - Best for quality/cost/speed/overall 자동 추천
+- **API**: `/api/v1/quality/evaluate-parallel`
+
+**3. Quality Score 표준화**
+- **파일**: `backend/app/services/quality_evaluator.py`
+- **표준 가중치**:
+  - JSON structure integrity: 30%
+  - Semantic similarity: 40%
+  - External validator: 10%
+  - Consistency over time: 20%
+- **Rule-based 가중치**:
+  - JSON validity: 30%
+  - Required fields: 25%
+  - Length acceptable: 25%
+  - Format valid: 20%
+- **LLM-based 가중치**:
+  - Semantic consistency: 40%
+  - Tone: 30%
+  - Coherence: 30%
+
+### 15.5 리스크 4: 품질 점수 신뢰도 문제
+
+#### 문제
+AI 품질 점수나 drift alert의 정확성에 대한 불신이 생길 수 있습니다.
+
+#### 구현된 해결책
+
+**1. 점수 구성요소 투명화**
+- **파일**: `backend/app/services/quality_evaluator.py`
+- **구현**:
+  - `evaluation_details` 필드에 상세 breakdown 저장:
+    - `rule_scores`: 각 규칙별 점수
+    - `rule_weights`: 각 규칙별 가중치
+    - `llm_scores`: LLM 기반 점수 (있는 경우)
+    - `llm_weights`: LLM 기반 가중치
+    - `score_breakdown`: 각 구성요소별 기여도
+    - `overall_score_formula`: 점수 계산 공식
+  - API 응답에 `evaluation_details` 포함
+  - 프론트엔드에서 breakdown 시각화 가능
+
+**2. Parallel Evaluator 구현**
+- **파일**: `backend/app/services/quality_evaluator.py`
+- **기능**: `evaluate_parallel()`
+  - 같은 prompt를 여러 모델에 동시 입력
+  - 상대적 점수 제공 (최고 모델 기준 정규화)
+  - 신뢰도 향상 (절대 점수가 아닌 상대 비교)
+- **API**: `/api/v1/quality/evaluate-parallel`
+
+**3. Drift 근거 자동 수집 및 표시**
+- **파일**: `backend/app/services/drift_engine.py`
+- **구현**:
+  - Length drift: 평균 길이 변화 + 샘플 응답 예시
+  - Structure drift: 필드 변화 + 누락된 필드 목록 + Before/After 필드 비교
+  - Evidence 메시지 자동 생성:
+    - "Average response length changed from 800 to 1200 characters (50% change)."
+    - "Missing fields: name, age, email."
+    - "Baseline fields: name, age. Current fields: name."
+  - `detection_details`에 저장:
+    - `evidence`: 사람이 읽을 수 있는 설명
+    - `baseline_sample`: Baseline 샘플 데이터
+    - `current_sample`: Current 샘플 데이터
+    - `missing_fields`: 누락된 필드 목록
+
+**4. 프론트엔드 점수 상세 표시**
+- **파일**: `backend/app/api/v1/endpoints/quality.py`
+- **구현**: `QualityScoreResponse`에 `evaluation_details` 필드 추가
+  - 프론트엔드에서 점수 breakdown 표시 가능
+  - 각 구성요소별 점수와 가중치 시각화 가능
+
+### 15.6 리스크 5: 개발자 도입 장벽
+
+#### 문제
+SDK 설치, Proxy 설정 등이 복잡하여 사용자가 도입을 포기할 수 있습니다.
+
+#### 구현된 해결책
+
+**1. 60초 설치 온보딩 플로우**
+- **파일**: `frontend/app/onboarding/page.tsx`
+- **구현**:
+  - 5단계 온보딩 프로세스
+  - 각 단계별 명확한 가이드
+  - 코드 복사 버튼
+  - Python/Node.js 선택 가능
+  - 환경 변수 또는 코드 초기화 선택 가능
+  - 테스트 API 호출 예시 제공
+
+**2. Zero-Config SDK**
+- **Python**: `pip install agentguard` + `agentguard.init()` 한 줄
+- **Node.js**: `npm install @agentguard/sdk` + `agentguard.init()` 한 줄
+- 코드 변경 없이 자동 모니터링
+
+**3. 프로젝트 생성 시 샘플 데이터 옵션**
+- 프로젝트 생성 시 `generate_sample_data: true` 옵션으로 즉시 대시보드 채우기
+- 온보딩 플로우에서 자동 활성화
+
+**4. 프록시 모드**
+- **파일**: `backend/app/api/v1/endpoints/proxy.py`
+- **기능**: URL만 변경하면 바로 연동
+  - 기존: `https://api.openai.com/v1/chat/completions`
+  - 변경: `https://api.agentguard.dev/openai/v1/chat/completions`
+  - 자동으로 요청/응답 캡처
+
+### 15.7 구현된 기능 요약
+
+#### 백엔드 구현
+1. **비용 최적화** (`backend/app/services/cost_analyzer.py`):
+   - `recommend_optimal_model_for_task()`: Task별 최적 모델 추천
+   - `simulate_model_switch()`: 모델 전환 시뮬레이션
+
+2. **벤치마크 강화** (`backend/app/services/benchmark_service.py`):
+   - `get_real_time_comparison()`: 실시간 모델 비교
+
+3. **품질 점수 투명성** (`backend/app/services/quality_evaluator.py`):
+   - 점수 구성요소 breakdown
+   - 가중치 명시
+   - `evaluate_parallel()`: 여러 모델 동시 평가
+
+4. **Drift 근거 수집** (`backend/app/services/drift_engine.py`):
+   - 구체적 근거 자동 수집
+   - Before/After 예시 제공
+
+5. **샘플 데이터 생성** (`backend/app/api/v1/endpoints/admin.py`):
+   - 다양한 시나리오 샘플 생성
+   - 프로젝트 생성 시 자동 생성 옵션
+
+#### 프론트엔드 구현
+1. **온보딩 플로우** (`frontend/app/onboarding/page.tsx`):
+   - 5단계 온보딩 가이드
+   - 코드 복사 및 언어 선택
+
+#### SDK 구현
+1. **Python SDK** (`sdk/python/agentguard/__init__.py`):
+   - Zero-config 자동 패칭
+   - 환경 변수 지원
+
+2. **Node.js SDK** (`sdk/node/src/index.ts`):
+   - Zero-config 자동 래핑
+   - TypeScript 지원
+
+### 15.8 생존 가능성 평가
+
+**강점**:
+1. 시장 타이밍: LLM 에이전트 시장 급성장 중
+2. 기술적 차별성: Real-time drift detection, Multi-model evaluator
+3. 플랫폼 접근: 단순 기능이 아닌 통합 플랫폼
+4. 수익성: B2B SaaS 모델로 안정적 수익 구조
+
+**약점 및 대응**:
+1. 경쟁 리스크 → 플랫폼 차별화로 대응
+2. 도입 장벽 → Zero-config SDK로 해결
+3. 신뢰도 문제 → 투명성 개선으로 해결
+4. 모델 안정화 → 비용 최적화 플랫폼으로 확장
+
+**최종 평가**: 종합 점수 87/100 — 성공 가능성이 매우 높은 편
+
+자세한 리스크 분석은 `RISK_ANALYSIS.md`를 참조하세요.
+
+---
+
+## 16. 추가 정보
 
 ### 15.1 지원하는 LLM 제공자
 - **OpenAI**: GPT-4, GPT-3.5-turbo 등
@@ -1551,7 +1868,7 @@ APICall 데이터
 
 ---
 
-## 16. 개발 및 테스트
+## 17. 개발 및 테스트
 
 ### 16.1 로컬 개발 환경
 - **Docker Compose**: 전체 스택 실행
@@ -1569,7 +1886,7 @@ APICall 데이터
 
 ---
 
-## 17. 로깅 및 모니터링
+## 18. 로깅 및 모니터링
 
 ### 17.1 로깅
 - **백엔드**: Python logging 모듈
@@ -1583,7 +1900,7 @@ APICall 데이터
 
 ---
 
-## 18. 제한 사항 및 향후 계획
+## 19. 제한 사항 및 향후 계획
 
 ### 18.1 현재 제한 사항
 - Paddle 결제 통합 미완성
@@ -1601,7 +1918,7 @@ APICall 데이터
 
 ---
 
-## 19. 연락처 및 지원
+## 20. 연락처 및 지원
 
 ### 19.1 문서
 - API 문서: `/docs` (Swagger UI)
@@ -1613,7 +1930,96 @@ APICall 데이터
 
 ---
 
-**문서 버전**: 1.0  
+---
+
+## 21. SDK 사용 가이드
+
+### 21.1 Python SDK
+
+**설치**:
+```bash
+pip install agentguard
+```
+
+**사용법**:
+```python
+import agentguard
+
+# 환경 변수 설정
+# export AGENTGUARD_API_KEY="your-api-key"
+# export AGENTGUARD_PROJECT_ID="123"
+
+# 한 줄로 초기화
+agentguard.init()
+
+# 이제 모든 OpenAI 호출이 자동으로 모니터링됨
+from openai import OpenAI
+client = OpenAI()
+response = client.chat.completions.create(
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+**수동 추적**:
+```python
+agentguard.track_call(
+    request_data={"model": "gpt-4", "messages": [...]},
+    response_data={"choices": [...]},
+    latency_ms=500,
+    status_code=200,
+    agent_name="my-agent"
+)
+```
+
+### 21.2 Node.js SDK
+
+**설치**:
+```bash
+npm install @agentguard/sdk
+```
+
+**사용법**:
+```typescript
+import agentguard from '@agentguard/sdk';
+
+// 환경 변수 설정
+// export AGENTGUARD_API_KEY="your-api-key"
+// export AGENTGUARD_PROJECT_ID="123"
+
+// 한 줄로 초기화
+agentguard.init();
+
+// 이제 모든 OpenAI 호출이 자동으로 모니터링됨
+import OpenAI from 'openai';
+const openai = new OpenAI();
+const response = await openai.chat.completions.create({
+  model: 'gpt-4',
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+```
+
+**수동 추적**:
+```typescript
+await agentguard.trackCall(
+  { model: 'gpt-4', messages: [...] },
+  { choices: [...] },
+  500,
+  200,
+  'my-agent'
+);
+```
+
+### 21.3 환경 변수
+
+- `AGENTGUARD_API_KEY`: AgentGuard API 키 (필수)
+- `AGENTGUARD_PROJECT_ID`: 프로젝트 ID (필수)
+- `AGENTGUARD_API_URL`: API URL (선택, 기본값: `https://api.agentguard.dev`)
+- `AGENTGUARD_AGENT_NAME`: 에이전트 이름 (선택)
+
+---
+
+**문서 버전**: 2.0  
 **최종 업데이트**: 2024년  
 **작성자**: AgentGuard 개발팀
 
