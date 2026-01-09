@@ -32,11 +32,20 @@ def get_db():
     """
     Dependency function to get database session
     Usage: db: Session = Depends(get_db)
+    
+    Automatically handles:
+    - Connection acquisition from pool
+    - Transaction rollback on exception
+    - Connection cleanup
     """
     db = SessionLocal()
     try:
         yield db
+        db.commit()  # Commit if no exception occurred
+    except Exception:
+        db.rollback()  # Rollback on any exception
+        raise
     finally:
-        db.close()
+        db.close()  # Always close connection
 
 
