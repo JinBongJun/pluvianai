@@ -19,7 +19,7 @@ export default function ComparePage() {
 
   const [comparisons, setComparisons] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<{ type: 'subscription' | 'empty' | 'api' | null; message: string }>({ type: null, message: '' });
+  const [error, setError] = useState<{ type: 'empty' | 'api' | null; message: string }>({ type: null, message: '' });
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
     from: (() => {
       const date = new Date();
@@ -57,13 +57,7 @@ export default function ComparePage() {
       console.error('Failed to load comparisons:', error);
       const errorMessage = error.response?.data?.detail || 'Failed to load comparisons';
       
-      if (error.response?.status === 403) {
-        setError({ 
-          type: 'subscription', 
-          message: errorMessage 
-        });
-        toast.showToast('Subscription upgrade required for model comparison', 'warning');
-      } else if (error.response?.status === 404 || error.response?.status === 400) {
+      if (error.response?.status === 404 || error.response?.status === 400) {
         setError({ 
           type: 'empty', 
           message: 'No comparison data found. Make sure you have API calls from multiple models in the selected date range.' 
@@ -105,20 +99,6 @@ export default function ComparePage() {
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
-          </div>
-        ) : error.type === 'subscription' ? (
-          <div className="relative overflow-hidden rounded-2xl border border-orange-500/30 bg-gradient-to-b from-orange-500/10 to-orange-500/5 backdrop-blur-sm p-12 text-center shadow-2xl">
-            <BarChart3 className="h-12 w-12 text-orange-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-white mb-2">Subscription Upgrade Required</h3>
-            <p className="text-sm text-slate-300 mb-4">
-              {error.message}
-            </p>
-            <p className="text-sm text-slate-400 mb-6">
-              Multi-model comparison is available on Startup plan or higher.
-            </p>
-            <Button onClick={() => router.push('/settings/billing')}>
-              Upgrade Subscription
-            </Button>
           </div>
         ) : error.type === 'empty' || comparisons.length === 0 ? (
           <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-12 text-center shadow-2xl">
