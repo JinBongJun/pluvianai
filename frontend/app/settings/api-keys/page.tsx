@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
-import { settingsAPI } from '@/lib/api';
+import { settingsAPI, projectsAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
-import { Key, Plus, Trash2, Copy, Check, Edit2 } from 'lucide-react';
+import { Key, Plus, Trash2, Copy, Check, Edit2, ExternalLink, Activity } from 'lucide-react';
 
 interface APIKey {
   id: number;
@@ -16,12 +17,15 @@ interface APIKey {
   key_prefix: string;
   created_at: string;
   last_used_at: string | null;
+  usage_count?: number;
+  projects_used?: number[];
 }
 
 export default function APIKeysPage() {
   const router = useRouter();
   const toast = useToast();
   const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
@@ -36,8 +40,18 @@ export default function APIKeysPage() {
       return;
     }
 
+    loadProjects();
     loadAPIKeys();
   }, [router]);
+
+  const loadProjects = async () => {
+    try {
+      const data = await projectsAPI.list();
+      setProjects(data);
+    } catch (error: any) {
+      console.error('Failed to load projects:', error);
+    }
+  };
 
   const loadAPIKeys = async () => {
     try {
@@ -97,11 +111,28 @@ export default function APIKeysPage() {
     setTimeout(() => setCopiedKeyId(null), 2000);
   };
 
+  const getDaysSinceLastUse = (lastUsedAt: string | null): number | null => {
+    if (!lastUsedAt) return null;
+    const lastUsed = new Date(lastUsedAt);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - lastUsed.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  const getUsageStatus = (lastUsedAt: string | null): 'active' | 'recent' | 'inactive' => {
+    if (!lastUsedAt) return 'inactive';
+    const days = getDaysSinceLastUse(lastUsedAt);
+    if (days === null) return 'inactive';
+    if (days <= 7) return 'active';
+    if (days <= 30) return 'recent';
+    return 'inactive';
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
         </div>
       </DashboardLayout>
     );
@@ -109,20 +140,21 @@ export default function APIKeysPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">API Keys</h1>
-            <p className="text-gray-600 mt-1">Manage your API keys for programmatic access</p>
+      <div className="bg-[#000314] min-h-screen">
+        <div className="space-y-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-white">API Keys</h1>
+              <p className="text-slate-400 mt-1">Manage your API keys for programmatic access</p>
+            </div>
+            <Button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Create API Key
+            </Button>
           </div>
-          <Button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Create API Key
-          </Button>
-        </div>
 
         {/* New Key Display Modal */}
         {newKey && (
@@ -193,75 +225,121 @@ export default function APIKeysPage() {
           </Modal>
         )}
 
-        {/* API Keys List */}
-        {apiKeys.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-            <Key className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No API keys</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Create an API key to enable programmatic access to your account
-            </p>
-            <Button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 mx-auto"
-            >
-              <Plus className="h-4 w-4" />
-              Create Your First API Key
-            </Button>
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Key Prefix
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Created
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Last Used
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {apiKeys.map((key) => (
-                  <tr key={key.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{key.name}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <code className="text-sm text-gray-600 font-mono bg-gray-100 px-2 py-1 rounded">
-                        {key.key_prefix}
-                      </code>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(key.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : 'Never'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => handleDeleteKey(key.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
+          {/* API Keys List */}
+          {apiKeys.length === 0 ? (
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-12 text-center shadow-2xl">
+              <Key className="h-12 w-12 text-slate-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-white mb-2">No API keys</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Create an API key to enable programmatic access to your account
+              </p>
+              <Button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center gap-2 mx-auto"
+              >
+                <Plus className="h-4 w-4" />
+                Create Your First API Key
+              </Button>
+            </div>
+          ) : (
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm shadow-2xl overflow-hidden">
+              <table className="min-w-full divide-y divide-white/10">
+                <thead className="bg-white/5">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      Key Prefix
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      Created
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      Last Used
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      Projects
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody className="bg-transparent divide-y divide-white/10">
+                  {apiKeys.map((key) => {
+                    const usageStatus = getUsageStatus(key.last_used_at);
+                    const daysSince = getDaysSinceLastUse(key.last_used_at);
+                    return (
+                      <tr key={key.id} className="hover:bg-white/5 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-white">{key.name}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <code className="text-sm text-slate-300 font-mono bg-white/5 px-2 py-1 rounded border border-white/10">
+                            {key.key_prefix}
+                          </code>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs font-medium rounded ${
+                            usageStatus === 'active' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
+                            usageStatus === 'recent' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
+                            'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                          }`}>
+                            {usageStatus === 'active' ? 'Active' : usageStatus === 'recent' ? 'Recent' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                          {new Date(key.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-slate-300">
+                            {key.last_used_at ? (
+                              <>
+                                <div>{new Date(key.last_used_at).toLocaleDateString()}</div>
+                                {daysSince !== null && (
+                                  <div className="text-xs text-slate-500">
+                                    {daysSince === 0 ? 'Today' : daysSince === 1 ? 'Yesterday' : `${daysSince} days ago`}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-slate-500">Never</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {projects.length > 0 ? (
+                            <Link
+                              href="/dashboard"
+                              className="text-sm text-purple-400 hover:text-purple-300 flex items-center gap-1 transition-colors"
+                            >
+                              <Activity className="h-4 w-4" />
+                              View Projects
+                              <ExternalLink className="h-3 w-3" />
+                            </Link>
+                          ) : (
+                            <span className="text-sm text-slate-500">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={() => handleDeleteKey(key.id)}
+                            className="text-red-400 hover:text-red-300 transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
 
         {/* Create API Key Modal */}
         <Modal
@@ -311,6 +389,7 @@ export default function APIKeysPage() {
             </div>
           </div>
         </Modal>
+        </div>
       </div>
     </DashboardLayout>
   );

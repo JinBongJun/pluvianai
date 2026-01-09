@@ -10,8 +10,11 @@ import StatsCard from '@/components/StatsCard';
 import MemberList from '@/components/MemberList';
 import ProjectSettings from '@/components/ProjectSettings';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import EmptyState from '@/components/EmptyState';
 import { clsx } from 'clsx';
 import ProjectTabs from '@/components/ProjectTabs';
+import { ArrowRight, Activity, TrendingUp } from 'lucide-react';
+import Button from '@/components/ui/Button';
 
 export default function ProjectDetailPage() {
   const router = useRouter();
@@ -135,38 +138,129 @@ export default function ProjectDetailPage() {
           <div className="space-y-6">
             {/* Bento Grid - Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatsCard
-                title="Total API Calls"
-                value={stats?.total_calls || 0}
-                subtitle="Last 7 days"
-              />
-              <StatsCard
-                title="Avg Quality Score"
-                value={stats?.avg_score ? `${stats.avg_score.toFixed(1)}%` : 'N/A'}
-                subtitle="Last 7 days"
-              />
-              <StatsCard
-                title="Total Cost"
-                value={costData?.total_cost ? `$${costData.total_cost.toFixed(2)}` : '$0.00'}
-                subtitle="Last 7 days"
-              />
-              <StatsCard
-                title="Success Rate"
-                value={stats?.success_rate ? `${(stats.success_rate * 100).toFixed(1)}%` : 'N/A'}
-                subtitle="Last 7 days"
-              />
+              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-purple">
+                <StatsCard
+                  title="Total API Calls"
+                  value={stats?.total_calls || 0}
+                  subtitle="Last 7 days"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => router.push(`/dashboard/${projectId}/api-calls`)}
+                  className="mt-4 w-full text-purple-400 hover:text-purple-300"
+                >
+                  View Details <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
+              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-purple">
+                <StatsCard
+                  title="Avg Quality Score"
+                  value={stats?.avg_score ? `${stats.avg_score.toFixed(1)}%` : 'N/A'}
+                  subtitle="Last 7 days"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => router.push(`/dashboard/${projectId}?tab=overview`)}
+                  className="mt-4 w-full text-purple-400 hover:text-purple-300"
+                >
+                  View Details <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
+              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-purple">
+                <StatsCard
+                  title="Total Cost"
+                  value={costData?.total_cost ? `$${costData.total_cost.toFixed(2)}` : '$0.00'}
+                  subtitle="Last 7 days"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => router.push(`/dashboard/${projectId}?tab=overview`)}
+                  className="mt-4 w-full text-purple-400 hover:text-purple-300"
+                >
+                  View Details <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
+              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-purple">
+                <StatsCard
+                  title="Success Rate"
+                  value={stats?.success_rate ? `${(stats.success_rate * 100).toFixed(1)}%` : 'N/A'}
+                  subtitle="Last 7 days"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => router.push(`/dashboard/${projectId}/api-calls`)}
+                  className="mt-4 w-full text-purple-400 hover:text-purple-300"
+                >
+                  View Details <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
             </div>
 
             {/* Charts - Bento Grid Style */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-purple">
-                <h2 className="text-lg font-semibold text-white mb-4">Quality Scores</h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-white">Quality Scores</h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push(`/dashboard/${projectId}?tab=overview`)}
+                    className="text-purple-400 hover:text-purple-300"
+                  >
+                    View All
+                  </Button>
+                </div>
                 <QualityChart projectId={projectId} />
               </div>
 
               <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-purple">
-                <h2 className="text-lg font-semibold text-white mb-4">Drift Detections</h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-white">Drift Detections</h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push(`/dashboard/${projectId}?tab=overview`)}
+                    className="text-purple-400 hover:text-purple-300"
+                  >
+                    View All
+                  </Button>
+                </div>
                 <DriftChart projectId={projectId} />
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
+              <h2 className="text-lg font-semibold text-white mb-4">Quick Actions</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Button
+                  variant="outline"
+                  onClick={() => router.push(`/dashboard/${projectId}/api-calls`)}
+                  className="flex items-center justify-center gap-2"
+                >
+                  <Activity className="h-4 w-4" />
+                  View API Calls
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push(`/dashboard/${projectId}/compare`)}
+                  className="flex items-center justify-center gap-2"
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  Compare Models
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push(`/dashboard/${projectId}/reports`)}
+                  className="flex items-center justify-center gap-2"
+                >
+                  <Activity className="h-4 w-4" />
+                  Generate Report
+                </Button>
               </div>
             </div>
           </div>

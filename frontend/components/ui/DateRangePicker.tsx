@@ -90,6 +90,49 @@ export default function DateRangePicker({
   const containerRef = useRef<HTMLDivElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
 
+  // Calculate dropdown position
+  const calculateDropdownPosition = () => {
+    if (containerRef.current && typeof window !== 'undefined') {
+      const rect = containerRef.current.getBoundingClientRect();
+      
+      // Check if dropdown would go off screen and adjust
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const dropdownWidth = 384; // w-96 = 384px
+      const dropdownHeight = 600; // max-h-[600px]
+      
+      // Position directly below the button (getBoundingClientRect is viewport-relative)
+      let left = rect.left;
+      let top = rect.bottom + 8;
+      
+      // Adjust if dropdown would go off right edge
+      if (left + dropdownWidth > viewportWidth - 8) {
+        left = viewportWidth - dropdownWidth - 8;
+      }
+      
+      // Adjust if dropdown would go off bottom edge
+      if (top + dropdownHeight > viewportHeight - 8) {
+        // Show above button instead
+        top = rect.top - dropdownHeight - 8;
+        if (top < 8) {
+          // If still off screen, center vertically
+          top = Math.max(8, (viewportHeight - dropdownHeight) / 2);
+        }
+      }
+      
+      // Ensure dropdown doesn't go off left edge
+      if (left < 8) {
+        left = 8;
+      }
+      
+      // getBoundingClientRect returns viewport-relative coordinates, perfect for fixed positioning
+      setDropdownPosition({ 
+        top: top, 
+        left: left 
+      });
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       setTempFrom(value?.from || null);
@@ -101,48 +144,29 @@ export default function DateRangePicker({
         setSelecting('from');
       }
       
-      // Calculate dropdown position for fixed positioning
-      if (containerRef.current && typeof window !== 'undefined') {
-        const rect = containerRef.current.getBoundingClientRect();
-        const scrollY = window.scrollY || window.pageYOffset;
-        const scrollX = window.scrollX || window.pageXOffset;
-        
-        // Check if dropdown would go off screen and adjust
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-        const dropdownWidth = 384; // w-96 = 384px
-        const dropdownHeight = 600; // max-h-[600px]
-        
-        // Position directly below the button
-        let left = rect.left;
-        let top = rect.bottom + 8;
-        
-        // Adjust if dropdown would go off right edge
-        if (left + dropdownWidth > viewportWidth) {
-          left = viewportWidth - dropdownWidth - 8;
+      // Calculate initial position
+      calculateDropdownPosition();
+      
+      // Recalculate on scroll and resize
+      const handleScroll = () => {
+        if (isOpen) {
+          calculateDropdownPosition();
         }
-        
-        // Adjust if dropdown would go off bottom edge
-        if (top + dropdownHeight > viewportHeight) {
-          // Show above button instead
-          top = rect.top - dropdownHeight - 8;
-          if (top < 0) {
-            // If still off screen, center vertically
-            top = Math.max(8, (viewportHeight - dropdownHeight) / 2);
-          }
+      };
+      
+      const handleResize = () => {
+        if (isOpen) {
+          calculateDropdownPosition();
         }
-        
-        // Ensure dropdown doesn't go off left edge
-        if (left < 0) {
-          left = 8;
-        }
-        
-        // Use getBoundingClientRect values directly (already relative to viewport)
-        setDropdownPosition({ 
-          top: top, 
-          left: left 
-        });
-      }
+      };
+      
+      window.addEventListener('scroll', handleScroll, true);
+      window.addEventListener('resize', handleResize);
+      
+      return () => {
+        window.removeEventListener('scroll', handleScroll, true);
+        window.removeEventListener('resize', handleResize);
+      };
     } else {
       setDropdownPosition(null);
     }
