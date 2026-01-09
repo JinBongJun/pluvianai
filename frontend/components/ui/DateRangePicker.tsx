@@ -94,6 +94,12 @@ export default function DateRangePicker({
     if (isOpen) {
       setTempFrom(value?.from || null);
       setTempTo(value?.to || null);
+      // Reset selecting state based on current values
+      if (value?.from && !value?.to) {
+        setSelecting('to');
+      } else {
+        setSelecting('from');
+      }
     }
   }, [isOpen, value]);
 
@@ -128,24 +134,41 @@ export default function DateRangePicker({
   };
 
   const handleDateClick = (date: Date) => {
-    if (selecting === 'from') {
-      const newFrom = new Date(date);
-      newFrom.setHours(0, 0, 0, 0);
-      setTempFrom(newFrom);
-      if (tempTo && newFrom > tempTo) {
-        setTempTo(null);
-      }
+    const clickedDate = new Date(date);
+    clickedDate.setHours(0, 0, 0, 0);
+    
+    // If no dates selected, start with 'from'
+    if (!tempFrom && !tempTo) {
+      setTempFrom(clickedDate);
       setSelecting('to');
-    } else {
-      const newTo = new Date(date);
-      newTo.setHours(23, 59, 59, 999);
-      if (tempFrom && newTo < tempFrom) {
-        setTempFrom(newTo);
-        setTempTo(tempFrom);
-      } else {
+      return;
+    }
+    
+    // If only 'from' is selected
+    if (tempFrom && !tempTo) {
+      if (clickedDate < tempFrom) {
+        // Clicked date is before 'from', swap them
+        const newTo = new Date(tempFrom);
+        newTo.setHours(23, 59, 59, 999);
         setTempTo(newTo);
+        setTempFrom(clickedDate);
+        setSelecting('from');
+      } else {
+        // Clicked date is after 'from', set as 'to'
+        const newTo = new Date(clickedDate);
+        newTo.setHours(23, 59, 59, 999);
+        setTempTo(newTo);
+        setSelecting('from');
       }
-      setSelecting('from');
+      return;
+    }
+    
+    // If both are selected, start fresh
+    if (tempFrom && tempTo) {
+      setTempFrom(clickedDate);
+      setTempTo(null);
+      setSelecting('to');
+      return;
     }
   };
 
@@ -177,17 +200,40 @@ export default function DateRangePicker({
   };
 
   const isDateInRange = (date: Date) => {
-    if (!tempFrom || !tempTo) return false;
-    return date >= tempFrom && date <= tempTo;
+    if (!tempFrom) return false;
+    const dateOnly = new Date(date);
+    dateOnly.setHours(0, 0, 0, 0);
+    
+    if (tempTo) {
+      const fromOnly = new Date(tempFrom);
+      fromOnly.setHours(0, 0, 0, 0);
+      const toOnly = new Date(tempTo);
+      toOnly.setHours(0, 0, 0, 0);
+      return dateOnly >= fromOnly && dateOnly <= toOnly;
+    }
+    
+    // If only 'from' is selected, highlight it
+    const fromOnly = new Date(tempFrom);
+    fromOnly.setHours(0, 0, 0, 0);
+    return dateOnly.getTime() === fromOnly.getTime();
   };
 
   const isDateSelected = (date: Date) => {
-    if (selecting === 'from' && tempFrom) {
-      return date.toDateString() === tempFrom.toDateString();
+    const dateOnly = new Date(date);
+    dateOnly.setHours(0, 0, 0, 0);
+    
+    if (tempFrom) {
+      const fromOnly = new Date(tempFrom);
+      fromOnly.setHours(0, 0, 0, 0);
+      if (dateOnly.getTime() === fromOnly.getTime()) return true;
     }
-    if (selecting === 'to' && tempTo) {
-      return date.toDateString() === tempTo.toDateString();
+    
+    if (tempTo) {
+      const toOnly = new Date(tempTo);
+      toOnly.setHours(0, 0, 0, 0);
+      if (dateOnly.getTime() === toOnly.getTime()) return true;
     }
+    
     return false;
   };
 
@@ -227,12 +273,12 @@ export default function DateRangePicker({
               key={date.toISOString()}
               onClick={() => handleDateClick(date)}
               className={clsx(
-                'h-8 w-8 rounded-md text-sm transition-colors',
+                'h-8 w-8 rounded-md text-sm transition-all duration-150',
                 isSelected
-                  ? 'bg-purple-500 text-white'
+                  ? 'bg-purple-500 text-white scale-110 shadow-lg shadow-purple-500/50'
                   : isInRange
-                  ? 'bg-purple-500/20 text-white'
-                  : 'text-slate-300 hover:bg-white/10 hover:text-white',
+                  ? 'bg-purple-500/20 text-white hover:bg-purple-500/30'
+                  : 'text-slate-300 hover:bg-white/10 hover:text-white hover:scale-105',
                 isToday && 'ring-2 ring-purple-500'
               )}
             >
@@ -264,7 +310,7 @@ export default function DateRangePicker({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 bg-[#0B0C15] rounded-lg shadow-2xl border border-white/10 z-[100] p-4 w-96 max-h-[600px] overflow-y-auto">
+        <div className="absolute top-full left-0 mt-2 bg-[#0B0C15] rounded-lg shadow-2xl border border-white/10 z-[9999] p-4 w-96 max-h-[600px] overflow-y-auto animate-fade-in">
           {/* Presets */}
           <div className="mb-4 pb-4 border-b border-white/10">
             <div className="text-xs font-medium text-white mb-2">Quick Select</div>
