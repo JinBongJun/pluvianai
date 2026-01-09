@@ -208,7 +208,7 @@ export default function DateRangePicker({
     return (
       <div className="grid grid-cols-7 gap-1">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-          <div key={day} className="text-xs font-medium text-gray-500 text-center py-2">
+          <div key={day} className="text-xs font-medium text-slate-400 text-center py-2">
             {day}
           </div>
         ))}
@@ -228,11 +228,11 @@ export default function DateRangePicker({
               className={clsx(
                 'h-8 w-8 rounded-md text-sm transition-colors',
                 isSelected
-                  ? 'bg-black text-white'
+                  ? 'bg-purple-500 text-white'
                   : isInRange
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'text-gray-700 hover:bg-gray-100',
-                isToday && 'ring-2 ring-black'
+                  ? 'bg-purple-500/20 text-white'
+                  : 'text-slate-300 hover:bg-white/10 hover:text-white',
+                isToday && 'ring-2 ring-purple-500'
               )}
             >
               {date.getDate()}
@@ -247,13 +247,13 @@ export default function DateRangePicker({
     <div ref={containerRef} className={clsx('relative', className)}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50"
+        className="flex items-center gap-2 px-3 py-2 border border-white/10 bg-white/5 rounded-md text-sm text-white hover:bg-white/10 transition-colors"
       >
         <Calendar className="h-4 w-4" />
         <span>{formatDisplay()}</span>
         {value?.from || value?.to ? (
           <X
-            className="h-4 w-4 text-gray-400 hover:text-gray-600"
+            className="h-4 w-4 text-slate-400 hover:text-white"
             onClick={(e) => {
               e.stopPropagation();
               handleClear();
@@ -263,16 +263,16 @@ export default function DateRangePicker({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-50 p-4 w-96">
+        <div className="absolute top-full left-0 mt-2 bg-[#0B0C15] rounded-lg shadow-2xl border border-white/10 z-[100] p-4 w-96 max-h-[600px] overflow-y-auto">
           {/* Presets */}
-          <div className="mb-4 pb-4 border-b border-gray-200">
-            <div className="text-xs font-medium text-gray-700 mb-2">Quick Select</div>
+          <div className="mb-4 pb-4 border-b border-white/10">
+            <div className="text-xs font-medium text-white mb-2">Quick Select</div>
             <div className="grid grid-cols-2 gap-2">
               {(presets || defaultPresets).map((preset, index) => (
                 <button
                   key={index}
                   onClick={() => handlePreset(preset)}
-                  className="text-xs px-2 py-1 text-gray-700 hover:bg-gray-100 rounded text-left"
+                  className="text-xs px-2 py-1 text-slate-300 hover:bg-white/10 hover:text-white rounded text-left transition-colors"
                 >
                   {preset.label}
                 </button>
@@ -289,11 +289,11 @@ export default function DateRangePicker({
                   prev.setMonth(prev.getMonth() - 1);
                   setCurrentMonth(prev);
                 }}
-                className="p-1 hover:bg-gray-100 rounded"
+                className="p-1 hover:bg-white/10 rounded text-white transition-colors"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <div className="font-medium text-gray-900">
+              <div className="font-medium text-white">
                 {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
               </div>
               <button
@@ -302,7 +302,7 @@ export default function DateRangePicker({
                   next.setMonth(next.getMonth() + 1);
                   setCurrentMonth(next);
                 }}
-                className="p-1 hover:bg-gray-100 rounded"
+                className="p-1 hover:bg-white/10 rounded text-white transition-colors"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -311,17 +311,17 @@ export default function DateRangePicker({
           </div>
 
           {/* Selected Range Display */}
-          <div className="mb-4 p-3 bg-gray-50 rounded text-sm">
+          <div className="mb-4 p-3 bg-white/5 rounded text-sm border border-white/10">
             <div className="flex items-center gap-4">
               <div className="flex-1">
-                <div className="text-xs text-gray-500 mb-1">From</div>
-                <div className="font-medium text-gray-900">
+                <div className="text-xs text-slate-400 mb-1">From</div>
+                <div className="font-medium text-white">
                   {tempFrom ? formatDate(tempFrom) : 'Not selected'}
                 </div>
               </div>
               <div className="flex-1">
-                <div className="text-xs text-gray-500 mb-1">To</div>
-                <div className="font-medium text-gray-900">
+                <div className="text-xs text-slate-400 mb-1">To</div>
+                <div className="font-medium text-white">
                   {tempTo ? formatDate(tempTo) : 'Not selected'}
                 </div>
               </div>
@@ -332,12 +332,12 @@ export default function DateRangePicker({
           <div className="flex items-center justify-between">
             <button
               onClick={handleClear}
-              className="text-sm text-gray-600 hover:text-gray-900"
+              className="text-sm text-slate-400 hover:text-white transition-colors"
             >
               Clear
             </button>
             <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => setIsOpen(false)}>
+              <Button variant="outline" onClick={() => setIsOpen(false)}>
                 Cancel
               </Button>
               <Button onClick={handleApply}>Apply</Button>

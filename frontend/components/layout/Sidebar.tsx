@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { 
   LayoutDashboard, 
   Folder, 
@@ -51,12 +52,12 @@ export default function Sidebar({
     <div className="fixed left-0 top-0 h-screen w-64 bg-[#0B0C15] border-r border-white/10 flex flex-col shadow-xl">
       {/* Logo/Header */}
       <div className="px-4 py-4 border-b border-white/10">
-        <div className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <div className="h-8 w-8 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/50">
             <span className="text-white font-bold text-sm">AG</span>
           </div>
           <span className="font-semibold text-white">AgentGuard</span>
-        </div>
+        </Link>
       </div>
 
       {/* Navigation */}
