@@ -19,25 +19,6 @@ interface DateRangePickerProps {
 
 const defaultPresets = [
   {
-    label: 'Today',
-    getRange: () => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      return { from: today, to: new Date() };
-    },
-  },
-  {
-    label: 'Yesterday',
-    getRange: () => {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      yesterday.setHours(0, 0, 0, 0);
-      const end = new Date(yesterday);
-      end.setHours(23, 59, 59, 999);
-      return { from: yesterday, to: end };
-    },
-  },
-  {
     label: 'Last 7 days',
     getRange: () => {
       const to = new Date();
@@ -58,20 +39,29 @@ const defaultPresets = [
     },
   },
   {
-    label: 'This month',
-    getRange: () => {
-      const now = new Date();
-      const from = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { from, to: now };
-    },
-  },
-  {
     label: 'Last month',
     getRange: () => {
       const now = new Date();
       const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const to = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
       return { from, to };
+    },
+  },
+  {
+    label: 'Last 6 months',
+    getRange: () => {
+      const to = new Date();
+      const from = new Date();
+      from.setMonth(from.getMonth() - 6);
+      from.setHours(0, 0, 0, 0);
+      return { from, to };
+    },
+  },
+  {
+    label: 'Custom range',
+    getRange: () => {
+      // Custom range doesn't set dates, user selects manually
+      return { from: null, to: null };
     },
   },
 ];
@@ -98,8 +88,8 @@ export default function DateRangePicker({
       // Check if dropdown would go off screen and adjust
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      const dropdownWidth = 384; // w-96 = 384px
-      const dropdownHeight = 600; // max-h-[600px]
+      const dropdownWidth = 700; // Wider for side-by-side layout
+      const dropdownHeight = 500; // Adjusted height
       
       // Position directly below the button (getBoundingClientRect is viewport-relative)
       let left = rect.left;
@@ -254,10 +244,36 @@ export default function DateRangePicker({
 
   const handlePreset = (preset: Preset) => {
     const range = preset.getRange();
-    setTempFrom(range.from);
-    setTempTo(range.to);
-    onChange(range);
-    setIsOpen(false);
+    if (preset.label === 'Custom range') {
+      // For custom range, just reset and let user select manually
+      setTempFrom(null);
+      setTempTo(null);
+      setSelecting('from');
+    } else {
+      setTempFrom(range.from);
+      setTempTo(range.to);
+      onChange(range);
+      setIsOpen(false);
+    }
+  };
+
+  const isPresetActive = (preset: Preset) => {
+    if (!value?.from || !value?.to) return false;
+    const range = preset.getRange();
+    if (!range.from || !range.to) return false;
+    
+    const valueFrom = new Date(value.from);
+    const valueTo = new Date(value.to);
+    const presetFrom = new Date(range.from);
+    const presetTo = new Date(range.to);
+    
+    valueFrom.setHours(0, 0, 0, 0);
+    valueTo.setHours(0, 0, 0, 0);
+    presetFrom.setHours(0, 0, 0, 0);
+    presetTo.setHours(0, 0, 0, 0);
+    
+    return valueFrom.getTime() === presetFrom.getTime() && 
+           valueTo.getTime() === presetTo.getTime();
   };
 
   const getDaysInMonth = (date: Date) => {
@@ -335,6 +351,8 @@ export default function DateRangePicker({
 
           const isInRange = isDateInRange(date);
           const isSelected = isDateSelected(date);
+          const isFrom = tempFrom && date.toDateString() === tempFrom.toDateString();
+          const isTo = tempTo && date.toDateString() === tempTo.toDateString();
           const isToday = date.toDateString() === new Date().toDateString();
 
           return (
@@ -342,14 +360,13 @@ export default function DateRangePicker({
               key={date.toISOString()}
               onClick={() => handleDateClick(date)}
               className={clsx(
-                'h-8 w-8 rounded-md text-sm transition-all duration-150',
-                isSelected
-                  ? 'bg-purple-500 text-white scale-110 shadow-lg shadow-purple-500/50'
+                'h-8 w-8 rounded text-sm transition-all duration-150 relative',
+                isFrom || isTo
+                  ? 'bg-slate-600 text-white font-medium'
                   : isInRange
-                  ? 'bg-purple-500/20 text-white hover:bg-purple-500/30'
-                  : 'text-slate-300 hover:bg-white/10 hover:text-white hover:scale-105',
-                // Only show today ring if not selected and not in range
-                isToday && !isSelected && !isInRange && 'ring-2 ring-purple-500/50'
+                  ? 'bg-slate-100 text-slate-900'
+                  : 'text-slate-700 hover:bg-slate-50',
+                isToday && !isSelected && !isInRange && 'font-medium'
               )}
             >
               {date.getDate()}
@@ -380,88 +397,78 @@ export default function DateRangePicker({
       </button>
 
       {isOpen && dropdownPosition && (
-        <div className="fixed bg-[#0B0C15] rounded-lg shadow-2xl border border-white/10 z-[99999] p-4 w-96 max-h-[600px] overflow-y-auto animate-fade-in" style={{
+        <div className="fixed bg-white rounded-lg shadow-2xl border border-gray-200 z-[99999] overflow-hidden animate-fade-in" style={{
           top: `${dropdownPosition.top}px`,
           left: `${dropdownPosition.left}px`,
           position: 'fixed',
+          width: '700px',
         }}>
-          {/* Presets */}
-          <div className="mb-4 pb-4 border-b border-white/10">
-            <div className="text-xs font-medium text-white mb-2">Quick Select</div>
-            <div className="grid grid-cols-2 gap-2">
-              {(presets || defaultPresets).map((preset, index) => (
+          <div className="flex">
+            {/* Left Panel - Presets */}
+            <div className="w-48 border-r border-gray-200 bg-gray-50 p-4">
+              <div className="space-y-1">
+                {(presets || defaultPresets).map((preset, index) => {
+                  const isActive = isPresetActive(preset);
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => handlePreset(preset)}
+                      className={clsx(
+                        'w-full text-left px-3 py-2 text-sm rounded-md transition-colors',
+                        isActive
+                          ? 'bg-blue-50 text-blue-600 font-medium'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      )}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right Panel - Calendar */}
+            <div className="flex-1 p-6 bg-white">
+              <div className="flex items-center justify-between mb-6">
                 <button
-                  key={index}
-                  onClick={() => handlePreset(preset)}
-                  className="text-xs px-2 py-1 text-slate-300 hover:bg-white/10 hover:text-white rounded text-left transition-colors"
+                  onClick={() => {
+                    const prev = new Date(currentMonth);
+                    prev.setMonth(prev.getMonth() - 1);
+                    setCurrentMonth(prev);
+                  }}
+                  className="p-1 hover:bg-gray-100 rounded text-gray-600 transition-colors"
                 >
-                  {preset.label}
+                  <ChevronLeft className="h-5 w-5" />
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Calendar */}
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() => {
-                  const prev = new Date(currentMonth);
-                  prev.setMonth(prev.getMonth() - 1);
-                  setCurrentMonth(prev);
-                }}
-                className="p-1 hover:bg-white/10 rounded text-white transition-colors"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <div className="font-medium text-white">
-                {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </div>
-              <button
-                onClick={() => {
-                  const next = new Date(currentMonth);
-                  next.setMonth(next.getMonth() + 1);
-                  setCurrentMonth(next);
-                }}
-                className="p-1 hover:bg-white/10 rounded text-white transition-colors"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-            {renderCalendar()}
-          </div>
-
-          {/* Selected Range Display */}
-          <div className="mb-4 p-3 bg-white/5 rounded text-sm border border-white/10">
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <div className="text-xs text-slate-400 mb-1">From</div>
-                <div className="font-medium text-white">
-                  {tempFrom ? formatDate(tempFrom) : 'Not selected'}
+                <div className="font-semibold text-gray-900">
+                  {currentMonth.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}
                 </div>
+                <button
+                  onClick={() => {
+                    const next = new Date(currentMonth);
+                    next.setMonth(next.getMonth() + 1);
+                    setCurrentMonth(next);
+                  }}
+                  className="p-1 hover:bg-gray-100 rounded text-gray-600 transition-colors"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
               </div>
-              <div className="flex-1">
-                <div className="text-xs text-slate-400 mb-1">To</div>
-                <div className="font-medium text-white">
-                  {tempTo ? formatDate(tempTo) : 'Not selected'}
-                </div>
+              {renderCalendar()}
+              
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 mt-6 pt-6 border-t border-gray-200">
+                <button
+                  onClick={handleClear}
+                  className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  Clear
+                </button>
+                <Button variant="outline" onClick={() => setIsOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleApply}>Apply</Button>
               </div>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center justify-between">
-            <button
-              onClick={handleClear}
-              className="text-sm text-slate-400 hover:text-white transition-colors"
-            >
-              Clear
-            </button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setIsOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleApply}>Apply</Button>
             </div>
           </div>
         </div>
