@@ -14,7 +14,6 @@ import EmptyState from '@/components/EmptyState';
 import { clsx } from 'clsx';
 import ProjectTabs from '@/components/ProjectTabs';
 import { ArrowRight, Activity, TrendingUp } from 'lucide-react';
-import Button from '@/components/ui/Button';
 
 export default function ProjectDetailPage() {
   const router = useRouter();
