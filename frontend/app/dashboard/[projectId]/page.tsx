@@ -13,7 +13,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import EmptyState from '@/components/EmptyState';
 import { clsx } from 'clsx';
 import ProjectTabs from '@/components/ProjectTabs';
-import { ArrowRight, Activity, TrendingUp } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 export default function ProjectDetailPage() {
   const router = useRouter();
@@ -229,37 +229,6 @@ export default function ProjectDetailPage() {
                   </Button>
                 </div>
                 <DriftChart projectId={projectId} />
-              </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-              <h2 className="text-lg font-semibold text-white mb-4">Quick Actions</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Button
-                  variant="outline"
-                  onClick={() => router.push(`/dashboard/${projectId}/api-calls`)}
-                  className="flex items-center justify-center gap-2"
-                >
-                  <Activity className="h-4 w-4" />
-                  View API Calls
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => router.push(`/dashboard/${projectId}/compare`)}
-                  className="flex items-center justify-center gap-2"
-                >
-                  <TrendingUp className="h-4 w-4" />
-                  Compare Models
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => router.push(`/dashboard/${projectId}/reports`)}
-                  className="flex items-center justify-center gap-2"
-                >
-                  <Activity className="h-4 w-4" />
-                  Generate Report
-                </Button>
               </div>
             </div>
           </div>
