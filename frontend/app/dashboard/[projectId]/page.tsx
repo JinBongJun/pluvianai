@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import { projectsAPI, qualityAPI, costAPI, apiCallsAPI } from '@/lib/api';
 import QualityChart from '@/components/QualityChart';
@@ -11,18 +11,22 @@ import MemberList from '@/components/MemberList';
 import ProjectSettings from '@/components/ProjectSettings';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { clsx } from 'clsx';
+import ProjectTabs from '@/components/ProjectTabs';
 
 export default function ProjectDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const projectId = Number(params.projectId);
   
   const [project, setProject] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
   const [costData, setCostData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'settings'>('overview');
   const [userRole, setUserRole] = useState<'owner' | 'admin' | 'member' | 'viewer'>('viewer');
+  
+  // Get active tab from URL params
+  const activeTab = (searchParams?.get('tab') || 'overview') as 'overview' | 'members' | 'settings';
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -39,7 +43,7 @@ export default function ProjectDetailPage() {
     }
 
     loadProjectData();
-  }, [projectId, router]);
+  }, [projectId, router, searchParams]);
 
   const loadProjectData = async () => {
     try {
@@ -123,72 +127,9 @@ export default function ProjectDetailPage() {
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-white/10 mb-6">
-          <nav className="-mb-px flex space-x-8">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={clsx(
-                'py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200',
-                activeTab === 'overview'
-                  ? 'border-purple-500 text-white'
-                  : 'border-transparent text-slate-400 hover:text-slate-300 hover:border-white/20'
-              )}
-            >
-              Overview
-            </button>
-            <button
-              onClick={() => router.push(`/dashboard/${projectId}/api-calls`)}
-              className={clsx(
-                'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
-                'border-transparent text-slate-400 hover:text-slate-300 hover:border-white/20'
-              )}
-            >
-              API Calls
-            </button>
-            <button
-              onClick={() => router.push(`/dashboard/${projectId}/compare`)}
-              className={clsx(
-                'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
-                'border-transparent text-slate-400 hover:text-slate-300 hover:border-white/20'
-              )}
-            >
-              Compare
-            </button>
-            <button
-              onClick={() => router.push(`/dashboard/${projectId}/reports`)}
-              className={clsx(
-                'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
-                'border-transparent text-slate-400 hover:text-slate-300 hover:border-white/20'
-              )}
-            >
-              Reports
-            </button>
-            <button
-              onClick={() => setActiveTab('members')}
-              className={clsx(
-                'py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200',
-                activeTab === 'members'
-                  ? 'border-purple-500 text-white'
-                  : 'border-transparent text-slate-400 hover:text-slate-300 hover:border-white/20'
-              )}
-            >
-              Team Members
-            </button>
-            {canManage && (
-              <button
-                onClick={() => setActiveTab('settings')}
-                className={clsx(
-                  'py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200',
-                  activeTab === 'settings'
-                    ? 'border-purple-500 text-white'
-                    : 'border-transparent text-slate-400 hover:text-slate-300 hover:border-white/20'
-                )}
-              >
-                Settings
-              </button>
-            )}
-          </nav>
-        </div>
+        <ProjectTabs projectId={projectId} canManage={canManage} />
+
+        {/* Tab Content */}
 
         {activeTab === 'overview' && (
           <div className="space-y-6">

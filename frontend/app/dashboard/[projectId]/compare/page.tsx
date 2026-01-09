@@ -9,6 +9,7 @@ import { benchmarkAPI, apiCallsAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
 import { TrendingUp, TrendingDown, DollarSign, Clock, BarChart3 } from 'lucide-react';
 import { clsx } from 'clsx';
+import ProjectTabs from '@/components/ProjectTabs';
 
 export default function ComparePage() {
   const router = useRouter();
@@ -57,25 +58,20 @@ export default function ComparePage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="bg-[#000314] min-h-screen">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Model Comparison</h1>
-            <p className="text-gray-600 mt-1">Compare performance across different models</p>
-          </div>
-          <Button
-            variant="secondary"
-            onClick={() => router.push(`/dashboard/${projectId}`)}
-          >
-            Back to Project
-          </Button>
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-white">Model Comparison</h1>
+          <p className="text-slate-400 mt-2">Compare performance across different models</p>
         </div>
 
+        {/* Tabs */}
+        <ProjectTabs projectId={projectId} />
+
         {/* Date Range Selector */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl mb-6">
           <div className="flex items-center gap-4">
-            <label className="text-sm font-medium text-gray-700">Date Range:</label>
+            <label className="text-sm font-medium text-white">Date Range:</label>
             <DateRangePicker value={dateRange} onChange={setDateRange} />
           </div>
         </div>
@@ -83,13 +79,13 @@ export default function ComparePage() {
         {/* Comparison Results */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
           </div>
         ) : comparisons.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-            <BarChart3 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Comparisons Available</h3>
-            <p className="text-sm text-gray-600">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-12 text-center shadow-2xl">
+            <BarChart3 className="h-12 w-12 text-slate-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-white mb-2">No Comparisons Available</h3>
+            <p className="text-sm text-slate-400">
               No model comparison data found for the selected date range.
             </p>
           </div>
@@ -98,59 +94,59 @@ export default function ComparePage() {
             {comparisons.map((comparison, index) => (
               <div
                 key={index}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
+                className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl"
               >
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">
+                    <h3 className="text-lg font-semibold text-white">
                       {comparison.model}
                     </h3>
-                    <p className="text-sm text-gray-600">{comparison.provider}</p>
+                    <p className="text-sm text-slate-400">{comparison.provider}</p>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-gray-900">
+                    <div className="text-2xl font-bold text-white">
                       {comparison.recommendation_score.toFixed(1)}
                     </div>
-                    <div className="text-xs text-gray-500">Score</div>
+                    <div className="text-xs text-slate-400">Score</div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="flex items-center gap-2">
-                    <DollarSign className="h-5 w-5 text-green-600" />
+                    <DollarSign className="h-5 w-5 text-green-400" />
                     <div>
-                      <div className="text-xs text-gray-500">Avg Cost</div>
-                      <div className="font-medium text-gray-900">
+                      <div className="text-xs text-slate-400">Avg Cost</div>
+                      <div className="font-medium text-white">
                         ${comparison.avg_cost_per_call.toFixed(4)}
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-blue-600" />
+                    <Clock className="h-5 w-5 text-cyan-400" />
                     <div>
-                      <div className="text-xs text-gray-500">Avg Latency</div>
-                      <div className="font-medium text-gray-900">
+                      <div className="text-xs text-slate-400">Avg Latency</div>
+                      <div className="font-medium text-white">
                         {comparison.avg_latency.toFixed(0)}ms
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-purple-600" />
+                    <TrendingUp className="h-5 w-5 text-purple-400" />
                     <div>
-                      <div className="text-xs text-gray-500">Success Rate</div>
-                      <div className="font-medium text-gray-900">
+                      <div className="text-xs text-slate-400">Success Rate</div>
+                      <div className="font-medium text-white">
                         {(comparison.success_rate * 100).toFixed(1)}%
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-orange-600" />
+                    <BarChart3 className="h-5 w-5 text-orange-400" />
                     <div>
-                      <div className="text-xs text-gray-500">Total Calls</div>
-                      <div className="font-medium text-gray-900">
+                      <div className="text-xs text-slate-400">Total Calls</div>
+                      <div className="font-medium text-white">
                         {comparison.total_calls}
                       </div>
                     </div>
@@ -158,9 +154,9 @@ export default function ComparePage() {
                 </div>
 
                 {comparison.recommendation && (
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                    <div className="text-sm font-medium text-blue-900 mb-1">Recommendation</div>
-                    <div className="text-sm text-blue-700">{comparison.recommendation}</div>
+                  <div className="mt-4 p-3 bg-purple-500/20 border border-purple-500/30 rounded-md">
+                    <div className="text-sm font-medium text-purple-300 mb-1">Recommendation</div>
+                    <div className="text-sm text-slate-300">{comparison.recommendation}</div>
                   </div>
                 )}
               </div>

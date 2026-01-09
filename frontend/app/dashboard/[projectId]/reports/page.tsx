@@ -8,6 +8,7 @@ import DateRangePicker from '@/components/ui/DateRangePicker';
 import { reportsAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
 import { FileText, Download, Calendar } from 'lucide-react';
+import ProjectTabs from '@/components/ProjectTabs';
 
 export default function ReportsPage() {
   const router = useRouter();
@@ -79,43 +80,38 @@ export default function ReportsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="bg-[#000314] min-h-screen">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Reports</h1>
-            <p className="text-gray-600 mt-1">Generate and download project reports</p>
-          </div>
-          <Button
-            variant="secondary"
-            onClick={() => router.push(`/dashboard/${projectId}`)}
-          >
-            Back to Project
-          </Button>
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-white">Reports</h1>
+          <p className="text-slate-400 mt-2">Generate and download project reports</p>
         </div>
 
+        {/* Tabs */}
+        <ProjectTabs projectId={projectId} />
+
         {/* Report Configuration */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Report Configuration</h2>
+        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl mb-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Report Configuration</h2>
           
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-white mb-2">
                 Template
               </label>
               <select
                 value={template}
                 onChange={(e) => setTemplate(e.target.value)}
-                className="w-full border-gray-300 rounded-md focus:ring-black focus:border-black"
+                className="w-full bg-white/5 border border-white/10 rounded-md text-white focus:ring-purple-500 focus:border-purple-500 px-3 py-2"
               >
-                <option value="standard">Standard Report</option>
-                <option value="detailed">Detailed Report</option>
-                <option value="executive">Executive Summary</option>
+                <option value="standard" className="bg-[#0B0C15]">Standard Report</option>
+                <option value="detailed" className="bg-[#0B0C15]">Detailed Report</option>
+                <option value="executive" className="bg-[#0B0C15]">Executive Summary</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-white mb-2">
                 Date Range
               </label>
               <DateRangePicker value={dateRange} onChange={setDateRange} />
@@ -152,10 +148,10 @@ export default function ReportsPage() {
 
         {/* Report Display */}
         {report && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Report Preview</h2>
-              <div className="text-sm text-gray-500">
+              <h2 className="text-lg font-semibold text-white">Report Preview</h2>
+              <div className="text-sm text-slate-400">
                 Generated: {new Date(report.generated_at).toLocaleString()}
               </div>
             </div>
@@ -163,29 +159,29 @@ export default function ReportsPage() {
             <div className="space-y-6">
               {/* Summary */}
               <div>
-                <h3 className="text-md font-semibold text-gray-900 mb-3">Summary</h3>
+                <h3 className="text-md font-semibold text-white mb-3">Summary</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <div className="text-sm text-gray-600 mb-1">Total API Calls</div>
-                    <div className="text-2xl font-bold text-gray-900">
+                  <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                    <div className="text-sm text-slate-400 mb-1">Total API Calls</div>
+                    <div className="text-2xl font-bold text-white">
                       {report.summary.total_api_calls.toLocaleString()}
                     </div>
                   </div>
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <div className="text-sm text-gray-600 mb-1">Success Rate</div>
-                    <div className="text-2xl font-bold text-gray-900">
+                  <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                    <div className="text-sm text-slate-400 mb-1">Success Rate</div>
+                    <div className="text-2xl font-bold text-white">
                       {report.summary.success_rate.toFixed(1)}%
                     </div>
                   </div>
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <div className="text-sm text-gray-600 mb-1">Total Cost</div>
-                    <div className="text-2xl font-bold text-gray-900">
+                  <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                    <div className="text-sm text-slate-400 mb-1">Total Cost</div>
+                    <div className="text-2xl font-bold text-white">
                       ${report.summary.total_cost.toFixed(2)}
                     </div>
                   </div>
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <div className="text-sm text-gray-600 mb-1">Avg Quality</div>
-                    <div className="text-2xl font-bold text-gray-900">
+                  <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                    <div className="text-sm text-slate-400 mb-1">Avg Quality</div>
+                    <div className="text-2xl font-bold text-white">
                       {report.summary.quality_scores.average
                         ? report.summary.quality_scores.average.toFixed(1)
                         : 'N/A'}
@@ -197,23 +193,23 @@ export default function ReportsPage() {
               {/* Quality Scores */}
               {report.summary.quality_scores.total_evaluations > 0 && (
                 <div>
-                  <h3 className="text-md font-semibold text-gray-900 mb-3">Quality Scores</h3>
+                  <h3 className="text-md font-semibold text-white mb-3">Quality Scores</h3>
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <div className="text-sm text-gray-600">Average</div>
-                      <div className="text-lg font-semibold text-gray-900">
+                      <div className="text-sm text-slate-400">Average</div>
+                      <div className="text-lg font-semibold text-white">
                         {report.summary.quality_scores.average?.toFixed(1) || 'N/A'}
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600">Min</div>
-                      <div className="text-lg font-semibold text-gray-900">
+                      <div className="text-sm text-slate-400">Min</div>
+                      <div className="text-lg font-semibold text-white">
                         {report.summary.quality_scores.min?.toFixed(1) || 'N/A'}
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600">Max</div>
-                      <div className="text-lg font-semibold text-gray-900">
+                      <div className="text-sm text-slate-400">Max</div>
+                      <div className="text-lg font-semibold text-white">
                         {report.summary.quality_scores.max?.toFixed(1) || 'N/A'}
                       </div>
                     </div>
@@ -223,17 +219,17 @@ export default function ReportsPage() {
 
               {/* Drift Detections */}
               <div>
-                <h3 className="text-md font-semibold text-gray-900 mb-3">Drift Detections</h3>
+                <h3 className="text-md font-semibold text-white mb-3">Drift Detections</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <div className="text-sm text-gray-600 mb-1">Total Detections</div>
-                    <div className="text-xl font-bold text-gray-900">
+                  <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                    <div className="text-sm text-slate-400 mb-1">Total Detections</div>
+                    <div className="text-xl font-bold text-white">
                       {report.summary.drift_detections.total}
                     </div>
                   </div>
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <div className="text-sm text-gray-600 mb-1">High Severity</div>
-                    <div className="text-xl font-bold text-gray-900">
+                  <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                    <div className="text-sm text-slate-400 mb-1">High Severity</div>
+                    <div className="text-xl font-bold text-white">
                       {report.summary.drift_detections.high_severity}
                     </div>
                   </div>
