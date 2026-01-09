@@ -104,10 +104,39 @@ export default function DateRangePicker({
       // Calculate dropdown position for fixed positioning
       if (containerRef.current && typeof window !== 'undefined') {
         const rect = containerRef.current.getBoundingClientRect();
-        setDropdownPosition({
-          top: rect.bottom + window.scrollY + 8,
-          left: rect.left + window.scrollX,
-        });
+        const scrollY = window.scrollY || window.pageYOffset;
+        const scrollX = window.scrollX || window.pageXOffset;
+        
+        // Check if dropdown would go off screen and adjust
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const dropdownWidth = 384; // w-96 = 384px
+        const dropdownHeight = 600; // max-h-[600px]
+        
+        let left = rect.left + scrollX;
+        let top = rect.bottom + scrollY + 8;
+        
+        // Adjust if dropdown would go off right edge
+        if (left + dropdownWidth > viewportWidth + scrollX) {
+          left = viewportWidth + scrollX - dropdownWidth - 8;
+        }
+        
+        // Adjust if dropdown would go off bottom edge
+        if (top + dropdownHeight > viewportHeight + scrollY) {
+          // Show above button instead
+          top = rect.top + scrollY - dropdownHeight - 8;
+          if (top < scrollY) {
+            // If still off screen, center vertically
+            top = scrollY + (viewportHeight - dropdownHeight) / 2;
+          }
+        }
+        
+        // Ensure dropdown doesn't go off left edge
+        if (left < scrollX) {
+          left = scrollX + 8;
+        }
+        
+        setDropdownPosition({ top, left });
       }
     } else {
       setDropdownPosition(null);

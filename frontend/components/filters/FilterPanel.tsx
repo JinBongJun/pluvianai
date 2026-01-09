@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { X, Filter } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import DateRangePicker from '@/components/ui/DateRangePicker';
 import { clsx } from 'clsx';
 
 export interface FilterState {
@@ -73,29 +74,20 @@ export default function FilterPanel({
         {isOpen && (
           <div className="space-y-4 pt-4 border-t border-white/10">
             {/* Date Range */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-white mb-1">
-                  From Date
-                </label>
-                <Input
-                  type="date"
-                  value={filters.dateFrom || ''}
-                  onChange={(e) => updateFilter('dateFrom', e.target.value)}
-                  className="bg-white/5 border-white/10 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-white mb-1">
-                  To Date
-                </label>
-                <Input
-                  type="date"
-                  value={filters.dateTo || ''}
-                  onChange={(e) => updateFilter('dateTo', e.target.value)}
-                  className="bg-white/5 border-white/10 text-white"
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-white mb-2">
+                Date Range
+              </label>
+              <DateRangePicker
+                value={{
+                  from: filters.dateFrom ? new Date(filters.dateFrom) : null,
+                  to: filters.dateTo ? new Date(filters.dateTo) : null,
+                }}
+                onChange={(range) => {
+                  updateFilter('dateFrom', range.from ? range.from.toISOString().split('T')[0] : undefined);
+                  updateFilter('dateTo', range.to ? range.to.toISOString().split('T')[0] : undefined);
+                }}
+              />
             </div>
 
             {/* Provider */}
