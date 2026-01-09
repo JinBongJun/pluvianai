@@ -113,30 +113,35 @@ export default function DateRangePicker({
         const dropdownWidth = 384; // w-96 = 384px
         const dropdownHeight = 600; // max-h-[600px]
         
-        let left = rect.left + scrollX;
-        let top = rect.bottom + scrollY + 8;
+        // Position directly below the button
+        let left = rect.left;
+        let top = rect.bottom + 8;
         
         // Adjust if dropdown would go off right edge
-        if (left + dropdownWidth > viewportWidth + scrollX) {
-          left = viewportWidth + scrollX - dropdownWidth - 8;
+        if (left + dropdownWidth > viewportWidth) {
+          left = viewportWidth - dropdownWidth - 8;
         }
         
         // Adjust if dropdown would go off bottom edge
-        if (top + dropdownHeight > viewportHeight + scrollY) {
+        if (top + dropdownHeight > viewportHeight) {
           // Show above button instead
-          top = rect.top + scrollY - dropdownHeight - 8;
-          if (top < scrollY) {
+          top = rect.top - dropdownHeight - 8;
+          if (top < 0) {
             // If still off screen, center vertically
-            top = scrollY + (viewportHeight - dropdownHeight) / 2;
+            top = Math.max(8, (viewportHeight - dropdownHeight) / 2);
           }
         }
         
         // Ensure dropdown doesn't go off left edge
-        if (left < scrollX) {
-          left = scrollX + 8;
+        if (left < 0) {
+          left = 8;
         }
         
-        setDropdownPosition({ top, left });
+        // Use getBoundingClientRect values directly (already relative to viewport)
+        setDropdownPosition({ 
+          top: top, 
+          left: left 
+        });
       }
     } else {
       setDropdownPosition(null);
@@ -351,9 +356,10 @@ export default function DateRangePicker({
       </button>
 
       {isOpen && dropdownPosition && (
-        <div className="fixed bg-[#0B0C15] rounded-lg shadow-2xl border border-white/10 z-[9999] p-4 w-96 max-h-[600px] overflow-y-auto animate-fade-in" style={{
+        <div className="fixed bg-[#0B0C15] rounded-lg shadow-2xl border border-white/10 z-[99999] p-4 w-96 max-h-[600px] overflow-y-auto animate-fade-in" style={{
           top: `${dropdownPosition.top}px`,
           left: `${dropdownPosition.left}px`,
+          position: 'fixed',
         }}>
           {/* Presets */}
           <div className="mb-4 pb-4 border-b border-white/10">
