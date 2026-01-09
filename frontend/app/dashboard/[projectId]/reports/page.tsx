@@ -91,7 +91,7 @@ export default function ReportsPage() {
         <ProjectTabs projectId={projectId} />
 
         {/* Report Configuration */}
-        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl mb-6">
+        <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl mb-6">
           <h2 className="text-lg font-semibold text-white mb-4">Report Configuration</h2>
           
           <div className="space-y-4">

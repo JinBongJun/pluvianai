@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import Button from './Button';
@@ -88,11 +89,23 @@ export default function DateRangePicker({
   const [tempFrom, setTempFrom] = useState<Date | null>(value?.from || null);
   const [tempTo, setTempTo] = useState<Date | null>(value?.to || null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setTempFrom(value?.from || null);
       setTempTo(value?.to || null);
+      
+      // Calculate dropdown position
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + window.scrollY + 8,
+          left: rect.left + window.scrollX,
+        });
+      }
+    } else {
+      setDropdownPosition(null);
     }
   }, [isOpen, value]);
 
@@ -262,8 +275,15 @@ export default function DateRangePicker({
         ) : null}
       </button>
 
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-2 bg-[#0B0C15] rounded-lg shadow-2xl border border-white/10 z-[100] p-4 w-96 max-h-[600px] overflow-y-auto">
+      {isOpen && dropdownPosition && typeof window !== 'undefined' && createPortal(
+        <div 
+          className="fixed bg-[#0B0C15] rounded-lg shadow-2xl border border-white/10 z-[9999] p-4 w-96 max-h-[600px] overflow-y-auto"
+          style={{
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
           {/* Presets */}
           <div className="mb-4 pb-4 border-b border-white/10">
             <div className="text-xs font-medium text-white mb-2">Quick Select</div>
@@ -343,8 +363,9 @@ export default function DateRangePicker({
               <Button onClick={handleApply}>Apply</Button>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body
+      ) : null}
     </div>
   );
 }

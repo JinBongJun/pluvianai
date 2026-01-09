@@ -69,7 +69,7 @@ export default function ComparePage() {
         <ProjectTabs projectId={projectId} />
 
         {/* Date Range Selector */}
-        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl mb-6">
+        <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl mb-6">
           <div className="flex items-center gap-4">
             <label className="text-sm font-medium text-white">Date Range:</label>
             <DateRangePicker value={dateRange} onChange={setDateRange} />
