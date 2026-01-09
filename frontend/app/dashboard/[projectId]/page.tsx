@@ -113,25 +113,25 @@ export default function ProjectDetailPage() {
 
   return (
     <DashboardLayout>
-      <div>
+      <div className="bg-[#000314] min-h-screen">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">{project?.name}</h1>
+          <h1 className="text-4xl font-bold text-white">{project?.name}</h1>
           {project?.description && (
-            <p className="text-gray-600 mt-2">{project.description}</p>
+            <p className="text-slate-400 mt-2">{project.description}</p>
           )}
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 mb-6">
+        <div className="border-b border-white/10 mb-6">
           <nav className="-mb-px flex space-x-8">
             <button
               onClick={() => setActiveTab('overview')}
               className={clsx(
                 'py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200',
                 activeTab === 'overview'
-                  ? 'border-primary-600 text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-primary-300'
+                  ? 'border-purple-500 text-white'
+                  : 'border-transparent text-slate-400 hover:text-slate-300 hover:border-white/20'
               )}
             >
               Overview
@@ -140,7 +140,7 @@ export default function ProjectDetailPage() {
               onClick={() => router.push(`/dashboard/${projectId}/api-calls`)}
               className={clsx(
                 'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
-                'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                'border-transparent text-slate-400 hover:text-slate-300 hover:border-white/20'
               )}
             >
               API Calls
@@ -149,7 +149,7 @@ export default function ProjectDetailPage() {
               onClick={() => router.push(`/dashboard/${projectId}/compare`)}
               className={clsx(
                 'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
-                'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                'border-transparent text-slate-400 hover:text-slate-300 hover:border-white/20'
               )}
             >
               Compare
@@ -158,7 +158,7 @@ export default function ProjectDetailPage() {
               onClick={() => router.push(`/dashboard/${projectId}/reports`)}
               className={clsx(
                 'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
-                'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                'border-transparent text-slate-400 hover:text-slate-300 hover:border-white/20'
               )}
             >
               Reports
@@ -168,8 +168,8 @@ export default function ProjectDetailPage() {
               className={clsx(
                 'py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200',
                 activeTab === 'members'
-                  ? 'border-primary-600 text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-primary-300'
+                  ? 'border-purple-500 text-white'
+                  : 'border-transparent text-slate-400 hover:text-slate-300 hover:border-white/20'
               )}
             >
               Team Members
@@ -180,8 +180,8 @@ export default function ProjectDetailPage() {
                 className={clsx(
                   'py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200',
                   activeTab === 'settings'
-                    ? 'border-primary-600 text-gray-900'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-primary-300'
+                    ? 'border-purple-500 text-white'
+                    : 'border-transparent text-slate-400 hover:text-slate-300 hover:border-white/20'
                 )}
               >
                 Settings
@@ -192,7 +192,7 @@ export default function ProjectDetailPage() {
 
         {activeTab === 'overview' && (
           <div className="space-y-6">
-            {/* Stats Cards */}
+            {/* Bento Grid - Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatsCard
                 title="Total API Calls"
@@ -216,15 +216,15 @@ export default function ProjectDetailPage() {
               />
             </div>
 
-            {/* Charts */}
+            {/* Charts - Bento Grid Style */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Quality Scores</h2>
+              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-purple">
+                <h2 className="text-lg font-semibold text-white mb-4">Quality Scores</h2>
                 <QualityChart projectId={projectId} />
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Drift Detections</h2>
+              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-purple">
+                <h2 className="text-lg font-semibold text-white mb-4">Drift Detections</h2>
                 <DriftChart projectId={projectId} />
               </div>
             </div>
@@ -233,13 +233,13 @@ export default function ProjectDetailPage() {
 
 
         {activeTab === 'members' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
             <MemberList projectId={projectId} canManage={canManage} />
           </div>
         )}
 
         {activeTab === 'settings' && canManage && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
             <ProjectSettings projectId={projectId} project={project} onUpdate={loadProjectData} />
           </div>
         )}

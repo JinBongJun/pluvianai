@@ -20,9 +20,15 @@ module.exports = {
           800: '#6b21a8',
           900: '#581c87',
         },
+        dark: {
+          bg: '#000314',
+          card: '#0B0C15',
+          border: '#313035',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
       },
       spacing: {
         '18': '4.5rem',
@@ -32,11 +38,18 @@ module.exports = {
         'subtle': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
         'medium': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
         'large': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+        'glow-purple': '0 0 20px rgba(139, 92, 246, 0.3)',
+        'glow-cyan': '0 0 20px rgba(6, 182, 212, 0.3)',
+        'glow-red': '0 0 20px rgba(239, 68, 68, 0.3)',
+      },
+      backdropBlur: {
+        xs: '2px',
       },
       animation: {
         'fade-in': 'fadeIn 0.2s ease-in-out',
         'slide-in': 'slideIn 0.3s ease-out',
         'scale-in': 'scaleIn 0.2s ease-out',
+        'glow-pulse': 'glowPulse 2s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
@@ -50,6 +63,10 @@ module.exports = {
         scaleIn: {
           '0%': { transform: 'scale(0.95)', opacity: '0' },
           '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        glowPulse: {
+          '0%, 100%': { opacity: '0.5' },
+          '50%': { opacity: '1' },
         },
       },
     },

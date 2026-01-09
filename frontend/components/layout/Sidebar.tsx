@@ -48,11 +48,11 @@ export default function Sidebar({
   };
 
   return (
-    <div className="fixed left-0 top-0 h-screen w-64 bg-gradient-to-b from-slate-900 to-slate-800 border-r border-slate-700 flex flex-col shadow-xl">
+    <div className="fixed left-0 top-0 h-screen w-64 bg-[#0B0C15] border-r border-white/10 flex flex-col shadow-xl">
       {/* Logo/Header */}
-      <div className="px-4 py-4 border-b border-slate-700">
+      <div className="px-4 py-4 border-b border-white/10">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center shadow-lg shadow-primary-500/50">
+          <div className="h-8 w-8 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/50">
             <span className="text-white font-bold text-sm">AG</span>
           </div>
           <span className="font-semibold text-white">AgentGuard</span>
@@ -68,8 +68,8 @@ export default function Sidebar({
             className={clsx(
               'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
               isActive('/dashboard')
-                ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/50'
-                : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                ? 'bg-purple-500/20 text-white border-l-2 border-purple-500'
+                : 'text-slate-400 hover:bg-white/5 hover:text-white'
             )}
           >
             <LayoutDashboard className="h-5 w-5" />
@@ -80,7 +80,7 @@ export default function Sidebar({
           <div>
             <button
               onClick={() => setIsProjectsOpen(!isProjectsOpen)}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700/50 hover:text-white transition-all duration-200"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition-all duration-200"
             >
               <div className="flex items-center gap-3">
                 <Folder className="h-5 w-5" />
@@ -107,13 +107,13 @@ export default function Sidebar({
                       className={clsx(
                         'w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 text-left',
                         isProjectActive(project.id)
-                          ? 'bg-primary-600/20 text-white font-medium border-l-2 border-primary-500'
-                          : 'text-slate-400 hover:bg-slate-700/50 hover:text-white'
+                          ? 'bg-purple-500/20 text-white font-medium border-l-2 border-purple-500'
+                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
                       )}
                     >
                       <div className={clsx(
                         'h-2 w-2 rounded-full transition-colors',
-                        isProjectActive(project.id) ? 'bg-primary-400' : 'bg-slate-500'
+                        isProjectActive(project.id) ? 'bg-purple-400' : 'bg-slate-500'
                       )} />
                       <span className="truncate">{project.name}</span>
                     </button>
@@ -121,7 +121,7 @@ export default function Sidebar({
                 )}
                 <button
                   onClick={() => router.push('/dashboard?create=true')}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:bg-slate-700/50 hover:text-primary-400 transition-all duration-200"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-purple-400 transition-all duration-200"
                 >
                   <span className="text-lg leading-none">+</span>
                   <span>New Project</span>
@@ -133,7 +133,7 @@ export default function Sidebar({
       </nav>
 
       {/* User Section */}
-      <div className="border-t border-slate-700 p-4">
+      <div className="border-t border-white/10 p-4">
         <div className="flex items-center gap-3 mb-3">
           <Avatar name={userName} email={userEmail} size="sm" />
           <div className="flex-1 min-w-0">
@@ -154,8 +154,8 @@ export default function Sidebar({
             className={clsx(
               'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200',
               pathname?.startsWith('/settings')
-                ? 'bg-primary-600/20 text-white border-l-2 border-primary-500'
-                : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                ? 'bg-purple-500/20 text-white border-l-2 border-purple-500'
+                : 'text-slate-400 hover:bg-white/5 hover:text-white'
             )}
           >
             <Settings className="h-4 w-4" />
@@ -163,7 +163,7 @@ export default function Sidebar({
           </button>
           <button
             onClick={onLogout}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-300 hover:bg-slate-700/50 hover:text-white transition-all duration-200"
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-white transition-all duration-200"
           >
             <LogOut className="h-4 w-4" />
             <span>Logout</span>

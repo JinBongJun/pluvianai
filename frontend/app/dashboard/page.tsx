@@ -93,7 +93,7 @@ export default function DashboardPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-primary-200 border-t-primary-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-500/20 border-t-purple-500"></div>
         </div>
       </DashboardLayout>
     );
@@ -101,12 +101,12 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div>
+      <div className="bg-[#000314] min-h-screen">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">Projects</h1>
-            <p className="text-gray-600 mt-2">Manage your LLM monitoring projects</p>
+            <h1 className="text-4xl font-bold text-white">Projects</h1>
+            <p className="text-slate-400 mt-2">Manage your LLM monitoring projects</p>
           </div>
           <Button onClick={() => setShowCreateModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
@@ -117,29 +117,29 @@ export default function DashboardPage() {
         {/* Search Bar */}
         {projects.length > 0 && (
           <div className="mb-6 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
             <Input
               type="text"
               placeholder="Search projects..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-slate-500"
             />
           </div>
         )}
 
         {/* Projects Grid */}
         {filteredProjects.length === 0 && projects.length > 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-            <p className="text-gray-600">No projects found matching "{searchQuery}"</p>
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-12 text-center shadow-2xl">
+            <p className="text-slate-400">No projects found matching "{searchQuery}"</p>
           </div>
         ) : projects.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-12 text-center shadow-2xl">
             <div className="max-w-md mx-auto">
-              <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center">
-                <Plus className="h-8 w-8 text-primary-600" />
+              <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-500/20 to-purple-700/20 flex items-center justify-center border border-purple-500/30">
+                <Plus className="h-8 w-8 text-purple-400" />
               </div>
-              <p className="text-gray-600 mb-6 text-lg">No projects yet. Create your first project to get started.</p>
+              <p className="text-slate-400 mb-6 text-lg">No projects yet. Create your first project to get started.</p>
               <Button onClick={() => setShowCreateModal(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create Project
@@ -171,7 +171,7 @@ export default function DashboardPage() {
         >
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-slate-400 mb-1">
                 Project Name *
               </label>
               <Input
@@ -179,6 +179,7 @@ export default function DashboardPage() {
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
                 placeholder="My Project"
+                className="bg-white/5 border-white/10 text-white placeholder:text-slate-500"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     handleCreateProject();
@@ -187,13 +188,13 @@ export default function DashboardPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-slate-400 mb-1">
                 Description
               </label>
               <textarea
                 value={newProjectDescription}
                 onChange={(e) => setNewProjectDescription(e.target.value)}
-                className="w-full border-gray-300 rounded-md shadow-sm focus:border-black focus:ring-black sm:text-sm"
+                className="w-full bg-white/5 border border-white/10 rounded-md shadow-sm focus:border-purple-500 focus:ring-purple-500 text-white placeholder:text-slate-500 sm:text-sm"
                 rows={3}
                 placeholder="Optional description"
               />

@@ -32,11 +32,15 @@ export default function DriftChart({ projectId }: { projectId: number }) {
   };
 
   if (loading) {
-    return <div className="h-64 flex items-center justify-center">Loading...</div>;
+    return (
+      <div className="h-64 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-purple-500 border-t-transparent"></div>
+      </div>
+    );
   }
 
   if (data.length === 0) {
-    return <div className="h-64 flex items-center justify-center text-gray-500">No drift detections</div>;
+    return <div className="h-64 flex items-center justify-center text-slate-400">No drift detections</div>;
   }
 
   // Group by detection type
@@ -57,32 +61,48 @@ export default function DriftChart({ projectId }: { projectId: number }) {
     <div>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="type" />
-          <YAxis />
-          <Tooltip />
-          <Legend />
-          <Bar dataKey="count" fill="#ef4444" name="Detections" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#313035" />
+          <XAxis 
+            dataKey="type" 
+            stroke="#9ca3af"
+            style={{ fontSize: '12px' }}
+          />
+          <YAxis 
+            stroke="#9ca3af"
+            style={{ fontSize: '12px' }}
+          />
+          <Tooltip 
+            contentStyle={{ 
+              backgroundColor: '#0B0C15', 
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '8px',
+              color: '#fff'
+            }}
+          />
+          <Legend 
+            wrapperStyle={{ color: '#9ca3af' }}
+          />
+          <Bar dataKey="count" fill="#ef4444" name="Detections" radius={[8, 8, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
       
       {/* Recent detections list */}
       <div className="mt-6">
-        <h3 className="text-sm font-medium text-gray-700 mb-2">Recent Detections</h3>
+        <h3 className="text-sm font-medium text-slate-400 mb-2">Recent Detections</h3>
         <div className="space-y-2">
           {data.slice(0, 5).map((detection) => (
-            <div key={detection.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+            <div key={detection.id} className="flex justify-between items-center p-3 bg-white/5 rounded-lg border border-white/10">
               <div>
-                <span className="font-medium">{detection.detection_type}</span>
-                <span className="ml-2 text-sm text-gray-600">
+                <span className="font-medium text-white">{detection.detection_type}</span>
+                <span className="ml-2 text-sm text-slate-400">
                   {detection.change_percentage.toFixed(1)}% change
                 </span>
               </div>
-              <span className={`px-2 py-1 rounded text-xs ${
-                detection.severity === 'critical' ? 'bg-red-100 text-red-800' :
-                detection.severity === 'high' ? 'bg-orange-100 text-orange-800' :
-                detection.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                'bg-gray-100 text-gray-800'
+              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                detection.severity === 'critical' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                detection.severity === 'high' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' :
+                detection.severity === 'medium' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
+                'bg-slate-500/20 text-slate-400 border border-slate-500/30'
               }`}>
                 {detection.severity}
               </span>
