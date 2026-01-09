@@ -7,7 +7,7 @@ import Button from './Button';
 
 type Preset = {
   label: string;
-  getRange: () => { from: Date; to: Date };
+  getRange: () => { from: Date | null; to: Date | null };
 };
 
 interface DateRangePickerProps {
@@ -261,6 +261,7 @@ export default function DateRangePicker({
     if (!value?.from || !value?.to) return false;
     const range = preset.getRange();
     if (!range.from || !range.to) return false;
+    if (preset.label === 'Custom range') return false; // Custom range is never "active"
     
     const valueFrom = new Date(value.from);
     const valueTo = new Date(value.to);
