@@ -100,12 +100,7 @@ export default function QualityChart({ projectId }: { projectId: number }) {
             strokeWidth={2}
             fillOpacity={1} 
             fill="url(#qualityGradient)"
-            dot={(props: any) => {
-              if (props.payload.isDrift) {
-                return <Dot {...props} r={6} fill="#ef4444" stroke="#ef4444" strokeWidth={2} />;
-              }
-              return false;
-            }}
+            dot={false}
             activeDot={{ r: 4, fill: '#818cf8' }}
           />
           {/* Drift 감지 영역 표시 */}
