@@ -624,9 +624,20 @@ export default function AgentChainsPage() {
             ) : (
               <>
                 <div className="space-y-4">
-                  {chains.length > 0 ? chains
-                    .filter((chain: ChainProfile) => chain && typeof chain === 'object' && chain.chain_id && typeof chain.chain_id === 'string')
-                    .map((chain: ChainProfile, index: number) => (
+                  {(() => {
+                    const validChains = chains.filter((chain: ChainProfile) => 
+                      chain && typeof chain === 'object' && chain.chain_id && typeof chain.chain_id === 'string'
+                    );
+                    
+                    if (validChains.length === 0) {
+                      return (
+                        <div className="text-center py-12 text-slate-400">
+                          <p>No chains available to display.</p>
+                        </div>
+                      );
+                    }
+                    
+                    return validChains.map((chain: ChainProfile, index: number) => (
                     <div
                       key={chain.chain_id || `chain-${index}`}
                       className="border border-white/10 bg-white/5 rounded-lg p-6 hover:bg-white/10 transition-colors cursor-pointer"
@@ -731,12 +742,8 @@ export default function AgentChainsPage() {
                         </div>
                       )}
                     </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-12 text-slate-400">
-                      <p>No chains available to display.</p>
-                    </div>
-                  )}
+                    ));
+                  })()}
                 </div>
                 {/* Pagination */}
                 {totalPages > 1 && (
