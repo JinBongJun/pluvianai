@@ -32,7 +32,12 @@ export default function Select({
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const selectedOption = options.find(opt => opt.value === value);
+  // Normalize value: treat null and empty string as the same
+  const normalizedValue = value === null || value === '' ? null : value;
+  const selectedOption = options.find(opt => {
+    const optValue = opt.value === '' ? null : opt.value;
+    return optValue === normalizedValue;
+  });
 
   // Calculate dropdown position
   const calculatePosition = () => {
@@ -121,7 +126,9 @@ export default function Select({
   }, [isOpen]);
 
   const handleOptionClick = (optionValue: string | null) => {
-    onChange(optionValue);
+    // Normalize: convert empty string to null for consistency
+    const normalizedValue = optionValue === '' ? null : optionValue;
+    onChange(normalizedValue);
     setIsOpen(false);
   };
 
@@ -139,7 +146,7 @@ export default function Select({
         )}
       >
         <span className="flex-1 text-left truncate">
-          {selectedOption ? selectedOption.label : placeholder}
+          {selectedOption ? selectedOption.label : (normalizedValue === null ? placeholder : '')}
         </span>
         <ChevronDown
           className={clsx(
@@ -172,10 +179,11 @@ export default function Select({
         >
           <div className="overflow-y-auto max-h-[300px] py-1">
             {options.map((option) => {
-              const isSelected = option.value === value;
+              const optValue = option.value === '' ? null : option.value;
+              const isSelected = optValue === normalizedValue;
               return (
                 <button
-                  key={option.value}
+                  key={option.value || 'empty'}
                   type="button"
                   onClick={() => handleOptionClick(option.value)}
                   className={clsx(

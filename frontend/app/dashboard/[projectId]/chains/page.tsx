@@ -173,17 +173,18 @@ export default function AgentChainsPage() {
             showPeriodLabel={true}
           />
           <Select
-            value={selectedChainId || null}
-            onChange={(value) => setSelectedChainId(value)}
-            placeholder="All Chains"
-            options={[
+            value={selectedChainId === null ? '' : selectedChainId}
+            onChange={(value) => setSelectedChainId(value === '' ? null : value)}
+            placeholder={chains.length === 0 ? 'No chains available' : 'All Chains'}
+            options={chains.length > 0 ? [
               { value: '', label: 'All Chains' },
               ...chains.map((chain: ChainProfile) => ({
                 value: chain.chain_id,
                 label: `${chain.chain_id.substring(0, 12)}... (${chain.total_steps} steps, ${chain.unique_agents} agents)`,
               })),
-            ]}
+            ] : []}
             className="min-w-[280px]"
+            disabled={chains.length === 0}
           />
         </div>
 
