@@ -87,6 +87,7 @@ export default function FilterPanel({
                   updateFilter('dateFrom', range.from ? range.from.toISOString().split('T')[0] : undefined);
                   updateFilter('dateTo', range.to ? range.to.toISOString().split('T')[0] : undefined);
                 }}
+                showPeriodLabel={false}
               />
             </div>
 

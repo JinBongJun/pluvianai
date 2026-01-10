@@ -16,6 +16,7 @@ interface DateRangePickerProps {
   onChange: (range: { from: Date | null; to: Date | null }) => void;
   presets?: Preset[];
   className?: string;
+  showPeriodLabel?: boolean; // Show "Period:" label or not
 }
 
 const defaultPresets = [
@@ -72,6 +73,7 @@ export default function DateRangePicker({
   onChange,
   presets,
   className,
+  showPeriodLabel = true,
 }: DateRangePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -135,28 +137,30 @@ export default function DateRangePicker({
         setSelecting('from');
       }
       
-      // Calculate initial position
-      calculateDropdownPosition();
+      // Calculate initial position with a small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        calculateDropdownPosition();
+      }, 0);
       
       // Recalculate on scroll and resize
       const handleScroll = () => {
-        if (isOpen) {
-          calculateDropdownPosition();
-        }
+        calculateDropdownPosition();
       };
       
       const handleResize = () => {
-        if (isOpen) {
-          calculateDropdownPosition();
-        }
+        calculateDropdownPosition();
       };
       
+      // Use capture phase and add to all scrollable containers
       window.addEventListener('scroll', handleScroll, true);
       window.addEventListener('resize', handleResize);
+      document.addEventListener('scroll', handleScroll, true);
       
       return () => {
+        clearTimeout(timer);
         window.removeEventListener('scroll', handleScroll, true);
         window.removeEventListener('resize', handleResize);
+        document.removeEventListener('scroll', handleScroll, true);
       };
     } else {
       setDropdownPosition(null);
@@ -452,7 +456,7 @@ export default function DateRangePicker({
           className="flex items-center justify-between gap-2 px-3 py-2 border border-white/10 bg-white/5 rounded-md text-sm text-white hover:bg-white/10 transition-colors min-w-[280px]"
         >
           <span className="flex items-center gap-2 flex-1">
-            <span className="text-slate-400">Period:</span>
+            {showPeriodLabel && <span className="text-slate-400">Period:</span>}
             <span className="font-medium text-left flex-1">{formatPeriodDisplay()}</span>
           </span>
           <svg
@@ -472,12 +476,15 @@ export default function DateRangePicker({
       {typeof window !== 'undefined' && isOpen && dropdownPosition && createPortal(
         <div 
           data-datepicker-dropdown
-          className="fixed bg-white rounded-lg shadow-2xl border border-gray-200 z-[99999] overflow-hidden animate-fade-in" 
+          className="fixed bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden animate-fade-in" 
           onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
           style={{
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
             width: '700px',
+            zIndex: 99999,
+            position: 'fixed',
           }}
         >
           <div className="flex">
