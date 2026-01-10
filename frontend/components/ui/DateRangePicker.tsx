@@ -186,10 +186,40 @@ export default function DateRangePicker({
   const formatDisplay = () => {
     if (!value?.from && !value?.to) return 'Select date range';
     if (value.from && value.to) {
-      return `${formatDate(value.from)} - ${formatDate(value.to)}`;
+      // Format as "Jan 04 - Jan 10" style
+      const fromStr = value.from.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const toStr = value.to.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `${fromStr} - ${toStr}`;
     }
     if (value.from) return `From ${formatDate(value.from)}`;
     return `To ${formatDate(value.to)}`;
+  };
+
+  const getActivePresetLabel = () => {
+    for (const preset of (presets || defaultPresets)) {
+      if (isPresetActive(preset)) {
+        return preset.label;
+      }
+    }
+    return null;
+  };
+
+  const formatPeriodDisplay = () => {
+    const presetLabel = getActivePresetLabel();
+    if (presetLabel && presetLabel !== 'Custom range') {
+      if (value?.from && value?.to) {
+        const fromStr = value.from.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const toStr = value.to.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return `${presetLabel} (${fromStr} - ${toStr})`;
+      }
+      return presetLabel;
+    }
+    if (value?.from && value?.to) {
+      const fromStr = value.from.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const toStr = value.to.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `Custom (${fromStr} - ${toStr})`;
+    }
+    return 'Select date range';
   };
 
   const handleDateClick = (date: Date) => {
@@ -258,9 +288,18 @@ export default function DateRangePicker({
   };
 
   const isPresetActive = (preset: Preset) => {
-    if (!value?.from || !value?.to) return false;
+    if (!value?.from || !value?.to) {
+      // If custom range preset, check if dates exist but don't match any preset
+      if (preset.label === 'Custom range') {
+        return false; // Don't highlight custom range even if dates exist
+      }
+      return false;
+    }
     const range = preset.getRange();
-    if (!range.from || !range.to) return false;
+    if (!range.from || !range.to) {
+      // Custom range
+      return false;
+    }
     if (preset.label === 'Custom range') return false; // Custom range is never "active"
     
     const valueFrom = new Date(value.from);
@@ -338,42 +377,48 @@ export default function DateRangePicker({
       days.push(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day));
     }
 
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
     return (
-      <div className="grid grid-cols-7 gap-1">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-          <div key={day} className="text-xs font-medium text-slate-400 text-center py-2">
-            {day}
-          </div>
-        ))}
-        {days.map((date, index) => {
-          if (!date) {
-            return <div key={`empty-${index}`} className="h-8" />;
-          }
+      <div>
+        <div className="grid grid-cols-7 gap-1 mb-2">
+          {dayNames.map((day) => (
+            <div key={day} className="text-xs font-medium text-gray-500 text-center py-2">
+              {day}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {days.map((date, index) => {
+            if (!date) {
+              return <div key={`empty-${index}`} className="h-8" />;
+            }
 
-          const isInRange = isDateInRange(date);
-          const isSelected = isDateSelected(date);
-          const isFrom = tempFrom && date.toDateString() === tempFrom.toDateString();
-          const isTo = tempTo && date.toDateString() === tempTo.toDateString();
-          const isToday = date.toDateString() === new Date().toDateString();
+            const isInRange = isDateInRange(date);
+            const isSelected = isDateSelected(date);
+            const isFrom = tempFrom && date.toDateString() === tempFrom.toDateString();
+            const isTo = tempTo && date.toDateString() === tempTo.toDateString();
+            const isToday = date.toDateString() === new Date().toDateString();
 
-          return (
-            <button
-              key={date.toISOString()}
-              onClick={() => handleDateClick(date)}
-              className={clsx(
-                'h-8 w-8 rounded text-sm transition-all duration-150 relative',
-                isFrom || isTo
-                  ? 'bg-slate-600 text-white font-medium'
-                  : isInRange
-                  ? 'bg-slate-100 text-slate-900'
-                  : 'text-slate-700 hover:bg-slate-50',
-                isToday && !isSelected && !isInRange && 'font-medium'
-              )}
-            >
-              {date.getDate()}
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={date.toISOString()}
+                onClick={() => handleDateClick(date)}
+                className={clsx(
+                  'h-8 w-8 rounded text-sm transition-all duration-150 relative flex items-center justify-center',
+                  isFrom || isTo
+                    ? 'bg-gray-900 text-white font-medium rounded-md'
+                    : isInRange
+                    ? 'bg-gray-100 text-gray-900'
+                    : 'text-gray-700 hover:bg-gray-50',
+                  isToday && !isSelected && !isInRange && 'font-medium ring-2 ring-blue-400 ring-opacity-50'
+                )}
+              >
+                {date.getDate()}
+              </button>
+            );
+          })}
+        </div>
       </div>
     );
   };
@@ -382,19 +427,23 @@ export default function DateRangePicker({
     <div ref={containerRef} className={clsx('relative', className)}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 border border-white/10 bg-white/5 rounded-md text-sm text-white hover:bg-white/10 transition-colors"
+        className="flex items-center justify-between gap-2 px-3 py-2 border border-white/10 bg-white/5 rounded-md text-sm text-white hover:bg-white/10 transition-colors min-w-[280px]"
       >
-        <Calendar className="h-4 w-4" />
-        <span>{formatDisplay()}</span>
-        {value?.from || value?.to ? (
-          <X
-            className="h-4 w-4 text-slate-400 hover:text-white"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleClear();
-            }}
-          />
-        ) : null}
+        <span className="flex items-center gap-2 flex-1">
+          <span className="text-slate-400">Period:</span>
+          <span className="font-medium text-left flex-1">{formatPeriodDisplay()}</span>
+        </span>
+        <svg
+          className={clsx(
+            'h-4 w-4 text-slate-400 transition-transform flex-shrink-0',
+            isOpen && 'transform rotate-180'
+          )}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
       </button>
 
       {isOpen && dropdownPosition && (
@@ -407,6 +456,7 @@ export default function DateRangePicker({
           <div className="flex">
             {/* Left Panel - Presets */}
             <div className="w-48 border-r border-gray-200 bg-gray-50 p-4">
+              <div className="text-xs font-medium text-gray-500 mb-2">Quick Select</div>
               <div className="space-y-1">
                 {(presets || defaultPresets).map((preset, index) => {
                   const isActive = isPresetActive(preset);
@@ -415,9 +465,9 @@ export default function DateRangePicker({
                       key={index}
                       onClick={() => handlePreset(preset)}
                       className={clsx(
-                        'w-full text-left px-3 py-2 text-sm rounded-md transition-colors',
+                        'w-full text-left px-3 py-2 text-sm rounded transition-colors',
                         isActive
-                          ? 'bg-blue-50 text-blue-600 font-medium'
+                          ? 'bg-blue-500 text-white font-medium'
                           : 'text-gray-700 hover:bg-gray-100'
                       )}
                     >
