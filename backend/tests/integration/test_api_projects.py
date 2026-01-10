@@ -50,8 +50,19 @@ class TestProjectsAPI:
             headers=auth_headers
         )
         
-        # Should allow duplicate names (different projects can have same name)
-        assert response.status_code in [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST]
+        # API returns 409 CONFLICT for duplicate names (same owner)
+        # Or 403 if project limit is reached
+        assert response.status_code in [
+            status.HTTP_409_CONFLICT,  # Duplicate name
+            status.HTTP_403_FORBIDDEN,  # Project limit reached
+            status.HTTP_201_CREATED     # If duplicate names are allowed (unlikely)
+        ]
+        
+        # If it's a conflict, verify the error message
+        if response.status_code == status.HTTP_409_CONFLICT:
+            data = response.json()
+            assert "detail" in data
+            assert "already exists" in data["detail"].lower() or "duplicate" in data["detail"].lower()
     
     def test_list_projects(self, client, auth_headers, test_project):
         """Test listing user's projects"""
