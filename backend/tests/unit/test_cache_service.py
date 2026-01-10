@@ -38,6 +38,18 @@ class TestCacheService:
         assert result == {"test": "value"}
         service.redis_client.get.assert_called_once_with("test_key")
     
+    def test_get_with_exception(self):
+        """Test get() handles Redis exceptions gracefully"""
+        service = CacheService()
+        service.enabled = True
+        service.redis_client = Mock()
+        service.redis_client.get.side_effect = Exception("Redis connection error")
+        
+        # Should not raise exception, should return None
+        result = service.get("test_key")
+        
+        assert result is None
+    
     def test_get_when_key_not_exists(self):
         """Test get() when key doesn't exist"""
         service = CacheService()
@@ -64,6 +76,16 @@ class TestCacheService:
         assert call_args[0][1] == 60
         assert json.loads(call_args[0][2]) == {"test": "value"}
     
+    def test_set_with_exception(self):
+        """Test set() handles Redis exceptions gracefully"""
+        service = CacheService()
+        service.enabled = True
+        service.redis_client = Mock()
+        service.redis_client.setex.side_effect = Exception("Redis connection error")
+        
+        # Should not raise exception
+        service.set("test_key", {"test": "value"}, ttl=60)
+    
     def test_delete_success(self):
         """Test delete() removes key"""
         service = CacheService()
@@ -74,17 +96,53 @@ class TestCacheService:
         
         service.redis_client.delete.assert_called_once_with("test_key")
     
+    def test_delete_with_exception(self):
+        """Test delete() handles Redis exceptions gracefully"""
+        service = CacheService()
+        service.enabled = True
+        service.redis_client = Mock()
+        service.redis_client.delete.side_effect = Exception("Redis connection error")
+        
+        # Should not raise exception
+        service.delete("test_key")
+    
     def test_delete_pattern(self):
         """Test delete_pattern() removes matching keys"""
         service = CacheService()
         service.enabled = True
         service.redis_client = Mock()
-        service.redis_client.keys.return_value = ["key1", "key2", "key3"]
+        matching_keys = ["key1", "key2", "key3"]
+        service.redis_client.keys.return_value = matching_keys
         
         service.delete_pattern("project:1:*")
         
         service.redis_client.keys.assert_called_once_with("project:1:*")
-        service.redis_client.delete.assert_called_once_with("key1", "key2", "key3")
+        # Verify delete was called with all keys (using unpacking)
+        assert service.redis_client.delete.call_count == 1
+        # The delete method uses *keys, so verify all keys are in the call args
+        delete_call_args = service.redis_client.delete.call_args[0]
+        assert set(delete_call_args) == set(matching_keys)
+    
+    def test_delete_pattern_empty_result(self):
+        """Test delete_pattern() when no keys match"""
+        service = CacheService()
+        service.enabled = True
+        service.redis_client = Mock()
+        service.redis_client.keys.return_value = []
+        
+        service.delete_pattern("project:999:*")
+        
+        service.redis_client.keys.assert_called_once_with("project:999:*")
+        # delete should not be called when no keys match
+        service.redis_client.delete.assert_not_called()
+    
+    def test_delete_pattern_when_disabled(self):
+        """Test delete_pattern() when Redis is disabled"""
+        service = CacheService()
+        service.enabled = False
+        
+        # Should not raise exception
+        service.delete_pattern("project:1:*")
     
     def test_cache_key_generators(self):
         """Test cache key generation methods"""
@@ -100,11 +158,14 @@ class TestCacheService:
         service = CacheService()
         service.enabled = True
         service.redis_client = Mock()
-        service.redis_client.keys.return_value = [
+        matching_keys = [
             "project:1:stats:7d",
             "project:1:quality:100",
-            "project:1:api_calls:50"
+            "project:1:api_calls:50",
+            "project:1:cost:30d",
+            "project:1:members"
         ]
+        service.redis_client.keys.return_value = matching_keys
         
         service.invalidate_project_cache(1)
         
@@ -113,8 +174,33 @@ class TestCacheService:
         assert service.redis_client.keys.call_args[0][0] == "project:1:*"
         # delete_pattern calls delete once with all matching keys
         assert service.redis_client.delete.call_count == 1
-        assert set(service.redis_client.delete.call_args[0]) == {
-            "project:1:stats:7d",
-            "project:1:quality:100",
-            "project:1:api_calls:50"
-        }
+        # Verify all matching keys were deleted (order doesn't matter)
+        deleted_keys = set(service.redis_client.delete.call_args[0])
+        assert deleted_keys == set(matching_keys)
+    
+    def test_invalidate_project_cache_when_disabled(self):
+        """Test invalidate_project_cache() when Redis is disabled"""
+        service = CacheService()
+        service.enabled = False
+        
+        # Should not raise exception
+        service.invalidate_project_cache(1)
+    
+    def test_invalidate_user_projects_cache(self):
+        """Test invalidate_user_projects_cache() removes user project list cache"""
+        service = CacheService()
+        service.enabled = True
+        service.redis_client = Mock()
+        
+        service.invalidate_user_projects_cache(1)
+        
+        expected_key = "user:1:projects"
+        service.redis_client.delete.assert_called_once_with(expected_key)
+    
+    def test_invalidate_user_projects_cache_when_disabled(self):
+        """Test invalidate_user_projects_cache() when Redis is disabled"""
+        service = CacheService()
+        service.enabled = False
+        
+        # Should not raise exception
+        service.invalidate_user_projects_cache(1)
