@@ -459,7 +459,6 @@ export default function DateRangePicker({
             const isSelected = isDateSelected(date);
             const isFrom = tempFrom && date.toDateString() === tempFrom.toDateString();
             const isTo = tempTo && date.toDateString() === tempTo.toDateString();
-            const isToday = date.toDateString() === new Date().toDateString();
 
             return (
               <button
@@ -471,8 +470,7 @@ export default function DateRangePicker({
                     ? 'bg-gray-900 text-white font-medium rounded-md'
                     : isInRange
                     ? 'bg-gray-100 text-gray-900'
-                    : 'text-gray-700 hover:bg-gray-50',
-                  isToday && !isSelected && !isInRange && 'font-medium ring-2 ring-blue-400 ring-opacity-50'
+                    : 'text-gray-700 hover:bg-gray-50'
                 )}
               >
                 {date.getDate()}
