@@ -1177,6 +1177,26 @@ async def generate_report(
     return report
 
 
+@router.post("/generate")
+async def generate_report(
+    project_id: int = Query(..., description="Project ID"),
+    template: str = Query("standard", description="Report template"),
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate a report for a project"""
+    return await _generate_report_data(
+        project_id=project_id,
+        template=template,
+        date_from=date_from,
+        date_to=date_to,
+        current_user=current_user,
+        db=db
+    )
+
+
 @router.get("/download")
 async def download_report(
     project_id: int = Query(..., description="Project ID"),
@@ -1188,8 +1208,8 @@ async def download_report(
     db: Session = Depends(get_db)
 ):
     """Download report as file"""
-    # Generate report
-    report_data = await generate_report(
+    # Generate report using helper function
+    report_data = await _generate_report_data(
         project_id=project_id,
         template=template,
         date_from=date_from,
