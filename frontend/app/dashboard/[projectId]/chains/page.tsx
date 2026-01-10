@@ -7,6 +7,7 @@ import ProjectTabs from '@/components/ProjectTabs';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import DateRangePicker from '@/components/ui/DateRangePicker';
+import Select from '@/components/ui/Select';
 import { agentChainAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
 import { ArrowRight, TrendingUp, TrendingDown, AlertTriangle, Activity, Clock, CheckCircle, XCircle, GitBranch } from 'lucide-react';
@@ -171,18 +172,19 @@ export default function AgentChainsPage() {
             }}
             showPeriodLabel={true}
           />
-          <select
-            value={selectedChainId || ''}
-            onChange={(e) => setSelectedChainId(e.target.value || null)}
-            className="px-3 py-2 border border-white/10 bg-white/5 rounded-md text-sm text-white hover:bg-white/10 transition-colors"
-          >
-            <option value="">All Chains</option>
-            {chains.map((chain: ChainProfile) => (
-              <option key={chain.chain_id} value={chain.chain_id}>
-                {chain.chain_id.substring(0, 8)}... ({chain.total_steps} steps)
-              </option>
-            ))}
-          </select>
+          <Select
+            value={selectedChainId || null}
+            onChange={(value) => setSelectedChainId(value)}
+            placeholder="All Chains"
+            options={[
+              { value: '', label: 'All Chains' },
+              ...chains.map((chain: ChainProfile) => ({
+                value: chain.chain_id,
+                label: `${chain.chain_id.substring(0, 12)}... (${chain.total_steps} steps, ${chain.unique_agents} agents)`,
+              })),
+            ]}
+            className="min-w-[280px]"
+          />
         </div>
 
         {/* Overview Stats */}
