@@ -133,16 +133,17 @@ export default function AgentChainsPage() {
       }
     } catch (error: any) {
       console.error('Failed to load agent chain data:', error);
-      if (error.response?.status === 403) {
-        toast.showToast('Agent Chain Profiling requires Pro plan or higher. Please upgrade your subscription.', 'error');
-        setChainProfile({ 
-          message: 'Agent Chain Profiling requires Pro plan or higher',
-          chains: [] 
-        });
-      } else {
-        toast.showToast(error.response?.data?.detail || 'Failed to load agent chain data', 'error');
-        setChainProfile({ chains: [] });
-      }
+      // Temporarily disable subscription check during development
+      // if (error.response?.status === 403) {
+      //   toast.showToast('Agent Chain Profiling requires Pro plan or higher. Please upgrade your subscription.', 'error');
+      //   setChainProfile({ 
+      //     message: 'Agent Chain Profiling requires Pro plan or higher',
+      //     chains: [] 
+      //   });
+      // } else {
+      toast.showToast(error.response?.data?.detail || 'Failed to load agent chain data', 'error');
+      setChainProfile({ chains: [] });
+      // }
       setAgentStats({ agents: [] });
       if (error.response?.status === 401) {
         router.push('/login');
@@ -162,30 +163,33 @@ export default function AgentChainsPage() {
     );
   }
 
+  // Temporarily disabled subscription check during development
   // Handle subscription upgrade required
-  if (chainProfile?.message && chainProfile.message.includes('requires Pro plan')) {
-    return (
-      <DashboardLayout>
-        <div className="bg-[#000314] min-h-screen">
-          <ProjectTabs projectId={projectId} />
-          <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-12 text-center shadow-2xl">
-            <GitBranch className="h-16 w-16 text-purple-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-white mb-2">Subscription Upgrade Required</h2>
-            <p className="text-slate-400 mb-6">
-              Agent Chain Profiling is available for Pro plan and above.
-            </p>
-            <Button onClick={() => router.push('/settings/billing')}>
-              Upgrade Plan
-            </Button>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
+  // if (chainProfile?.message && chainProfile.message.includes('requires Pro plan')) {
+  //   return (
+  //     <DashboardLayout>
+  //       <div className="bg-[#000314] min-h-screen">
+  //         <ProjectTabs projectId={projectId} />
+  //         <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-12 text-center shadow-2xl">
+  //           <GitBranch className="h-16 w-16 text-purple-400 mx-auto mb-4" />
+  //           <h2 className="text-2xl font-bold text-white mb-2">Subscription Upgrade Required</h2>
+  //           <p className="text-slate-400 mb-6">
+  //             Agent Chain Profiling is available for Pro plan and above.
+  //           </p>
+  //           <Button onClick={() => router.push('/settings/billing')}>
+  //             Upgrade Plan
+  //           </Button>
+  //         </div>
+  //       </div>
+  //     </DashboardLayout>
+  //   );
+  // }
 
   // Safely extract chains array - handle null/undefined/error cases
+  // Temporarily ignore subscription messages during development
   let chainsArray: ChainProfile[] = [];
-  if (chainProfile && typeof chainProfile === 'object' && !chainProfile.message) {
+  if (chainProfile && typeof chainProfile === 'object') {
+    // Ignore message field during development - allow access to chains
     chainsArray = Array.isArray(chainProfile.chains) ? chainProfile.chains : [];
   }
   
