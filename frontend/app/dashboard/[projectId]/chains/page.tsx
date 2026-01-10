@@ -79,6 +79,25 @@ export default function AgentChainsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+  // Calculate days from date range - use useMemo to avoid conditional hooks
+  const calculatedDays = useMemo(() => {
+    if (dateRange.from && dateRange.to) {
+      const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays > 0 ? diffDays : 7;
+    }
+    return 7;
+  }, [dateRange.from, dateRange.to]);
+
+  // Update days when calculated days change (but only if different to avoid loop)
+  useEffect(() => {
+    if (calculatedDays !== days && calculatedDays > 0) {
+      setDays(calculatedDays);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calculatedDays]); // Only depend on calculatedDays, not days to avoid infinite loop
+
+  // Load data when dependencies change
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     if (!token) {
@@ -86,20 +105,56 @@ export default function AgentChainsPage() {
       return;
     }
 
-    loadData();
-  }, [projectId, selectedChainId, days, router]);
+    const loadDataAsync = async () => {
+      setLoading(true);
+      try {
+        // Load chain profile
+        const profileData = await agentChainAPI.profile(
+          projectId,
+          selectedChainId || undefined,
+          days
+        );
+        
+        // Ensure profileData has the expected structure
+        if (profileData && typeof profileData === 'object') {
+          setChainProfile({
+            ...profileData,
+            chains: Array.isArray(profileData.chains) ? profileData.chains : [],
+          });
+        } else {
+          setChainProfile({ chains: [] });
+        }
 
-  // Reload when date range changes
-  useEffect(() => {
-    if (dateRange.from && dateRange.to) {
-      const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      if (diffDays !== days) {
-        setDays(diffDays);
+        // Load agent statistics - use same days value
+        try {
+          const statsData = await agentChainAPI.getAgentStatistics(projectId, days);
+          setAgentStats({
+            ...statsData,
+            agents: Array.isArray(statsData?.agents) ? statsData.agents : [],
+          });
+        } catch (statsError: any) {
+          console.error('Failed to load agent statistics:', statsError);
+          setAgentStats({ agents: [] });
+        }
+      } catch (error: any) {
+        console.error('Failed to load agent chain data:', error);
+        // Use toast.showToast but don't include in deps to avoid infinite loop
+        toast.showToast(error.response?.data?.detail || 'Failed to load agent chain data', 'error');
+        setChainProfile({ chains: [] });
+        setAgentStats({ agents: [] });
+        if (error.response?.status === 401) {
+          router.push('/login');
+        }
+      } finally {
+        setLoading(false);
       }
-    }
-  }, [dateRange.from, dateRange.to]);
+    };
 
+    loadDataAsync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, selectedChainId, days, router]); // Removed toast from deps to prevent infinite loop
+
+  // Load data function for manual refresh (doesn't violate hooks rules as it's called from event handler)
   const loadData = async () => {
     setLoading(true);
     try {
@@ -133,17 +188,8 @@ export default function AgentChainsPage() {
       }
     } catch (error: any) {
       console.error('Failed to load agent chain data:', error);
-      // Temporarily disable subscription check during development
-      // if (error.response?.status === 403) {
-      //   toast.showToast('Agent Chain Profiling requires Pro plan or higher. Please upgrade your subscription.', 'error');
-      //   setChainProfile({ 
-      //     message: 'Agent Chain Profiling requires Pro plan or higher',
-      //     chains: [] 
-      //   });
-      // } else {
       toast.showToast(error.response?.data?.detail || 'Failed to load agent chain data', 'error');
       setChainProfile({ chains: [] });
-      // }
       setAgentStats({ agents: [] });
       if (error.response?.status === 401) {
         router.push('/login');
@@ -185,25 +231,28 @@ export default function AgentChainsPage() {
   //   );
   // }
 
-  // Safely extract chains array - handle null/undefined/error cases
-  // Temporarily ignore subscription messages during development
-  let chainsArray: ChainProfile[] = [];
-  if (chainProfile && typeof chainProfile === 'object' && chainProfile !== null) {
-    // Ignore message field during development - allow access to chains
-    // Check if chains property exists and is an array
-    if ('chains' in chainProfile && Array.isArray(chainProfile.chains)) {
-      chainsArray = chainProfile.chains;
+  // Safely extract chains array - use useMemo to ensure consistent hooks count
+  const allChains = useMemo(() => {
+    let chainsArray: ChainProfile[] = [];
+    if (chainProfile && typeof chainProfile === 'object' && chainProfile !== null) {
+      // Ignore message field during development - allow access to chains
+      // Check if chains property exists and is an array
+      if ('chains' in chainProfile && Array.isArray(chainProfile.chains)) {
+        chainsArray = chainProfile.chains;
+      }
     }
-  }
+    
+    return chainsArray.filter((chain: ChainProfile) => 
+      chain && 
+      chain.chain_id && 
+      typeof chain.chain_id === 'string' &&
+      chain.chain_id.length > 0
+    );
+  }, [chainProfile]);
   
-  const allChains = chainsArray.filter((chain: ChainProfile) => 
-    chain && 
-    chain.chain_id && 
-    typeof chain.chain_id === 'string' &&
-    chain.chain_id.length > 0
-  );
-  
-  const agents = (agentStats && Array.isArray(agentStats.agents)) ? agentStats.agents : [];
+  const agents = useMemo(() => {
+    return (agentStats && Array.isArray(agentStats.agents)) ? agentStats.agents : [];
+  }, [agentStats]);
 
   // Filter chains by search query
   const filteredChains = useMemo(() => {
