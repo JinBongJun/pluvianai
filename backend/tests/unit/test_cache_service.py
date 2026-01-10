@@ -117,8 +117,8 @@ class TestCacheService:
         service.delete_pattern("project:1:*")
         
         service.redis_client.keys.assert_called_once_with("project:1:*")
-        # Verify delete was called with all keys (using unpacking)
-        assert service.redis_client.delete.call_count == 1
+        # Verify delete was called once with all keys (using unpacking)
+        service.redis_client.delete.assert_called_once()
         # The delete method uses *keys, so verify all keys are in the call args
         delete_call_args = service.redis_client.delete.call_args[0]
         assert set(delete_call_args) == set(matching_keys)
@@ -170,10 +170,9 @@ class TestCacheService:
         service.invalidate_project_cache(1)
         
         # invalidate_project_cache calls delete_pattern once, which calls keys once
-        assert service.redis_client.keys.call_count == 1
-        assert service.redis_client.keys.call_args[0][0] == "project:1:*"
+        service.redis_client.keys.assert_called_once_with("project:1:*")
         # delete_pattern calls delete once with all matching keys
-        assert service.redis_client.delete.call_count == 1
+        service.redis_client.delete.assert_called_once()
         # Verify all matching keys were deleted (order doesn't matter)
         deleted_keys = set(service.redis_client.delete.call_args[0])
         assert deleted_keys == set(matching_keys)
