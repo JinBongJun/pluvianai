@@ -9,7 +9,7 @@ import Badge from '@/components/ui/Badge';
 import ChainFlowDiagram from '@/components/ChainFlowDiagram';
 import { agentChainAPI, apiCallsAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
-import { ArrowLeft, Clock, CheckCircle, XCircle, Activity, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Clock, CheckCircle, XCircle, Activity, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
   ResponsiveContainer,
