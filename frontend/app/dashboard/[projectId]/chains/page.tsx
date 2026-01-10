@@ -154,83 +154,7 @@ export default function AgentChainsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, selectedChainId, days, router]); // Removed toast from deps to prevent infinite loop
 
-  // Load data function for manual refresh (doesn't violate hooks rules as it's called from event handler)
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      // Load chain profile
-      const profileData = await agentChainAPI.profile(
-        projectId,
-        selectedChainId || undefined,
-        days
-      );
-      
-      // Ensure profileData has the expected structure
-      if (profileData && typeof profileData === 'object') {
-        setChainProfile({
-          ...profileData,
-          chains: Array.isArray(profileData.chains) ? profileData.chains : [],
-        });
-      } else {
-        setChainProfile({ chains: [] });
-      }
-
-      // Load agent statistics
-      try {
-        const statsData = await agentChainAPI.getAgentStatistics(projectId, days);
-        setAgentStats({
-          ...statsData,
-          agents: Array.isArray(statsData?.agents) ? statsData.agents : [],
-        });
-      } catch (statsError: any) {
-        console.error('Failed to load agent statistics:', statsError);
-        setAgentStats({ agents: [] });
-      }
-    } catch (error: any) {
-      console.error('Failed to load agent chain data:', error);
-      toast.showToast(error.response?.data?.detail || 'Failed to load agent chain data', 'error');
-      setChainProfile({ chains: [] });
-      setAgentStats({ agents: [] });
-      if (error.response?.status === 401) {
-        router.push('/login');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  // Temporarily disabled subscription check during development
-  // Handle subscription upgrade required
-  // if (chainProfile?.message && chainProfile.message.includes('requires Pro plan')) {
-  //   return (
-  //     <DashboardLayout>
-  //       <div className="bg-[#000314] min-h-screen">
-  //         <ProjectTabs projectId={projectId} />
-  //         <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-12 text-center shadow-2xl">
-  //           <GitBranch className="h-16 w-16 text-purple-400 mx-auto mb-4" />
-  //           <h2 className="text-2xl font-bold text-white mb-2">Subscription Upgrade Required</h2>
-  //           <p className="text-slate-400 mb-6">
-  //             Agent Chain Profiling is available for Pro plan and above.
-  //           </p>
-  //           <Button onClick={() => router.push('/settings/billing')}>
-  //             Upgrade Plan
-  //           </Button>
-  //         </div>
-  //       </div>
-  //     </DashboardLayout>
-  //   );
-  // }
-
+  // CRITICAL: All hooks must be called before any early returns!
   // Safely extract chains array - use useMemo to ensure consistent hooks count
   const allChains = useMemo(() => {
     let chainsArray: ChainProfile[] = [];
@@ -349,6 +273,51 @@ export default function AgentChainsPage() {
 
   const COLORS = ['#a855f7', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
+  // Load data function for manual refresh (doesn't violate hooks rules as it's called from event handler)
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      // Load chain profile
+      const profileData = await agentChainAPI.profile(
+        projectId,
+        selectedChainId || undefined,
+        days
+      );
+      
+      // Ensure profileData has the expected structure
+      if (profileData && typeof profileData === 'object') {
+        setChainProfile({
+          ...profileData,
+          chains: Array.isArray(profileData.chains) ? profileData.chains : [],
+        });
+      } else {
+        setChainProfile({ chains: [] });
+      }
+
+      // Load agent statistics
+      try {
+        const statsData = await agentChainAPI.getAgentStatistics(projectId, days);
+        setAgentStats({
+          ...statsData,
+          agents: Array.isArray(statsData?.agents) ? statsData.agents : [],
+        });
+      } catch (statsError: any) {
+        console.error('Failed to load agent statistics:', statsError);
+        setAgentStats({ agents: [] });
+      }
+    } catch (error: any) {
+      console.error('Failed to load agent chain data:', error);
+      toast.showToast(error.response?.data?.detail || 'Failed to load agent chain data', 'error');
+      setChainProfile({ chains: [] });
+      setAgentStats({ agents: [] });
+      if (error.response?.status === 401) {
+        router.push('/login');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSort = (field: typeof sortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -389,6 +358,17 @@ export default function AgentChainsPage() {
       toast.showToast('Failed to export chain data', 'error');
     }
   };
+
+  // Early return for loading state - MUST be after all hooks
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
