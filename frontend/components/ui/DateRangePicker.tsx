@@ -477,14 +477,21 @@ export default function DateRangePicker({
         <div 
           data-datepicker-dropdown
           className="fixed bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden animate-fade-in" 
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
           style={{
-            top: `${dropdownPosition.top}px`,
-            left: `${dropdownPosition.left}px`,
-            width: '700px',
-            zIndex: 99999,
             position: 'fixed',
+            top: `${Math.max(8, dropdownPosition.top)}px`,
+            left: `${Math.max(8, dropdownPosition.left)}px`,
+            width: '700px',
+            zIndex: 999999,
+            pointerEvents: 'auto',
           }}
         >
           <div className="flex">
