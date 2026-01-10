@@ -117,12 +117,24 @@ def generate_pdf_report(report_data: dict, buffer: io.BytesIO) -> None:
 
 
 def _add_standard_report_content(elements: list, report_data: dict, heading_style, normal_style):
-    """Add standard report content"""
+    """Add standard report content - concise executive summary"""
     summary = report_data.get('summary', {})
     
-    elements.append(Paragraph("Summary", heading_style))
+    # Executive Summary section with brief intro
+    elements.append(Spacer(1, 0.2*inch))
+    intro_style = ParagraphStyle(
+        'Intro',
+        parent=normal_style,
+        fontSize=10,
+        textColor=colors.HexColor('#555555'),
+        spaceAfter=12
+    )
+    elements.append(Paragraph("This report provides a high-level overview of key performance metrics for the reporting period.", intro_style))
+    elements.append(Spacer(1, 0.15*inch))
     
-    # Summary metrics
+    elements.append(Paragraph("Executive Summary", heading_style))
+    
+    # Key metrics in a clean table
     summary_data = [
         ['Metric', 'Value'],
         ['Total API Calls', f"{summary.get('total_api_calls', 0):,}"],
@@ -135,46 +147,128 @@ def _add_standard_report_content(elements: list, report_data: dict, heading_styl
         summary_data.append(['Average Quality Score', f"{quality_scores.get('average', 0):.2f}%"])
     
     drift_detections = summary.get('drift_detections', {})
-    summary_data.append(['Total Drift Detections', f"{drift_detections.get('total', 0)}"])
-    summary_data.append(['High Severity Drifts', f"{drift_detections.get('high_severity', 0)}"])
+    if drift_detections.get('total', 0) > 0:
+        summary_data.append(['Total Drift Detections', f"{drift_detections.get('total', 0)}"])
+        summary_data.append(['High Severity Drifts', f"{drift_detections.get('high_severity', 0)}"])
     
-    summary_table = Table(summary_data, colWidths=[3*inch, 3*inch])
+    summary_table = Table(summary_data, colWidths=[3.5*inch, 2.5*inch])
     summary_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a90e2')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f9f9f9')),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        ('TOPPADDING', (0, 0), (-1, 0), 10),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
         ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+        ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#2c3e50')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 1), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
     ]))
     elements.append(summary_table)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Brief conclusion
+    conclusion_style = ParagraphStyle(
+        'Conclusion',
+        parent=normal_style,
+        fontSize=10,
+        textColor=colors.HexColor('#333333'),
+        fontName='Helvetica-Italic'
+    )
+    elements.append(Paragraph("For detailed analysis and breakdowns, please refer to the Detailed Report template.", conclusion_style))
 
 
 def _add_detailed_report_content(elements: list, report_data: dict, heading_style, normal_style):
-    """Add detailed report content"""
+    """Add detailed report content - comprehensive analysis for analysts"""
     summary = report_data.get('summary', {})
     breakdown = report_data.get('breakdown', {})
     
-    # Summary section
-    _add_standard_report_content(elements, report_data, heading_style, normal_style)
+    # Detailed report introduction
+    elements.append(Spacer(1, 0.2*inch))
+    intro_style = ParagraphStyle(
+        'Intro',
+        parent=normal_style,
+        fontSize=10,
+        textColor=colors.HexColor('#555555'),
+        spaceAfter=12
+    )
+    elements.append(Paragraph("This comprehensive report provides detailed analysis including model performance, provider breakdowns, error analysis, and daily trends for in-depth evaluation.", intro_style))
+    elements.append(Spacer(1, 0.15*inch))
+    
+    # Summary section (simplified)
+    elements.append(Paragraph("Performance Summary", heading_style))
+    summary_data = [
+        ['Metric', 'Value'],
+        ['Total API Calls', f"{summary.get('total_api_calls', 0):,}"],
+        ['Successful Calls', f"{summary.get('successful_calls', 0):,}"],
+        ['Failed Calls', f"{summary.get('failed_calls', 0):,}"],
+        ['Success Rate', f"{summary.get('success_rate', 0):.2f}%"],
+        ['Total Cost', f"${summary.get('total_cost', 0):.2f}"],
+    ]
+    
+    quality_scores = summary.get('quality_scores', {})
+    if quality_scores.get('average') is not None:
+        summary_data.append(['Average Quality Score', f"{quality_scores.get('average', 0):.2f}%"])
+        summary_data.append(['Quality Score Range', f"{quality_scores.get('min', 0):.1f}% - {quality_scores.get('max', 0):.1f}%"])
+        summary_data.append(['Total Evaluations', f"{quality_scores.get('total_evaluations', 0):,}"])
+    
+    drift_detections = summary.get('drift_detections', {})
+    if drift_detections.get('total', 0) > 0:
+        summary_data.append(['Total Drift Detections', f"{drift_detections.get('total', 0)}"])
+        summary_data.append(['Critical Severity', f"{drift_detections.get('critical', 0)}"])
+        summary_data.append(['High Severity', f"{drift_detections.get('high_severity', 0)}"])
+        summary_data.append(['Medium Severity', f"{drift_detections.get('medium', 0)}"])
+        summary_data.append(['Low Severity', f"{drift_detections.get('low', 0)}"])
+    
+    summary_table = Table(summary_data, colWidths=[3*inch, 3*inch])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+        ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#2c3e50')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+    ]))
+    elements.append(summary_table)
+    elements.append(Spacer(1, 0.3*inch))
     elements.append(PageBreak())
     
-    # Top Models
+    # Top Models by Usage
     if breakdown.get('by_model', {}).get('top_models'):
-        elements.append(Paragraph("Top Models by Usage", heading_style))
-        top_models = breakdown['by_model']['top_models'][:10]  # Limit to top 10
+        elements.append(Paragraph("Model Performance Analysis", heading_style))
+        intro_style = ParagraphStyle(
+            'SectionIntro',
+            parent=normal_style,
+            fontSize=9,
+            textColor=colors.HexColor('#666666'),
+            spaceAfter=10
+        )
+        elements.append(Paragraph("Top 10 models ranked by API call volume, showing usage patterns and performance metrics.", intro_style))
+        elements.append(Spacer(1, 0.1*inch))
         
+        top_models = breakdown['by_model']['top_models'][:10]
         models_data = [['Model', 'Calls', 'Input Tokens', 'Output Tokens', 'Avg Latency (s)', 'Cost']]
         for model in top_models:
             avg_latency = (model.get('avg_latency_ms', 0) / 1000) if model.get('avg_latency_ms') else 0
             cost = model.get('cost', 0) if model.get('cost') is not None else 0
             models_data.append([
-                model.get('model', 'N/A'),
+                model.get('model', 'N/A')[:30],  # Truncate long model names
                 f"{model.get('calls', 0):,}",
                 f"{model.get('input_tokens', 0):,}",
                 f"{model.get('output_tokens', 0):,}",
@@ -182,61 +276,188 @@ def _add_detailed_report_content(elements: list, report_data: dict, heading_styl
                 f"${cost:.2f}"
             ])
         
-        models_table = Table(models_data, colWidths=[1.5*inch, 0.8*inch, 0.8*inch, 0.8*inch, 0.8*inch, 0.8*inch])
+        models_table = Table(models_data, colWidths=[2*inch, 0.75*inch, 0.75*inch, 0.75*inch, 0.75*inch, 0.75*inch])
         models_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a90e2')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
             ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d0d0d0')),
+            ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#34495e')),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 1), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
         ]))
         elements.append(models_table)
-        elements.append(Spacer(1, 0.2*inch))
+        elements.append(Spacer(1, 0.3*inch))
     
     # Provider Breakdown
     if breakdown.get('by_provider'):
-        elements.append(Paragraph("Usage by Provider", heading_style))
-        providers_data = [['Provider', 'Calls', 'Input Tokens', 'Output Tokens']]
+        elements.append(Paragraph("Provider Usage Breakdown", heading_style))
+        intro_style = ParagraphStyle(
+            'SectionIntro',
+            parent=normal_style,
+            fontSize=9,
+            textColor=colors.HexColor('#666666'),
+            spaceAfter=10
+        )
+        elements.append(Paragraph("Token usage and API call distribution across different LLM providers.", intro_style))
+        elements.append(Spacer(1, 0.1*inch))
+        
+        providers_data = [['Provider', 'Calls', 'Input Tokens', 'Output Tokens', 'Total Tokens']]
+        total_tokens_all = 0
         for provider, stats in breakdown['by_provider'].items():
+            total_tokens = stats.get('input_tokens', 0) + stats.get('output_tokens', 0)
+            total_tokens_all += total_tokens
             providers_data.append([
                 provider.capitalize(),
                 f"{stats.get('calls', 0):,}",
                 f"{stats.get('input_tokens', 0):,}",
-                f"{stats.get('output_tokens', 0):,}"
+                f"{stats.get('output_tokens', 0):,}",
+                f"{total_tokens:,}"
             ])
         
-        providers_table = Table(providers_data, colWidths=[2*inch, 1.5*inch, 1.5*inch, 1.5*inch])
+        providers_table = Table(providers_data, colWidths=[1.5*inch, 1.2*inch, 1.2*inch, 1.2*inch, 1.2*inch])
         providers_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a90e2')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
             ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d0d0d0')),
+            ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#34495e')),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 1), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
         ]))
         elements.append(providers_table)
-        elements.append(Spacer(1, 0.2*inch))
+        elements.append(Spacer(1, 0.3*inch))
+    
+    # Error Breakdown
+    if breakdown.get('error_breakdown'):
+        elements.append(Paragraph("Error Analysis", heading_style))
+        intro_style = ParagraphStyle(
+            'SectionIntro',
+            parent=normal_style,
+            fontSize=9,
+            textColor=colors.HexColor('#666666'),
+            spaceAfter=10
+        )
+        elements.append(Paragraph("HTTP status code distribution showing error patterns and failure rates.", intro_style))
+        elements.append(Spacer(1, 0.1*inch))
+        
+        error_breakdown = breakdown.get('error_breakdown', {})
+        errors_data = [['Status Code', 'Count', 'Percentage']]
+        total_errors = sum(error_breakdown.values())
+        for status_code, count in sorted(error_breakdown.items(), key=lambda x: x[1], reverse=True):
+            percentage = (count / total_errors * 100) if total_errors > 0 else 0
+            errors_data.append([
+                status_code,
+                f"{count:,}",
+                f"{percentage:.2f}%"
+            ])
+        
+        if errors_data:
+            errors_table = Table(errors_data, colWidths=[2*inch, 2*inch, 2*inch])
+            errors_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d0d0d0')),
+                ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#34495e')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 1), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
+            ]))
+            elements.append(errors_table)
+            elements.append(Spacer(1, 0.3*inch))
+    
+    # Daily Trends
+    if breakdown.get('daily_trends'):
+        elements.append(Paragraph("Daily Usage Trends", heading_style))
+        intro_style = ParagraphStyle(
+            'SectionIntro',
+            parent=normal_style,
+            fontSize=9,
+            textColor=colors.HexColor('#666666'),
+            spaceAfter=10
+        )
+        elements.append(Paragraph("Day-by-day breakdown of API calls and token usage showing usage patterns over time.", intro_style))
+        elements.append(Spacer(1, 0.1*inch))
+        
+        daily_trends = breakdown.get('daily_trends', [])
+        trends_data = [['Date', 'Calls', 'Input Tokens', 'Output Tokens', 'Total Tokens']]
+        for trend in daily_trends[:30]:  # Limit to last 30 days for readability
+            date_str = trend.get('date', '')[:10] if trend.get('date') else 'N/A'  # Extract date part
+            input_tokens = trend.get('input_tokens', 0)
+            output_tokens = trend.get('output_tokens', 0)
+            total_tokens = input_tokens + output_tokens
+            trends_data.append([
+                date_str,
+                f"{trend.get('calls', 0):,}",
+                f"{input_tokens:,}",
+                f"{output_tokens:,}",
+                f"{total_tokens:,}"
+            ])
+        
+        if len(trends_data) > 1:
+            trends_table = Table(trends_data, colWidths=[1.2*inch, 1*inch, 1.2*inch, 1.2*inch, 1.2*inch])
+            trends_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 7),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d0d0d0')),
+                ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#34495e')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 1), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ]))
+            elements.append(trends_table)
 
 
 def _add_executive_report_content(elements: list, report_data: dict, heading_style, normal_style):
-    """Add executive report content"""
+    """Add executive report content - high-level KPIs and strategic recommendations"""
     key_metrics = report_data.get('key_metrics', {})
     top_performers = report_data.get('top_performers', [])
     trends = report_data.get('trends', {})
     recommendations = report_data.get('recommendations', [])
     
+    # Executive Summary introduction
+    elements.append(Spacer(1, 0.2*inch))
+    intro_style = ParagraphStyle(
+        'Intro',
+        parent=normal_style,
+        fontSize=10,
+        textColor=colors.HexColor('#555555'),
+        spaceAfter=12
+    )
+    elements.append(Paragraph("This executive report provides high-level KPIs, performance trends, and strategic recommendations for decision-makers.", intro_style))
+    elements.append(Spacer(1, 0.15*inch))
+    
     elements.append(Paragraph("Key Performance Indicators", heading_style))
     
-    # KPIs
+    # KPIs in a professional table format
     kpi_data = [
         ['KPI', 'Value'],
         ['Total API Calls', f"{key_metrics.get('total_api_calls', 0):,}"],
@@ -250,41 +471,97 @@ def _add_executive_report_content(elements: list, report_data: dict, heading_sty
         kpi_data.append(['Avg Quality Score', f"{key_metrics.get('avg_quality_score', 0):.2f}%"])
     kpi_data.append(['Critical Issues', f"{key_metrics.get('critical_issues', 0)}"])
     
-    kpi_table = Table(kpi_data, colWidths=[3*inch, 3*inch])
+    kpi_table = Table(kpi_data, colWidths=[3.5*inch, 2.5*inch])
     kpi_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a1a')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f9f9f9')),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('TOPPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+        ('FONTSIZE', (0, 1), (-1, -1), 11),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+        ('LINEBELOW', (0, 0), (-1, 0), 3, colors.HexColor('#1a1a1a')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 1), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 10),
     ]))
     elements.append(kpi_table)
-    elements.append(Spacer(1, 0.3*inch))
+    elements.append(Spacer(1, 0.4*inch))
     
-    # Trends
+    # Trends section
     if trends:
-        elements.append(Paragraph("Trends", heading_style))
+        elements.append(Paragraph("Performance Trends", heading_style))
+        intro_style = ParagraphStyle(
+            'SectionIntro',
+            parent=normal_style,
+            fontSize=9,
+            textColor=colors.HexColor('#666666'),
+            spaceAfter=10
+        )
+        elements.append(Paragraph("Comparison between first half and second half of the reporting period.", intro_style))
+        elements.append(Spacer(1, 0.1*inch))
+        
+        trends_data = [['Metric', 'First Half', 'Second Half', 'Change', 'Trend']]
         for trend_key, trend_data in trends.items():
             trend_name = trend_key.replace('_', ' ').title()
+            first_half = trend_data.get('first_half', 0)
+            second_half = trend_data.get('second_half', 0)
             change_pct = trend_data.get('change_percentage', 0)
             direction = trend_data.get('direction', 'stable')
             
-            trend_text = f"{trend_name}: {direction.capitalize()} by {abs(change_pct):.2f}% "
-            trend_text += f"(First Half: {trend_data.get('first_half', 0):,}, "
-            trend_text += f"Second Half: {trend_data.get('second_half', 0):,})"
-            elements.append(Paragraph(trend_text, normal_style))
-            elements.append(Spacer(1, 0.1*inch))
+            # Format change percentage with sign
+            change_str = f"{change_pct:+.2f}%" if change_pct != 0 else "0.00%"
+            trend_icon = "↗" if direction == 'increasing' else "↘" if direction == 'decreasing' else "→"
+            
+            trends_data.append([
+                trend_name,
+                f"{first_half:,}",
+                f"{second_half:,}",
+                change_str,
+                trend_icon
+            ])
+        
+        trends_table = Table(trends_data, colWidths=[2*inch, 1.5*inch, 1.5*inch, 1*inch, 0.5*inch])
+        trends_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+            ('ALIGN', (4, 0), (4, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d0d0d0')),
+            ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#34495e')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+        ]))
+        elements.append(trends_table)
+        elements.append(Spacer(1, 0.3*inch))
     
     # Top Performers
     if top_performers:
-        elements.append(Spacer(1, 0.2*inch))
         elements.append(Paragraph("Top Performing Models", heading_style))
-        performers_data = [['Model', 'Calls', 'Avg Latency (s)']]
+        intro_style = ParagraphStyle(
+            'SectionIntro',
+            parent=normal_style,
+            fontSize=9,
+            textColor=colors.HexColor('#666666'),
+            spaceAfter=10
+        )
+        elements.append(Paragraph("Top 5 models by API call volume with average latency metrics.", intro_style))
+        elements.append(Spacer(1, 0.1*inch))
+        
+        performers_data = [['Model', 'Total Calls', 'Avg Latency (s)']]
         for model in top_performers[:5]:
             avg_latency = (model.get('avg_latency_ms', 0) / 1000) if model.get('avg_latency_ms') else 0
             performers_data.append([
@@ -293,57 +570,90 @@ def _add_executive_report_content(elements: list, report_data: dict, heading_sty
                 f"{avg_latency:.2f}"
             ])
         
-        performers_table = Table(performers_data, colWidths=[4*inch, 1*inch, 1*inch])
+        performers_table = Table(performers_data, colWidths=[4*inch, 1.2*inch, 1.2*inch])
         performers_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a90e2')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
             ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d0d0d0')),
+            ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#34495e')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
         ]))
         elements.append(performers_table)
-    
-    # Recommendations
-    if recommendations:
         elements.append(Spacer(1, 0.3*inch))
-        elements.append(Paragraph("Recommendations", heading_style))
+    
+    # Recommendations - professional table format instead of colored boxes
+    if recommendations:
+        elements.append(Paragraph("Strategic Recommendations", heading_style))
+        intro_style = ParagraphStyle(
+            'SectionIntro',
+            parent=normal_style,
+            fontSize=9,
+            textColor=colors.HexColor('#666666'),
+            spaceAfter=10
+        )
+        elements.append(Paragraph("Actionable recommendations based on performance analysis and trends.", intro_style))
+        elements.append(Spacer(1, 0.1*inch))
+        
+        recs_data = [['Priority', 'Category', 'Recommendation']]
         for rec in recommendations:
-            rec_type = rec.get('type', 'info')
-            priority = rec.get('priority', 'medium')
+            priority = rec.get('priority', 'medium').upper()
+            rec_type = rec.get('type', 'info').replace('_', ' ').title()
             title = rec.get('title', '')
             description = rec.get('description', '')
+            full_text = f"<b>{title}</b><br/>{description}"
             
-            # Color based on type
-            if rec_type == 'critical':
-                bg_color = colors.HexColor('#fee')
-                text_color = colors.HexColor('#c33')
-            elif rec_type == 'warning':
-                bg_color = colors.HexColor('#ffe')
-                text_color = colors.HexColor('#cc3')
-            elif rec_type == 'success':
-                bg_color = colors.HexColor('#efe')
-                text_color = colors.HexColor('#3c3')
-            else:
-                bg_color = colors.HexColor('#eef')
-                text_color = colors.HexColor('#33c')
-            
-            rec_style = ParagraphStyle(
-                'Recommendation',
-                parent=normal_style,
-                backColor=bg_color,
-                textColor=text_color,
-                borderPadding=8,
-                leftIndent=10,
-                rightIndent=10
-            )
-            
-            rec_text = f"<b>{title}</b> ({priority.upper()} Priority)<br/>{description}"
-            elements.append(Paragraph(rec_text, rec_style))
-            elements.append(Spacer(1, 0.15*inch))
+            recs_data.append([
+                priority,
+                rec_type,
+                full_text
+            ])
+        
+        recs_table = Table(recs_data, colWidths=[1*inch, 1.2*inch, 4.3*inch])
+        
+        # Build table style with conditional priority colors
+        table_style = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a1a')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (1, -1), 'CENTER'),
+            ('ALIGN', (2, 0), (2, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (1, -1), 9),
+            ('FONTSIZE', (2, 1), (2, -1), 9),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+            ('LINEBELOW', (0, 0), (-1, 0), 3, colors.HexColor('#1a1a1a')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
+            ('TOPPADDING', (0, 1), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 10),
+            ('LEFTPADDING', (0, 1), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 1), (-1, -1), 8),
+            ('BACKGROUND', (0, 1), (0, -1), colors.HexColor('#f5f5f5')),
+            ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+        ]
+        
+        # Add conditional text colors for priority levels
+        for i, rec in enumerate(recommendations, start=1):
+            priority = rec.get('priority', 'medium').lower()
+            if priority == 'high':
+                table_style.append(('TEXTCOLOR', (0, i), (0, i), colors.HexColor('#c0392b')))
+            elif priority == 'medium':
+                table_style.append(('TEXTCOLOR', (0, i), (0, i), colors.HexColor('#f39c12')))
+            else:  # low
+                table_style.append(('TEXTCOLOR', (0, i), (0, i), colors.HexColor('#27ae60')))
+        
+        recs_table.setStyle(TableStyle(table_style))
+        elements.append(recs_table)
 
 
 class ReportRequest(BaseModel):
