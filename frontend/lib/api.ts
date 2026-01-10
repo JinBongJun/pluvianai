@@ -518,30 +518,35 @@ export const reportsAPI = {
       // Create blob with correct MIME type
       const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: fileContentType });
       const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
       
-      // Try to extract filename from Content-Disposition header
-      let filename = `report-${projectId}-${params.template || 'standard'}-${new Date().toISOString().split('T')[0]}.${format}`;
-      const contentDisposition = response.headers['content-disposition'];
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-        if (filenameMatch && filenameMatch[1]) {
-          filename = filenameMatch[1].replace(/['"]/g, '');
-          // Decode URI if needed
-          try {
-            filename = decodeURIComponent(filename);
-          } catch (e) {
-            // If decoding fails, use as is
+      try {
+        const link = document.createElement('a');
+        link.href = url;
+        
+        // Try to extract filename from Content-Disposition header
+        let filename = `report-${projectId}-${params.template || 'standard'}-${new Date().toISOString().split('T')[0]}.${format}`;
+        const contentDisposition = response.headers['content-disposition'];
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+          if (filenameMatch && filenameMatch[1]) {
+            filename = filenameMatch[1].replace(/['"]/g, '');
+            // Decode URI if needed
+            try {
+              filename = decodeURIComponent(filename);
+            } catch (e) {
+              // If decoding fails, use as is
+            }
           }
         }
+        
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } finally {
+        // Always revoke the object URL to free memory
+        window.URL.revokeObjectURL(url);
       }
-      
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
     } catch (error: any) {
       // Handle blob error responses
       if (error.response && error.response.data) {
