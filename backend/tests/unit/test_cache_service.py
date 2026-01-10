@@ -100,12 +100,21 @@ class TestCacheService:
         service = CacheService()
         service.enabled = True
         service.redis_client = Mock()
-        service.redis_client.keys.side_effect = [
-            ["project:1:stats:7d", "project:1:quality:100"],
-            ["project:1:api_calls:50"]
+        service.redis_client.keys.return_value = [
+            "project:1:stats:7d",
+            "project:1:quality:100",
+            "project:1:api_calls:50"
         ]
         
         service.invalidate_project_cache(1)
         
-        assert service.redis_client.keys.call_count == 2
-        assert service.redis_client.delete.call_count == 2
+        # invalidate_project_cache calls delete_pattern once, which calls keys once
+        assert service.redis_client.keys.call_count == 1
+        assert service.redis_client.keys.call_args[0][0] == "project:1:*"
+        # delete_pattern calls delete once with all matching keys
+        assert service.redis_client.delete.call_count == 1
+        assert set(service.redis_client.delete.call_args[0]) == {
+            "project:1:stats:7d",
+            "project:1:quality:100",
+            "project:1:api_calls:50"
+        }
