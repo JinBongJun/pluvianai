@@ -756,16 +756,15 @@ class ReportRequest(BaseModel):
     date_to: Optional[datetime] = None
 
 
-@router.post("/generate")
-async def generate_report(
-    project_id: int = Query(..., description="Project ID"),
-    template: str = Query("standard", description="Report template"),
-    date_from: Optional[str] = Query(None, description="Start date (ISO format)"),
-    date_to: Optional[str] = Query(None, description="End date (ISO format)"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Generate a report for a project"""
+async def _generate_report_data(
+    project_id: int,
+    template: str,
+    date_from: Optional[str],
+    date_to: Optional[str],
+    current_user: User,
+    db: Session
+) -> dict:
+    """Internal helper function to generate report data"""
     # Verify project access
     project = check_project_access(project_id, current_user, db)
     
