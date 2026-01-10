@@ -94,29 +94,33 @@ export default function DateRangePicker({
       const dropdownWidth = 700; // Wider for side-by-side layout
       const dropdownHeight = 500; // Adjusted height
       
-      // Position directly below the button (getBoundingClientRect is viewport-relative)
+      // Position directly below the button, aligned to the left edge
       // getBoundingClientRect already accounts for scroll, so we don't need to add scroll offset for fixed positioning
-      let left = rect.left;
-      let top = rect.bottom + 2; // Very close to button (2px gap for visual separation)
+      let left = rect.left; // Align left edge of dropdown with left edge of button
+      let top = rect.bottom + 1; // Position directly below button with minimal gap
       
-      // Adjust if dropdown would go off right edge
-      if (left + dropdownWidth > viewportWidth - 16) {
-        left = Math.max(8, viewportWidth - dropdownWidth - 8);
+      // Adjust if dropdown would go off right edge (but keep left alignment if possible)
+      if (left + dropdownWidth > viewportWidth - 8) {
+        // Only shift left if absolutely necessary, try to maintain button alignment
+        const availableSpace = viewportWidth - left - 8;
+        if (availableSpace < dropdownWidth) {
+          left = Math.max(8, viewportWidth - dropdownWidth - 8);
+        }
       }
       
       // Adjust if dropdown would go off bottom edge
-      if (top + dropdownHeight > viewportHeight - 16) {
+      if (top + dropdownHeight > viewportHeight - 8) {
         // Try to show above button instead
-        const topAbove = rect.top - dropdownHeight - 4;
+        const topAbove = rect.top - dropdownHeight - 1;
         if (topAbove >= 8) {
           top = topAbove;
         } else {
-          // If still off screen, position at top of viewport
+          // If still off screen, position at top of viewport but maintain left alignment
           top = 8;
         }
       }
       
-      // Ensure dropdown doesn't go off left edge
+      // Ensure dropdown doesn't go off left edge (minimum 8px from edge)
       if (left < 8) {
         left = 8;
       }
@@ -128,8 +132,8 @@ export default function DateRangePicker({
       
       // getBoundingClientRect returns viewport-relative coordinates, perfect for fixed positioning
       setDropdownPosition({ 
-        top: Math.max(8, top), 
-        left: Math.max(8, left) 
+        top: top, 
+        left: left 
       });
     }
   };
@@ -495,8 +499,8 @@ export default function DateRangePicker({
           }}
           style={{
             position: 'fixed',
-            top: `${Math.max(8, dropdownPosition.top)}px`,
-            left: `${Math.max(8, dropdownPosition.left)}px`,
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
             width: '700px',
             zIndex: 999999,
             pointerEvents: 'auto',
