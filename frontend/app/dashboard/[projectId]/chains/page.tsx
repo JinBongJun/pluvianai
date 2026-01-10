@@ -188,9 +188,12 @@ export default function AgentChainsPage() {
   // Safely extract chains array - handle null/undefined/error cases
   // Temporarily ignore subscription messages during development
   let chainsArray: ChainProfile[] = [];
-  if (chainProfile && typeof chainProfile === 'object') {
+  if (chainProfile && typeof chainProfile === 'object' && chainProfile !== null) {
     // Ignore message field during development - allow access to chains
-    chainsArray = Array.isArray(chainProfile.chains) ? chainProfile.chains : [];
+    // Check if chains property exists and is an array
+    if ('chains' in chainProfile && Array.isArray(chainProfile.chains)) {
+      chainsArray = chainProfile.chains;
+    }
   }
   
   const allChains = chainsArray.filter((chain: ChainProfile) => 
@@ -446,14 +449,16 @@ export default function AgentChainsPage() {
         </div>
 
         {/* Overview Stats */}
-        {chainProfile && !chainProfile.message && (
+        {chainProfile && typeof chainProfile === 'object' && !('message' in chainProfile && chainProfile.message) && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-slate-400 mb-1">Total Chains</p>
                   <p className="text-2xl font-bold text-white">
-                    {typeof chainProfile.total_chains === 'number' ? chainProfile.total_chains : 0}
+                    {'total_chains' in chainProfile && typeof chainProfile.total_chains === 'number' 
+                      ? chainProfile.total_chains 
+                      : allChains.length}
                   </p>
                 </div>
                 <GitBranch className="h-8 w-8 text-purple-400" />
@@ -464,7 +469,7 @@ export default function AgentChainsPage() {
                 <div>
                   <p className="text-sm text-slate-400 mb-1">Success Rate</p>
                   <p className="text-2xl font-bold text-white">
-                    {typeof chainProfile.success_rate === 'number' 
+                    {'success_rate' in chainProfile && typeof chainProfile.success_rate === 'number' 
                       ? `${chainProfile.success_rate.toFixed(1)}%` 
                       : '0%'}
                   </p>
@@ -477,7 +482,7 @@ export default function AgentChainsPage() {
                 <div>
                   <p className="text-sm text-slate-400 mb-1">Avg Chain Latency</p>
                   <p className="text-2xl font-bold text-white">
-                    {typeof chainProfile.avg_chain_latency_ms === 'number' && chainProfile.avg_chain_latency_ms > 0
+                    {'avg_chain_latency_ms' in chainProfile && typeof chainProfile.avg_chain_latency_ms === 'number' && chainProfile.avg_chain_latency_ms > 0
                       ? `${(chainProfile.avg_chain_latency_ms / 1000).toFixed(2)}s`
                       : 'N/A'}
                   </p>
@@ -490,7 +495,9 @@ export default function AgentChainsPage() {
                 <div>
                   <p className="text-sm text-slate-400 mb-1">Active Agents</p>
                   <p className="text-2xl font-bold text-white">
-                    {typeof agentStats?.total_agents === 'number' ? agentStats.total_agents : 0}
+                    {agentStats && typeof agentStats === 'object' && agentStats !== null && 'total_agents' in agentStats && typeof agentStats.total_agents === 'number' 
+                      ? agentStats.total_agents 
+                      : agents.length}
                   </p>
                 </div>
                 <Activity className="h-8 w-8 text-blue-400" />
