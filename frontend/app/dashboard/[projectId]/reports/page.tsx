@@ -76,7 +76,8 @@ export default function ReportsPage() {
       toast.showToast('Report downloaded successfully', 'success');
     } catch (error: any) {
       console.error('Failed to download report:', error);
-      toast.showToast(error.response?.data?.detail || 'Failed to download report', 'error');
+      const errorMessage = error.message || error.response?.data?.detail || error.response?.data?.message || 'Failed to download report';
+      toast.showToast(errorMessage, 'error');
     }
   };
 

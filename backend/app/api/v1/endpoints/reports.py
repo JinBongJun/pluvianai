@@ -137,18 +137,38 @@ def generate_pdf_report(report_data: dict, buffer: io.BytesIO) -> None:
         # Report content based on template type
         report_type = report_data.get('type', 'standard')
         
-        if report_type == 'standard':
-            _add_standard_report_content(elements, report_data, heading_style, normal_style)
-        elif report_type == 'detailed':
-            _add_detailed_report_content(elements, report_data, heading_style, normal_style)
-        elif report_type == 'executive':
-            _add_executive_report_content(elements, report_data, heading_style, normal_style)
+        try:
+            if report_type == 'standard':
+                _add_standard_report_content(elements, report_data, heading_style, normal_style)
+            elif report_type == 'detailed':
+                _add_detailed_report_content(elements, report_data, heading_style, normal_style)
+            elif report_type == 'executive':
+                _add_executive_report_content(elements, report_data, heading_style, normal_style)
+        except Exception as content_error:
+            import traceback
+            from app.core.logging_config import logger
+            logger.error(f"Error adding report content: {str(content_error)}\n{traceback.format_exc()}")
+            # Add fallback content
+            elements.append(Paragraph("Error generating report content. Please check server logs.", normal_style))
+        
+        # Verify we have content to build
+        if not elements or len(elements) < 3:  # At least title, spacer, metadata table
+            raise ValueError("No content was generated for the PDF. Elements list is empty or too small.")
         
         # Build PDF
-        doc.build(elements)
+        try:
+            doc.build(elements)
+        except Exception as build_error:
+            import traceback
+            from app.core.logging_config import logger
+            error_msg = f"Error building PDF: {str(build_error)}"
+            logger.error(f"{error_msg}\n{traceback.format_exc()}")
+            raise ValueError(f"Failed to build PDF document: {str(build_error)}")
     except Exception as e:
         import traceback
-        traceback.print_exc()
+        from app.core.logging_config import logger
+        error_msg = f"PDF generation failed: {str(e)}"
+        logger.error(f"{error_msg}\n{traceback.format_exc()}")
         raise
 
 
@@ -474,10 +494,10 @@ def _add_detailed_report_content(elements: list, report_data: dict, heading_styl
 
 def _add_executive_report_content(elements: list, report_data: dict, heading_style, normal_style):
     """Add executive report content - high-level KPIs and strategic recommendations"""
-    key_metrics = report_data.get('key_metrics', {})
-    top_performers = report_data.get('top_performers', [])
-    trends = report_data.get('trends', {})
-    recommendations = report_data.get('recommendations', [])
+    key_metrics = report_data.get('key_metrics', {}) or {}
+    top_performers = report_data.get('top_performers', []) or []
+    trends = report_data.get('trends', {}) or {}
+    recommendations = report_data.get('recommendations', []) or []
     
     # Executive Summary introduction
     elements.append(Spacer(1, 0.2*inch))
@@ -494,18 +514,26 @@ def _add_executive_report_content(elements: list, report_data: dict, heading_sty
     elements.append(Paragraph("Key Performance Indicators", heading_style))
     
     # KPIs in a professional table format
+    total_calls = key_metrics.get('total_api_calls') or 0
+    success_rate = key_metrics.get('success_rate') or 0
+    total_cost = key_metrics.get('total_cost') or 0
+    avg_daily_calls = key_metrics.get('avg_daily_calls') or 0
+    avg_daily_cost = key_metrics.get('avg_daily_cost') or 0
+    avg_quality_score = key_metrics.get('avg_quality_score')
+    critical_issues = key_metrics.get('critical_issues') or 0
+    
     kpi_data = [
         ['KPI', 'Value'],
-        ['Total API Calls', f"{key_metrics.get('total_api_calls', 0):,}"],
-        ['Success Rate', f"{key_metrics.get('success_rate', 0):.2f}%"],
-        ['Total Cost', f"${key_metrics.get('total_cost', 0):.2f}"],
-        ['Avg Daily Calls', f"{key_metrics.get('avg_daily_calls', 0):.2f}"],
-        ['Avg Daily Cost', f"${key_metrics.get('avg_daily_cost', 0):.2f}"],
+        ['Total API Calls', f"{total_calls:,}"],
+        ['Success Rate', f"{success_rate:.2f}%"],
+        ['Total Cost', f"${total_cost:.2f}"],
+        ['Avg Daily Calls', f"{avg_daily_calls:.2f}"],
+        ['Avg Daily Cost', f"${avg_daily_cost:.2f}"],
     ]
     
-    if key_metrics.get('avg_quality_score') is not None:
-        kpi_data.append(['Avg Quality Score', f"{key_metrics.get('avg_quality_score', 0):.2f}%"])
-    kpi_data.append(['Critical Issues', f"{key_metrics.get('critical_issues', 0)}"])
+    if avg_quality_score is not None:
+        kpi_data.append(['Avg Quality Score', f"{avg_quality_score:.2f}%"])
+    kpi_data.append(['Critical Issues', f"{critical_issues}"])
     
     kpi_table = Table(kpi_data, colWidths=[3.5*inch, 2.5*inch])
     kpi_table.setStyle(TableStyle([
@@ -531,7 +559,7 @@ def _add_executive_report_content(elements: list, report_data: dict, heading_sty
     elements.append(Spacer(1, 0.4*inch))
     
     # Trends section
-    if trends:
+    if trends and isinstance(trends, dict):
         elements.append(Paragraph("Performance Trends", heading_style))
         intro_style = ParagraphStyle(
             'SectionIntro',
@@ -545,47 +573,55 @@ def _add_executive_report_content(elements: list, report_data: dict, heading_sty
         
         trends_data = [['Metric', 'First Half', 'Second Half', 'Change', 'Trend']]
         for trend_key, trend_data in trends.items():
-            trend_name = trend_key.replace('_', ' ').title()
-            first_half = trend_data.get('first_half', 0)
-            second_half = trend_data.get('second_half', 0)
-            change_pct = trend_data.get('change_percentage', 0)
-            direction = trend_data.get('direction', 'stable')
+            if not isinstance(trend_data, dict):
+                continue
+            trend_name = str(trend_key).replace('_', ' ').title()
+            first_half = trend_data.get('first_half') or 0
+            second_half = trend_data.get('second_half') or 0
+            change_pct = trend_data.get('change_percentage') or 0
+            direction = str(trend_data.get('direction', 'stable'))
             
             # Format change percentage with sign
-            change_str = f"{change_pct:+.2f}%" if change_pct != 0 else "0.00%"
+            try:
+                change_pct = float(change_pct)
+                change_str = f"{change_pct:+.2f}%" if change_pct != 0 else "0.00%"
+            except (ValueError, TypeError):
+                change_str = "0.00%"
+            
             trend_icon = "↗" if direction == 'increasing' else "↘" if direction == 'decreasing' else "→"
             
             trends_data.append([
                 trend_name,
-                f"{first_half:,}",
-                f"{second_half:,}",
+                f"{int(first_half):,}",
+                f"{int(second_half):,}",
                 change_str,
                 trend_icon
             ])
         
-        trends_table = Table(trends_data, colWidths=[2*inch, 1.5*inch, 1.5*inch, 1*inch, 0.5*inch])
-        trends_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
-            ('ALIGN', (4, 0), (4, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d0d0d0')),
-            ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#34495e')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 1), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
-        ]))
-        elements.append(trends_table)
-        elements.append(Spacer(1, 0.3*inch))
+        if len(trends_data) > 1:  # More than just header
+            trends_table = Table(trends_data, colWidths=[2*inch, 1.5*inch, 1.5*inch, 1*inch, 0.5*inch])
+            trends_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+                ('ALIGN', (4, 0), (4, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d0d0d0')),
+                ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#34495e')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 1), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+            ]))
+            elements.append(trends_table)
+            elements.append(Spacer(1, 0.3*inch))
     
     # Top Performers
-    if top_performers:
+    if top_performers and isinstance(top_performers, list) and len(top_performers) > 0:
         elements.append(Paragraph("Top Performing Models", heading_style))
         intro_style = ParagraphStyle(
             'SectionIntro',
@@ -599,35 +635,46 @@ def _add_executive_report_content(elements: list, report_data: dict, heading_sty
         
         performers_data = [['Model', 'Total Calls', 'Avg Latency (s)']]
         for model in top_performers[:5]:
-            avg_latency = (model.get('avg_latency_ms', 0) / 1000) if model.get('avg_latency_ms') else 0
+            if not isinstance(model, dict):
+                continue
+            avg_latency_ms = model.get('avg_latency_ms')
+            try:
+                avg_latency = (float(avg_latency_ms) / 1000) if avg_latency_ms is not None else 0.0
+            except (ValueError, TypeError):
+                avg_latency = 0.0
+            
+            model_name = str(model.get('model', 'N/A'))
+            calls = model.get('calls') or 0
+            
             performers_data.append([
-                model.get('model', 'N/A'),
-                f"{model.get('calls', 0):,}",
+                model_name,
+                f"{int(calls):,}",
                 f"{avg_latency:.2f}"
             ])
         
-        performers_table = Table(performers_data, colWidths=[4*inch, 1.2*inch, 1.2*inch])
-        performers_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d0d0d0')),
-            ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#34495e')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 1), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
-        ]))
-        elements.append(performers_table)
-        elements.append(Spacer(1, 0.3*inch))
+        if len(performers_data) > 1:  # More than just header
+            performers_table = Table(performers_data, colWidths=[4*inch, 1.2*inch, 1.2*inch])
+            performers_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d0d0d0')),
+                ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#34495e')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 1), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+            ]))
+            elements.append(performers_table)
+            elements.append(Spacer(1, 0.3*inch))
     
     # Recommendations - professional table format instead of colored boxes
-    if recommendations:
+    if recommendations and isinstance(recommendations, list) and len(recommendations) > 0:
         elements.append(Paragraph("Strategic Recommendations", heading_style))
         intro_style = ParagraphStyle(
             'SectionIntro',
@@ -640,12 +687,19 @@ def _add_executive_report_content(elements: list, report_data: dict, heading_sty
         elements.append(Spacer(1, 0.1*inch))
         
         recs_data = [['Priority', 'Category', 'Recommendation']]
+        valid_recs = []
         for rec in recommendations:
-            priority = rec.get('priority', 'medium').upper()
-            rec_type = rec.get('type', 'info').replace('_', ' ').title()
-            title = rec.get('title', '')
-            description = rec.get('description', '')
-            full_text = f"<b>{title}</b><br/>{description}"
+            if not rec or not isinstance(rec, dict):
+                continue
+            valid_recs.append(rec)
+            priority = str(rec.get('priority', 'medium')).upper()
+            rec_type = str(rec.get('type', 'info')).replace('_', ' ').title()
+            title = str(rec.get('title', '')) or 'No title'
+            description = str(rec.get('description', '')) or 'No description'
+            # Escape any special characters and create safe HTML
+            title_escaped = title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            description_escaped = description.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('\n', '<br/>')
+            full_text = f"<b>{title_escaped}</b><br/>{description_escaped}"
             
             recs_data.append([
                 priority,
@@ -653,43 +707,44 @@ def _add_executive_report_content(elements: list, report_data: dict, heading_sty
                 full_text
             ])
         
-        recs_table = Table(recs_data, colWidths=[1*inch, 1.2*inch, 4.3*inch])
-        
-        # Build table style with conditional priority colors
-        table_style = [
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a1a')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (1, -1), 'CENTER'),
-            ('ALIGN', (2, 0), (2, -1), 'LEFT'),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (1, -1), 9),
-            ('FONTSIZE', (2, 1), (2, -1), 9),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
-            ('LINEBELOW', (0, 0), (-1, 0), 3, colors.HexColor('#1a1a1a')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
-            ('TOPPADDING', (0, 1), (-1, -1), 10),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 10),
-            ('LEFTPADDING', (0, 1), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 1), (-1, -1), 8),
-            ('BACKGROUND', (0, 1), (0, -1), colors.HexColor('#f5f5f5')),
-            ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
-        ]
-        
-        # Add conditional text colors for priority levels
-        for i, rec in enumerate(recommendations, start=1):
-            priority = rec.get('priority', 'medium').lower()
-            if priority == 'high':
-                table_style.append(('TEXTCOLOR', (0, i), (0, i), colors.HexColor('#c0392b')))
-            elif priority == 'medium':
-                table_style.append(('TEXTCOLOR', (0, i), (0, i), colors.HexColor('#f39c12')))
-            else:  # low
-                table_style.append(('TEXTCOLOR', (0, i), (0, i), colors.HexColor('#27ae60')))
-        
-        recs_table.setStyle(TableStyle(table_style))
-        elements.append(recs_table)
+        if len(recs_data) > 1:  # More than just header
+            recs_table = Table(recs_data, colWidths=[1*inch, 1.2*inch, 4.3*inch])
+            
+            # Build table style with conditional priority colors
+            table_style = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a1a')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (1, -1), 'CENTER'),
+                ('ALIGN', (2, 0), (2, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (1, -1), 9),
+                ('FONTSIZE', (2, 1), (2, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+                ('LINEBELOW', (0, 0), (-1, 0), 3, colors.HexColor('#1a1a1a')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
+                ('TOPPADDING', (0, 1), (-1, -1), 10),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 10),
+                ('LEFTPADDING', (0, 1), (-1, -1), 8),
+                ('RIGHTPADDING', (0, 1), (-1, -1), 8),
+                ('BACKGROUND', (0, 1), (0, -1), colors.HexColor('#f5f5f5')),
+                ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+            ]
+            
+            # Add conditional text colors for priority levels (using valid_recs index)
+            for i, rec in enumerate(valid_recs, start=1):
+                priority = str(rec.get('priority', 'medium')).lower()
+                if priority == 'high':
+                    table_style.append(('TEXTCOLOR', (0, i), (0, i), colors.HexColor('#c0392b')))
+                elif priority == 'medium':
+                    table_style.append(('TEXTCOLOR', (0, i), (0, i), colors.HexColor('#f39c12')))
+                else:  # low
+                    table_style.append(('TEXTCOLOR', (0, i), (0, i), colors.HexColor('#27ae60')))
+            
+            recs_table.setStyle(TableStyle(table_style))
+            elements.append(recs_table)
 
 
 class ReportRequest(BaseModel):
