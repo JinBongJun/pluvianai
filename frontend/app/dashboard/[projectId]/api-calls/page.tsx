@@ -9,12 +9,12 @@ import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import { apiCallsAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
-import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, RefreshCw } from 'lucide-react';
 import ExportButton from '@/components/export/ExportButton';
 import { clsx } from 'clsx';
 import ProjectTabs from '@/components/ProjectTabs';
 
-type SortField = 'created_at' | 'latency_ms' | 'status_code';
+type SortField = 'created_at' | 'latency_ms' | 'status_code' | 'provider' | 'model';
 type SortDirection = 'asc' | 'desc';
 
 export default function APICallsListPage() {
@@ -31,6 +31,7 @@ export default function APICallsListPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [totalItems, setTotalItems] = useState(0);
+  const [allData, setAllData] = useState<any[]>([]); // Store all fetched data for client-side filtering
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -45,9 +46,15 @@ export default function APICallsListPage() {
   const loadAPICalls = async () => {
     setLoading(true);
     try {
+      // Fetch more data if client-side filters are active (date range, status, search)
+      // Otherwise use server-side pagination
+      const needsClientSideFiltering = !!(filters.dateFrom || filters.dateTo || filters.status || filters.search);
+      const fetchLimit = needsClientSideFiltering ? 10000 : itemsPerPage;
+      const fetchOffset = needsClientSideFiltering ? 0 : (currentPage - 1) * itemsPerPage;
+      
       const params: any = {
-        limit: itemsPerPage,
-        offset: (currentPage - 1) * itemsPerPage,
+        limit: fetchLimit,
+        offset: fetchOffset,
       };
 
       if (filters.provider) params.provider = filters.provider;
@@ -56,8 +63,15 @@ export default function APICallsListPage() {
 
       const data = await apiCallsAPI.list(projectId, params);
       
-      // Apply client-side filtering for date range and status
-      let filtered = data;
+      // Store all data for client-side filtering
+      if (needsClientSideFiltering) {
+        setAllData(data);
+      } else {
+        setAllData([]); // Clear when using server-side pagination
+      }
+      
+      // Apply client-side filtering for date range, status, and search
+      let filtered = needsClientSideFiltering ? data : [...data];
       
       if (filters.dateFrom || filters.dateTo) {
         filtered = filtered.filter((call: any) => {
@@ -85,23 +99,35 @@ export default function APICallsListPage() {
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
         filtered = filtered.filter((call: any) => {
-          // Search in request/response data (simplified - in production, search in actual data)
-          return JSON.stringify(call).toLowerCase().includes(searchLower);
+          // Search in relevant fields only (more efficient and accurate)
+          return (
+            call.provider?.toLowerCase().includes(searchLower) ||
+            call.model?.toLowerCase().includes(searchLower) ||
+            call.agent_name?.toLowerCase().includes(searchLower) ||
+            call.chain_id?.toLowerCase().includes(searchLower) ||
+            (call.request_prompt && call.request_prompt.toLowerCase().includes(searchLower)) ||
+            (call.response_text && call.response_text.toLowerCase().includes(searchLower)) ||
+            call.status_code?.toString().includes(searchLower)
+          );
         });
       }
 
       // Apply sorting
       filtered.sort((a: any, b: any) => {
-        let aVal = a[sortField];
-        let bVal = b[sortField];
+        let aVal: any = a[sortField];
+        let bVal: any = b[sortField];
 
         if (sortField === 'created_at') {
           aVal = new Date(aVal).getTime();
           bVal = new Date(bVal).getTime();
+        } else if (sortField === 'provider' || sortField === 'model') {
+          // String comparison for provider and model
+          aVal = aVal?.toLowerCase() || '';
+          bVal = bVal?.toLowerCase() || '';
         }
 
-        if (aVal === null || aVal === undefined) return 1;
-        if (bVal === null || bVal === undefined) return -1;
+        if (aVal === null || aVal === undefined || aVal === '') return 1;
+        if (bVal === null || bVal === undefined || bVal === '') return -1;
 
         if (sortDirection === 'asc') {
           return aVal > bVal ? 1 : -1;
@@ -110,14 +136,23 @@ export default function APICallsListPage() {
         }
       });
 
-      setApiCalls(filtered);
-      setTotalItems(filtered.length);
+      // Paginate filtered results if client-side filtering was applied
+      const paginatedResults = needsClientSideFiltering
+        ? filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+        : filtered;
+
+      setApiCalls(paginatedResults);
+      setTotalItems(filtered.length); // Total filtered count for pagination
     } catch (error: any) {
       console.error('Failed to load API calls:', error);
       toast.showToast(error.response?.data?.detail || 'Failed to load API calls', 'error');
       if (error.response?.status === 401) {
         router.push('/login');
       }
+      // Set empty arrays on error
+      setApiCalls([]);
+      setAllData([]);
+      setTotalItems(0);
     } finally {
       setLoading(false);
     }
@@ -130,6 +165,12 @@ export default function APICallsListPage() {
       setSortField(field);
       setSortDirection('desc');
     }
+    setCurrentPage(1); // Reset to first page when sorting
+  };
+
+  const handleFiltersChange = (newFilters: FilterState) => {
+    setFilters(newFilters);
+    setCurrentPage(1); // Reset to first page when filters change
   };
 
   const getStatusBadge = (statusCode: number | null) => {
@@ -145,37 +186,38 @@ export default function APICallsListPage() {
     }
   };
 
+  // Extract available options from all fetched data, not just current page
   const availableProviders = useMemo(() => {
     const providers = new Set<string>();
-    apiCalls.forEach((call) => {
+    (allData.length > 0 ? allData : apiCalls).forEach((call) => {
       if (call.provider) providers.add(call.provider);
     });
     return Array.from(providers).sort();
-  }, [apiCalls]);
+  }, [allData, apiCalls]);
 
   const availableModels = useMemo(() => {
     const models = new Set<string>();
-    apiCalls.forEach((call) => {
+    (allData.length > 0 ? allData : apiCalls).forEach((call) => {
       if (call.model) models.add(call.model);
     });
     return Array.from(models).sort();
-  }, [apiCalls]);
+  }, [allData, apiCalls]);
 
   const availableAgents = useMemo(() => {
     const agents = new Set<string>();
-    apiCalls.forEach((call) => {
+    (allData.length > 0 ? allData : apiCalls).forEach((call) => {
       if (call.agent_name) agents.add(call.agent_name);
     });
     return Array.from(agents).sort();
-  }, [apiCalls]);
+  }, [allData, apiCalls]);
 
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   if (loading && apiCalls.length === 0) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
+        <div className="bg-[#000314] min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
         </div>
       </DashboardLayout>
     );
@@ -194,7 +236,16 @@ export default function APICallsListPage() {
         <ProjectTabs projectId={projectId} />
 
         {/* Actions */}
-        <div className="flex justify-end mb-6">
+        <div className="flex items-center justify-between mb-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={loadAPICalls}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
           <ExportButton projectId={projectId} filters={filters} />
         </div>
 
@@ -202,8 +253,11 @@ export default function APICallsListPage() {
         <div className="mb-6">
           <FilterPanel
             filters={filters}
-            onFiltersChange={setFilters}
-            onReset={() => setFilters({})}
+            onFiltersChange={handleFiltersChange}
+            onReset={() => {
+              setFilters({});
+              setCurrentPage(1);
+            }}
             availableProviders={availableProviders}
             availableModels={availableModels}
             availableAgents={availableAgents}
@@ -234,7 +288,38 @@ export default function APICallsListPage() {
                     </button>
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                    Model
+                    <button
+                      onClick={() => handleSort('provider')}
+                      className="flex items-center gap-1 hover:text-white transition-colors"
+                    >
+                      Provider
+                      {sortField === 'provider' ? (
+                        sortDirection === 'asc' ? (
+                          <ArrowUp className="h-4 w-4" />
+                        ) : (
+                          <ArrowDown className="h-4 w-4" />
+                        )
+                      ) : (
+                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <button
+                      onClick={() => handleSort('model')}
+                      className="flex items-center gap-1 hover:text-white transition-colors"
+                    >
+                      Model
+                      {sortField === 'model' ? (
+                        sortDirection === 'asc' ? (
+                          <ArrowUp className="h-4 w-4" />
+                        ) : (
+                          <ArrowDown className="h-4 w-4" />
+                        )
+                      ) : (
+                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                      )}
+                    </button>
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Status
@@ -270,8 +355,37 @@ export default function APICallsListPage() {
               <tbody className="divide-y divide-white/10">
                 {apiCalls.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
-                      No API calls found
+                    <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
+                      {loading ? (
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 border-t-transparent"></div>
+                        </div>
+                      ) : filters.search || filters.dateFrom || filters.dateTo || filters.status || filters.provider || filters.model || filters.agentName ? (
+                        <div>
+                          <p>No API calls found matching the current filters.</p>
+                          <p className="text-sm mt-2 text-slate-500">
+                            {filters.search && `Search: "${filters.search}"`}
+                          </p>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setFilters({});
+                              setCurrentPage(1);
+                            }}
+                            className="mt-4"
+                          >
+                            Clear Filters
+                          </Button>
+                        </div>
+                      ) : (
+                        <div>
+                          <p>No API calls found for this project.</p>
+                          <p className="text-sm mt-2 text-slate-500">
+                            Start making API calls to see them here.
+                          </p>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ) : (
@@ -282,7 +396,12 @@ export default function APICallsListPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-white">
-                          {call.provider}/{call.model}
+                          {call.provider || 'unknown'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-white">
+                          {call.model || 'unknown'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -321,14 +440,29 @@ export default function APICallsListPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={totalItems}
-            itemsPerPage={itemsPerPage}
-            onPageChange={setCurrentPage}
-            onItemsPerPageChange={setItemsPerPage}
-          />
+          <div className="mt-6">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={(newItemsPerPage) => {
+                setItemsPerPage(newItemsPerPage);
+                setCurrentPage(1); // Reset to first page when changing items per page
+              }}
+              className="bg-transparent"
+            />
+          </div>
+        )}
+        
+        {/* Show info when client-side filtering is applied */}
+        {(filters.dateFrom || filters.dateTo || filters.status || filters.search) && totalItems > 0 && (
+          <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <p className="text-sm text-blue-400">
+              Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} filtered results
+            </p>
+          </div>
         )}
       </div>
     </DashboardLayout>

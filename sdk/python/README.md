@@ -51,6 +51,34 @@ agentguard.init(
 )
 ```
 
+### Agent Chain Tracking
+
+To track a chain of API calls that belong to the same workflow:
+
+```python
+import agentguard
+from openai import OpenAI
+
+agentguard.init()
+client = OpenAI()
+
+# Use context manager to group related calls into a chain
+with agentguard.chain("user-query-123", agent_name="data-collector"):
+    # All calls within this block will have the same chain_id
+    response1 = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": "Collect data"}]
+    )
+    
+    response2 = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": "Analyze data"}]
+    )
+    
+    # Both calls will be grouped under chain_id="user-query-123"
+    # You can view them in the Agent Chains page
+```
+
 ### Manual Tracking
 
 If you prefer to track calls manually:
@@ -68,7 +96,8 @@ agentguard.track_call(
     response_data={"choices": [...]},
     latency_ms=latency_ms,
     status_code=200,
-    agent_name="my-agent"
+    agent_name="my-agent",
+    chain_id="user-query-123"  # Optional: group related calls
 )
 ```
 

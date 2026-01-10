@@ -29,6 +29,9 @@ class AgentGuard {
   private patched: boolean = false;
   private originalFunctions: Map<string, any> = new Map();
   private axiosInstance: AxiosInstance;
+  
+  // Context for chain_id and agent_name (using AsyncLocalStorage for async context)
+  private context: Map<string, any> = new Map();
 
   constructor(config: AgentGuardConfig = {}) {
     this.apiKey = config.apiKey || process.env.AGENTGUARD_API_KEY;
@@ -179,6 +182,62 @@ class AgentGuard {
     }
   }
 
+  /**
+   * Get chain_id from context
+   */
+  private getChainId(): string | undefined {
+    return this.context.get('chain_id');
+  }
+
+  /**
+   * Get agent_name from context or default
+   */
+  private getAgentName(): string | undefined {
+    return this.context.get('agent_name') || this.agentName;
+  }
+
+  /**
+   * Context manager to set chain_id and agent_name for a chain of API calls
+   * 
+   * @example
+   * ```typescript
+   * await agentguard.chain("user-query-123", "data-collector", async () => {
+   *   const response1 = await openai.chat.completions.create(...);
+   *   const response2 = await openai.chat.completions.create(...);
+   *   // Both calls will have chain_id="user-query-123"
+   * });
+   * ```
+   */
+  async chain<T>(
+    chainId: string,
+    agentName: string | undefined,
+    callback: () => Promise<T>
+  ): Promise<T> {
+    const oldChainId = this.context.get('chain_id');
+    const oldAgentName = this.context.get('agent_name');
+
+    this.context.set('chain_id', chainId);
+    if (agentName) {
+      this.context.set('agent_name', agentName);
+    }
+
+    try {
+      return await callback();
+    } finally {
+      if (oldChainId !== undefined) {
+        this.context.set('chain_id', oldChainId);
+      } else {
+        this.context.delete('chain_id');
+      }
+
+      if (oldAgentName !== undefined) {
+        this.context.set('agent_name', oldAgentName);
+      } else if (agentName) {
+        this.context.delete('agent_name');
+      }
+    }
+  }
+
   private async sendToAPI(
     requestData: any,
     responseData: any,
@@ -190,14 +249,23 @@ class AgentGuard {
     }
 
     try {
-      const payload = {
+      // Get chain_id and agent_name from context
+      const chainId = this.getChainId();
+      const agentName = this.getAgentName();
+
+      const payload: any = {
         project_id: Number(this.projectId),
         request_data: requestData,
         response_data: responseData,
         latency_ms: latencyMs,
         status_code: statusCode,
-        agent_name: this.agentName,
+        agent_name: agentName,
       };
+
+      // Add chain_id if available
+      if (chainId) {
+        payload.chain_id = chainId;
+      }
 
       // Send asynchronously (fire and forget)
       await this.axiosInstance.post(`${this.apiUrl}/api/v1/api-calls`, payload);
@@ -216,19 +284,47 @@ class AgentGuard {
    * @param latencyMs - Latency in milliseconds
    * @param statusCode - HTTP status code
    * @param agentName - Optional agent name
+   * @param chainId - Optional chain ID to group related calls
    */
   async trackCall(
     requestData: any,
     responseData: any,
     latencyMs: number,
     statusCode: number = 200,
-    agentName?: string
+    agentName?: string,
+    chainId?: string
   ): Promise<void> {
     if (!this.enabled) {
       return;
     }
 
-    await this.sendToAPI(requestData, responseData, latencyMs, statusCode);
+    // Store chain_id and agent_name temporarily
+    const oldChainId = this.context.get('chain_id');
+    const oldAgentName = this.context.get('agent_name');
+
+    if (chainId) {
+      this.context.set('chain_id', chainId);
+    }
+    if (agentName) {
+      this.context.set('agent_name', agentName);
+    }
+
+    try {
+      await this.sendToAPI(requestData, responseData, latencyMs, statusCode);
+    } finally {
+      // Restore old values
+      if (oldChainId !== undefined) {
+        this.context.set('chain_id', oldChainId);
+      } else if (chainId) {
+        this.context.delete('chain_id');
+      }
+
+      if (oldAgentName !== undefined) {
+        this.context.set('agent_name', oldAgentName);
+      } else if (agentName) {
+        this.context.delete('agent_name');
+      }
+    }
   }
 }
 
@@ -259,6 +355,32 @@ export function init(config: AgentGuardConfig = {}): void {
 }
 
 /**
+ * Context manager to set chain_id and agent_name for a chain of API calls
+ * 
+ * @example
+ * ```typescript
+ * import agentguard from '@agentguard/sdk';
+ * agentguard.init();
+ * 
+ * await agentguard.chain("user-query-123", "data-collector", async () => {
+ *   const response1 = await openai.chat.completions.create(...);
+ *   const response2 = await openai.chat.completions.create(...);
+ *   // Both calls will have chain_id="user-query-123"
+ * });
+ * ```
+ */
+export async function chain<T>(
+  chainId: string,
+  agentName: string | undefined,
+  callback: () => Promise<T>
+): Promise<T> {
+  if (!globalInstance) {
+    throw new Error('AgentGuard not initialized. Call agentguard.init() first.');
+  }
+  return globalInstance.chain(chainId, agentName, callback);
+}
+
+/**
  * Manually track an API call
  * 
  * Use this if you want to manually track calls instead of using auto-patching.
@@ -268,20 +390,22 @@ export function init(config: AgentGuardConfig = {}): void {
  * @param latencyMs - Latency in milliseconds
  * @param statusCode - HTTP status code
  * @param agentName - Optional agent name
+ * @param chainId - Optional chain ID to group related calls
  */
 export async function trackCall(
   requestData: any,
   responseData: any,
   latencyMs: number,
   statusCode: number = 200,
-  agentName?: string
+  agentName?: string,
+  chainId?: string
 ): Promise<void> {
   if (globalInstance) {
-    await globalInstance.trackCall(requestData, responseData, latencyMs, statusCode, agentName);
+    await globalInstance.trackCall(requestData, responseData, latencyMs, statusCode, agentName, chainId);
   } else {
     // Create a temporary instance
     const instance = new AgentGuard();
-    await instance.trackCall(requestData, responseData, latencyMs, statusCode, agentName);
+    await instance.trackCall(requestData, responseData, latencyMs, statusCode, agentName, chainId);
   }
 }
 
@@ -291,6 +415,7 @@ export { AgentGuard };
 // Default export
 export default {
   init,
+  chain,
   trackCall,
   AgentGuard,
 };

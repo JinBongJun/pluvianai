@@ -51,6 +51,35 @@ agentguard.init({
 });
 ```
 
+### Agent Chain Tracking
+
+To track a chain of API calls that belong to the same workflow:
+
+```typescript
+import agentguard from '@agentguard/sdk';
+import OpenAI from 'openai';
+
+agentguard.init();
+const openai = new OpenAI();
+
+// Use chain function to group related calls into a chain
+await agentguard.chain("user-query-123", "data-collector", async () => {
+  // All calls within this block will have the same chain_id
+  const response1 = await openai.chat.completions.create({
+    model: 'gpt-4',
+    messages: [{ role: 'user', content: 'Collect data' }]
+  });
+  
+  const response2 = await openai.chat.completions.create({
+    model: 'gpt-4',
+    messages: [{ role: 'user', content: 'Analyze data' }]
+  });
+  
+  // Both calls will be grouped under chain_id="user-query-123"
+  // You can view them in the Agent Chains page
+});
+```
+
 ### Manual Tracking
 
 If you prefer to track calls manually:
@@ -68,7 +97,8 @@ await agentguard.trackCall(
   { choices: [...] },
   latencyMs,
   200,
-  'my-agent'
+  'my-agent',
+  'user-query-123'  // Optional: group related calls
 );
 ```
 

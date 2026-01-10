@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ProjectTabs from '@/components/ProjectTabs';
@@ -10,8 +10,10 @@ import DateRangePicker from '@/components/ui/DateRangePicker';
 import Select from '@/components/ui/Select';
 import { agentChainAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
-import { ArrowRight, TrendingUp, TrendingDown, AlertTriangle, Activity, Clock, CheckCircle, XCircle, GitBranch } from 'lucide-react';
+import { ArrowRight, TrendingUp, TrendingDown, AlertTriangle, Activity, Clock, CheckCircle, XCircle, GitBranch, Search, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Download } from 'lucide-react';
 import { clsx } from 'clsx';
+import Input from '@/components/ui/Input';
+import Pagination from '@/components/ui/Pagination';
 import {
   ResponsiveContainer,
   BarChart,
@@ -70,6 +72,11 @@ export default function AgentChainsPage() {
     })(),
     to: new Date(),
   });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState<'first_call_at' | 'success_rate' | 'total_latency' | 'total_steps'>('first_call_at');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -80,6 +87,17 @@ export default function AgentChainsPage() {
 
     loadData();
   }, [projectId, selectedChainId, days, router]);
+
+  // Reload when date range changes
+  useEffect(() => {
+    if (dateRange.from && dateRange.to) {
+      const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays !== days) {
+        setDays(diffDays);
+      }
+    }
+  }, [dateRange.from, dateRange.to]);
 
   const loadData = async () => {
     setLoading(true);
@@ -141,10 +159,105 @@ export default function AgentChainsPage() {
     );
   }
 
-  const chains = chainProfile?.chains || [];
+  const allChains = chainProfile?.chains || [];
   const agents = agentStats?.agents || [];
 
+  // Filter chains by search query
+  const filteredChains = useMemo(() => {
+    let filtered = allChains;
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((chain: ChainProfile) => {
+        return (
+          chain.chain_id.toLowerCase().includes(query) ||
+          chain.agents?.some((agent: AgentStats) => 
+            agent.agent_name?.toLowerCase().includes(query)
+          )
+        );
+      });
+    }
+    
+    // Sort chains
+    filtered.sort((a: ChainProfile, b: ChainProfile) => {
+      let aVal: any;
+      let bVal: any;
+      
+      switch (sortField) {
+        case 'first_call_at':
+          aVal = new Date(a.first_call_at).getTime();
+          bVal = new Date(b.first_call_at).getTime();
+          break;
+        case 'success_rate':
+          aVal = a.success_rate;
+          bVal = b.success_rate;
+          break;
+        case 'total_latency':
+          aVal = a.total_latency;
+          bVal = b.total_latency;
+          break;
+        case 'total_steps':
+          aVal = a.total_steps;
+          bVal = b.total_steps;
+          break;
+        default:
+          aVal = 0;
+          bVal = 0;
+      }
+      
+      if (sortDirection === 'asc') {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
+    });
+    
+    return filtered;
+  }, [allChains, searchQuery, sortField, sortDirection]);
+
+  // Paginate chains
+  const totalItems = filteredChains.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const paginatedChains = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredChains.slice(startIndex, endIndex);
+  }, [filteredChains, currentPage, itemsPerPage]);
+
+  const chains = paginatedChains;
+  const allChainsForSelect = allChains;
+
   const COLORS = ['#a855f7', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+    setCurrentPage(1); // Reset to first page when sorting
+  };
+
+  const handleExport = () => {
+    const data = {
+      chains: filteredChains,
+      stats: chainProfile,
+      exported_at: new Date().toISOString(),
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `agent-chains-${projectId}-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    toast.showToast('Chain data exported successfully', 'success');
+  };
 
   return (
     <DashboardLayout>
@@ -158,34 +271,105 @@ export default function AgentChainsPage() {
         {/* Tabs */}
         <ProjectTabs projectId={projectId} />
 
-        {/* Filters */}
-        <div className="mb-6 flex items-center gap-4">
-          <DateRangePicker
-            value={dateRange}
-            onChange={(range) => {
-              setDateRange(range);
-              if (range.from && range.to) {
-                const diffTime = Math.abs(range.to.getTime() - range.from.getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                setDays(diffDays);
-              }
-            }}
-            showPeriodLabel={true}
-          />
-          <Select
-            value={selectedChainId === null ? '' : selectedChainId}
-            onChange={(value) => setSelectedChainId(value === '' ? null : value)}
-            placeholder={chains.length === 0 ? 'No chains available' : 'All Chains'}
-            options={chains.length > 0 ? [
-              { value: '', label: 'All Chains' },
-              ...chains.map((chain: ChainProfile) => ({
-                value: chain.chain_id,
-                label: `${chain.chain_id.substring(0, 12)}... (${chain.total_steps} steps, ${chain.unique_agents} agents)`,
-              })),
-            ] : []}
-            className="min-w-[280px]"
-            disabled={chains.length === 0}
-          />
+        {/* Filters and Actions */}
+        <div className="mb-6 flex flex-col gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            <DateRangePicker
+              value={dateRange}
+              onChange={(range) => {
+                setDateRange(range);
+                if (range.from && range.to) {
+                  const diffTime = Math.abs(range.to.getTime() - range.from.getTime());
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  setDays(diffDays);
+                }
+              }}
+              showPeriodLabel={true}
+            />
+            <Select
+              value={selectedChainId === null ? '' : selectedChainId}
+              onChange={(value) => {
+                setSelectedChainId(value === '' ? null : value);
+                setCurrentPage(1); // Reset to first page when filtering
+              }}
+              placeholder={allChainsForSelect.length === 0 ? 'No chains available' : 'All Chains'}
+              options={allChainsForSelect.length > 0 ? [
+                { value: '', label: 'All Chains' },
+                ...allChainsForSelect.map((chain: ChainProfile) => ({
+                  value: chain.chain_id,
+                  label: `${chain.chain_id.substring(0, 16)}... (${chain.total_steps} steps, ${chain.unique_agents} agents)`,
+                })),
+              ] : []}
+              className="min-w-[280px]"
+              disabled={allChainsForSelect.length === 0}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={loadData}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+            {filteredChains.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleExport}
+                className="flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Export
+              </Button>
+            )}
+          </div>
+          
+          {/* Search and Sort */}
+          {allChainsForSelect.length > 0 && (
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  type="text"
+                  placeholder="Search by chain ID or agent name..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1); // Reset to first page when searching
+                  }}
+                  className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-slate-500"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-400">Sort by:</span>
+                <Select
+                  value={sortField}
+                  onChange={(value) => value && handleSort(value as typeof sortField)}
+                  placeholder="Sort..."
+                  options={[
+                    { value: 'first_call_at', label: 'Time' },
+                    { value: 'success_rate', label: 'Success Rate' },
+                    { value: 'total_latency', label: 'Total Latency' },
+                    { value: 'total_steps', label: 'Total Steps' },
+                  ]}
+                  className="min-w-[150px]"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
+                  className="flex items-center gap-1"
+                >
+                  {sortDirection === 'asc' ? (
+                    <ArrowUp className="h-4 w-4" />
+                  ) : (
+                    <ArrowDown className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Overview Stats */}
@@ -271,27 +455,67 @@ export default function AgentChainsPage() {
         {/* Chains List */}
         <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm shadow-2xl">
           <div className="p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Chain Profiles</h2>
-            {chains.length === 0 ? (
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white">
+                Chain Profiles
+                {filteredChains.length > 0 && (
+                  <span className="ml-2 text-sm font-normal text-slate-400">
+                    ({filteredChains.length} {filteredChains.length === 1 ? 'chain' : 'chains'})
+                  </span>
+                )}
+              </h2>
+              {allChainsForSelect.length > filteredChains.length && (
+                <span className="text-sm text-slate-400">
+                  Showing {filteredChains.length} of {allChainsForSelect.length}
+                </span>
+              )}
+            </div>
+            {filteredChains.length === 0 ? (
               <div className="text-center py-12 text-slate-400">
                 <GitBranch className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No chain data available for the selected period.</p>
-                <p className="text-sm mt-2">Chains are created when API calls share the same chain_id.</p>
+                {searchQuery ? (
+                  <>
+                    <p>No chains found matching "{searchQuery}"</p>
+                    <p className="text-sm mt-2">Try adjusting your search query.</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSearchQuery('')}
+                      className="mt-4"
+                    >
+                      Clear Search
+                    </Button>
+                  </>
+                ) : allChainsForSelect.length === 0 ? (
+                  <>
+                    <p>No chain data available for the selected period.</p>
+                    <p className="text-sm mt-2">Chains are created when API calls share the same chain_id.</p>
+                  </>
+                ) : (
+                  <>
+                    <p>No chains match the current filters.</p>
+                    <p className="text-sm mt-2">Try adjusting your filters.</p>
+                  </>
+                )}
               </div>
             ) : (
-              <div className="space-y-4">
-                {chains.map((chain: ChainProfile) => (
-                  <div
-                    key={chain.chain_id}
-                    className="border border-white/10 bg-white/5 rounded-lg p-6 hover:bg-white/10 transition-colors cursor-pointer"
-                    onClick={() => router.push(`/dashboard/${projectId}/chains/${chain.chain_id}`)}
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="text-lg font-semibold text-white">
-                            Chain: {chain.chain_id.substring(0, 12)}...
-                          </h3>
+              <>
+                <div className="space-y-4">
+                  {chains.map((chain: ChainProfile) => (
+                    <div
+                      key={chain.chain_id}
+                      className="border border-white/10 bg-white/5 rounded-lg p-6 hover:bg-white/10 transition-colors cursor-pointer"
+                      onClick={() => router.push(`/dashboard/${projectId}/chains/${chain.chain_id}`)}
+                    >
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 
+                              className="text-lg font-semibold text-white font-mono text-sm"
+                              title={chain.chain_id}
+                            >
+                              Chain: {chain.chain_id.substring(0, 20)}...
+                            </h3>
                           {chain.success ? (
                             <Badge variant="success">
                               <CheckCircle className="h-3 w-3 mr-1" />
@@ -370,8 +594,23 @@ export default function AgentChainsPage() {
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="mt-6 pt-6 border-t border-white/10">
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      totalItems={totalItems}
+                      itemsPerPage={itemsPerPage}
+                      onPageChange={setCurrentPage}
+                      onItemsPerPageChange={setItemsPerPage}
+                      className="bg-transparent"
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

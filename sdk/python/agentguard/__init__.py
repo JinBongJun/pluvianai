@@ -5,8 +5,10 @@ import os
 import json
 import time
 import httpx
+import threading
 from typing import Optional, Dict, Any, Callable
 from functools import wraps
+from contextlib import contextmanager
 
 
 class AgentGuard:
@@ -38,6 +40,9 @@ class AgentGuard:
         
         self._patched = False
         self._original_functions = {}
+        
+        # Thread-local storage for chain_id and agent_name context
+        self._local = threading.local()
     
     def init(self):
         """
@@ -152,12 +157,55 @@ class AgentGuard:
             # Re-raise the exception
             raise
     
+    def _get_chain_id(self) -> Optional[str]:
+        """Get chain_id from thread-local storage"""
+        return getattr(self._local, 'chain_id', None)
+    
+    def _get_agent_name(self) -> Optional[str]:
+        """Get agent_name from thread-local storage or instance default"""
+        return getattr(self._local, 'agent_name', self.agent_name)
+    
+    @contextmanager
+    def chain(self, chain_id: str, agent_name: Optional[str] = None):
+        """
+        Context manager to set chain_id and agent_name for a chain of API calls
+        
+        Example:
+            with agentguard.chain("user-query-123", agent_name="data-collector"):
+                response1 = openai.chat.completions.create(...)
+                response2 = openai.chat.completions.create(...)
+            # Both calls will have chain_id="user-query-123"
+        """
+        old_chain_id = getattr(self._local, 'chain_id', None)
+        old_agent_name = getattr(self._local, 'agent_name', None)
+        
+        self._local.chain_id = chain_id
+        if agent_name:
+            self._local.agent_name = agent_name
+        
+        try:
+            yield
+        finally:
+            if old_chain_id is not None:
+                self._local.chain_id = old_chain_id
+            else:
+                delattr(self._local, 'chain_id')
+            
+            if old_agent_name is not None:
+                self._local.agent_name = old_agent_name
+            elif hasattr(self._local, 'agent_name'):
+                delattr(self._local, 'agent_name')
+    
     def _send_to_api(self, request_data: Dict[str, Any], response_data: Dict[str, Any], latency_ms: float, status_code: int):
         """Send API call data to AgentGuard (non-blocking)"""
         if not self.enabled:
             return
         
         try:
+            # Get chain_id and agent_name from context
+            chain_id = self._get_chain_id()
+            agent_name = self._get_agent_name()
+            
             # Prepare payload
             payload = {
                 "project_id": int(self.project_id),
@@ -165,8 +213,12 @@ class AgentGuard:
                 "response_data": response_data,
                 "latency_ms": latency_ms,
                 "status_code": status_code,
-                "agent_name": self.agent_name,
+                "agent_name": agent_name,
             }
+            
+            # Add chain_id if available
+            if chain_id:
+                payload["chain_id"] = chain_id
             
             # Send asynchronously (fire and forget)
             # In production, use a background thread or queue
@@ -194,7 +246,8 @@ class AgentGuard:
         response_data: Dict[str, Any],
         latency_ms: float,
         status_code: int = 200,
-        agent_name: Optional[str] = None
+        agent_name: Optional[str] = None,
+        chain_id: Optional[str] = None
     ):
         """
         Manually track an API call
@@ -207,16 +260,38 @@ class AgentGuard:
             latency_ms: Latency in milliseconds
             status_code: HTTP status code
             agent_name: Optional agent name
+            chain_id: Optional chain ID to group related calls
         """
         if not self.enabled:
             return
         
-        self._send_to_api(
-            request_data,
-            response_data,
-            latency_ms,
-            status_code
-        )
+        # Store chain_id and agent_name temporarily
+        old_chain_id = getattr(self._local, 'chain_id', None)
+        old_agent_name = getattr(self._local, 'agent_name', None)
+        
+        if chain_id:
+            self._local.chain_id = chain_id
+        if agent_name:
+            self._local.agent_name = agent_name
+        
+        try:
+            self._send_to_api(
+                request_data,
+                response_data,
+                latency_ms,
+                status_code
+            )
+        finally:
+            # Restore old values
+            if old_chain_id is not None:
+                self._local.chain_id = old_chain_id
+            elif hasattr(self._local, 'chain_id') and not chain_id:
+                delattr(self._local, 'chain_id')
+            
+            if old_agent_name is not None:
+                self._local.agent_name = old_agent_name
+            elif hasattr(self._local, 'agent_name') and not agent_name:
+                delattr(self._local, 'agent_name')
 
 
 # Global instance
@@ -259,12 +334,32 @@ def init(
     _global_instance.init()
 
 
+def chain(chain_id: str, agent_name: Optional[str] = None):
+    """
+    Context manager to set chain_id and agent_name for a chain of API calls
+    
+    Example:
+        import agentguard
+        agentguard.init()
+        
+        with agentguard.chain("user-query-123", agent_name="data-collector"):
+            response1 = openai.chat.completions.create(...)
+            response2 = openai.chat.completions.create(...)
+        # Both calls will have chain_id="user-query-123"
+    """
+    global _global_instance
+    if not _global_instance:
+        raise RuntimeError("AgentGuard not initialized. Call agentguard.init() first.")
+    return _global_instance.chain(chain_id, agent_name)
+
+
 def track_call(
     request_data: Dict[str, Any],
     response_data: Dict[str, Any],
     latency_ms: float,
     status_code: int = 200,
-    agent_name: Optional[str] = None
+    agent_name: Optional[str] = None,
+    chain_id: Optional[str] = None
 ):
     """
     Manually track an API call
@@ -277,6 +372,7 @@ def track_call(
         latency_ms: Latency in milliseconds
         status_code: HTTP status code
         agent_name: Optional agent name
+        chain_id: Optional chain ID to group related calls
     """
     global _global_instance
     if _global_instance:
@@ -285,7 +381,8 @@ def track_call(
             response_data,
             latency_ms,
             status_code,
-            agent_name
+            agent_name,
+            chain_id
         )
     else:
         # Create a temporary instance
@@ -295,5 +392,6 @@ def track_call(
             response_data,
             latency_ms,
             status_code,
-            agent_name
+            agent_name,
+            chain_id
         )
