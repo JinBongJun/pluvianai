@@ -288,8 +288,9 @@ export default function AgentChainsPage() {
     return filteredChains.slice(startIndex, endIndex);
   }, [filteredChains, currentPage, itemsPerPage]);
 
-  const chains = paginatedChains;
-  const allChainsForSelect = allChains;
+  // Ensure chains is always an array
+  const chains = Array.isArray(paginatedChains) ? paginatedChains : [];
+  const allChainsForSelect = Array.isArray(allChains) ? allChains : [];
 
   const COLORS = ['#a855f7', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -608,8 +609,10 @@ export default function AgentChainsPage() {
             ) : (
               <>
                 <div className="space-y-4">
-                  {chains.map((chain: ChainProfile, index: number) => {
-                    if (!chain || !chain.chain_id) return null;
+                  {Array.isArray(chains) && chains.length > 0 ? chains.map((chain: ChainProfile, index: number) => {
+                    if (!chain || typeof chain !== 'object' || !chain.chain_id || typeof chain.chain_id !== 'string') {
+                      return null;
+                    }
                     
                     return (
                     <div
@@ -717,7 +720,11 @@ export default function AgentChainsPage() {
                       )}
                     </div>
                     );
-                  })}
+                  }) : (
+                    <div className="text-center py-12 text-slate-400">
+                      <p>No chains available to display.</p>
+                    </div>
+                  )}
                 </div>
                 {/* Pagination */}
                 {totalPages > 1 && (
