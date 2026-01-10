@@ -18,6 +18,7 @@ export default function ProjectTabs({ projectId, canManage = false }: ProjectTab
     { id: 'chains', label: 'Chains', path: `/dashboard/${projectId}/chains` },
     { id: 'compare', label: 'Compare', path: `/dashboard/${projectId}/compare` },
     { id: 'reports', label: 'Reports', path: `/dashboard/${projectId}/reports` },
+    { id: 'alerts', label: 'Alerts', path: `/dashboard/${projectId}/alerts` },
     { id: 'members', label: 'Team Members', path: `/dashboard/${projectId}?tab=members` },
     ...(canManage ? [{ id: 'settings', label: 'Settings', path: `/dashboard/${projectId}?tab=settings` }] : []),
   ];
@@ -27,6 +28,7 @@ export default function ProjectTabs({ projectId, canManage = false }: ProjectTab
     if (pathname?.includes('/chains')) return 'chains';
     if (pathname?.includes('/compare')) return 'compare';
     if (pathname?.includes('/reports')) return 'reports';
+    if (pathname?.includes('/alerts')) return 'alerts';
     if (pathname?.includes('/quality')) return 'overview'; // Quality is part of overview
     if (pathname?.includes('/drift')) return 'overview'; // Drift is part of overview
     // Check URL params for members/settings tabs

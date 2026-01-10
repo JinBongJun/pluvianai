@@ -42,7 +42,7 @@ export default function AlertDetailPage() {
       if (error.response?.status === 401) {
         router.push('/login');
       } else if (error.response?.status === 404) {
-        router.push(`/dashboard/${projectId}`);
+        router.push(`/dashboard/${projectId}/alerts`);
       }
     } finally {
       setLoading(false);
@@ -106,8 +106,8 @@ export default function AlertDetailPage() {
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
+        <div className="bg-[#000314] min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
         </div>
       </DashboardLayout>
     );
@@ -116,13 +116,15 @@ export default function AlertDetailPage() {
   if (!alert) {
     return (
       <DashboardLayout>
-        <div className="text-center py-12">
-          <AlertTriangle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Alert Not Found</h3>
-          <p className="text-gray-600 mb-4">The alert you're looking for doesn't exist or you don't have access to it.</p>
-          <Button onClick={() => router.push(`/dashboard/${projectId}`)}>
-            Back to Project
-          </Button>
+        <div className="bg-[#000314] min-h-screen">
+          <div className="text-center py-12">
+            <AlertTriangle className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-white mb-2">Alert Not Found</h3>
+            <p className="text-slate-400 mb-4">The alert you're looking for doesn't exist or you don't have access to it.</p>
+            <Button onClick={() => router.push(`/dashboard/${projectId}/alerts`)}>
+              Back to Alerts
+            </Button>
+          </div>
         </div>
       </DashboardLayout>
     );
@@ -130,85 +132,92 @@ export default function AlertDetailPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="bg-[#000314] min-h-screen">
+        <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="mb-8">
+          <div className="flex items-center gap-4 mb-4">
             <Button
-              variant="secondary"
-              onClick={() => router.push(`/dashboard/${projectId}`)}
+              variant="ghost"
+              onClick={() => router.push(`/dashboard/${projectId}/alerts`)}
               className="flex items-center gap-2"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back
+              Back to Alerts
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{alert.title}</h1>
-              <p className="text-sm text-gray-600 mt-1">
+              <h1 className="text-4xl font-bold text-white">{alert.title}</h1>
+              <p className="text-slate-400 mt-2">
                 Created on {new Date(alert.created_at).toLocaleString()}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Badge variant={getSeverityColor(alert.severity)}>
               {alert.severity}
             </Badge>
             {alert.is_resolved ? (
-              <Badge variant="success">Resolved</Badge>
+              <Badge variant="success">
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Resolved
+              </Badge>
             ) : (
-              <Badge variant="default">Active</Badge>
+              <Badge variant="warning">
+                <AlertTriangle className="h-3 w-3 mr-1" />
+                Active
+              </Badge>
             )}
           </div>
         </div>
 
         {/* Status Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="text-sm font-medium text-gray-700 mb-2">Alert Type</div>
-            <div className="text-lg font-semibold text-gray-900">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
+            <div className="text-sm text-slate-400 mb-2">Alert Type</div>
+            <div className="text-lg font-semibold text-white">
               {getAlertTypeLabel(alert.alert_type)}
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="text-sm font-medium text-gray-700 mb-2">Notification Status</div>
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
+            <div className="text-sm text-slate-400 mb-2">Notification Status</div>
             <div className="flex items-center gap-2">
               {alert.is_sent ? (
                 <>
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  <span className="text-lg font-semibold text-gray-900">Sent</span>
+                  <CheckCircle className="h-5 w-5 text-green-400" />
+                  <span className="text-lg font-semibold text-white">Sent</span>
                 </>
               ) : (
                 <>
-                  <XCircle className="h-5 w-5 text-gray-400" />
-                  <span className="text-lg font-semibold text-gray-900">Not Sent</span>
+                  <XCircle className="h-5 w-5 text-slate-400" />
+                  <span className="text-lg font-semibold text-white">Not Sent</span>
                 </>
               )}
             </div>
             {alert.sent_at && (
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-slate-400 mt-2">
                 {new Date(alert.sent_at).toLocaleString()}
               </div>
             )}
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="text-sm font-medium text-gray-700 mb-2">Resolution Status</div>
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
+            <div className="text-sm text-slate-400 mb-2">Resolution Status</div>
             <div className="flex items-center gap-2">
               {alert.is_resolved ? (
                 <>
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  <span className="text-lg font-semibold text-gray-900">Resolved</span>
+                  <CheckCircle className="h-5 w-5 text-green-400" />
+                  <span className="text-lg font-semibold text-white">Resolved</span>
                 </>
               ) : (
                 <>
-                  <XCircle className="h-5 w-5 text-orange-600" />
-                  <span className="text-lg font-semibold text-gray-900">Unresolved</span>
+                  <XCircle className="h-5 w-5 text-orange-400" />
+                  <span className="text-lg font-semibold text-white">Unresolved</span>
                 </>
               )}
             </div>
             {alert.resolved_at && (
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-slate-400 mt-2">
                 {new Date(alert.resolved_at).toLocaleString()}
               </div>
             )}
@@ -216,23 +225,23 @@ export default function AlertDetailPage() {
         </div>
 
         {/* Message */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Message</h2>
-          <p className="text-gray-700 whitespace-pre-wrap">{alert.message}</p>
+        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl mb-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Message</h2>
+          <p className="text-slate-300 whitespace-pre-wrap">{alert.message}</p>
         </div>
 
         {/* Alert Data */}
         {alert.alert_data && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Alert Data</h2>
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl mb-6">
+            <h2 className="text-lg font-semibold text-white mb-4">Alert Data</h2>
             <JSONViewer data={alert.alert_data} searchable />
           </div>
         )}
 
         {/* Notification Channels */}
         {alert.notification_channels && alert.notification_channels.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Notification Channels</h2>
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl mb-6">
+            <h2 className="text-lg font-semibold text-white mb-4">Notification Channels</h2>
             <div className="flex flex-wrap gap-2">
               {alert.notification_channels.map((channel: string, index: number) => (
                 <Badge key={index} variant="default">
@@ -244,8 +253,8 @@ export default function AlertDetailPage() {
         )}
 
         {/* Actions */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Actions</h2>
+        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
+          <h2 className="text-lg font-semibold text-white mb-4">Actions</h2>
           <div className="flex gap-3">
             {!alert.is_sent && (
               <Button
@@ -268,6 +277,7 @@ export default function AlertDetailPage() {
               </Button>
             )}
           </div>
+        </div>
         </div>
       </div>
     </DashboardLayout>
