@@ -166,7 +166,7 @@ export default function ProjectDetailPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => router.push(`/dashboard/${projectId}?tab=overview`)}
+                    onClick={() => router.push(`/dashboard/${projectId}/quality`)}
                     className="text-purple-400 hover:text-purple-300"
                   >
                     View All
@@ -181,7 +181,7 @@ export default function ProjectDetailPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => router.push(`/dashboard/${projectId}?tab=overview`)}
+                    onClick={() => router.push(`/dashboard/${projectId}/drift`)}
                     className="text-purple-400 hover:text-purple-300"
                   >
                     View All
