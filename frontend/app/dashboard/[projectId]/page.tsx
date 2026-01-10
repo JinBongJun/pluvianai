@@ -235,11 +235,11 @@ export default function ProjectDetailPage() {
         )}
 
 
-        {activeTab === 'members' && (
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-            <MemberList projectId={projectId} canManage={canManage} />
-          </div>
-        )}
+                   {activeTab === 'members' && (
+                     <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
+                       <MemberList projectId={projectId} canManage={canManage} />
+                     </div>
+                   )}
 
         {activeTab === 'settings' && canManage && (
           <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">

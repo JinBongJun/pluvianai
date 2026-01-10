@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { projectMembersAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
 import MemberActivity from './MemberActivity';
 import MemberInvite from './MemberInvite';
-import { ChevronDown, ChevronUp, Eye, Settings, Users, Trash2, FileText, BarChart3 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, Settings, Users, Trash2, FileText, BarChart3, X } from 'lucide-react';
 
 interface Member {
   id: number;
@@ -274,10 +275,34 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
         })}
       </div>
 
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[99999] p-4">
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-md p-6 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-            <h3 className="text-lg font-semibold text-white mb-2">Add Team Member</h3>
+      {showAddModal && typeof window !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[999999] p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAddModal(false);
+              setNewMemberEmail('');
+              setNewMemberRole('member');
+            }
+          }}
+        >
+          <div 
+            className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-md p-6 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Add Team Member</h3>
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  setNewMemberEmail('');
+                  setNewMemberRole('member');
+                }}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
             <p className="text-sm text-slate-400 mb-4">
               The user must already have an AgentGuard account with this email address.
             </p>
@@ -341,7 +366,8 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

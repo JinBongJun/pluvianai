@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { projectMembersAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import { Link2, Copy, Check, Clock, Users } from 'lucide-react';
+import { Link2, Copy, Check, Clock, Users, X } from 'lucide-react';
 
 interface MemberInviteProps {
   projectId: number;
@@ -60,10 +61,34 @@ export default function MemberInvite({ projectId, onInviteCreated }: MemberInvit
         Generate Invite Link
       </Button>
 
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[99999] p-4">
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-md p-6 max-w-md w-full shadow-2xl">
-            <h3 className="text-lg font-semibold text-white mb-4">Generate Invite Link</h3>
+      {showInviteModal && typeof window !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[999999] p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowInviteModal(false);
+              setInviteLink(null);
+              setExpirationDays(7);
+            }
+          }}
+        >
+          <div 
+            className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-md p-6 max-w-md w-full shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Generate Invite Link</h3>
+              <button
+                onClick={() => {
+                  setShowInviteModal(false);
+                  setInviteLink(null);
+                  setExpirationDays(7);
+                }}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
             
             {!inviteLink ? (
               <div className="space-y-4">
@@ -161,7 +186,8 @@ export default function MemberInvite({ projectId, onInviteCreated }: MemberInvit
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
