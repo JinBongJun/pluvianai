@@ -74,14 +74,50 @@ def generate_pdf_report(report_data: dict, buffer: io.BytesIO) -> None:
         elements.append(Spacer(1, 0.2*inch))
         
         # Report metadata
+        generated_at = report_data.get('generated_at', datetime.utcnow().isoformat())
+        if isinstance(generated_at, str):
+            # Handle ISO format with or without timezone
+            if generated_at.endswith('Z'):
+                generated_at = generated_at.replace('Z', '+00:00')
+            try:
+                generated_at_str = datetime.fromisoformat(generated_at).strftime('%Y-%m-%d %H:%M:%S UTC')
+            except (ValueError, AttributeError):
+                generated_at_str = str(generated_at)
+        else:
+            generated_at_str = str(generated_at)
+        
         metadata_data = [
-            ['Generated At:', datetime.fromisoformat(report_data['generated_at'].replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S UTC')],
+            ['Generated At:', generated_at_str],
             ['Template:', report_data.get('template', 'standard').upper()],
         ]
         
-        if report_data.get('period', {}).get('from'):
-            period_from = datetime.fromisoformat(report_data['period']['from'].replace('Z', '+00:00')).strftime('%Y-%m-%d')
-            period_to = datetime.fromisoformat(report_data['period']['to'].replace('Z', '+00:00')).strftime('%Y-%m-%d') if report_data.get('period', {}).get('to') else 'N/A'
+        period = report_data.get('period', {})
+        if period and period.get('from'):
+            try:
+                period_from_str = period['from']
+                if isinstance(period_from_str, str):
+                    if period_from_str.endswith('Z'):
+                        period_from_str = period_from_str.replace('Z', '+00:00')
+                    period_from = datetime.fromisoformat(period_from_str).strftime('%Y-%m-%d')
+                else:
+                    period_from = str(period_from_str)
+            except (ValueError, AttributeError):
+                period_from = str(period.get('from', 'N/A'))
+            
+            period_to_str = period.get('to')
+            if period_to_str:
+                try:
+                    if isinstance(period_to_str, str):
+                        if period_to_str.endswith('Z'):
+                            period_to_str = period_to_str.replace('Z', '+00:00')
+                        period_to = datetime.fromisoformat(period_to_str).strftime('%Y-%m-%d')
+                    else:
+                        period_to = str(period_to_str)
+                except (ValueError, AttributeError):
+                    period_to = str(period_to_str)
+            else:
+                period_to = 'N/A'
+            
             metadata_data.append(['Period:', f"{period_from} to {period_to}"])
         
         metadata_table = Table(metadata_data, colWidths=[2*inch, 4*inch])
@@ -1130,18 +1166,32 @@ async def download_report(
             generate_pdf_report(report_data, pdf_buffer)
             pdf_buffer.seek(0)
             
+            # Verify PDF was generated successfully
+            pdf_content = pdf_buffer.getvalue()
+            if not pdf_content or len(pdf_content) < 100:  # PDF should be at least 100 bytes
+                raise ValueError("Generated PDF is empty or too small")
+            
             # Return as PDF file
             return Response(
-                content=pdf_buffer.getvalue(),
+                content=pdf_content,
                 media_type="application/pdf",
                 headers={
                     "Content-Disposition": f"attachment; filename=report-{project_id}-{template}-{datetime.now().strftime('%Y%m%d')}.pdf"
                 }
             )
+        except HTTPException:
+            # Re-raise HTTP exceptions as-is
+            raise
         except Exception as e:
+            # Log the full error for debugging
+            import traceback
+            error_trace = traceback.format_exc()
+            from app.core.logging_config import logger
+            logger.error(f"PDF generation failed: {str(e)}\n{error_trace}")
+            
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to generate PDF: {str(e)}"
+                detail=f"Failed to generate PDF: {str(e)}. Please check server logs for details."
             )
     else:
         raise HTTPException(

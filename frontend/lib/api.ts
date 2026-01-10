@@ -487,42 +487,81 @@ export const reportsAPI = {
   },
   
   download: async (projectId: number, params: any) => {
-    const response = await apiClient.get('/reports/download', {
-      params: { project_id: projectId, ...params },
-      responseType: 'blob',
-    });
-    
-    // Determine content type
-    const format = params.format || 'json';
-    const contentType = format === 'pdf' ? 'application/pdf' : 'application/json';
-    
-    // Create blob with correct MIME type
-    const blob = new Blob([response.data], { type: contentType });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    
-    // Try to extract filename from Content-Disposition header
-    let filename = `report-${projectId}-${params.template || 'standard'}-${new Date().toISOString().split('T')[0]}.${format}`;
-    const contentDisposition = response.headers['content-disposition'];
-    if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-      if (filenameMatch && filenameMatch[1]) {
-        filename = filenameMatch[1].replace(/['"]/g, '');
-        // Decode URI if needed
+    try {
+      const response = await apiClient.get('/reports/download', {
+        params: { project_id: projectId, ...params },
+        responseType: 'blob',
+      });
+      
+      // Check if response is an error (error responses are also blobs when responseType is 'blob')
+      const contentType = response.headers['content-type'] || '';
+      if (contentType.includes('application/json') || response.status >= 400) {
+        // This is an error response, parse it
+        const blob = response.data instanceof Blob ? response.data : new Blob([response.data]);
+        const text = await blob.text();
         try {
-          filename = decodeURIComponent(filename);
-        } catch (e) {
-          // If decoding fails, use as is
+          const errorData = JSON.parse(text);
+          const error = new Error(errorData.detail || errorData.message || 'Failed to download report');
+          (error as any).response = response;
+          throw error;
+        } catch (parseError) {
+          const error = new Error('Failed to download report: ' + (text || response.statusText).substring(0, 200));
+          (error as any).response = response;
+          throw error;
         }
       }
+      
+      // Determine content type
+      const format = params.format || 'json';
+      const fileContentType = format === 'pdf' ? 'application/pdf' : 'application/json';
+      
+      // Create blob with correct MIME type
+      const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: fileContentType });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Try to extract filename from Content-Disposition header
+      let filename = `report-${projectId}-${params.template || 'standard'}-${new Date().toISOString().split('T')[0]}.${format}`;
+      const contentDisposition = response.headers['content-disposition'];
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+          // Decode URI if needed
+          try {
+            filename = decodeURIComponent(filename);
+          } catch (e) {
+            // If decoding fails, use as is
+          }
+        }
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      // Handle blob error responses
+      if (error.response && error.response.data) {
+        const errorData = error.response.data;
+        if (errorData instanceof Blob) {
+          try {
+            const text = await errorData.text();
+            const parsedError = JSON.parse(text);
+            throw new Error(parsedError.detail || parsedError.message || 'Failed to download report');
+          } catch (parseError) {
+            // If parsing fails, use the original error message
+            if (error.message) {
+              throw error;
+            }
+            throw new Error('Failed to download report. Please check server logs for details.');
+          }
+        }
+      }
+      throw error;
     }
-    
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
   },
 };
 
