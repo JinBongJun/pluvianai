@@ -86,7 +86,11 @@ export default function DateRangePicker({
   // Calculate dropdown position
   const calculateDropdownPosition = () => {
     if (containerRef.current && typeof window !== 'undefined') {
-      const rect = containerRef.current.getBoundingClientRect();
+      // Get the actual button element's bounding rect
+      const buttonElement = containerRef.current.querySelector('button');
+      if (!buttonElement) return;
+      
+      const buttonRect = buttonElement.getBoundingClientRect();
       
       // Check if dropdown would go off screen and adjust
       const viewportWidth = window.innerWidth;
@@ -95,9 +99,9 @@ export default function DateRangePicker({
       const dropdownHeight = 500; // Adjusted height
       
       // Position directly below the button, aligned to the left edge
-      // getBoundingClientRect already accounts for scroll, so we don't need to add scroll offset for fixed positioning
-      let left = rect.left; // Align left edge of dropdown with left edge of button
-      let top = rect.bottom + 1; // Position directly below button with minimal gap
+      // Use button's actual position for precise alignment
+      let left = buttonRect.left; // Align left edge of dropdown with left edge of button
+      let top = buttonRect.bottom; // Position directly below button (no gap)
       
       // Adjust if dropdown would go off right edge (but keep left alignment if possible)
       if (left + dropdownWidth > viewportWidth - 8) {
@@ -111,7 +115,7 @@ export default function DateRangePicker({
       // Adjust if dropdown would go off bottom edge
       if (top + dropdownHeight > viewportHeight - 8) {
         // Try to show above button instead
-        const topAbove = rect.top - dropdownHeight - 1;
+        const topAbove = buttonRect.top - dropdownHeight;
         if (topAbove >= 8) {
           top = topAbove;
         } else {
