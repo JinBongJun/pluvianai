@@ -90,6 +90,11 @@ export default function ReportsPage() {
         {/* Tabs */}
         <ProjectTabs projectId={projectId} />
 
+        {/* Date Range Selector */}
+        <div className="mb-6">
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
+        </div>
+
         {/* Report Configuration */}
         <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl mb-6">
           <h2 className="text-lg font-semibold text-white mb-4">Report Configuration</h2>
@@ -108,13 +113,6 @@ export default function ReportsPage() {
                 <option value="detailed" className="bg-[#0B0C15]">Detailed Report</option>
                 <option value="executive" className="bg-[#0B0C15]">Executive Summary</option>
               </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-white mb-2">
-                Date Range
-              </label>
-              <DateRangePicker value={dateRange} onChange={setDateRange} />
             </div>
 
             <div className="flex gap-3">

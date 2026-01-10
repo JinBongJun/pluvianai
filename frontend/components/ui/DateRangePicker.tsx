@@ -95,21 +95,24 @@ export default function DateRangePicker({
       const dropdownHeight = 500; // Adjusted height
       
       // Position directly below the button (getBoundingClientRect is viewport-relative)
+      // getBoundingClientRect already accounts for scroll, so we don't need to add scroll offset for fixed positioning
       let left = rect.left;
-      let top = rect.bottom + 4; // Closer to button
+      let top = rect.bottom + 2; // Very close to button (2px gap for visual separation)
       
       // Adjust if dropdown would go off right edge
-      if (left + dropdownWidth > viewportWidth - 8) {
-        left = viewportWidth - dropdownWidth - 8;
+      if (left + dropdownWidth > viewportWidth - 16) {
+        left = Math.max(8, viewportWidth - dropdownWidth - 8);
       }
       
       // Adjust if dropdown would go off bottom edge
-      if (top + dropdownHeight > viewportHeight - 8) {
-        // Show above button instead
-        top = rect.top - dropdownHeight - 8;
-        if (top < 8) {
-          // If still off screen, center vertically
-          top = Math.max(8, (viewportHeight - dropdownHeight) / 2);
+      if (top + dropdownHeight > viewportHeight - 16) {
+        // Try to show above button instead
+        const topAbove = rect.top - dropdownHeight - 4;
+        if (topAbove >= 8) {
+          top = topAbove;
+        } else {
+          // If still off screen, position at top of viewport
+          top = 8;
         }
       }
       
@@ -118,10 +121,15 @@ export default function DateRangePicker({
         left = 8;
       }
       
+      // Ensure dropdown doesn't go off top edge
+      if (top < 8) {
+        top = 8;
+      }
+      
       // getBoundingClientRect returns viewport-relative coordinates, perfect for fixed positioning
       setDropdownPosition({ 
-        top: top, 
-        left: left 
+        top: Math.max(8, top), 
+        left: Math.max(8, left) 
       });
     }
   };
