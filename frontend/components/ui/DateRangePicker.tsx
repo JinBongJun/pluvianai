@@ -94,7 +94,7 @@ export default function DateRangePicker({
       
       // Position directly below the button (getBoundingClientRect is viewport-relative)
       let left = rect.left;
-      let top = rect.bottom + 8;
+      let top = rect.bottom + 4; // Closer to button
       
       // Adjust if dropdown would go off right edge
       if (left + dropdownWidth > viewportWidth - 8) {
@@ -165,13 +165,28 @@ export default function DateRangePicker({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+      const target = event.target as Node;
+      
+      // Check if click is inside the button container
+      if (containerRef.current && containerRef.current.contains(target)) {
+        return;
       }
+      
+      // Check if click is inside the dropdown portal (by class name)
+      const dropdownElement = document.querySelector('[data-datepicker-dropdown]');
+      if (dropdownElement && dropdownElement.contains(target)) {
+        return;
+      }
+      
+      // Click is outside both button and dropdown, close it
+      setIsOpen(false);
     };
 
     if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
+      // Use setTimeout to avoid immediate close on button click
+      setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside);
+      }, 0);
     }
 
     return () => {
@@ -424,11 +439,16 @@ export default function DateRangePicker({
     );
   };
 
+  const handleButtonClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsOpen(!isOpen);
+  };
+
   return (
     <>
       <div ref={containerRef} className={clsx('relative', className)}>
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={handleButtonClick}
           className="flex items-center justify-between gap-2 px-3 py-2 border border-white/10 bg-white/5 rounded-md text-sm text-white hover:bg-white/10 transition-colors min-w-[280px]"
         >
           <span className="flex items-center gap-2 flex-1">
@@ -451,7 +471,9 @@ export default function DateRangePicker({
       
       {typeof window !== 'undefined' && isOpen && dropdownPosition && createPortal(
         <div 
+          data-datepicker-dropdown
           className="fixed bg-white rounded-lg shadow-2xl border border-gray-200 z-[99999] overflow-hidden animate-fade-in" 
+          onClick={(e) => e.stopPropagation()}
           style={{
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,

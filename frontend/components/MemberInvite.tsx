@@ -61,7 +61,7 @@ export default function MemberInvite({ projectId, onInviteCreated }: MemberInvit
       </Button>
 
       {showInviteModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[99999] p-4">
           <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-md p-6 max-w-md w-full shadow-2xl">
             <h3 className="text-lg font-semibold text-white mb-4">Generate Invite Link</h3>
             
