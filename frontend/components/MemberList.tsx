@@ -6,6 +6,9 @@ import { projectMembersAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
 import MemberActivity from './MemberActivity';
 import MemberInvite from './MemberInvite';
+import Select from '@/components/ui/Select';
+import Button from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
 import { ChevronDown, ChevronUp, Eye, Settings, Users, Trash2, FileText, BarChart3, X } from 'lucide-react';
 
 interface Member {
@@ -154,12 +157,17 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
         {canManage && (
           <div className="flex items-center gap-2">
             <MemberInvite projectId={projectId} />
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm transition-colors"
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('Add Member button clicked');
+                setShowAddModal(true);
+              }}
+              size="sm"
             >
               Add Member
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -277,7 +285,8 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
 
       {showAddModal && typeof window !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[999999] p-4"
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          style={{ zIndex: 999999, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setShowAddModal(false);
@@ -287,18 +296,24 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
           }}
         >
           <div 
-            className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-md p-6 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-md p-6 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+            style={{ position: 'relative' }}
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white">Add Team Member</h3>
               <button
-                onClick={() => {
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   setShowAddModal(false);
                   setNewMemberEmail('');
                   setNewMemberRole('member');
                 }}
-                className="text-slate-400 hover:text-white transition-colors"
+                className="text-slate-400 hover:text-white transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -311,12 +326,12 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
                 <label className="block text-sm font-medium text-white mb-1">
                   Email Address
                 </label>
-                <input
+                <Input
                   type="email"
                   value={newMemberEmail}
                   onChange={(e) => setNewMemberEmail(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-md shadow-sm px-3 py-2 text-white placeholder:text-slate-500 focus:ring-purple-500 focus:border-purple-500"
                   placeholder="user@example.com"
+                  className="w-full bg-white/5 border-white/10 text-white placeholder:text-slate-500"
                   onKeyPress={(e) => {
                     if (e.key === 'Enter') {
                       handleAddMember();
@@ -331,38 +346,41 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
                 <label className="block text-sm font-medium text-white mb-1">
                   Role
                 </label>
-                <select
+                <Select
                   value={newMemberRole}
-                  onChange={(e) =>
-                    setNewMemberRole(e.target.value as 'admin' | 'member' | 'viewer')
-                  }
-                  className="w-full bg-white/5 border border-white/10 rounded-md shadow-sm px-3 py-2 text-white focus:ring-purple-500 focus:border-purple-500"
-                >
-                  <option value="admin" className="bg-[#0B0C15] text-white">Admin - Manage settings and members</option>
-                  <option value="member" className="bg-[#0B0C15] text-white">Member - View data and make API calls</option>
-                  <option value="viewer" className="bg-[#0B0C15] text-white">Viewer - Read-only access</option>
-                </select>
+                  onChange={(value) => setNewMemberRole((value || 'member') as 'admin' | 'member' | 'viewer')}
+                  placeholder="Select role..."
+                  options={[
+                    { value: 'admin', label: 'Admin - Manage settings and members' },
+                    { value: 'member', label: 'Member - View data and make API calls' },
+                    { value: 'viewer', label: 'Viewer - Read-only access' },
+                  ]}
+                  className="w-full"
+                />
                 <p className="text-xs text-slate-400 mt-1">
                   {roleDescriptions[newMemberRole]}
                 </p>
               </div>
               <div className="flex gap-2 justify-end pt-2">
-                <button
+                <Button
+                  variant="outline"
                   onClick={() => {
                     setShowAddModal(false);
                     setNewMemberEmail('');
                     setNewMemberRole('member');
                   }}
-                  className="px-4 py-2 text-slate-300 bg-white/5 border border-white/10 rounded-md hover:bg-white/10 transition-colors"
                 >
                   Cancel
-                </button>
-                <button
-                  onClick={handleAddMember}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+                </Button>
+                <Button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAddMember();
+                  }}
                 >
                   Add Member
-                </button>
+                </Button>
               </div>
             </div>
           </div>
