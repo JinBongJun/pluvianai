@@ -40,74 +40,74 @@ def generate_pdf_report(report_data: dict, buffer: io.BytesIO) -> None:
         doc = SimpleDocTemplate(buffer, pagesize=A4, 
                                rightMargin=72, leftMargin=72,
                                topMargin=72, bottomMargin=18)
-    
-    # Container for the 'Flowable' objects
-    elements = []
-    
-    # Styles
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#1a1a1a'),
-        spaceAfter=30,
-        alignment=TA_CENTER
-    )
-    
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=16,
-        textColor=colors.HexColor('#2c3e50'),
-        spaceAfter=12,
-        spaceBefore=20
-    )
-    
-    normal_style = styles['Normal']
-    normal_style.fontSize = 10
-    normal_style.textColor = colors.HexColor('#333333')
-    
-    # Title
-    title_text = f"AgentGuard Report - {report_data.get('project_name', 'Project')}"
-    elements.append(Paragraph(title_text, title_style))
-    elements.append(Spacer(1, 0.2*inch))
-    
-    # Report metadata
-    metadata_data = [
-        ['Generated At:', datetime.fromisoformat(report_data['generated_at'].replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S UTC')],
-        ['Template:', report_data.get('template', 'standard').upper()],
-    ]
-    
-    if report_data.get('period', {}).get('from'):
-        period_from = datetime.fromisoformat(report_data['period']['from'].replace('Z', '+00:00')).strftime('%Y-%m-%d')
-        period_to = datetime.fromisoformat(report_data['period']['to'].replace('Z', '+00:00')).strftime('%Y-%m-%d') if report_data.get('period', {}).get('to') else 'N/A'
-        metadata_data.append(['Period:', f"{period_from} to {period_to}"])
-    
-    metadata_table = Table(metadata_data, colWidths=[2*inch, 4*inch])
-    metadata_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f0f0f0')),
-        ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#333333')),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#cccccc')),
-    ]))
-    elements.append(metadata_table)
-    elements.append(Spacer(1, 0.3*inch))
-    
-    # Report content based on template type
-    report_type = report_data.get('type', 'standard')
-    
-    if report_type == 'standard':
-        _add_standard_report_content(elements, report_data, heading_style, normal_style)
-    elif report_type == 'detailed':
-        _add_detailed_report_content(elements, report_data, heading_style, normal_style)
-    elif report_type == 'executive':
-        _add_executive_report_content(elements, report_data, heading_style, normal_style)
-    
+        
+        # Container for the 'Flowable' objects
+        elements = []
+        
+        # Styles
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            textColor=colors.HexColor('#1a1a1a'),
+            spaceAfter=30,
+            alignment=TA_CENTER
+        )
+        
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=16,
+            textColor=colors.HexColor('#2c3e50'),
+            spaceAfter=12,
+            spaceBefore=20
+        )
+        
+        normal_style = styles['Normal']
+        normal_style.fontSize = 10
+        normal_style.textColor = colors.HexColor('#333333')
+        
+        # Title
+        title_text = f"AgentGuard Report - {report_data.get('project_name', 'Project')}"
+        elements.append(Paragraph(title_text, title_style))
+        elements.append(Spacer(1, 0.2*inch))
+        
+        # Report metadata
+        metadata_data = [
+            ['Generated At:', datetime.fromisoformat(report_data['generated_at'].replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S UTC')],
+            ['Template:', report_data.get('template', 'standard').upper()],
+        ]
+        
+        if report_data.get('period', {}).get('from'):
+            period_from = datetime.fromisoformat(report_data['period']['from'].replace('Z', '+00:00')).strftime('%Y-%m-%d')
+            period_to = datetime.fromisoformat(report_data['period']['to'].replace('Z', '+00:00')).strftime('%Y-%m-%d') if report_data.get('period', {}).get('to') else 'N/A'
+            metadata_data.append(['Period:', f"{period_from} to {period_to}"])
+        
+        metadata_table = Table(metadata_data, colWidths=[2*inch, 4*inch])
+        metadata_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f0f0f0')),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#333333')),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#cccccc')),
+        ]))
+        elements.append(metadata_table)
+        elements.append(Spacer(1, 0.3*inch))
+        
+        # Report content based on template type
+        report_type = report_data.get('type', 'standard')
+        
+        if report_type == 'standard':
+            _add_standard_report_content(elements, report_data, heading_style, normal_style)
+        elif report_type == 'detailed':
+            _add_detailed_report_content(elements, report_data, heading_style, normal_style)
+        elif report_type == 'executive':
+            _add_executive_report_content(elements, report_data, heading_style, normal_style)
+        
         # Build PDF
         doc.build(elements)
     except Exception as e:
