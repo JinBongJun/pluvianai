@@ -7,34 +7,20 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from app.models.api_call import APICall
 from app.models.alert import Alert
+from app.services.pricing_updater import pricing_updater
 
 
 class CostAnalyzer:
     """Analyze and detect cost anomalies"""
     
-    # Model pricing (per 1M tokens) - as of 2024
-    PRICING = {
-        "openai": {
-            "gpt-4": {"input": 30.0, "output": 60.0},
-            "gpt-4-turbo": {"input": 10.0, "output": 30.0},
-            "gpt-4-32k": {"input": 60.0, "output": 120.0},
-            "gpt-3.5-turbo": {"input": 0.5, "output": 1.5},
-            "gpt-3.5-turbo-16k": {"input": 3.0, "output": 4.0},
-        },
-        "anthropic": {
-            "claude-3-opus": {"input": 15.0, "output": 75.0},
-            "claude-3-sonnet": {"input": 3.0, "output": 15.0},
-            "claude-3-haiku": {"input": 0.25, "output": 1.25},
-            "claude-2": {"input": 8.0, "output": 24.0},
-        },
-        "google": {
-            "gemini-pro": {"input": 0.5, "output": 1.5},
-            "gemini-ultra": {"input": 7.0, "output": 21.0},
-        },
-    }
-    
     def __init__(self):
         self.anomaly_threshold = 3.0  # 3x increase triggers alert
+        self.pricing_updater = pricing_updater
+    
+    @property
+    def PRICING(self):
+        """Get current pricing from PricingUpdater"""
+        return self.pricing_updater.get_pricing()
     
     def calculate_cost(
         self,
@@ -59,9 +45,16 @@ class CostAnalyzer:
         model_pricing = provider_pricing.get(model, {})
         
         if not model_pricing:
-            # Default pricing if model not found
-            input_price = 1.0
-            output_price = 2.0
+            # Try to get default pricing for provider
+            provider_default = self.PRICING.get(provider, {}).get("default", {})
+            if provider_default:
+                input_price = provider_default.get("input", 1.0)
+                output_price = provider_default.get("output", 2.0)
+            else:
+                # Final fallback: use unknown provider default
+                unknown_default = self.PRICING.get("unknown", {}).get("default", {})
+                input_price = unknown_default.get("input", 1.0)
+                output_price = unknown_default.get("output", 2.0)
         else:
             input_price = model_pricing.get("input", 1.0)
             output_price = model_pricing.get("output", 2.0)

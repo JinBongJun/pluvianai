@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func
 from pydantic import BaseModel
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_user_from_api_key
 from app.core.permissions import check_project_access
+from app.services.data_normalizer import DataNormalizer
+from app.services.background_tasks import background_task_service
 from app.models.user import User
 from app.models.project import Project
 from app.models.api_call import APICall
@@ -123,6 +125,17 @@ async def get_api_call(
     return api_call
 
 
+class APICallCreateRequest(BaseModel):
+    """SDK에서 보내는 API Call 생성 요청"""
+    project_id: int
+    request_data: dict
+    response_data: dict
+    latency_ms: float
+    status_code: int
+    agent_name: Optional[str] = None
+    chain_id: Optional[str] = None
+
+
 class APICallStatsResponse(BaseModel):
     """API Call statistics response schema"""
     total_calls: int
@@ -191,4 +204,109 @@ async def get_api_call_stats(
         period_end=period_end
     )
 
+
+@router.post("", response_model=APICallResponse, status_code=status.HTTP_201_CREATED)
+async def create_api_call(
+    api_call_data: APICallCreateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_user_from_api_key)  # API Key 인증
+):
+    """
+    SDK에서 직접 API Call 데이터를 전송하는 엔드포인트
+    
+    사용 방법:
+    POST /api/v1/api-calls
+    Headers:
+      Authorization: Bearer ag_live_xxxxx
+    Body:
+      {
+        "project_id": 1,
+        "request_data": {...},
+        "response_data": {...},
+        "latency_ms": 123.45,
+        "status_code": 200,
+        "agent_name": "router",
+        "chain_id": "uuid-optional"
+      }
+    
+    특징:
+    - SDK에서 직접 호출 (Proxy 없이)
+    - API Key 인증 (JWT 토큰 불필요)
+    - 비동기 저장 (non-blocking)
+    - 자동 데이터 정규화
+    """
+    # Verify project access
+    project = check_project_access(api_call_data.project_id, user, db)
+    
+    # Normalize data (SDK는 URL이 없으므로 빈 문자열 전달)
+    normalizer = DataNormalizer()
+    normalized = normalizer.normalize(
+        request_data=api_call_data.request_data,
+        response_data=api_call_data.response_data,
+        url=""  # SDK 직접 모드에서는 URL 없음
+    )
+    
+    # Extract provider and model (fallback if not detected)
+    provider = normalized.get("provider", "unknown")
+    model = normalized.get("model", "unknown")
+    
+    # If provider is unknown, try to detect from model name
+    if provider == "unknown" and model != "unknown":
+        # Try to detect from model name
+        model_lower = model.lower()
+        if any(x in model_lower for x in ["gpt", "o1", "text-", "davinci"]):
+            provider = "openai"
+        elif any(x in model_lower for x in ["claude", "sonnet", "opus", "haiku"]):
+            provider = "anthropic"
+        elif any(x in model_lower for x in ["gemini", "palm", "bison"]):
+            provider = "google"
+    
+    # If still unknown, try to detect from request_data structure
+    if provider == "unknown":
+        request_data = api_call_data.request_data
+        if isinstance(request_data, dict):
+            # OpenAI format: has "messages" with role/content structure
+            if "messages" in request_data:
+                messages = request_data.get("messages", [])
+                if messages and isinstance(messages[0], dict) and "role" in messages[0]:
+                    provider = "openai"  # Default to OpenAI for standard format
+            # Anthropic format: has "messages" with different structure or "model" starts with claude
+            if "model" in request_data:
+                model_name = str(request_data["model"]).lower()
+                if "claude" in model_name:
+                    provider = "anthropic"
+    
+    # Save to database asynchronously (non-blocking)
+    # This prevents blocking the SDK request
+    try:
+        await background_task_service.save_api_call_async(
+            project_id=api_call_data.project_id,
+            request_data=api_call_data.request_data,
+            response_data=api_call_data.response_data,
+            normalized=normalized,
+            latency_ms=api_call_data.latency_ms,
+            status_code=api_call_data.status_code,
+            agent_name=api_call_data.agent_name,
+            chain_id=api_call_data.chain_id
+        )
+    except Exception as e:
+        # Log error but don't fail (SDK is non-blocking)
+        # In production, use proper logging
+        print(f"Error scheduling API call save: {e}")
+    
+    # Return immediate response (don't wait for save)
+    # Note: id is 0 because it's saved asynchronously
+    return APICallResponse(
+        id=0,  # Background에서 생성되므로 임시값
+        project_id=api_call_data.project_id,
+        provider=provider,
+        model=model,
+        request_tokens=normalized.get("request_tokens"),
+        response_tokens=normalized.get("response_tokens"),
+        latency_ms=api_call_data.latency_ms,
+        status_code=api_call_data.status_code,
+        agent_name=api_call_data.agent_name,
+        chain_id=api_call_data.chain_id,
+        created_at=datetime.utcnow()
+    )
 

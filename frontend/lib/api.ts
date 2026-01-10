@@ -301,6 +301,25 @@ export const costAPI = {
   },
 };
 
+// Agent Chain API
+export const agentChainAPI = {
+  profile: async (projectId: number, chainId?: string, days: number = 7) => {
+    const params: any = { project_id: projectId, days };
+    if (chainId) {
+      params.chain_id = chainId;
+    }
+    const response = await apiClient.get('/agent-chain/profile', { params });
+    return response.data;
+  },
+  
+  getAgentStatistics: async (projectId: number, days: number = 7) => {
+    const response = await apiClient.get('/agent-chain/agents', {
+      params: { project_id: projectId, days },
+    });
+    return response.data;
+  },
+};
+
 // Subscription API
 export const subscriptionAPI = {
   getCurrent: async () => {

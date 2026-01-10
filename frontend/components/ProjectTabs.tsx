@@ -15,6 +15,7 @@ export default function ProjectTabs({ projectId, canManage = false }: ProjectTab
   const tabs = [
     { id: 'overview', label: 'Overview', path: `/dashboard/${projectId}` },
     { id: 'api-calls', label: 'API Calls', path: `/dashboard/${projectId}/api-calls` },
+    { id: 'chains', label: 'Chains', path: `/dashboard/${projectId}/chains` },
     { id: 'compare', label: 'Compare', path: `/dashboard/${projectId}/compare` },
     { id: 'reports', label: 'Reports', path: `/dashboard/${projectId}/reports` },
     { id: 'members', label: 'Team Members', path: `/dashboard/${projectId}?tab=members` },
@@ -23,8 +24,11 @@ export default function ProjectTabs({ projectId, canManage = false }: ProjectTab
 
   const getActiveTab = () => {
     if (pathname?.includes('/api-calls')) return 'api-calls';
+    if (pathname?.includes('/chains')) return 'chains';
     if (pathname?.includes('/compare')) return 'compare';
     if (pathname?.includes('/reports')) return 'reports';
+    if (pathname?.includes('/quality')) return 'overview'; // Quality is part of overview
+    if (pathname?.includes('/drift')) return 'overview'; // Drift is part of overview
     // Check URL params for members/settings tabs
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
