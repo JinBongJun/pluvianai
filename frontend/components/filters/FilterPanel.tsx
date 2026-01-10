@@ -46,7 +46,7 @@ export default function FilterPanel({
   ).length;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm shadow-2xl">
+    <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm shadow-2xl">
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
           <button

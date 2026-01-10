@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import Button from './Button';
@@ -424,35 +425,39 @@ export default function DateRangePicker({
   };
 
   return (
-    <div ref={containerRef} className={clsx('relative', className)}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-between gap-2 px-3 py-2 border border-white/10 bg-white/5 rounded-md text-sm text-white hover:bg-white/10 transition-colors min-w-[280px]"
-      >
-        <span className="flex items-center gap-2 flex-1">
-          <span className="text-slate-400">Period:</span>
-          <span className="font-medium text-left flex-1">{formatPeriodDisplay()}</span>
-        </span>
-        <svg
-          className={clsx(
-            'h-4 w-4 text-slate-400 transition-transform flex-shrink-0',
-            isOpen && 'transform rotate-180'
-          )}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+    <>
+      <div ref={containerRef} className={clsx('relative', className)}>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center justify-between gap-2 px-3 py-2 border border-white/10 bg-white/5 rounded-md text-sm text-white hover:bg-white/10 transition-colors min-w-[280px]"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {isOpen && dropdownPosition && (
-        <div className="fixed bg-white rounded-lg shadow-2xl border border-gray-200 z-[99999] overflow-hidden animate-fade-in" style={{
-          top: `${dropdownPosition.top}px`,
-          left: `${dropdownPosition.left}px`,
-          position: 'fixed',
-          width: '700px',
-        }}>
+          <span className="flex items-center gap-2 flex-1">
+            <span className="text-slate-400">Period:</span>
+            <span className="font-medium text-left flex-1">{formatPeriodDisplay()}</span>
+          </span>
+          <svg
+            className={clsx(
+              'h-4 w-4 text-slate-400 transition-transform flex-shrink-0',
+              isOpen && 'transform rotate-180'
+            )}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
+      
+      {typeof window !== 'undefined' && isOpen && dropdownPosition && createPortal(
+        <div 
+          className="fixed bg-white rounded-lg shadow-2xl border border-gray-200 z-[99999] overflow-hidden animate-fade-in" 
+          style={{
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            width: '700px',
+          }}
+        >
           <div className="flex">
             {/* Left Panel - Presets */}
             <div className="w-48 border-r border-gray-200 bg-gray-50 p-4">
@@ -522,9 +527,10 @@ export default function DateRangePicker({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 

@@ -211,7 +211,7 @@ export default function APICallsListPage() {
         </div>
 
         {/* Table */}
-        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm shadow-2xl overflow-hidden">
+        <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm shadow-2xl">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-white/10">
               <thead className="bg-white/5">
