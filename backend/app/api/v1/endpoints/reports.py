@@ -306,8 +306,17 @@ async def generate_report(
     
     elif template == "executive":
         # Executive Summary: High-level KPIs and recommendations
-        avg_daily_calls = total_calls / ((end_date - start_date).days + 1) if start_date and end_date and (end_date - start_date).days >= 0 else total_calls
-        avg_daily_cost = total_cost / ((end_date - start_date).days + 1) if start_date and end_date and (end_date - start_date).days >= 0 else total_cost
+        # Calculate success rate first (needed for recommendations)
+        success_rate = round((successful_calls / total_calls * 100) if total_calls > 0 else 0, 2)
+        
+        # Calculate daily averages
+        if start_date and end_date and (end_date - start_date).days >= 0:
+            period_days = (end_date - start_date).days + 1
+            avg_daily_calls = total_calls / period_days if period_days > 0 else total_calls
+            avg_daily_cost = total_cost / period_days if period_days > 0 else total_cost
+        else:
+            avg_daily_calls = total_calls
+            avg_daily_cost = total_cost
         
         # Get top performing models
         top_models_query = db.query(
@@ -376,7 +385,7 @@ async def generate_report(
                 "description": f"{high_severity_drifts} high or critical severity drift detections found. Investigate model performance changes immediately.",
             })
         
-        if quality_scores.avg_score and quality_scores.avg_score < 80:
+        if quality_scores and quality_scores.avg_score and quality_scores.avg_score < 80:
             recommendations.append({
                 "type": "warning",
                 "priority": "medium",
@@ -397,11 +406,11 @@ async def generate_report(
             "type": "executive",
             "key_metrics": {
                 "total_api_calls": total_calls,
-                "success_rate": round((successful_calls / total_calls * 100) if total_calls > 0 else 0, 2),
+                "success_rate": success_rate,
                 "total_cost": round(total_cost, 2),
                 "avg_daily_calls": round(avg_daily_calls, 2),
                 "avg_daily_cost": round(avg_daily_cost, 2),
-                "avg_quality_score": round(float(quality_scores.avg_score), 2) if quality_scores.avg_score else None,
+                "avg_quality_score": round(float(quality_scores.avg_score), 2) if quality_scores and quality_scores.avg_score else None,
                 "critical_issues": high_severity_drifts,
             },
             "top_performers": [
