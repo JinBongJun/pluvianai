@@ -449,62 +449,71 @@ export default function AgentChainsPage() {
         </div>
 
         {/* Overview Stats */}
-        {chainProfile && typeof chainProfile === 'object' && !('message' in chainProfile && chainProfile.message) && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400 mb-1">Total Chains</p>
-                  <p className="text-2xl font-bold text-white">
-                    {'total_chains' in chainProfile && typeof chainProfile.total_chains === 'number' 
-                      ? chainProfile.total_chains 
-                      : allChains.length}
-                  </p>
+        {(() => {
+          const hasValidProfile = chainProfile && 
+            typeof chainProfile === 'object' && 
+            chainProfile !== null && 
+            !Array.isArray(chainProfile) &&
+            !('message' in chainProfile && chainProfile.message);
+          
+          if (!hasValidProfile) return null;
+          
+          const totalChains = ('total_chains' in chainProfile && typeof chainProfile.total_chains === 'number') 
+            ? chainProfile.total_chains 
+            : allChains.length;
+          const successRate = ('success_rate' in chainProfile && typeof chainProfile.success_rate === 'number') 
+            ? chainProfile.success_rate 
+            : 0;
+          const avgLatency = ('avg_chain_latency_ms' in chainProfile && typeof chainProfile.avg_chain_latency_ms === 'number' && chainProfile.avg_chain_latency_ms > 0) 
+            ? chainProfile.avg_chain_latency_ms 
+            : null;
+          const totalAgents = (agentStats && typeof agentStats === 'object' && agentStats !== null && 'total_agents' in agentStats && typeof agentStats.total_agents === 'number') 
+            ? agentStats.total_agents 
+            : agents.length;
+          
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-400 mb-1">Total Chains</p>
+                    <p className="text-2xl font-bold text-white">{totalChains}</p>
+                  </div>
+                  <GitBranch className="h-8 w-8 text-purple-400" />
                 </div>
-                <GitBranch className="h-8 w-8 text-purple-400" />
+              </div>
+              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-400 mb-1">Success Rate</p>
+                    <p className="text-2xl font-bold text-white">{successRate.toFixed(1)}%</p>
+                  </div>
+                  <CheckCircle className="h-8 w-8 text-green-400" />
+                </div>
+              </div>
+              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-400 mb-1">Avg Chain Latency</p>
+                    <p className="text-2xl font-bold text-white">
+                      {avgLatency ? `${(avgLatency / 1000).toFixed(2)}s` : 'N/A'}
+                    </p>
+                  </div>
+                  <Clock className="h-8 w-8 text-cyan-400" />
+                </div>
+              </div>
+              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-400 mb-1">Active Agents</p>
+                    <p className="text-2xl font-bold text-white">{totalAgents}</p>
+                  </div>
+                  <Activity className="h-8 w-8 text-blue-400" />
+                </div>
               </div>
             </div>
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400 mb-1">Success Rate</p>
-                  <p className="text-2xl font-bold text-white">
-                    {'success_rate' in chainProfile && typeof chainProfile.success_rate === 'number' 
-                      ? `${chainProfile.success_rate.toFixed(1)}%` 
-                      : '0%'}
-                  </p>
-                </div>
-                <CheckCircle className="h-8 w-8 text-green-400" />
-              </div>
-            </div>
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400 mb-1">Avg Chain Latency</p>
-                  <p className="text-2xl font-bold text-white">
-                    {'avg_chain_latency_ms' in chainProfile && typeof chainProfile.avg_chain_latency_ms === 'number' && chainProfile.avg_chain_latency_ms > 0
-                      ? `${(chainProfile.avg_chain_latency_ms / 1000).toFixed(2)}s`
-                      : 'N/A'}
-                  </p>
-                </div>
-                <Clock className="h-8 w-8 text-cyan-400" />
-              </div>
-            </div>
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400 mb-1">Active Agents</p>
-                  <p className="text-2xl font-bold text-white">
-                    {agentStats && typeof agentStats === 'object' && agentStats !== null && 'total_agents' in agentStats && typeof agentStats.total_agents === 'number' 
-                      ? agentStats.total_agents 
-                      : agents.length}
-                  </p>
-                </div>
-                <Activity className="h-8 w-8 text-blue-400" />
-              </div>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Agent Statistics Chart */}
         {Array.isArray(agents) && agents.length > 0 && (
