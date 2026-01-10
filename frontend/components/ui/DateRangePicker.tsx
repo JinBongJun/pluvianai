@@ -88,7 +88,13 @@ export default function DateRangePicker({
     if (containerRef.current && typeof window !== 'undefined') {
       // Get the actual button element's bounding rect
       const buttonElement = containerRef.current.querySelector('button');
-      if (!buttonElement) return;
+      if (!buttonElement) {
+        console.warn('DateRangePicker: Button element not found');
+        return;
+      }
+      
+      // Force a reflow to ensure button position is accurate
+      void buttonElement.offsetHeight;
       
       const buttonRect = buttonElement.getBoundingClientRect();
       
@@ -101,9 +107,10 @@ export default function DateRangePicker({
       // Position directly below the button, aligned to the left edge
       // Use button's actual position for precise alignment
       let left = buttonRect.left; // Align left edge of dropdown with left edge of button
-      // Position dropdown right below button with a small gap to avoid overlap
-      // Add 4px gap to ensure dropdown doesn't visually overlap with button border
-      let top = buttonRect.bottom + 4; // Position directly below button with minimal gap
+      
+      // Position dropdown right below button with 1px gap to prevent overlap
+      // buttonRect.bottom is the bottom edge of the button, so we add 1px for a tiny gap
+      let top = buttonRect.bottom + 1; // Position directly below button with minimal gap
       
       // Adjust if dropdown would go off right edge (but keep left alignment if possible)
       if (left + dropdownWidth > viewportWidth - 8) {
@@ -117,7 +124,7 @@ export default function DateRangePicker({
       // Adjust if dropdown would go off bottom edge
       if (top + dropdownHeight > viewportHeight - 8) {
         // Try to show above button instead
-        const topAbove = buttonRect.top - dropdownHeight;
+        const topAbove = buttonRect.top - dropdownHeight - 1;
         if (topAbove >= 8) {
           top = topAbove;
         } else {
@@ -134,6 +141,11 @@ export default function DateRangePicker({
       // Ensure dropdown doesn't go off top edge
       if (top < 8) {
         top = 8;
+      }
+      
+      // Ensure dropdown is always below button (never overlap)
+      if (top < buttonRect.bottom) {
+        top = buttonRect.bottom + 1;
       }
       
       // getBoundingClientRect returns viewport-relative coordinates, perfect for fixed positioning
@@ -158,13 +170,17 @@ export default function DateRangePicker({
       // Calculate initial position - use requestAnimationFrame to ensure DOM is fully rendered
       const calculatePosition = () => {
         requestAnimationFrame(() => {
-          calculateDropdownPosition();
+          requestAnimationFrame(() => {
+            // Double RAF to ensure layout is fully complete
+            calculateDropdownPosition();
+          });
         });
       };
       
       // Calculate immediately and after a short delay to ensure button position is stable
       calculatePosition();
-      const timer = setTimeout(calculatePosition, 10);
+      const timer1 = setTimeout(calculatePosition, 10);
+      const timer2 = setTimeout(calculatePosition, 50);
       
       // Recalculate on scroll and resize
       const handleScroll = () => {
@@ -181,7 +197,8 @@ export default function DateRangePicker({
       document.addEventListener('scroll', handleScroll, true);
       
       return () => {
-        clearTimeout(timer);
+        clearTimeout(timer1);
+        clearTimeout(timer2);
         window.removeEventListener('scroll', handleScroll, true);
         window.removeEventListener('resize', handleResize);
         document.removeEventListener('scroll', handleScroll, true);
