@@ -49,6 +49,7 @@ interface AgentStats {
   avg_latency_ms: number;
   failure_count: number;
   failure_rate: number;
+  success_rate?: number; // Optional, can be calculated from failure_rate
   avg_quality_score: number;
 }
 
@@ -108,18 +109,41 @@ export default function AgentChainsPage() {
         selectedChainId || undefined,
         days
       );
-      setChainProfile(profileData);
+      
+      // Ensure profileData has the expected structure
+      if (profileData && typeof profileData === 'object') {
+        setChainProfile({
+          ...profileData,
+          chains: Array.isArray(profileData.chains) ? profileData.chains : [],
+        });
+      } else {
+        setChainProfile({ chains: [] });
+      }
 
       // Load agent statistics
-      const statsData = await agentChainAPI.getAgentStatistics(projectId, days);
-      setAgentStats(statsData);
+      try {
+        const statsData = await agentChainAPI.getAgentStatistics(projectId, days);
+        setAgentStats({
+          ...statsData,
+          agents: Array.isArray(statsData?.agents) ? statsData.agents : [],
+        });
+      } catch (statsError: any) {
+        console.error('Failed to load agent statistics:', statsError);
+        setAgentStats({ agents: [] });
+      }
     } catch (error: any) {
       console.error('Failed to load agent chain data:', error);
       if (error.response?.status === 403) {
         toast.showToast('Agent Chain Profiling requires Pro plan or higher. Please upgrade your subscription.', 'error');
+        setChainProfile({ 
+          message: 'Agent Chain Profiling requires Pro plan or higher',
+          chains: [] 
+        });
       } else {
         toast.showToast(error.response?.data?.detail || 'Failed to load agent chain data', 'error');
+        setChainProfile({ chains: [] });
       }
+      setAgentStats({ agents: [] });
       if (error.response?.status === 401) {
         router.push('/login');
       }
@@ -139,7 +163,7 @@ export default function AgentChainsPage() {
   }
 
   // Handle subscription upgrade required
-  if (chainProfile?.message === 'Agent Chain Profiling requires Pro plan or higher') {
+  if (chainProfile?.message && chainProfile.message.includes('requires Pro plan')) {
     return (
       <DashboardLayout>
         <div className="bg-[#000314] min-h-screen">
@@ -159,58 +183,91 @@ export default function AgentChainsPage() {
     );
   }
 
-  const allChains = chainProfile?.chains || [];
-  const agents = agentStats?.agents || [];
+  // Safely extract chains array - handle null/undefined/error cases
+  let chainsArray: ChainProfile[] = [];
+  if (chainProfile && typeof chainProfile === 'object' && !chainProfile.message) {
+    chainsArray = Array.isArray(chainProfile.chains) ? chainProfile.chains : [];
+  }
+  
+  const allChains = chainsArray.filter((chain: ChainProfile) => 
+    chain && 
+    chain.chain_id && 
+    typeof chain.chain_id === 'string' &&
+    chain.chain_id.length > 0
+  );
+  
+  const agents = (agentStats && Array.isArray(agentStats.agents)) ? agentStats.agents : [];
 
   // Filter chains by search query
   const filteredChains = useMemo(() => {
-    let filtered = allChains;
+    if (!Array.isArray(allChains) || allChains.length === 0) {
+      return [];
+    }
     
-    if (searchQuery.trim()) {
+    let filtered = [...allChains]; // Create a copy to avoid mutating the original
+    
+    if (searchQuery && searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((chain: ChainProfile) => {
-        return (
-          chain.chain_id.toLowerCase().includes(query) ||
-          chain.agents?.some((agent: AgentStats) => 
-            agent.agent_name?.toLowerCase().includes(query)
-          )
-        );
+        if (!chain || !chain.chain_id || typeof chain.chain_id !== 'string') return false;
+        try {
+          return (
+            chain.chain_id.toLowerCase().includes(query) ||
+            (Array.isArray(chain.agents) && chain.agents.some((agent: AgentStats) => 
+              agent?.agent_name && typeof agent.agent_name === 'string' && agent.agent_name.toLowerCase().includes(query)
+            ))
+          );
+        } catch (e) {
+          console.error('Error filtering chain:', e);
+          return false;
+        }
       });
     }
     
     // Sort chains
-    filtered.sort((a: ChainProfile, b: ChainProfile) => {
-      let aVal: any;
-      let bVal: any;
-      
-      switch (sortField) {
-        case 'first_call_at':
-          aVal = new Date(a.first_call_at).getTime();
-          bVal = new Date(b.first_call_at).getTime();
-          break;
-        case 'success_rate':
-          aVal = a.success_rate;
-          bVal = b.success_rate;
-          break;
-        case 'total_latency':
-          aVal = a.total_latency;
-          bVal = b.total_latency;
-          break;
-        case 'total_steps':
-          aVal = a.total_steps;
-          bVal = b.total_steps;
-          break;
-        default:
-          aVal = 0;
-          bVal = 0;
-      }
-      
-      if (sortDirection === 'asc') {
-        return aVal > bVal ? 1 : -1;
-      } else {
-        return aVal < bVal ? 1 : -1;
-      }
-    });
+    try {
+      filtered.sort((a: ChainProfile, b: ChainProfile) => {
+        if (!a || !b) return 0;
+        
+        let aVal: any = 0;
+        let bVal: any = 0;
+        
+        switch (sortField) {
+          case 'first_call_at':
+            try {
+              aVal = a.first_call_at ? new Date(a.first_call_at).getTime() : 0;
+              bVal = b.first_call_at ? new Date(b.first_call_at).getTime() : 0;
+            } catch (e) {
+              aVal = 0;
+              bVal = 0;
+            }
+            break;
+          case 'success_rate':
+            aVal = (typeof a.success_rate === 'number') ? a.success_rate : 0;
+            bVal = (typeof b.success_rate === 'number') ? b.success_rate : 0;
+            break;
+          case 'total_latency':
+            aVal = (typeof a.total_latency === 'number') ? a.total_latency : 0;
+            bVal = (typeof b.total_latency === 'number') ? b.total_latency : 0;
+            break;
+          case 'total_steps':
+            aVal = (typeof a.total_steps === 'number') ? a.total_steps : 0;
+            bVal = (typeof b.total_steps === 'number') ? b.total_steps : 0;
+            break;
+          default:
+            aVal = 0;
+            bVal = 0;
+        }
+        
+        if (sortDirection === 'asc') {
+          return aVal > bVal ? 1 : -1;
+        } else {
+          return aVal < bVal ? 1 : -1;
+        }
+      });
+    } catch (e) {
+      console.error('Error sorting chains:', e);
+    }
     
     return filtered;
   }, [allChains, searchQuery, sortField, sortDirection]);
@@ -240,23 +297,33 @@ export default function AgentChainsPage() {
   };
 
   const handleExport = () => {
-    const data = {
-      chains: filteredChains,
-      stats: chainProfile,
-      exported_at: new Date().toISOString(),
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `agent-chains-${projectId}-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
-    toast.showToast('Chain data exported successfully', 'success');
+    try {
+      if (!Array.isArray(filteredChains) || filteredChains.length === 0) {
+        toast.showToast('No chains to export', 'warning');
+        return;
+      }
+      
+      const data = {
+        chains: filteredChains,
+        stats: chainProfile,
+        exported_at: new Date().toISOString(),
+      };
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `agent-chains-${projectId}-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.showToast('Chain data exported successfully', 'success');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.showToast('Failed to export chain data', 'error');
+    }
   };
 
   return (
@@ -295,10 +362,12 @@ export default function AgentChainsPage() {
               placeholder={allChainsForSelect.length === 0 ? 'No chains available' : 'All Chains'}
               options={allChainsForSelect.length > 0 ? [
                 { value: '', label: 'All Chains' },
-                ...allChainsForSelect.map((chain: ChainProfile) => ({
-                  value: chain.chain_id,
-                  label: `${chain.chain_id.substring(0, 16)}... (${chain.total_steps} steps, ${chain.unique_agents} agents)`,
-                })),
+                ...allChainsForSelect
+                  .filter((chain: ChainProfile) => chain && chain.chain_id)
+                  .map((chain: ChainProfile) => ({
+                    value: chain.chain_id || '',
+                    label: `${(chain.chain_id || '').substring(0, 16)}... (${chain.total_steps || 0} steps, ${chain.unique_agents || 0} agents)`,
+                  })),
               ] : []}
               className="min-w-[280px]"
               disabled={allChainsForSelect.length === 0}
@@ -373,13 +442,15 @@ export default function AgentChainsPage() {
         </div>
 
         {/* Overview Stats */}
-        {chainProfile && (
+        {chainProfile && !chainProfile.message && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-slate-400 mb-1">Total Chains</p>
-                  <p className="text-2xl font-bold text-white">{chainProfile.total_chains || 0}</p>
+                  <p className="text-2xl font-bold text-white">
+                    {typeof chainProfile.total_chains === 'number' ? chainProfile.total_chains : 0}
+                  </p>
                 </div>
                 <GitBranch className="h-8 w-8 text-purple-400" />
               </div>
@@ -389,7 +460,9 @@ export default function AgentChainsPage() {
                 <div>
                   <p className="text-sm text-slate-400 mb-1">Success Rate</p>
                   <p className="text-2xl font-bold text-white">
-                    {chainProfile.success_rate?.toFixed(1) || 0}%
+                    {typeof chainProfile.success_rate === 'number' 
+                      ? `${chainProfile.success_rate.toFixed(1)}%` 
+                      : '0%'}
                   </p>
                 </div>
                 <CheckCircle className="h-8 w-8 text-green-400" />
@@ -400,7 +473,7 @@ export default function AgentChainsPage() {
                 <div>
                   <p className="text-sm text-slate-400 mb-1">Avg Chain Latency</p>
                   <p className="text-2xl font-bold text-white">
-                    {chainProfile.avg_chain_latency_ms
+                    {typeof chainProfile.avg_chain_latency_ms === 'number' && chainProfile.avg_chain_latency_ms > 0
                       ? `${(chainProfile.avg_chain_latency_ms / 1000).toFixed(2)}s`
                       : 'N/A'}
                   </p>
@@ -412,7 +485,9 @@ export default function AgentChainsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-slate-400 mb-1">Active Agents</p>
-                  <p className="text-2xl font-bold text-white">{agentStats?.total_agents || 0}</p>
+                  <p className="text-2xl font-bold text-white">
+                    {typeof agentStats?.total_agents === 'number' ? agentStats.total_agents : 0}
+                  </p>
                 </div>
                 <Activity className="h-8 w-8 text-blue-400" />
               </div>
@@ -421,11 +496,23 @@ export default function AgentChainsPage() {
         )}
 
         {/* Agent Statistics Chart */}
-        {agents.length > 0 && (
+        {Array.isArray(agents) && agents.length > 0 && (
           <div className="mb-6 relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
             <h2 className="text-lg font-semibold text-white mb-4">Agent Performance</h2>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={agents.slice(0, 10)}>
+              <BarChart data={agents.slice(0, 10).map((agent: AgentStats) => {
+                const successRate = typeof agent?.success_rate === 'number' 
+                  ? agent.success_rate 
+                  : (typeof agent?.failure_rate === 'number' 
+                    ? Math.max(0, 100 - agent.failure_rate) 
+                    : 0);
+                return {
+                  ...agent,
+                  avg_latency_ms: typeof agent?.avg_latency_ms === 'number' ? agent.avg_latency_ms : 0,
+                  success_rate: successRate,
+                  agent_name: agent?.agent_name || 'Unknown',
+                };
+              })}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                 <XAxis
                   dataKey="agent_name"
@@ -501,100 +588,116 @@ export default function AgentChainsPage() {
             ) : (
               <>
                 <div className="space-y-4">
-                  {chains.map((chain: ChainProfile) => (
+                  {chains.map((chain: ChainProfile, index: number) => {
+                    if (!chain || !chain.chain_id) return null;
+                    
+                    return (
                     <div
-                      key={chain.chain_id}
+                      key={chain.chain_id || `chain-${index}`}
                       className="border border-white/10 bg-white/5 rounded-lg p-6 hover:bg-white/10 transition-colors cursor-pointer"
-                      onClick={() => router.push(`/dashboard/${projectId}/chains/${chain.chain_id}`)}
+                      onClick={() => {
+                        if (chain.chain_id) {
+                          router.push(`/dashboard/${projectId}/chains/${chain.chain_id}`);
+                        }
+                      }}
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <h3 
                               className="text-lg font-semibold text-white font-mono text-sm"
-                              title={chain.chain_id}
+                              title={chain.chain_id || 'Unknown chain'}
                             >
-                              Chain: {chain.chain_id.substring(0, 20)}...
+                              Chain: {(chain.chain_id || 'unknown').substring(0, 20)}...
                             </h3>
-                          {chain.success ? (
-                            <Badge variant="success">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Success
-                            </Badge>
-                          ) : (
-                            <Badge variant="error">
-                              <XCircle className="h-3 w-3 mr-1" />
-                              Failed
-                            </Badge>
-                          )}
+                            {chain.success ? (
+                              <Badge variant="success">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Success
+                              </Badge>
+                            ) : (
+                              <Badge variant="error">
+                                <XCircle className="h-3 w-3 mr-1" />
+                                Failed
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-slate-400">
+                            {chain.first_call_at ? new Date(chain.first_call_at).toLocaleString() : 'N/A'} -{' '}
+                            {chain.last_call_at ? new Date(chain.last_call_at).toLocaleString() : 'N/A'}
+                          </p>
                         </div>
-                        <p className="text-sm text-slate-400">
-                          {new Date(chain.first_call_at).toLocaleString()} -{' '}
-                          {new Date(chain.last_call_at).toLocaleString()}
-                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (chain.chain_id) {
+                              router.push(`/dashboard/${projectId}/chains/${chain.chain_id}`);
+                            }
+                          }}
+                        >
+                          View Details <ArrowRight className="h-4 w-4 ml-1" />
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(`/dashboard/${projectId}/chains/${chain.chain_id}`);
-                        }}
-                      >
-                        View Details <ArrowRight className="h-4 w-4 ml-1" />
-                      </Button>
-                    </div>
 
-                    {/* Chain Stats Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                      <div>
-                        <p className="text-xs text-slate-400 mb-1">Total Steps</p>
-                        <p className="text-lg font-semibold text-white">{chain.total_steps}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-400 mb-1">Unique Agents</p>
-                        <p className="text-lg font-semibold text-white">{chain.unique_agents}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-400 mb-1">Total Latency</p>
-                        <p className="text-lg font-semibold text-white">
-                          {(chain.total_latency / 1000).toFixed(2)}s
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-400 mb-1">Success Rate</p>
-                        <p className="text-lg font-semibold text-white">
-                          {chain.success_rate.toFixed(1)}%
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Bottleneck */}
-                    {chain.bottleneck_agent && (
-                      <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className="h-4 w-4 text-yellow-400" />
-                          <span className="text-sm text-yellow-400">
-                            Bottleneck: <strong>{chain.bottleneck_agent}</strong> (
-                            {(chain.bottleneck_latency_ms / 1000).toFixed(2)}s avg latency)
-                          </span>
+                      {/* Chain Stats Grid */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        <div>
+                          <p className="text-xs text-slate-400 mb-1">Total Steps</p>
+                          <p className="text-lg font-semibold text-white">{chain.total_steps ?? 0}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-400 mb-1">Unique Agents</p>
+                          <p className="text-lg font-semibold text-white">{chain.unique_agents ?? 0}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-400 mb-1">Total Latency</p>
+                          <p className="text-lg font-semibold text-white">
+                            {chain.total_latency ? `${(chain.total_latency / 1000).toFixed(2)}s` : 'N/A'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-400 mb-1">Success Rate</p>
+                          <p className="text-lg font-semibold text-white">
+                            {chain.success_rate !== null && chain.success_rate !== undefined 
+                              ? `${chain.success_rate.toFixed(1)}%` 
+                              : 'N/A'}
+                          </p>
                         </div>
                       </div>
-                    )}
 
-                    {/* Agent Flow Diagram */}
-                    {chain.agents && chain.agents.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-white/10">
-                        <p className="text-xs text-slate-400 mb-3 font-medium uppercase tracking-wide">Agent Flow</p>
-                        <ChainFlowDiagram
-                          agents={chain.agents}
-                          totalLatency={chain.total_latency}
-                          successRate={chain.success_rate}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  ))}
+                      {/* Bottleneck */}
+                      {chain.bottleneck_agent && (
+                        <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-yellow-400" />
+                            <span className="text-sm text-yellow-400">
+                              Bottleneck: <strong>{chain.bottleneck_agent}</strong>{' '}
+                              {chain.bottleneck_latency_ms && (
+                                <>(
+                                  {(chain.bottleneck_latency_ms / 1000).toFixed(2)}s avg latency
+                                )</>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Agent Flow Diagram */}
+                      {chain.agents && chain.agents.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-white/10">
+                          <p className="text-xs text-slate-400 mb-3 font-medium uppercase tracking-wide">Agent Flow</p>
+                          <ChainFlowDiagram
+                            agents={chain.agents}
+                            totalLatency={chain.total_latency ?? 0}
+                            successRate={chain.success_rate ?? 0}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    );
+                  })}
                 </div>
                 {/* Pagination */}
                 {totalPages > 1 && (
