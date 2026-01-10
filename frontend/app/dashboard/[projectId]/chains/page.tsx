@@ -276,21 +276,27 @@ export default function AgentChainsPage() {
       console.error('Error sorting chains:', e);
     }
     
-    return filtered;
+    return Array.isArray(filtered) ? filtered : [];
   }, [allChains, searchQuery, sortField, sortDirection]);
 
+  // Ensure filteredChains is always an array (defensive check)
+  const safeFilteredChains: ChainProfile[] = Array.isArray(filteredChains) ? filteredChains : [];
+  
   // Paginate chains
-  const totalItems = filteredChains.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const totalItems = safeFilteredChains.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
   const paginatedChains = useMemo(() => {
+    if (!Array.isArray(safeFilteredChains) || safeFilteredChains.length === 0) {
+      return [];
+    }
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    return filteredChains.slice(startIndex, endIndex);
-  }, [filteredChains, currentPage, itemsPerPage]);
+    return safeFilteredChains.slice(startIndex, endIndex);
+  }, [safeFilteredChains, currentPage, itemsPerPage]);
 
   // Ensure chains is always an array
-  const chains = Array.isArray(paginatedChains) ? paginatedChains : [];
-  const allChainsForSelect = Array.isArray(allChains) ? allChains : [];
+  const chains: ChainProfile[] = Array.isArray(paginatedChains) ? paginatedChains : [];
+  const allChainsForSelect: ChainProfile[] = Array.isArray(allChains) ? allChains : [];
 
   const COLORS = ['#a855f7', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -306,13 +312,14 @@ export default function AgentChainsPage() {
 
   const handleExport = () => {
     try {
-      if (!Array.isArray(filteredChains) || filteredChains.length === 0) {
+      const safeChains = Array.isArray(filteredChains) ? filteredChains : [];
+      if (safeChains.length === 0) {
         toast.showToast('No chains to export', 'warning');
         return;
       }
       
       const data = {
-        chains: filteredChains,
+        chains: safeChains,
         stats: chainProfile,
         exported_at: new Date().toISOString(),
       };
@@ -389,7 +396,7 @@ export default function AgentChainsPage() {
               <RefreshCw className="h-4 w-4" />
               Refresh
             </Button>
-            {filteredChains.length > 0 && (
+            {safeFilteredChains.length > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -517,23 +524,30 @@ export default function AgentChainsPage() {
         })()}
 
         {/* Agent Statistics Chart */}
-        {Array.isArray(agents) && agents.length > 0 && (
-          <div className="mb-6 relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-            <h2 className="text-lg font-semibold text-white mb-4">Agent Performance</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={agents.slice(0, 10).map((agent: AgentStats) => {
-                const successRate = typeof agent?.success_rate === 'number' 
-                  ? agent.success_rate 
-                  : (typeof agent?.failure_rate === 'number' 
-                    ? Math.max(0, 100 - agent.failure_rate) 
-                    : 0);
-                return {
-                  ...agent,
-                  avg_latency_ms: typeof agent?.avg_latency_ms === 'number' ? agent.avg_latency_ms : 0,
-                  success_rate: successRate,
-                  agent_name: agent?.agent_name || 'Unknown',
-                };
-              })}>
+        {Array.isArray(agents) && agents.length > 0 && (() => {
+          const chartData = agents.slice(0, 10)
+            .filter((agent: AgentStats) => agent && typeof agent === 'object')
+            .map((agent: AgentStats) => {
+              const successRate = typeof agent?.success_rate === 'number' 
+                ? agent.success_rate 
+                : (typeof agent?.failure_rate === 'number' 
+                  ? Math.max(0, 100 - agent.failure_rate) 
+                  : 0);
+              return {
+                agent_name: (agent?.agent_name && typeof agent.agent_name === 'string') ? agent.agent_name : 'Unknown',
+                avg_latency_ms: typeof agent?.avg_latency_ms === 'number' ? agent.avg_latency_ms : 0,
+                success_rate: successRate,
+                call_count: typeof agent?.call_count === 'number' ? agent.call_count : 0,
+              };
+            });
+          
+          if (chartData.length === 0) return null;
+          
+          return (
+            <div className="mb-6 relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
+              <h2 className="text-lg font-semibold text-white mb-4">Agent Performance</h2>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                 <XAxis
                   dataKey="agent_name"
@@ -558,7 +572,8 @@ export default function AgentChainsPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        )}
+          );
+        })()}
 
         {/* Chains List */}
         <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm shadow-2xl">
@@ -566,19 +581,19 @@ export default function AgentChainsPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-white">
                 Chain Profiles
-                {filteredChains.length > 0 && (
+                {safeFilteredChains.length > 0 && (
                   <span className="ml-2 text-sm font-normal text-slate-400">
-                    ({filteredChains.length} {filteredChains.length === 1 ? 'chain' : 'chains'})
+                    ({safeFilteredChains.length} {safeFilteredChains.length === 1 ? 'chain' : 'chains'})
                   </span>
                 )}
               </h2>
-              {allChainsForSelect.length > filteredChains.length && (
+              {allChainsForSelect.length > safeFilteredChains.length && (
                 <span className="text-sm text-slate-400">
-                  Showing {filteredChains.length} of {allChainsForSelect.length}
+                  Showing {safeFilteredChains.length} of {allChainsForSelect.length}
                 </span>
               )}
             </div>
-            {filteredChains.length === 0 ? (
+            {safeFilteredChains.length === 0 ? (
               <div className="text-center py-12 text-slate-400">
                 <GitBranch className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 {searchQuery ? (
@@ -609,12 +624,9 @@ export default function AgentChainsPage() {
             ) : (
               <>
                 <div className="space-y-4">
-                  {Array.isArray(chains) && chains.length > 0 ? chains.map((chain: ChainProfile, index: number) => {
-                    if (!chain || typeof chain !== 'object' || !chain.chain_id || typeof chain.chain_id !== 'string') {
-                      return null;
-                    }
-                    
-                    return (
+                  {chains.length > 0 ? chains
+                    .filter((chain: ChainProfile) => chain && typeof chain === 'object' && chain.chain_id && typeof chain.chain_id === 'string')
+                    .map((chain: ChainProfile, index: number) => (
                     <div
                       key={chain.chain_id || `chain-${index}`}
                       className="border border-white/10 bg-white/5 rounded-lg p-6 hover:bg-white/10 transition-colors cursor-pointer"
@@ -719,8 +731,8 @@ export default function AgentChainsPage() {
                         </div>
                       )}
                     </div>
-                    );
-                  }) : (
+                    ))
+                  ) : (
                     <div className="text-center py-12 text-slate-400">
                       <p>No chains available to display.</p>
                     </div>
