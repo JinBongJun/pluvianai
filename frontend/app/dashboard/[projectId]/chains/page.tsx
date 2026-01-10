@@ -470,10 +470,10 @@ export default function AgentChainsPage() {
             ? chainProfile.total_chains 
             : allChains.length;
           const successRate = ('success_rate' in chainProfile && typeof chainProfile.success_rate === 'number') 
-            ? chainProfile.success_rate 
+            ? Number(chainProfile.success_rate) 
             : 0;
           const avgLatency = ('avg_chain_latency_ms' in chainProfile && typeof chainProfile.avg_chain_latency_ms === 'number' && chainProfile.avg_chain_latency_ms > 0) 
-            ? chainProfile.avg_chain_latency_ms 
+            ? Number(chainProfile.avg_chain_latency_ms)
             : null;
           const totalAgents = (agentStats && typeof agentStats === 'object' && agentStats !== null && 'total_agents' in agentStats && typeof agentStats.total_agents === 'number') 
             ? agentStats.total_agents 
@@ -494,7 +494,9 @@ export default function AgentChainsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-slate-400 mb-1">Success Rate</p>
-                    <p className="text-2xl font-bold text-white">{successRate.toFixed(1)}%</p>
+                    <p className="text-2xl font-bold text-white">
+                      {typeof successRate === 'number' && !isNaN(successRate) ? successRate.toFixed(1) : '0.0'}%
+                    </p>
                   </div>
                   <CheckCircle className="h-8 w-8 text-green-400" />
                 </div>
@@ -700,13 +702,15 @@ export default function AgentChainsPage() {
                         <div>
                           <p className="text-xs text-slate-400 mb-1">Total Latency</p>
                           <p className="text-lg font-semibold text-white">
-                            {chain.total_latency ? `${(chain.total_latency / 1000).toFixed(2)}s` : 'N/A'}
+                            {typeof chain.total_latency === 'number' && !isNaN(chain.total_latency)
+                              ? `${(chain.total_latency / 1000).toFixed(2)}s` 
+                              : 'N/A'}
                           </p>
                         </div>
                         <div>
                           <p className="text-xs text-slate-400 mb-1">Success Rate</p>
                           <p className="text-lg font-semibold text-white">
-                            {chain.success_rate !== null && chain.success_rate !== undefined 
+                            {typeof chain.success_rate === 'number' && !isNaN(chain.success_rate)
                               ? `${chain.success_rate.toFixed(1)}%` 
                               : 'N/A'}
                           </p>
@@ -720,10 +724,8 @@ export default function AgentChainsPage() {
                             <AlertTriangle className="h-4 w-4 text-yellow-400" />
                             <span className="text-sm text-yellow-400">
                               Bottleneck: <strong>{chain.bottleneck_agent}</strong>{' '}
-                              {chain.bottleneck_latency_ms && (
-                                <>(
-                                  {(chain.bottleneck_latency_ms / 1000).toFixed(2)}s avg latency
-                                )</>
+                              {typeof chain.bottleneck_latency_ms === 'number' && !isNaN(chain.bottleneck_latency_ms) && chain.bottleneck_latency_ms > 0 && (
+                                <> ({(chain.bottleneck_latency_ms / 1000).toFixed(2)}s avg latency)</>
                               )}
                             </span>
                           </div>
@@ -731,16 +733,30 @@ export default function AgentChainsPage() {
                       )}
 
                       {/* Agent Flow Diagram */}
-                      {chain.agents && chain.agents.length > 0 && (
-                        <div className="mt-4 pt-4 border-t border-white/10">
-                          <p className="text-xs text-slate-400 mb-3 font-medium uppercase tracking-wide">Agent Flow</p>
-                          <ChainFlowDiagram
-                            agents={chain.agents}
-                            totalLatency={chain.total_latency ?? 0}
-                            successRate={chain.success_rate ?? 0}
-                          />
-                        </div>
-                      )}
+                      {Array.isArray(chain.agents) && chain.agents.length > 0 && (() => {
+                        const safeAgents = chain.agents.filter((agent: any) => 
+                          agent && 
+                          typeof agent === 'object' && 
+                          agent.agent_name && 
+                          typeof agent.agent_name === 'string'
+                        );
+                        
+                        if (safeAgents.length === 0) return null;
+                        
+                        const safeTotalLatency = typeof chain.total_latency === 'number' ? chain.total_latency : 0;
+                        const safeSuccessRate = typeof chain.success_rate === 'number' ? chain.success_rate : 0;
+                        
+                        return (
+                          <div className="mt-4 pt-4 border-t border-white/10">
+                            <p className="text-xs text-slate-400 mb-3 font-medium uppercase tracking-wide">Agent Flow</p>
+                            <ChainFlowDiagram
+                              agents={safeAgents}
+                              totalLatency={safeTotalLatency}
+                              successRate={safeSuccessRate}
+                            />
+                          </div>
+                        );
+                      })()}
                     </div>
                     ));
                   })()}
