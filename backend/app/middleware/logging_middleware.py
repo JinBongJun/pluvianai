@@ -12,8 +12,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     """Middleware to log all requests and responses"""
     
     async def dispatch(self, request: Request, call_next):
-        # Skip logging for health checks and docs
-        if request.url.path in ["/health", "/docs", "/openapi.json", "/redoc"]:
+        # Skip logging for health checks, docs, and OPTIONS requests (CORS preflight)
+        if request.url.path in ["/health", "/docs", "/openapi.json", "/redoc"] or request.method == "OPTIONS":
             return await call_next(request)
         
         # Record start time

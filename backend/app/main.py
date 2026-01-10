@@ -48,22 +48,25 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
 app.add_exception_handler(Exception, general_exception_handler)
 
-# Logging middleware (should be first to log all requests)
-app.add_middleware(LoggingMiddleware)
-
-# CORS middleware
-# CRITICAL: Always allow all origins to support Vercel preview deployments
+# CRITICAL: CORS middleware MUST be added LAST (last in list = first to execute)
+# FastAPI middleware executes in REVERSE order (last added = first executed)
+# CORS must handle preflight OPTIONS requests before any other middleware
+# Always allow all origins to support Vercel preview deployments
 # Vercel creates unique preview URLs for each deployment (e.g., agent-guard-xxx.vercel.app)
-# Railway environment variable CORS_ORIGINS is IGNORED - we hardcode "*" to ensure compatibility
-# In production, if stricter CORS is needed, use a reverse proxy or API gateway
+# Note: allow_credentials=False is required when allow_origins=["*"]
+# Authorization header works fine with allow_credentials=False (it's not a cookie/credential)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Hardcoded to always allow all origins
-    allow_credentials=False,  # Cannot use credentials with wildcard
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_origins=["*"],  # Hardcoded to always allow all origins for flexibility
+    allow_credentials=False,  # Must be False when using allow_origins=["*"]
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers including Authorization, Content-Type, etc.
+    expose_headers=["*"],  # Expose all response headers to frontend
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
+
+# Logging middleware (added after CORS so CORS handles preflight first)
+app.add_middleware(LoggingMiddleware)
 
 # Gzip compression middleware (reduce bandwidth)
 app.add_middleware(GZipMiddleware)

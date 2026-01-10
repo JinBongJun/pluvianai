@@ -16,8 +16,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.requests_per_minute = requests_per_minute
     
     async def dispatch(self, request: Request, call_next):
-        # Skip rate limiting for health checks
-        if request.url.path in ["/health", "/"]:
+        # Skip rate limiting for health checks and OPTIONS requests (CORS preflight)
+        if request.url.path in ["/health", "/"] or request.method == "OPTIONS":
             return await call_next(request)
         
         # Get client identifier (IP or user ID)
