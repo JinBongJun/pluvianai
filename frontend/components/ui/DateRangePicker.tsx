@@ -101,7 +101,9 @@ export default function DateRangePicker({
       // Position directly below the button, aligned to the left edge
       // Use button's actual position for precise alignment
       let left = buttonRect.left; // Align left edge of dropdown with left edge of button
-      let top = buttonRect.bottom; // Position directly below button (no gap - dropdown top edge touches button bottom edge)
+      // Position dropdown right below button with a small gap to avoid overlap
+      // Add 4px gap to ensure dropdown doesn't visually overlap with button border
+      let top = buttonRect.bottom + 4; // Position directly below button with minimal gap
       
       // Adjust if dropdown would go off right edge (but keep left alignment if possible)
       if (left + dropdownWidth > viewportWidth - 8) {
@@ -498,7 +500,7 @@ export default function DateRangePicker({
       {typeof window !== 'undefined' && isOpen && dropdownPosition && createPortal(
         <div 
           data-datepicker-dropdown
-          className="fixed bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden animate-fade-in mt-0" 
+          className="fixed bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden animate-fade-in" 
           onClick={(e) => {
             e.stopPropagation();
             e.preventDefault();
@@ -514,7 +516,6 @@ export default function DateRangePicker({
             width: '700px',
             zIndex: 999999,
             pointerEvents: 'auto',
-            marginTop: 0,
           }}
         >
           <div className="flex">
