@@ -101,7 +101,7 @@ export default function DateRangePicker({
       // Position directly below the button, aligned to the left edge
       // Use button's actual position for precise alignment
       let left = buttonRect.left; // Align left edge of dropdown with left edge of button
-      let top = buttonRect.bottom; // Position directly below button (no gap)
+      let top = buttonRect.bottom; // Position directly below button (no gap - dropdown top edge touches button bottom edge)
       
       // Adjust if dropdown would go off right edge (but keep left alignment if possible)
       if (left + dropdownWidth > viewportWidth - 8) {
@@ -153,10 +153,16 @@ export default function DateRangePicker({
         setSelecting('from');
       }
       
-      // Calculate initial position with a small delay to ensure DOM is ready
-      const timer = setTimeout(() => {
-        calculateDropdownPosition();
-      }, 0);
+      // Calculate initial position - use requestAnimationFrame to ensure DOM is fully rendered
+      const calculatePosition = () => {
+        requestAnimationFrame(() => {
+          calculateDropdownPosition();
+        });
+      };
+      
+      // Calculate immediately and after a short delay to ensure button position is stable
+      calculatePosition();
+      const timer = setTimeout(calculatePosition, 10);
       
       // Recalculate on scroll and resize
       const handleScroll = () => {
@@ -492,7 +498,7 @@ export default function DateRangePicker({
       {typeof window !== 'undefined' && isOpen && dropdownPosition && createPortal(
         <div 
           data-datepicker-dropdown
-          className="fixed bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden animate-fade-in" 
+          className="fixed bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden animate-fade-in mt-0" 
           onClick={(e) => {
             e.stopPropagation();
             e.preventDefault();
@@ -508,6 +514,7 @@ export default function DateRangePicker({
             width: '700px',
             zIndex: 999999,
             pointerEvents: 'auto',
+            marginTop: 0,
           }}
         >
           <div className="flex">
