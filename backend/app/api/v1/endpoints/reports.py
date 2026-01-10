@@ -686,6 +686,17 @@ def _add_executive_report_content(elements: list, report_data: dict, heading_sty
         elements.append(Paragraph("Actionable recommendations based on performance analysis and trends.", intro_style))
         elements.append(Spacer(1, 0.1*inch))
         
+        # Create a style for recommendation text that allows wrapping
+        rec_text_style = ParagraphStyle(
+            'RecText',
+            parent=normal_style,
+            fontSize=8,
+            textColor=colors.HexColor('#333333'),
+            leading=10,  # Line spacing
+            spaceAfter=4,
+            wordWrap='LTR',  # Enable word wrapping
+        )
+        
         recs_data = [['Priority', 'Category', 'Recommendation']]
         valid_recs = []
         for rec in recommendations:
@@ -696,19 +707,31 @@ def _add_executive_report_content(elements: list, report_data: dict, heading_sty
             rec_type = str(rec.get('type', 'info')).replace('_', ' ').title()
             title = str(rec.get('title', '')) or 'No title'
             description = str(rec.get('description', '')) or 'No description'
+            
             # Escape any special characters and create safe HTML
             title_escaped = title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
             description_escaped = description.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('\n', '<br/>')
+            
+            # Truncate very long descriptions to prevent overflow
+            max_desc_length = 200
+            if len(description_escaped) > max_desc_length:
+                description_escaped = description_escaped[:max_desc_length] + "..."
+            
             full_text = f"<b>{title_escaped}</b><br/>{description_escaped}"
+            
+            # Use Paragraph for automatic text wrapping
+            rec_paragraph = Paragraph(full_text, rec_text_style)
             
             recs_data.append([
                 priority,
                 rec_type,
-                full_text
+                rec_paragraph  # Use Paragraph instead of plain string
             ])
         
         if len(recs_data) > 1:  # More than just header
-            recs_table = Table(recs_data, colWidths=[1*inch, 1.2*inch, 4.3*inch])
+            # A4 page width: 8.27 inch, margins: 2*1 inch = 2 inch, usable: ~6.27 inch
+            # Adjust column widths to fit and allow text wrapping
+            recs_table = Table(recs_data, colWidths=[0.9*inch, 1.1*inch, 4.0*inch])
             
             # Build table style with conditional priority colors
             table_style = [
@@ -721,16 +744,18 @@ def _add_executive_report_content(elements: list, report_data: dict, heading_sty
                 ('FONTSIZE', (0, 0), (-1, 0), 10),
                 ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
                 ('FONTSIZE', (0, 1), (1, -1), 9),
-                ('FONTSIZE', (2, 1), (2, -1), 9),
+                ('FONTSIZE', (2, 1), (2, -1), 8),  # Smaller font for recommendation text
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
                 ('LINEBELOW', (0, 0), (-1, 0), 3, colors.HexColor('#1a1a1a')),
                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
-                ('TOPPADDING', (0, 1), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 1), (-1, -1), 10),
-                ('LEFTPADDING', (0, 1), (-1, -1), 8),
-                ('RIGHTPADDING', (0, 1), (-1, -1), 8),
+                ('TOPPADDING', (0, 1), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+                ('LEFTPADDING', (0, 1), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 1), (-1, -1), 6),
                 ('BACKGROUND', (0, 1), (0, -1), colors.HexColor('#f5f5f5')),
                 ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+                # Enable word wrapping for recommendation column
+                ('WORDWRAP', (2, 1), (2, -1), True),
             ]
             
             # Add conditional text colors for priority levels (using valid_recs index)

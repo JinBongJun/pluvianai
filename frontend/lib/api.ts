@@ -495,7 +495,12 @@ export const reportsAPI = {
       
       // Check if response is an error (error responses are also blobs when responseType is 'blob')
       const contentType = response.headers['content-type'] || '';
-      if (contentType.includes('application/json') || response.status >= 400) {
+      const format = params.format || 'json';
+      
+      // For JSON format, application/json is expected, not an error
+      if (format === 'json' && contentType.includes('application/json') && response.status < 400) {
+        // This is a valid JSON response, proceed with download
+      } else if (contentType.includes('application/json') && response.status >= 400) {
         // This is an error response, parse it
         const blob = response.data instanceof Blob ? response.data : new Blob([response.data]);
         const text = await blob.text();
@@ -511,8 +516,7 @@ export const reportsAPI = {
         }
       }
       
-      // Determine content type
-      const format = params.format || 'json';
+      // Determine content type (format was already determined above)
       const fileContentType = format === 'pdf' ? 'application/pdf' : 'application/json';
       
       // Create blob with correct MIME type
