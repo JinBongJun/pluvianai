@@ -19,7 +19,331 @@ from app.models.drift_detection import DriftDetection
 import json
 import io
 
+try:
+    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+
 router = APIRouter()
+
+
+def generate_pdf_report(report_data: dict, buffer: io.BytesIO) -> None:
+    """Generate PDF report from report data"""
+    try:
+        # Create PDF document
+        doc = SimpleDocTemplate(buffer, pagesize=A4, 
+                               rightMargin=72, leftMargin=72,
+                               topMargin=72, bottomMargin=18)
+    
+    # Container for the 'Flowable' objects
+    elements = []
+    
+    # Styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#1a1a1a'),
+        spaceAfter=30,
+        alignment=TA_CENTER
+    )
+    
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=16,
+        textColor=colors.HexColor('#2c3e50'),
+        spaceAfter=12,
+        spaceBefore=20
+    )
+    
+    normal_style = styles['Normal']
+    normal_style.fontSize = 10
+    normal_style.textColor = colors.HexColor('#333333')
+    
+    # Title
+    title_text = f"AgentGuard Report - {report_data.get('project_name', 'Project')}"
+    elements.append(Paragraph(title_text, title_style))
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # Report metadata
+    metadata_data = [
+        ['Generated At:', datetime.fromisoformat(report_data['generated_at'].replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S UTC')],
+        ['Template:', report_data.get('template', 'standard').upper()],
+    ]
+    
+    if report_data.get('period', {}).get('from'):
+        period_from = datetime.fromisoformat(report_data['period']['from'].replace('Z', '+00:00')).strftime('%Y-%m-%d')
+        period_to = datetime.fromisoformat(report_data['period']['to'].replace('Z', '+00:00')).strftime('%Y-%m-%d') if report_data.get('period', {}).get('to') else 'N/A'
+        metadata_data.append(['Period:', f"{period_from} to {period_to}"])
+    
+    metadata_table = Table(metadata_data, colWidths=[2*inch, 4*inch])
+    metadata_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f0f0f0')),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#333333')),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#cccccc')),
+    ]))
+    elements.append(metadata_table)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Report content based on template type
+    report_type = report_data.get('type', 'standard')
+    
+    if report_type == 'standard':
+        _add_standard_report_content(elements, report_data, heading_style, normal_style)
+    elif report_type == 'detailed':
+        _add_detailed_report_content(elements, report_data, heading_style, normal_style)
+    elif report_type == 'executive':
+        _add_executive_report_content(elements, report_data, heading_style, normal_style)
+    
+        # Build PDF
+        doc.build(elements)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise
+
+
+def _add_standard_report_content(elements: list, report_data: dict, heading_style, normal_style):
+    """Add standard report content"""
+    summary = report_data.get('summary', {})
+    
+    elements.append(Paragraph("Summary", heading_style))
+    
+    # Summary metrics
+    summary_data = [
+        ['Metric', 'Value'],
+        ['Total API Calls', f"{summary.get('total_api_calls', 0):,}"],
+        ['Success Rate', f"{summary.get('success_rate', 0):.2f}%"],
+        ['Total Cost', f"${summary.get('total_cost', 0):.2f}"],
+    ]
+    
+    quality_scores = summary.get('quality_scores', {})
+    if quality_scores.get('average') is not None:
+        summary_data.append(['Average Quality Score', f"{quality_scores.get('average', 0):.2f}%"])
+    
+    drift_detections = summary.get('drift_detections', {})
+    summary_data.append(['Total Drift Detections', f"{drift_detections.get('total', 0)}"])
+    summary_data.append(['High Severity Drifts', f"{drift_detections.get('high_severity', 0)}"])
+    
+    summary_table = Table(summary_data, colWidths=[3*inch, 3*inch])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a90e2')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f9f9f9')),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+    ]))
+    elements.append(summary_table)
+
+
+def _add_detailed_report_content(elements: list, report_data: dict, heading_style, normal_style):
+    """Add detailed report content"""
+    summary = report_data.get('summary', {})
+    breakdown = report_data.get('breakdown', {})
+    
+    # Summary section
+    _add_standard_report_content(elements, report_data, heading_style, normal_style)
+    elements.append(PageBreak())
+    
+    # Top Models
+    if breakdown.get('by_model', {}).get('top_models'):
+        elements.append(Paragraph("Top Models by Usage", heading_style))
+        top_models = breakdown['by_model']['top_models'][:10]  # Limit to top 10
+        
+        models_data = [['Model', 'Calls', 'Input Tokens', 'Output Tokens', 'Avg Latency (s)', 'Cost']]
+        for model in top_models:
+            avg_latency = (model.get('avg_latency_ms', 0) / 1000) if model.get('avg_latency_ms') else 0
+            cost = model.get('cost', 0) if model.get('cost') is not None else 0
+            models_data.append([
+                model.get('model', 'N/A'),
+                f"{model.get('calls', 0):,}",
+                f"{model.get('input_tokens', 0):,}",
+                f"{model.get('output_tokens', 0):,}",
+                f"{avg_latency:.2f}",
+                f"${cost:.2f}"
+            ])
+        
+        models_table = Table(models_data, colWidths=[1.5*inch, 0.8*inch, 0.8*inch, 0.8*inch, 0.8*inch, 0.8*inch])
+        models_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a90e2')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+        ]))
+        elements.append(models_table)
+        elements.append(Spacer(1, 0.2*inch))
+    
+    # Provider Breakdown
+    if breakdown.get('by_provider'):
+        elements.append(Paragraph("Usage by Provider", heading_style))
+        providers_data = [['Provider', 'Calls', 'Input Tokens', 'Output Tokens']]
+        for provider, stats in breakdown['by_provider'].items():
+            providers_data.append([
+                provider.capitalize(),
+                f"{stats.get('calls', 0):,}",
+                f"{stats.get('input_tokens', 0):,}",
+                f"{stats.get('output_tokens', 0):,}"
+            ])
+        
+        providers_table = Table(providers_data, colWidths=[2*inch, 1.5*inch, 1.5*inch, 1.5*inch])
+        providers_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a90e2')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+        ]))
+        elements.append(providers_table)
+        elements.append(Spacer(1, 0.2*inch))
+
+
+def _add_executive_report_content(elements: list, report_data: dict, heading_style, normal_style):
+    """Add executive report content"""
+    key_metrics = report_data.get('key_metrics', {})
+    top_performers = report_data.get('top_performers', [])
+    trends = report_data.get('trends', {})
+    recommendations = report_data.get('recommendations', [])
+    
+    elements.append(Paragraph("Key Performance Indicators", heading_style))
+    
+    # KPIs
+    kpi_data = [
+        ['KPI', 'Value'],
+        ['Total API Calls', f"{key_metrics.get('total_api_calls', 0):,}"],
+        ['Success Rate', f"{key_metrics.get('success_rate', 0):.2f}%"],
+        ['Total Cost', f"${key_metrics.get('total_cost', 0):.2f}"],
+        ['Avg Daily Calls', f"{key_metrics.get('avg_daily_calls', 0):.2f}"],
+        ['Avg Daily Cost', f"${key_metrics.get('avg_daily_cost', 0):.2f}"],
+    ]
+    
+    if key_metrics.get('avg_quality_score') is not None:
+        kpi_data.append(['Avg Quality Score', f"{key_metrics.get('avg_quality_score', 0):.2f}%"])
+    kpi_data.append(['Critical Issues', f"{key_metrics.get('critical_issues', 0)}"])
+    
+    kpi_table = Table(kpi_data, colWidths=[3*inch, 3*inch])
+    kpi_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f9f9f9')),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+    ]))
+    elements.append(kpi_table)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Trends
+    if trends:
+        elements.append(Paragraph("Trends", heading_style))
+        for trend_key, trend_data in trends.items():
+            trend_name = trend_key.replace('_', ' ').title()
+            change_pct = trend_data.get('change_percentage', 0)
+            direction = trend_data.get('direction', 'stable')
+            
+            trend_text = f"{trend_name}: {direction.capitalize()} by {abs(change_pct):.2f}% "
+            trend_text += f"(First Half: {trend_data.get('first_half', 0):,}, "
+            trend_text += f"Second Half: {trend_data.get('second_half', 0):,})"
+            elements.append(Paragraph(trend_text, normal_style))
+            elements.append(Spacer(1, 0.1*inch))
+    
+    # Top Performers
+    if top_performers:
+        elements.append(Spacer(1, 0.2*inch))
+        elements.append(Paragraph("Top Performing Models", heading_style))
+        performers_data = [['Model', 'Calls', 'Avg Latency (s)']]
+        for model in top_performers[:5]:
+            avg_latency = (model.get('avg_latency_ms', 0) / 1000) if model.get('avg_latency_ms') else 0
+            performers_data.append([
+                model.get('model', 'N/A'),
+                f"{model.get('calls', 0):,}",
+                f"{avg_latency:.2f}"
+            ])
+        
+        performers_table = Table(performers_data, colWidths=[4*inch, 1*inch, 1*inch])
+        performers_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a90e2')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
+        ]))
+        elements.append(performers_table)
+    
+    # Recommendations
+    if recommendations:
+        elements.append(Spacer(1, 0.3*inch))
+        elements.append(Paragraph("Recommendations", heading_style))
+        for rec in recommendations:
+            rec_type = rec.get('type', 'info')
+            priority = rec.get('priority', 'medium')
+            title = rec.get('title', '')
+            description = rec.get('description', '')
+            
+            # Color based on type
+            if rec_type == 'critical':
+                bg_color = colors.HexColor('#fee')
+                text_color = colors.HexColor('#c33')
+            elif rec_type == 'warning':
+                bg_color = colors.HexColor('#ffe')
+                text_color = colors.HexColor('#cc3')
+            elif rec_type == 'success':
+                bg_color = colors.HexColor('#efe')
+                text_color = colors.HexColor('#3c3')
+            else:
+                bg_color = colors.HexColor('#eef')
+                text_color = colors.HexColor('#33c')
+            
+            rec_style = ParagraphStyle(
+                'Recommendation',
+                parent=normal_style,
+                backColor=bg_color,
+                textColor=text_color,
+                borderPadding=8,
+                leftIndent=10,
+                rightIndent=10
+            )
+            
+            rec_text = f"<b>{title}</b> ({priority.upper()} Priority)<br/>{description}"
+            elements.append(Paragraph(rec_text, rec_style))
+            elements.append(Spacer(1, 0.15*inch))
 
 
 class ReportRequest(BaseModel):
@@ -483,11 +807,35 @@ async def download_report(
                 "Content-Disposition": f"attachment; filename=report-{project_id}-{datetime.now().strftime('%Y%m%d')}.json"
             }
         )
+    elif format == "pdf":
+        if not REPORTLAB_AVAILABLE:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="PDF generation library (reportlab) is not installed. Please install it using: pip install reportlab"
+            )
+        
+        try:
+            # Generate PDF
+            pdf_buffer = io.BytesIO()
+            generate_pdf_report(report_data, pdf_buffer)
+            pdf_buffer.seek(0)
+            
+            # Return as PDF file
+            return Response(
+                content=pdf_buffer.getvalue(),
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f"attachment; filename=report-{project_id}-{template}-{datetime.now().strftime('%Y%m%d')}.pdf"
+                }
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to generate PDF: {str(e)}"
+            )
     else:
-        # PDF generation would require additional library like reportlab or weasyprint
-        # For now, return JSON
         raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="PDF format not yet implemented"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported format: {format}. Supported formats: json, pdf"
         )
 

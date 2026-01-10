@@ -492,12 +492,33 @@ export const reportsAPI = {
       responseType: 'blob',
     });
     
-    // Create download link
-    const url = window.URL.createObjectURL(new Blob([response.data]));
+    // Determine content type
+    const format = params.format || 'json';
+    const contentType = format === 'pdf' ? 'application/pdf' : 'application/json';
+    
+    // Create blob with correct MIME type
+    const blob = new Blob([response.data], { type: contentType });
+    const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    const format = params.format || 'json';
-    link.setAttribute('download', `report-${projectId}-${new Date().toISOString().split('T')[0]}.${format}`);
+    
+    // Try to extract filename from Content-Disposition header
+    let filename = `report-${projectId}-${params.template || 'standard'}-${new Date().toISOString().split('T')[0]}.${format}`;
+    const contentDisposition = response.headers['content-disposition'];
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      if (filenameMatch && filenameMatch[1]) {
+        filename = filenameMatch[1].replace(/['"]/g, '');
+        // Decode URI if needed
+        try {
+          filename = decodeURIComponent(filename);
+        } catch (e) {
+          // If decoding fails, use as is
+        }
+      }
+    }
+    
+    link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
     link.remove();

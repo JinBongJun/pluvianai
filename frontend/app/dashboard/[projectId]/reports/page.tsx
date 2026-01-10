@@ -137,10 +137,9 @@ export default function ReportsPage() {
                     variant="secondary"
                     onClick={() => handleDownload('pdf')}
                     className="flex items-center gap-2"
-                    disabled
                   >
                     <Download className="h-4 w-4" />
-                    Download PDF (Coming Soon)
+                    Download PDF
                   </Button>
                 </>
               )}
