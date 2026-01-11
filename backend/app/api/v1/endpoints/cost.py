@@ -3,7 +3,7 @@ Cost analysis endpoints
 """
 from typing import List
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.core.database import get_db
@@ -89,6 +89,7 @@ async def detect_cost_anomalies(
     db: Session = Depends(get_db)
 ):
     """Detect cost anomalies for a project"""
+    from app.models.alert import Alert
     from app.services.alert_service import AlertService
     from app.services.webhook_service import webhook_service
     

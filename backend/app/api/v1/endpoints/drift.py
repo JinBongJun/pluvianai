@@ -3,7 +3,7 @@ Drift detection endpoints
 """
 from typing import List
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from pydantic import BaseModel
@@ -91,10 +91,12 @@ async def detect_drift(
     ).all()
     
     # Send alerts and trigger webhooks in background tasks
+    from app.core.database import SessionLocal
+    
     alert_service = AlertService()
     for alert in alerts:
         async def send_alert_task(alert_id: int):
-            db_session = next(get_db())
+            db_session = SessionLocal()
             try:
                 alert = db_session.query(Alert).filter(Alert.id == alert_id).first()
                 if alert:
