@@ -6,6 +6,7 @@ import Button from '@/components/ui/Button';
 import { projectsAPI, qualityAPI, costAPI, apiCallsAPI } from '@/lib/api';
 import QualityChart from '@/components/QualityChart';
 import DriftChart from '@/components/DriftChart';
+import CostChart from '@/components/CostChart';
 import StatsCard from '@/components/StatsCard';
 import MemberList from '@/components/MemberList';
 import ProjectSettings from '@/components/ProjectSettings';
@@ -175,6 +176,24 @@ export default function ProjectDetailPage() {
                 <QualityChart projectId={projectId} />
               </div>
 
+              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-purple">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-white">Cost Analysis</h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push(`/dashboard/${projectId}/cost`)}
+                    className="text-purple-400 hover:text-purple-300"
+                  >
+                    View All
+                  </Button>
+                </div>
+                <CostChart projectId={projectId} days={7} />
+              </div>
+            </div>
+
+            {/* Additional Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-purple">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-white">Drift Detections</h2>
