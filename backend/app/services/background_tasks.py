@@ -8,6 +8,7 @@ from app.core.database import SessionLocal
 from app.models.api_call import APICall
 from app.services.data_normalizer import DataNormalizer
 from app.utils.compression import optimize_api_call_data, compress_json
+from app.core.logging_config import logger
 
 
 class BackgroundTaskService:
@@ -25,7 +26,8 @@ class BackgroundTaskService:
         latency_ms: float,
         status_code: int,
         agent_name: Optional[str] = None,
-        chain_id: Optional[str] = None
+        chain_id: Optional[str] = None,
+        api_key: Optional[str] = None
     ):
         """
         Save API call to database asynchronously
@@ -33,7 +35,7 @@ class BackgroundTaskService:
         """
         # Run in background thread to avoid blocking
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
+        api_call_id = await loop.run_in_executor(
             None,
             self._save_api_call_sync,
             project_id,
@@ -45,6 +47,20 @@ class BackgroundTaskService:
             agent_name,
             chain_id
         )
+        
+        # Trigger Shadow Routing in background (fire and forget)
+        if api_call_id and api_key:
+            try:
+                asyncio.create_task(
+                    self._trigger_shadow_routing_async(
+                        project_id,
+                        api_call_id,
+                        request_data,
+                        api_key
+                    )
+                )
+            except Exception as e:
+                logger.error(f"Error triggering shadow routing: {str(e)}")
     
     def _save_api_call_sync(
         self,
@@ -56,8 +72,8 @@ class BackgroundTaskService:
         status_code: int,
         agent_name: Optional[str],
         chain_id: Optional[str]
-    ):
-        """Synchronous version for executor"""
+    ) -> Optional[int]:
+        """Synchronous version for executor - returns API call ID"""
         db: Session = SessionLocal()
         try:
             # Optimize data before saving
@@ -113,12 +129,51 @@ class BackgroundTaskService:
                 print(f"Error tracking usage: {e}")
             
             db.commit()
+            db.refresh(api_call)
+            return api_call.id
         except Exception as e:
             db.rollback()
             # Log error but don't fail
-            print(f"Error saving API call in background: {e}")
+            logger.error(f"Error saving API call in background: {e}")
+            return None
         finally:
             db.close()
+    
+    async def _trigger_shadow_routing_async(
+        self,
+        project_id: int,
+        api_call_id: int,
+        request_data: Dict[str, Any],
+        api_key: str
+    ):
+        """Trigger Shadow Routing asynchronously"""
+        try:
+            from app.services.shadow_routing_service import ShadowRoutingService
+            from app.models.project import Project
+            
+            db: Session = SessionLocal()
+            try:
+                # Get project and API call
+                project = db.query(Project).filter(Project.id == project_id).first()
+                api_call = db.query(APICall).filter(APICall.id == api_call_id).first()
+                
+                if not project or not api_call:
+                    return
+                
+                # Only trigger for successful API calls
+                if api_call.status_code and 200 <= api_call.status_code < 300:
+                    shadow_service = ShadowRoutingService()
+                    await shadow_service.execute_shadow_routing(
+                        project=project,
+                        primary_api_call=api_call,
+                        request_data=request_data,
+                        api_key=api_key,
+                        db=db
+                    )
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error in shadow routing: {str(e)}")
 
 
 # Global instance

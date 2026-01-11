@@ -102,6 +102,12 @@ class APIHookMiddleware(BaseHTTPMiddleware):
         agent_name = request.headers.get("X-Agent-Name")
         chain_id = request.headers.get("X-Chain-ID")
         
+        # Get API key for Shadow Routing
+        api_key = None
+        auth_header = request.headers.get("Authorization")
+        if auth_header:
+            api_key = auth_header.replace("Bearer ", "").replace("Api-Key ", "")
+        
         # Fire and forget - don't wait for completion
         try:
             asyncio.create_task(
@@ -113,12 +119,14 @@ class APIHookMiddleware(BaseHTTPMiddleware):
                     latency_ms=latency_ms,
                     status_code=status_code,
                     agent_name=agent_name,
-                    chain_id=chain_id
+                    chain_id=chain_id,
+                    api_key=api_key
                 )
             )
         except Exception as e:
             # Log error but don't fail the request
-            print(f"Error scheduling API call save: {e}")
+            from app.core.logging_config import logger
+            logger.error(f"Error scheduling API call save: {e}")
         
         return response
 
