@@ -26,8 +26,8 @@ export default function Toast({ message, type = 'info', onClose, duration = 3000
   }[type];
 
   return (
-    <div className="fixed top-4 right-4 z-[9999] animate-slide-in">
-      <div className={`${styles} border-2 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 min-w-[320px] max-w-[500px] backdrop-blur-sm`}>
+    <div className="fixed top-4 right-4 z-[99999] animate-slide-in" style={{ pointerEvents: 'auto' }}>
+      <div className={`${styles} border-2 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 min-w-[320px] max-w-[500px]`}>
         <span className="font-medium flex-1">{message}</span>
         <button
           onClick={onClose}
