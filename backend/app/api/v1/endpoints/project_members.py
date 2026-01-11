@@ -90,7 +90,7 @@ async def add_project_member(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail=f"User with email '{member_data.user_email}' not found. The user must have an existing AgentGuard account with this email address."
         )
     
     # Check if user is already owner
