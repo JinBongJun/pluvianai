@@ -2,10 +2,14 @@
 Alert service for notifications.
 """
 import httpx
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from app.models.alert import Alert
 from app.core.config import settings
+from app.core.logging_config import logger
 
 
 class AlertService:
