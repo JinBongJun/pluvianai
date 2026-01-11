@@ -84,10 +84,14 @@ async def get_cost_analysis(
 @router.post("/detect-anomalies")
 async def detect_cost_anomalies(
     project_id: int,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Detect cost anomalies for a project"""
+    from app.services.alert_service import AlertService
+    from app.services.webhook_service import webhook_service
+    
     # Verify project access (any member can view cost)
     project = check_project_access(project_id, current_user, db)
     
@@ -96,6 +100,26 @@ async def detect_cost_anomalies(
         project_id=project_id,
         db=db
     )
+    
+    # Send alerts and trigger webhooks in background
+    from app.core.database import SessionLocal
+    
+    alert_service = AlertService()
+    for alert in alerts:
+        async def send_alert_task(alert_id: int):
+            db_session = SessionLocal()
+            try:
+                alert = db_session.query(Alert).filter(Alert.id == alert_id).first()
+                if alert:
+                    await alert_service.send_alert(alert, db=db_session)
+                    await webhook_service.trigger_alert_webhooks(alert, db_session)
+            except Exception as e:
+                from app.core.logging_config import logger
+                logger.error(f"Error sending alert for cost anomaly: {str(e)}")
+            finally:
+                db_session.close()
+        
+        background_tasks.add_task(send_alert_task, alert.id)
     
     return {"alerts_created": len(alerts), "alerts": alerts}
 

@@ -26,7 +26,8 @@ from app.middleware.logging_middleware import LoggingMiddleware
 # Import all models to ensure they are registered with Base
 from app.models import (
     User, Project, ProjectMember, APIKey, APICall,
-    QualityScore, DriftDetection, Alert, Subscription, Usage
+    QualityScore, DriftDetection, Alert, Subscription, Usage,
+    NotificationSettings
 )
 
 # Create database tables

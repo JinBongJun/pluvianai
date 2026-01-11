@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
     
+    # Email configuration (SMTP)
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_USE_TLS: bool = True
+    EMAIL_FROM: Optional[str] = None
+    EMAIL_FROM_NAME: str = "AgentGuard"
+    
+    # SendGrid (alternative to SMTP)
+    SENDGRID_API_KEY: Optional[str] = None
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

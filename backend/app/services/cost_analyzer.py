@@ -260,9 +260,10 @@ class CostAnalyzer:
                     )
                     alerts.append(alert)
         
-        # Save alerts
+        # Save alerts (alert sending and webhook triggering handled by API endpoint)
         for alert in alerts:
             db.add(alert)
+        
         db.commit()
         
         return alerts

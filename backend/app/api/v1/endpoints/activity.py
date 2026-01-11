@@ -5,7 +5,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, and_
+from sqlalchemy import desc, and_, func
 from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -30,7 +30,15 @@ class ActivityLogResponse(BaseModel):
         from_attributes = True
 
 
-@router.get("", response_model=List[ActivityLogResponse])
+class ActivityLogListResponse(BaseModel):
+    """Paginated activity log response schema"""
+    items: List[ActivityLogResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+@router.get("", response_model=ActivityLogListResponse)
 async def list_activity_logs(
     project_id: Optional[int] = Query(None, description="Optional project ID filter"),
     activity_type: Optional[str] = Query(None, description="Filter by activity type"),
@@ -45,32 +53,48 @@ async def list_activity_logs(
     end_date = datetime.utcnow()
     start_date = end_date - timedelta(days=days)
     
-    # Build query - only show user's own activities
-    query = db.query(ActivityLog).filter(
+    # Build base query - only show user's own activities
+    base_query = db.query(ActivityLog).filter(
         ActivityLog.user_id == current_user.id,
         ActivityLog.created_at >= start_date,
         ActivityLog.created_at <= end_date
     )
     
-    # Apply filters
+    # Apply filters for counting
+    count_query = base_query
     if project_id:
-        query = query.filter(ActivityLog.project_id == project_id)
+        count_query = count_query.filter(ActivityLog.project_id == project_id)
     if activity_type:
-        query = query.filter(ActivityLog.activity_type == activity_type)
+        count_query = count_query.filter(ActivityLog.activity_type == activity_type)
+    
+    # Get total count
+    total = count_query.count()
+    
+    # Apply filters for data query
+    data_query = base_query
+    if project_id:
+        data_query = data_query.filter(ActivityLog.project_id == project_id)
+    if activity_type:
+        data_query = data_query.filter(ActivityLog.activity_type == activity_type)
     
     # Order by created_at descending and paginate
-    logs = query.order_by(desc(ActivityLog.created_at)).offset(offset).limit(limit).all()
+    logs = data_query.order_by(desc(ActivityLog.created_at)).offset(offset).limit(limit).all()
     
-    return [
-        ActivityLogResponse(
-            id=log.id,
-            user_id=log.user_id,
-            project_id=log.project_id,
-            activity_type=log.activity_type,
-            action=log.action,
-            description=log.description,
-            activity_data=log.activity_data,
-            created_at=log.created_at.isoformat()
-        )
-        for log in logs
-    ]
+    return ActivityLogListResponse(
+        items=[
+            ActivityLogResponse(
+                id=log.id,
+                user_id=log.user_id,
+                project_id=log.project_id,
+                activity_type=log.activity_type,
+                action=log.action,
+                description=log.description,
+                activity_data=log.activity_data,
+                created_at=log.created_at.isoformat()
+            )
+            for log in logs
+        ],
+        total=total,
+        limit=limit,
+        offset=offset
+    )

@@ -19,7 +19,8 @@ class AlertService:
     async def send_alert(
         self,
         alert: Alert,
-        channels: Optional[List[str]] = None
+        channels: Optional[List[str]] = None,
+        db: Optional[Session] = None
     ) -> Dict[str, Any]:
         """
         Send alert through specified channels
@@ -27,6 +28,7 @@ class AlertService:
         Args:
             alert: Alert object to send
             channels: List of channels to use (slack, discord, email)
+            db: Database session (required for email)
         
         Returns:
             Dictionary with send status for each channel
@@ -43,7 +45,7 @@ class AlertService:
                 elif channel == "discord":
                     result = await self._send_discord(alert)
                 elif channel == "email":
-                    result = await self._send_email(alert)
+                    result = await self._send_email(alert, db)
                 else:
                     result = {"status": "error", "message": f"Unknown channel: {channel}"}
                 
@@ -144,21 +146,198 @@ class AlertService:
         
         return {"status": "sent", "channel": "discord"}
     
-    async def _send_email(self, alert: Alert) -> Dict[str, Any]:
+    async def _send_email(self, alert: Alert, db: Optional[Session] = None) -> Dict[str, Any]:
         """Send alert via email"""
-        # Email service implementation would go here
-        # For MVP, we'll just log it
         if not self.email_enabled:
             return {"status": "skipped", "message": "Email not enabled"}
         
-        # TODO: Implement email sending
-        # This would typically use a service like SendGrid, AWS SES, etc.
-        return {"status": "not_implemented", "message": "Email sending not yet implemented"}
+        if not db:
+            return {"status": "error", "message": "Database session required"}
+        
+        # Get user email from project
+        from app.models.project import Project
+        project = db.query(Project).filter(Project.id == alert.project_id).first()
+        if not project:
+            return {"status": "error", "message": "Project not found"}
+        
+        from app.models.user import User
+        user = db.query(User).filter(User.id == project.owner_id).first()
+        if not user or not user.email:
+            return {"status": "error", "message": "User email not found"}
+        
+        recipient_email = user.email
+        
+        # Try SendGrid first, then SMTP
+        if settings.SENDGRID_API_KEY:
+            return await self._send_email_sendgrid(alert, recipient_email)
+        elif settings.SMTP_HOST:
+            return await self._send_email_smtp(alert, recipient_email)
+        else:
+            return {"status": "error", "message": "No email service configured"}
+    
+    async def _send_email_sendgrid(self, alert: Alert, recipient_email: str) -> Dict[str, Any]:
+        """Send email using SendGrid"""
+        try:
+            import sendgrid
+            from sendgrid.helpers.mail import Mail, Email, To, Content
+            
+            sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
+            
+            # Determine severity color
+            severity_colors = {
+                "critical": "#FF0000",
+                "high": "#FF8800",
+                "medium": "#FFBB00",
+                "low": "#888888",
+            }
+            color = severity_colors.get(alert.severity, "#888888")
+            
+            # Create HTML email
+            html_content = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: {color}; border-bottom: 2px solid {color}; padding-bottom: 10px;">
+                        {alert.title}
+                    </h2>
+                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                        <p><strong>Alert Type:</strong> {alert.alert_type}</p>
+                        <p><strong>Severity:</strong> {alert.severity.upper()}</p>
+                        <p><strong>Project ID:</strong> {alert.project_id}</p>
+                    </div>
+                    <div style="margin: 20px 0;">
+                        <p>{alert.message}</p>
+                    </div>
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #888; font-size: 12px;">
+                        <p>This is an automated alert from AgentGuard.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            from_email = Email(settings.EMAIL_FROM or "noreply@agentguard.ai", settings.EMAIL_FROM_NAME)
+            to_email = To(recipient_email)
+            subject = f"[AgentGuard Alert] {alert.title}"
+            content = Content("text/html", html_content)
+            
+            message = Mail(from_email, to_email, subject, content)
+            
+            # Send email (run in executor since SendGrid SDK is sync)
+            import asyncio
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: sg.send(message)
+            )
+            
+            if response.status_code in [200, 202]:
+                logger.info(f"Email sent successfully to {recipient_email} via SendGrid")
+                return {"status": "sent", "channel": "email", "service": "sendgrid"}
+            else:
+                logger.error(f"SendGrid API error: {response.status_code}")
+                return {"status": "error", "message": f"SendGrid API error: {response.status_code}"}
+                
+        except ImportError:
+            return {"status": "error", "message": "SendGrid library not installed. Install with: pip install sendgrid"}
+        except Exception as e:
+            logger.error(f"Error sending email via SendGrid: {str(e)}")
+            return {"status": "error", "message": str(e)}
+    
+    async def _send_email_smtp(self, alert: Alert, recipient_email: str) -> Dict[str, Any]:
+        """Send email using SMTP"""
+        try:
+            # Determine severity color
+            severity_colors = {
+                "critical": "#FF0000",
+                "high": "#FF8800",
+                "medium": "#FFBB00",
+                "low": "#888888",
+            }
+            color = severity_colors.get(alert.severity, "#888888")
+            
+            # Create email message
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = f"[AgentGuard Alert] {alert.title}"
+            msg['From'] = f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM or 'noreply@agentguard.ai'}>"
+            msg['To'] = recipient_email
+            
+            # Plain text version
+            text_content = f"""
+{alert.title}
+
+Alert Type: {alert.alert_type}
+Severity: {alert.severity.upper()}
+Project ID: {alert.project_id}
+
+{alert.message}
+
+---
+This is an automated alert from AgentGuard.
+            """.strip()
+            
+            # HTML version
+            html_content = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: {color}; border-bottom: 2px solid {color}; padding-bottom: 10px;">
+                        {alert.title}
+                    </h2>
+                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                        <p><strong>Alert Type:</strong> {alert.alert_type}</p>
+                        <p><strong>Severity:</strong> {alert.severity.upper()}</p>
+                        <p><strong>Project ID:</strong> {alert.project_id}</p>
+                    </div>
+                    <div style="margin: 20px 0;">
+                        <p>{alert.message}</p>
+                    </div>
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #888; font-size: 12px;">
+                        <p>This is an automated alert from AgentGuard.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            part1 = MIMEText(text_content, 'plain')
+            part2 = MIMEText(html_content, 'html')
+            
+            msg.attach(part1)
+            msg.attach(part2)
+            
+            # Send email (run in executor since smtplib is sync)
+            import asyncio
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                self._send_smtp_sync,
+                msg,
+                recipient_email
+            )
+            
+            logger.info(f"Email sent successfully to {recipient_email} via SMTP")
+            return {"status": "sent", "channel": "email", "service": "smtp"}
+            
+        except Exception as e:
+            logger.error(f"Error sending email via SMTP: {str(e)}")
+            return {"status": "error", "message": str(e)}
+    
+    def _send_smtp_sync(self, msg: MIMEMultipart, recipient_email: str):
+        """Synchronous SMTP send for executor"""
+        server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
+        if settings.SMTP_USE_TLS:
+            server.starttls()
+        if settings.SMTP_USER and settings.SMTP_PASSWORD:
+            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+        server.send_message(msg)
+        server.quit()
     
     async def send_batch(
         self,
         alerts: List[Alert],
-        channels: Optional[List[str]] = None
+        channels: Optional[List[str]] = None,
+        db: Optional[Session] = None
     ) -> Dict[str, Any]:
         """
         Send multiple alerts in batch
@@ -176,7 +355,7 @@ class AlertService:
         
         for alert in alerts:
             try:
-                send_results = await self.send_alert(alert, channels)
+                send_results = await self.send_alert(alert, channels, db)
                 
                 # Check if at least one channel succeeded
                 any_sent = any(

@@ -53,6 +53,7 @@ class DetectDriftRequest(BaseModel):
 async def detect_drift(
     project_id: int,
     request: DetectDriftRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -76,6 +77,36 @@ async def detect_drift(
         agent_name=request.agent_name,
         db=db
     )
+    
+    # Send alerts and trigger webhooks for high/critical detections (in background)
+    from app.models.alert import Alert
+    from app.services.alert_service import AlertService
+    from app.services.webhook_service import webhook_service
+    
+    # Get alerts created by drift detection
+    alerts = db.query(Alert).filter(
+        Alert.project_id == project_id,
+        Alert.alert_type == "drift",
+        Alert.created_at >= datetime.utcnow() - timedelta(seconds=5)  # Recent alerts
+    ).all()
+    
+    # Send alerts and trigger webhooks in background tasks
+    alert_service = AlertService()
+    for alert in alerts:
+        async def send_alert_task(alert_id: int):
+            db_session = next(get_db())
+            try:
+                alert = db_session.query(Alert).filter(Alert.id == alert_id).first()
+                if alert:
+                    await alert_service.send_alert(alert, db=db_session)
+                    await webhook_service.trigger_alert_webhooks(alert, db_session)
+            except Exception as e:
+                from app.core.logging_config import logger
+                logger.error(f"Error sending alert for drift detection: {str(e)}")
+            finally:
+                db_session.close()
+        
+        background_tasks.add_task(send_alert_task, alert.id)
     
     return detections
 

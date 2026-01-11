@@ -442,7 +442,13 @@ export const exportAPI = {
 export const activityAPI = {
   list: async (params?: any) => {
     const response = await apiClient.get('/activity', { params });
-    return response.data;
+    // Backend returns {items: [], total: number, limit: number, offset: number}
+    // Return items for backward compatibility, but also return total if available
+    return response.data.items || response.data;
+  },
+  listWithTotal: async (params?: any) => {
+    const response = await apiClient.get('/activity', { params });
+    return response.data; // Returns {items: [], total: number, limit: number, offset: number}
   },
 };
 

@@ -144,7 +144,7 @@ export default function WebhooksPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-500/20 border-t-purple-500"></div>
         </div>
       </DashboardLayout>
     );
@@ -155,8 +155,8 @@ export default function WebhooksPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Webhooks</h1>
-            <p className="text-gray-600 mt-1">Configure webhooks to receive real-time notifications</p>
+            <h1 className="text-3xl font-bold text-white">Webhooks</h1>
+            <p className="text-gray-400 mt-1">Configure webhooks to receive real-time notifications</p>
           </div>
           <Button
             onClick={() => setShowCreateModal(true)}
@@ -169,10 +169,10 @@ export default function WebhooksPage() {
 
         {/* Webhooks List */}
         {webhooks.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-            <ExternalLink className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No webhooks</h3>
-            <p className="text-sm text-gray-600 mb-4">
+          <div className="bg-[#0A0F1C] rounded-lg shadow-sm border border-gray-700 p-12 text-center">
+            <ExternalLink className="h-12 w-12 text-gray-600 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-white mb-2">No webhooks</h3>
+            <p className="text-sm text-gray-400 mb-4">
               Create a webhook to receive real-time notifications about your projects
             </p>
             <Button
@@ -188,12 +188,12 @@ export default function WebhooksPage() {
             {webhooks.map((webhook) => (
               <div
                 key={webhook.id}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
+                className="bg-[#0A0F1C] rounded-lg shadow-sm border border-gray-700 p-6"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900">{webhook.name}</h3>
+                      <h3 className="text-lg font-semibold text-white">{webhook.name}</h3>
                       {webhook.is_active ? (
                         <Badge variant="success">Active</Badge>
                       ) : (
@@ -203,7 +203,7 @@ export default function WebhooksPage() {
                         <Badge variant="warning">{webhook.failure_count} failures</Badge>
                       )}
                     </div>
-                    <div className="text-sm text-gray-600 mb-3">
+                    <div className="text-sm text-gray-400 mb-3">
                       <div className="font-mono break-all">{webhook.url}</div>
                     </div>
                     <div className="flex flex-wrap gap-2 mb-3">
@@ -222,14 +222,14 @@ export default function WebhooksPage() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleTest(webhook)}
-                      className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded"
+                      className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded"
                       title="Test webhook"
                     >
                       <Play className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(webhook.id)}
-                      className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded"
+                      className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded"
                       title="Delete webhook"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -252,7 +252,7 @@ export default function WebhooksPage() {
         >
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 Name
               </label>
               <Input
@@ -264,7 +264,7 @@ export default function WebhooksPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 URL
               </label>
               <Input
@@ -276,7 +276,7 @@ export default function WebhooksPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 Project (Optional)
               </label>
               <select
@@ -287,7 +287,7 @@ export default function WebhooksPage() {
                     project_id: e.target.value ? Number(e.target.value) : null,
                   })
                 }
-                className="w-full border-gray-300 rounded-md focus:ring-black focus:border-black"
+                className="w-full border-gray-600 bg-[#0A0F1C] text-white rounded-md focus:ring-purple-500 focus:border-purple-500"
               >
                 <option value="">All Projects</option>
                 {projects.map((project) => (
@@ -299,22 +299,22 @@ export default function WebhooksPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
                 Events
               </label>
               <div className="grid grid-cols-2 gap-2">
                 {availableEvents.map((event) => (
                   <label
                     key={event}
-                    className="flex items-center gap-2 p-2 border border-gray-200 rounded hover:bg-gray-50 cursor-pointer"
+                    className="flex items-center gap-2 p-2 border border-gray-700 rounded hover:bg-gray-800 cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={newWebhook.events.includes(event)}
                       onChange={() => toggleEvent(event)}
-                      className="h-4 w-4 text-black focus:ring-black border-gray-300 rounded"
+                      className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-600 rounded"
                     />
-                    <span className="text-sm text-gray-700 capitalize">
+                    <span className="text-sm text-gray-300 capitalize">
                       {event.replace('_', ' ')}
                     </span>
                   </label>
@@ -323,7 +323,7 @@ export default function WebhooksPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 Secret (Optional)
               </label>
               <Input
@@ -365,29 +365,29 @@ export default function WebhooksPage() {
             {testing ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto mb-4"></div>
-                <p className="text-sm text-gray-600">Sending test webhook...</p>
+                <p className="text-sm text-gray-400">Sending test webhook...</p>
               </div>
             ) : testResult ? (
               <div>
                 {testResult.success ? (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="p-4 bg-green-900/20 border border-green-700 rounded-lg">
                     <div className="flex items-center gap-2 mb-2">
-                      <Check className="h-5 w-5 text-green-600" />
-                      <div className="font-medium text-green-900">Test Successful</div>
+                      <Check className="h-5 w-5 text-green-400" />
+                      <div className="font-medium text-green-300">Test Successful</div>
                     </div>
-                    <div className="text-sm text-green-700">
+                    <div className="text-sm text-green-400">
                       Status Code: {testResult.status_code}
                     </div>
                     {testResult.response && (
-                      <div className="mt-2 text-xs text-green-600 font-mono bg-green-100 p-2 rounded">
+                      <div className="mt-2 text-xs text-green-400 font-mono bg-green-900/30 p-2 rounded">
                         {testResult.response}
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <div className="font-medium text-red-900 mb-2">Test Failed</div>
-                    <div className="text-sm text-red-700">
+                  <div className="p-4 bg-red-900/20 border border-red-700 rounded-lg">
+                    <div className="font-medium text-red-300 mb-2">Test Failed</div>
+                    <div className="text-sm text-red-400">
                       {testResult.error || 'Unknown error'}
                     </div>
                   </div>

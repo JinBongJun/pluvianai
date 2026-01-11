@@ -60,9 +60,9 @@ export default function ActivityLogPage() {
       if (filters.project_id) params.project_id = filters.project_id;
       if (filters.activity_type) params.activity_type = filters.activity_type;
 
-      const data = await activityAPI.list(params);
-      setActivities(data);
-      setTotalItems(data.length); // In production, get total from API
+      const response = await activityAPI.listWithTotal(params);
+      setActivities(response.items || response);
+      setTotalItems(response.total || (response.items ? response.items.length : response.length));
     } catch (error: any) {
       console.error('Failed to load activities:', error);
       toast.showToast(error.response?.data?.detail || 'Failed to load activities', 'error');
@@ -93,15 +93,13 @@ export default function ActivityLogPage() {
   };
 
   const getProjectIdFromActivity = (activity: any): number | null => {
-    // Try to extract project_id from activity_data
+    // Use project_id directly from activity (backend returns it)
+    if (activity.project_id) {
+      return activity.project_id;
+    }
+    // Fallback: Try to extract from activity_data
     if (activity.activity_data?.project_id) {
       return activity.activity_data.project_id;
-    }
-    // Try to extract from description or action
-    const projectMatch = activity.description?.match(/project[_\s]?id[:\s]+(\d+)/i) ||
-                         activity.action?.match(/project[_\s]?id[:\s]+(\d+)/i);
-    if (projectMatch) {
-      return parseInt(projectMatch[1]);
     }
     return null;
   };

@@ -13,6 +13,7 @@ from app.models.subscription import Subscription
 from app.models.usage import Usage
 from app.models.activity_log import ActivityLog
 from app.models.webhook import Webhook
+from app.models.notification_settings import NotificationSettings
 
 __all__ = [
     "User",
@@ -27,6 +28,7 @@ __all__ = [
     "Usage",
     "ActivityLog",
     "Webhook",
+    "NotificationSettings",
 ]
 
 

@@ -377,17 +377,17 @@ init({
               <h4 className="font-semibold mb-4">Resources</h4>
               <ul className="space-y-2 text-sm text-slate-400">
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <a href="https://docs.agentguard.ai" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
                     Documentation
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <a href="https://docs.agentguard.ai/api" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
                     API Reference
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <a href="mailto:support@agentguard.ai" className="hover:text-white transition-colors">
                     Support
                   </a>
                 </li>
@@ -399,17 +399,17 @@ init({
               <h4 className="font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-slate-400">
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <Link href="/about" className="hover:text-white transition-colors">
                     About
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <Link href="/blog" className="hover:text-white transition-colors">
                     Blog
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <a href="mailto:contact@agentguard.ai" className="hover:text-white transition-colors">
                     Contact
                   </a>
                 </li>
@@ -425,13 +425,13 @@ init({
             <div className="flex items-center gap-6">
               <LanguageSelector variant="footer" />
               <div className="flex items-center gap-4">
-                <a href="#" className="text-slate-400 hover:text-white transition-colors">
+                <a href="https://github.com/agentguard" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-colors" aria-label="GitHub">
                   <Github className="h-5 w-5" />
                 </a>
-                <a href="#" className="text-slate-400 hover:text-white transition-colors">
+                <a href="https://twitter.com/agentguard" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-colors" aria-label="Twitter">
                   <Twitter className="h-5 w-5" />
                 </a>
-                <a href="#" className="text-slate-400 hover:text-white transition-colors">
+                <a href="https://linkedin.com/company/agentguard" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-colors" aria-label="LinkedIn">
                   <Linkedin className="h-5 w-5" />
                 </a>
               </div>

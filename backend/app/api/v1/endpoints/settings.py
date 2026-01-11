@@ -356,19 +356,41 @@ async def get_notification_settings(
     db: Session = Depends(get_db)
 ):
     """Get notification settings for current user"""
-    # For now, return defaults. In the future, store in database
-    # TODO: Create NotificationSettings model if needed
+    from app.models.notification_settings import NotificationSettings as NotificationSettingsModel
+    
+    # Get or create notification settings
+    notification_settings = db.query(NotificationSettingsModel).filter(
+        NotificationSettingsModel.user_id == current_user.id
+    ).first()
+    
+    if not notification_settings:
+        # Create default settings for user
+        notification_settings = NotificationSettingsModel(
+            user_id=current_user.id,
+            email_drift=True,
+            email_cost_anomaly=True,
+            email_quality_drop=True,
+            in_app_drift=True,
+            in_app_cost_anomaly=True,
+            in_app_quality_drop=True,
+            slack_enabled=False,
+            discord_enabled=False,
+        )
+        db.add(notification_settings)
+        db.commit()
+        db.refresh(notification_settings)
+    
     return NotificationSettingsResponse(
-        email_drift=True,
-        email_cost_anomaly=True,
-        email_quality_drop=True,
-        in_app_drift=True,
-        in_app_cost_anomaly=True,
-        in_app_quality_drop=True,
-        slack_enabled=False,
-        slack_webhook_url=None,
-        discord_enabled=False,
-        discord_webhook_url=None
+        email_drift=notification_settings.email_drift,
+        email_cost_anomaly=notification_settings.email_cost_anomaly,
+        email_quality_drop=notification_settings.email_quality_drop,
+        in_app_drift=notification_settings.in_app_drift,
+        in_app_cost_anomaly=notification_settings.in_app_cost_anomaly,
+        in_app_quality_drop=notification_settings.in_app_quality_drop,
+        slack_enabled=notification_settings.slack_enabled,
+        slack_webhook_url=notification_settings.slack_webhook_url,
+        discord_enabled=notification_settings.discord_enabled,
+        discord_webhook_url=notification_settings.discord_webhook_url,
     )
 
 
@@ -379,8 +401,52 @@ async def update_notification_settings(
     db: Session = Depends(get_db)
 ):
     """Update notification settings for current user"""
-    # For now, just return the settings. In the future, save to database
-    # TODO: Create NotificationSettings model and save settings
-    logger.info(f"Notification settings updated for user {current_user.id}")
-    return settings
+    from app.models.notification_settings import NotificationSettings as NotificationSettingsModel
+    
+    # Get or create notification settings
+    notification_settings = db.query(NotificationSettingsModel).filter(
+        NotificationSettingsModel.user_id == current_user.id
+    ).first()
+    
+    if not notification_settings:
+        # Create new settings
+        notification_settings = NotificationSettingsModel(user_id=current_user.id)
+        db.add(notification_settings)
+    
+    # Update settings
+    notification_settings.email_drift = settings.email_drift
+    notification_settings.email_cost_anomaly = settings.email_cost_anomaly
+    notification_settings.email_quality_drop = settings.email_quality_drop
+    notification_settings.in_app_drift = settings.in_app_drift
+    notification_settings.in_app_cost_anomaly = settings.in_app_cost_anomaly
+    notification_settings.in_app_quality_drop = settings.in_app_quality_drop
+    notification_settings.slack_enabled = settings.slack_enabled
+    notification_settings.slack_webhook_url = settings.slack_webhook_url
+    notification_settings.discord_enabled = settings.discord_enabled
+    notification_settings.discord_webhook_url = settings.discord_webhook_url
+    
+    try:
+        db.commit()
+        db.refresh(notification_settings)
+        logger.info(f"Notification settings updated for user {current_user.id}")
+        
+        return NotificationSettingsResponse(
+            email_drift=notification_settings.email_drift,
+            email_cost_anomaly=notification_settings.email_cost_anomaly,
+            email_quality_drop=notification_settings.email_quality_drop,
+            in_app_drift=notification_settings.in_app_drift,
+            in_app_cost_anomaly=notification_settings.in_app_cost_anomaly,
+            in_app_quality_drop=notification_settings.in_app_quality_drop,
+            slack_enabled=notification_settings.slack_enabled,
+            slack_webhook_url=notification_settings.slack_webhook_url,
+            discord_enabled=notification_settings.discord_enabled,
+            discord_webhook_url=notification_settings.discord_webhook_url,
+        )
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to update notification settings: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update notification settings"
+        )
 

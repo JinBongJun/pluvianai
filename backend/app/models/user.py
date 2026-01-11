@@ -28,6 +28,7 @@ class User(Base):
     usage_records = relationship("Usage", back_populates="user", cascade="all, delete-orphan")
     activity_logs = relationship("ActivityLog", back_populates="user", cascade="all, delete-orphan")
     webhooks = relationship("Webhook", back_populates="user", cascade="all, delete-orphan")
+    notification_settings = relationship("NotificationSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
 
