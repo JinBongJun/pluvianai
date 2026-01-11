@@ -97,7 +97,6 @@ async def startup_event():
     # This handles the case where the column was added to the model but not migrated
     try:
         from sqlalchemy import text, inspect
-        from app.core.database import engine
         inspector = inspect(engine)
         columns = [col['name'] for col in inspector.get_columns('projects')]
         
@@ -106,7 +105,7 @@ async def startup_event():
             with engine.connect() as conn:
                 conn.execute(text("ALTER TABLE projects ADD COLUMN shadow_routing_config JSONB"))
                 conn.commit()
-            logger.info("✅ Migration: shadow_routing_config column added")
+            logger.info("Migration: shadow_routing_config column added")
     except Exception as e:
         # Column might already exist, which is fine
         if 'already exists' not in str(e).lower() and 'duplicate' not in str(e).lower():
