@@ -87,10 +87,30 @@ async def startup_event():
     """Initialize database connection on startup"""
     logger.info("Starting AgentGuard API...")
     logger.info(f"Environment: {'DEBUG' if settings.DEBUG else 'PRODUCTION'}")
+    
     # Create database tables (for development)
     # In production, use Alembic migrations instead
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables initialized")
+    
+    # Safe migration: Add shadow_routing_config column if it doesn't exist
+    # This handles the case where the column was added to the model but not migrated
+    try:
+        from sqlalchemy import text, inspect
+        from app.core.database import engine
+        inspector = inspect(engine)
+        columns = [col['name'] for col in inspector.get_columns('projects')]
+        
+        if 'shadow_routing_config' not in columns:
+            logger.info("Adding shadow_routing_config column to projects table...")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE projects ADD COLUMN shadow_routing_config JSONB"))
+                conn.commit()
+            logger.info("✅ Migration: shadow_routing_config column added")
+    except Exception as e:
+        # Column might already exist, which is fine
+        if 'already exists' not in str(e).lower() and 'duplicate' not in str(e).lower():
+            logger.warning(f"Migration check failed (non-critical): {str(e)}")
     
     # Start background scheduler
     from app.services.scheduler_service import scheduler_service
