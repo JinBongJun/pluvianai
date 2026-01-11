@@ -276,6 +276,9 @@ async def update_project_member_role(
         # Invalidate cache
         cache_service.invalidate_project_cache(project_id)
         
+        # Get user info before logging
+        user = db.query(User).filter(User.id == user_id).first()
+        
         # Log activity
         activity_logger.log_activity(
             db=db,
@@ -296,8 +299,9 @@ async def update_project_member_role(
             detail="Failed to update member role"
         )
     
-    # Get user info
-    user = db.query(User).filter(User.id == user_id).first()
+    # Get user info (if not already retrieved in try block)
+    if 'user' not in locals():
+        user = db.query(User).filter(User.id == user_id).first()
     
     return ProjectMemberResponse(
         id=member.id,
