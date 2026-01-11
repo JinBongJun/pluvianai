@@ -175,12 +175,11 @@ class AlertService:
             return {"status": "error", "message": "Resend API key not configured. Please set RESEND_API_KEY environment variable."}
     
     async def _send_email_resend(self, alert: Alert, recipient_email: str) -> Dict[str, Any]:
-        """Send email using SendGrid"""
+        """Send email using Resend"""
         try:
-            import sendgrid
-            from sendgrid.helpers.mail import Mail, Email, To, Content
+            import resend
             
-            sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
+            resend.api_key = settings.RESEND_API_KEY
             
             # Determine severity color
             severity_colors = {
@@ -215,52 +214,6 @@ class AlertService:
             </html>
             """
             
-            from_email = Email(settings.EMAIL_FROM or "noreply@agentguard.ai", settings.EMAIL_FROM_NAME)
-            to_email = To(recipient_email)
-            subject = f"[AgentGuard Alert] {alert.title}"
-            content = Content("text/html", html_content)
-            
-            message = Mail(from_email, to_email, subject, content)
-            
-            # Send email (run in executor since SendGrid SDK is sync)
-            import asyncio
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: sg.send(message)
-            )
-            
-            if response.status_code in [200, 202]:
-                logger.info(f"Email sent successfully to {recipient_email} via SendGrid")
-                return {"status": "sent", "channel": "email", "service": "sendgrid"}
-            else:
-                logger.error(f"SendGrid API error: {response.status_code}")
-                return {"status": "error", "message": f"SendGrid API error: {response.status_code}"}
-                
-        except ImportError:
-            return {"status": "error", "message": "SendGrid library not installed. Install with: pip install sendgrid"}
-        except Exception as e:
-            logger.error(f"Error sending email via SendGrid: {str(e)}")
-            return {"status": "error", "message": str(e)}
-    
-    async def _send_email_smtp(self, alert: Alert, recipient_email: str) -> Dict[str, Any]:
-        """Send email using SMTP"""
-        try:
-            # Determine severity color
-            severity_colors = {
-                "critical": "#FF0000",
-                "high": "#FF8800",
-                "medium": "#FFBB00",
-                "low": "#888888",
-            }
-            color = severity_colors.get(alert.severity, "#888888")
-            
-            # Create email message
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = f"[AgentGuard Alert] {alert.title}"
-            msg['From'] = f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM or 'noreply@agentguard.ai'}>"
-            msg['To'] = recipient_email
-            
             # Plain text version
             text_content = f"""
 {alert.title}
@@ -275,62 +228,24 @@ Project ID: {alert.project_id}
 This is an automated alert from AgentGuard.
             """.strip()
             
-            # HTML version
-            html_content = f"""
-            <html>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: {color}; border-bottom: 2px solid {color}; padding-bottom: 10px;">
-                        {alert.title}
-                    </h2>
-                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                        <p><strong>Alert Type:</strong> {alert.alert_type}</p>
-                        <p><strong>Severity:</strong> {alert.severity.upper()}</p>
-                        <p><strong>Project ID:</strong> {alert.project_id}</p>
-                    </div>
-                    <div style="margin: 20px 0;">
-                        <p>{alert.message}</p>
-                    </div>
-                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #888; font-size: 12px;">
-                        <p>This is an automated alert from AgentGuard.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """
+            params = {
+                "from": f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM or 'onboarding@resend.dev'}>",
+                "to": [recipient_email],
+                "subject": f"[AgentGuard Alert] {alert.title}",
+                "html": html_content,
+                "text": text_content,
+            }
             
-            part1 = MIMEText(text_content, 'plain')
-            part2 = MIMEText(html_content, 'html')
+            email = resend.Emails.send(params)
             
-            msg.attach(part1)
-            msg.attach(part2)
-            
-            # Send email (run in executor since smtplib is sync)
-            import asyncio
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None,
-                self._send_smtp_sync,
-                msg,
-                recipient_email
-            )
-            
-            logger.info(f"Email sent successfully to {recipient_email} via SMTP")
-            return {"status": "sent", "channel": "email", "service": "smtp"}
-            
+            logger.info(f"Email sent successfully to {recipient_email} via Resend. Email ID: {email.get('id')}")
+            return {"status": "sent", "channel": "email", "service": "resend", "email_id": email.get("id")}
+                
+        except ImportError:
+            return {"status": "error", "message": "Resend library not installed. Install with: pip install resend"}
         except Exception as e:
-            logger.error(f"Error sending email via SMTP: {str(e)}")
+            logger.error(f"Error sending email via Resend: {str(e)}")
             return {"status": "error", "message": str(e)}
-    
-    def _send_smtp_sync(self, msg: MIMEMultipart, recipient_email: str):
-        """Synchronous SMTP send for executor"""
-        server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
-        if settings.SMTP_USE_TLS:
-            server.starttls()
-        if settings.SMTP_USER and settings.SMTP_PASSWORD:
-            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-        server.send_message(msg)
-        server.quit()
     
     async def send_batch(
         self,
