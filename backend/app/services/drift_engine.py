@@ -105,7 +105,10 @@ class DriftEngine:
         if quality_drift:
             detections.append(quality_drift)
         
-        # Save detections to database
+        # Save detections to database and create alerts
+        from app.models.alert import Alert
+        
+        alerts_created = []
         for detection in detections:
             detection.project_id = project_id
             detection.model = model
@@ -113,6 +116,65 @@ class DriftEngine:
             detection.baseline_period_start = baseline_start
             detection.baseline_period_end = baseline_end
             db.add(detection)
+            
+            # Create alert for medium/high/critical severity detections
+            if detection.severity in ["medium", "high", "critical"]:
+                # Generate alert title and message
+                model_str = f" ({detection.model})" if detection.model else ""
+                agent_str = f" [{detection.agent_name}]" if detection.agent_name else ""
+                
+                title = f"Drift Detected: {detection.detection_type}{model_str}{agent_str}"
+                
+                # Build message from detection details
+                message_parts = [
+                    f"Detected {detection.detection_type} drift with {detection.change_percentage:.1f}% change.",
+                ]
+                
+                if detection.detection_details and "evidence" in detection.detection_details:
+                    message_parts.append(detection.detection_details["evidence"])
+                
+                message = " ".join(message_parts)
+                
+                # Determine notification channels based on severity
+                if detection.severity == "critical":
+                    channels = ["email", "slack"]
+                elif detection.severity == "high":
+                    channels = ["email"]
+                else:
+                    channels = ["email"]
+                
+                alert = Alert(
+                    project_id=project_id,
+                    alert_type="drift",
+                    severity=detection.severity,
+                    title=title,
+                    message=message,
+                    alert_data={
+                        "detection_id": None,  # Will be set after detection is committed
+                        "detection_type": detection.detection_type,
+                        "model": detection.model,
+                        "agent_name": detection.agent_name,
+                        "change_percentage": detection.change_percentage,
+                        "drift_score": detection.drift_score,
+                        "current_value": detection.current_value,
+                        "baseline_value": detection.baseline_value,
+                    },
+                    notification_channels=channels
+                )
+                db.add(alert)
+                alerts_created.append(alert)
+        
+        db.commit()
+        
+        # Update alert_data with detection_id after commit
+        for alert in alerts_created:
+            # Find the corresponding detection
+            for detection in detections:
+                if (detection.detection_type == alert.alert_data.get("detection_type") and
+                    detection.model == alert.alert_data.get("model") and
+                    detection.agent_name == alert.alert_data.get("agent_name")):
+                    alert.alert_data["detection_id"] = detection.id
+                    break
         
         db.commit()
         

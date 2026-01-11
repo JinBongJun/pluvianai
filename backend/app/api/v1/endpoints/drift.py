@@ -70,7 +70,7 @@ async def detect_drift(
     # Enhanced drift (semantic/tone) requires Startup plan or higher
     # For now, all drift detection is available, but we can restrict enhanced features later
     
-    # Detect drift
+    # Detect drift (this now creates alerts automatically)
     detections = drift_engine.detect_drift(
         project_id=project_id,
         model=request.model,
@@ -78,21 +78,20 @@ async def detect_drift(
         db=db
     )
     
-    # Send alerts and trigger webhooks for high/critical detections (in background)
+    # Get alerts created by drift detection (created in the last 5 seconds)
     from app.models.alert import Alert
     from app.services.alert_service import AlertService
     from app.services.webhook_service import webhook_service
+    from app.core.database import SessionLocal
     
-    # Get alerts created by drift detection
+    # Get recently created alerts for this project
     alerts = db.query(Alert).filter(
         Alert.project_id == project_id,
         Alert.alert_type == "drift",
-        Alert.created_at >= datetime.utcnow() - timedelta(seconds=5)  # Recent alerts
+        Alert.created_at >= datetime.utcnow() - timedelta(seconds=5)
     ).all()
     
     # Send alerts and trigger webhooks in background tasks
-    from app.core.database import SessionLocal
-    
     alert_service = AlertService()
     for alert in alerts:
         async def send_alert_task(alert_id: int):

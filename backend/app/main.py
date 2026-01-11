@@ -91,12 +91,22 @@ async def startup_event():
     # In production, use Alembic migrations instead
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables initialized")
+    
+    # Start background scheduler
+    from app.services.scheduler_service import scheduler_service
+    scheduler_service.start()
+    logger.info("Background scheduler started")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("Shutting down AgentGuard API...")
+    
+    # Shutdown background scheduler
+    from app.services.scheduler_service import scheduler_service
+    scheduler_service.shutdown()
+    
     # Additional cleanup tasks can be added here
 
 
