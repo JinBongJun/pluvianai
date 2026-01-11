@@ -2,9 +2,6 @@
 Alert service for notifications.
 """
 import httpx
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from app.models.alert import Alert
@@ -18,7 +15,7 @@ class AlertService:
     def __init__(self):
         self.slack_webhook_url = None  # Should be configured per project
         self.discord_webhook_url = None  # Should be configured per project
-        self.email_enabled = False  # Email service to be implemented
+        self.email_enabled = bool(settings.RESEND_API_KEY)  # Enable if Resend API key is configured
     
     async def send_alert(
         self,
@@ -171,15 +168,13 @@ class AlertService:
         
         recipient_email = user.email
         
-        # Try SendGrid first, then SMTP
-        if settings.SENDGRID_API_KEY:
-            return await self._send_email_sendgrid(alert, recipient_email)
-        elif settings.SMTP_HOST:
-            return await self._send_email_smtp(alert, recipient_email)
+        # Use Resend for email delivery
+        if settings.RESEND_API_KEY:
+            return await self._send_email_resend(alert, recipient_email)
         else:
-            return {"status": "error", "message": "No email service configured"}
+            return {"status": "error", "message": "Resend API key not configured. Please set RESEND_API_KEY environment variable."}
     
-    async def _send_email_sendgrid(self, alert: Alert, recipient_email: str) -> Dict[str, Any]:
+    async def _send_email_resend(self, alert: Alert, recipient_email: str) -> Dict[str, Any]:
         """Send email using SendGrid"""
         try:
             import sendgrid

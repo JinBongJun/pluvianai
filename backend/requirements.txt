@@ -13,5 +13,6 @@ python-multipart==0.0.6
 redis==5.0.1
 httpx==0.25.2
 reportlab==4.0.7
+resend==2.1.0
 
 
