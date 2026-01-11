@@ -31,6 +31,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
 
     loadData();
+    
+    // Listen for project update events to refresh the projects list
+    const handleProjectUpdate = () => {
+      loadData();
+    };
+    
+    window.addEventListener('projectUpdated', handleProjectUpdate);
+    
+    return () => {
+      window.removeEventListener('projectUpdated', handleProjectUpdate);
+    };
   }, [router]);
 
   const loadData = async () => {

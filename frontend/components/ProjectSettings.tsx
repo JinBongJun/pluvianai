@@ -40,6 +40,8 @@ export default function ProjectSettings({ projectId, project, onUpdate }: Projec
     try {
       await projectsAPI.update(projectId, name, description || undefined);
       onUpdate();
+      // Dispatch event to refresh sidebar projects list
+      window.dispatchEvent(new Event('projectUpdated'));
       toast.showToast('Project updated successfully', 'success');
     } catch (err: any) {
       const errorMsg = err.response?.data?.detail || 'Failed to update project';
