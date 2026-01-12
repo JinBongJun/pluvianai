@@ -238,8 +238,17 @@ export const driftAPI = {
 // Alerts API
 export const alertsAPI = {
   list: async (projectId: number, params?: any) => {
+    // Validate projectId
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    // Ensure limit doesn't exceed backend max (1000)
+    const validatedParams = {
+      ...params,
+      limit: params?.limit ? Math.min(params.limit, 1000) : 100,
+    };
     const response = await apiClient.get('/alerts', {
-      params: { project_id: projectId, ...params },
+      params: { project_id: Number(projectId), ...validatedParams },
     });
     return response.data;
   },
@@ -280,8 +289,14 @@ export const benchmarkAPI = {
 // Cost API
 export const costAPI = {
   getAnalysis: async (projectId: number, days: number = 7) => {
+    // Validate projectId
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    // Validate days (backend limit is 30)
+    const validatedDays = Math.min(Math.max(1, days), 30);
     const response = await apiClient.get('/cost/analysis', {
-      params: { project_id: projectId, days },
+      params: { project_id: Number(projectId), days: validatedDays },
     });
     return response.data;
   },

@@ -76,7 +76,7 @@ export default function AlertsPage() {
     setLoading(true);
     try {
       const params: any = {
-        limit: 10000, // Load all for client-side filtering
+        limit: 1000, // Max limit per backend validation
         offset: 0,
       };
 

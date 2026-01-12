@@ -67,7 +67,7 @@ export default function QualityScoresPage() {
     setLoading(true);
     try {
       const params: any = {
-        limit: itemsPerPage * 10, // Load more for client-side filtering/pagination
+        limit: Math.min(itemsPerPage * 10, 1000), // Max 1000 per backend validation
         offset: 0,
       };
 

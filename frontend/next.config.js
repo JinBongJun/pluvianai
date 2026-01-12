@@ -10,6 +10,8 @@ const nextConfig = {
   // Code splitting optimization
   experimental: {
     optimizePackageImports: ['lucide-react'],
+    // Enable instrumentation hook for Sentry
+    instrumentationHook: true,
   },
   // Compress output
   compress: true,
