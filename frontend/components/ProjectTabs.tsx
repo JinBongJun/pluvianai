@@ -31,6 +31,7 @@ export default function ProjectTabs({ projectId, canManage = false }: ProjectTab
     if (pathname?.includes('/alerts')) return 'alerts';
     if (pathname?.includes('/quality')) return 'overview'; // Quality is part of overview
     if (pathname?.includes('/drift')) return 'overview'; // Drift is part of overview
+    if (pathname?.includes('/cost')) return 'overview'; // Cost is part of overview
     // Check URL params for members/settings tabs
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);

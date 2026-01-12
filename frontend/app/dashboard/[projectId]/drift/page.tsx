@@ -402,13 +402,17 @@ export default function DriftDetectionsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => router.push(`/dashboard/${projectId}/drift/${detection.id}`)}
-                          className="text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1 ml-auto"
-                        >
-                          <Eye className="h-4 w-4" />
-                          View Details
-                        </button>
+                        <div className="flex items-center justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/dashboard/${projectId}/drift/${detection.id}`)}
+                            className="flex items-center gap-2 text-purple-400 hover:text-purple-300"
+                          >
+                            <Eye className="h-4 w-4" />
+                            View
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))

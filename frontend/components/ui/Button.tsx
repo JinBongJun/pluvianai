@@ -18,15 +18,15 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           'inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none',
           {
             // Variants
-            'bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 shadow-lg shadow-primary-500/50 focus:ring-primary-500 transition-all duration-200 hover:shadow-xl hover:shadow-primary-500/60': variant === 'primary',
-            'bg-gray-100 text-gray-900 hover:bg-gray-200 focus:ring-gray-500': variant === 'secondary',
-            'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-500': variant === 'ghost',
-            'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 shadow-lg shadow-red-500/50': variant === 'danger',
-            'border border-white/20 bg-transparent text-white hover:bg-white/5 hover:border-white/30 focus:ring-purple-500': variant === 'outline',
+            'bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800 shadow-lg shadow-purple-500/50 focus:ring-purple-500 transition-all duration-200 hover:shadow-xl hover:shadow-purple-500/60': variant === 'primary',
+            'bg-white/10 text-white hover:bg-white/20 focus:ring-white/50': variant === 'secondary',
+            'bg-transparent text-slate-300 hover:bg-white/5 hover:text-white focus:ring-purple-500': variant === 'ghost',
+            'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 shadow-lg shadow-red-500/50 transition-all duration-200': variant === 'danger',
+            'border border-white/20 bg-transparent text-white hover:bg-white/5 hover:border-white/30 focus:ring-purple-500 transition-all duration-200': variant === 'outline',
             // Sizes
-            'px-3 py-1.5 text-sm': size === 'sm',
-            'px-4 py-2 text-sm': size === 'md',
-            'px-6 py-3 text-base': size === 'lg',
+            'px-3 py-1.5 text-sm gap-1.5': size === 'sm',
+            'px-4 py-2 text-sm gap-2': size === 'md',
+            'px-6 py-3 text-base gap-2': size === 'lg',
           },
           className
         )}

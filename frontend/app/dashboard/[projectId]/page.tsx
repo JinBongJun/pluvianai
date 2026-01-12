@@ -168,7 +168,7 @@ export default function ProjectDetailPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => router.push(`/dashboard/${projectId}/quality`)}
-                    className="text-purple-400 hover:text-purple-300"
+                    className="text-purple-400 hover:text-purple-300 transition-colors"
                   >
                     View All
                   </Button>
@@ -183,7 +183,7 @@ export default function ProjectDetailPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => router.push(`/dashboard/${projectId}/cost`)}
-                    className="text-purple-400 hover:text-purple-300"
+                    className="text-purple-400 hover:text-purple-300 transition-colors"
                   >
                     View All
                   </Button>
@@ -201,7 +201,7 @@ export default function ProjectDetailPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => router.push(`/dashboard/${projectId}/drift`)}
-                    className="text-purple-400 hover:text-purple-300"
+                    className="text-purple-400 hover:text-purple-300 transition-colors"
                   >
                     View All
                   </Button>

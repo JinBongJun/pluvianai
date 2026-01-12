@@ -155,7 +155,7 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
           </p>
         </div>
         {canManage && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <MemberInvite projectId={projectId} />
             <Button
               type="button"
@@ -218,20 +218,22 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
                               e.target.value as 'admin' | 'member' | 'viewer'
                             )
                           }
-                          className="text-xs bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white focus:ring-purple-500 focus:border-purple-500"
+                          className="text-xs bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white focus:ring-purple-500 focus:border-purple-500 transition-colors"
                           title="Change role"
                         >
                           <option value="admin" className="bg-[#0B0C15]">Admin</option>
                           <option value="member" className="bg-[#0B0C15]">Member</option>
                           <option value="viewer" className="bg-[#0B0C15]">Viewer</option>
                         </select>
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleRemoveMember(member.user_id)}
-                          className="px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors"
+                          className="text-xs text-red-400 hover:text-red-300 hover:bg-red-500/20"
                           title="Remove member"
                         >
                           Remove
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -361,7 +363,7 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
                   {roleDescriptions[newMemberRole]}
                 </p>
               </div>
-              <div className="flex gap-2 justify-end pt-2">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
                 <Button
                   variant="outline"
                   onClick={() => {

@@ -199,9 +199,9 @@ export default function DashboardPage() {
                 placeholder="Optional description"
               />
             </div>
-            <div className="flex gap-2 justify-end pt-4">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
               <Button
-                variant="ghost"
+                variant="outline"
                 onClick={() => {
                   setShowCreateModal(false);
                   setNewProjectName('');

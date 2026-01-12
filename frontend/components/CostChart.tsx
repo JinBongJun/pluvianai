@@ -76,33 +76,33 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
   return (
     <div className="space-y-4">
       {/* Chart Type Selector */}
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2 mb-4">
         <button
           onClick={() => setChartType('daily')}
-          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
             chartType === 'daily'
-              ? 'bg-purple-600 text-white'
-              : 'bg-white/5 text-slate-400 hover:bg-white/10'
+              ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50'
+              : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
           }`}
         >
           Daily
         </button>
         <button
           onClick={() => setChartType('model')}
-          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
             chartType === 'model'
-              ? 'bg-purple-600 text-white'
-              : 'bg-white/5 text-slate-400 hover:bg-white/10'
+              ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50'
+              : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
           }`}
         >
           By Model
         </button>
         <button
           onClick={() => setChartType('provider')}
-          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
             chartType === 'provider'
-              ? 'bg-purple-600 text-white'
-              : 'bg-white/5 text-slate-400 hover:bg-white/10'
+              ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50'
+              : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
           }`}
         >
           By Provider

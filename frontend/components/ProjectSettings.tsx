@@ -117,14 +117,14 @@ export default function ProjectSettings({ projectId, project, onUpdate }: Projec
       </div>
 
       {/* Update Button */}
-      <div className="flex gap-2">
-        <button
+      <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
+        <Button
           onClick={handleUpdate}
           disabled={loading}
-          className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 transition-colors"
+          isLoading={loading}
         >
-          {loading ? 'Saving...' : 'Save Changes'}
-        </button>
+          Save Changes
+        </Button>
       </div>
 
       {/* Danger Zone */}
@@ -151,20 +151,21 @@ export default function ProjectSettings({ projectId, project, onUpdate }: Projec
             <p className="text-slate-300 mb-4">
               Are you sure you want to delete "{project.name}"? This action cannot be undone and will delete all associated data.
             </p>
-            <div className="flex gap-2 justify-end">
-              <button
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
+              <Button
+                variant="outline"
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 text-slate-300 bg-white/5 border border-white/10 rounded-md hover:bg-white/10 transition-colors"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="danger"
                 onClick={handleDelete}
                 disabled={loading}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
+                isLoading={loading}
               >
-                {loading ? 'Deleting...' : 'Delete'}
-              </button>
+                Delete
+              </Button>
             </div>
           </div>
         </div>

@@ -249,9 +249,9 @@ export default function AlertsPage() {
         <ProjectTabs projectId={projectId} />
 
         {/* Actions */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-end mb-6">
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={loadAlerts}
             className="flex items-center gap-2"
@@ -415,7 +415,7 @@ export default function AlertsPage() {
                           </p>
                           {(filters.alert_type !== 'all' || filters.severity !== 'all' || filters.is_resolved !== 'all' || dateRange.from || dateRange.to) && (
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
                               onClick={() => {
                                 setFilters({ alert_type: 'all', severity: 'all', is_resolved: 'all' });
@@ -488,7 +488,8 @@ export default function AlertsPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleSend(alert.id)}
-                              className="text-blue-400 hover:text-blue-300"
+                              className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300"
+                              title="Send alert"
                             >
                               <Send className="h-4 w-4" />
                             </Button>
@@ -498,18 +499,22 @@ export default function AlertsPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleResolve(alert.id)}
-                              className="text-green-400 hover:text-green-300"
+                              className="flex items-center gap-1.5 text-green-400 hover:text-green-300"
+                              title="Resolve alert"
                             >
                               <CheckCircle className="h-4 w-4" />
                             </Button>
                           )}
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => router.push(`/dashboard/${projectId}/alerts/${alert.id}`)}
-                            className="text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1"
+                            className="flex items-center gap-1.5 text-purple-400 hover:text-purple-300"
+                            title="View details"
                           >
                             <Eye className="h-4 w-4" />
                             View
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     </tr>

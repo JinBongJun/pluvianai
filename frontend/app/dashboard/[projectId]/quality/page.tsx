@@ -335,13 +335,17 @@ export default function QualityScoresPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => router.push(`/dashboard/${projectId}/api-calls/${score.api_call_id}`)}
-                          className="text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1"
-                        >
-                          <Eye className="h-4 w-4" />
-                          View API Call
-                        </button>
+                        <div className="flex items-center justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/dashboard/${projectId}/api-calls/${score.api_call_id}`)}
+                            className="flex items-center gap-2 text-purple-400 hover:text-purple-300"
+                          >
+                            <Eye className="h-4 w-4" />
+                            View
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))
