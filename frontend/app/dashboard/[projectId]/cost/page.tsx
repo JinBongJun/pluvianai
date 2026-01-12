@@ -96,6 +96,21 @@ export default function CostAnalysisPage() {
     );
   }
 
+  // Format date range for display
+  const formatDateRange = () => {
+    if (!dateRange.from || !dateRange.to) return '';
+    
+    const formatDate = (date: Date) => {
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+      });
+    };
+    
+    return `${formatDate(dateRange.from)} - ${formatDate(dateRange.to)}`;
+  };
+
   // Calculate top models and providers
   const topModels = costData
     ? Object.entries(costData.by_model)
@@ -157,12 +172,12 @@ export default function CostAnalysisPage() {
             <StatsCard
               title="Total Cost"
               value={`$${costData.total_cost.toFixed(2)}`}
-              subtitle={`Last ${days} days`}
+              subtitle={formatDateRange()}
             />
             <StatsCard
               title="Average Daily"
               value={`$${costData.average_daily_cost.toFixed(2)}`}
-              subtitle={`Last ${days} days`}
+              subtitle={formatDateRange()}
             />
             <StatsCard
               title="Top Model"
