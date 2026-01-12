@@ -216,8 +216,11 @@ export default function AlertsPage() {
     return labels[type] || type;
   };
 
+  // Default alert types from backend model (even if no data exists yet)
+  const defaultAlertTypes = ['drift', 'cost_spike', 'error', 'timeout', 'model_update', 'shadow_routing'];
+  
   const availableTypes = useMemo(() => {
-    const types = new Set<string>();
+    const types = new Set<string>(defaultAlertTypes); // Start with defaults
     allAlerts.forEach((alert) => {
       if (alert.alert_type) types.add(alert.alert_type);
     });

@@ -80,11 +80,12 @@ export default function AgentChainsPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Calculate days from date range - use useMemo to avoid conditional hooks
+  // Backend limit is 30 days, so cap at 30
   const calculatedDays = useMemo(() => {
     if (dateRange.from && dateRange.to) {
       const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays > 0 ? diffDays : 7;
+      return Math.min(Math.max(diffDays, 1), 30); // Clamp between 1 and 30
     }
     return 7;
   }, [dateRange.from, dateRange.to]);
@@ -109,10 +110,12 @@ export default function AgentChainsPage() {
       setLoading(true);
       try {
         // Load chain profile
+        // Ensure days doesn't exceed backend limit (30)
+        const validatedDays = Math.min(Math.max(1, days), 30);
         const profileData = await agentChainAPI.profile(
           projectId,
           selectedChainId || undefined,
-          days
+          validatedDays
         );
         
         // Ensure profileData has the expected structure
@@ -125,9 +128,10 @@ export default function AgentChainsPage() {
           setChainProfile({ chains: [] });
         }
 
-        // Load agent statistics - use same days value
+        // Load agent statistics - use same validated days value
         try {
-          const statsData = await agentChainAPI.getAgentStatistics(projectId, days);
+          const validatedDays = Math.min(Math.max(1, days), 30);
+          const statsData = await agentChainAPI.getAgentStatistics(projectId, validatedDays);
           setAgentStats({
             ...statsData,
             agents: Array.isArray(statsData?.agents) ? statsData.agents : [],
@@ -277,11 +281,12 @@ export default function AgentChainsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load chain profile
+      // Load chain profile - ensure days doesn't exceed backend limit (30)
+      const validatedDays = Math.min(Math.max(1, days), 30);
       const profileData = await agentChainAPI.profile(
         projectId,
         selectedChainId || undefined,
-        days
+        validatedDays
       );
       
       // Ensure profileData has the expected structure
@@ -294,9 +299,10 @@ export default function AgentChainsPage() {
         setChainProfile({ chains: [] });
       }
 
-      // Load agent statistics
+      // Load agent statistics - ensure days doesn't exceed backend limit (30)
       try {
-        const statsData = await agentChainAPI.getAgentStatistics(projectId, days);
+        const validatedDays = Math.min(Math.max(1, days), 30);
+        const statsData = await agentChainAPI.getAgentStatistics(projectId, validatedDays);
         setAgentStats({
           ...statsData,
           agents: Array.isArray(statsData?.agents) ? statsData.agents : [],

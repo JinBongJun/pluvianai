@@ -195,7 +195,7 @@ export default function QualityScoresPage() {
 
         {/* Date Range Selector */}
         <div className="mb-6">
-          <DateRangePicker value={dateRange} onChange={setDateRange} showPeriodLabel={true} />
+          <DateRangePicker value={dateRange} onChange={setDateRange} showPeriodLabel={false} />
         </div>
 
         {/* Filters */}

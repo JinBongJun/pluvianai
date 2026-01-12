@@ -47,7 +47,9 @@ export default function ComparePage() {
     setLoading(true);
     setError({ type: null, message: '' });
     try {
-      const days = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24));
+      // Calculate days and ensure it doesn't exceed backend limit (30)
+      const calculatedDays = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24));
+      const days = Math.min(Math.max(1, calculatedDays), 30); // Clamp between 1 and 30
       const data = await benchmarkAPI.compareModels(projectId, days);
       setComparisons(data);
       if (data.length === 0) {

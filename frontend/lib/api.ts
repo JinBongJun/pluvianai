@@ -281,8 +281,14 @@ export const alertsAPI = {
 // Benchmark API
 export const benchmarkAPI = {
   compareModels: async (projectId: number, days: number = 7) => {
+    // Validate projectId
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    // Validate days (backend limit is 30)
+    const validatedDays = Math.min(Math.max(1, days), 30);
     const response = await apiClient.get('/benchmark/compare', {
-      params: { project_id: projectId, days },
+      params: { project_id: Number(projectId), days: validatedDays },
     });
     return response.data;
   },
@@ -328,7 +334,13 @@ export const costAPI = {
 // Agent Chain API
 export const agentChainAPI = {
   profile: async (projectId: number, chainId?: string, days: number = 7) => {
-    const params: any = { project_id: projectId, days };
+    // Validate projectId
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    // Validate days (backend limit is 30)
+    const validatedDays = Math.min(Math.max(1, days), 30);
+    const params: any = { project_id: Number(projectId), days: validatedDays };
     if (chainId) {
       params.chain_id = chainId;
     }
@@ -337,8 +349,14 @@ export const agentChainAPI = {
   },
   
   getAgentStatistics: async (projectId: number, days: number = 7) => {
+    // Validate projectId
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    // Validate days (backend limit is 30)
+    const validatedDays = Math.min(Math.max(1, days), 30);
     const response = await apiClient.get('/agent-chain/agents', {
-      params: { project_id: projectId, days },
+      params: { project_id: Number(projectId), days: validatedDays },
     });
     return response.data;
   },
