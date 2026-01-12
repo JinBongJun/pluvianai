@@ -162,8 +162,17 @@ export const projectMembersAPI = {
 // API Calls API
 export const apiCallsAPI = {
   list: async (projectId: number, params?: any) => {
+    // Validate projectId
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    // Ensure limit doesn't exceed backend max (1000)
+    const validatedParams = {
+      ...params,
+      limit: params?.limit ? Math.min(params.limit, 1000) : 100,
+    };
     const response = await apiClient.get('/api-calls', {
-      params: { project_id: projectId, ...params },
+      params: { project_id: Number(projectId), ...validatedParams },
     });
     return response.data;
   },

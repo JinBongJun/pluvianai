@@ -48,8 +48,9 @@ export default function APICallsListPage() {
     try {
       // Fetch more data if client-side filters are active (date range, status, search)
       // Otherwise use server-side pagination
+      // Note: Backend max limit is 1000, so we can't fetch all data at once
       const needsClientSideFiltering = !!(filters.dateFrom || filters.dateTo || filters.status || filters.search);
-      const fetchLimit = needsClientSideFiltering ? 10000 : itemsPerPage;
+      const fetchLimit = needsClientSideFiltering ? 1000 : itemsPerPage; // Max 1000 per backend validation
       const fetchOffset = needsClientSideFiltering ? 0 : (currentPage - 1) * itemsPerPage;
       
       const params: any = {
