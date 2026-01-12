@@ -44,6 +44,17 @@ export default function CostAnalysisPage() {
     to: new Date(),
   });
 
+  // Update days when dateRange changes
+  useEffect(() => {
+    if (dateRange.from && dateRange.to) {
+      const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      // Clamp to max 30 days (backend limit)
+      const clampedDays = Math.min(Math.max(1, diffDays), 30);
+      setDays(clampedDays);
+    }
+  }, [dateRange]);
+
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     if (!token) {
@@ -137,28 +148,7 @@ export default function CostAnalysisPage() {
 
         {/* Date Range Selector */}
         <div className="mb-6">
-          <div className="flex items-center gap-4">
-            <DateRangePicker value={dateRange} onChange={setDateRange} showPeriodLabel={true} />
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-400">Quick select:</span>
-              <div className="flex items-center gap-2">
-                {[7, 14, 30, 90].map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setDays(d)}
-                    className={clsx(
-                      'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                      days === d
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
-                    )}
-                  >
-                    {d}d
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <DateRangePicker value={dateRange} onChange={setDateRange} showPeriodLabel={true} />
         </div>
 
         {/* Summary Stats */}
