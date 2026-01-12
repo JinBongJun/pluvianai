@@ -1,6 +1,10 @@
 """
 AgentGuard FastAPI Application
 """
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+from sentry_sdk.integrations.httpx import HttpxIntegration
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
@@ -9,6 +13,29 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.logging_config import logger
+
+# Initialize Sentry before creating the app
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.SENTRY_ENVIRONMENT,
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        integrations=[
+            FastApiIntegration(),
+            SqlalchemyIntegration(),
+            HttpxIntegration(),
+        ],
+        # Set profiles_sample_rate to 1.0 to profile 100% of sampled transactions.
+        # We recommend adjusting this value in production.
+        profiles_sample_rate=1.0,
+        # Enable sending of PII (Personally Identifiable Information)
+        send_default_pii=False,
+        # Set release version
+        release=f"agentguard@{settings.APP_VERSION}",
+    )
+    logger.info(f"Sentry initialized for environment: {settings.SENTRY_ENVIRONMENT}")
+else:
+    logger.info("Sentry DSN not configured, skipping Sentry initialization")
 from app.core.exceptions import (
     AgentGuardException,
     agentguard_exception_handler,

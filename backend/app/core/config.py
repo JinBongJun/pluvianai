@@ -3,6 +3,13 @@ Application configuration management
 """
 from pydantic_settings import BaseSettings
 from typing import Optional
+from pathlib import Path
+
+
+# Find project root (where .env file should be located)
+# This file is in backend/app/core/config.py, so go up 4 levels to reach project root
+# backend/app/core -> backend/app -> backend -> project root
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 
 class Settings(BaseSettings):
@@ -41,8 +48,13 @@ class Settings(BaseSettings):
     EMAIL_FROM: Optional[str] = None  # e.g., "onboarding@resend.dev" or verified domain
     EMAIL_FROM_NAME: str = "AgentGuard"
     
+    # Sentry (Error Tracking)
+    SENTRY_DSN: Optional[str] = None
+    SENTRY_ENVIRONMENT: str = "production"  # production, staging, development
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1  # 10% of transactions for performance monitoring
+    
     class Config:
-        env_file = ".env"
+        env_file = str(PROJECT_ROOT / ".env")
         case_sensitive = True
     
     @property

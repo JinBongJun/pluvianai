@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.32.1",
     "autoprefixer": "^10.4.16",
     "axios": "^1.6.2",
     "clsx": "^2.1.1",
