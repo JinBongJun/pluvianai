@@ -1,0 +1,52 @@
+name: Code Quality Checks
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  python-syntax-check:
+    runs-on: ubuntu-latest
+    name: Python Syntax Check
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Check Python syntax
+        run: |
+          echo "🔍 Checking Python syntax..."
+          find backend -name "*.py" -type f | while read file; do
+            echo "Checking: $file"
+            python -m py_compile "$file" || exit 1
+          done
+          echo "✅ All Python files passed syntax check"
+
+  typescript-check:
+    runs-on: ubuntu-latest
+    name: TypeScript Check
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      
+      - name: TypeScript check
+        working-directory: frontend
+        run: |
+          echo "🔍 Checking TypeScript syntax..."
+          npx tsc --noEmit --skipLibCheck
+          echo "✅ TypeScript check passed"
