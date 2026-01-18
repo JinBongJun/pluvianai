@@ -428,7 +428,7 @@ async def update_notification_settings(
     try:
         db.commit()
         db.refresh(notification_settings)
-    logger.info(f"Notification settings updated for user {current_user.id}")
+        logger.info(f"Notification settings updated for user {current_user.id}")
         
         return NotificationSettingsResponse(
             email_drift=notification_settings.email_drift,
