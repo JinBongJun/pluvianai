@@ -10,6 +10,7 @@ import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { Search, Plus } from 'lucide-react';
+import posthog from 'posthog-js';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -64,6 +65,9 @@ export default function DashboardPage() {
       await projectsAPI.create({
         name: newProjectName,
         description: newProjectDescription || undefined,
+      });
+      posthog.capture('project_created', {
+        has_description: !!newProjectDescription,
       });
       setNewProjectName('');
       setNewProjectDescription('');

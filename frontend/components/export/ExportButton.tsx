@@ -7,6 +7,7 @@ import Modal from '@/components/ui/Modal';
 import { exportAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
 import { FilterState } from '@/components/filters/FilterPanel';
+import posthog from 'posthog-js';
 
 interface ExportButtonProps {
   projectId: number;
@@ -24,6 +25,7 @@ export default function ExportButton({ projectId, filters, className }: ExportBu
     setExporting(true);
     try {
       await exportAPI.exportCSV(projectId, filters);
+      posthog.capture('export_started', { format: 'csv' });
       toast.showToast('CSV export started', 'success');
       setShowModal(false);
     } catch (error: any) {
@@ -38,6 +40,7 @@ export default function ExportButton({ projectId, filters, className }: ExportBu
     setExporting(true);
     try {
       await exportAPI.exportJSON(projectId, filters, includeData);
+      posthog.capture('export_started', { format: 'json', include_data: includeData });
       toast.showToast('JSON export started', 'success');
       setShowModal(false);
     } catch (error: any) {

@@ -367,14 +367,14 @@ async def get_notification_settings(
         # Create default settings for user
         notification_settings = NotificationSettingsModel(
             user_id=current_user.id,
-            email_drift=True,
-            email_cost_anomaly=True,
-            email_quality_drop=True,
-            in_app_drift=True,
-            in_app_cost_anomaly=True,
-            in_app_quality_drop=True,
-            slack_enabled=False,
-            discord_enabled=False,
+        email_drift=True,
+        email_cost_anomaly=True,
+        email_quality_drop=True,
+        in_app_drift=True,
+        in_app_cost_anomaly=True,
+        in_app_quality_drop=True,
+        slack_enabled=False,
+        discord_enabled=False,
         )
         db.add(notification_settings)
         db.commit()
@@ -428,7 +428,7 @@ async def update_notification_settings(
     try:
         db.commit()
         db.refresh(notification_settings)
-        logger.info(f"Notification settings updated for user {current_user.id}")
+    logger.info(f"Notification settings updated for user {current_user.id}")
         
         return NotificationSettingsResponse(
             email_drift=notification_settings.email_drift,

@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Button from '@/components/ui/Button';
-import { projectsAPI, qualityAPI, costAPI, apiCallsAPI } from '@/lib/api';
+import { useToast } from '@/components/ToastContainer';
+import { projectsAPI, qualityAPI, costAPI, apiCallsAPI, adminAPI } from '@/lib/api';
 import QualityChart from '@/components/QualityChart';
 import DriftChart from '@/components/DriftChart';
 import CostChart from '@/components/CostChart';
@@ -19,12 +20,14 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
+  const toast = useToast();
   const projectId = Number(params.projectId);
   
   const [project, setProject] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
   const [costData, setCostData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [userRole, setUserRole] = useState<'owner' | 'admin' | 'member' | 'viewer'>('viewer');
   
   // Get active tab from URL params
@@ -117,14 +120,48 @@ export default function ProjectDetailPage() {
 
   const canManage = userRole === 'owner' || userRole === 'admin';
 
+  const handleGenerateSampleData = async () => {
+    if (!confirm('This will generate sample data for this project. Continue?')) {
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      await adminAPI.generateSampleData(projectId);
+      toast.showToast('Sample data generated successfully! Refreshing...', 'success');
+      // Reload data after a short delay
+      setTimeout(() => {
+        loadProjectData();
+      }, 1000);
+    } catch (error: any) {
+      console.error('Failed to generate sample data:', error);
+      toast.showToast(error.response?.data?.detail || 'Failed to generate sample data', 'error');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const hasNoData = (stats?.total_calls || 0) === 0;
+
   return (
     <DashboardLayout>
       <div className="bg-[#000314] min-h-screen">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white">{project?.name}</h1>
-          {project?.description && (
-            <p className="text-slate-400 mt-2">{project.description}</p>
+        <div className="mb-8 flex justify-between items-start">
+          <div>
+            <h1 className="text-4xl font-bold text-white">{project?.name}</h1>
+            {project?.description && (
+              <p className="text-slate-400 mt-2">{project.description}</p>
+            )}
+          </div>
+          {hasNoData && canManage && (
+            <Button
+              onClick={handleGenerateSampleData}
+              disabled={generating}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              {generating ? 'Generating...' : 'Generate Sample Data'}
+            </Button>
           )}
         </div>
 

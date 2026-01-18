@@ -10,6 +10,7 @@ import Modal from '@/components/ui/Modal';
 import { settingsAPI, projectsAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
 import { Key, Plus, Trash2, Copy, Check, Edit2, ExternalLink, Activity } from 'lucide-react';
+import posthog from 'posthog-js';
 
 interface APIKey {
   id: number;
@@ -77,6 +78,7 @@ export default function APIKeysPage() {
     setCreating(true);
     try {
       const data = await settingsAPI.createAPIKey(newKeyName);
+      posthog.capture('api_key_created');
       setNewKey({ key: data.key, name: data.name });
       setNewKeyName('');
       setShowCreateModal(false);

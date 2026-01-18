@@ -364,3 +364,61 @@ async def generate_sample_data(
             detail=f"Failed to generate sample data: {str(e)}"
         )
 
+
+@router.post("/upgrade-user-subscription")
+async def upgrade_user_subscription(
+    email: str,
+    plan_type: str = "startup",
+    db: Session = Depends(get_db)
+):
+    """
+    Upgrade user subscription by email (for testing/admin purposes)
+    ⚠️ WARNING: This endpoint should be secured or removed in production
+    """
+    from app.models.subscription import Subscription
+    from app.services.subscription_service import SubscriptionService
+    from app.core.subscription_limits import PLAN_PRICING
+    
+    if plan_type not in PLAN_PRICING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid plan type: {plan_type}. Must be one of: {', '.join(PLAN_PRICING.keys())}"
+        )
+    
+    try:
+        # Find user by email
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User with email {email} not found"
+            )
+        
+        # Upgrade subscription
+        subscription_service = SubscriptionService(db)
+        subscription = subscription_service.create_or_update_subscription(
+            user_id=user.id,
+            plan_type=plan_type,
+            status="active",
+            price_per_month=PLAN_PRICING[plan_type]
+        )
+        
+        logger.info(f"Upgraded subscription for user {email} to {plan_type}")
+        
+        return {
+            "message": f"Subscription upgraded to {plan_type}",
+            "user_email": email,
+            "plan_type": subscription.plan_type,
+            "status": subscription.status,
+            "price_per_month": subscription.price_per_month
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to upgrade subscription: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upgrade subscription: {str(e)}"
+        )
+

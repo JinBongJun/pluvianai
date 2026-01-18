@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authAPI } from '@/lib/api';
+import posthog from 'posthog-js';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,11 +31,14 @@ export default function LoginPage() {
     try {
       if (isLogin) {
         await authAPI.login(email, password);
+        posthog.capture('user_login', { method: 'password' });
         router.push('/dashboard');
       } else {
         await authAPI.register(email, password, fullName);
+        posthog.capture('user_register', { method: 'password' });
         // After registration, log in
         await authAPI.login(email, password);
+        posthog.capture('user_login', { method: 'password' });
         router.push('/dashboard');
       }
     } catch (err: any) {
