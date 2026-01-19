@@ -9,6 +9,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole
+from app.core.decorators import handle_errors
 from app.core.logging_config import logger
 from app.services.cache_service import cache_service
 from app.middleware.usage_middleware import check_team_member_limit
@@ -67,6 +68,7 @@ class ProjectMemberResponse(BaseModel):
 
 
 @router.post("/projects/{project_id}/members", response_model=ProjectMemberResponse, status_code=status.HTTP_201_CREATED)
+@handle_errors
 async def add_project_member(
     project_id: int,
     member_data: ProjectMemberCreate,
@@ -121,40 +123,32 @@ async def add_project_member(
         )
     
     # Create member
-    try:
-        member = ProjectMember(
-            project_id=project_id,
-            user_id=user.id,
-            role=member_data.role.value
-        )
-        db.add(member)
-        db.commit()
-        db.refresh(member)
-        
-        # Invalidate cache
-        cache_service.invalidate_project_cache(project_id)
-        cache_service.invalidate_user_projects_cache(user.id)
-        cache_service.invalidate_user_projects_cache(current_user.id)
-        
-        # Log activity
-        activity_logger.log_activity(
-            db=db,
-            user_id=current_user.id,
-            activity_type="member_add",
-            action=f"Added member: {user.email}",
-            description=f"Added {user.email} as {member_data.role} to project",
-            project_id=project_id,
-            activity_data={"member_email": user.email, "role": member_data.role.value, "project_id": project_id}
-        )
-        
-        logger.info(f"Member added successfully: {user.email} to project {project_id}")
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to add member: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to add member"
-        )
+    member = ProjectMember(
+        project_id=project_id,
+        user_id=user.id,
+        role=member_data.role.value
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    
+    # Invalidate cache
+    cache_service.invalidate_project_cache(project_id)
+    cache_service.invalidate_user_projects_cache(user.id)
+    cache_service.invalidate_user_projects_cache(current_user.id)
+    
+    # Log activity
+    activity_logger.log_activity(
+        db=db,
+        user_id=current_user.id,
+        activity_type="member_add",
+        action=f"Added member: {user.email}",
+        description=f"Added {user.email} as {member_data.role} to project",
+        project_id=project_id,
+        activity_data={"member_email": user.email, "role": member_data.role.value, "project_id": project_id}
+    )
+    
+    logger.info(f"Member added successfully: {user.email} to project {project_id}")
     
     # Return response with user info
     return ProjectMemberResponse(
@@ -169,6 +163,7 @@ async def add_project_member(
 
 
 @router.get("/projects/{project_id}/members", response_model=List[ProjectMemberResponse])
+@handle_errors
 async def list_project_members(
     project_id: int,
     current_user: User = Depends(get_current_user),
@@ -229,6 +224,7 @@ async def list_project_members(
 
 
 @router.patch("/projects/{project_id}/members/{user_id}", response_model=ProjectMemberResponse)
+@handle_errors
 async def update_project_member_role(
     project_id: int,
     user_id: int,
@@ -268,40 +264,28 @@ async def update_project_member_role(
         )
     
     # Update role
-    try:
-        member.role = member_data.role.value
-        db.commit()
-        db.refresh(member)
-        
-        # Invalidate cache
-        cache_service.invalidate_project_cache(project_id)
-        
-        # Get user info before logging
-        user = db.query(User).filter(User.id == user_id).first()
-        
-        # Log activity
-        activity_logger.log_activity(
-            db=db,
-            user_id=current_user.id,
-            activity_type="member_update",
-            action=f"Updated member role: {user.email if user else user_id}",
-            description=f"Changed role to {member_data.role.value}",
-            project_id=project_id,
-            activity_data={"member_user_id": user_id, "new_role": member_data.role.value, "project_id": project_id}
-        )
-        
-        logger.info(f"Member role updated successfully: user {user_id} in project {project_id}")
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to update member role: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update member role"
-        )
+    member.role = member_data.role.value
+    db.commit()
+    db.refresh(member)
     
-    # Get user info (if not already retrieved in try block)
-    if 'user' not in locals():
-        user = db.query(User).filter(User.id == user_id).first()
+    # Invalidate cache
+    cache_service.invalidate_project_cache(project_id)
+    
+    # Get user info for logging
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    # Log activity
+    activity_logger.log_activity(
+        db=db,
+        user_id=current_user.id,
+        activity_type="member_update",
+        action=f"Updated member role: {user.email if user else user_id}",
+        description=f"Changed role to {member_data.role.value}",
+        project_id=project_id,
+        activity_data={"member_user_id": user_id, "new_role": member_data.role.value, "project_id": project_id}
+    )
+    
+    logger.info(f"Member role updated successfully: user {user_id} in project {project_id}")
     
     return ProjectMemberResponse(
         id=member.id,

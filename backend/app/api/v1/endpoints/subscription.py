@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.decorators import handle_errors
 from app.models.user import User
 from app.services.subscription_service import SubscriptionService
 from app.core.subscription_limits import PLAN_LIMITS, PLAN_PRICING
@@ -48,6 +49,7 @@ class UpgradeRequest(BaseModel):
 
 
 @router.get("", response_model=SubscriptionResponse)
+@handle_errors
 async def get_current_subscription(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -71,6 +73,7 @@ async def get_current_subscription(
 
 
 @router.get("/plans", response_model=List[PlanResponse])
+@handle_errors
 async def get_available_plans():
     """Get all available subscription plans"""
     plans = []
@@ -91,6 +94,7 @@ async def get_available_plans():
 
 
 @router.post("/upgrade")
+@handle_errors
 async def initiate_upgrade(
     request: UpgradeRequest,
     current_user: User = Depends(get_current_user),

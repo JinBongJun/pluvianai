@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access
+from app.core.decorators import handle_errors
 from app.models.user import User
 from app.models.project import Project
 from app.services.agent_chain_profiler import AgentChainProfiler
@@ -18,6 +19,7 @@ profiler = AgentChainProfiler()
 
 
 @router.get("/profile")
+@handle_errors
 async def profile_chain(
     project_id: int = Query(..., description="Project ID"),
     chain_id: str | None = Query(None, description="Specific chain ID"),
@@ -50,6 +52,7 @@ async def profile_chain(
 
 
 @router.get("/agents")
+@handle_errors
 async def get_agent_statistics(
     project_id: int = Query(..., description="Project ID"),
     days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
