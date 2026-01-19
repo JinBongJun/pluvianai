@@ -22,13 +22,14 @@ export default function QualityChart({ projectId }: { projectId: number }) {
   const loadData = async () => {
     try {
       const scores = await qualityAPI.getScores(projectId, { limit: 100 });
-      setData(Array.isArray(scores) ? (scores as unknown as QualityScore[]) : []);
+      const qualityScores: QualityScore[] = Array.isArray(scores) ? (scores as unknown as QualityScore[]) : [];
+      setData(qualityScores);
       
       // Drift 감지: 점수가 10% 이상 떨어진 지점 찾기
       const driftIndices: number[] = [];
-      for (let i = 1; i < scores.length; i++) {
-        const prev = scores[i - 1].overall_score;
-        const curr = scores[i].overall_score;
+      for (let i = 1; i < qualityScores.length; i++) {
+        const prev = qualityScores[i - 1].overall_score;
+        const curr = qualityScores[i].overall_score;
         if (prev - curr > 10) {
           driftIndices.push(i);
         }
