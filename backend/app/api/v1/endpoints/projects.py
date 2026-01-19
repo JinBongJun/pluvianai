@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole, get_user_project_role
+from app.core.decorators import handle_errors
 from app.core.logging_config import logger
 from app.services.cache_service import cache_service
 from app.middleware.usage_middleware import check_project_limit
@@ -48,6 +49,7 @@ class ProjectResponse(BaseModel):
 
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
+@handle_errors
 async def create_project(
     project_data: ProjectCreate,
     current_user: User = Depends(get_current_user),
@@ -217,6 +219,7 @@ async def get_project(
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
+@handle_errors
 async def update_project(
     project_id: int,
     project_data: ProjectUpdate,
@@ -253,46 +256,39 @@ async def update_project(
     if project_data.description is not None:
         project.description = project_data.description
     
-    try:
-        db.commit()
-        db.refresh(project)
-        
-        # Invalidate cache
-        cache_service.invalidate_project_cache(project_id)
-        cache_service.invalidate_user_projects_cache(current_user.id)
-        
-        # Log activity
-        activity_logger.log_activity(
-            db=db,
-            user_id=current_user.id,
-            activity_type="project_update",
-            action=f"Updated project: {project.name}",
-            description=f"Updated project '{project.name}'",
-            project_id=project_id,
-            activity_data={"project_name": project.name, "project_id": project_id, "changes": project_data.dict(exclude_unset=True)}
-        )
-        
-        role = get_user_project_role(project_id, current_user.id, db)
-        logger.info(f"Project updated successfully: {project_id}")
-        
-        return ProjectResponse(
-            id=project.id,
-            name=project.name,
-            description=project.description,
-            owner_id=project.owner_id,
-            is_active=project.is_active,
-            role=role
-        )
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to update project: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update project"
-        )
+    db.commit()
+    db.refresh(project)
+    
+    # Invalidate cache
+    cache_service.invalidate_project_cache(project_id)
+    cache_service.invalidate_user_projects_cache(current_user.id)
+    
+    # Log activity
+    activity_logger.log_activity(
+        db=db,
+        user_id=current_user.id,
+        activity_type="project_update",
+        action=f"Updated project: {project.name}",
+        description=f"Updated project '{project.name}'",
+        project_id=project_id,
+        activity_data={"project_name": project.name, "project_id": project_id, "changes": project_data.dict(exclude_unset=True)}
+    )
+    
+    role = get_user_project_role(project_id, current_user.id, db)
+    logger.info(f"Project updated successfully: {project_id}")
+    
+    return ProjectResponse(
+        id=project.id,
+        name=project.name,
+        description=project.description,
+        owner_id=project.owner_id,
+        is_active=project.is_active,
+        role=role
+    )
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+@handle_errors
 async def delete_project(
     project_id: int,
     current_user: User = Depends(get_current_user),
@@ -308,34 +304,26 @@ async def delete_project(
     
     project_name = project.name  # Save name before deletion
     
-    try:
-        db.delete(project)
-        db.commit()
-        
-        # Log activity
-        activity_logger.log_activity(
-            db=db,
-            user_id=current_user.id,
-            activity_type="project_delete",
-            action=f"Deleted project: {project_name}",
-            description=f"Deleted project '{project_name}'",
-            project_id=None,  # Project is deleted, so no project_id
-            activity_data={"project_name": project_name, "project_id": project_id}
-        )
-        
-        # Invalidate cache
-        cache_service.invalidate_project_cache(project_id)
-        cache_service.invalidate_user_projects_cache(current_user.id)
-        
-        logger.info(f"Project deleted successfully: {project_id}")
-        return None
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to delete project: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete project"
-        )
+    db.delete(project)
+    db.commit()
+    
+    # Log activity
+    activity_logger.log_activity(
+        db=db,
+        user_id=current_user.id,
+        activity_type="project_delete",
+        action=f"Deleted project: {project_name}",
+        description=f"Deleted project '{project_name}'",
+        project_id=None,  # Project is deleted, so no project_id
+        activity_data={"project_name": project_name, "project_id": project_id}
+    )
+    
+    # Invalidate cache
+    cache_service.invalidate_project_cache(project_id)
+    cache_service.invalidate_user_projects_cache(current_user.id)
+    
+    logger.info(f"Project deleted successfully: {project_id}")
+    return None
 
 
 

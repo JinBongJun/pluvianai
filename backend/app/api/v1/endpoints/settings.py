@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, Field
 from app.core.database import get_db
 from app.core.security import get_current_user, verify_password, get_password_hash
+from app.core.decorators import handle_errors
 from app.core.logging_config import logger
 from app.models.user import User
 from app.models.api_key import APIKey
@@ -115,6 +116,7 @@ async def get_profile(
 
 
 @router.patch("/profile", response_model=ProfileResponse)
+@handle_errors
 async def update_profile(
     profile_data: ProfileUpdate,
     current_user: User = Depends(get_current_user),
@@ -126,28 +128,21 @@ async def update_profile(
     if profile_data.full_name is not None:
         current_user.full_name = profile_data.full_name
     
-    try:
-        db.commit()
-        db.refresh(current_user)
-        logger.info(f"Profile updated successfully for user {current_user.id}")
-        
-        return ProfileResponse(
-            id=current_user.id,
-            email=current_user.email,
-            full_name=current_user.full_name,
-            created_at=current_user.created_at.isoformat(),
-            updated_at=current_user.updated_at.isoformat() if current_user.updated_at else None
-        )
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to update profile: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update profile"
-        )
+    db.commit()
+    db.refresh(current_user)
+    logger.info(f"Profile updated successfully for user {current_user.id}")
+    
+    return ProfileResponse(
+        id=current_user.id,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        created_at=current_user.created_at.isoformat(),
+        updated_at=current_user.updated_at.isoformat() if current_user.updated_at else None
+    )
 
 
 @router.delete("/profile", status_code=status.HTTP_204_NO_CONTENT)
+@handle_errors
 async def delete_account(
     password: str = Query(..., description="Password confirmation for account deletion"),
     current_user: User = Depends(get_current_user),
@@ -163,23 +158,16 @@ async def delete_account(
     
     logger.info(f"Deleting account for user {current_user.id}")
     
-    try:
-        # Delete user (cascade will handle related records)
-        db.delete(current_user)
-        db.commit()
-        logger.info(f"Account deleted successfully for user {current_user.id}")
-        return None
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to delete account: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete account"
-        )
+    # Delete user (cascade will handle related records)
+    db.delete(current_user)
+    db.commit()
+    logger.info(f"Account deleted successfully for user {current_user.id}")
+    return None
 
 
 # Password Endpoints
 @router.patch("/password", status_code=status.HTTP_204_NO_CONTENT)
+@handle_errors
 async def change_password(
     password_data: PasswordChange,
     current_user: User = Depends(get_current_user),
@@ -196,17 +184,9 @@ async def change_password(
     # Hash new password
     current_user.hashed_password = get_password_hash(password_data.new_password)
     
-    try:
-        db.commit()
-        logger.info(f"Password changed successfully for user {current_user.id}")
-        return None
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to change password: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to change password"
-        )
+    db.commit()
+    logger.info(f"Password changed successfully for user {current_user.id}")
+    return None
 
 
 # API Key Endpoints
@@ -231,6 +211,7 @@ async def list_api_keys(
 
 
 @router.post("/api-keys", response_model=APIKeyCreateResponse, status_code=status.HTTP_201_CREATED)
+@handle_errors
 async def create_api_key(
     key_data: APIKeyCreate,
     current_user: User = Depends(get_current_user),
@@ -245,37 +226,30 @@ async def create_api_key(
     # Hash the key for storage
     hashed_key = hashlib.sha256(api_key.encode()).hexdigest()
     
-    try:
-        new_key = APIKey(
-            user_id=current_user.id,
-            name=key_data.name,
-            key_hash=hashed_key,  # Store hashed version
-            is_active=True
-        )
-        db.add(new_key)
-        db.commit()
-        db.refresh(new_key)
-        
-        logger.info(f"API key created for user {current_user.id}")
-        
-        # Return the full key only once (client should save it)
-        return APIKeyCreateResponse(
-            id=new_key.id,
-            name=new_key.name,
-            key=api_key,  # Full unhashed key (only shown once)
-            key_prefix=api_key[:8] + "...",
-            created_at=new_key.created_at.isoformat()
-        )
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to create API key: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create API key"
-        )
+    new_key = APIKey(
+        user_id=current_user.id,
+        name=key_data.name,
+        key_hash=hashed_key,  # Store hashed version
+        is_active=True
+    )
+    db.add(new_key)
+    db.commit()
+    db.refresh(new_key)
+    
+    logger.info(f"API key created for user {current_user.id}")
+    
+    # Return the full key only once (client should save it)
+    return APIKeyCreateResponse(
+        id=new_key.id,
+        name=new_key.name,
+        key=api_key,  # Full unhashed key (only shown once)
+        key_prefix=api_key[:8] + "...",
+        created_at=new_key.created_at.isoformat()
+    )
 
 
 @router.delete("/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+@handle_errors
 async def delete_api_key(
     key_id: int,
     current_user: User = Depends(get_current_user),
@@ -293,21 +267,14 @@ async def delete_api_key(
             detail="API key not found"
         )
     
-    try:
-        db.delete(api_key)
-        db.commit()
-        logger.info(f"API key {key_id} deleted for user {current_user.id}")
-        return None
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to delete API key: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete API key"
-        )
+    db.delete(api_key)
+    db.commit()
+    logger.info(f"API key {key_id} deleted for user {current_user.id}")
+    return None
 
 
 @router.patch("/api-keys/{key_id}", response_model=APIKeyResponse)
+@handle_errors
 async def update_api_key(
     key_id: int,
     update_data: APIKeyUpdate,
@@ -328,25 +295,17 @@ async def update_api_key(
     
     api_key.name = update_data.name
     
-    try:
-        db.commit()
-        db.refresh(api_key)
-        logger.info(f"API key {key_id} updated for user {current_user.id}")
-        
-        return APIKeyResponse(
-            id=api_key.id,
-            name=api_key.name or "Unnamed",
-            key_prefix=api_key.key_hash[:8] + "..." if len(api_key.key_hash) > 8 else api_key.key_hash,
-            created_at=api_key.created_at.isoformat(),
-            last_used_at=api_key.last_used_at.isoformat() if api_key.last_used_at else None
-        )
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to update API key: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update API key"
-        )
+    db.commit()
+    db.refresh(api_key)
+    logger.info(f"API key {key_id} updated for user {current_user.id}")
+    
+    return APIKeyResponse(
+        id=api_key.id,
+        name=api_key.name or "Unnamed",
+        key_prefix=api_key.key_hash[:8] + "..." if len(api_key.key_hash) > 8 else api_key.key_hash,
+        created_at=api_key.created_at.isoformat(),
+        last_used_at=api_key.last_used_at.isoformat() if api_key.last_used_at else None
+    )
 
 
 # Notification Settings Endpoints
@@ -395,6 +354,7 @@ async def get_notification_settings(
 
 
 @router.patch("/notifications", response_model=NotificationSettingsResponse)
+@handle_errors
 async def update_notification_settings(
     settings: NotificationSettings,
     current_user: User = Depends(get_current_user),
@@ -425,28 +385,20 @@ async def update_notification_settings(
     notification_settings.discord_enabled = settings.discord_enabled
     notification_settings.discord_webhook_url = settings.discord_webhook_url
     
-    try:
-        db.commit()
-        db.refresh(notification_settings)
-        logger.info(f"Notification settings updated for user {current_user.id}")
-        
-        return NotificationSettingsResponse(
-            email_drift=notification_settings.email_drift,
-            email_cost_anomaly=notification_settings.email_cost_anomaly,
-            email_quality_drop=notification_settings.email_quality_drop,
-            in_app_drift=notification_settings.in_app_drift,
-            in_app_cost_anomaly=notification_settings.in_app_cost_anomaly,
-            in_app_quality_drop=notification_settings.in_app_quality_drop,
-            slack_enabled=notification_settings.slack_enabled,
-            slack_webhook_url=notification_settings.slack_webhook_url,
-            discord_enabled=notification_settings.discord_enabled,
-            discord_webhook_url=notification_settings.discord_webhook_url,
-        )
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to update notification settings: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update notification settings"
-        )
+    db.commit()
+    db.refresh(notification_settings)
+    logger.info(f"Notification settings updated for user {current_user.id}")
+    
+    return NotificationSettingsResponse(
+        email_drift=notification_settings.email_drift,
+        email_cost_anomaly=notification_settings.email_cost_anomaly,
+        email_quality_drop=notification_settings.email_quality_drop,
+        in_app_drift=notification_settings.in_app_drift,
+        in_app_cost_anomaly=notification_settings.in_app_cost_anomaly,
+        in_app_quality_drop=notification_settings.in_app_quality_drop,
+        slack_enabled=notification_settings.slack_enabled,
+        slack_webhook_url=notification_settings.slack_webhook_url,
+        discord_enabled=notification_settings.discord_enabled,
+        discord_webhook_url=notification_settings.discord_webhook_url,
+    )
 

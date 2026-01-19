@@ -17,6 +17,7 @@ from app.core.security import (
 )
 from app.core.config import settings
 from app.core.logging_config import logger
+from app.core.decorators import handle_errors
 from app.models.user import User
 
 router = APIRouter()
@@ -67,48 +68,40 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
         )
     
     # Create new user
-    try:
-        hashed_password = get_password_hash(user_data.password)
-        user = User(
-            email=user_data.email,
-            hashed_password=hashed_password,
-            full_name=user_data.full_name,
-            is_active=True
-        )
-        db.add(user)
-        db.flush()  # Flush to get user.id
-        
-        # Create free plan subscription for new user
-        from app.models.subscription import Subscription
-        from datetime import datetime, timedelta
-        
-        now = datetime.utcnow()
-        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        if now.month == 12:
-            period_end = period_start.replace(year=now.year + 1, month=1)
-        else:
-            period_end = period_start.replace(month=now.month + 1)
-        
-        subscription = Subscription(
-            user_id=user.id,
-            plan_type="free",
-            status="active",
-            current_period_start=period_start,
-            current_period_end=period_end,
-            cancel_at_period_end="false"
-        )
-        db.add(subscription)
-        db.commit()
-        db.refresh(user)
-        logger.info(f"User registered successfully: {user.email}")
-        return user
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to register user: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to register user"
-        )
+    hashed_password = get_password_hash(user_data.password)
+    user = User(
+        email=user_data.email,
+        hashed_password=hashed_password,
+        full_name=user_data.full_name,
+        is_active=True
+    )
+    db.add(user)
+    db.flush()  # Flush to get user.id
+    
+    # Create free plan subscription for new user
+    from app.models.subscription import Subscription
+    from datetime import datetime, timedelta
+    
+    now = datetime.utcnow()
+    period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if now.month == 12:
+        period_end = period_start.replace(year=now.year + 1, month=1)
+    else:
+        period_end = period_start.replace(month=now.month + 1)
+    
+    subscription = Subscription(
+        user_id=user.id,
+        plan_type="free",
+        status="active",
+        current_period_start=period_start,
+        current_period_end=period_end,
+        cancel_at_period_end="false"
+    )
+    db.add(subscription)
+    db.commit()
+    db.refresh(user)
+    logger.info(f"User registered successfully: {user.email}")
+    return user
 
 
 @router.post("/login", response_model=TokenResponse)
