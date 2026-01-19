@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { User, Lock, Key, Bell, CreditCard, Activity, Link2 } from 'lucide-react';
+import { User, Lock, Key, Bell, CreditCard, Activity, Link2, BarChart3 } from 'lucide-react';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -56,6 +56,13 @@ export default function SettingsPage() {
       icon: Activity,
       href: '/settings/activity',
       color: 'text-gray-600 bg-gray-50',
+    },
+    {
+      title: 'Monitoring',
+      description: 'View system metrics and monitoring dashboards',
+      icon: BarChart3,
+      href: '/settings/monitoring',
+      color: 'text-cyan-600 bg-cyan-50',
     },
   ];
 

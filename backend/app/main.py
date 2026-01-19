@@ -120,11 +120,47 @@ app.add_middleware(APIHookMiddleware, enabled=True)
 app.include_router(api_router, prefix="/api/v1")
 
 
+async def update_business_metrics_periodically():
+    """Periodically update business metrics (active users, projects)"""
+    import asyncio
+    from app.core.database import SessionLocal
+    from app.models import User, Project
+    from app.core.metrics import active_users, active_projects
+    
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                # Count active users (users with is_active=True)
+                user_count = db.query(User).filter(User.is_active == True).count()
+                active_users.set(user_count)
+                
+                # Count active projects (projects with is_active=True)
+                project_count = db.query(Project).filter(Project.is_active == True).count()
+                active_projects.set(project_count)
+                
+                logger.debug(f"Updated metrics: {user_count} active users, {project_count} active projects")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error updating business metrics: {e}", exc_info=True)
+        
+        # Update every 60 seconds
+        await asyncio.sleep(60)
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database connection on startup"""
     logger.info("Starting AgentGuard API...")
     logger.info(f"Environment: {'DEBUG' if settings.DEBUG else 'PRODUCTION'}")
+    
+    # Update app info metrics
+    update_app_info(
+        version=settings.APP_VERSION,
+        environment=settings.ENVIRONMENT if hasattr(settings, 'ENVIRONMENT') else ('development' if settings.DEBUG else 'production')
+    )
+    logger.info("App info metrics updated")
     
     # Create database tables (for development)
     # In production, use Alembic migrations instead
@@ -153,6 +189,11 @@ async def startup_event():
     from app.services.scheduler_service import scheduler_service
     scheduler_service.start()
     logger.info("Background scheduler started")
+    
+    # Start periodic metrics update task
+    import asyncio
+    asyncio.create_task(update_business_metrics_periodically())
+    logger.info("Business metrics update task started")
 
 
 @app.on_event("shutdown")
