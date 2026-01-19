@@ -3,6 +3,18 @@
  */
 import axios from 'axios';
 import { toNumber } from '@/lib/format';
+import { validateArrayResponse, normalizeModelComparison } from '@/lib/validate';
+import {
+  ModelComparisonArraySchema,
+  CostAnalysisSchema,
+  QualityScoreArraySchema,
+  DriftDetectionArraySchema,
+  ChainProfileSchema,
+  APICallArraySchema,
+  ProjectSchema,
+  APICallSchema,
+  DriftDetectionSchema,
+} from '@/lib/schemas';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -103,12 +115,23 @@ export const projectsAPI = {
   list: async (search?: string) => {
     const params = search ? { search } : {};
     const response = await apiClient.get('/projects', { params });
-    return response.data;
+    // Validate array response
+    return validateArrayResponse(
+      ProjectSchema,
+      response.data,
+      '/projects'
+    );
   },
   
   get: async (id: number) => {
     const response = await apiClient.get(`/projects/${id}`);
-    return response.data;
+    // Validate single item response
+    try {
+      return ProjectSchema.parse(response.data);
+    } catch (error) {
+      console.warn(`[API Validation] Project ${id} schema mismatch:`, error);
+      return response.data; // Return raw data on validation failure
+    }
   },
   
   create: async (data: { name: string; description?: string; generate_sample_data?: boolean }) => {
@@ -175,12 +198,23 @@ export const apiCallsAPI = {
     const response = await apiClient.get('/api-calls', {
       params: { project_id: Number(projectId), ...validatedParams },
     });
-    return response.data;
+    // Validate array response
+    return validateArrayResponse(
+      APICallArraySchema,
+      response.data,
+      '/api-calls'
+    );
   },
   
   get: async (id: number) => {
     const response = await apiClient.get(`/api-calls/${id}`);
-    return response.data;
+    // Validate single item response
+    try {
+      return APICallSchema.parse(response.data);
+    } catch (error) {
+      console.warn(`[API Validation] API call ${id} schema mismatch:`, error);
+      return response.data; // Return raw data on validation failure
+    }
   },
   
   getStats: async (projectId: number, days: number = 7) => {
@@ -212,7 +246,12 @@ export const qualityAPI = {
     const response = await apiClient.get('/quality/scores', {
       params: { project_id: projectId, ...params },
     });
-    return response.data;
+    // Validate array response
+    return validateArrayResponse(
+      QualityScoreArraySchema,
+      response.data,
+      '/quality/scores'
+    );
   },
   
   getStats: async (projectId: number, days: number = 7) => {
@@ -236,12 +275,23 @@ export const driftAPI = {
     const response = await apiClient.get('/drift', {
       params: { project_id: projectId, ...params },
     });
-    return response.data;
+    // Validate array response
+    return validateArrayResponse(
+      DriftDetectionArraySchema,
+      response.data,
+      '/drift'
+    );
   },
   
   get: async (id: number) => {
     const response = await apiClient.get(`/drift/${id}`);
-    return response.data;
+    // Validate single item response
+    try {
+      return DriftDetectionSchema.parse(response.data);
+    } catch (error) {
+      console.warn(`[API Validation] Drift detection ${id} schema mismatch:`, error);
+      return response.data; // Return raw data on validation failure
+    }
   },
 };
 
@@ -291,15 +341,15 @@ export const benchmarkAPI = {
     const response = await apiClient.get('/benchmark/compare', {
       params: { project_id: Number(projectId), days: validatedDays },
     });
+    // Validate and normalize response
     const data = Array.isArray(response.data) ? response.data : [];
-    return data.map((item) => ({
-      ...item,
-      recommendation_score: toNumber(item?.recommendation_score),
-      success_rate: toNumber(item?.success_rate),
-      total_calls: toNumber(item?.total_calls),
-      cost_per_call: toNumber(item?.cost_per_call ?? item?.avg_cost_per_call),
-      avg_latency_ms: toNumber(item?.avg_latency_ms ?? item?.avg_latency),
-    }));
+    const validated = validateArrayResponse(
+      ModelComparisonSchema,
+      data,
+      '/benchmark/compare'
+    );
+    // Normalize field name variations
+    return validated.map(normalizeModelComparison);
   },
   
   getRecommendations: async (projectId: number, days: number = 7) => {
@@ -322,7 +372,19 @@ export const costAPI = {
     const response = await apiClient.get('/cost/analysis', {
       params: { project_id: Number(projectId), days: validatedDays },
     });
-    return response.data;
+    // Validate response schema - return safe defaults on failure
+    try {
+      return CostAnalysisSchema.parse(response.data);
+    } catch (error) {
+      console.warn('[API Validation] Cost analysis schema mismatch, using defaults:', error);
+      return {
+        total_cost: 0,
+        by_model: {},
+        by_provider: {},
+        by_day: [],
+        average_daily_cost: 0,
+      };
+    }
   },
   
   detectAnomalies: async (projectId: number) => {
@@ -354,7 +416,21 @@ export const agentChainAPI = {
       params.chain_id = chainId;
     }
     const response = await apiClient.get('/agent-chain/profile', { params });
-    return response.data;
+    // Validate response - chain profile can be single object or array
+    if (Array.isArray(response.data)) {
+      return validateArrayResponse(
+        ChainProfileSchema,
+        response.data,
+        '/agent-chain/profile'
+      );
+    } else {
+      try {
+        return ChainProfileSchema.parse(response.data);
+      } catch (error) {
+        console.warn('[API Validation] Chain profile schema mismatch:', error);
+        return response.data; // Return raw data on validation failure
+      }
+    }
   },
   
   getAgentStatistics: async (projectId: number, days: number = 7) => {

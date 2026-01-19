@@ -45,14 +45,16 @@ export default function APICallDetailPage() {
       setApiCall(callData);
 
       // Find previous and next calls
-      const currentIndex = callsList.findIndex((c: any) => c.id === callId);
-      if (currentIndex > 0) {
-        setPrevCallId(callsList[currentIndex - 1].id);
+      // Ensure callsList is an array (validateArrayResponse guarantees this)
+      const calls: any[] = Array.isArray(callsList) ? (callsList as any[]) : [];
+      const currentIndex = calls.findIndex((c: any) => c && c.id === callId);
+      if (currentIndex > 0 && calls[currentIndex - 1]?.id) {
+        setPrevCallId(calls[currentIndex - 1].id);
       } else {
         setPrevCallId(null);
       }
-      if (currentIndex < callsList.length - 1 && currentIndex >= 0) {
-        setNextCallId(callsList[currentIndex + 1].id);
+      if (currentIndex < calls.length - 1 && currentIndex >= 0 && calls[currentIndex + 1]?.id) {
+        setNextCallId(calls[currentIndex + 1].id);
       } else {
         setNextCallId(null);
       }

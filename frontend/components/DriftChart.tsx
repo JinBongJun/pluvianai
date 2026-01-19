@@ -24,7 +24,7 @@ export default function DriftChart({ projectId }: { projectId: number }) {
   const loadData = async () => {
     try {
       const detections = await driftAPI.list(projectId, { limit: 50 });
-      setData(detections);
+      setData(Array.isArray(detections) ? (detections as unknown as DriftDetection[]) : []);
     } catch (error) {
       console.error('Failed to load drift detections:', error);
     } finally {

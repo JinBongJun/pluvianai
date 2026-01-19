@@ -77,8 +77,11 @@ export default function DriftDetectionsPage() {
 
       const data = await driftAPI.list(projectId, params);
       
+      // Ensure data is an array (validateArrayResponse guarantees this)
+      const detections: DriftDetection[] = Array.isArray(data) ? (data as unknown as DriftDetection[]) : [];
+      
       // Apply client-side filtering
-      let filtered = data;
+      let filtered = detections;
       
       // Date range filter
       if (dateRange.from || dateRange.to) {

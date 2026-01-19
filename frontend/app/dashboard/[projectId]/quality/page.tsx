@@ -74,8 +74,11 @@ export default function QualityScoresPage() {
 
       const data = await qualityAPI.getScores(projectId, params);
       
+      // Ensure data is an array
+      const scores: QualityScore[] = Array.isArray(data) ? (data as unknown as QualityScore[]) : [];
+      
       // Apply client-side filtering
-      let filtered = data;
+      let filtered = scores;
       
       // Date range filter
       if (dateRange.from || dateRange.to) {
