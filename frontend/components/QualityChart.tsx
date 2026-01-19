@@ -22,7 +22,7 @@ export default function QualityChart({ projectId }: { projectId: number }) {
   const loadData = async () => {
     try {
       const scores = await qualityAPI.getScores(projectId, { limit: 100 });
-      setData(scores);
+      setData(Array.isArray(scores) ? (scores as unknown as QualityScore[]) : []);
       
       // Drift 감지: 점수가 10% 이상 떨어진 지점 찾기
       const driftIndices: number[] = [];
