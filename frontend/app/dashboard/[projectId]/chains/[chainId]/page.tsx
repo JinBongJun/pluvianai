@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import ChainFlowDiagram from '@/components/ChainFlowDiagram';
 import { agentChainAPI, apiCallsAPI } from '@/lib/api';
+import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
 import { ArrowLeft, ArrowRight, Clock, CheckCircle, XCircle, Activity, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -203,7 +204,7 @@ export default function ChainDetailPage() {
               <div>
                 <p className="text-sm text-slate-400 mb-1">Total Latency</p>
                 <p className="text-2xl font-bold text-white">
-                  {(chain.total_latency / 1000).toFixed(2)}s
+                  {toFixedSafe(chain.total_latency / 1000, 2)}s
                 </p>
               </div>
               <Clock className="h-8 w-8 text-blue-400" />
@@ -218,7 +219,7 @@ export default function ChainDetailPage() {
                   chain.success_rate >= 90 ? 'text-green-400' :
                   chain.success_rate >= 70 ? 'text-yellow-400' : 'text-red-400'
                 )}>
-                  {chain.success_rate.toFixed(1)}%
+                  {toFixedSafe(chain.success_rate, 1)}%
                 </p>
               </div>
               {chain.success ? (
@@ -239,7 +240,7 @@ export default function ChainDetailPage() {
                 <h3 className="text-lg font-semibold text-yellow-400 mb-1">Bottleneck Detected</h3>
                 <p className="text-sm text-yellow-300">
                   Agent <strong>{chain.bottleneck_agent}</strong> is the slowest component with an average latency of{' '}
-                  <strong>{(chain.bottleneck_latency_ms / 1000).toFixed(2)}s</strong>.
+                  <strong>{toFixedSafe(chain.bottleneck_latency_ms / 1000, 2)}s</strong>.
                   Consider optimizing this agent for better overall chain performance.
                 </p>
               </div>
@@ -322,10 +323,10 @@ export default function ChainDetailPage() {
                           {agent.call_count}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
-                          {(agent.avg_latency_ms / 1000).toFixed(2)}s
+                          {toFixedSafe(agent.avg_latency_ms / 1000, 2)}s
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
-                          {(agent.total_latency_ms / 1000).toFixed(2)}s
+                          {toFixedSafe(agent.total_latency_ms / 1000, 2)}s
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           {agent.failure_count > 0 ? (
@@ -335,11 +336,11 @@ export default function ChainDetailPage() {
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
-                          {agent.failure_rate.toFixed(1)}%
+                          {toFixedSafe(agent.failure_rate, 1)}%
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <Badge variant={agent.avg_quality_score >= 80 ? 'success' : agent.avg_quality_score >= 60 ? 'warning' : 'error'}>
-                            {agent.avg_quality_score.toFixed(1)}%
+                            {toFixedSafe(agent.avg_quality_score, 1)}%
                           </Badge>
                         </td>
                       </tr>
@@ -388,7 +389,7 @@ export default function ChainDetailPage() {
                     <div className="flex items-center gap-3">
                       {call.latency_ms && (
                         <div className="text-sm text-slate-400">
-                          {(call.latency_ms / 1000).toFixed(2)}s
+                          {toFixedSafe(call.latency_ms / 1000, 2)}s
                         </div>
                       )}
                       {call.status_code ? (

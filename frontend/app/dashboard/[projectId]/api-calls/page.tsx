@@ -8,6 +8,7 @@ import Pagination from '@/components/ui/Pagination';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import { apiCallsAPI } from '@/lib/api';
+import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
 import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, RefreshCw } from 'lucide-react';
 import ExportButton from '@/components/export/ExportButton';
@@ -409,7 +410,7 @@ export default function APICallsListPage() {
                         {getStatusBadge(call.status_code)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
-                        {call.latency_ms ? `${call.latency_ms.toFixed(0)}ms` : 'N/A'}
+                        {call.latency_ms ? `${toFixedSafe(call.latency_ms, 0)}ms` : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                         {call.request_tokens && call.response_tokens ? (

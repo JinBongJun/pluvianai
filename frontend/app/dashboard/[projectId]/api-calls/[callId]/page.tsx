@@ -7,6 +7,7 @@ import JSONViewer from '@/components/ui/JSONViewer';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import { apiCallsAPI, qualityAPI } from '@/lib/api';
+import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
 import { ArrowLeft, ArrowRight, Clock, DollarSign, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -108,7 +109,7 @@ export default function APICallDetailPage() {
     const outputPrice = 0.00006; // per 1K tokens
     
     const cost = (apiCall.request_tokens / 1000) * inputPrice + (apiCall.response_tokens / 1000) * outputPrice;
-    return cost.toFixed(6);
+    return toFixedSafe(cost, 6);
   };
 
   if (loading) {
@@ -207,7 +208,7 @@ export default function APICallDetailPage() {
               <span className="text-sm font-medium text-gray-700">Latency</span>
             </div>
             <div className="text-lg font-semibold text-gray-900">
-              {apiCall.latency_ms ? `${apiCall.latency_ms.toFixed(0)}ms` : 'N/A'}
+              {apiCall.latency_ms ? `${toFixedSafe(apiCall.latency_ms, 0)}ms` : 'N/A'}
             </div>
           </div>
 
@@ -247,14 +248,14 @@ export default function APICallDetailPage() {
               <div>
                 <div className="text-sm text-gray-600">Overall</div>
                 <div className="text-2xl font-bold text-gray-900">
-                  {qualityScore.overall_score.toFixed(1)}%
+                  {toFixedSafe(qualityScore.overall_score, 1)}%
                 </div>
               </div>
               {qualityScore.semantic_consistency_score !== null && (
                 <div>
                   <div className="text-sm text-gray-600">Semantic</div>
                   <div className="text-xl font-semibold text-gray-900">
-                    {qualityScore.semantic_consistency_score.toFixed(1)}%
+                    {toFixedSafe(qualityScore.semantic_consistency_score, 1)}%
                   </div>
                 </div>
               )}
@@ -262,7 +263,7 @@ export default function APICallDetailPage() {
                 <div>
                   <div className="text-sm text-gray-600">Tone</div>
                   <div className="text-xl font-semibold text-gray-900">
-                    {qualityScore.tone_score.toFixed(1)}%
+                    {toFixedSafe(qualityScore.tone_score, 1)}%
                   </div>
                 </div>
               )}
@@ -270,7 +271,7 @@ export default function APICallDetailPage() {
                 <div>
                   <div className="text-sm text-gray-600">Coherence</div>
                   <div className="text-xl font-semibold text-gray-900">
-                    {qualityScore.coherence_score.toFixed(1)}%
+                    {toFixedSafe(qualityScore.coherence_score, 1)}%
                   </div>
                 </div>
               )}

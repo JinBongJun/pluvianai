@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { subscriptionAPI } from '@/lib/api';
 import { clsx } from 'clsx';
+import { toFixedSafe } from '@/lib/format';
 
 interface UsageMetric {
   current: number;
@@ -43,8 +44,8 @@ export default function UsageDashboard({ userId }: UsageDashboardProps) {
   }
 
   const formatNumber = (num: number) => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    if (num >= 1000000) return `${toFixedSafe(num / 1000000, 1)}M`;
+    if (num >= 1000) return `${toFixedSafe(num / 1000, 1)}K`;
     return num.toString();
   };
 

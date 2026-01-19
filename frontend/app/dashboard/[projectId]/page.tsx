@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ToastContainer';
 import { projectsAPI, qualityAPI, costAPI, apiCallsAPI, adminAPI } from '@/lib/api';
+import { toFixedSafe } from '@/lib/format';
 import QualityChart from '@/components/QualityChart';
 import DriftChart from '@/components/DriftChart';
 import CostChart from '@/components/CostChart';
@@ -181,17 +182,17 @@ export default function ProjectDetailPage() {
               />
               <StatsCard
                 title="Avg Quality Score"
-                value={stats?.avg_score ? `${stats.avg_score.toFixed(1)}%` : 'N/A'}
+                value={stats?.avg_score != null ? `${toFixedSafe(stats.avg_score, 1)}%` : 'N/A'}
                 subtitle="Last 7 days"
               />
               <StatsCard
                 title="Total Cost"
-                value={costData?.total_cost ? `$${costData.total_cost.toFixed(2)}` : '$0.00'}
+                value={costData?.total_cost != null ? `$${toFixedSafe(costData.total_cost, 2)}` : '$0.00'}
                 subtitle="Last 7 days"
               />
               <StatsCard
                 title="Success Rate"
-                value={stats?.success_rate ? `${(stats.success_rate * 100).toFixed(1)}%` : 'N/A'}
+                value={stats?.success_rate != null ? `${toFixedSafe(stats.success_rate * 100, 1)}%` : 'N/A'}
                 subtitle="Last 7 days"
               />
             </div>

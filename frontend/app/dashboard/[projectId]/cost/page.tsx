@@ -7,6 +7,7 @@ import FilterPanel, { FilterState } from '@/components/filters/FilterPanel';
 import DateRangePicker from '@/components/ui/DateRangePicker';
 import Button from '@/components/ui/Button';
 import { costAPI } from '@/lib/api';
+import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
 import { ArrowLeft, Download, RefreshCw } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -171,23 +172,23 @@ export default function CostAnalysisPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <StatsCard
               title="Total Cost"
-              value={`$${costData.total_cost.toFixed(2)}`}
+              value={`$${toFixedSafe(costData.total_cost, 2)}`}
               subtitle={formatDateRange()}
             />
             <StatsCard
               title="Average Daily"
-              value={`$${costData.average_daily_cost.toFixed(2)}`}
+              value={`$${toFixedSafe(costData.average_daily_cost, 2)}`}
               subtitle={formatDateRange()}
             />
             <StatsCard
               title="Top Model"
               value={topModels[0]?.model || 'N/A'}
-              subtitle={topModels[0] ? `$${topModels[0].cost.toFixed(2)}` : undefined}
+              subtitle={topModels[0] ? `$${toFixedSafe(topModels[0].cost, 2)}` : undefined}
             />
             <StatsCard
               title="Top Provider"
               value={topProviders[0]?.provider || 'N/A'}
-              subtitle={topProviders[0] ? `$${topProviders[0].cost.toFixed(2)}` : undefined}
+              subtitle={topProviders[0] ? `$${toFixedSafe(topProviders[0].cost, 2)}` : undefined}
             />
           </div>
         )}
@@ -220,7 +221,7 @@ export default function CostAnalysisPage() {
                           {item.model}
                         </span>
                         <span className="text-slate-300 font-mono">
-                          ${item.cost.toFixed(2)}
+                          ${toFixedSafe(item.cost, 2)}
                         </span>
                       </div>
                       <div className="w-full bg-slate-700/50 rounded-full h-2 overflow-hidden">
@@ -230,7 +231,7 @@ export default function CostAnalysisPage() {
                         />
                       </div>
                       <div className="text-xs text-slate-400">
-                        {percentage.toFixed(1)}% of total
+                        {toFixedSafe(percentage, 1)}% of total
                       </div>
                     </div>
                   );
@@ -257,7 +258,7 @@ export default function CostAnalysisPage() {
                           {item.provider}
                         </span>
                         <span className="text-slate-300 font-mono">
-                          ${item.cost.toFixed(2)}
+                          ${toFixedSafe(item.cost, 2)}
                         </span>
                       </div>
                       <div className="w-full bg-slate-700/50 rounded-full h-2 overflow-hidden">
@@ -267,7 +268,7 @@ export default function CostAnalysisPage() {
                         />
                       </div>
                       <div className="text-xs text-slate-400">
-                        {percentage.toFixed(1)}% of total
+                        {toFixedSafe(percentage, 1)}% of total
                       </div>
                     </div>
                   );

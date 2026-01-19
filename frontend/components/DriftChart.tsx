@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { driftAPI } from '@/lib/api';
+import { toFixedSafe } from '@/lib/format';
 
 interface DriftDetection {
   id: number;
@@ -95,7 +96,7 @@ export default function DriftChart({ projectId }: { projectId: number }) {
               <div>
                 <span className="font-medium text-white">{detection.detection_type}</span>
                 <span className="ml-2 text-sm text-slate-400">
-                  {detection.change_percentage.toFixed(1)}% change
+                  {toFixedSafe(detection.change_percentage, 1)}% change
                 </span>
               </div>
               <span className={`px-2 py-1 rounded text-xs font-medium ${

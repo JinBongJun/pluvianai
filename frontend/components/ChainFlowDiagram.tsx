@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { ArrowRight, Clock, CheckCircle, XCircle, Activity } from 'lucide-react';
 import Badge from './ui/Badge';
 import { clsx } from 'clsx';
+import { toFixedSafe } from '@/lib/format';
 
 interface AgentStats {
   agent_name: string;
@@ -57,7 +58,7 @@ export default function ChainFlowDiagram({
           <div>
             <p className="text-xs text-slate-400 mb-1">Total Chain Latency</p>
             <p className="text-xl font-bold text-white">
-              {(totalLatency / 1000).toFixed(2)}s
+              {toFixedSafe(totalLatency / 1000, 2)}s
             </p>
           </div>
           <div className="h-12 w-px bg-white/10" />
@@ -68,7 +69,7 @@ export default function ChainFlowDiagram({
               successRate >= 90 ? 'text-green-400' :
               successRate >= 70 ? 'text-yellow-400' : 'text-red-400'
             )}>
-              {successRate.toFixed(1)}%
+              {toFixedSafe(successRate, 1)}%
             </p>
           </div>
         </div>
@@ -122,7 +123,7 @@ export default function ChainFlowDiagram({
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-400">Avg Latency</span>
                       <span className="text-white font-medium">
-                        {(agent.avg_latency_ms / 1000).toFixed(2)}s
+                        {toFixedSafe(agent.avg_latency_ms / 1000, 2)}s
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
@@ -134,7 +135,7 @@ export default function ChainFlowDiagram({
                         }
                         className="text-xs"
                       >
-                        {agent.avg_quality_score.toFixed(0)}%
+                        {toFixedSafe(agent.avg_quality_score, 0)}%
                       </Badge>
                     </div>
                     {hasFailures && (
@@ -160,7 +161,7 @@ export default function ChainFlowDiagram({
                   <div className="flex flex-col items-center">
                     <ArrowRight className="h-6 w-6 text-slate-400" />
                     <span className="text-xs text-slate-500 mt-1">
-                      {(sortedAgents[index + 1].avg_latency_ms / 1000).toFixed(1)}s
+                      {toFixedSafe(sortedAgents[index + 1].avg_latency_ms / 1000, 1)}s
                     </span>
                   </div>
                 )}
@@ -190,11 +191,11 @@ export default function ChainFlowDiagram({
                   left: `${leftPercent}%`,
                   width: `${widthPercent}%`,
                 }}
-                title={`${agent.agent_name}: ${(agent.avg_latency_ms / 1000).toFixed(2)}s`}
+                title={`${agent.agent_name}: ${toFixedSafe(agent.avg_latency_ms / 1000, 2)}s`}
               >
                 {widthPercent > 10 && (
                   <span className="text-xs font-medium text-white">
-                    {agent.agent_name} ({(agent.avg_latency_ms / 1000).toFixed(1)}s)
+                    {agent.agent_name} ({toFixedSafe(agent.avg_latency_ms / 1000, 1)}s)
                   </span>
                 )}
               </div>
@@ -203,7 +204,7 @@ export default function ChainFlowDiagram({
         </div>
         <div className="mt-2 flex items-center justify-between text-xs text-slate-400 px-2">
           <span>0s</span>
-          <span>Total: {(totalLatency / 1000).toFixed(2)}s</span>
+          <span>Total: {toFixedSafe(totalLatency / 1000, 2)}s</span>
         </div>
       </div>
     </div>

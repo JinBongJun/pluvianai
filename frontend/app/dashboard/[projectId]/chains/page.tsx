@@ -9,6 +9,7 @@ import Badge from '@/components/ui/Badge';
 import DateRangePicker from '@/components/ui/DateRangePicker';
 import Select from '@/components/ui/Select';
 import { agentChainAPI } from '@/lib/api';
+import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
 import { ArrowRight, TrendingUp, TrendingDown, AlertTriangle, Activity, Clock, CheckCircle, XCircle, GitBranch, Search, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Download } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -530,7 +531,7 @@ export default function AgentChainsPage() {
                   <div>
                     <p className="text-sm text-slate-400 mb-1">Success Rate</p>
                     <p className="text-2xl font-bold text-white">
-                      {typeof successRate === 'number' && !isNaN(successRate) ? successRate.toFixed(1) : '0.0'}%
+                      {toFixedSafe(successRate, 1)}%
                     </p>
                   </div>
                   <CheckCircle className="h-8 w-8 text-green-400" />
@@ -541,7 +542,7 @@ export default function AgentChainsPage() {
                   <div>
                     <p className="text-sm text-slate-400 mb-1">Avg Chain Latency</p>
                     <p className="text-2xl font-bold text-white">
-                      {avgLatency ? `${(avgLatency / 1000).toFixed(2)}s` : 'N/A'}
+                      {avgLatency ? `${toFixedSafe(avgLatency / 1000, 2)}s` : 'N/A'}
                     </p>
                   </div>
                   <Clock className="h-8 w-8 text-cyan-400" />
@@ -738,7 +739,7 @@ export default function AgentChainsPage() {
                           <p className="text-xs text-slate-400 mb-1">Total Latency</p>
                           <p className="text-lg font-semibold text-white">
                             {typeof chain.total_latency === 'number' && !isNaN(chain.total_latency)
-                              ? `${(chain.total_latency / 1000).toFixed(2)}s` 
+                              ? `${toFixedSafe(chain.total_latency / 1000, 2)}s` 
                               : 'N/A'}
                           </p>
                         </div>
@@ -746,7 +747,7 @@ export default function AgentChainsPage() {
                           <p className="text-xs text-slate-400 mb-1">Success Rate</p>
                           <p className="text-lg font-semibold text-white">
                             {typeof chain.success_rate === 'number' && !isNaN(chain.success_rate)
-                              ? `${chain.success_rate.toFixed(1)}%` 
+                              ? `${toFixedSafe(chain.success_rate, 1)}%` 
                               : 'N/A'}
                           </p>
                         </div>
@@ -760,7 +761,7 @@ export default function AgentChainsPage() {
                             <span className="text-sm text-yellow-400">
                               Bottleneck: <strong>{chain.bottleneck_agent}</strong>{' '}
                               {typeof chain.bottleneck_latency_ms === 'number' && !isNaN(chain.bottleneck_latency_ms) && chain.bottleneck_latency_ms > 0 && (
-                                <> ({(chain.bottleneck_latency_ms / 1000).toFixed(2)}s avg latency)</>
+                                <> ({toFixedSafe(chain.bottleneck_latency_ms / 1000, 2)}s avg latency)</>
                               )}
                             </span>
                           </div>

@@ -2,6 +2,7 @@
  * API client for AgentGuard backend
  */
 import axios from 'axios';
+import { toNumber } from '@/lib/format';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -290,7 +291,15 @@ export const benchmarkAPI = {
     const response = await apiClient.get('/benchmark/compare', {
       params: { project_id: Number(projectId), days: validatedDays },
     });
-    return response.data;
+    const data = Array.isArray(response.data) ? response.data : [];
+    return data.map((item) => ({
+      ...item,
+      recommendation_score: toNumber(item?.recommendation_score),
+      success_rate: toNumber(item?.success_rate),
+      total_calls: toNumber(item?.total_calls),
+      cost_per_call: toNumber(item?.cost_per_call ?? item?.avg_cost_per_call),
+      avg_latency_ms: toNumber(item?.avg_latency_ms ?? item?.avg_latency),
+    }));
   },
   
   getRecommendations: async (projectId: number, days: number = 7) => {

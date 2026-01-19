@@ -7,6 +7,7 @@ import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import JSONViewer from '@/components/ui/JSONViewer';
 import { driftAPI, apiCallsAPI } from '@/lib/api';
+import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
 import { ArrowLeft, TrendingUp, TrendingDown, AlertTriangle, Info } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -151,7 +152,7 @@ export default function DriftDetailPage() {
             <div className="flex items-center gap-2">
               {getChangeIcon()}
               <span className="text-lg font-semibold text-gray-900">
-                {Math.abs(drift.change_percentage).toFixed(1)}%
+                {toFixedSafe(Math.abs(drift.change_percentage), 1)}%
               </span>
             </div>
           </div>
@@ -159,7 +160,7 @@ export default function DriftDetailPage() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <div className="text-sm font-medium text-gray-700 mb-2">Drift Score</div>
             <div className="text-lg font-semibold text-gray-900">
-              {drift.drift_score.toFixed(1)}/100
+              {toFixedSafe(drift.drift_score, 1)}/100
             </div>
           </div>
         </div>
@@ -172,7 +173,7 @@ export default function DriftDetailPage() {
               <div>
                 <div className="text-sm font-medium text-gray-700 mb-2">Baseline Value</div>
                 <div className="text-2xl font-bold text-gray-900">
-                  {drift.baseline_value !== null ? drift.baseline_value.toFixed(2) : 'N/A'}
+                  {drift.baseline_value !== null ? toFixedSafe(drift.baseline_value, 2) : 'N/A'}
                 </div>
                 {drift.baseline_period_start && drift.baseline_period_end && (
                   <div className="text-xs text-gray-500 mt-2">
@@ -183,7 +184,7 @@ export default function DriftDetailPage() {
               <div>
                 <div className="text-sm font-medium text-gray-700 mb-2">Current Value</div>
                 <div className="text-2xl font-bold text-gray-900">
-                  {drift.current_value !== null ? drift.current_value.toFixed(2) : 'N/A'}
+                  {drift.current_value !== null ? toFixedSafe(drift.current_value, 2) : 'N/A'}
                 </div>
                 <div className="text-xs text-gray-500 mt-2">
                   Detected: {new Date(drift.detected_at).toLocaleDateString()}
@@ -262,7 +263,7 @@ export default function DriftDetailPage() {
                     </div>
                   </div>
                   <div className="text-sm text-gray-600">
-                    {call.latency_ms ? `${call.latency_ms.toFixed(0)}ms` : 'N/A'}
+                    {call.latency_ms ? `${toFixedSafe(call.latency_ms, 0)}ms` : 'N/A'}
                   </div>
                 </div>
               ))}

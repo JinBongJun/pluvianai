@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button';
 import DateRangePicker from '@/components/ui/DateRangePicker';
 import Select from '@/components/ui/Select';
 import { reportsAPI } from '@/lib/api';
+import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
 import { FileText, Download, Calendar, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import ProjectTabs from '@/components/ProjectTabs';
@@ -207,20 +208,20 @@ function StandardReportView({ report }: { report: any }) {
           <div className="p-4 bg-white/5 rounded-lg border border-white/10">
             <div className="text-sm text-slate-400 mb-1">Success Rate</div>
             <div className="text-2xl font-bold text-white">
-              {report.summary.success_rate.toFixed(1)}%
+              {toFixedSafe(report.summary.success_rate, 1)}%
             </div>
           </div>
           <div className="p-4 bg-white/5 rounded-lg border border-white/10">
             <div className="text-sm text-slate-400 mb-1">Total Cost</div>
             <div className="text-2xl font-bold text-white">
-              ${report.summary.total_cost.toFixed(2)}
+              ${toFixedSafe(report.summary.total_cost, 2)}
             </div>
           </div>
           <div className="p-4 bg-white/5 rounded-lg border border-white/10">
             <div className="text-sm text-slate-400 mb-1">Avg Quality</div>
             <div className="text-2xl font-bold text-white">
               {report.summary.quality_scores.average
-                ? report.summary.quality_scores.average.toFixed(1)
+                ? toFixedSafe(report.summary.quality_scores.average, 1)
                 : 'N/A'}
             </div>
           </div>
@@ -235,19 +236,19 @@ function StandardReportView({ report }: { report: any }) {
             <div className="p-4 bg-white/5 rounded-lg border border-white/10">
               <div className="text-sm text-slate-400 mb-1">Average</div>
               <div className="text-xl font-semibold text-white">
-                {report.summary.quality_scores.average?.toFixed(1) || 'N/A'}
+                {report.summary.quality_scores.average != null ? toFixedSafe(report.summary.quality_scores.average, 1) : 'N/A'}
               </div>
             </div>
             <div className="p-4 bg-white/5 rounded-lg border border-white/10">
               <div className="text-sm text-slate-400 mb-1">Min</div>
               <div className="text-xl font-semibold text-white">
-                {report.summary.quality_scores.min?.toFixed(1) || 'N/A'}
+                {report.summary.quality_scores.min != null ? toFixedSafe(report.summary.quality_scores.min, 1) : 'N/A'}
               </div>
             </div>
             <div className="p-4 bg-white/5 rounded-lg border border-white/10">
               <div className="text-sm text-slate-400 mb-1">Max</div>
               <div className="text-xl font-semibold text-white">
-                {report.summary.quality_scores.max?.toFixed(1) || 'N/A'}
+                {report.summary.quality_scores.max != null ? toFixedSafe(report.summary.quality_scores.max, 1) : 'N/A'}
               </div>
             </div>
           </div>
@@ -293,19 +294,19 @@ function DetailedReportView({ report }: { report: any }) {
           <div className="p-4 bg-white/5 rounded-lg border border-white/10">
             <div className="text-sm text-slate-400 mb-1">Success Rate</div>
             <div className="text-2xl font-bold text-white">
-              {report.summary.success_rate.toFixed(1)}%
+              {toFixedSafe(report.summary.success_rate, 1)}%
             </div>
           </div>
           <div className="p-4 bg-white/5 rounded-lg border border-white/10">
             <div className="text-sm text-slate-400 mb-1">Total Cost</div>
             <div className="text-2xl font-bold text-white">
-              ${report.summary.total_cost.toFixed(2)}
+              ${toFixedSafe(report.summary.total_cost, 2)}
             </div>
           </div>
           <div className="p-4 bg-white/5 rounded-lg border border-white/10">
             <div className="text-sm text-slate-400 mb-1">Quality Score</div>
             <div className="text-2xl font-bold text-white">
-              {report.summary.quality_scores.average?.toFixed(1) || 'N/A'}
+              {report.summary.quality_scores.average != null ? toFixedSafe(report.summary.quality_scores.average, 1) : 'N/A'}
             </div>
           </div>
         </div>
@@ -335,9 +336,9 @@ function DetailedReportView({ report }: { report: any }) {
                     <td className="px-4 py-3 text-sm text-white text-right">{model.input_tokens.toLocaleString()}</td>
                     <td className="px-4 py-3 text-sm text-white text-right">{model.output_tokens.toLocaleString()}</td>
                     <td className="px-4 py-3 text-sm text-white text-right">
-                      {model.avg_latency_ms ? `${(model.avg_latency_ms / 1000).toFixed(2)}s` : 'N/A'}
+                      {model.avg_latency_ms ? `${toFixedSafe(model.avg_latency_ms / 1000, 2)}s` : 'N/A'}
                     </td>
-                    <td className="px-4 py-3 text-sm text-white text-right">${model.cost.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-sm text-white text-right">${toFixedSafe(model.cost, 2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -464,7 +465,7 @@ function ExecutiveReportView({ report }: { report: any }) {
           <div className="p-6 bg-gradient-to-br from-green-500/20 to-green-500/5 rounded-lg border border-green-500/30">
             <div className="text-sm text-green-300 mb-2">Success Rate</div>
             <div className="text-3xl font-bold text-white mb-1">
-              {report.key_metrics.success_rate.toFixed(1)}%
+              {toFixedSafe(report.key_metrics.success_rate, 1)}%
             </div>
             <div className="text-xs text-green-400">
               {report.key_metrics.success_rate >= 95 ? 'Excellent' : report.key_metrics.success_rate >= 90 ? 'Good' : 'Needs Attention'}
@@ -473,16 +474,16 @@ function ExecutiveReportView({ report }: { report: any }) {
           <div className="p-6 bg-gradient-to-br from-blue-500/20 to-blue-500/5 rounded-lg border border-blue-500/30">
             <div className="text-sm text-blue-300 mb-2">Total Cost</div>
             <div className="text-3xl font-bold text-white mb-1">
-              ${report.key_metrics.total_cost.toFixed(2)}
+              ${toFixedSafe(report.key_metrics.total_cost, 2)}
             </div>
             <div className="text-xs text-blue-400">
-              ${report.key_metrics.avg_daily_cost.toFixed(2)}/day avg
+              ${toFixedSafe(report.key_metrics.avg_daily_cost, 2)}/day avg
             </div>
           </div>
           <div className="p-6 bg-gradient-to-br from-cyan-500/20 to-cyan-500/5 rounded-lg border border-cyan-500/30">
             <div className="text-sm text-cyan-300 mb-2">Quality Score</div>
             <div className="text-3xl font-bold text-white mb-1">
-              {report.key_metrics.avg_quality_score?.toFixed(1) || 'N/A'}
+              {report.key_metrics.avg_quality_score != null ? toFixedSafe(report.key_metrics.avg_quality_score, 1) : 'N/A'}
             </div>
             <div className="text-xs text-cyan-400">Average quality</div>
           </div>
@@ -508,7 +509,7 @@ function ExecutiveReportView({ report }: { report: any }) {
                       ) : (
                         <TrendingDown className="h-4 w-4" />
                       )}
-                      {Math.abs(trend.change_percentage).toFixed(1)}%
+                      {toFixedSafe(Math.abs(trend.change_percentage), 1)}%
                     </div>
                   )}
                 </div>
@@ -548,7 +549,7 @@ function ExecutiveReportView({ report }: { report: any }) {
                   {model.avg_latency_ms && (
                     <div className="flex justify-between">
                       <span className="text-slate-400">Avg Latency:</span>
-                      <span className="text-white font-medium">{(model.avg_latency_ms / 1000).toFixed(2)}s</span>
+                      <span className="text-white font-medium">{toFixedSafe(model.avg_latency_ms / 1000, 2)}s</span>
                     </div>
                   )}
                 </div>

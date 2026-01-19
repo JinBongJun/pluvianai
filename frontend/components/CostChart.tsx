@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { costAPI } from '@/lib/api';
+import { toFixedSafe } from '@/lib/format';
 
 interface CostData {
   total_cost: number;
@@ -53,14 +54,14 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
   // Prepare daily chart data
   const dailyChartData = costData.by_day.map(item => ({
     date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    cost: parseFloat(item.cost.toFixed(2)),
+    cost: Number(toFixedSafe(item.cost, 2)),
   }));
 
   // Prepare model chart data
   const modelChartData = Object.entries(costData.by_model)
     .map(([model, cost]) => ({
       name: model,
-      value: parseFloat(cost.toFixed(2)),
+      value: Number(toFixedSafe(cost, 2)),
     }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 5); // Top 5 models
@@ -69,7 +70,7 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
   const providerChartData = Object.entries(costData.by_provider)
     .map(([provider, cost]) => ({
       name: provider.charAt(0).toUpperCase() + provider.slice(1),
-      value: parseFloat(cost.toFixed(2)),
+      value: Number(toFixedSafe(cost, 2)),
     }))
     .sort((a, b) => b.value - a.value);
 
@@ -122,7 +123,7 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
             <YAxis 
               stroke="#9ca3af"
               style={{ fontSize: '12px' }}
-              tickFormatter={(value) => `$${value.toFixed(2)}`}
+              tickFormatter={(value) => `$${toFixedSafe(value, 2)}`}
             />
             <Tooltip 
               contentStyle={{ 
@@ -131,7 +132,7 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
                 borderRadius: '8px',
                 color: '#fff'
               }}
-              formatter={(value: number) => [`$${value.toFixed(2)}`, 'Cost']}
+              formatter={(value: number) => [`$${toFixedSafe(value, 2)}`, 'Cost']}
             />
             <Legend 
               wrapperStyle={{ color: '#9ca3af' }}
@@ -165,7 +166,7 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
             <YAxis 
               stroke="#9ca3af"
               style={{ fontSize: '12px' }}
-              tickFormatter={(value) => `$${value.toFixed(2)}`}
+              tickFormatter={(value) => `$${toFixedSafe(value, 2)}`}
             />
             <Tooltip 
               contentStyle={{ 
@@ -174,7 +175,7 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
                 borderRadius: '8px',
                 color: '#fff'
               }}
-              formatter={(value: number) => [`$${value.toFixed(2)}`, 'Cost']}
+              formatter={(value: number) => [`$${toFixedSafe(value, 2)}`, 'Cost']}
             />
             <Legend 
               wrapperStyle={{ color: '#9ca3af' }}
@@ -194,7 +195,7 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                label={({ name, percent }) => `${name}: ${toFixedSafe(percent * 100, 0)}%`}
                 outerRadius={100}
                 fill="#8884d8"
                 dataKey="value"
@@ -210,7 +211,7 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
                   borderRadius: '8px',
                   color: '#fff'
                 }}
-                formatter={(value: number) => `$${value.toFixed(2)}`}
+                formatter={(value: number) => `$${toFixedSafe(value, 2)}`}
               />
               <Legend 
                 wrapperStyle={{ color: '#9ca3af' }}
@@ -224,11 +225,11 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
       <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
         <div>
           <p className="text-sm text-slate-400">Total Cost</p>
-          <p className="text-2xl font-bold text-white">${costData.total_cost.toFixed(2)}</p>
+          <p className="text-2xl font-bold text-white">${toFixedSafe(costData.total_cost, 2)}</p>
         </div>
         <div>
           <p className="text-sm text-slate-400">Avg Daily Cost</p>
-          <p className="text-2xl font-bold text-white">${costData.average_daily_cost.toFixed(2)}</p>
+          <p className="text-2xl font-bold text-white">${toFixedSafe(costData.average_daily_cost, 2)}</p>
         </div>
       </div>
     </div>

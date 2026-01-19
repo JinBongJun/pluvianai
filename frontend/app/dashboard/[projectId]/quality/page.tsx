@@ -9,6 +9,7 @@ import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import DateRangePicker from '@/components/ui/DateRangePicker';
 import { qualityAPI } from '@/lib/api';
+import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
 import { ArrowUpDown, ArrowUp, ArrowDown, Eye, TrendingUp, TrendingDown } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -288,28 +289,28 @@ export default function QualityScoresPage() {
                             score.overall_score >= 70 ? 'text-yellow-400' :
                             'text-red-400'
                           )}>
-                            {score.overall_score.toFixed(1)}
+                            {toFixedSafe(score.overall_score, 1)}
                           </span>
                           {getScoreBadge(score.overall_score)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                         {score.semantic_consistency_score !== null ? (
-                          `${score.semantic_consistency_score.toFixed(1)}`
+                          `${toFixedSafe(score.semantic_consistency_score, 1)}`
                         ) : (
                           'N/A'
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                         {score.tone_score !== null ? (
-                          `${score.tone_score.toFixed(1)}`
+                          `${toFixedSafe(score.tone_score, 1)}`
                         ) : (
                           'N/A'
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                         {score.coherence_score !== null ? (
-                          `${score.coherence_score.toFixed(1)}`
+                          `${toFixedSafe(score.coherence_score, 1)}`
                         ) : (
                           'N/A'
                         )}

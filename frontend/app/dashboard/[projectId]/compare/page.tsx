@@ -6,6 +6,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import Button from '@/components/ui/Button';
 import DateRangePicker from '@/components/ui/DateRangePicker';
 import { benchmarkAPI, apiCallsAPI } from '@/lib/api';
+import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
 import { TrendingUp, TrendingDown, DollarSign, Clock, BarChart3 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -150,7 +151,7 @@ export default function ComparePage() {
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold text-white">
-                      {(comparison.recommendation_score ?? 0).toFixed(1)}
+                      {toFixedSafe(comparison.recommendation_score, 1)}
                     </div>
                     <div className="text-xs text-slate-400">Score</div>
                   </div>
@@ -162,7 +163,7 @@ export default function ComparePage() {
                     <div>
                       <div className="text-xs text-slate-400">Avg Cost</div>
                       <div className="font-medium text-white">
-                        ${((comparison.cost_per_call ?? comparison.avg_cost_per_call) ?? 0).toFixed(4)}
+                        ${toFixedSafe(comparison.cost_per_call, 4)}
                       </div>
                     </div>
                   </div>
@@ -172,7 +173,7 @@ export default function ComparePage() {
                     <div>
                       <div className="text-xs text-slate-400">Avg Latency</div>
                       <div className="font-medium text-white">
-                        {((comparison.avg_latency_ms ?? comparison.avg_latency) ?? 0).toFixed(0)}ms
+                        {toFixedSafe(comparison.avg_latency_ms, 0)}ms
                       </div>
                     </div>
                   </div>
@@ -182,7 +183,7 @@ export default function ComparePage() {
                     <div>
                       <div className="text-xs text-slate-400">Success Rate</div>
                       <div className="font-medium text-white">
-                        {((comparison.success_rate ?? 0) * 100).toFixed(1)}%
+                        {toFixedSafe((comparison.success_rate ?? 0) * 100, 1)}%
                       </div>
                     </div>
                   </div>

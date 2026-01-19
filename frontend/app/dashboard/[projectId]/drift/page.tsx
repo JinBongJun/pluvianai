@@ -9,6 +9,7 @@ import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import DateRangePicker from '@/components/ui/DateRangePicker';
 import { driftAPI } from '@/lib/api';
+import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
 import { ArrowUpDown, ArrowUp, ArrowDown, Eye, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -363,7 +364,7 @@ export default function DriftDetectionsPage() {
                             detection.change_percentage > 20 ? 'text-yellow-400' :
                             'text-slate-300'
                           )}>
-                            {detection.change_percentage > 0 ? '+' : ''}{detection.change_percentage.toFixed(1)}%
+                            {detection.change_percentage > 0 ? '+' : ''}{toFixedSafe(detection.change_percentage, 1)}%
                           </span>
                         </div>
                       </td>
@@ -384,7 +385,7 @@ export default function DriftDetectionsPage() {
                             />
                           </div>
                           <span className="text-sm text-slate-300 font-mono">
-                            {detection.drift_score.toFixed(1)}
+                            {toFixedSafe(detection.drift_score, 1)}
                           </span>
                         </div>
                       </td>

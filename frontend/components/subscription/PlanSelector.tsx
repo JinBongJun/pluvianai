@@ -6,6 +6,7 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { Check, X } from 'lucide-react';
 import { clsx } from 'clsx';
+import { toFixedSafe } from '@/lib/format';
 
 interface Plan {
   plan_type: string;
@@ -45,8 +46,8 @@ export default function PlanSelector({ currentPlan, onSelectPlan }: PlanSelector
 
   const formatLimit = (limit: number) => {
     if (limit === -1) return 'Unlimited';
-    if (limit >= 1000000) return `${(limit / 1000000).toFixed(0)}M`;
-    if (limit >= 1000) return `${(limit / 1000).toFixed(0)}K`;
+    if (limit >= 1000000) return `${toFixedSafe(limit / 1000000, 0)}M`;
+    if (limit >= 1000) return `${toFixedSafe(limit / 1000, 0)}K`;
     return limit.toString();
   };
 
