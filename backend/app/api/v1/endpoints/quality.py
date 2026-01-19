@@ -59,8 +59,8 @@ class EvaluateRequest(BaseModel):
 
 @router.post("/evaluate", response_model=List[QualityScoreResponse])
 async def evaluate_quality(
-    project_id: int,
-    request: EvaluateRequest,
+    project_id: int = Query(..., description="Project ID"),
+    request: EvaluateRequest = EvaluateRequest(),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
