@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access
+from app.core.decorators import handle_errors
 from app.models.user import User
 from app.models.project import Project
 from app.services.benchmark_service import BenchmarkService
@@ -46,30 +47,22 @@ async def compare_models(
     db: Session = Depends(get_db)
 ):
     """Compare models across multiple dimensions"""
-    try:
-        # Verify project access (any member can view benchmarks)
-        project = check_project_access(project_id, current_user, db)
-        
-        # Compare models (subscription check removed - available to all users)
-        comparisons = benchmark_service.compare_models(
-            project_id=project_id,
-            days=days,
-            db=db
-        )
-        
-        # Ensure all required fields are present
-        for comp in comparisons:
-            if "recommendation" not in comp:
-                comp["recommendation"] = None
-        
-        return comparisons
-    except Exception as e:
-        from app.core.logging_config import logger
-        logger.error(f"Error comparing models for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to compare models: {str(e)}"
-        )
+    # Verify project access (any member can view benchmarks)
+    project = check_project_access(project_id, current_user, db)
+    
+    # Compare models (subscription check removed - available to all users)
+    comparisons = benchmark_service.compare_models(
+        project_id=project_id,
+        days=days,
+        db=db
+    )
+    
+    # Ensure all required fields are present
+    for comp in comparisons:
+        if "recommendation" not in comp:
+            comp["recommendation"] = None
+    
+    return comparisons
 
 
 @router.get("/recommendations", response_model=RecommendationResponse)

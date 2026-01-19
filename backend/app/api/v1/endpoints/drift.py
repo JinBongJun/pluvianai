@@ -51,6 +51,7 @@ class DetectDriftRequest(BaseModel):
 
 
 @router.post("/detect", response_model=List[DriftDetectionResponse])
+@handle_errors
 async def detect_drift(
     project_id: int = Query(..., description="Project ID"),
     request: DetectDriftRequest = DetectDriftRequest(),
