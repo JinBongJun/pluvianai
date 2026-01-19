@@ -74,6 +74,9 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+# Update app info metrics
+update_app_info(settings.APP_VERSION, settings.SENTRY_ENVIRONMENT)
+
 # Add exception handlers
 app.add_exception_handler(AgentGuardException, agentguard_exception_handler)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
@@ -97,6 +100,9 @@ app.add_middleware(
     expose_headers=["*"],  # Expose all response headers to frontend
     max_age=3600,  # Cache preflight requests for 1 hour
 )
+
+# Metrics middleware (collect API metrics)
+app.add_middleware(MetricsMiddleware)
 
 # Logging middleware (added after CORS so CORS handles preflight first)
 app.add_middleware(LoggingMiddleware)
