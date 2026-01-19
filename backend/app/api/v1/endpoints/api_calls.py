@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user, get_user_from_api_key
 from app.core.permissions import check_project_access
+from app.core.decorators import handle_errors
 from app.services.data_normalizer import DataNormalizer
 from app.services.background_tasks import background_task_service
 from app.models.user import User
@@ -47,6 +48,7 @@ class APICallDetailResponse(APICallResponse):
 
 
 @router.get("", response_model=List[APICallResponse])
+@handle_errors
 async def list_api_calls(
     project_id: int = Query(..., description="Project ID"),
     limit: int = Query(100, ge=1, le=1000),
@@ -58,51 +60,43 @@ async def list_api_calls(
     db: Session = Depends(get_db)
 ):
     """List API calls for a project with caching"""
-    try:
-        # Verify project access (any member can view)
-        project = check_project_access(project_id, current_user, db)
-        
-        # Generate cache key
-        cache_key = cache_service.api_calls_key(project_id, limit)
-        if provider:
-            cache_key += f":{provider}"
-        if model:
-            cache_key += f":{model}"
-        if agent_name:
-            cache_key += f":{agent_name}"
-        cache_key += f":{offset}"
-        
-        # Try to get from cache (only for first page, no filters)
-        if offset == 0 and not provider and not model and not agent_name:
-            cached = cache_service.get(cache_key)
-            if cached:
-                return cached
-        
-        # Build query
-        query = db.query(APICall).filter(APICall.project_id == project_id)
-        
-        if provider:
-            query = query.filter(APICall.provider == provider)
-        if model:
-            query = query.filter(APICall.model == model)
-        if agent_name:
-            query = query.filter(APICall.agent_name == agent_name)
-        
-        # Order by created_at descending and paginate
-        api_calls = query.order_by(desc(APICall.created_at)).offset(offset).limit(limit).all()
-        
-        # Cache result (only for first page, no filters, TTL 5 minutes)
-        if offset == 0 and not provider and not model and not agent_name:
-            cache_service.set(cache_key, api_calls, ttl=300)
-        
-        return api_calls
-    except Exception as e:
-        from app.core.logging_config import logger
-        logger.error(f"Error listing API calls for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve API calls: {str(e)}"
-        )
+    # Verify project access (any member can view)
+    project = check_project_access(project_id, current_user, db)
+    
+    # Generate cache key
+    cache_key = cache_service.api_calls_key(project_id, limit)
+    if provider:
+        cache_key += f":{provider}"
+    if model:
+        cache_key += f":{model}"
+    if agent_name:
+        cache_key += f":{agent_name}"
+    cache_key += f":{offset}"
+    
+    # Try to get from cache (only for first page, no filters)
+    if offset == 0 and not provider and not model and not agent_name:
+        cached = cache_service.get(cache_key)
+        if cached:
+            return cached
+    
+    # Build query
+    query = db.query(APICall).filter(APICall.project_id == project_id)
+    
+    if provider:
+        query = query.filter(APICall.provider == provider)
+    if model:
+        query = query.filter(APICall.model == model)
+    if agent_name:
+        query = query.filter(APICall.agent_name == agent_name)
+    
+    # Order by created_at descending and paginate
+    api_calls = query.order_by(desc(APICall.created_at)).offset(offset).limit(limit).all()
+    
+    # Cache result (only for first page, no filters, TTL 5 minutes)
+    if offset == 0 and not provider and not model and not agent_name:
+        cache_service.set(cache_key, api_calls, ttl=300)
+    
+    return api_calls
 
 
 @router.get("/{api_call_id}", response_model=APICallDetailResponse)

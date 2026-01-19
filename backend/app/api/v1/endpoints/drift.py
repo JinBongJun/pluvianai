@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access
+from app.core.decorators import handle_errors
 from app.models.user import User
 from app.models.project import Project
 from app.models.drift_detection import DriftDetection

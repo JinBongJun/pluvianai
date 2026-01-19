@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access
+from app.core.decorators import handle_errors
 from app.models.user import User
 from app.models.project import Project
 from app.models.alert import Alert
@@ -47,6 +48,7 @@ class SendAlertRequest(BaseModel):
 
 
 @router.get("", response_model=List[AlertResponse])
+@handle_errors
 async def list_alerts(
     project_id: int = Query(..., description="Project ID"),
     limit: int = Query(100, ge=1, le=1000),
@@ -58,34 +60,27 @@ async def list_alerts(
     db: Session = Depends(get_db)
 ):
     """List alerts for a project"""
-    try:
-        # Verify project access (any member can view alerts)
-        project = check_project_access(project_id, current_user, db)
-        
-        # Build query
-        query = db.query(Alert).filter(Alert.project_id == project_id)
-        
-        if alert_type:
-            query = query.filter(Alert.alert_type == alert_type)
-        if severity:
-            query = query.filter(Alert.severity == severity)
-        if is_resolved is not None:
-            query = query.filter(Alert.is_resolved == is_resolved)
-        
-        # Order by created_at descending and paginate
-        alerts = query.order_by(desc(Alert.created_at)).offset(offset).limit(limit).all()
-        
-        return alerts
-    except Exception as e:
-        from app.core.logging_config import logger
-        logger.error(f"Error listing alerts for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve alerts: {str(e)}"
-        )
+    # Verify project access (any member can view alerts)
+    project = check_project_access(project_id, current_user, db)
+    
+    # Build query
+    query = db.query(Alert).filter(Alert.project_id == project_id)
+    
+    if alert_type:
+        query = query.filter(Alert.alert_type == alert_type)
+    if severity:
+        query = query.filter(Alert.severity == severity)
+    if is_resolved is not None:
+        query = query.filter(Alert.is_resolved == is_resolved)
+    
+    # Order by created_at descending and paginate
+    alerts = query.order_by(desc(Alert.created_at)).offset(offset).limit(limit).all()
+    
+    return alerts
 
 
 @router.post("/{alert_id}/send")
+@handle_errors
 async def send_alert(
     alert_id: int,
     request: SendAlertRequest = SendAlertRequest(),
@@ -93,43 +88,33 @@ async def send_alert(
     db: Session = Depends(get_db)
 ):
     """Send an alert through notification channels"""
-    try:
-        alert = db.query(Alert).filter(Alert.id == alert_id).first()
-        
-        if not alert:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Alert not found"
-            )
-        
-        # Verify project access
-        project = check_project_access(alert.project_id, current_user, db)
-        
-        # Use channels from request, or default to alert's notification_channels, or ["email"]
-        channels = request.channels or alert.notification_channels or ["email"]
-        
-        # Send alert (simplified - remove complex subscription checks for now)
-        results = await alert_service.send_alert(alert, channels, db=db)
-        
-        # Update alert status
-        if any(r.get("status") == "sent" for r in results.values()):
-            alert.is_sent = True
-            alert.sent_at = datetime.utcnow()
-            if alert.notification_channels is None:
-                alert.notification_channels = channels
-            db.commit()
-            db.refresh(alert)
-        
-        return {"alert_id": alert_id, "results": results}
-    except HTTPException:
-        raise
-    except Exception as e:
-        from app.core.logging_config import logger
-        logger.error(f"Error sending alert {alert_id}: {str(e)}", exc_info=True)
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    
+    if not alert:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send alert: {str(e)}"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Alert not found"
         )
+    
+    # Verify project access
+    project = check_project_access(alert.project_id, current_user, db)
+    
+    # Use channels from request, or default to alert's notification_channels, or ["email"]
+    channels = request.channels or alert.notification_channels or ["email"]
+    
+    # Send alert (simplified - remove complex subscription checks for now)
+    results = await alert_service.send_alert(alert, channels, db=db)
+    
+    # Update alert status
+    if any(r.get("status") == "sent" for r in results.values()):
+        alert.is_sent = True
+        alert.sent_at = datetime.utcnow()
+        if alert.notification_channels is None:
+            alert.notification_channels = channels
+        db.commit()
+        db.refresh(alert)
+    
+    return {"alert_id": alert_id, "results": results}
 
 
 @router.post("/{alert_id}/resolve", response_model=AlertResponse)
