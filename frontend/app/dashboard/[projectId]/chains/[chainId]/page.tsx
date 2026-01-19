@@ -74,7 +74,7 @@ export default function ChainDetailPage() {
     setLoading(true);
     try {
       // Load chain profile for specific chain_id
-      const profileData = await agentChainAPI.profile(projectId, chainId, 30);
+      const profileData = await agentChainAPI.profile(projectId, chainId, 30) as any;
       
       // Handle response structure: {chains: [...], ...} or direct chain object
       if (profileData && typeof profileData === 'object') {
