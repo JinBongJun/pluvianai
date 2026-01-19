@@ -45,8 +45,8 @@ interface ChainProfile {
   bottleneck_agent: string | null;
   bottleneck_latency_ms: number;
   agents: AgentStats[];
-  first_call_at: string;
-  last_call_at: string;
+  first_call_at?: string; // Optional - may not be in API response
+  last_call_at?: string; // Optional - may not be in API response
 }
 
 export default function ChainDetailPage() {
@@ -91,6 +91,8 @@ export default function ChainDetailPage() {
                   avg_quality_score: agent.avg_quality_score ?? 0,
                 }))
               : [],
+            first_call_at: chainData.first_call_at ?? new Date().toISOString(),
+            last_call_at: chainData.last_call_at ?? new Date().toISOString(),
           });
         } else if (profileData.chain_id) {
           // Direct chain object (not wrapped in chains array)
@@ -104,6 +106,8 @@ export default function ChainDetailPage() {
                   avg_quality_score: agent.avg_quality_score ?? 0,
                 }))
               : [],
+            first_call_at: profileData.first_call_at ?? new Date().toISOString(),
+            last_call_at: profileData.last_call_at ?? new Date().toISOString(),
           });
         } else {
           throw new Error('No chain data found');
@@ -200,7 +204,7 @@ export default function ChainDetailPage() {
               </Badge>
             )}
             <span className="text-sm text-slate-400">
-              {new Date(chain.first_call_at).toLocaleString()} - {new Date(chain.last_call_at).toLocaleString()}
+              {chain.first_call_at ? new Date(chain.first_call_at).toLocaleString() : 'N/A'} - {chain.last_call_at ? new Date(chain.last_call_at).toLocaleString() : 'N/A'}
             </span>
           </div>
         </div>
