@@ -149,11 +149,13 @@ class AlertService:
     
     async def _send_email(self, alert: Alert, db: Optional[Session] = None) -> Dict[str, Any]:
         """Send alert via email"""
-        if not self.email_enabled:
-            return {"status": "skipped", "message": "Email not enabled"}
-        
+        # Check for database first - it's required for email
         if not db:
             return {"status": "error", "message": "Database session required"}
+        
+        # Check if email is enabled (after DB check)
+        if not self.email_enabled:
+            return {"status": "skipped", "message": "Email not enabled"}
         
         # Get user email from project
         from app.models.project import Project
