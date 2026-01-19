@@ -10,7 +10,8 @@ export function safeParse<T>(schema: z.ZodSchema<T>, data: unknown): { success: 
   if (result.success) {
     return { success: true, data: result.data };
   }
-  const errors = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+  // Zod uses 'issues' instead of 'errors' in the error object
+  const errors = result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
   return { success: false, error: `Validation failed: ${errors}` };
 }
 
