@@ -30,7 +30,8 @@ interface AgentStats {
   avg_latency_ms: number;
   failure_count: number;
   failure_rate: number;
-  avg_quality_score?: number; // Optional - may not be available for all agents
+  // Normalized to always be a number when we build state
+  avg_quality_score: number;
 }
 
 interface ChainProfile {
