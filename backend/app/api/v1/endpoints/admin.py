@@ -67,8 +67,6 @@ async def generate_sample_data(
     
     # Verify project access
     project = check_project_access(project_id, current_user, db)
-    
-    try:
         # Generate sample API calls with various scenarios
         providers = ['openai', 'anthropic', 'google']
         models = {
@@ -351,13 +349,6 @@ async def generate_sample_data(
                 "high_latency": 5
             }
         }
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to generate sample data: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate sample data: {str(e)}"
-        )
 
 
 @router.post("/upgrade-user-subscription")
