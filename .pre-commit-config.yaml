@@ -47,7 +47,17 @@ repos:
         types: [python]
         pass_filenames: true
 
-  # TypeScript/JavaScript (if needed in future)
+  # TypeScript/JavaScript formatting
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        files: ^frontend/.*\.(ts|tsx|js|jsx|json|css|md)$
+        types: [file]
+        additional_dependencies:
+          - prettier@3.1.0
+  
+  # TypeScript/JavaScript linting
   - repo: https://github.com/pre-commit/mirrors-eslint
     rev: v9.0.0
     hooks:
@@ -58,4 +68,4 @@ repos:
           - eslint@9
           - '@typescript-eslint/parser@6'
           - '@typescript-eslint/eslint-plugin@6'
-        args: ['--max-warnings=0']
+        args: ['--fix', '--max-warnings=0']  # Auto-fix issues
