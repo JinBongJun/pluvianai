@@ -174,3 +174,10 @@ async def health():
     """Health check endpoint"""
     return {"status": "healthy"}
 
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    from app.core.metrics import get_metrics_response
+    return get_metrics_response()
+
