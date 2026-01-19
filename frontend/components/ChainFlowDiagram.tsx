@@ -13,7 +13,7 @@ interface AgentStats {
   avg_latency_ms: number;
   failure_count: number;
   failure_rate: number;
-  avg_quality_score: number;
+  avg_quality_score?: number; // Optional - may not be available for all agents
 }
 
 interface ChainFlowDiagramProps {
@@ -130,12 +130,12 @@ export default function ChainFlowDiagram({
                       <span className="text-slate-400">Quality</span>
                       <Badge
                         variant={
-                          agent.avg_quality_score >= 80 ? 'success' :
-                          agent.avg_quality_score >= 60 ? 'warning' : 'error'
+                          (agent.avg_quality_score ?? 0) >= 80 ? 'success' :
+                          (agent.avg_quality_score ?? 0) >= 60 ? 'warning' : 'error'
                         }
                         className="text-xs"
                       >
-                        {toFixedSafe(agent.avg_quality_score, 0)}%
+                        {toFixedSafe(agent.avg_quality_score ?? 0, 0)}%
                       </Badge>
                     </div>
                     {hasFailures && (
