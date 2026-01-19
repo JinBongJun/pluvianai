@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     SENTRY_ENVIRONMENT: str = "production"  # production, staging, development
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1  # 10% of transactions for performance monitoring
     
+    # Feature Flags (can be overridden by FEATURE_FLAG_* environment variables)
+    FEATURE_FLAG_NEW_DASHBOARD: bool = False
+    FEATURE_FLAG_ENHANCED_ANALYTICS: bool = False
+    FEATURE_FLAG_BETA_FEATURES: bool = False
+    FEATURE_FLAG_EXPERIMENTAL_API: bool = False
+    
     class Config:
         env_file = str(PROJECT_ROOT / ".env")
         case_sensitive = True
