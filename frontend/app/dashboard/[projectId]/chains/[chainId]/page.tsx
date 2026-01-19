@@ -79,7 +79,7 @@ export default function ChainDetailPage() {
       // Handle response structure: {chains: [...], ...} or direct chain object
       if (profileData && typeof profileData === 'object') {
         if (Array.isArray(profileData.chains) && profileData.chains.length > 0) {
-          const chainData = profileData.chains[0];
+          const chainData = profileData.chains[0] as any;
           // Ensure all required fields have defaults
           setChain({
             ...chainData,
@@ -96,18 +96,19 @@ export default function ChainDetailPage() {
           });
         } else if (profileData.chain_id) {
           // Direct chain object (not wrapped in chains array)
+          const chainData = profileData as any;
           setChain({
-            ...profileData,
-            success: profileData.success ?? false,
-            bottleneck_agent: profileData.bottleneck_agent ?? null,
-            agents: Array.isArray(profileData.agents)
-              ? profileData.agents.map((agent: any) => ({
+            ...chainData,
+            success: chainData.success ?? false,
+            bottleneck_agent: chainData.bottleneck_agent ?? null,
+            agents: Array.isArray(chainData.agents)
+              ? chainData.agents.map((agent: any) => ({
                   ...agent,
                   avg_quality_score: agent.avg_quality_score ?? 0,
                 }))
               : [],
-            first_call_at: profileData.first_call_at ?? new Date().toISOString(),
-            last_call_at: profileData.last_call_at ?? new Date().toISOString(),
+            first_call_at: chainData.first_call_at ?? new Date().toISOString(),
+            last_call_at: chainData.last_call_at ?? new Date().toISOString(),
           });
         } else {
           throw new Error('No chain data found');
