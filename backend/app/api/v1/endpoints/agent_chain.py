@@ -12,6 +12,7 @@ from app.models.user import User
 from app.models.project import Project
 from app.services.agent_chain_profiler import AgentChainProfiler
 from app.services.subscription_service import SubscriptionService
+from app.services.cache_service import cache_service
 
 router = APIRouter()
 
@@ -31,6 +32,12 @@ async def profile_chain(
     # Verify project access (any member can view agent chains)
     project = check_project_access(project_id, current_user, db)
     
+    # Check cache first
+    cache_key = f"chain_profile:{project_id}:{chain_id or 'all'}:{days}"
+    cached = cache_service.get(cache_key)
+    if cached:
+        return cached
+    
     # Temporarily disable subscription check during development
     # Check feature access (Agent Chain Profiler requires Pro plan or higher)
     # subscription_service = SubscriptionService(db)
@@ -48,6 +55,9 @@ async def profile_chain(
         db=db
     )
     
+    # Cache result for 5 minutes
+    cache_service.set(cache_key, profile, ttl=300)
+    
     return profile
 
 
@@ -62,6 +72,12 @@ async def get_agent_statistics(
     """Get statistics for all agents"""
     # Verify project access (any member can view agent chains)
     project = check_project_access(project_id, current_user, db)
+    
+    # Check cache first
+    cache_key = f"agent_stats:{project_id}:{days}"
+    cached = cache_service.get(cache_key)
+    if cached:
+        return cached
     
     # Temporarily disable subscription check during development
     # Check feature access (Agent Chain Profiler requires Pro plan or higher)
@@ -78,6 +94,9 @@ async def get_agent_statistics(
         days=days,
         db=db
     )
+    
+    # Cache result for 5 minutes
+    cache_service.set(cache_key, stats, ttl=300)
     
     return stats
 

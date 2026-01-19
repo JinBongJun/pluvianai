@@ -65,7 +65,7 @@ async def generate_sample_data(
 ):
     """
     Generate comprehensive sample data for a project (for onboarding/demo)
-    
+
     Generates:
     - 50 API calls with various scenarios (success, errors, JSON issues)
     - 30 quality scores
@@ -74,153 +74,91 @@ async def generate_sample_data(
     - Various agent types and models
     """
     from app.core.permissions import check_project_access
-    
+
     # Verify project access
     project = check_project_access(project_id, current_user, db)
-        # Generate sample API calls with various scenarios
-        providers = ['openai', 'anthropic', 'google']
-        models = {
-            'openai': ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-            'anthropic': ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
-            'google': ['gemini-pro', 'gemini-ultra']
-        }
-        
-        agents = ['router', 'parser', 'summarizer', 'classifier', 'extractor', None]
-        
-        api_calls = []
-        
-        # Scenario 1: Normal successful calls (30 calls)
-        for i in range(30):
-            provider = random.choice(providers)
-            model = random.choice(models[provider])
-            days_ago = random.randint(0, 7)
-            created_at = datetime.utcnow() - timedelta(days=days_ago, hours=random.randint(0, 23))
-            
-            api_call = APICall(
-                project_id=project_id,
-                provider=provider,
-                model=model,
-                request_data={
-                    "messages": [
-                        {"role": "user", "content": f"Analyze this data: {random.randint(1000, 9999)}"}
-                    ],
-                    "temperature": random.uniform(0.1, 0.9),
-                },
-                request_prompt=f"Analyze this data: {random.randint(1000, 9999)}",
-                response_data={
-                    "choices": [{
-                        "message": {
-                            "content": f"Based on the analysis, here are the key findings: {random.randint(1, 10)} insights."
-                        }
-                    }],
-                    "model": model,
-                },
-                response_text=f"Based on the analysis, here are the key findings: {random.randint(1, 10)} insights.",
-                request_tokens=random.randint(100, 500),
-                response_tokens=random.randint(200, 1000),
-                latency_ms=random.uniform(500, 3000),
-                status_code=200,
-                agent_name=random.choice(agents),
-                created_at=created_at
-            )
-            db.add(api_call)
-            api_calls.append(api_call)
-        
-        # Scenario 2: JSON validation errors (10 calls)
-        for i in range(10):
-            provider = random.choice(providers)
-            model = random.choice(models[provider])
-            days_ago = random.randint(0, 7)
-            created_at = datetime.utcnow() - timedelta(days=days_ago, hours=random.randint(0, 23))
-            
-            # Invalid JSON response
-            api_call = APICall(
-                project_id=project_id,
-                provider=provider,
-                model=model,
-                request_data={
-                    "messages": [{"role": "user", "content": "Return JSON format: {name, age}"}],
-                },
-                request_prompt="Return JSON format: {name, age}",
-                response_data={
-                    "choices": [{
-                        "message": {
-                            "content": "Here's the data: name: John, age: 30"  # Not valid JSON
-                        }
-                    }],
-                },
-                response_text="Here's the data: name: John, age: 30",
-                request_tokens=random.randint(50, 200),
-                response_tokens=random.randint(50, 200),
-                latency_ms=random.uniform(300, 2000),
-                status_code=200,
-                agent_name=random.choice(agents),
-                created_at=created_at
-            )
-            db.add(api_call)
-            api_calls.append(api_call)
-        
-        # Scenario 3: Server errors (5 calls)
-        for i in range(5):
-            provider = random.choice(providers)
-            model = random.choice(models[provider])
-            days_ago = random.randint(0, 7)
-            created_at = datetime.utcnow() - timedelta(days=days_ago, hours=random.randint(0, 23))
-            
-            api_call = APICall(
-                project_id=project_id,
-                provider=provider,
-                model=model,
-                request_data={
-                    "messages": [{"role": "user", "content": "Process this request"}],
-                },
-                request_prompt="Process this request",
-                response_data={"error": "Internal server error"},
-                response_text="Internal server error",
-                request_tokens=random.randint(50, 300),
-                response_tokens=0,
-                latency_ms=random.uniform(100, 500),
-                status_code=500,
-                error_message="Internal server error",
-                agent_name=random.choice(agents),
-                created_at=created_at
-            )
-            db.add(api_call)
-            api_calls.append(api_call)
-        
-        # Scenario 4: High latency calls (5 calls)
-        for i in range(5):
-            provider = random.choice(providers)
-            model = random.choice(models[provider])
-            days_ago = random.randint(0, 7)
-            created_at = datetime.utcnow() - timedelta(days=days_ago, hours=random.randint(0, 23))
-            
-            api_call = APICall(
-                project_id=project_id,
-                provider=provider,
-                model=model,
-                request_data={
-                    "messages": [{"role": "user", "content": "Generate a long analysis"}],
-                },
-                request_prompt="Generate a long analysis",
-                response_data={
-                    "choices": [{
-                        "message": {
-                            "content": "This is a comprehensive analysis with many details. " * 20
-                        }
-                    }],
-                },
-                response_text="This is a comprehensive analysis with many details. " * 20,
-                request_tokens=random.randint(500, 2000),
-                response_tokens=random.randint(1000, 4000),
-                latency_ms=random.uniform(5000, 15000),  # High latency
-                status_code=200,
-                agent_name=random.choice(agents),
-                created_at=created_at
-            )
-            db.add(api_call)
-            api_calls.append(api_call)
-        
+
+    # Generate sample API calls with various scenarios
+    providers = ['openai', 'anthropic', 'google']
+    models = {
+        'openai': ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+        'anthropic': ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
+        'google': ['gemini-pro', 'gemini-ultra']
+    }
+
+    agents = ['router', 'parser', 'summarizer', 'classifier', 'extractor', None]
+    api_calls = []
+
+    # Scenario 1: Normal successful calls (30 calls)
+    for i in range(30):
+        provider = random.choice(providers)
+        model = random.choice(models[provider])
+        days_ago = random.randint(0, 7)
+        created_at = datetime.utcnow() - timedelta(days=days_ago, hours=random.randint(0, 23))
+
+        api_call = APICall(
+            project_id=project_id,
+            provider=provider,
+            model=model,
+            request_data={
+                "messages": [
+                    {"role": "user", "content": f"Analyze this data: {random.randint(1000, 9999)}"}
+                ],
+                "temperature": random.uniform(0.1, 0.9),
+            },
+            request_prompt=f"Analyze this data: {random.randint(1000, 9999)}",
+            response_data={
+                "choices": [{
+                    "message": {
+                        "content": f"Based on the analysis, here are the key findings: {random.randint(1, 10)} insights."
+                    }
+                }],
+                "model": model,
+            },
+            response_text=f"Based on the analysis, here are the key findings: {random.randint(1, 10)} insights.",
+            request_tokens=random.randint(100, 500),
+            response_tokens=random.randint(200, 1000),
+            latency_ms=random.uniform(500, 3000),
+            status_code=200,
+            agent_name=random.choice(agents),
+            created_at=created_at
+        )
+        db.add(api_call)
+        api_calls.append(api_call)
+
+    # Scenario 2: JSON validation errors (10 calls)
+    for i in range(10):
+        provider = random.choice(providers)
+        model = random.choice(models[provider])
+        days_ago = random.randint(0, 7)
+        created_at = datetime.utcnow() - timedelta(days=days_ago, hours=random.randint(0, 23))
+
+        # Invalid JSON response
+        api_call = APICall(
+            project_id=project_id,
+            provider=provider,
+            model=model,
+            request_data={
+                "messages": [{"role": "user", "content": "Return JSON format: {name, age}"}],
+            },
+            request_prompt="Return JSON format: {name, age}",
+            response_data={
+                "choices": [{
+                    "message": {
+                        "content": "Here's the data: name: John, age: 30"  # Not valid JSON
+                    }
+                }],
+            },
+            response_text="Here's the data: name: John, age: 30",
+            request_tokens=random.randint(50, 200),
+            response_tokens=random.randint(50, 200),
+            latency_ms=random.uniform(300, 2000),
+            status_code=200,
+            agent_name=random.choice(agents),
+            created_at=created_at
+        )
+        db.add(api_call)
+        api_calls.append(api_call)        
         db.flush()
         
         # Generate quality scores with breakdown

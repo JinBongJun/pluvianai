@@ -7,7 +7,8 @@
 ### 🚀 시작하기
 **새로운 개발자나 사용자를 위한 가이드**
 
-- [SETUP_GUIDE.md](./SETUP_GUIDE.md) - 로컬 개발 환경 설정 가이드
+- **[PRODUCTION_FIRST_GUIDE.md](./PRODUCTION_FIRST_GUIDE.md) ⭐** - 프로덕션 우선 개발 가이드 (권장)
+- [SETUP_GUIDE.md](./SETUP_GUIDE.md) - 로컬 개발 환경 설정 가이드 (선택사항)
 - [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) - 프로덕션 배포 가이드 (Vercel + Railway)
 
 ### 🏗️ 아키텍처 및 설계
@@ -31,7 +32,8 @@
 ### 📊 모니터링 및 운영
 **운영 및 성능 모니터링**
 
-- [MONITORING_GUIDE.md](./MONITORING_GUIDE.md) - Prometheus + Grafana 모니터링 가이드
+- **[PRODUCTION_MONITORING.md](./PRODUCTION_MONITORING.md) ⭐** - 프로덕션 모니터링 가이드 (Vercel + Railway)
+- [MONITORING_GUIDE.md](./MONITORING_GUIDE.md) - Prometheus + Grafana 모니터링 가이드 (로컬, 선택사항)
 - [LOAD_TEST_GUIDE.md](./LOAD_TEST_GUIDE.md) - 부하 테스트 실행 가이드
 - [CHAOS_TESTING_GUIDE.md](./CHAOS_TESTING_GUIDE.md) - Chaos Engineering 테스트 가이드
 

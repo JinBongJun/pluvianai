@@ -38,8 +38,13 @@ class AgentChainProfiler:
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
         
-        # Build query
-        query = db.query(APICall).filter(
+        # Build query with optimized loading
+        # Use joinedload to prevent N+1 queries when accessing relationships
+        from sqlalchemy.orm import joinedload
+        
+        query = db.query(APICall).options(
+            joinedload(APICall.quality_scores)  # Eager load quality scores
+        ).filter(
             and_(
                 APICall.project_id == project_id,
                 APICall.created_at >= start_date,
@@ -50,6 +55,9 @@ class AgentChainProfiler:
         
         if chain_id:
             query = query.filter(APICall.chain_id == chain_id)
+        
+        # Order by created_at for consistent results
+        query = query.order_by(APICall.created_at.desc())
         
         api_calls = query.all()
         
@@ -111,12 +119,18 @@ class AgentChainProfiler:
             agent_failures = sum(1 for c in agent_calls if c.status_code and c.status_code >= 400)
             
             # Get quality scores for this agent
+            # Quality scores are already loaded via joinedload, so access directly
             quality_scores = []
             for call in agent_calls:
-                scores = db.query(QualityScore).filter(
-                    QualityScore.api_call_id == call.id
-                ).all()
-                quality_scores.extend([s.overall_score for s in scores])
+                # Access quality_scores relationship (already loaded)
+                if hasattr(call, 'quality_scores') and call.quality_scores:
+                    quality_scores.extend([s.overall_score for s in call.quality_scores])
+                else:
+                    # Fallback: query if not loaded
+                    scores = db.query(QualityScore).filter(
+                        QualityScore.api_call_id == call.id
+                    ).all()
+                    quality_scores.extend([s.overall_score for s in scores])
             
             avg_quality = (
                 sum(quality_scores) / len(quality_scores)

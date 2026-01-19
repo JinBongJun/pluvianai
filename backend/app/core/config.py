@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
+    # Frontend analytics keys (loaded from shared .env but not used in backend logic)
+    NEXT_PUBLIC_POSTHOG_KEY: Optional[str] = None
+    NEXT_PUBLIC_POSTHOG_HOST: Optional[str] = None
     
     # Email configuration (Resend)
     RESEND_API_KEY: Optional[str] = None
