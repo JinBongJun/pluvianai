@@ -67,6 +67,9 @@ app = FastAPI(
     description="LLM Agent Monitoring Platform",
     version=settings.APP_VERSION,
     debug=settings.DEBUG,
+    openapi_url="/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # Add exception handlers
