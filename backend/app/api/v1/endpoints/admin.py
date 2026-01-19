@@ -24,27 +24,37 @@ router = APIRouter()
 @handle_errors
 async def init_database(db: Session = Depends(get_db)):
     """
-    Initialize database tables
+    Initialize database tables using Alembic migrations
     ⚠️ WARNING: This endpoint should be removed or secured after initial deployment
+    ⚠️ DEPRECATED: Use 'alembic upgrade head' instead
     """
-    # Import all models to ensure they are registered
-    from app.models import (
-        User, Project, ProjectMember, APIKey, APICall,
-        QualityScore, DriftDetection, Alert, Subscription, Usage, ActivityLog, Webhook
-    )
+    import subprocess
+    import os
     
-    # Create all tables
-    Base.metadata.create_all(bind=engine)
+    # Use Alembic to run migrations instead of create_all
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    alembic_cmd = ["python", "-m", "alembic", "upgrade", "head"]
     
-    logger.info("Database tables created successfully")
-    return {
-        "message": "Database initialized successfully",
-        "tables_created": [
-            "users", "projects", "project_members", "api_keys",
-            "api_calls", "quality_scores", "drift_detections", "alerts",
-            "subscriptions", "usage", "activity_logs", "webhooks"
-        ]
-    }
+    try:
+        result = subprocess.run(
+            alembic_cmd,
+            cwd=backend_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        logger.info("Database migrations applied successfully")
+        return {
+            "message": "Database initialized successfully using Alembic migrations",
+            "method": "alembic upgrade head",
+            "output": result.stdout
+        }
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Migration failed: {e.stderr}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Migration failed: {e.stderr}"
+        )
 
 
 @router.post("/generate-sample-data")
