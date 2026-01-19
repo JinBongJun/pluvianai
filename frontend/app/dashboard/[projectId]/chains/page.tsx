@@ -306,7 +306,19 @@ export default function AgentChainsPage() {
       if (profileData && typeof profileData === 'object') {
         setChainProfile({
           ...profileData,
-          chains: Array.isArray(profileData.chains) ? profileData.chains : [],
+          chains: Array.isArray(profileData.chains)
+            ? profileData.chains.map((chain: any) => ({
+                ...chain,
+                success: chain.success ?? false,
+                bottleneck_agent: chain.bottleneck_agent ?? null,
+                agents: Array.isArray(chain.agents)
+                  ? chain.agents.map((agent: any) => ({
+                      ...agent,
+                      avg_quality_score: agent.avg_quality_score ?? 0,
+                    }))
+                  : [],
+              }))
+            : [],
         });
       } else {
         setChainProfile({ chains: [] });
@@ -318,7 +330,12 @@ export default function AgentChainsPage() {
         const statsData = await agentChainAPI.getAgentStatistics(projectId, validatedDays);
         setAgentStats({
           ...statsData,
-          agents: Array.isArray(statsData?.agents) ? statsData.agents : [],
+          agents: Array.isArray(statsData?.agents)
+            ? statsData.agents.map((agent: any) => ({
+                ...agent,
+                avg_quality_score: agent.avg_quality_score ?? 0,
+              }))
+            : [],
         });
       } catch (statsError: any) {
         console.error('Failed to load agent statistics:', statsError);
