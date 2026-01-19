@@ -49,6 +49,8 @@ from app.middleware.api_hook import APIHookMiddleware
 from app.middleware.gzip_middleware import GZipMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.logging_middleware import LoggingMiddleware
+from app.middleware.metrics_middleware import MetricsMiddleware
+from app.core.metrics import get_metrics_response, update_app_info, registry
 
 # Import all models to ensure they are registered with Base
 from app.models import (

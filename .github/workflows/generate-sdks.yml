@@ -1,0 +1,147 @@
+name: Generate SDKs
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/app/api/**'
+      - 'backend/app/models/**'
+  workflow_dispatch:
+  schedule:
+    # Run daily at 3 AM UTC
+    - cron: '0 3 * * *'
+
+jobs:
+  generate-sdks:
+    runs-on: ubuntu-latest
+    name: Generate SDKs from OpenAPI Schema
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Start backend server
+        working-directory: ./backend
+        run: |
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          sleep 10
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key
+      
+      - name: Fetch OpenAPI schema
+        run: |
+          curl -s http://localhost:8000/openapi.json > openapi.json
+          echo "✅ OpenAPI schema fetched"
+      
+      - name: Validate OpenAPI schema
+        run: |
+          pip install openapi-spec-validator
+          openapi-spec-validator openapi.json
+          echo "✅ OpenAPI schema validated"
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: Install openapi-generator
+        run: |
+          npm install -g @openapitools/openapi-generator-cli
+      
+      - name: Generate Python SDK
+        run: |
+          openapi-generator-cli generate \
+            -i openapi.json \
+            -g python \
+            -o sdk/python-generated \
+            --package-name agentguard_sdk \
+            --additional-properties=packageVersion=0.1.0,packageName=agentguard-sdk
+          echo "✅ Python SDK generated"
+      
+      - name: Generate TypeScript SDK
+        run: |
+          openapi-generator-cli generate \
+            -i openapi.json \
+            -g typescript-axios \
+            -o sdk/typescript-generated \
+            --additional-properties=npmName=@agentguard/sdk,npmVersion=0.1.0
+          echo "✅ TypeScript SDK generated"
+      
+      - name: Generate Node.js SDK
+        run: |
+          openapi-generator-cli generate \
+            -i openapi.json \
+            -g typescript-node \
+            -o sdk/node-generated \
+            --additional-properties=npmName=@agentguard/node-sdk,npmVersion=0.1.0
+          echo "✅ Node.js SDK generated"
+      
+      - name: Upload generated SDKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-sdks
+          path: |
+            sdk/python-generated
+            sdk/typescript-generated
+            sdk/node-generated
+            openapi.json
+          retention-days: 7
+      
+      - name: Create PR with SDK updates
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: Update SDKs from OpenAPI schema"
+          title: "Auto-update: SDKs from OpenAPI schema"
+          body: |
+            This PR automatically updates SDKs based on the latest OpenAPI schema.
+            
+            Generated SDKs:
+            - Python SDK
+            - TypeScript SDK
+            - Node.js SDK
+            
+            Review the changes and merge if everything looks good.
+          branch: auto-update/sdks
+          delete-branch: true

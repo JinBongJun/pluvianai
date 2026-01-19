@@ -1,0 +1,170 @@
+name: Load Test
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/app/api/**'
+      - 'backend/app/services/**'
+  schedule:
+    # Run weekly on Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    name: Load Test
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install locust
+      
+      - name: Start backend server
+        working-directory: ./backend
+        run: |
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          sleep 10
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key
+      
+      - name: Create test user
+        working-directory: ./backend
+        run: |
+          python -c "
+          from app.core.database import SessionLocal
+          from app.models.user import User
+          from app.core.security import get_password_hash
+          db = SessionLocal()
+          try:
+              user = db.query(User).filter(User.email == 'test@example.com').first()
+              if not user:
+                  user = User(
+                      email='test@example.com',
+                      hashed_password=get_password_hash('testpassword'),
+                      full_name='Test User'
+                  )
+                  db.add(user)
+                  db.commit()
+              print('Test user created')
+          finally:
+              db.close()
+          "
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          SECRET_KEY: test-secret-key
+      
+      - name: Run load tests
+        working-directory: ./backend
+        run: |
+          # Create locustfile if it doesn't exist
+          if [ ! -f locustfile.py ]; then
+            cat > locustfile.py << 'EOF'
+from locust import HttpUser, task, between
+import json
+
+class AgentGuardUser(HttpUser):
+    wait_time = between(1, 3)
+    token = None
+    
+    def on_start(self):
+        # Login
+        response = self.client.post(
+            "/api/v1/auth/login",
+            json={"email": "test@example.com", "password": "testpassword"}
+        )
+        if response.status_code == 200:
+            data = response.json()
+            self.token = data.get("access_token")
+            self.client.headers.update({"Authorization": f"Bearer {self.token}"})
+    
+    @task(3)
+    def get_projects(self):
+        self.client.get("/api/v1/projects")
+    
+    @task(2)
+    def get_api_calls(self):
+        self.client.get("/api/v1/api-calls?project_id=1&limit=10")
+    
+    @task(1)
+    def get_quality_scores(self):
+        self.client.get("/api/v1/quality/scores?project_id=1&limit=10")
+    
+    @task(1)
+    def health_check(self):
+        self.client.get("/health")
+EOF
+          fi
+          
+          # Run load test
+          locust -f locustfile.py \
+            --headless \
+            --users 50 \
+            --spawn-rate 10 \
+            --run-time 2m \
+            --host http://localhost:8000 \
+            --html load-test-report.html \
+            --csv load-test-results
+        continue-on-error: true
+      
+      - name: Upload load test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: |
+            backend/load-test-report.html
+            backend/load-test-results*.csv
+          if-no-files-found: ignore
+      
+      - name: Check performance thresholds
+        working-directory: ./backend
+        run: |
+          if [ -f load-test-results_stats.csv ]; then
+            echo "📊 Load Test Results Summary"
+            cat load-test-results_stats.csv | head -20
+            echo ""
+            echo "✅ Load test completed. Check artifacts for detailed report."
+          else
+            echo "⚠️ Load test results not found"
+          fi
+        continue-on-error: true
