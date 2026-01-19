@@ -14,6 +14,8 @@ import {
   ProjectSchema,
   APICallSchema,
   DriftDetectionSchema,
+  AlertArraySchema,
+  AlertSchema,
 } from '@/lib/schemas';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -310,12 +312,23 @@ export const alertsAPI = {
     const response = await apiClient.get('/alerts', {
       params: { project_id: Number(projectId), ...validatedParams },
     });
-    return response.data;
+    // Validate array response - return empty array on validation failure (graceful degradation)
+    return validateArrayResponse(
+      AlertSchema,
+      response.data,
+      '/alerts'
+    );
   },
   
   get: async (id: number) => {
     const response = await apiClient.get(`/alerts/${id}`);
-    return response.data;
+    // Validate single item response
+    try {
+      return AlertSchema.parse(response.data);
+    } catch (error) {
+      console.warn(`[API Validation] Alert ${id} schema mismatch:`, error);
+      return response.data; // Return raw data on validation failure
+    }
   },
   
   resolve: async (id: number) => {

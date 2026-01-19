@@ -61,6 +61,24 @@ export const QualityScoreSchema = z.object({
   created_at: DateSchema,
 });
 
+// Alert schemas
+export const AlertSchema = z.object({
+  id: z.number().int().positive(),
+  project_id: z.number().int().positive(),
+  alert_type: z.string(),
+  severity: z.enum(['low', 'medium', 'high', 'critical']),
+  title: z.string(),
+  message: z.string(),
+  alert_data: z.unknown().nullable(),
+  is_sent: z.boolean(),
+  sent_at: DateSchema.nullable(),
+  notification_channels: z.array(z.string()).nullable(),
+  is_resolved: z.boolean(),
+  resolved_at: DateSchema.nullable(),
+  resolved_by: z.number().int().positive().nullable(),
+  created_at: DateSchema,
+});
+
 // Drift Detection schemas
 export const DriftDetectionSchema = z.object({
   id: z.number().int().positive(),
@@ -147,6 +165,7 @@ export const ChainProfileSchema = z.object({
 export const ProjectArraySchema = z.array(ProjectSchema);
 export const APICallArraySchema = z.array(APICallSchema);
 export const QualityScoreArraySchema = z.array(QualityScoreSchema);
+export const AlertArraySchema = z.array(AlertSchema);
 export const DriftDetectionArraySchema = z.array(DriftDetectionSchema);
 // ModelComparisonArraySchema uses individual ModelComparisonSchema items
 export const ModelComparisonArraySchema = ModelComparisonSchema;

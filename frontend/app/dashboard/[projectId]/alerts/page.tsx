@@ -145,10 +145,21 @@ export default function AlertsPage() {
       setTotalItems(filtered.length);
     } catch (error: any) {
       console.error('Failed to load alerts:', error);
-      toast.showToast(error.response?.data?.detail || 'Failed to load alerts', 'error');
-      if (error.response?.status === 401) {
+      
+      // Only show error toast for actual API failures, not empty results
+      const status = error.response?.status;
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to load alerts';
+      
+      // 404 or empty results should not show error toast
+      if (status !== 404 && status !== 200) {
+        toast.showToast(errorMessage, 'error');
+      }
+      
+      if (status === 401) {
         router.push('/login');
       }
+      
+      // Set empty arrays on error (graceful degradation)
       setAlerts([]);
       setAllAlerts([]);
       setTotalItems(0);
