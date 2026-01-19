@@ -51,13 +51,17 @@ class DetectDriftRequest(BaseModel):
 
 @router.post("/detect", response_model=List[DriftDetectionResponse])
 async def detect_drift(
-    project_id: int,
-    request: DetectDriftRequest,
-    background_tasks: BackgroundTasks,
+    project_id: int = Query(..., description="Project ID"),
+    request: DetectDriftRequest = None,
+    background_tasks: BackgroundTasks = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Detect drift for a project"""
+    # Handle optional request body
+    if request is None:
+        request = DetectDriftRequest()
+    
     # Verify project access (any member can detect drift)
     project = check_project_access(project_id, current_user, db)
     

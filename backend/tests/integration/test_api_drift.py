@@ -42,9 +42,12 @@ class TestDriftAPI:
         
         db.commit()
         
+        # detect_drift endpoint expects project_id as path parameter or query param
+        # Based on the endpoint signature, it's a path parameter
         response = await async_client.post(
-            f"/api/v1/drift/detect",
-            json={"project_id": test_project.id},
+            "/api/v1/drift/detect",
+            params={"project_id": test_project.id},
+            json={},  # DetectDriftRequest body (optional fields)
             headers=auth_headers
         )
         

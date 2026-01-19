@@ -60,10 +60,12 @@ class TestProjectsAPI:
         ]
         
         # If it's a conflict, verify the error message
+        # Our exception handler returns {"error": True, "message": ..., "status_code": ...}
         if response.status_code == status.HTTP_409_CONFLICT:
             data = response.json()
-            assert "detail" in data
-            assert "already exists" in data["detail"].lower() or "duplicate" in data["detail"].lower()
+            # Check for either "detail" (FastAPI default) or "message" (our custom handler)
+            error_msg = data.get("message") or data.get("detail", "")
+            assert "already exists" in error_msg.lower() or "duplicate" in error_msg.lower()
     
     async def test_list_projects(self, async_client, auth_headers, test_project):
         """Test listing user's projects"""
