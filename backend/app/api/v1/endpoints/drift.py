@@ -115,6 +115,7 @@ async def detect_drift(
 
 
 @router.get("", response_model=List[DriftDetectionResponse])
+@handle_errors
 async def list_drift_detections(
     project_id: int = Query(..., description="Project ID"),
     limit: int = Query(100, ge=1, le=1000),
@@ -125,29 +126,21 @@ async def list_drift_detections(
     db: Session = Depends(get_db)
 ):
     """List drift detections for a project"""
-    try:
-        # Verify project access (any member can detect drift)
-        project = check_project_access(project_id, current_user, db)
-        
-        # Build query
-        query = db.query(DriftDetection).filter(DriftDetection.project_id == project_id)
-        
-        if detection_type:
-            query = query.filter(DriftDetection.detection_type == detection_type)
-        if severity:
-            query = query.filter(DriftDetection.severity == severity)
-        
-        # Order by detected_at descending and paginate
-        detections = query.order_by(desc(DriftDetection.detected_at)).offset(offset).limit(limit).all()
-        
-        return detections
-    except Exception as e:
-        from app.core.logging_config import logger
-        logger.error(f"Error listing drift detections for project {project_id}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve drift detections: {str(e)}"
-        )
+    # Verify project access (any member can detect drift)
+    project = check_project_access(project_id, current_user, db)
+    
+    # Build query
+    query = db.query(DriftDetection).filter(DriftDetection.project_id == project_id)
+    
+    if detection_type:
+        query = query.filter(DriftDetection.detection_type == detection_type)
+    if severity:
+        query = query.filter(DriftDetection.severity == severity)
+    
+    # Order by detected_at descending and paginate
+    detections = query.order_by(desc(DriftDetection.detected_at)).offset(offset).limit(limit).all()
+    
+    return detections
 
 
 @router.get("/{detection_id}", response_model=DriftDetectionResponse)
