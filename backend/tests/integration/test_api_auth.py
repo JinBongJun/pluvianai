@@ -6,12 +6,13 @@ from fastapi import status
 
 
 @pytest.mark.integration
+@pytest.mark.asyncio
 class TestAuthAPI:
-    """Test Authentication API endpoints"""
+    """Test Authentication API endpoints using async client"""
     
-    def test_register_success(self, client, db):
+    async def test_register_success(self, async_client, db):
         """Test user registration"""
-        response = client.post(
+        response = await async_client.post(
             "/api/v1/auth/register",
             json={
                 "email": "newuser@example.com",
@@ -26,9 +27,9 @@ class TestAuthAPI:
         assert data["email"] == "newuser@example.com"
         assert "password" not in data  # Password should not be in response
     
-    def test_register_duplicate_email(self, client, test_user):
+    async def test_register_duplicate_email(self, async_client, test_user):
         """Test registering with duplicate email"""
-        response = client.post(
+        response = await async_client.post(
             "/api/v1/auth/register",
             json={
                 "email": test_user.email,
@@ -39,9 +40,9 @@ class TestAuthAPI:
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
     
-    def test_register_invalid_email(self, client):
+    async def test_register_invalid_email(self, async_client):
         """Test registering with invalid email"""
-        response = client.post(
+        response = await async_client.post(
             "/api/v1/auth/register",
             json={
                 "email": "not-an-email",
@@ -52,9 +53,9 @@ class TestAuthAPI:
         
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
     
-    def test_register_weak_password(self, client):
+    async def test_register_weak_password(self, async_client):
         """Test registering with weak password"""
-        response = client.post(
+        response = await async_client.post(
             "/api/v1/auth/register",
             json={
                 "email": "user@example.com",
@@ -70,9 +71,9 @@ class TestAuthAPI:
             status.HTTP_422_UNPROCESSABLE_ENTITY
         ]
     
-    def test_login_success(self, client, test_user):
+    async def test_login_success(self, async_client, test_user):
         """Test user login"""
-        response = client.post(
+        response = await async_client.post(
             "/api/v1/auth/login",
             data={
                 "username": test_user.email,
@@ -86,9 +87,9 @@ class TestAuthAPI:
         assert "refresh_token" in data
         assert data["token_type"] == "bearer"
     
-    def test_login_invalid_credentials(self, client, test_user):
+    async def test_login_invalid_credentials(self, async_client, test_user):
         """Test login with invalid credentials"""
-        response = client.post(
+        response = await async_client.post(
             "/api/v1/auth/login",
             data={
                 "username": test_user.email,
@@ -98,9 +99,9 @@ class TestAuthAPI:
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
     
-    def test_login_nonexistent_user(self, client):
+    async def test_login_nonexistent_user(self, async_client):
         """Test login with non-existent user"""
-        response = client.post(
+        response = await async_client.post(
             "/api/v1/auth/login",
             data={
                 "username": "nonexistent@example.com",
@@ -110,9 +111,9 @@ class TestAuthAPI:
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
     
-    def test_get_current_user(self, client, auth_headers, test_user):
+    async def test_get_current_user(self, async_client, auth_headers, test_user):
         """Test getting current user info"""
-        response = client.get(
+        response = await async_client.get(
             "/api/v1/auth/me",
             headers=auth_headers
         )
@@ -122,8 +123,8 @@ class TestAuthAPI:
         assert data["email"] == test_user.email
         assert data["id"] == test_user.id
     
-    def test_get_current_user_without_auth(self, client):
+    async def test_get_current_user_without_auth(self, async_client):
         """Test getting current user without authentication"""
-        response = client.get("/api/v1/auth/me")
+        response = await async_client.get("/api/v1/auth/me")
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED

@@ -7,10 +7,11 @@ from app.models.alert import Alert
 
 
 @pytest.mark.integration
+@pytest.mark.asyncio
 class TestAlertsAPI:
-    """Test Alerts API endpoints"""
+    """Test Alerts API endpoints using async client for proper event loop handling"""
     
-    def test_list_alerts(self, client, auth_headers, test_project, db):
+    async def test_list_alerts(self, async_client, auth_headers, test_project, db):
         """Test listing alerts"""
         alert = Alert(
             project_id=test_project.id,
@@ -21,8 +22,9 @@ class TestAlertsAPI:
         )
         db.add(alert)
         db.commit()
+        db.refresh(alert)
         
-        response = client.get(
+        response = await async_client.get(
             "/api/v1/alerts",
             params={"project_id": test_project.id},
             headers=auth_headers
@@ -31,8 +33,9 @@ class TestAlertsAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert isinstance(data, list)
+        assert len(data) > 0
     
-    def test_get_alert_by_id(self, client, auth_headers, test_project, db):
+    async def test_get_alert_by_id(self, async_client, auth_headers, test_project, db):
         """Test getting alert by ID"""
         alert = Alert(
             project_id=test_project.id,
@@ -43,8 +46,9 @@ class TestAlertsAPI:
         )
         db.add(alert)
         db.commit()
+        db.refresh(alert)
         
-        response = client.get(
+        response = await async_client.get(
             f"/api/v1/alerts/{alert.id}",
             headers=auth_headers
         )

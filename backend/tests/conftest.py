@@ -3,10 +3,13 @@ Pytest configuration and fixtures
 """
 import pytest
 import asyncio
+from typing import AsyncGenerator
 from fastapi.testclient import TestClient
+from httpx import AsyncClient, ASGITransport
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 import os
 from app.main import app
 from app.core.database import Base, get_db
@@ -26,9 +29,28 @@ test_engine = create_engine(
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 
-# Note: event_loop fixture is not needed for TestClient
-# TestClient handles async operations internally using httpx.Client
-# which manages its own event loop in a separate thread
+@pytest.fixture(scope="function")
+def event_loop():
+    """Create and manage event loop for async tests.
+    
+    This ensures proper event loop lifecycle management for async operations.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    yield loop
+    # Clean up: cancel pending tasks and close the loop
+    try:
+        # Cancel all pending tasks
+        pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
+        for task in pending:
+            task.cancel()
+        # Wait for tasks to complete (cancelled or finished)
+        if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    except Exception:
+        pass
+    finally:
+        loop.close()
 
 
 @pytest.fixture(scope="function")
@@ -49,7 +71,10 @@ def db():
 
 @pytest.fixture(scope="function")
 def client(db):
-    """Create a test client with database override"""
+    """Create a synchronous test client with database override.
+    
+    Use this for unit tests or simple integration tests.
+    """
     from app.core.security import get_current_user
     
     def override_get_db():
@@ -64,6 +89,35 @@ def client(db):
     # Use TestClient as context manager - it handles async properly
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
+    
+    # Clear all overrides after test
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+async def async_client(db, event_loop) -> AsyncGenerator[AsyncClient, None]:
+    """Create an async test client with database override.
+    
+    Use this for integration tests that need proper async handling.
+    This prevents event loop issues and matches production behavior.
+    """
+    from app.core.security import get_current_user
+    
+    async def override_get_db():
+        try:
+            yield db
+        finally:
+            pass
+    
+    # Override database dependency
+    app.dependency_overrides[get_db] = override_get_db
+    
+    # Create async client with proper transport
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test"
+    ) as ac:
+        yield ac
     
     # Clear all overrides after test
     app.dependency_overrides.clear()
@@ -88,7 +142,7 @@ def test_user(db):
 
 
 @pytest.fixture
-def auth_headers(client, test_user):
+def auth_headers(test_user):
     """Get authentication headers for test user"""
     from app.core.security import create_access_token, get_current_user
     

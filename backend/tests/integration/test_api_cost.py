@@ -8,16 +8,19 @@ from app.models.api_call import APICall
 
 
 @pytest.mark.integration
+@pytest.mark.asyncio
 class TestCostAPI:
-    """Test Cost API endpoints"""
+    """Test Cost API endpoints using async client"""
     
-    def test_get_cost_analysis(self, client, auth_headers, test_project, db):
+    async def test_get_cost_analysis(self, async_client, auth_headers, test_project, db):
         """Test getting cost analysis"""
         for i in range(5):
             api_call = APICall(
                 project_id=test_project.id,
                 provider="openai",
                 model="gpt-4",
+                request_data={},
+                response_data={},
                 request_tokens=1000,
                 response_tokens=500,
                 created_at=datetime.utcnow() - timedelta(days=i)
@@ -26,7 +29,7 @@ class TestCostAPI:
         
         db.commit()
         
-        response = client.get(
+        response = await async_client.get(
             "/api/v1/cost/analysis",
             params={"project_id": test_project.id, "days": 7},
             headers=auth_headers

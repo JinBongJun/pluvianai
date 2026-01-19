@@ -8,10 +8,11 @@ from app.models.api_call import APICall
 
 
 @pytest.mark.integration
+@pytest.mark.asyncio
 class TestQualityAPI:
-    """Test Quality API endpoints"""
+    """Test Quality API endpoints using async client"""
     
-    def test_list_quality_scores(self, client, auth_headers, test_project, db):
+    async def test_list_quality_scores(self, async_client, auth_headers, test_project, db):
         """Test listing quality scores"""
         from app.models.api_call import APICall
         from app.models.quality_score import QualityScore
@@ -28,13 +29,15 @@ class TestQualityAPI:
         )
         db.add(api_call)
         db.commit()
+        db.refresh(api_call)
         
         evaluator = QualityEvaluator()
         score = evaluator.evaluate(api_call)
         db.add(score)
         db.commit()
+        db.refresh(score)
         
-        response = client.get(
+        response = await async_client.get(
             "/api/v1/quality/scores",
             params={"project_id": test_project.id},
             headers=auth_headers
@@ -45,9 +48,9 @@ class TestQualityAPI:
         assert isinstance(data, list)
         assert len(data) >= 1
     
-    def test_get_quality_stats(self, client, auth_headers, test_project, db):
+    async def test_get_quality_stats(self, async_client, auth_headers, test_project, db):
         """Test getting quality statistics"""
-        response = client.get(
+        response = await async_client.get(
             "/api/v1/quality/stats",
             params={"project_id": test_project.id, "days": 7},
             headers=auth_headers

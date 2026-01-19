@@ -8,10 +8,11 @@ from app.models.api_call import APICall
 
 
 @pytest.mark.integration
+@pytest.mark.asyncio
 class TestDriftAPI:
-    """Test Drift API endpoints"""
+    """Test Drift API endpoints using async client"""
     
-    def test_detect_drift(self, client, auth_headers, test_project, db):
+    async def test_detect_drift(self, async_client, auth_headers, test_project, db):
         """Test detecting drift"""
         baseline_date = datetime.utcnow() - timedelta(days=5)
         
@@ -20,6 +21,8 @@ class TestDriftAPI:
                 project_id=test_project.id,
                 provider="openai",
                 model="gpt-4",
+                request_data={},
+                response_data={},
                 response_text="A" * 100,
                 created_at=baseline_date + timedelta(hours=i)
             )
@@ -30,6 +33,8 @@ class TestDriftAPI:
                 project_id=test_project.id,
                 provider="openai",
                 model="gpt-4",
+                request_data={},
+                response_data={},
                 response_text="B" * 200,
                 created_at=datetime.utcnow() - timedelta(hours=i)
             )
@@ -37,7 +42,7 @@ class TestDriftAPI:
         
         db.commit()
         
-        response = client.post(
+        response = await async_client.post(
             f"/api/v1/drift/detect",
             json={"project_id": test_project.id},
             headers=auth_headers
@@ -47,9 +52,9 @@ class TestDriftAPI:
         data = response.json()
         assert isinstance(data, list)
     
-    def test_list_drift_detections(self, client, auth_headers, test_project):
+    async def test_list_drift_detections(self, async_client, auth_headers, test_project):
         """Test listing drift detections"""
-        response = client.get(
+        response = await async_client.get(
             "/api/v1/drift",
             params={"project_id": test_project.id},
             headers=auth_headers
