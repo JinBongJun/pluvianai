@@ -30,7 +30,7 @@ interface AgentStats {
   avg_latency_ms: number;
   failure_count: number;
   failure_rate: number;
-  avg_quality_score: number;
+  avg_quality_score?: number; // Optional - may not be available for all agents
 }
 
 interface ChainProfile {
@@ -85,7 +85,12 @@ export default function ChainDetailPage() {
             ...chainData,
             success: chainData.success ?? false,
             bottleneck_agent: chainData.bottleneck_agent ?? null,
-            agents: Array.isArray(chainData.agents) ? chainData.agents : [],
+            agents: Array.isArray(chainData.agents) 
+              ? chainData.agents.map((agent: any) => ({
+                  ...agent,
+                  avg_quality_score: agent.avg_quality_score ?? 0,
+                }))
+              : [],
           });
         } else if (profileData.chain_id) {
           // Direct chain object (not wrapped in chains array)
@@ -93,7 +98,12 @@ export default function ChainDetailPage() {
             ...profileData,
             success: profileData.success ?? false,
             bottleneck_agent: profileData.bottleneck_agent ?? null,
-            agents: Array.isArray(profileData.agents) ? profileData.agents : [],
+            agents: Array.isArray(profileData.agents)
+              ? profileData.agents.map((agent: any) => ({
+                  ...agent,
+                  avg_quality_score: agent.avg_quality_score ?? 0,
+                }))
+              : [],
           });
         } else {
           throw new Error('No chain data found');
