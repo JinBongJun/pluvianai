@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     FEATURE_FLAG_BETA_FEATURES: bool = False
     FEATURE_FLAG_EXPERIMENTAL_API: bool = False
     
+    # Monitoring (optional, for production)
+    GRAFANA_URL: Optional[str] = None
+    PROMETHEUS_URL: Optional[str] = None
+    
     class Config:
         env_file = str(PROJECT_ROOT / ".env")
         case_sensitive = True

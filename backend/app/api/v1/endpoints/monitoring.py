@@ -3,18 +3,22 @@ Monitoring endpoints for status and links
 """
 from fastapi import APIRouter
 from app.core.config import settings
-from typing import Dict
+from app.core.database import SessionLocal
+from app.models import User, Project
+from typing import Dict, Any
+from sqlalchemy import func
+from datetime import datetime, timedelta
 
 router = APIRouter()
 
 
 @router.get("/status")
-async def monitoring_status() -> Dict[str, any]:
+async def monitoring_status() -> Dict[str, Any]:
     """Get monitoring status and URLs"""
     # Determine monitoring URLs based on environment
     if settings.ENVIRONMENT == "production":
-        grafana_url = getattr(settings, 'GRAFANA_URL', None)
-        prometheus_url = getattr(settings, 'PROMETHEUS_URL', None)
+        grafana_url = settings.GRAFANA_URL
+        prometheus_url = settings.PROMETHEUS_URL
     else:
         grafana_url = "http://localhost:3001"
         prometheus_url = "http://localhost:9090"
@@ -30,3 +34,29 @@ async def monitoring_status() -> Dict[str, any]:
         },
         "status": "operational"
     }
+
+
+@router.get("/metrics")
+async def get_current_metrics() -> Dict[str, Any]:
+    """Get current metrics summary for widget display"""
+    db = SessionLocal()
+    try:
+        # Get active users count
+        active_users_count = db.query(User).filter(User.is_active == True).count()
+        
+        # Get active projects count
+        active_projects_count = db.query(Project).filter(Project.is_active == True).count()
+        
+        # Note: For real-time request/error/latency metrics, you would query Prometheus
+        # For now, we return basic counts. In production, you'd integrate with Prometheus API
+        
+        return {
+            "total_requests": 0,  # Would be fetched from Prometheus
+            "error_rate": 0.0,   # Would be calculated from Prometheus metrics
+            "avg_latency": 0,    # Would be fetched from Prometheus
+            "active_users": active_users_count,
+            "active_projects": active_projects_count,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    finally:
+        db.close()
