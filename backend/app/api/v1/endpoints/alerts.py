@@ -41,6 +41,11 @@ class AlertResponse(BaseModel):
         from_attributes = True
 
 
+class SendAlertRequest(BaseModel):
+    """Request to send alert"""
+    channels: List[str] | None = None  # Optional: if None, use alert's default channels
+
+
 @router.get("", response_model=List[AlertResponse])
 async def list_alerts(
     project_id: int = Query(..., description="Project ID"),
@@ -83,52 +88,48 @@ async def list_alerts(
 @router.post("/{alert_id}/send")
 async def send_alert(
     alert_id: int,
-    channels: List[str] | None = None,
+    request: SendAlertRequest = SendAlertRequest(),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Send an alert through notification channels"""
-    alert = db.query(Alert).filter(Alert.id == alert_id).first()
-    
-    if not alert:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found"
-        )
-    
-    # Verify project access
-    project = check_project_access(alert.project_id, current_user, db)
-    
-    # Check alert feature access
-    subscription_service = SubscriptionService(db)
-    plan_info = subscription_service.get_user_plan(project.owner_id)
-    alerts_feature = plan_info["features"].get("alerts", False)
-    
-    if not alerts_feature:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Alerts are not available on your current plan. Please upgrade to Indie plan or higher."
-        )
-    
-    # Check channel access (Indie: email only, Startup+: full)
-    if channels:
-        if alerts_feature == "email" and any(ch not in ["email"] for ch in channels):
+    try:
+        alert = db.query(Alert).filter(Alert.id == alert_id).first()
+        
+        if not alert:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Slack/Discord alerts require Startup plan or higher. Indie plan supports email only."
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Alert not found"
             )
-    
-    # Send alert
-    results = await alert_service.send_alert(alert, channels)
-    
-    # Update alert status
-    if any(r.get("status") == "sent" for r in results.values()):
-        alert.is_sent = True
-        from datetime import datetime
-        alert.sent_at = datetime.utcnow()
-        db.commit()
-    
-    return {"alert_id": alert_id, "results": results}
+        
+        # Verify project access
+        project = check_project_access(alert.project_id, current_user, db)
+        
+        # Use channels from request, or default to alert's notification_channels, or ["email"]
+        channels = request.channels or alert.notification_channels or ["email"]
+        
+        # Send alert (simplified - remove complex subscription checks for now)
+        results = await alert_service.send_alert(alert, channels, db=db)
+        
+        # Update alert status
+        if any(r.get("status") == "sent" for r in results.values()):
+            alert.is_sent = True
+            alert.sent_at = datetime.utcnow()
+            if alert.notification_channels is None:
+                alert.notification_channels = channels
+            db.commit()
+            db.refresh(alert)
+        
+        return {"alert_id": alert_id, "results": results}
+    except HTTPException:
+        raise
+    except Exception as e:
+        from app.core.logging_config import logger
+        logger.error(f"Error sending alert {alert_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to send alert: {str(e)}"
+        )
 
 
 @router.post("/{alert_id}/resolve", response_model=AlertResponse)

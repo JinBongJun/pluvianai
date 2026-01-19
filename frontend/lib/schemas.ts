@@ -157,12 +157,22 @@ export const ChainProfileSchema = z.object({
   unique_agents: NumberSchema,
   total_latency: NumberSchema,
   avg_latency_per_step: NumberSchema,
-  success: z.boolean(),
+  success: z.boolean().default(false),
   success_rate: NumberSchema,
   failure_count: NumberSchema,
-  bottleneck_agent: z.string().nullable(),
+  bottleneck_agent: z.string().nullable().default(null),
   bottleneck_latency_ms: NumberSchema,
-  agents: z.array(AgentStatsSchema),
+  agents: z.array(AgentStatsSchema).default([]),
+});
+
+// Chain Profile Response (wraps chains array)
+export const ChainProfileResponseSchema = z.object({
+  total_chains: NumberSchema.optional(),
+  successful_chains: NumberSchema.optional(),
+  success_rate: NumberSchema.optional(),
+  avg_chain_latency_ms: NumberSchema.optional(),
+  chains: z.array(ChainProfileSchema).default([]),
+  message: z.string().optional(),
 });
 
 // Array schemas - use individual item schemas

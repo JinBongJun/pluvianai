@@ -76,9 +76,28 @@ export default function ChainDetailPage() {
       // Load chain profile for specific chain_id
       const profileData = await agentChainAPI.profile(projectId, chainId, 30);
       
-      if (profileData.chains && profileData.chains.length > 0) {
-        const chainData = profileData.chains[0];
-        setChain(chainData);
+      // Handle response structure: {chains: [...], ...} or direct chain object
+      if (profileData && typeof profileData === 'object') {
+        if (Array.isArray(profileData.chains) && profileData.chains.length > 0) {
+          const chainData = profileData.chains[0];
+          // Ensure all required fields have defaults
+          setChain({
+            ...chainData,
+            success: chainData.success ?? false,
+            bottleneck_agent: chainData.bottleneck_agent ?? null,
+            agents: Array.isArray(chainData.agents) ? chainData.agents : [],
+          });
+        } else if (profileData.chain_id) {
+          // Direct chain object (not wrapped in chains array)
+          setChain({
+            ...profileData,
+            success: profileData.success ?? false,
+            bottleneck_agent: profileData.bottleneck_agent ?? null,
+            agents: Array.isArray(profileData.agents) ? profileData.agents : [],
+          });
+        } else {
+          throw new Error('No chain data found');
+        }
 
         // Load related API calls for this chain
         try {

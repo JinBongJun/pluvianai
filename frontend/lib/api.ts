@@ -10,6 +10,7 @@ import {
   QualityScoreSchema,
   DriftDetectionSchema,
   ChainProfileSchema,
+  ChainProfileResponseSchema,
   ProjectSchema,
   APICallSchema,
   AlertSchema,
@@ -426,20 +427,23 @@ export const agentChainAPI = {
       params.chain_id = chainId;
     }
     const response = await apiClient.get('/agent-chain/profile', { params });
-    // Validate response - chain profile can be single object or array
-    if (Array.isArray(response.data)) {
-      return validateArrayResponse(
-        ChainProfileSchema,
-        response.data,
-        '/agent-chain/profile'
-      );
-    } else {
-      try {
-        return ChainProfileSchema.parse(response.data);
-      } catch (error) {
-        console.warn('[API Validation] Chain profile schema mismatch:', error);
-        return response.data; // Return raw data on validation failure
-      }
+    
+    // Backend returns {total_chains, chains: [], ...} or {message, chains: []}
+    // Validate using ChainProfileResponseSchema
+    try {
+      const validated = ChainProfileResponseSchema.parse(response.data);
+      return validated;
+    } catch (error) {
+      console.warn('[API Validation] Chain profile response schema mismatch:', error);
+      // Return safe default structure
+      return {
+        total_chains: 0,
+        successful_chains: 0,
+        success_rate: 0,
+        avg_chain_latency_ms: 0,
+        chains: [],
+        message: response.data?.message || 'No chain data available',
+      };
     }
   },
   

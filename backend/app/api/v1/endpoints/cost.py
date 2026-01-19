@@ -83,8 +83,8 @@ async def get_cost_analysis(
 
 @router.post("/detect-anomalies")
 async def detect_cost_anomalies(
-    project_id: int,
-    background_tasks: BackgroundTasks,
+    project_id: int = Query(..., description="Project ID"),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
