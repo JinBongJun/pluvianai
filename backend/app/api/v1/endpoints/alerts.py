@@ -2,6 +2,7 @@
 Alert endpoints
 """
 from typing import List
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -29,12 +30,12 @@ class AlertResponse(BaseModel):
     message: str
     alert_data: dict | None = None
     is_sent: bool
-    sent_at: str | None = None
+    sent_at: datetime | None = None
     notification_channels: list | None = None
     is_resolved: bool
-    resolved_at: str | None = None
+    resolved_at: datetime | None = None
     resolved_by: int | None = None
-    created_at: str
+    created_at: datetime
     
     class Config:
         from_attributes = True
@@ -52,23 +53,31 @@ async def list_alerts(
     db: Session = Depends(get_db)
 ):
     """List alerts for a project"""
-    # Verify project access (any member can view alerts)
-    project = check_project_access(project_id, current_user, db)
-    
-    # Build query
-    query = db.query(Alert).filter(Alert.project_id == project_id)
-    
-    if alert_type:
-        query = query.filter(Alert.alert_type == alert_type)
-    if severity:
-        query = query.filter(Alert.severity == severity)
-    if is_resolved is not None:
-        query = query.filter(Alert.is_resolved == is_resolved)
-    
-    # Order by created_at descending and paginate
-    alerts = query.order_by(desc(Alert.created_at)).offset(offset).limit(limit).all()
-    
-    return alerts
+    try:
+        # Verify project access (any member can view alerts)
+        project = check_project_access(project_id, current_user, db)
+        
+        # Build query
+        query = db.query(Alert).filter(Alert.project_id == project_id)
+        
+        if alert_type:
+            query = query.filter(Alert.alert_type == alert_type)
+        if severity:
+            query = query.filter(Alert.severity == severity)
+        if is_resolved is not None:
+            query = query.filter(Alert.is_resolved == is_resolved)
+        
+        # Order by created_at descending and paginate
+        alerts = query.order_by(desc(Alert.created_at)).offset(offset).limit(limit).all()
+        
+        return alerts
+    except Exception as e:
+        from app.core.logging_config import logger
+        logger.error(f"Error listing alerts for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve alerts: {str(e)}"
+        )
 
 
 @router.post("/{alert_id}/send")

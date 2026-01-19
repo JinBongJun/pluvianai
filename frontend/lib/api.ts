@@ -7,14 +7,11 @@ import { validateArrayResponse, normalizeModelComparison } from '@/lib/validate'
 import {
   ModelComparisonSchema,
   CostAnalysisSchema,
-  QualityScoreArraySchema,
-  DriftDetectionArraySchema,
+  QualityScoreSchema,
+  DriftDetectionSchema,
   ChainProfileSchema,
-  APICallArraySchema,
   ProjectSchema,
   APICallSchema,
-  DriftDetectionSchema,
-  AlertArraySchema,
   AlertSchema,
 } from '@/lib/schemas';
 
@@ -200,9 +197,9 @@ export const apiCallsAPI = {
     const response = await apiClient.get('/api-calls', {
       params: { project_id: Number(projectId), ...validatedParams },
     });
-    // Validate array response
+    // Validate array response - use item schema, not array schema
     return validateArrayResponse(
-      APICallArraySchema,
+      APICallSchema,
       response.data,
       '/api-calls'
     );
@@ -248,9 +245,9 @@ export const qualityAPI = {
     const response = await apiClient.get('/quality/scores', {
       params: { project_id: projectId, ...params },
     });
-    // Validate array response
+    // Validate array response - use item schema, not array schema
     return validateArrayResponse(
-      QualityScoreArraySchema,
+      QualityScoreSchema,
       response.data,
       '/quality/scores'
     );
@@ -277,9 +274,9 @@ export const driftAPI = {
     const response = await apiClient.get('/drift', {
       params: { project_id: projectId, ...params },
     });
-    // Validate array response
+    // Validate array response - use item schema, not array schema
     return validateArrayResponse(
-      DriftDetectionArraySchema,
+      DriftDetectionSchema,
       response.data,
       '/drift'
     );

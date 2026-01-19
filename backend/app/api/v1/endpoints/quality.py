@@ -117,14 +117,22 @@ async def list_quality_scores(
     db: Session = Depends(get_db)
 ):
     """List quality scores for a project"""
-    # Verify project access (any member can view)
-    project = check_project_access(project_id, current_user, db)
-    
-    scores = db.query(QualityScore).filter(
-        QualityScore.project_id == project_id
-    ).order_by(desc(QualityScore.created_at)).offset(offset).limit(limit).all()
-    
-    return scores
+    try:
+        # Verify project access (any member can view)
+        project = check_project_access(project_id, current_user, db)
+        
+        scores = db.query(QualityScore).filter(
+            QualityScore.project_id == project_id
+        ).order_by(desc(QualityScore.created_at)).offset(offset).limit(limit).all()
+        
+        return scores
+    except Exception as e:
+        from app.core.logging_config import logger
+        logger.error(f"Error listing quality scores for project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve quality scores: {str(e)}"
+        )
 
 
 @router.get("/stats", response_model=QualityStatsResponse)
