@@ -1,0 +1,248 @@
+name: Comprehensive CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # 1. 코드 품질 검사 (Python)
+  python-quality:
+    runs-on: ubuntu-latest
+    name: Python Code Quality
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+          pip install black flake8 mypy
+      
+      - name: Check code formatting (Black)
+        working-directory: ./backend
+        run: black --check --diff app/ || (echo "❌ Code formatting issues found. Run 'black app/' to fix." && exit 1)
+      
+      - name: Lint with flake8
+        working-directory: ./backend
+        run: |
+          flake8 app/ --max-line-length=120 --extend-ignore=E203,W503 --count --statistics || exit 1
+      
+      - name: Type check with mypy
+        working-directory: ./backend
+        run: |
+          mypy app/ --ignore-missing-imports --no-strict-optional || echo "⚠️ Type checking warnings (non-blocking)"
+        continue-on-error: true
+
+  # 2. 코드 품질 검사 (TypeScript)
+  typescript-quality:
+    runs-on: ubuntu-latest
+    name: TypeScript Code Quality
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+      
+      - name: TypeScript check
+        working-directory: ./frontend
+        run: npx tsc --noEmit --skipLibCheck
+      
+      - name: ESLint check
+        working-directory: ./frontend
+        run: npm run lint || (echo "❌ ESLint errors found. Run 'npm run lint -- --fix' to auto-fix." && exit 1)
+
+  # 3. 자동 테스트 실행
+  backend-tests:
+    runs-on: ubuntu-latest
+    name: Backend Tests
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+      
+      - name: Run unit tests
+        working-directory: ./backend
+        run: |
+          pytest tests/unit -v --cov=app --cov-report=xml --cov-report=term --cov-report=html
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key
+      
+      - name: Run integration tests
+        working-directory: ./backend
+        run: |
+          pytest tests/integration -v --cov=app --cov-append --cov-report=xml --cov-report=term
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key
+      
+      - name: Check coverage threshold
+        working-directory: ./backend
+        run: |
+          coverage report --fail-under=60 || (echo "❌ Coverage below 60%. Current coverage:" && coverage report && exit 1)
+        continue-on-error: true
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./backend/coverage.xml
+          flags: backend
+          name: backend-coverage
+          fail_ci_if_error: false
+
+  # 4. OpenAPI 타입 검증
+  openapi-validation:
+    runs-on: ubuntu-latest
+    name: OpenAPI Schema Validation
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+      
+      - name: Start backend server
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          sleep 10
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key
+      
+      - name: Generate and validate types
+        working-directory: ./frontend
+        run: |
+          npm run generate-types || (echo "❌ Type generation failed. Check OpenAPI schema." && exit 1)
+          # Check if types file was generated
+          if [ ! -f "lib/api-types.ts" ]; then
+            echo "❌ api-types.ts not generated"
+            exit 1
+          fi
+          echo "✅ Types generated successfully"
+
+  # 5. 보안 검사
+  security-scan:
+    runs-on: ubuntu-latest
+    name: Security Scan
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install safety
+        run: pip install safety
+      
+      - name: Check Python dependencies for vulnerabilities
+        working-directory: ./backend
+        run: |
+          safety check --file requirements.txt || echo "⚠️ Security vulnerabilities found (non-blocking)"
+        continue-on-error: true
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install npm audit
+        working-directory: ./frontend
+        run: npm ci
+      
+      - name: Run npm audit
+        working-directory: ./frontend
+        run: |
+          npm audit --audit-level=moderate || echo "⚠️ npm vulnerabilities found (non-blocking)"
+        continue-on-error: true
+
+  # 6. 품질 게이트 - 모든 검사 통과 확인
+  quality-gate:
+    runs-on: ubuntu-latest
+    name: Quality Gate
+    needs: [python-quality, typescript-quality, backend-tests, openapi-validation]
+    if: always()
+    
+    steps:
+      - name: Check all jobs status
+        run: |
+          if [ "${{ needs.python-quality.result }}" != "success" ] || \
+             [ "${{ needs.typescript-quality.result }}" != "success" ] || \
+             [ "${{ needs.backend-tests.result }}" != "success" ] || \
+             [ "${{ needs.openapi-validation.result }}" != "success" ]; then
+            echo "❌ Quality gate failed. One or more checks did not pass."
+            exit 1
+          fi
+          echo "✅ All quality checks passed!"

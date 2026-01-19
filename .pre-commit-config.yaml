@@ -26,7 +26,8 @@ repos:
     hooks:
       - id: black
         language_version: python3.11
-        args: ['--check']  # Only check, don't auto-fix on commit
+        # Auto-fix formatting issues
+        args: []
 
   # Python linting
   - repo: https://github.com/pycqa/flake8

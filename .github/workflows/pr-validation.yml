@@ -1,0 +1,63 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    name: Validate Pull Request
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for better analysis
+      
+      - name: Check PR title format
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          if [[ ! "$PR_TITLE" =~ ^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: .+ ]]; then
+            echo "❌ PR title must follow conventional commits format:"
+            echo "   feat(scope): description"
+            echo "   fix(scope): description"
+            echo "   etc."
+            echo ""
+            echo "Current title: $PR_TITLE"
+            exit 1
+          fi
+          echo "✅ PR title format is valid"
+      
+      - name: Check for large files
+        run: |
+          MAX_SIZE=1048576  # 1MB
+          LARGE_FILES=$(find . -type f -size +${MAX_SIZE}c -not -path "./.git/*" -not -path "./node_modules/*" -not -path "./.next/*" -not -path "./__pycache__/*" -not -path "./htmlcov/*" -not -path "./dist/*" -not -path "./build/*")
+          if [ -n "$LARGE_FILES" ]; then
+            echo "❌ Large files detected (>1MB):"
+            echo "$LARGE_FILES"
+            echo "Please remove or compress these files."
+            exit 1
+          fi
+          echo "✅ No large files detected"
+      
+      - name: Check for sensitive data
+        run: |
+          # Check for common secrets patterns
+          if git diff origin/${{ github.base_ref }}...HEAD | grep -iE "(password|secret|api_key|token|private_key)" | grep -vE "(test|example|dummy|placeholder)" | grep -v "\.md$" | grep -v "\.yml$" | grep -v "\.yaml$"; then
+            echo "⚠️ Potential sensitive data detected. Please review carefully."
+            echo "If this is intentional (e.g., test data), please ignore this warning."
+          else
+            echo "✅ No obvious sensitive data detected"
+          fi
+        continue-on-error: true
+      
+      - name: Check commit message format
+        run: |
+          # Get commits in this PR
+          git log origin/${{ github.base_ref }}..HEAD --pretty=format:"%s" | while read commit_msg; do
+            if [[ ! "$commit_msg" =~ ^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert|Merge|Revert)(\(.+\))?: .+ ]]; then
+              echo "⚠️ Commit message doesn't follow conventional commits: $commit_msg"
+              echo "   (This is a warning, not blocking)"
+            fi
+          done
+        continue-on-error: true

@@ -1,0 +1,42 @@
+name: Auto Format Check
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  check-formatting:
+    runs-on: ubuntu-latest
+    name: Check Code Formatting
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install Black
+        run: pip install black
+      
+      - name: Check Python formatting
+        working-directory: ./backend
+        run: |
+          black --check --diff app/ || (echo "❌ Python code is not formatted. Run 'black app/' to fix." && exit 1)
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: Install Prettier
+        working-directory: ./frontend
+        run: npm ci
+      
+      - name: Check TypeScript/JavaScript formatting
+        working-directory: ./frontend
+        run: |
+          npm run format:check || (echo "❌ Code is not formatted. Run 'npm run format' to fix." && exit 1)
