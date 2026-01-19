@@ -92,6 +92,10 @@ export const DriftDetectionSchema = z.object({
   drift_score: NumberSchema,
   severity: z.enum(['low', 'medium', 'high', 'critical']),
   detected_at: DateSchema,
+  detection_details: z.unknown().nullable().optional(),
+  affected_fields: z.array(z.unknown()).nullable().optional(),
+  baseline_period_start: DateSchema.nullable().optional(),
+  baseline_period_end: DateSchema.nullable().optional(),
 });
 
 // Benchmark/Comparison schemas

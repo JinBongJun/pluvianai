@@ -47,6 +47,11 @@ async def agentguard_exception_handler(request: Request, exc: AgentGuardExceptio
             "error": True,
             "message": exc.message,
             "status_code": exc.status_code
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
         }
     )
 
@@ -63,6 +68,11 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
             "error": True,
             "message": exc.detail,
             "status_code": exc.status_code
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
         }
     )
 
@@ -90,6 +100,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "details": errors,
             "error_messages": error_messages,
             "status_code": 422
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
         }
     )
 
@@ -102,6 +117,12 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
         exc_info=True
     )
     
+    cors_headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "*",
+        "Access-Control-Allow-Headers": "*",
+    }
+    
     if isinstance(exc, IntegrityError):
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
@@ -109,7 +130,8 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
                 "error": True,
                 "message": "Database integrity error. The resource may already exist.",
                 "status_code": 409
-            }
+            },
+            headers=cors_headers
         )
     
     return JSONResponse(
@@ -118,7 +140,8 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
             "error": True,
             "message": "Database error occurred",
             "status_code": 500
-        }
+        },
+        headers=cors_headers
     )
 
 
@@ -135,6 +158,11 @@ async def general_exception_handler(request: Request, exc: Exception):
             "error": True,
             "message": "An unexpected error occurred",
             "status_code": 500
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
         }
     )
 

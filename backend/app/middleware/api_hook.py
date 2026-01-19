@@ -22,6 +22,10 @@ class APIHookMiddleware(BaseHTTPMiddleware):
         self.normalizer = DataNormalizer()
     
     async def dispatch(self, request: Request, call_next):
+        # Skip OPTIONS requests (CORS preflight)
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        
         # Only process LLM API proxy requests
         if not self.enabled or not request.url.path.startswith("/api/v1/proxy/"):
             return await call_next(request)
