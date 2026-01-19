@@ -5,7 +5,7 @@ import axios from 'axios';
 import { toNumber } from '@/lib/format';
 import { validateArrayResponse, normalizeModelComparison } from '@/lib/validate';
 import {
-  ModelComparisonArraySchema,
+  ModelComparisonSchema,
   CostAnalysisSchema,
   QualityScoreArraySchema,
   DriftDetectionArraySchema,
