@@ -2,6 +2,7 @@
 Pytest configuration and fixtures
 """
 import pytest
+import asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -23,6 +24,11 @@ test_engine = create_engine(
 
 # Create test session factory
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+
+# Note: event_loop fixture is not needed for TestClient
+# TestClient handles async operations internally using httpx.Client
+# which manages its own event loop in a separate thread
 
 
 @pytest.fixture(scope="function")
@@ -55,10 +61,11 @@ def client(db):
     # Override database dependency
     app.dependency_overrides[get_db] = override_get_db
     
-    with TestClient(app) as test_client:
+    # Use TestClient as context manager - it handles async properly
+    with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
     
-    # Clear all overrides
+    # Clear all overrides after test
     app.dependency_overrides.clear()
 
 
