@@ -130,7 +130,9 @@ export default function APICallDetailPage() {
         <div className="text-center py-12">
           <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">API Call Not Found</h3>
-          <p className="text-gray-600 mb-4">The API call you're looking for doesn't exist or you don't have access to it.</p>
+          <p className="text-gray-600 mb-4">
+            The API call you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.
+          </p>
           <Button onClick={() => router.push(`/dashboard/${projectId}/api-calls`)}>
             Back to API Calls
           </Button>

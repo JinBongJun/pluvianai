@@ -103,7 +103,9 @@ export default function DriftDetailPage() {
         <div className="text-center py-12">
           <AlertTriangle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Drift Detection Not Found</h3>
-          <p className="text-gray-600 mb-4">The drift detection you're looking for doesn't exist or you don't have access to it.</p>
+          <p className="text-gray-600 mb-4">
+            The drift detection you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.
+          </p>
           <Button onClick={() => router.push(`/dashboard/${projectId}`)}>
             Back to Project
           </Button>

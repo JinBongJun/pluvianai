@@ -153,7 +153,7 @@ export default function DashboardPage() {
         {/* Projects Grid */}
         {filteredProjects.length === 0 && projects.length > 0 ? (
           <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-12 text-center shadow-2xl">
-            <p className="text-slate-400">No projects found matching "{searchQuery}"</p>
+            <p className="text-slate-400">No projects found matching &quot;{searchQuery}&quot;</p>
           </div>
         ) : projects.length === 0 ? (
           <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-12 text-center shadow-2xl">

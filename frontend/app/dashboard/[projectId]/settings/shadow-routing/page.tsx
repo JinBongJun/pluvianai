@@ -170,7 +170,9 @@ export default function ShadowRoutingPage() {
             <div className="group relative">
               <HelpCircle className="h-3 w-3 text-slate-400 cursor-help" />
               <div className="absolute left-0 top-6 w-64 p-3 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                <p>Select the model currently used in production. We'll automatically recommend cheaper alternatives.</p>
+                <p>
+                  Select the model currently used in production. We&apos;ll automatically recommend cheaper alternatives.
+                </p>
               </div>
             </div>
           </div>

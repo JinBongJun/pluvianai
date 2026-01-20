@@ -236,7 +236,7 @@ export default function MonitoringPage() {
             <div>
               <h3 className="font-semibold mb-2">2. Grafana 대시보드 확인</h3>
               <p className="text-sm text-gray-600">
-                위의 "대시보드 열기" 버튼을 클릭하거나 직접 접속하세요.
+                위의 &quot;대시보드 열기&quot; 버튼을 클릭하거나 직접 접속하세요.
                 기본 계정으로 로그인하면 AgentGuard Overview 대시보드를 확인할 수 있습니다.
               </p>
             </div>

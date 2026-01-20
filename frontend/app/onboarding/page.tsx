@@ -356,16 +356,14 @@ const response = await openai.chat.completions.create({
         <div className="max-w-4xl mx-auto py-12 px-4">
           <div className="text-center mb-12">
             <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">
-              You're All Set!
-            </h1>
+            <h1 className="text-4xl font-bold text-gray-900 mb-4">You&apos;re All Set!</h1>
             <p className="text-xl text-gray-600 mb-8">
               Your project is ready. Sample data has been generated to help you explore.
             </p>
           </div>
 
           <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-            <h2 className="text-2xl font-semibold mb-6">What's Next?</h2>
+            <h2 className="text-2xl font-semibold mb-6">What&apos;s Next?</h2>
             <div className="space-y-4">
               <div className="flex items-start gap-4">
                 <CheckCircle className="h-6 w-6 text-green-500 mt-1" />
@@ -380,9 +378,9 @@ const response = await openai.chat.completions.create({
                 <CheckCircle className="h-6 w-6 text-green-500 mt-1" />
                 <div>
                   <h3 className="font-semibold">Make API Calls</h3>
-                  <p className="text-sm text-gray-600">
-                    Start using your LLM APIs - they're automatically monitored
-                  </p>
+                    <p className="text-sm text-gray-600">
+                      Start using your LLM APIs - they&apos;re automatically monitored
+                    </p>
                 </div>
               </div>
               <div className="flex items-start gap-4">

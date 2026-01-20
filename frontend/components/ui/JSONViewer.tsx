@@ -45,7 +45,7 @@ export default function JSONViewer({ data, title, searchable = true, className }
       const displayValue = value.length > 100 ? value.substring(0, 100) + '...' : value;
       return (
         <span className="text-green-700">
-          "{displayValue}"
+          &quot;{displayValue}&quot;
           {value.length > 100 && (
             <span className="text-gray-500 text-xs ml-2">({value.length} chars)</span>
           )}
@@ -114,7 +114,7 @@ export default function JSONViewer({ data, title, searchable = true, className }
 
                 return (
                   <div key={key} className="mb-1">
-                    <span className="text-blue-800 font-medium">"{key}"</span>
+                    <span className="text-blue-800 font-medium">&quot;{key}&quot;</span>
                     <span className="text-gray-600">: </span>
                     {renderValue(value[key], keyPath, depth + 1)}
                   </div>

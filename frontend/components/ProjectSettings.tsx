@@ -150,7 +150,8 @@ export default function ProjectSettings({ projectId, project, onUpdate }: Projec
           <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-md p-6 max-w-md w-full shadow-2xl">
             <h3 className="text-lg font-semibold text-red-400 mb-4">Delete Project</h3>
             <p className="text-slate-300 mb-4">
-              Are you sure you want to delete "{project.name}"? This action cannot be undone and will delete all associated data.
+              Are you sure you want to delete &quot;{project.name}&quot;? This action cannot be undone and will
+              delete all associated data.
             </p>
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
               <Button

@@ -120,7 +120,9 @@ export default function AlertDetailPage() {
           <div className="text-center py-12">
             <AlertTriangle className="h-12 w-12 text-slate-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-white mb-2">Alert Not Found</h3>
-            <p className="text-slate-400 mb-4">The alert you're looking for doesn't exist or you don't have access to it.</p>
+            <p className="text-slate-400 mb-4">
+              The alert you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.
+            </p>
             <Button onClick={() => router.push(`/dashboard/${projectId}/alerts`)}>
               Back to Alerts
             </Button>

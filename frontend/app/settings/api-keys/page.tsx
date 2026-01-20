@@ -171,7 +171,7 @@ export default function APIKeysPage() {
                   ⚠️ Important: Save this API key now
                 </p>
                 <p className="text-xs text-yellow-700">
-                  You won't be able to see this key again. Make sure to copy it and store it securely.
+                  You won&apos;t be able to see this key again. Make sure to copy it and store it securely.
                 </p>
               </div>
               
@@ -219,9 +219,7 @@ export default function APIKeysPage() {
               </div>
 
               <div className="flex justify-end pt-2">
-                <Button onClick={() => setNewKey(null)}>
-                  I've Saved This Key
-                </Button>
+                <Button onClick={() => setNewKey(null)}>I&apos;ve Saved This Key</Button>
               </div>
             </div>
           </Modal>

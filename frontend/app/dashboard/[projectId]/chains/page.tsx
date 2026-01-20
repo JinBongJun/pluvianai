@@ -668,7 +668,7 @@ export default function AgentChainsPage() {
                 <GitBranch className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 {searchQuery ? (
                   <>
-                    <p>No chains found matching "{searchQuery}"</p>
+                    <p>No chains found matching &quot;{searchQuery}&quot;</p>
                     <p className="text-sm mt-2">Try adjusting your search query.</p>
                     <Button
                       variant="ghost"
