@@ -2,6 +2,7 @@
 Admin endpoints for database initialization
 ⚠️ This endpoint should be removed or secured after initial deployment
 """
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -30,38 +31,27 @@ async def init_database(db: Session = Depends(get_db)):
     """
     import subprocess
     import os
-    
+
     # Use Alembic to run migrations instead of create_all
     backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
     alembic_cmd = ["python", "-m", "alembic", "upgrade", "head"]
-    
+
     try:
-        result = subprocess.run(
-            alembic_cmd,
-            cwd=backend_dir,
-            capture_output=True,
-            text=True,
-            check=True
-        )
+        result = subprocess.run(alembic_cmd, cwd=backend_dir, capture_output=True, text=True, check=True)
         logger.info("Database migrations applied successfully")
         return {
             "message": "Database initialized successfully using Alembic migrations",
             "method": "alembic upgrade head",
-            "output": result.stdout
+            "output": result.stdout,
         }
     except subprocess.CalledProcessError as e:
         logger.error(f"Migration failed: {e.stderr}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Migration failed: {e.stderr}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Migration failed: {e.stderr}")
 
 
 @router.post("/generate-sample-data")
 async def generate_sample_data(
-    project_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    project_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
     Generate comprehensive sample data for a project (for onboarding/demo)
@@ -79,14 +69,14 @@ async def generate_sample_data(
     project = check_project_access(project_id, current_user, db)
 
     # Generate sample API calls with various scenarios
-    providers = ['openai', 'anthropic', 'google']
+    providers = ["openai", "anthropic", "google"]
     models = {
-        'openai': ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-        'anthropic': ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
-        'google': ['gemini-pro', 'gemini-ultra']
+        "openai": ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"],
+        "anthropic": ["claude-3-opus", "claude-3-sonnet", "claude-3-haiku"],
+        "google": ["gemini-pro", "gemini-ultra"],
     }
 
-    agents = ['router', 'parser', 'summarizer', 'classifier', 'extractor', None]
+    agents = ["router", "parser", "summarizer", "classifier", "extractor", None]
     api_calls = []
 
     # Scenario 1: Normal successful calls (30 calls)
@@ -101,18 +91,18 @@ async def generate_sample_data(
             provider=provider,
             model=model,
             request_data={
-                "messages": [
-                    {"role": "user", "content": f"Analyze this data: {random.randint(1000, 9999)}"}
-                ],
+                "messages": [{"role": "user", "content": f"Analyze this data: {random.randint(1000, 9999)}"}],
                 "temperature": random.uniform(0.1, 0.9),
             },
             request_prompt=f"Analyze this data: {random.randint(1000, 9999)}",
             response_data={
-                "choices": [{
-                    "message": {
-                        "content": f"Based on the analysis, here are the key findings: {random.randint(1, 10)} insights."
+                "choices": [
+                    {
+                        "message": {
+                            "content": f"Based on the analysis, here are the key findings: {random.randint(1, 10)} insights."
+                        }
                     }
-                }],
+                ],
                 "model": model,
             },
             response_text=f"Based on the analysis, here are the key findings: {random.randint(1, 10)} insights.",
@@ -121,7 +111,7 @@ async def generate_sample_data(
             latency_ms=random.uniform(500, 3000),
             status_code=200,
             agent_name=random.choice(agents),
-            created_at=created_at
+            created_at=created_at,
         )
         db.add(api_call)
         api_calls.append(api_call)
@@ -143,11 +133,7 @@ async def generate_sample_data(
             },
             request_prompt="Return JSON format: {name, age}",
             response_data={
-                "choices": [{
-                    "message": {
-                        "content": "Here's the data: name: John, age: 30"  # Not valid JSON
-                    }
-                }],
+                "choices": [{"message": {"content": "Here's the data: name: John, age: 30"}}],  # Not valid JSON
             },
             response_text="Here's the data: name: John, age: 30",
             request_tokens=random.randint(50, 200),
@@ -155,23 +141,23 @@ async def generate_sample_data(
             latency_ms=random.uniform(300, 2000),
             status_code=200,
             agent_name=random.choice(agents),
-            created_at=created_at
+            created_at=created_at,
         )
         db.add(api_call)
-        api_calls.append(api_call)        
+        api_calls.append(api_call)
         db.flush()
-        
+
         # Generate quality scores with breakdown
         quality_scenarios = [
             {"overall": (70, 80), "json_valid": False, "reason": "Invalid JSON structure"},
             {"overall": (85, 95), "json_valid": True, "reason": "High quality response"},
             {"overall": (60, 70), "json_valid": True, "reason": "Low semantic consistency"},
         ]
-        
+
         for i, api_call in enumerate(api_calls[:30]):
             scenario = quality_scenarios[i % len(quality_scenarios)]
             overall = random.uniform(*scenario["overall"])
-            
+
             quality_score = QualityScore(
                 project_id=project_id,
                 api_call_id=api_call.id,
@@ -181,10 +167,10 @@ async def generate_sample_data(
                 tone_score=random.uniform(overall - 15, overall + 5),
                 coherence_score=random.uniform(overall - 10, overall + 5),
                 violations=[] if scenario.get("json_valid", True) else ["invalid_json"],
-                created_at=api_call.created_at
+                created_at=api_call.created_at,
             )
             db.add(quality_score)
-        
+
         # Generate drift detections with evidence
         drift_scenarios = [
             {
@@ -193,7 +179,7 @@ async def generate_sample_data(
                 "baseline": 800,
                 "change": 50.0,
                 "evidence": "Average response length increased from 800 to 1200 tokens",
-                "severity": "high"
+                "severity": "high",
             },
             {
                 "type": "structure",
@@ -201,7 +187,7 @@ async def generate_sample_data(
                 "baseline": 0.95,
                 "change": -10.5,
                 "evidence": "JSON structure validity decreased from 95% to 85%",
-                "severity": "medium"
+                "severity": "medium",
             },
             {
                 "type": "semantic",
@@ -209,7 +195,7 @@ async def generate_sample_data(
                 "baseline": 0.85,
                 "change": -17.6,
                 "evidence": "Semantic consistency dropped from 85% to 70%",
-                "severity": "high"
+                "severity": "high",
             },
             {
                 "type": "latency",
@@ -217,7 +203,7 @@ async def generate_sample_data(
                 "baseline": 2000,
                 "change": 75.0,
                 "evidence": "Average latency increased from 2000ms to 3500ms",
-                "severity": "critical"
+                "severity": "critical",
             },
             {
                 "type": "quality",
@@ -225,25 +211,25 @@ async def generate_sample_data(
                 "baseline": 88.0,
                 "change": -14.8,
                 "evidence": "Overall quality score decreased from 88 to 75",
-                "severity": "high"
+                "severity": "high",
             },
         ]
-        
+
         for scenario in drift_scenarios:
             detection = DriftDetection(
                 project_id=project_id,
                 detection_type=scenario["type"],
-                model=random.choice(['gpt-4', 'claude-3-opus', 'gpt-3.5-turbo']),
+                model=random.choice(["gpt-4", "claude-3-opus", "gpt-3.5-turbo"]),
                 current_value=scenario["current"],
                 baseline_value=scenario["baseline"],
                 change_percentage=scenario["change"],
                 drift_score=abs(scenario["change"]) + random.uniform(0, 10),
                 severity=scenario["severity"],
                 detected_at=datetime.utcnow() - timedelta(days=random.randint(0, 3), hours=random.randint(0, 23)),
-                metadata={"evidence": scenario["evidence"]}
+                metadata={"evidence": scenario["evidence"]},
             )
             db.add(detection)
-        
+
         # Generate sample alerts with context
         alert_scenarios = [
             {
@@ -265,7 +251,7 @@ async def generate_sample_data(
                 "message": "Overall quality score decreased from 88 to 75 over the past 48 hours.",
             },
         ]
-        
+
         for scenario in alert_scenarios:
             alert = Alert(
                 project_id=project_id,
@@ -275,37 +261,23 @@ async def generate_sample_data(
                 message=scenario["message"],
                 is_sent=False,
                 is_resolved=random.choice([True, False]),
-                created_at=datetime.utcnow() - timedelta(days=random.randint(0, 2), hours=random.randint(0, 23))
+                created_at=datetime.utcnow() - timedelta(days=random.randint(0, 2), hours=random.randint(0, 23)),
             )
             db.add(alert)
-        
+
         db.commit()
-        
+
         logger.info(f"Comprehensive sample data generated for project {project_id}")
         return {
             "message": "Sample data generated successfully",
-            "summary": {
-                "api_calls": 50,
-                "quality_scores": 30,
-                "drift_detections": 5,
-                "alerts": 3
-            },
-            "scenarios": {
-                "normal_calls": 30,
-                "json_errors": 10,
-                "server_errors": 5,
-                "high_latency": 5
-            }
+            "summary": {"api_calls": 50, "quality_scores": 30, "drift_detections": 5, "alerts": 3},
+            "scenarios": {"normal_calls": 30, "json_errors": 10, "server_errors": 5, "high_latency": 5},
         }
 
 
 @router.post("/upgrade-user-subscription")
 @handle_errors
-async def upgrade_user_subscription(
-    email: str,
-    plan_type: str = "startup",
-    db: Session = Depends(get_db)
-):
+async def upgrade_user_subscription(email: str, plan_type: str = "startup", db: Session = Depends(get_db)):
     """
     Upgrade user subscription by email (for testing/admin purposes)
     ⚠️ WARNING: This endpoint should be secured or removed in production
@@ -313,37 +285,30 @@ async def upgrade_user_subscription(
     from app.models.subscription import Subscription
     from app.services.subscription_service import SubscriptionService
     from app.core.subscription_limits import PLAN_PRICING
-    
+
     if plan_type not in PLAN_PRICING:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid plan type: {plan_type}. Must be one of: {', '.join(PLAN_PRICING.keys())}"
+            detail=f"Invalid plan type: {plan_type}. Must be one of: {', '.join(PLAN_PRICING.keys())}",
         )
-    
+
     # Find user by email
     user = db.query(User).filter(User.email == email).first()
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with email {email} not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with email {email} not found")
+
     # Upgrade subscription
     subscription_service = SubscriptionService(db)
     subscription = subscription_service.create_or_update_subscription(
-        user_id=user.id,
-        plan_type=plan_type,
-        status="active",
-        price_per_month=PLAN_PRICING[plan_type]
+        user_id=user.id, plan_type=plan_type, status="active", price_per_month=PLAN_PRICING[plan_type]
     )
-    
+
     logger.info(f"Upgraded subscription for user {email} to {plan_type}")
-    
+
     return {
         "message": f"Subscription upgraded to {plan_type}",
         "user_email": email,
         "plan_type": subscription.plan_type,
         "status": subscription.status,
-        "price_per_month": subscription.price_per_month
+        "price_per_month": subscription.price_per_month,
     }
-

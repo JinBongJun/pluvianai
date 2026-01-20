@@ -32,27 +32,22 @@ _breaker = CircuitBreaker(failure_threshold=5, recovery_time_seconds=30, excepti
 _bulkhead = Bulkhead(max_concurrent=20)
 
 
-@router.api_route("/{provider}/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
-async def proxy_request(
+async def _proxy_request(
     provider: str,
     path: str,
     request: Request,
-    x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
-    x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
-    x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
-    db: Session = Depends(get_db)
-):
+    x_project_id: Optional[str],
+    x_agent_name: Optional[str],
+    x_chain_id: Optional[str],
+    db: Session,
+) -> Response:
     """
-    Proxy LLM API requests to the actual provider
-    
-    This endpoint forwards requests to OpenAI, Anthropic, or Google APIs
-    while capturing the request/response for monitoring.
+    Core proxy implementation shared by all HTTP methods.
+    Defined separately so that each method-specific route can have a unique
+    function name / operation_id in the OpenAPI schema.
     """
     if provider not in PROVIDER_URLS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported provider: {provider}"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported provider: {provider}")
     
     # Check usage limit if project ID is provided
     if x_project_id:
@@ -65,7 +60,7 @@ async def proxy_request(
                 if not can_make_call:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail=error_msg or "API call limit exceeded. Please upgrade your plan."
+                        detail=error_msg or "API call limit exceeded. Please upgrade your plan.",
                     )
         except (ValueError, TypeError):
             # Invalid project ID, continue without limit check
@@ -93,10 +88,7 @@ async def proxy_request(
             api_key = settings.GOOGLE_API_KEY
     
     if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"API key required for {provider}"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"API key required for {provider}")
     
     # Prepare headers
     headers = dict(request.headers)
@@ -127,19 +119,21 @@ async def proxy_request(
                         params=dict(request.query_params),
                     )
                 # Update breaker state metric
-                circuit_breaker_state.labels(service="proxy").set({"closed": 0, "open": 1, "half-open": 2}.get(_breaker.state, 0))
+                circuit_breaker_state.labels(service="proxy").set(
+                    {"closed": 0, "open": 1, "half-open": 2}.get(_breaker.state, 0)
+                )
                 return Response(
                     content=response.content,
                     status_code=response.status_code,
                     headers=dict(response.headers),
-                    media_type=response.headers.get("content-type")
+                    media_type=response.headers.get("content-type"),
                 )
             except CircuitBreakerOpen:
                 circuit_breaker_open_total.labels(service="proxy").inc()
                 circuit_breaker_state.labels(service="proxy").set(1)
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Upstream temporarily unavailable (circuit open)"
+                    detail="Upstream temporarily unavailable (circuit open)",
                 )
             except httpx.TimeoutException as e:
                 last_error = e
@@ -147,7 +141,7 @@ async def proxy_request(
                 if attempt == 2:
                     raise HTTPException(
                         status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                        detail="Request timeout"
+                        detail="Request timeout",
                     )
             except httpx.RequestError as e:
                 last_error = e
@@ -155,13 +149,76 @@ async def proxy_request(
                 if attempt == 2:
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail=f"Proxy error: {str(e)}"
+                        detail=f"Proxy error: {str(e)}",
                     )
         # If all retries failed
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Proxy failed after retries" if last_error else "Proxy failed"
+            detail="Proxy failed after retries" if last_error else "Proxy failed",
         )
 
 
+@router.get("/{provider}/{path:path}")
+async def proxy_get(
+    provider: str,
+    path: str,
+    request: Request,
+    x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
+    x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
+    x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
+    db: Session = Depends(get_db),
+) -> Response:
+    return await _proxy_request(provider, path, request, x_project_id, x_agent_name, x_chain_id, db)
+
+
+@router.post("/{provider}/{path:path}")
+async def proxy_post(
+    provider: str,
+    path: str,
+    request: Request,
+    x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
+    x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
+    x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
+    db: Session = Depends(get_db),
+) -> Response:
+    return await _proxy_request(provider, path, request, x_project_id, x_agent_name, x_chain_id, db)
+
+
+@router.put("/{provider}/{path:path}")
+async def proxy_put(
+    provider: str,
+    path: str,
+    request: Request,
+    x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
+    x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
+    x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
+    db: Session = Depends(get_db),
+) -> Response:
+    return await _proxy_request(provider, path, request, x_project_id, x_agent_name, x_chain_id, db)
+
+
+@router.patch("/{provider}/{path:path}")
+async def proxy_patch(
+    provider: str,
+    path: str,
+    request: Request,
+    x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
+    x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
+    x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
+    db: Session = Depends(get_db),
+) -> Response:
+    return await _proxy_request(provider, path, request, x_project_id, x_agent_name, x_chain_id, db)
+
+
+@router.delete("/{provider}/{path:path}")
+async def proxy_delete(
+    provider: str,
+    path: str,
+    request: Request,
+    x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
+    x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
+    x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
+    db: Session = Depends(get_db),
+) -> Response:
+    return await _proxy_request(provider, path, request, x_project_id, x_agent_name, x_chain_id, db)
 
