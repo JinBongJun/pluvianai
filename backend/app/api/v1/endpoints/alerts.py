@@ -62,7 +62,7 @@ async def list_alerts(
 ):
     """List alerts for a project"""
     # Verify project access (any member can view alerts)
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Build query
     query = db.query(Alert).filter(Alert.project_id == project_id)
@@ -95,7 +95,7 @@ async def send_alert(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 
     # Verify project access
-    project = check_project_access(alert.project_id, current_user, db)
+    check_project_access(alert.project_id, current_user, db)
 
     # Use channels from request, or default to alert's notification_channels, or ["email"]
     channels = request.channels or alert.notification_channels or ["email"]

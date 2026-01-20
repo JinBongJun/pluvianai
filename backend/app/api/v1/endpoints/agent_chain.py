@@ -140,7 +140,7 @@ async def apply_optimization(
     # Verify project access (owner/admin only for applying changes)
     from app.core.permissions import ProjectRole
 
-    project = check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
+    check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
 
     # Check user confirmation
     if not request.user_confirmation:
@@ -155,5 +155,8 @@ async def apply_optimization(
         "message": "Optimization application is not yet fully implemented",
         "optimization_id": request.optimization_id,
         "status": "pending",
-        "note": "This endpoint is a placeholder. Full implementation requires additional work to track and apply optimizations.",
+        "note": (
+            "This endpoint is a placeholder. Full implementation requires "
+            "additional work to track and apply optimizations."
+        ),
     }

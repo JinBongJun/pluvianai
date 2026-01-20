@@ -98,7 +98,10 @@ async def generate_sample_data(
                 "choices": [
                     {
                         "message": {
-                            "content": f"Based on the analysis, here are the key findings: {random.randint(1, 10)} insights."
+                            "content": (
+                                f"Based on the analysis, here are the key findings: "
+                                f"{random.randint(1, 10)} insights."
+                            )
                         }
                     }
                 ],
@@ -235,7 +238,10 @@ async def generate_sample_data(
                 "type": "drift",
                 "severity": "high",
                 "title": "Significant drift detected in response length",
-                "message": "Average response length increased by 50% compared to baseline. This may indicate model behavior changes.",
+                "message": (
+                    "Average response length increased by 50% compared to baseline. "
+                    "This may indicate model behavior changes."
+                ),
             },
             {
                 "type": "cost_spike",
@@ -281,7 +287,6 @@ async def upgrade_user_subscription(email: str, plan_type: str = "startup", db: 
     Upgrade user subscription by email (for testing/admin purposes)
     ⚠️ WARNING: This endpoint should be secured or removed in production
     """
-    from app.models.subscription import Subscription
     from app.services.subscription_service import SubscriptionService
     from app.core.subscription_limits import PLAN_PRICING
 
