@@ -46,6 +46,7 @@ interface ChainProfile {
   failure_count: number;
   bottleneck_agent: string | null;
   bottleneck_latency_ms: number;
+  bottleneck_severity?: string; // Optional - severity level: "none" | "low" | "medium" | "high" | "critical"
   agents: AgentStats[];
   first_call_at?: string; // Optional - may not be in API response
   last_call_at?: string; // Optional - may not be in API response
