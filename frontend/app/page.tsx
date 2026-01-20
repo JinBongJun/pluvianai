@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Menu, X, ChevronRight, Check, Code2, Zap, Shield, BarChart3, Globe2, Github, Twitter, Linkedin } from 'lucide-react';
 import Button from '@/components/ui/Button';
-import LanguageSelector from '@/components/LanguageSelector';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -65,7 +64,6 @@ init({
               <Link href="#pricing" className="text-slate-400 hover:text-white transition-colors text-sm font-medium">
                 Pricing
               </Link>
-              <LanguageSelector variant="header" />
               <Link href="/login">
                 <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/5">
                   Sign in
@@ -111,9 +109,6 @@ init({
               >
                 Pricing
               </Link>
-              <div className="pt-4 border-t border-white/10">
-                <LanguageSelector variant="header" />
-              </div>
               <div className="flex flex-col gap-2 pt-4">
                 <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
                   <Button variant="outline" className="w-full border-white/20 text-white hover:bg-white/5">
@@ -418,12 +413,11 @@ init({
           </div>
 
           {/* Bottom Bar */}
-          <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-sm text-slate-400">
               © {new Date().getFullYear()} AgentGuard. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
-              <LanguageSelector variant="footer" />
               <div className="flex items-center gap-4">
                 <a href="https://github.com/agentguard" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-colors" aria-label="GitHub">
                   <Github className="h-5 w-5" />

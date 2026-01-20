@@ -411,9 +411,11 @@ export default function AgentChainsPage() {
     <DashboardLayout>
       <div className="bg-[#000314] min-h-screen">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white">Agent Chains</h1>
-          <p className="text-slate-400 mt-2">Monitor and analyze multi-agent pipeline performance</p>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-white">Agent Chains</h1>
+          <p className="text-slate-400 mt-2 text-sm">
+            Monitor and analyze performance of multi-agent pipelines
+          </p>
         </div>
 
         {/* Tabs */}

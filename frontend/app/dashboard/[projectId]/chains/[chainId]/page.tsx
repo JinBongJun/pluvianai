@@ -10,7 +10,7 @@ import ChainFlowDiagram from '@/components/ChainFlowDiagram';
 import { agentChainAPI, apiCallsAPI } from '@/lib/api';
 import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
-import { ArrowLeft, ArrowRight, Clock, CheckCircle, XCircle, Activity, AlertTriangle, TrendingUp, TrendingDown, Sparkles, Zap } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Clock, CheckCircle, XCircle, Activity, AlertTriangle, TrendingUp, TrendingDown, Sparkles, Zap, HelpCircle } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import { clsx } from 'clsx';
 import {
@@ -65,6 +65,7 @@ export default function ChainDetailPage() {
   const [optimizations, setOptimizations] = useState<any>(null);
   const [loadingOptimizations, setLoadingOptimizations] = useState(false);
   const [showOptimizationModal, setShowOptimizationModal] = useState(false);
+  const [showOptimizations, setShowOptimizations] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -214,38 +215,28 @@ export default function ChainDetailPage() {
     <DashboardLayout>
       <div className="bg-[#000314] min-h-screen">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-4 mb-4">
-            <Button
-              variant="ghost"
-              onClick={() => router.push(`/dashboard/${projectId}/chains`)}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Chains
-            </Button>
-            <div>
-              <h1 className="text-4xl font-bold text-white">Chain Profile</h1>
-              <p className="text-slate-400 mt-2">
-                {chain.chain_id.substring(0, 16)}...
-              </p>
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push(`/dashboard/${projectId}/chains`)}
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div>
+                <h1 className="text-2xl font-bold text-white">Agent Chain Details</h1>
+                <p className="text-slate-400 mt-1 text-sm">
+                  Analyze performance, bottlenecks, and optimization opportunities for multi-agent pipelines
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
             {chain.success ? (
-              <Badge variant="success">
-                <CheckCircle className="h-3 w-3 mr-1" />
-                Success
-              </Badge>
+              <Badge variant="success" className="text-xs">Success</Badge>
             ) : (
-              <Badge variant="error">
-                <XCircle className="h-3 w-3 mr-1" />
-                Failed ({chain.failure_count} failures)
-              </Badge>
+              <Badge variant="error" className="text-xs">Failed</Badge>
             )}
-            <span className="text-sm text-slate-400">
-              {chain.first_call_at ? new Date(chain.first_call_at).toLocaleString() : 'N/A'} - {chain.last_call_at ? new Date(chain.last_call_at).toLocaleString() : 'N/A'}
-            </span>
           </div>
         </div>
 
@@ -253,53 +244,45 @@ export default function ChainDetailPage() {
         <ProjectTabs projectId={projectId} />
 
         {/* Overview Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400 mb-1">Total Steps</p>
-                <p className="text-2xl font-bold text-white">{chain.total_steps}</p>
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-lg font-semibold text-white">Key Metrics</h2>
+            <div className="group relative">
+              <HelpCircle className="h-4 w-4 text-slate-400 cursor-help" />
+              <div className="absolute left-0 top-6 w-64 p-3 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                <p><strong>Steps:</strong> Total number of steps in the chain<br/>
+                <strong>Agents:</strong> Number of unique agents used<br/>
+                <strong>Latency:</strong> Total chain execution time<br/>
+                <strong>Success:</strong> Successfully completed ratio</p>
               </div>
-              <Activity className="h-8 w-8 text-purple-400" />
             </div>
           </div>
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400 mb-1">Unique Agents</p>
-                <p className="text-2xl font-bold text-white">{chain.unique_agents}</p>
-              </div>
-              <Activity className="h-8 w-8 text-cyan-400" />
+          <div className="grid grid-cols-4 gap-4">
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <p className="text-xs text-slate-400 mb-1">Steps</p>
+              <p className="text-lg font-bold text-white">{chain.total_steps}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Total steps</p>
             </div>
-          </div>
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400 mb-1">Total Latency</p>
-                <p className="text-2xl font-bold text-white">
-                  {toFixedSafe(chain.total_latency / 1000, 2)}s
-                </p>
-              </div>
-              <Clock className="h-8 w-8 text-blue-400" />
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <p className="text-xs text-slate-400 mb-1">Agents</p>
+              <p className="text-lg font-bold text-white">{chain.unique_agents}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Unique agents</p>
             </div>
-          </div>
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400 mb-1">Success Rate</p>
-                <p className={clsx(
-                  'text-2xl font-bold',
-                  chain.success_rate >= 90 ? 'text-green-400' :
-                  chain.success_rate >= 70 ? 'text-yellow-400' : 'text-red-400'
-                )}>
-                  {toFixedSafe(chain.success_rate, 1)}%
-                </p>
-              </div>
-              {chain.success ? (
-                <CheckCircle className="h-8 w-8 text-green-400" />
-              ) : (
-                <XCircle className="h-8 w-8 text-red-400" />
-              )}
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <p className="text-xs text-slate-400 mb-1">Latency</p>
+              <p className="text-lg font-bold text-white">{toFixedSafe(chain.total_latency / 1000, 2)}s</p>
+              <p className="text-xs text-slate-500 mt-0.5">Total execution time</p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <p className="text-xs text-slate-400 mb-1">Success</p>
+              <p className={clsx(
+                'text-lg font-bold',
+                chain.success_rate >= 90 ? 'text-green-400' :
+                chain.success_rate >= 70 ? 'text-yellow-400' : 'text-red-400'
+              )}>
+                {toFixedSafe(chain.success_rate, 1)}%
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">Success rate</p>
             </div>
           </div>
         </div>
@@ -307,118 +290,101 @@ export default function ChainDetailPage() {
         {/* Bottleneck Warning */}
         {chain.bottleneck_agent && (
           <div className={clsx(
-            "mb-6 relative rounded-2xl border backdrop-blur-sm p-6 shadow-2xl",
+            "mb-4 rounded-lg border p-3",
             chain.bottleneck_severity === "critical" ? "border-red-500/30 bg-red-500/10" :
             chain.bottleneck_severity === "high" ? "border-orange-500/30 bg-orange-500/10" :
             "border-yellow-500/30 bg-yellow-500/10"
           )}>
-            <div className="flex items-center gap-3">
-              <AlertTriangle className={clsx(
-                "h-6 w-6",
-                chain.bottleneck_severity === "critical" ? "text-red-400" :
-                chain.bottleneck_severity === "high" ? "text-orange-400" :
-                "text-yellow-400"
-              )} />
-              <div className="flex-1">
-                <h3 className={clsx(
-                  "text-lg font-semibold mb-1",
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className={clsx(
+                  "h-4 w-4",
+                  chain.bottleneck_severity === "critical" ? "text-red-400" :
+                  chain.bottleneck_severity === "high" ? "text-orange-400" :
+                  "text-yellow-400"
+                )} />
+                <span className={clsx(
+                  "text-sm font-medium",
                   chain.bottleneck_severity === "critical" ? "text-red-400" :
                   chain.bottleneck_severity === "high" ? "text-orange-400" :
                   "text-yellow-400"
                 )}>
-                  Bottleneck Detected ({chain.bottleneck_severity || "medium"})
-                </h3>
-                <p className={clsx(
-                  "text-sm",
-                  chain.bottleneck_severity === "critical" ? "text-red-300" :
-                  chain.bottleneck_severity === "high" ? "text-orange-300" :
-                  "text-yellow-300"
-                )}>
-                  Agent <strong>{chain.bottleneck_agent}</strong> is the slowest component with an average latency of{' '}
-                  <strong>{toFixedSafe(chain.bottleneck_latency_ms / 1000, 2)}s</strong>.
-                  Consider optimizing this agent for better overall chain performance.
-                </p>
+                  Bottleneck Detected
+                </span>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowOptimizationModal(true)}
-                className="flex items-center gap-2"
               >
-                <Sparkles className="h-4 w-4" />
-                View Optimizations
+                <Sparkles className="h-3 w-3 mr-1" />
+                Optimize
               </Button>
             </div>
+            <p className="text-xs text-slate-300 mb-1">
+              Agent <strong>{chain.bottleneck_agent}</strong> is the slowest with an average latency of {toFixedSafe(chain.bottleneck_latency_ms / 1000, 2)}s.
+            </p>
+            <p className="text-xs text-slate-400">
+              View optimization suggestions to improve chain performance.
+            </p>
           </div>
         )}
 
-        {/* Optimization Suggestions */}
+        {/* Optimization Suggestions - Collapsible */}
         {optimizations && optimizations.suggestions && optimizations.suggestions.length > 0 && (
-          <div className="mb-6 relative rounded-2xl border border-purple-500/30 bg-purple-500/10 backdrop-blur-sm p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <Sparkles className="h-6 w-6 text-purple-400" />
-                <h3 className="text-lg font-semibold text-purple-400">Optimization Suggestions</h3>
+          <div className="mb-4 rounded-lg border border-purple-500/30 bg-purple-500/10">
+            <button
+              onClick={() => setShowOptimizations(!showOptimizations)}
+              className="w-full flex items-center justify-between p-3 text-left hover:bg-purple-500/20 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-purple-400" />
+                <div>
+                  <span className="text-sm font-medium text-purple-400 block">
+                    {optimizations.suggestions.length} Optimization Suggestions
+                  </span>
+                  <span className="text-xs text-slate-400 mt-0.5">
+                    Click to view performance improvement opportunities
+                  </span>
+                </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowOptimizationModal(true)}
-              >
-                View All
-              </Button>
-            </div>
-            <div className="space-y-3">
-              {optimizations.suggestions.slice(0, 2).map((opt: any, idx: number) => (
-                <div key={idx} className="p-4 bg-white/5 rounded-lg border border-white/10">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-medium text-white mb-1">
-                        {opt.type === "parallelization" && "Parallelization Opportunity"}
-                        {opt.type === "order_optimization" && "Order Optimization"}
-                        {opt.type === "model_optimization" && "Model Optimization"}
-                        {opt.type === "cost_optimization" && "Cost Optimization"}
-                      </div>
-                      <p className="text-sm text-slate-400">{opt.description}</p>
-                      <div className="flex items-center gap-4 mt-2 text-xs text-slate-300">
-                        {opt.improvement_percentage && (
-                          <span className="flex items-center gap-1">
-                            <TrendingUp className="h-3 w-3" />
-                            {opt.improvement_percentage > 0 ? '+' : ''}{opt.improvement_percentage}% improvement
-                          </span>
-                        )}
-                        <Badge variant={opt.risk_level === "low" ? "success" : opt.risk_level === "medium" ? "warning" : "error"}>
-                          {opt.risk_level} risk
-                        </Badge>
-                      </div>
+              <div className="flex items-center gap-2">
+                {optimizations.predicted_improvement && (
+                  <span className="text-xs text-green-400 font-medium">
+                    {optimizations.predicted_improvement.latency_reduction_percentage}% improvement expected
+                  </span>
+                )}
+                <TrendingUp className={clsx("h-4 w-4 text-slate-400 transition-transform", showOptimizations && "rotate-180")} />
+              </div>
+            </button>
+            {showOptimizations && (
+              <div className="p-3 pt-0 border-t border-purple-500/20 space-y-2">
+                {optimizations.suggestions.slice(0, 2).map((opt: any, idx: number) => (
+                  <div key={idx} className="p-2 bg-white/5 rounded text-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-white font-medium">
+                        {opt.type === "parallelization" && "Parallelize"}
+                        {opt.type === "order_optimization" && "Reorder"}
+                        {opt.type === "model_optimization" && "Optimize Model"}
+                        {opt.type === "cost_optimization" && "Reduce Cost"}
+                      </span>
+                      {opt.improvement_percentage && (
+                        <span className="text-green-400">
+                          {opt.improvement_percentage > 0 ? '+' : ''}{opt.improvement_percentage}%
+                        </span>
+                      )}
                     </div>
+                    <p className="text-slate-400 text-xs">{opt.description}</p>
                   </div>
-                </div>
-              ))}
-            </div>
-            {optimizations.predicted_improvement && (
-              <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10">
-                <div className="text-sm font-medium text-white mb-2">Predicted Overall Improvement</div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <div className="text-xs text-slate-400">Latency Reduction</div>
-                    <div className="text-lg font-bold text-green-400">
-                      {optimizations.predicted_improvement.latency_reduction_percentage}%
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-400">Cost Reduction</div>
-                    <div className="text-lg font-bold text-green-400">
-                      {optimizations.predicted_improvement.cost_reduction_percentage}%
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-400">Success Rate</div>
-                    <div className="text-lg font-bold text-green-400">
-                      +{optimizations.predicted_improvement.success_rate_improvement_percentage}%
-                    </div>
-                  </div>
-                </div>
+                ))}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowOptimizationModal(true)}
+                  className="w-full text-xs"
+                >
+                  View All {optimizations.suggestions.length} Suggestions
+                </Button>
               </div>
             )}
           </div>
@@ -426,8 +392,8 @@ export default function ChainDetailPage() {
 
         {/* Chain Flow Diagram */}
         {chain.agents && chain.agents.length > 0 && (
-          <div className="mb-6 relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-            <h2 className="text-lg font-semibold text-white mb-4">Agent Flow</h2>
+          <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-4">
+            <h3 className="text-sm font-medium text-slate-400 mb-3">Agent Flow</h3>
             <ChainFlowDiagram
               agents={chain.agents}
               totalLatency={chain.total_latency}
@@ -438,8 +404,8 @@ export default function ChainDetailPage() {
 
         {/* Agent Performance Chart */}
         {chain.agents && chain.agents.length > 0 && (
-          <div className="mb-6 relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-            <h2 className="text-lg font-semibold text-white mb-4">Agent Performance</h2>
+          <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-4">
+            <h3 className="text-sm font-medium text-slate-400 mb-3">Performance</h3>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={chain.agents}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
@@ -467,82 +433,58 @@ export default function ChainDetailPage() {
 
         {/* Agent Statistics Table */}
         {chain.agents && chain.agents.length > 0 && (
-          <div className="mb-6 relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm shadow-2xl">
-            <div className="p-6">
-              <h2 className="text-lg font-semibold text-white mb-4">Agent Statistics</h2>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-white/10">
-                  <thead className="bg-white/5">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Agent</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Calls</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Avg Latency</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Total Latency</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Failures</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Failure Rate</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Quality Score</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10">
-                    {chain.agents.map((agent: AgentStats) => (
-                      <tr key={agent.agent_name} className="hover:bg-white/5 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <Activity className="h-4 w-4 text-purple-400" />
-                            <span className="text-sm font-medium text-white">{agent.agent_name}</span>
-                            {agent.agent_name === chain.bottleneck_agent && (
-                              <Badge variant="warning" className="text-xs">Bottleneck</Badge>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
-                          {agent.call_count}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
-                          {toFixedSafe(agent.avg_latency_ms / 1000, 2)}s
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
-                          {toFixedSafe(agent.total_latency_ms / 1000, 2)}s
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {agent.failure_count > 0 ? (
-                            <Badge variant="error">{agent.failure_count}</Badge>
-                          ) : (
-                            <Badge variant="success">0</Badge>
+          <div className="mb-4 rounded-lg border border-white/10 bg-white/5 overflow-hidden">
+            <div className="p-3 border-b border-white/10">
+              <h3 className="text-sm font-medium text-slate-400">Agents</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead className="bg-white/5">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-slate-400">Agent</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-slate-400">Latency</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-slate-400">Quality</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {chain.agents.map((agent: AgentStats) => (
+                    <tr key={agent.agent_name} className="hover:bg-white/5">
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-white">{agent.agent_name}</span>
+                          {agent.agent_name === chain.bottleneck_agent && (
+                            <Badge variant="warning" className="text-xs">Bottleneck</Badge>
                           )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
-                          {toFixedSafe(agent.failure_rate, 1)}%
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <Badge variant={agent.avg_quality_score >= 80 ? 'success' : agent.avg_quality_score >= 60 ? 'warning' : 'error'}>
-                            {toFixedSafe(agent.avg_quality_score, 1)}%
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-right text-sm text-white">
+                        {toFixedSafe(agent.avg_latency_ms / 1000, 2)}s
+                      </td>
+                      <td className="px-3 py-2 text-right text-sm text-white">
+                        {toFixedSafe(agent.avg_quality_score, 1)}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
 
-        {/* Related API Calls */}
+        {/* Related API Calls - Simplified */}
         {relatedCalls.length > 0 && (
-          <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm shadow-2xl">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-white">Related API Calls</h2>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => router.push(`/dashboard/${projectId}/api-calls?chain_id=${chainId}`)}
-                >
-                  View All
-                </Button>
-              </div>
-              <div className="space-y-2">
+          <div className="rounded-lg border border-white/10 bg-white/5 overflow-hidden">
+            <div className="p-3 border-b border-white/10 flex items-center justify-between">
+              <h3 className="text-sm font-medium text-slate-400">Related Calls ({relatedCalls.length})</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push(`/dashboard/${projectId}/api-calls?chain_id=${chainId}`)}
+              >
+                View All
+              </Button>
+            </div>
+            <div className="p-3 space-y-2">
                 {relatedCalls.slice(0, 10).map((call) => (
                   <div
                     key={call.id}

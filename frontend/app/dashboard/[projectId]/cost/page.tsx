@@ -9,7 +9,7 @@ import Button from '@/components/ui/Button';
 import { costAPI } from '@/lib/api';
 import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
-import { ArrowLeft, Download, RefreshCw, Sparkles, TrendingUp, AlertTriangle, Zap } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, Sparkles, TrendingUp, AlertTriangle, Zap, HelpCircle } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import Badge from '@/components/ui/Badge';
 import { clsx } from 'clsx';
@@ -174,30 +174,17 @@ export default function CostAnalysisPage() {
     <DashboardLayout>
       <div className="bg-[#000314] min-h-screen">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
             <div>
-              <h1 className="text-4xl font-bold text-white">Cost Analysis</h1>
-              <p className="text-slate-400 mt-2">Track and analyze your LLM API costs</p>
+              <h1 className="text-2xl font-bold text-white">비용 분석</h1>
+              <p className="text-slate-400 mt-1 text-sm">
+                Monitor LLM API costs and discover optimization opportunities
+              </p>
             </div>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={loadCostData}
-                className="flex items-center gap-2"
-              >
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={loadCostData}>
                 <RefreshCw className="h-4 w-4" />
-                Refresh
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExport}
-                className="flex items-center gap-2"
-              >
-                <Download className="h-4 w-4" />
-                Export
               </Button>
             </div>
           </div>
@@ -213,43 +200,43 @@ export default function CostAnalysisPage() {
 
         {/* Summary Stats */}
         {costData && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-4 gap-4 mb-4">
             <StatsCard
-              title="Total Cost"
+              title="Total"
               value={`$${toFixedSafe(costData.total_cost, 2)}`}
-              subtitle={formatDateRange()}
             />
             <StatsCard
-              title="Average Daily"
+              title="Daily Avg"
               value={`$${toFixedSafe(costData.average_daily_cost, 2)}`}
-              subtitle={formatDateRange()}
             />
             <StatsCard
               title="Top Model"
               value={topModels[0]?.model || 'N/A'}
-              subtitle={topModels[0] ? `$${toFixedSafe(topModels[0].cost, 2)}` : undefined}
             />
             <StatsCard
               title="Top Provider"
               value={topProviders[0]?.provider || 'N/A'}
-              subtitle={topProviders[0] ? `$${toFixedSafe(topProviders[0].cost, 2)}` : undefined}
             />
           </div>
         )}
 
         {/* Main Chart */}
-        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-purple mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">Cost Trends</h2>
+        <div className="rounded-lg border border-white/10 bg-white/5 p-4 mb-4">
+          <div className="mb-3">
+            <h3 className="text-sm font-medium text-white">Cost Trends</h3>
+            <p className="text-xs text-slate-400 mt-0.5">View daily cost changes</p>
           </div>
           <CostChart projectId={projectId} days={days} />
         </div>
 
         {/* Breakdown Tables */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Top Models */}
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-white mb-4">Cost by Model</h3>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+            <div className="mb-3">
+              <h3 className="text-sm font-medium text-white">Cost by Model</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Cost breakdown by model</p>
+            </div>
             {topModels.length === 0 ? (
               <div className="text-center py-8 text-slate-400">No cost data available</div>
             ) : (
@@ -285,8 +272,11 @@ export default function CostAnalysisPage() {
           </div>
 
           {/* Top Providers */}
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-white mb-4">Cost by Provider</h3>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+            <div className="mb-3">
+              <h3 className="text-sm font-medium text-white">Cost by Provider</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Cost breakdown by provider</p>
+            </div>
             {topProviders.length === 0 ? (
               <div className="text-center py-8 text-slate-400">No cost data available</div>
             ) : (
@@ -322,127 +312,61 @@ export default function CostAnalysisPage() {
           </div>
         </div>
 
-        {/* Cost Predictions */}
+        {/* Cost Predictions - Simplified */}
         {predictions && predictions.predictions && predictions.predictions.length > 0 && (
-          <div className="mb-6 relative rounded-2xl border border-blue-500/30 bg-blue-500/10 backdrop-blur-sm p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="h-6 w-6 text-blue-400" />
-                <h2 className="text-lg font-semibold text-blue-400">Cost Predictions</h2>
+          <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-medium text-white">Cost Predictions</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Future cost predictions based on historical data</p>
               </div>
-              <Badge variant={predictions.trend === 'increasing' ? 'warning' : 'success'}>
+              <Badge variant={predictions.trend === 'increasing' ? 'warning' : 'success'} className="text-xs">
                 {predictions.trend}
               </Badge>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-3">
               {predictions.predictions.map((pred: any) => (
-                <div key={pred.days_ahead} className="p-4 bg-white/5 rounded-lg border border-white/10">
-                  <div className="text-sm text-slate-400 mb-1">{pred.days_ahead} Days</div>
-                  <div className="text-xl font-bold text-white mb-1">
+                <div key={pred.days_ahead} className="text-center">
+                  <div className="text-xs text-slate-400 mb-1">{pred.days_ahead}d</div>
+                  <div className="text-lg font-bold text-white">
                     ${toFixedSafe(pred.predicted_cost, 2)}
-                  </div>
-                  <div className="text-xs text-slate-400">
-                    ${toFixedSafe(pred.predicted_daily_avg, 2)}/day • {toFixedSafe(pred.confidence * 100, 0)}% confidence
                   </div>
                 </div>
               ))}
             </div>
             {predictions.spike_predicted && (
-              <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                <div className="flex items-center gap-2 text-yellow-400">
-                  <AlertTriangle className="h-4 w-4" />
-                  <span className="text-sm font-medium">Cost spike predicted: {toFixedSafe(predictions.trend_percentage, 1)}% increase</span>
-                </div>
+              <div className="mt-3 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs text-yellow-400">
+                ⚠️ Spike predicted: +{toFixedSafe(predictions.trend_percentage, 1)}%
               </div>
             )}
           </div>
         )}
 
-        {/* Cost Optimization Suggestions */}
+        {/* Cost Optimization Suggestions - Collapsible */}
         {optimizations && optimizations.opportunities && optimizations.opportunities.length > 0 && (
-          <div className="mb-6 relative rounded-2xl border border-purple-500/30 bg-purple-500/10 backdrop-blur-sm p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <Sparkles className="h-6 w-6 text-purple-400" />
-                <h2 className="text-lg font-semibold text-purple-400">Optimization Opportunities</h2>
-              </div>
-              <div className="text-sm text-purple-300">
-                Potential Savings: <span className="font-bold text-green-400">
-                  ${toFixedSafe(optimizations.total_potential_savings, 2)}/month
-                </span>
-              </div>
-            </div>
-            <div className="space-y-4">
-              {optimizations.opportunities.slice(0, 3).map((opp: any, idx: number) => (
-                <div key={idx} className="p-4 bg-white/5 rounded-lg border border-white/10">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-white">
-                        {opp.type === "model_downgrade" && "Model Downgrade"}
-                        {opp.type === "cost_optimization" && "Cost Optimization"}
-                        {opp.type === "remove_unused_model" && "Remove Unused Model"}
-                      </span>
-                      <Badge variant={opp.risk === "low" || opp.risk === "none" ? "success" : "warning"}>
-                        {opp.risk} risk
-                      </Badge>
-                    </div>
-                    <div className="text-green-400 font-bold">
-                      ${toFixedSafe(opp.estimated_monthly_savings, 2)}/mo
-                    </div>
-                  </div>
-                  <p className="text-sm text-slate-400 mb-3">{opp.reason}</p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span className="text-slate-400">Current: </span>
-                      <span className="text-white">{opp.current_model}</span>
-                    </div>
-                    {opp.recommended_model && (
-                      <div>
-                        <span className="text-slate-400">Recommended: </span>
-                        <span className="text-purple-400">{opp.recommended_model}</span>
-                      </div>
-                    )}
-                    <div>
-                      <span className="text-slate-400">Savings: </span>
-                      <span className="text-green-400">{toFixedSafe(opp.savings_percentage, 1)}%</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Quality: </span>
-                      <span className={clsx(
-                        opp.quality_change >= 0 ? 'text-green-400' : 'text-yellow-400'
-                      )}>
-                        {opp.quality_change > 0 ? '+' : ''}{toFixedSafe(opp.quality_change, 1)}%
-                      </span>
-                    </div>
-                  </div>
-                  {opp.requires_approval && (
-                    <div className="mt-3 pt-3 border-t border-white/10">
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setSelectedOptimization(opp);
-                          setShowOptimizationModal(true);
-                        }}
-                        className="w-full"
-                      >
-                        <Zap className="h-4 w-4 mr-2" />
-                        Apply This Optimization
-                      </Button>
-                    </div>
-                  )}
+          <div className="mb-4 rounded-lg border border-purple-500/30 bg-purple-500/10">
+            <button
+              onClick={() => setShowOptimizationModal(true)}
+              className="w-full flex items-center justify-between p-3 text-left hover:bg-purple-500/20 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-purple-400" />
+                <div>
+                  <span className="text-sm font-medium text-purple-400 block">
+                    {optimizations.opportunities.length} Cost Optimization Suggestions
+                  </span>
+                  <span className="text-xs text-slate-400 mt-0.5">
+                    Click to view and apply automatic optimization opportunities
+                  </span>
                 </div>
-              ))}
-            </div>
-            {optimizations.opportunities.length > 3 && (
-              <div className="mt-4 text-center">
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowOptimizationModal(true)}
-                >
-                  View All {optimizations.opportunities.length} Opportunities
-                </Button>
               </div>
-            )}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-green-400 font-medium">
+                  ${toFixedSafe(optimizations.total_potential_savings, 2)}/mo potential savings
+                </span>
+                <Zap className="h-4 w-4 text-slate-400" />
+              </div>
+            </button>
           </div>
         )}
 
