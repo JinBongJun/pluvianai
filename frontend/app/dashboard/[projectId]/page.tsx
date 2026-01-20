@@ -16,6 +16,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import EmptyState from '@/components/EmptyState';
 import { clsx } from 'clsx';
 import ProjectTabs from '@/components/ProjectTabs';
+import { HelpCircle } from 'lucide-react';
 
 export default function ProjectDetailPage() {
   const router = useRouter();
