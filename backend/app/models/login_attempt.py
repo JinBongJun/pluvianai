@@ -1,6 +1,7 @@
 """
 Login attempt model for auditing authentication events.
 """
+
 from sqlalchemy import (
     Column,
     Integer,

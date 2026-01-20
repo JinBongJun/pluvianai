@@ -4,6 +4,7 @@ Risk-based authentication helper.
 Provides a lightweight heuristic to flag unusual login attempts
 based on IP, User-Agent, and recent successful logins.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,9 +31,7 @@ class RiskBasedAuthService:
     def __init__(self, lookback_hours: int = 48):
         self.lookback = timedelta(hours=lookback_hours)
 
-    def _get_last_success(
-        self, db: Session, user_id: int
-    ) -> Optional[LoginAttempt]:
+    def _get_last_success(self, db: Session, user_id: int) -> Optional[LoginAttempt]:
         return (
             db.query(LoginAttempt)
             .filter(LoginAttempt.user_id == user_id, LoginAttempt.is_success.is_(True))
@@ -64,11 +63,7 @@ class RiskBasedAuthService:
             if ip and last_success.ip_address and ip != last_success.ip_address:
                 risk_score += 30
                 reasons.append("new_ip")
-            if (
-                user_agent
-                and last_success.user_agent
-                and user_agent[:50] != last_success.user_agent[:50]
-            ):
+            if user_agent and last_success.user_agent and user_agent[:50] != last_success.user_agent[:50]:
                 risk_score += 20
                 reasons.append("new_user_agent")
             if last_success.created_at:

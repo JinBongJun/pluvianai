@@ -1,6 +1,7 @@
 """
 API Key model for project authentication
 """
+
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -9,6 +10,7 @@ from app.core.database import Base
 
 class APIKey(Base):
     """API Key model for project authentication"""
+
     __tablename__ = "api_keys"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -22,6 +24,3 @@ class APIKey(Base):
 
     # Relationships
     user = relationship("User", back_populates="api_keys")
-
-
-

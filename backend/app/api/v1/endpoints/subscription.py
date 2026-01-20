@@ -1,6 +1,7 @@
 """
 Subscription endpoints for plan management and billing
 """
+
 from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ router = APIRouter()
 
 class PlanResponse(BaseModel):
     """Plan information response"""
+
     plan_type: str
     price: int
     limits: Dict[str, Any]
@@ -25,6 +27,7 @@ class PlanResponse(BaseModel):
 
 class SubscriptionResponse(BaseModel):
     """Current subscription response"""
+
     plan_type: str
     status: str
     price_per_month: float
@@ -38,27 +41,21 @@ class SubscriptionResponse(BaseModel):
 
 class UpgradeRequest(BaseModel):
     """Upgrade subscription request"""
+
     plan_type: str
-    
+
     class Config:
-        json_schema_extra = {
-            "example": {
-                "plan_type": "startup"
-            }
-        }
+        json_schema_extra = {"example": {"plan_type": "startup"}}
 
 
 @router.get("", response_model=SubscriptionResponse)
 @handle_errors
-async def get_current_subscription(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_current_subscription(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get current user's subscription and usage"""
     service = SubscriptionService(db)
     plan_info = service.get_user_plan(current_user.id)
     usage_summary = service.get_usage_summary(current_user.id)
-    
+
     return SubscriptionResponse(
         plan_type=plan_info["plan_type"],
         status=plan_info["status"],
@@ -68,7 +65,7 @@ async def get_current_subscription(
         current_period_start=plan_info["current_period_start"],
         current_period_end=plan_info["current_period_end"],
         trial_end=plan_info["trial_end"],
-        usage=usage_summary
+        usage=usage_summary,
     )
 
 
@@ -78,35 +75,35 @@ async def get_available_plans():
     """Get all available subscription plans"""
     plans = []
     for plan_type, limits in PLAN_LIMITS.items():
-        plans.append(PlanResponse(
-            plan_type=plan_type,
-            price=PLAN_PRICING.get(plan_type, 0),
-            limits={
-                "projects": limits["projects"],
-                "api_calls_per_month": limits["api_calls_per_month"],
-                "team_members_per_project": limits["team_members_per_project"],
-                "data_retention_days": limits["data_retention_days"],
-            },
-            features=limits["features"]
-        ))
-    
+        plans.append(
+            PlanResponse(
+                plan_type=plan_type,
+                price=PLAN_PRICING.get(plan_type, 0),
+                limits={
+                    "projects": limits["projects"],
+                    "api_calls_per_month": limits["api_calls_per_month"],
+                    "team_members_per_project": limits["team_members_per_project"],
+                    "data_retention_days": limits["data_retention_days"],
+                },
+                features=limits["features"],
+            )
+        )
+
     return plans
 
 
 @router.post("/upgrade")
 @handle_errors
 async def initiate_upgrade(
-    request: UpgradeRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    request: UpgradeRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Initiate subscription upgrade (returns Paddle checkout URL)"""
     if request.plan_type not in PLAN_PRICING:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid plan type: {request.plan_type}. Must be one of: {', '.join(PLAN_PRICING.keys())}"
+            detail=f"Invalid plan type: {request.plan_type}. Must be one of: {', '.join(PLAN_PRICING.keys())}",
         )
-    
+
     # TODO: Integrate with Paddle API to create checkout
     # For now, return a placeholder response
     # In production, this would:
@@ -116,49 +113,38 @@ async def initiate_upgrade(
     return {
         "checkout_url": f"https://checkout.paddle.com/...?plan={request.plan_type}&user_id={current_user.id}",
         "plan_type": request.plan_type,
-        "price": PLAN_PRICING[request.plan_type]
+        "price": PLAN_PRICING[request.plan_type],
     }
 
 
 @router.post("/cancel")
-async def cancel_subscription(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def cancel_subscription(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Cancel current subscription (cancels at period end)"""
     from app.models.subscription import Subscription
-    
-    subscription = db.query(Subscription).filter(
-        Subscription.user_id == current_user.id
-    ).first()
-    
+
+    subscription = db.query(Subscription).filter(Subscription.user_id == current_user.id).first()
+
     if not subscription:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No active subscription found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active subscription found")
+
     subscription.cancel_at_period_end = "true"
     # Don't change status to cancelled immediately - keep it active until period end
     db.commit()
-    
+
     return {"message": "Subscription will be cancelled at period end"}
 
 
 @router.post("/webhooks/paddle")
-async def handle_paddle_webhook(
-    payload: Dict[str, Any],
-    db: Session = Depends(get_db)
-):
+async def handle_paddle_webhook(payload: Dict[str, Any], db: Session = Depends(get_db)):
     """
     Handle Paddle webhook events
     Events: subscription.created, subscription.updated, subscription.cancelled
     """
     # TODO: Verify Paddle webhook signature
     # TODO: Handle different webhook event types
-    
+
     event_type = payload.get("event_type")
-    
+
     if event_type == "subscription.created":
         # Create new subscription
         user_id = payload.get("user_id")  # This should map to your user ID
@@ -171,6 +157,5 @@ async def handle_paddle_webhook(
     elif event_type == "subscription.cancelled":
         # Cancel subscription
         pass
-    
-    return {"status": "ok"}
 
+    return {"status": "ok"}

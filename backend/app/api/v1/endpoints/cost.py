@@ -1,6 +1,7 @@
 """
 Cost analysis endpoints
 """
+
 from typing import List
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
@@ -23,6 +24,7 @@ cost_optimizer = CostOptimizer()
 
 class CostAnalysisResponse(BaseModel):
     """Cost analysis response schema"""
+
     total_cost: float
     by_model: dict
     by_provider: dict
@@ -34,6 +36,7 @@ class CostAnalysisResponse(BaseModel):
 
 class ModelComparisonResponse(BaseModel):
     """Model comparison response schema"""
+
     model: str
     provider: str
     model_name: str
@@ -50,28 +53,26 @@ async def get_cost_analysis(
     project_id: int = Query(..., description="Project ID"),
     days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get cost analysis for a project"""
     # Verify project access (any member can view cost)
     project = check_project_access(project_id, current_user, db)
-    
+
     # Calculate date range
     end_date = datetime.utcnow()
     start_date = end_date - timedelta(days=days)
-    
+
     try:
         # Analyze costs
         analysis = cost_analyzer.analyze_project_costs(
-            project_id=project_id,
-            start_date=start_date,
-            end_date=end_date,
-            db=db
+            project_id=project_id, start_date=start_date, end_date=end_date, db=db
         )
         return analysis
     except Exception as e:
         # Return empty analysis on error instead of raising exception
         from app.core.logging_config import logger
+
         logger.error(f"Error analyzing costs for project {project_id}: {str(e)}")
         return CostAnalysisResponse(
             total_cost=0.0,
@@ -80,7 +81,7 @@ async def get_cost_analysis(
             by_day=[],
             average_daily_cost=0.0,
             period_start=start_date,
-            period_end=end_date
+            period_end=end_date,
         )
 
 
@@ -89,27 +90,25 @@ async def detect_cost_anomalies(
     project_id: int = Query(..., description="Project ID"),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Detect cost anomalies for a project"""
     from app.models.alert import Alert
     from app.services.alert_service import AlertService
     from app.services.webhook_service import webhook_service
-    
+
     # Verify project access (any member can view cost)
     project = check_project_access(project_id, current_user, db)
-    
+
     # Detect anomalies
-    alerts = cost_analyzer.detect_cost_anomalies(
-        project_id=project_id,
-        db=db
-    )
-    
+    alerts = cost_analyzer.detect_cost_anomalies(project_id=project_id, db=db)
+
     # Send alerts and trigger webhooks in background
     from app.core.database import SessionLocal
-    
+
     alert_service = AlertService()
     for alert in alerts:
+
         async def send_alert_task(alert_id: int):
             db_session = SessionLocal()
             try:
@@ -119,12 +118,13 @@ async def detect_cost_anomalies(
                     await webhook_service.trigger_alert_webhooks(alert, db_session)
             except Exception as e:
                 from app.core.logging_config import logger
+
                 logger.error(f"Error sending alert for cost anomaly: {str(e)}")
             finally:
                 db_session.close()
-        
+
         background_tasks.add_task(send_alert_task, alert.id)
-    
+
     return {"alerts_created": len(alerts), "alerts": alerts}
 
 
@@ -133,24 +133,21 @@ async def compare_models(
     project_id: int = Query(..., description="Project ID"),
     days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Compare costs across different models"""
     # Verify project access (any member can view cost)
     project = check_project_access(project_id, current_user, db)
-    
+
     # Compare models
-    comparisons = cost_analyzer.compare_models(
-        project_id=project_id,
-        days=days,
-        db=db
-    )
-    
+    comparisons = cost_analyzer.compare_models(project_id=project_id, days=days, db=db)
+
     return comparisons
 
 
 class ApplyOptimizationRequest(BaseModel):
     """Request model for applying cost optimization"""
+
     optimization_id: str
     user_confirmation: bool = True
 
@@ -161,19 +158,15 @@ async def get_cost_optimizations(
     project_id: int = Query(..., description="Project ID"),
     days: int = Query(30, ge=7, le=90, description="Number of days to analyze"),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get cost optimization suggestions"""
     # Verify project access
     project = check_project_access(project_id, current_user, db)
-    
+
     # Get optimization suggestions
-    suggestions = cost_optimizer.suggest_optimizations(
-        project_id=project_id,
-        days=days,
-        db=db
-    )
-    
+    suggestions = cost_optimizer.suggest_optimizations(project_id=project_id, days=days, db=db)
+
     return suggestions
 
 
@@ -183,29 +176,25 @@ async def apply_cost_optimization(
     project_id: int = Query(..., description="Project ID"),
     request: ApplyOptimizationRequest = ...,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Apply a cost optimization suggestion (requires user confirmation)"""
     # Verify project access (owner/admin only)
-    project = check_project_access(
-        project_id, current_user, db,
-        required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN]
-    )
-    
+    project = check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
+
     # Check user confirmation
     if not request.user_confirmation:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User confirmation is required to apply optimizations"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="User confirmation is required to apply optimizations"
         )
-    
+
     # For now, return a placeholder response
     # Actual implementation would apply the optimization based on optimization_id
     return {
         "message": "Cost optimization application is not yet fully implemented",
         "optimization_id": request.optimization_id,
         "status": "pending",
-        "note": "This endpoint is a placeholder. Full implementation requires additional work to track and apply optimizations."
+        "note": "This endpoint is a placeholder. Full implementation requires additional work to track and apply optimizations.",
     }
 
 
@@ -216,19 +205,15 @@ async def get_cost_predictions(
     days: int = Query(30, ge=7, le=90, description="Number of days of historical data"),
     prediction_days: int = Query(30, ge=7, le=90, description="Number of days to predict ahead"),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get cost predictions for a project"""
     # Verify project access
     project = check_project_access(project_id, current_user, db)
-    
+
     # Get predictions
     predictions = cost_analyzer.predict_future_costs(
-        project_id=project_id,
-        days=days,
-        prediction_days=prediction_days,
-        db=db
+        project_id=project_id, days=days, prediction_days=prediction_days, db=db
     )
-    
-    return predictions
 
+    return predictions

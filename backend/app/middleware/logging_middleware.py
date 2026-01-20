@@ -1,6 +1,7 @@
 """
 Logging middleware for request/response logging
 """
+
 import time
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -10,15 +11,15 @@ from app.core.logging_config import logger
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     """Middleware to log all requests and responses"""
-    
+
     async def dispatch(self, request: Request, call_next):
         # Skip logging for health checks, docs, and OPTIONS requests (CORS preflight)
         if request.url.path in ["/health", "/docs", "/openapi.json", "/redoc"] or request.method == "OPTIONS":
             return await call_next(request)
-        
+
         # Record start time
         start_time = time.time()
-        
+
         # Log request
         logger.info(
             f"Request: {request.method} {request.url.path}",
@@ -26,17 +27,17 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 "method": request.method,
                 "path": request.url.path,
                 "query_params": str(request.query_params),
-                "client": request.client.host if request.client else None
-            }
+                "client": request.client.host if request.client else None,
+            },
         )
-        
+
         # Process request
         try:
             response = await call_next(request)
-            
+
             # Calculate duration
             duration = time.time() - start_time
-            
+
             # Log response
             logger.info(
                 f"Response: {request.method} {request.url.path} - {response.status_code} - {duration:.3f}s",
@@ -44,25 +45,20 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                     "method": request.method,
                     "path": request.url.path,
                     "status_code": response.status_code,
-                    "duration": duration
-                }
+                    "duration": duration,
+                },
             )
-            
+
             return response
-            
+
         except Exception as e:
             # Calculate duration
             duration = time.time() - start_time
-            
+
             # Log error
             logger.error(
                 f"Error: {request.method} {request.url.path} - {str(e)} - {duration:.3f}s",
-                extra={
-                    "method": request.method,
-                    "path": request.url.path,
-                    "duration": duration
-                },
-                exc_info=True
+                extra={"method": request.method, "path": request.url.path, "duration": duration},
+                exc_info=True,
             )
             raise
-

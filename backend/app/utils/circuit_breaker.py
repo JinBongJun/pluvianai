@@ -1,6 +1,7 @@
 """
 Simple circuit breaker utility.
 """
+
 from __future__ import annotations
 
 import time

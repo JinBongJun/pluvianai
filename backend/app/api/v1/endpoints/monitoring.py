@@ -1,6 +1,7 @@
 """
 Monitoring endpoints for status and links
 """
+
 from fastapi import APIRouter, Depends
 from app.core.config import settings
 from app.core.database import get_db
@@ -23,7 +24,7 @@ async def monitoring_status() -> Dict[str, Any]:
     else:
         grafana_url = "http://localhost:3001"
         prometheus_url = "http://localhost:9090"
-    
+
     return {
         "metrics_enabled": True,
         "environment": settings.ENVIRONMENT,
@@ -31,9 +32,9 @@ async def monitoring_status() -> Dict[str, Any]:
             "grafana_url": grafana_url,
             "prometheus_url": prometheus_url,
             "metrics_endpoint": "/metrics",
-            "health_endpoint": "/health"
+            "health_endpoint": "/health",
         },
-        "status": "operational"
+        "status": "operational",
     }
 
 
@@ -51,9 +52,9 @@ async def get_current_metrics(db: Session = Depends(get_db)) -> Dict[str, Any]:
 
     return {
         "total_requests": 0,  # Would be fetched from Prometheus
-        "error_rate": 0.0,   # Would be calculated from Prometheus metrics
-        "avg_latency": 0,    # Would be fetched from Prometheus
+        "error_rate": 0.0,  # Would be calculated from Prometheus metrics
+        "avg_latency": 0,  # Would be fetched from Prometheus
         "active_users": active_users_count,
         "active_projects": active_projects_count,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }

@@ -1,6 +1,7 @@
 """
 Usage tracking model for subscription limits
 """
+
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, BigInteger, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -9,6 +10,7 @@ from app.core.database import Base
 
 class Usage(Base):
     """Usage tracking model"""
+
     __tablename__ = "usage"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -28,7 +30,6 @@ class Usage(Base):
 
     # Indexes
     __table_args__ = (
-        Index('idx_usage_user_metric', 'user_id', 'metric_type', 'period_start'),
-        Index('idx_usage_project_metric', 'project_id', 'metric_type', 'period_start'),
+        Index("idx_usage_user_metric", "user_id", "metric_type", "period_start"),
+        Index("idx_usage_project_metric", "project_id", "metric_type", "period_start"),
     )
-

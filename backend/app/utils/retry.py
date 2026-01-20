@@ -1,6 +1,7 @@
 """
 Lightweight retry utilities with exponential backoff and jitter.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -32,7 +33,9 @@ def async_retry(
                     delay = min(max_delay, base_delay * (2 ** (attempt - 1)))
                     delay = delay * (0.8 + random.random() * 0.4)  # jitter
                     await asyncio.sleep(delay)
+
         return wrapper
+
     return decorator
 
 
@@ -59,5 +62,7 @@ def sync_retry(
                     delay = min(max_delay, base_delay * (2 ** (attempt - 1)))
                     delay = delay * (0.8 + random.random() * 0.4)
                     time.sleep(delay)
+
         return wrapper
+
     return decorator

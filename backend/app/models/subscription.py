@@ -1,6 +1,7 @@
 """
 Subscription model for user plans and billing
 """
+
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -9,6 +10,7 @@ from app.core.database import Base
 
 class Subscription(Base):
     """Subscription model"""
+
     __tablename__ = "subscriptions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -30,7 +32,6 @@ class Subscription(Base):
 
     # Indexes
     __table_args__ = (
-        Index('idx_subscription_user_status', 'user_id', 'status'),
-        Index('idx_subscription_plan', 'plan_type', 'status'),
+        Index("idx_subscription_user_status", "user_id", "status"),
+        Index("idx_subscription_plan", "plan_type", "status"),
     )
-

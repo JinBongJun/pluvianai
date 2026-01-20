@@ -1,6 +1,7 @@
 """
 Alert service for notifications.
 """
+
 import httpx
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
@@ -11,12 +12,12 @@ from app.core.logging_config import logger
 
 class AlertService:
     """Service for sending alerts via various channels"""
-    
+
     def __init__(self):
         self.slack_webhook_url = None  # Should be configured per project
         self.discord_webhook_url = None  # Should be configured per project
         self.email_enabled = bool(settings.RESEND_API_KEY)  # Enable if Resend API key is configured
-    
+
     async def send_alert(
         self,
         alert: Alert,
@@ -26,13 +27,13 @@ class AlertService:
     ) -> Dict[str, Any]:
         """
         Send alert through specified channels
-        
+
         Args:
             alert: Alert object to send
             channels: List of channels to use (slack, discord, email)
             db: Database session (required for email)
             severity: override severity if provided
-        
+
         Returns:
             Dictionary with send status for each channel
         """
@@ -43,7 +44,7 @@ class AlertService:
             alert.severity = severity
 
         results = {}
-        
+
         for channel in channels:
             try:
                 if channel == "slack":
@@ -54,21 +55,21 @@ class AlertService:
                     result = await self._send_email(alert, db)
                 else:
                     result = {"status": "error", "message": f"Unknown channel: {channel}"}
-                
+
                 results[channel] = result
             except Exception as e:
                 results[channel] = {"status": "error", "message": str(e)}
-        
+
         return results
-    
+
     async def _send_slack(self, alert: Alert) -> Dict[str, Any]:
         """Send alert to Slack via webhook"""
         # In production, webhook URL should be stored per project
         webhook_url = self.slack_webhook_url
-        
+
         if not webhook_url:
             return {"status": "skipped", "message": "Slack webhook not configured"}
-        
+
         # Determine color based on severity
         color_map = {
             "critical": "#ff0000",
@@ -77,7 +78,7 @@ class AlertService:
             "low": "#888888",
         }
         color = color_map.get(alert.severity, "#888888")
-        
+
         payload = {
             "attachments": [
                 {
@@ -100,20 +101,20 @@ class AlertService:
                 }
             ]
         }
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(webhook_url, json=payload)
             response.raise_for_status()
-        
+
         return {"status": "sent", "channel": "slack"}
-    
+
     async def _send_discord(self, alert: Alert) -> Dict[str, Any]:
         """Send alert to Discord via webhook"""
         webhook_url = self.discord_webhook_url
-        
+
         if not webhook_url:
             return {"status": "skipped", "message": "Discord webhook not configured"}
-        
+
         # Determine color based on severity (Discord uses integer colors)
         color_map = {
             "critical": 0xFF0000,  # Red
@@ -122,7 +123,7 @@ class AlertService:
             "low": 0x888888,  # Gray
         }
         color = color_map.get(alert.severity, 0x888888)
-        
+
         payload = {
             "embeds": [
                 {
@@ -145,49 +146,54 @@ class AlertService:
                 }
             ]
         }
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(webhook_url, json=payload)
             response.raise_for_status()
-        
+
         return {"status": "sent", "channel": "discord"}
-    
+
     async def _send_email(self, alert: Alert, db: Optional[Session] = None) -> Dict[str, Any]:
         """Send alert via email"""
         # Check for database first - it's required for email
         if not db:
             return {"status": "error", "message": "Database session required"}
-        
+
         # Check if email is enabled (after DB check)
         if not self.email_enabled:
             return {"status": "skipped", "message": "Email not enabled"}
-        
+
         # Get user email from project
         from app.models.project import Project
+
         project = db.query(Project).filter(Project.id == alert.project_id).first()
         if not project:
             return {"status": "error", "message": "Project not found"}
-        
+
         from app.models.user import User
+
         user = db.query(User).filter(User.id == project.owner_id).first()
         if not user or not user.email:
             return {"status": "error", "message": "User email not found"}
-        
+
         recipient_email = user.email
-        
+
         # Use Resend for email delivery
         if settings.RESEND_API_KEY:
             return await self._send_email_resend(alert, recipient_email)
         else:
-            return {"status": "error", "message": "Resend API key not configured. Please set RESEND_API_KEY environment variable."}
-    
+            return {
+                "status": "error",
+                "message": "Resend API key not configured. Please set RESEND_API_KEY environment variable.",
+            }
+
     async def _send_email_resend(self, alert: Alert, recipient_email: str) -> Dict[str, Any]:
         """Send email using Resend"""
         try:
             import resend
-            
+
             resend.api_key = settings.RESEND_API_KEY
-            
+
             # Determine severity color
             severity_colors = {
                 "critical": "#FF0000",
@@ -196,7 +202,7 @@ class AlertService:
                 "low": "#888888",
             }
             color = severity_colors.get(alert.severity, "#888888")
-            
+
             # Create HTML email
             html_content = f"""
             <html>
@@ -220,7 +226,7 @@ class AlertService:
             </body>
             </html>
             """
-            
+
             # Plain text version
             text_content = f"""
 {alert.title}
@@ -234,7 +240,7 @@ Project ID: {alert.project_id}
 ---
 This is an automated alert from AgentGuard.
             """.strip()
-            
+
             params = {
                 "from": f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM or 'onboarding@resend.dev'}>",
                 "to": [recipient_email],
@@ -242,27 +248,24 @@ This is an automated alert from AgentGuard.
                 "html": html_content,
                 "text": text_content,
             }
-            
+
             email = resend.Emails.send(params)
-            
+
             logger.info(f"Email sent successfully to {recipient_email} via Resend. Email ID: {email.get('id')}")
             return {"status": "sent", "channel": "email", "service": "resend", "email_id": email.get("id")}
-                
+
         except ImportError:
             return {"status": "error", "message": "Resend library not installed. Install with: pip install resend"}
         except Exception as e:
             logger.error(f"Error sending email via Resend: {str(e)}")
             return {"status": "error", "message": str(e)}
-    
+
     async def send_batch(
-        self,
-        alerts: List[Alert],
-        channels: Optional[List[str]] = None,
-        db: Optional[Session] = None
+        self, alerts: List[Alert], channels: Optional[List[str]] = None, db: Optional[Session] = None
     ) -> Dict[str, Any]:
         """
         Send multiple alerts in batch
-        
+
         Returns:
             Summary of send results
         """
@@ -273,42 +276,41 @@ This is an automated alert from AgentGuard.
             "skipped": 0,
             "details": [],
         }
-        
+
         for alert in alerts:
             try:
                 send_results = await self.send_alert(alert, channels, db)
-                
+
                 # Check if at least one channel succeeded
-                any_sent = any(
-                    r.get("status") == "sent" for r in send_results.values()
-                )
-                
+                any_sent = any(r.get("status") == "sent" for r in send_results.values())
+
                 if any_sent:
                     results["sent"] += 1
                     alert.is_sent = True
                     from datetime import datetime
+
                     alert.sent_at = datetime.utcnow()
                 else:
                     results["skipped"] += 1
-                
-                results["details"].append({
-                    "alert_id": alert.id,
-                    "results": send_results,
-                })
+
+                results["details"].append(
+                    {
+                        "alert_id": alert.id,
+                        "results": send_results,
+                    }
+                )
             except Exception as e:
                 results["failed"] += 1
-                results["details"].append({
-                    "alert_id": alert.id,
-                    "error": str(e),
-                })
-        
+                results["details"].append(
+                    {
+                        "alert_id": alert.id,
+                        "error": str(e),
+                    }
+                )
+
         return results
-    
-    def configure_webhooks(
-        self,
-        slack_webhook_url: Optional[str] = None,
-        discord_webhook_url: Optional[str] = None
-    ):
+
+    def configure_webhooks(self, slack_webhook_url: Optional[str] = None, discord_webhook_url: Optional[str] = None):
         """Configure webhook URLs"""
         if slack_webhook_url:
             self.slack_webhook_url = slack_webhook_url

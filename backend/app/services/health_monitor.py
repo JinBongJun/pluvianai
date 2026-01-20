@@ -1,6 +1,7 @@
 """
 Health Monitor Service for automatic health checks and alerts
 """
+
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -12,18 +13,18 @@ import httpx
 
 class HealthMonitor:
     """Service for monitoring system health and sending alerts"""
-    
+
     def __init__(self):
         self.alert_service = AlertService()
         self.base_url = "http://localhost:8000"  # Default, should use settings
-    
+
     async def check_system_health(self, db: Optional[Session] = None) -> Dict[str, Any]:
         """
         Check system health and return status
-        
+
         Args:
             db: Database session (optional, will create if not provided)
-        
+
         Returns:
             Dictionary with health status
         """
@@ -32,15 +33,12 @@ class HealthMonitor:
             should_close = True
         else:
             should_close = False
-        
+
         try:
             # Check health endpoint
             try:
                 async with httpx.AsyncClient() as client:
-                    response = await client.get(
-                        f"{self.base_url}/api/v1/health/detailed",
-                        timeout=5.0
-                    )
+                    response = await client.get(f"{self.base_url}/api/v1/health/detailed", timeout=5.0)
                     health_data = response.json() if response.status_code == 200 else None
             except Exception as e:
                 logger.error(f"Error checking health endpoint: {str(e)}")
@@ -48,12 +46,12 @@ class HealthMonitor:
                     "status": "error",
                     "error": str(e),
                 }
-            
+
             # Determine if alert should be sent
             should_alert = False
             alert_severity = "medium"
             alert_message = ""
-            
+
             if health_data:
                 if health_data.get("status") == "unhealthy":
                     should_alert = True
@@ -63,13 +61,13 @@ class HealthMonitor:
                     should_alert = True
                     alert_severity = "medium"
                     alert_message = "System is degraded"
-                
+
                 # Check database
                 if health_data.get("database", {}).get("status") == "error":
                     should_alert = True
                     alert_severity = "critical"
                     alert_message = "Database connection failed"
-            
+
             return {
                 "health_data": health_data,
                 "should_alert": should_alert,
@@ -80,16 +78,13 @@ class HealthMonitor:
         finally:
             if should_close:
                 db.close()
-    
+
     async def send_health_alert(
-        self,
-        health_result: Dict[str, Any],
-        project_id: Optional[int] = None,
-        db: Optional[Session] = None
+        self, health_result: Dict[str, Any], project_id: Optional[int] = None, db: Optional[Session] = None
     ) -> None:
         """
         Send health alert if needed
-        
+
         Args:
             health_result: Result from check_system_health
             project_id: Optional project ID (for project-specific alerts)
@@ -97,27 +92,27 @@ class HealthMonitor:
         """
         if not health_result.get("should_alert"):
             return
-        
+
         if not db:
             db = SessionLocal()
             should_close = True
         else:
             should_close = False
-        
+
         try:
             # Only send critical alerts (to avoid spam)
             if health_result.get("alert_severity") == "critical":
                 from app.models.alert import Alert
-                
+
                 # Find a project to associate the alert with, or use admin project
                 from app.models.project import Project
-                
+
                 if project_id:
                     project = db.query(Project).filter(Project.id == project_id).first()
                 else:
                     # Use first active project as fallback
                     project = db.query(Project).filter(Project.is_active == True).first()
-                
+
                 if project:
                     alert = Alert(
                         project_id=project.id,
@@ -133,26 +128,24 @@ class HealthMonitor:
                     )
                     db.add(alert)
                     db.commit()
-                    
+
                     # Send alert
                     await self.alert_service.send_alert(alert, db=db)
                     logger.warning(f"Health alert sent: {health_result.get('alert_message')}")
         finally:
             if should_close:
                 db.close()
-    
+
     async def monitor_health_and_alert(
-        self,
-        project_id: Optional[int] = None,
-        db: Optional[Session] = None
+        self, project_id: Optional[int] = None, db: Optional[Session] = None
     ) -> Dict[str, Any]:
         """
         Check health and send alert if needed (convenience method)
-        
+
         Args:
             project_id: Optional project ID
             db: Database session (optional)
-        
+
         Returns:
             Health check result
         """

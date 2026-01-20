@@ -1,6 +1,7 @@
 """
 Bulkhead isolation using asyncio.Semaphore.
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -1,6 +1,7 @@
 """
 Core module exports
 """
+
 from .config import settings
 from .database import Base, SessionLocal, get_db, engine
 from .security import (
@@ -27,4 +28,3 @@ __all__ = [
     "get_current_user",
     "oauth2_scheme",
 ]
-

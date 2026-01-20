@@ -1,6 +1,7 @@
 """
 Project model for multi-tenancy
 """
+
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -9,6 +10,7 @@ from app.core.database import Base
 
 class Project(Base):
     """Project/Workspace model"""
+
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -18,7 +20,7 @@ class Project(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Shadow Routing configuration (JSON)
     # Example structure:
     # {
@@ -47,6 +49,3 @@ class Project(Base):
     activity_logs = relationship("ActivityLog", back_populates="project", cascade="all, delete-orphan")
     webhooks = relationship("Webhook", back_populates="project", cascade="all, delete-orphan")
     shadow_comparisons = relationship("ShadowComparison", back_populates="project", cascade="all, delete-orphan")
-
-
-

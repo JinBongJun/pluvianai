@@ -1,6 +1,7 @@
 """
 AgentGuard FastAPI Application
 """
+
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
@@ -42,7 +43,7 @@ from app.core.exceptions import (
     http_exception_handler,
     validation_exception_handler,
     sqlalchemy_exception_handler,
-    general_exception_handler
+    general_exception_handler,
 )
 from app.api.v1 import api_router
 from app.middleware.api_hook import APIHookMiddleware
@@ -55,9 +56,18 @@ from app.services.cache_service import cache_service
 
 # Import all models to ensure they are registered with Base
 from app.models import (
-    User, Project, ProjectMember, APIKey, APICall,
-    QualityScore, DriftDetection, Alert, Subscription, Usage,
-    NotificationSettings, LoginAttempt
+    User,
+    Project,
+    ProjectMember,
+    APIKey,
+    APICall,
+    QualityScore,
+    DriftDetection,
+    Alert,
+    Subscription,
+    Usage,
+    NotificationSettings,
+    LoginAttempt,
 )
 
 # Create database tables
@@ -127,7 +137,7 @@ async def update_business_metrics_periodically():
     from app.core.database import SessionLocal
     from app.models import User, Project
     from app.core.metrics import active_users, active_projects
-    
+
     while True:
         try:
             db = SessionLocal()
@@ -135,17 +145,17 @@ async def update_business_metrics_periodically():
                 # Count active users (users with is_active=True)
                 user_count = db.query(User).filter(User.is_active == True).count()
                 active_users.set(user_count)
-                
+
                 # Count active projects (projects with is_active=True)
                 project_count = db.query(Project).filter(Project.is_active == True).count()
                 active_projects.set(project_count)
-                
+
                 logger.debug(f"Updated metrics: {user_count} active users, {project_count} active projects")
             finally:
                 db.close()
         except Exception as e:
             logger.error(f"Error updating business metrics: {e}", exc_info=True)
-        
+
         # Update every 60 seconds
         await asyncio.sleep(60)
 
@@ -161,9 +171,11 @@ async def startup_event():
     # Update app info metrics
     update_app_info(
         version=settings.APP_VERSION,
-        environment=settings.ENVIRONMENT
-        if hasattr(settings, "ENVIRONMENT")
-        else ("development" if settings.DEBUG else "production"),
+        environment=(
+            settings.ENVIRONMENT
+            if hasattr(settings, "ENVIRONMENT")
+            else ("development" if settings.DEBUG else "production")
+        ),
     )
     logger.info("App info metrics updated")
 
@@ -223,20 +235,18 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("Shutting down AgentGuard API...")
-    
+
     # Shutdown background scheduler
     from app.services.scheduler_service import scheduler_service
+
     scheduler_service.shutdown()
-    
+
     # Additional cleanup tasks can be added here
 
 
 @app.get("/")
 async def root():
-    return {
-        "message": settings.APP_NAME,
-        "version": settings.APP_VERSION
-    }
+    return {"message": settings.APP_NAME, "version": settings.APP_VERSION}
 
 
 @app.get("/health")
@@ -274,5 +284,5 @@ async def health_ready():
 async def metrics():
     """Prometheus metrics endpoint"""
     from app.core.metrics import get_metrics_response
-    return get_metrics_response()
 
+    return get_metrics_response()

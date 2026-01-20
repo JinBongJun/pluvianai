@@ -1,6 +1,7 @@
 """
 Subscription plan limits and features configuration
 """
+
 from typing import Dict, Any
 
 PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
@@ -20,7 +21,7 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
             "agent_chain_profiler": False,
             "reports": False,
             "cost_anomaly_detection": False,
-        }
+        },
     },
     "indie": {  # $19/month - Personal/Indie developers
         "projects": 3,
@@ -38,7 +39,7 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
             "agent_chain_profiler": False,
             "reports": "manual",  # Manual report generation
             "cost_anomaly_detection": True,
-        }
+        },
     },
     "startup": {  # $59/month - Core target, Most Popular
         "projects": 10,
@@ -61,7 +62,7 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
             "region_latency": False,
             "advanced_cost_optimizer": False,
             "model_auto_switch": False,
-        }
+        },
     },
     "pro": {  # $199/month - Growing startups/tech teams
         "projects": -1,  # unlimited (soft limit)
@@ -91,7 +92,7 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
             "sla": False,
             "data_masking": False,
             "custom_evaluator_rules": False,
-        }
+        },
     },
     "enterprise": {  # $499/month - Finance/Healthcare/Security-sensitive
         "projects": -1,  # unlimited
@@ -122,8 +123,8 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
             "data_masking": True,  # 데이터 마스킹 옵션
             "custom_evaluator_rules": True,  # 자체 evaluator 룰 구축
             "custom_integrations": True,
-        }
-    }
+        },
+    },
 }
 
 PLAN_PRICING: Dict[str, int] = {
@@ -133,4 +134,3 @@ PLAN_PRICING: Dict[str, int] = {
     "pro": 199,
     "enterprise": 499,
 }
-

@@ -4,6 +4,7 @@ Brute force protection service.
 Tracks failed login attempts per IP and account, applies exponential backoff,
 and signals when a CAPTCHA or lockout should be enforced.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -28,10 +29,10 @@ class BruteForceProtectionService:
     def __init__(self):
         # (failures, wait_seconds)
         self.thresholds: Tuple[Tuple[int, int], ...] = (
-            (3, 60),        # 1 minute
-            (5, 300),       # 5 minutes
-            (10, 900),      # 15 minutes
-            (15, 3600),     # 1 hour
+            (3, 60),  # 1 minute
+            (5, 300),  # 5 minutes
+            (10, 900),  # 15 minutes
+            (15, 3600),  # 1 hour
         )
         self.captcha_threshold = 20
 

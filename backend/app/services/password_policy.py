@@ -1,6 +1,7 @@
 """
 Password policy validation.
 """
+
 from __future__ import annotations
 
 import re
@@ -10,7 +11,6 @@ from typing import List
 import httpx
 from app.core.config import settings
 from app.core.logging_config import logger
-
 
 COMMON_WEAK_PASSWORDS = {
     "password",

@@ -1,6 +1,7 @@
 """
 Feature flags endpoints
 """
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Dict
 from pydantic import BaseModel
@@ -19,9 +20,7 @@ class FeatureFlagResponse(BaseModel):
 
 @router.get("", response_model=Dict[str, bool])
 @handle_errors
-async def get_feature_flags(
-    current_user: User = Depends(get_current_user)
-):
+async def get_feature_flags(current_user: User = Depends(get_current_user)):
     """
     Get all feature flags for the current user
     """
@@ -31,10 +30,7 @@ async def get_feature_flags(
 
 @router.get("/{flag_name}", response_model=FeatureFlagResponse)
 @handle_errors
-async def get_feature_flag(
-    flag_name: str,
-    current_user: User = Depends(get_current_user)
-):
+async def get_feature_flag(flag_name: str, current_user: User = Depends(get_current_user)):
     """
     Check if a specific feature flag is enabled for the current user
     """

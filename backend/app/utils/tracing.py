@@ -1,6 +1,7 @@
 """
 OpenTelemetry tracing helper (no-op if OTEL not configured).
 """
+
 from __future__ import annotations
 
 import os

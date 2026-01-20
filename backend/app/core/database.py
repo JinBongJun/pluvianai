@@ -1,6 +1,7 @@
 """
 Database connection and session management
 """
+
 import json
 import time
 from pathlib import Path
@@ -19,9 +20,7 @@ engine = create_engine(
     pool_timeout=30,  # Timeout for getting connection
     echo=settings.DEBUG,  # Log SQL queries in debug mode
     # Optimize for JSONB queries
-    connect_args={
-        "options": "-c timezone=utc"
-    } if "postgresql" in settings.DATABASE_URL else {}
+    connect_args={"options": "-c timezone=utc"} if "postgresql" in settings.DATABASE_URL else {},
 )
 
 # Create session factory
@@ -54,8 +53,14 @@ def _agent_log(hypothesis_id: str, location: str, message: str, data: dict):
         # Logging must never break the app
         pass
 
+
 # #region agent log
-_agent_log("H1", "database.py:module", "module_imported", {"engine_url_prefix": settings.DATABASE_URL.split('@')[0] if settings.DATABASE_URL else "none"})
+_agent_log(
+    "H1",
+    "database.py:module",
+    "module_imported",
+    {"engine_url_prefix": settings.DATABASE_URL.split("@")[0] if settings.DATABASE_URL else "none"},
+)
 # #endregion
 
 
@@ -63,7 +68,7 @@ def get_db():
     """
     Dependency function to get database session
     Usage: db: Session = Depends(get_db)
-    
+
     Automatically handles:
     - Connection acquisition from pool
     - Transaction rollback on exception

@@ -1,6 +1,7 @@
 """
 Proxy endpoints for forwarding LLM API requests
 """
+
 import httpx
 from fastapi import APIRouter, Request, Response, HTTPException, status, Header, Depends
 from typing import Optional
@@ -48,7 +49,7 @@ async def _proxy_request(
     """
     if provider not in PROVIDER_URLS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported provider: {provider}")
-    
+
     # Check usage limit if project ID is provided
     if x_project_id:
         try:
@@ -65,14 +66,14 @@ async def _proxy_request(
         except (ValueError, TypeError):
             # Invalid project ID, continue without limit check
             pass
-    
+
     # Build target URL
     base_url = PROVIDER_URLS[provider]
     target_url = f"{base_url}/{path}"
-    
+
     # Get request body
     body = await request.body()
-    
+
     # Get API key from headers or settings
     api_key = None
     auth_header = request.headers.get("Authorization")
@@ -86,15 +87,15 @@ async def _proxy_request(
             api_key = settings.ANTHROPIC_API_KEY
         elif provider == "google" and settings.GOOGLE_API_KEY:
             api_key = settings.GOOGLE_API_KEY
-    
+
     if not api_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"API key required for {provider}")
-    
+
     # Prepare headers
     headers = dict(request.headers)
     headers.pop("host", None)
     headers.pop("content-length", None)
-    
+
     # Set provider-specific auth headers
     if provider == "openai":
         headers["Authorization"] = f"Bearer {api_key}"
@@ -103,7 +104,7 @@ async def _proxy_request(
         headers["anthropic-version"] = headers.get("anthropic-version", "2023-06-01")
     elif provider == "google":
         headers["x-goog-api-key"] = api_key
-    
+
     # Forward request with bulkhead + circuit breaker + retry
     async with httpx.AsyncClient(timeout=60.0) as client:
         last_error = None
@@ -221,4 +222,3 @@ async def proxy_delete(
     db: Session = Depends(get_db),
 ) -> Response:
     return await _proxy_request(provider, path, request, x_project_id, x_agent_name, x_chain_id, db)
-
