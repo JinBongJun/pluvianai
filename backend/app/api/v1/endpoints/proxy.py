@@ -10,6 +10,14 @@ from app.core.database import get_db
 from app.models.project import Project
 from app.services.subscription_service import SubscriptionService
 from app.middleware.usage_middleware import check_api_call_limit
+from app.utils.retry import async_retry
+from app.utils.circuit_breaker import CircuitBreaker, CircuitBreakerOpen
+from app.utils.bulkhead import Bulkhead
+from app.core.metrics import (
+    retry_attempts_total,
+    circuit_breaker_open_total,
+    circuit_breaker_state,
+)
 
 router = APIRouter()
 
@@ -19,6 +27,9 @@ PROVIDER_URLS = {
     "anthropic": "https://api.anthropic.com/v1",
     "google": "https://generativelanguage.googleapis.com/v1",
 }
+
+_breaker = CircuitBreaker(failure_threshold=5, recovery_time_seconds=30, exception_types=(httpx.RequestError,))
+_bulkhead = Bulkhead(max_concurrent=20)
 
 
 @router.api_route("/{provider}/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
@@ -101,34 +112,56 @@ async def proxy_request(
     elif provider == "google":
         headers["x-goog-api-key"] = api_key
     
-    # Forward request
-    async with httpx.AsyncClient(timeout=300.0) as client:
-        try:
-            response = await client.request(
-                method=request.method,
-                url=target_url,
-                headers=headers,
-                content=body,
-                params=dict(request.query_params)
-            )
-            
-            # Return response
-            return Response(
-                content=response.content,
-                status_code=response.status_code,
-                headers=dict(response.headers),
-                media_type=response.headers.get("content-type")
-            )
-        except httpx.TimeoutException:
-            raise HTTPException(
-                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                detail="Request timeout"
-            )
-        except httpx.RequestError as e:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Proxy error: {str(e)}"
-            )
+    # Forward request with bulkhead + circuit breaker + retry
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        last_error = None
+        for attempt in range(3):
+            try:
+                async with _bulkhead.acquire():
+                    response = await _breaker.call_async(
+                        client.request,
+                        method=request.method,
+                        url=target_url,
+                        headers=headers,
+                        content=body,
+                        params=dict(request.query_params),
+                    )
+                # Update breaker state metric
+                circuit_breaker_state.labels(service="proxy").set({"closed": 0, "open": 1, "half-open": 2}.get(_breaker.state, 0))
+                return Response(
+                    content=response.content,
+                    status_code=response.status_code,
+                    headers=dict(response.headers),
+                    media_type=response.headers.get("content-type")
+                )
+            except CircuitBreakerOpen:
+                circuit_breaker_open_total.labels(service="proxy").inc()
+                circuit_breaker_state.labels(service="proxy").set(1)
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Upstream temporarily unavailable (circuit open)"
+                )
+            except httpx.TimeoutException as e:
+                last_error = e
+                retry_attempts_total.labels(service="proxy").inc()
+                if attempt == 2:
+                    raise HTTPException(
+                        status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                        detail="Request timeout"
+                    )
+            except httpx.RequestError as e:
+                last_error = e
+                retry_attempts_total.labels(service="proxy").inc()
+                if attempt == 2:
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"Proxy error: {str(e)}"
+                    )
+        # If all retries failed
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Proxy failed after retries" if last_error else "Proxy failed"
+        )
 
 
 

@@ -129,6 +129,82 @@ errors_total = Counter(
     registry=registry
 )
 
+# Resilience Metrics
+retry_attempts_total = Counter(
+    'retry_attempts_total',
+    'Total number of retry attempts',
+    ['service'],
+    registry=registry
+)
+
+circuit_breaker_open_total = Counter(
+    'circuit_breaker_open_total',
+    'Total times circuit breaker opened',
+    ['service'],
+    registry=registry
+)
+
+circuit_breaker_state = Gauge(
+    'circuit_breaker_state',
+    'Circuit breaker state (0=Closed,1=Open,2=Half-Open)',
+    ['service'],
+    registry=registry
+)
+
+db_connection_failures_total = Counter(
+    'db_connection_failures_total',
+    'Total number of database connection failures',
+    registry=registry
+)
+
+cache_connection_failures_total = Counter(
+    'cache_connection_failures_total',
+    'Total number of cache connection failures',
+    registry=registry
+)
+
+# Authentication / Security Metrics
+login_attempts_total = Counter(
+    'login_attempts_total',
+    'Total login attempts',
+    ['outcome', 'reason'],
+    registry=registry
+)
+
+brute_force_blocks_total = Counter(
+    'brute_force_blocks_total',
+    'Total number of brute force blocks',
+    ['reason'],
+    registry=registry
+)
+
+account_lockouts_total = Counter(
+    'account_lockouts_total',
+    'Total number of account lockouts',
+    registry=registry
+)
+
+risk_based_auth_challenges_total = Counter(
+    'risk_based_auth_challenges_total',
+    'Total number of risk-based auth challenges/flags',
+    ['reason'],
+    registry=registry
+)
+
+password_policy_rejections_total = Counter(
+    'password_policy_rejections_total',
+    'Total password policy rejections',
+    ['reason'],
+    registry=registry
+)
+
+login_latency_seconds = Histogram(
+    'login_latency_seconds',
+    'Login endpoint latency in seconds',
+    buckets=[0.1, 0.5, 1.0, 2.5, 5.0, 10.0],
+    registry=registry
+)
+
 # Application Info
 app_info = Info(
     'app_info',

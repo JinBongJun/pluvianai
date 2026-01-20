@@ -2,7 +2,8 @@
 Authentication endpoints
 """
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+import time
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, Field
@@ -19,6 +20,19 @@ from app.core.config import settings
 from app.core.logging_config import logger
 from app.core.decorators import handle_errors
 from app.models.user import User
+from app.models.login_attempt import LoginAttempt
+from app.services.brute_force_protection import brute_force_service
+from app.services.risk_based_auth import risk_based_auth_service
+from app.services.password_policy import password_policy_service
+from app.services.captcha_service import captcha_service
+from app.core.metrics import (
+    login_attempts_total,
+    brute_force_blocks_total,
+    account_lockouts_total,
+    risk_based_auth_challenges_total,
+    password_policy_rejections_total,
+    login_latency_seconds,
+)
 
 router = APIRouter()
 
@@ -58,6 +72,16 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """Register a new user"""
     logger.info(f"User registration attempt: {user_data.email}")
     
+    # Enforce password policy
+    policy_result = password_policy_service.validate(user_data.password)
+    if not policy_result.valid:
+        for reason in policy_result.reasons:
+            password_policy_rejections_total.labels(reason=reason).inc()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"message": "Password policy violation", "reasons": policy_result.reasons},
+        )
+
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
@@ -107,13 +131,76 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None,
 ):
     """Login and get access token"""
+    start_time = time.time()
+    ip = request.client.host if request and request.client else None
+    user_agent = request.headers.get("user-agent") if request else None
+
+    # Brute force pre-check
+    precheck = brute_force_service.check_allowed(form_data.username, ip)
+    if not precheck.allowed:
+        if precheck.require_captcha:
+            captcha_token = request.headers.get("X-Captcha-Token") if request else None
+            captcha_ok = await captcha_service.verify(captcha_token)
+            if captcha_ok:
+                brute_force_service.register_success(form_data.username, ip)
+            else:
+                brute_force_blocks_total.labels(reason=precheck.reason or "rate_limited").inc()
+                login_attempts_total.labels(outcome="blocked", reason="captcha_required").inc()
+                db.add(
+                    LoginAttempt(
+                        email=form_data.username,
+                        ip_address=ip,
+                        user_agent=user_agent,
+                        is_success=False,
+                        failure_reason="captcha_required",
+                    )
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many attempts. Complete CAPTCHA to continue.",
+                )
+        else:
+            brute_force_blocks_total.labels(reason=precheck.reason or "rate_limited").inc()
+            login_attempts_total.labels(outcome="blocked", reason=precheck.reason or "rate_limited").inc()
+            db.add(
+                LoginAttempt(
+                    email=form_data.username,
+                    ip_address=ip,
+                    user_agent=user_agent,
+                    is_success=False,
+                    failure_reason=precheck.reason or "rate_limited",
+                )
+            )
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many attempts. Try again in {precheck.wait_seconds} seconds.",
+            )
+
     # Find user by email (OAuth2PasswordRequestForm uses username field for email)
     user = db.query(User).filter(User.email == form_data.username).first()
     
     if not user or not verify_password(form_data.password, user.hashed_password):
+        result = brute_force_service.register_failure(form_data.username, ip)
+        login_attempts_total.labels(outcome="failure", reason="invalid_credentials").inc()
+        db.add(
+            LoginAttempt(
+                email=form_data.username,
+                ip_address=ip,
+                user_agent=user_agent,
+                is_success=False,
+                failure_reason="invalid_credentials",
+            )
+        )
+        if not result.allowed:
+            brute_force_blocks_total.labels(reason=result.reason or "rate_limited").inc()
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many attempts. Try again in {result.wait_seconds} seconds.",
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -121,11 +208,45 @@ async def login(
         )
     
     if not user.is_active:
+        login_attempts_total.labels(outcome="failure", reason="inactive").inc()
+        db.add(
+            LoginAttempt(
+                user_id=user.id,
+                email=user.email,
+                ip_address=ip,
+                user_agent=user_agent,
+                is_success=False,
+                failure_reason="inactive",
+            )
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive"
         )
     
+    # Success path
+    brute_force_service.register_success(user.email, ip)
+    db.add(
+        LoginAttempt(
+            user_id=user.id,
+            email=user.email,
+            ip_address=ip,
+            user_agent=user_agent,
+            is_success=True,
+        )
+    )
+    login_attempts_total.labels(outcome="success", reason="none").inc()
+
+    # Risk-based assessment (informational)
+    risk = risk_based_auth_service.assess(user.id, ip, user_agent)
+    if risk.require_step_up:
+        for reason in risk.reasons or ["high_risk"]:
+            risk_based_auth_challenges_total.labels(reason=reason).inc()
+        logger.warning(
+            "High risk login detected",
+            extra={"user_id": user.id, "ip": ip, "reasons": risk.reasons},
+        )
+
     # Create tokens
     access_token = create_access_token(
         data={"sub": str(user.id), "email": user.email}
@@ -133,6 +254,9 @@ async def login(
     refresh_token = create_refresh_token(
         data={"sub": str(user.id), "email": user.email}
     )
+
+    duration = time.time() - start_time
+    login_latency_seconds.observe(duration)
     
     return {
         "access_token": access_token,

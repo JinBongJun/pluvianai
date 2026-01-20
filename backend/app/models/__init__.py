@@ -15,6 +15,7 @@ from app.models.activity_log import ActivityLog
 from app.models.webhook import Webhook
 from app.models.notification_settings import NotificationSettings
 from app.models.shadow_comparison import ShadowComparison
+from app.models.login_attempt import LoginAttempt
 
 __all__ = [
     "User",
@@ -31,6 +32,7 @@ __all__ = [
     "Webhook",
     "NotificationSettings",
     "ShadowComparison",
+    "LoginAttempt",
 ]
 
 

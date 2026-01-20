@@ -21,7 +21,8 @@ class AlertService:
         self,
         alert: Alert,
         channels: Optional[List[str]] = None,
-        db: Optional[Session] = None
+        db: Optional[Session] = None,
+        severity: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Send alert through specified channels
@@ -30,13 +31,17 @@ class AlertService:
             alert: Alert object to send
             channels: List of channels to use (slack, discord, email)
             db: Database session (required for email)
+            severity: override severity if provided
         
         Returns:
             Dictionary with send status for each channel
         """
         if channels is None:
             channels = alert.notification_channels or ["email"]
-        
+
+        if severity:
+            alert.severity = severity
+
         results = {}
         
         for channel in channels:

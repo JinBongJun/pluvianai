@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    PASSWORD_POLICY_MIN_LENGTH: int = 12
+    ENABLE_HIBP_CHECK: bool = False  # Optional: set True to enable Have I Been Pwned checks
+    RECAPTCHA_SECRET: Optional[str] = None
+    RECAPTCHA_MIN_SCORE: float = 0.5
     
     # CORS - supports comma-separated list or single URL
     # Use "*" to allow all origins (for development/flexibility)

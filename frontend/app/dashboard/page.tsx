@@ -10,6 +10,8 @@ import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { Search, Plus } from 'lucide-react';
+import { ShortLoading } from '@/components/ui/LoadingStates';
+import Skeleton from '@/components/ui/Skeleton';
 import posthog from 'posthog-js';
 
 export default function DashboardPage() {
@@ -96,8 +98,24 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-500/20 border-t-purple-500"></div>
+        <div className="p-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-white">Projects</h1>
+              <p className="text-slate-400">Monitor and manage your LLM projects</p>
+            </div>
+            <ShortLoading text="Loading projects..." />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, idx) => (
+              <div key={idx} className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+                <Skeleton className="h-5 w-2/3" />
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-5/6" />
+              </div>
+            ))}
+          </div>
         </div>
       </DashboardLayout>
     );

@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import engine, Base, check_database_health
 from app.core.logging_config import logger
 
 # Initialize Sentry before creating the app
@@ -51,12 +51,13 @@ from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.logging_middleware import LoggingMiddleware
 from app.middleware.metrics_middleware import MetricsMiddleware
 from app.core.metrics import get_metrics_response, update_app_info, registry
+from app.services.cache_service import cache_service
 
 # Import all models to ensure they are registered with Base
 from app.models import (
     User, Project, ProjectMember, APIKey, APICall,
     QualityScore, DriftDetection, Alert, Subscription, Usage,
-    NotificationSettings
+    NotificationSettings, LoginAttempt
 )
 
 # Create database tables
@@ -219,7 +220,32 @@ async def root():
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    return {"status": "healthy"}
+    db_ok = check_database_health()
+    cache_ok = cache_service.enabled
+    return {
+        "status": "healthy" if db_ok and cache_ok else "degraded",
+        "database": "connected" if db_ok else "unreachable",
+        "cache": "connected" if cache_ok else "disabled_or_unreachable",
+    }
+
+
+@app.get("/health/live")
+async def health_live():
+    """Liveness probe"""
+    return {"status": "ok"}
+
+
+@app.get("/health/ready")
+async def health_ready():
+    """Readiness probe including dependencies"""
+    db_ok = check_database_health()
+    cache_ok = cache_service.enabled
+    status_code = status.HTTP_200_OK if db_ok else status.HTTP_503_SERVICE_UNAVAILABLE
+    return {
+        "status": "ready" if db_ok else "not_ready",
+        "database": "connected" if db_ok else "unreachable",
+        "cache": "connected" if cache_ok else "disabled_or_unreachable",
+    }, status_code
 
 
 @app.get("/metrics")

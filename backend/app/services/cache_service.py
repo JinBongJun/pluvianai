@@ -37,7 +37,8 @@ class CacheService:
             if value:
                 return json.loads(value)
         except Exception:
-            pass
+            # Graceful degradation: treat as cache miss
+            return None
         return None
     
     def set(
@@ -57,7 +58,8 @@ class CacheService:
                 json.dumps(value, default=str)
             )
         except Exception:
-            pass
+            # Graceful degradation: ignore set errors
+            return
     
     def delete(self, key: str):
         """Delete key from cache"""
@@ -67,7 +69,8 @@ class CacheService:
         try:
             self.redis_client.delete(key)
         except Exception:
-            pass
+            # Graceful degradation: ignore delete errors
+            return
     
     def delete_pattern(self, pattern: str):
         """Delete all keys matching pattern"""
@@ -79,7 +82,8 @@ class CacheService:
             if keys:
                 self.redis_client.delete(*keys)
         except Exception:
-            pass
+            # Graceful degradation: ignore delete errors
+            return
     
     # Cache key generators
     @staticmethod
