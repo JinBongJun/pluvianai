@@ -45,15 +45,17 @@ class RiskBasedAuthService:
         user_id: Optional[int],
         ip: Optional[str],
         user_agent: Optional[str],
+        db: Optional[Session] = None,
     ) -> RiskAssessment:
         if user_id is None:
             return RiskAssessment(risk_score=0, reasons=[], require_step_up=False)
 
-        db: Session = SessionLocal()
+        managed_db = db or SessionLocal()
         try:
-            last_success = self._get_last_success(db, user_id)
+            last_success = self._get_last_success(managed_db, user_id)
         finally:
-            db.close()
+            if db is None:
+                managed_db.close()
 
         reasons: List[str] = []
         risk_score = 0

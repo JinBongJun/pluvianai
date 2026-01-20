@@ -238,7 +238,7 @@ async def login(
     login_attempts_total.labels(outcome="success", reason="none").inc()
 
     # Risk-based assessment (informational)
-    risk = risk_based_auth_service.assess(user.id, ip, user_agent)
+    risk = risk_based_auth_service.assess(user.id, ip, user_agent, db=db)
     if risk.require_step_up:
         for reason in risk.reasons or ["high_risk"]:
             risk_based_auth_challenges_total.labels(reason=reason).inc()

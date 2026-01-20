@@ -3,12 +3,18 @@ Feature flags endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Dict
+from pydantic import BaseModel
 from app.core.security import get_current_user
 from app.models.user import User
 from app.core.feature_flags import feature_flags
 from app.core.decorators import handle_errors
 
 router = APIRouter()
+
+
+class FeatureFlagResponse(BaseModel):
+    flag: str
+    enabled: bool
 
 
 @router.get("", response_model=Dict[str, bool])
@@ -23,7 +29,7 @@ async def get_feature_flags(
     return feature_flags.get_all_flags()
 
 
-@router.get("/{flag_name}", response_model=Dict[str, bool])
+@router.get("/{flag_name}", response_model=FeatureFlagResponse)
 @handle_errors
 async def get_feature_flag(
     flag_name: str,
@@ -33,7 +39,4 @@ async def get_feature_flag(
     Check if a specific feature flag is enabled for the current user
     """
     is_enabled = feature_flags.is_enabled(flag_name, user_id=current_user.id)
-    return {
-        "flag": flag_name,
-        "enabled": is_enabled
-    }
+    return FeatureFlagResponse(flag=flag_name, enabled=is_enabled)

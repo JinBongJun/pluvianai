@@ -1,13 +1,14 @@
 """
 Monitoring endpoints for status and links
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from app.core.config import settings
-from app.core.database import SessionLocal
+from app.core.database import get_db
 from app.models import User, Project
 from typing import Dict, Any
 from sqlalchemy import func
 from datetime import datetime, timedelta
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -37,26 +38,22 @@ async def monitoring_status() -> Dict[str, Any]:
 
 
 @router.get("/metrics")
-async def get_current_metrics() -> Dict[str, Any]:
+async def get_current_metrics(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """Get current metrics summary for widget display"""
-    db = SessionLocal()
-    try:
-        # Get active users count
-        active_users_count = db.query(User).filter(User.is_active == True).count()
-        
-        # Get active projects count
-        active_projects_count = db.query(Project).filter(Project.is_active == True).count()
-        
-        # Note: For real-time request/error/latency metrics, you would query Prometheus
-        # For now, we return basic counts. In production, you'd integrate with Prometheus API
-        
-        return {
-            "total_requests": 0,  # Would be fetched from Prometheus
-            "error_rate": 0.0,   # Would be calculated from Prometheus metrics
-            "avg_latency": 0,    # Would be fetched from Prometheus
-            "active_users": active_users_count,
-            "active_projects": active_projects_count,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-    finally:
-        db.close()
+    # Get active users count
+    active_users_count = db.query(User).filter(User.is_active == True).count()
+
+    # Get active projects count
+    active_projects_count = db.query(Project).filter(Project.is_active == True).count()
+
+    # Note: For real-time request/error/latency metrics, you would query Prometheus
+    # For now, we return basic counts. In production, you'd integrate with Prometheus API
+
+    return {
+        "total_requests": 0,  # Would be fetched from Prometheus
+        "error_rate": 0.0,   # Would be calculated from Prometheus metrics
+        "avg_latency": 0,    # Would be fetched from Prometheus
+        "active_users": active_users_count,
+        "active_projects": active_projects_count,
+        "timestamp": datetime.utcnow().isoformat()
+    }
