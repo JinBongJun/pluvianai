@@ -130,7 +130,7 @@ class WebhookService:
                     try:
                         error_body = response.json()
                         error_msg = error_body.get("message", error_msg)
-                    except:
+                    except Exception:
                         error_msg = response.text or error_msg
 
                     return {"status": "error", "message": error_msg}

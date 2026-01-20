@@ -2,7 +2,6 @@
 Authentication endpoints
 """
 
-from datetime import timedelta
 import time
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
@@ -17,9 +16,7 @@ from app.core.security import (
     decode_token,
     get_current_user,
 )
-from app.core.config import settings
 from app.core.logging_config import logger
-from app.core.decorators import handle_errors
 from app.models.user import User
 from app.models.login_attempt import LoginAttempt
 from app.services.brute_force_protection import brute_force_service
@@ -29,7 +26,6 @@ from app.services.captcha_service import captcha_service
 from app.core.metrics import (
     login_attempts_total,
     brute_force_blocks_total,
-    account_lockouts_total,
     risk_based_auth_challenges_total,
     password_policy_rejections_total,
     login_latency_seconds,

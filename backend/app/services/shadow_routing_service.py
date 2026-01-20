@@ -4,6 +4,7 @@ Shadow Routing Service for comparing production and shadow model responses
 
 import json
 import asyncio
+from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from app.models.api_call import APICall

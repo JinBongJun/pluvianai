@@ -378,9 +378,9 @@ const response = await openai.chat.completions.create({
                 <CheckCircle className="h-6 w-6 text-green-500 mt-1" />
                 <div>
                   <h3 className="font-semibold">Make API Calls</h3>
-                    <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600">
                       Start using your LLM APIs - they&apos;re automatically monitored
-                    </p>
+                  </p>
                 </div>
               </div>
               <div className="flex items-start gap-4">

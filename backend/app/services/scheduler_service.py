@@ -15,6 +15,7 @@ from app.services.cost_analyzer import CostAnalyzer
 from app.services.alert_service import AlertService
 from app.services.webhook_service import webhook_service
 from app.services.health_monitor import health_monitor
+from app.services.infrastructure_cost_monitor import infrastructure_cost_monitor
 from app.core.logging_config import logger
 
 

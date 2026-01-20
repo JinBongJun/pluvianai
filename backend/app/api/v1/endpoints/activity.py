@@ -4,9 +4,9 @@ Activity log endpoints
 
 from typing import List, Optional
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, and_, func
+from sqlalchemy import desc
 from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user

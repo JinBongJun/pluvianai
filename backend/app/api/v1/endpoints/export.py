@@ -2,9 +2,9 @@
 Data export endpoints
 """
 
-from typing import Optional, List
-from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import Optional
+from datetime import datetime
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -13,10 +13,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access
 from app.models.user import User
-from app.models.project import Project
 from app.models.api_call import APICall
 import csv
-import json
 import io
 
 router = APIRouter()
@@ -31,7 +29,7 @@ class ExportRequest(BaseModel):
     date_to: Optional[datetime] = None
     provider: Optional[str] = None
     model: Optional[str] = None
-    status: Optional[str] = None  # 'success', 'error', or None for all
+    call_status: Optional[str] = None  # 'success', 'error', or None for all
 
 
 @router.get("/csv")
@@ -41,13 +39,13 @@ async def export_csv(
     date_to: Optional[str] = Query(None, description="End date (ISO format)"),
     provider: Optional[str] = None,
     model: Optional[str] = None,
-    status: Optional[str] = None,
+    call_status: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Export API calls as CSV"""
     # Verify project access
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Build query
     query = db.query(APICall).filter(APICall.project_id == project_id)
@@ -63,9 +61,9 @@ async def export_csv(
         query = query.filter(APICall.provider == provider)
     if model:
         query = query.filter(APICall.model == model)
-    if status == "success":
+    if call_status == "success":
         query = query.filter(and_(APICall.status_code >= 200, APICall.status_code < 300))
-    elif status == "error":
+    elif call_status == "error":
         query = query.filter(or_(APICall.status_code < 200, APICall.status_code >= 300))
 
     # Get all results
@@ -117,7 +115,10 @@ async def export_csv(
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={
-            "Content-Disposition": f"attachment; filename=api-calls-{project_id}-{datetime.now().strftime('%Y%m%d')}.csv"
+            "Content-Disposition": (
+                f"attachment; filename=api-calls-{project_id}-"
+                f"{datetime.now().strftime('%Y%m%d')}.csv"
+            )
         },
     )
 
@@ -136,7 +137,7 @@ async def export_json(
 ):
     """Export API calls as JSON"""
     # Verify project access
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Build query
     query = db.query(APICall).filter(APICall.project_id == project_id)
@@ -152,9 +153,9 @@ async def export_json(
         query = query.filter(APICall.provider == provider)
     if model:
         query = query.filter(APICall.model == model)
-    if status == "success":
+    if call_status == "success":
         query = query.filter(and_(APICall.status_code >= 200, APICall.status_code < 300))
-    elif status == "error":
+    elif call_status == "error":
         query = query.filter(or_(APICall.status_code < 200, APICall.status_code >= 300))
 
     # Get all results

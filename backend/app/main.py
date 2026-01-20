@@ -6,7 +6,7 @@ import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from sentry_sdk.integrations.httpx import HttpxIntegration
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -51,11 +51,13 @@ from app.middleware.gzip_middleware import GZipMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.logging_middleware import LoggingMiddleware
 from app.middleware.metrics_middleware import MetricsMiddleware
-from app.core.metrics import get_metrics_response, update_app_info, registry
+from app.core.metrics import update_app_info
 from app.services.cache_service import cache_service
 
 # Import all models to ensure they are registered with Base
-from app.models import (
+# Models are imported here to ensure SQLAlchemy Base metadata includes them
+# Individual models are imported where needed
+from app.models import (  # noqa: F401
     User,
     Project,
     ProjectMember,
@@ -153,8 +155,8 @@ async def update_business_metrics_periodically():
                 logger.debug(f"Updated metrics: {user_count} active users, {project_count} active projects")
             finally:
                 db.close()
-        except Exception as e:
-            logger.error(f"Error updating business metrics: {e}", exc_info=True)
+        except Exception:
+            logger.error("Error updating business metrics", exc_info=True)
 
         # Update every 60 seconds
         await asyncio.sleep(60)
