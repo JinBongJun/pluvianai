@@ -590,7 +590,7 @@ export default function ChainDetailPage() {
             isOpen={showOptimizationModal}
             onClose={() => setShowOptimizationModal(false)}
             title="Optimization Suggestions"
-            size="large"
+            size="xl"
           >
             <div className="space-y-4">
               {optimizations.suggestions && optimizations.suggestions.length > 0 ? (
