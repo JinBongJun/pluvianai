@@ -21,75 +21,84 @@ class AgentChainProfiler:
         db: Optional[Session] = None
     ) -> Dict[str, Any]:
         """
-        Profile an agent chain
-        
-        Args:
-            project_id: Project ID
-            chain_id: Optional chain ID to filter by
-            days: Number of days to analyze
-            db: Database session
-        
-        Returns:
-            Dictionary with chain profiling data
+        Profile a single agent chain (API used by tests and dashboard).
+
+        NOTE:
+        - When ``chain_id`` is None, this method aggregates across all chains.
+        - Return shape is intentionally simple and stable for SDK/analytics:
+          {
+            "chain_id": str | None,
+            "total_calls": int,
+            "success_rate": float,   # 0.0–1.0
+            "avg_latency": float,    # ms
+            "agents": [...],
+            ... (additional fields allowed)
+          }
         """
         if not db:
             raise ValueError("Database session required")
-        
+
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
-        
+
         # Build query with optimized loading
-        # Use joinedload to prevent N+1 queries when accessing relationships
         from sqlalchemy.orm import joinedload
-        
+
         query = db.query(APICall).options(
-            joinedload(APICall.quality_scores)  # Eager load quality scores
+            joinedload(APICall.quality_scores)
         ).filter(
             and_(
                 APICall.project_id == project_id,
                 APICall.created_at >= start_date,
                 APICall.created_at <= end_date,
-                APICall.chain_id.isnot(None),  # Only chain calls
+                APICall.chain_id.isnot(None),
             )
         )
-        
+
         if chain_id:
             query = query.filter(APICall.chain_id == chain_id)
-        
-        # Order by created_at for consistent results
-        query = query.order_by(APICall.created_at.desc())
-        
-        api_calls = query.all()
-        
+
+        # Most recent first for deterministic ordering
+        api_calls = query.order_by(APICall.created_at.desc()).all()
+
         if not api_calls:
+            # Keep the contract expected by tests: always expose these keys
             return {
+                "chain_id": chain_id,
+                "total_calls": 0,
+                "success_rate": 0.0,
+                "avg_latency": 0.0,
+                "agents": [],
                 "message": "No chain data available",
-                "chains": [],
             }
-        
-        # Group by chain_id
-        chains: Dict[str, List[APICall]] = defaultdict(list)
-        for call in api_calls:
-            if call.chain_id:
-                chains[call.chain_id].append(call)
-        
-        # Analyze each chain
-        chain_profiles = []
-        for chain_id, calls in chains.items():
-            profile = self._analyze_chain(chain_id, calls, db)
-            chain_profiles.append(profile)
-        
-        # Aggregate statistics
-        total_chains = len(chain_profiles)
-        successful_chains = sum(1 for p in chain_profiles if p["success_rate"] == 100.0)
-        avg_chain_latency = sum(p["total_latency"] for p in chain_profiles) / total_chains if total_chains > 0 else 0.0
-        
+
+        # If a specific chain_id was requested, analyse that chain only.
+        # Otherwise, aggregate all chains into a virtual "combined" chain.
+        if chain_id:
+            calls_for_chain = [c for c in api_calls if c.chain_id == chain_id]
+            profile = self._analyze_chain(chain_id, calls_for_chain, db)
+        else:
+            # Flatten all calls into a single logical chain id of None
+            profile = self._analyze_chain("all", api_calls, db)
+
+        total_calls = profile["total_steps"]
+        # _analyze_chain returns success_rate as 0–100, tests expect 0–1
+        success_rate_fraction = profile["success_rate"] / 100.0 if total_calls > 0 else 0.0
+
         return {
-            "total_chains": total_chains,
-            "successful_chains": successful_chains,
-            "success_rate": (successful_chains / total_chains * 100) if total_chains > 0 else 0.0,
-            "avg_chain_latency_ms": avg_chain_latency,
-            "chains": chain_profiles,
+            "chain_id": chain_id,
+            "total_calls": total_calls,
+            "success_rate": success_rate_fraction,
+            "avg_latency": profile["avg_latency_per_step"],
+            "agents": profile["agents"],
+            # Expose richer data for dashboards without breaking tests
+            "total_latency": profile["total_latency"],
+            "failure_count": profile["failure_count"],
+            "bottleneck_agent": profile["bottleneck_agent"],
+            "bottleneck_latency_ms": profile["bottleneck_latency_ms"],
+            "bottleneck_severity": profile["bottleneck_severity"],
+            "first_call_at": profile["first_call_at"],
+            "last_call_at": profile["last_call_at"],
         }
     
     def _analyze_chain(

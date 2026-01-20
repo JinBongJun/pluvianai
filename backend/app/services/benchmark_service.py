@@ -159,6 +159,8 @@ class BenchmarkService:
                 "avg_quality_score": avg_quality,
                 "total_cost": stats["total_cost"],
                 "cost_per_call": cost_per_call,
+                # Keep both a generic field and an explicit *_ms field for clarity
+                "avg_latency": avg_latency,
                 "avg_latency_ms": avg_latency,
                 "success_rate": success_rate,
                 "recommendation_score": recommendation_score,
