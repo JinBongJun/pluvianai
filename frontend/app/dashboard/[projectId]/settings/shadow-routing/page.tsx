@@ -357,7 +357,7 @@ export default function ShadowRoutingPage() {
           isOpen={showApplyModal}
           onClose={() => setShowApplyModal(false)}
           title="Apply Shadow Routing"
-          size="medium"
+          size="md"
         >
           <div className="space-y-4">
             <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
