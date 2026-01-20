@@ -152,49 +152,71 @@ async def update_business_metrics_periodically():
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database connection on startup"""
+    """Initialize application on startup (tolerant to missing DB in non-prod/CI)."""
+    from sqlalchemy.exc import OperationalError
+
     logger.info("Starting AgentGuard API...")
     logger.info(f"Environment: {'DEBUG' if settings.DEBUG else 'PRODUCTION'}")
-    
+
     # Update app info metrics
     update_app_info(
         version=settings.APP_VERSION,
-        environment=settings.ENVIRONMENT if hasattr(settings, 'ENVIRONMENT') else ('development' if settings.DEBUG else 'production')
+        environment=settings.ENVIRONMENT
+        if hasattr(settings, "ENVIRONMENT")
+        else ("development" if settings.DEBUG else "production"),
     )
     logger.info("App info metrics updated")
-    
-    # Create database tables (for development)
-    # In production, use Alembic migrations instead
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database tables initialized")
-    
-    # Safe migration: Add shadow_routing_config column if it doesn't exist
-    # This handles the case where the column was added to the model but not migrated
+
+    db_available = False
     try:
-        from sqlalchemy import text, inspect
-        inspector = inspect(engine)
-        columns = [col['name'] for col in inspector.get_columns('projects')]
-        
-        if 'shadow_routing_config' not in columns:
-            logger.info("Adding shadow_routing_config column to projects table...")
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE projects ADD COLUMN shadow_routing_config JSONB"))
-                conn.commit()
-            logger.info("Migration: shadow_routing_config column added")
+        # Create database tables (for development)
+        # In production, use Alembic migrations instead
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables initialized")
+        db_available = True
+
+        # Safe migration: Add shadow_routing_config column if it doesn't exist
+        # This handles the case where the column was added to the model but not migrated
+        try:
+            from sqlalchemy import inspect, text
+
+            inspector = inspect(engine)
+            columns = [col["name"] for col in inspector.get_columns("projects")]
+
+            if "shadow_routing_config" not in columns:
+                logger.info("Adding shadow_routing_config column to projects table...")
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE projects ADD COLUMN shadow_routing_config JSONB"))
+                    conn.commit()
+                logger.info("Migration: shadow_routing_config column added")
+        except Exception as e:
+            # Column might already exist, which is fine
+            if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                logger.warning(f"Migration check failed (non-critical): {str(e)}")
+    except OperationalError as e:
+        # Database is not reachable (e.g., in CI OpenAPI job) - degrade gracefully
+        logger.warning(
+            "Database not reachable on startup; skipping table initialization and migrations. "
+            "App will start in degraded mode.",
+            exc_info=True,
+        )
     except Exception as e:
-        # Column might already exist, which is fine
-        if 'already exists' not in str(e).lower() and 'duplicate' not in str(e).lower():
-            logger.warning(f"Migration check failed (non-critical): {str(e)}")
-    
-    # Start background scheduler
-    from app.services.scheduler_service import scheduler_service
-    scheduler_service.start()
-    logger.info("Background scheduler started")
-    
-    # Start periodic metrics update task
-    import asyncio
-    asyncio.create_task(update_business_metrics_periodically())
-    logger.info("Business metrics update task started")
+        logger.error(f"Unexpected error during startup DB initialization: {e}", exc_info=True)
+
+    # Start background scheduler only if DB is available
+    if db_available:
+        from app.services.scheduler_service import scheduler_service
+
+        scheduler_service.start()
+        logger.info("Background scheduler started")
+
+        # Start periodic metrics update task
+        import asyncio
+
+        asyncio.create_task(update_business_metrics_periodically())
+        logger.info("Business metrics update task started")
+    else:
+        logger.warning("Skipping scheduler startup because database is unavailable.")
 
 
 @app.on_event("shutdown")
