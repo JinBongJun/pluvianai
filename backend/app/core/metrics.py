@@ -3,9 +3,8 @@ Prometheus metrics for monitoring
 """
 
 from prometheus_client import Counter, Histogram, Gauge, Info, generate_latest, CONTENT_TYPE_LATEST
-from prometheus_client import CollectorRegistry, REGISTRY
+from prometheus_client import CollectorRegistry
 from fastapi import Response
-from typing import Optional
 import time
 
 # Create a custom registry to avoid conflicts

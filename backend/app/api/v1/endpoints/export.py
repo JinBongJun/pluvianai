@@ -129,7 +129,7 @@ async def export_json(
     date_to: Optional[str] = Query(None, description="End date (ISO format)"),
     provider: Optional[str] = None,
     model: Optional[str] = None,
-    status: Optional[str] = None,
+    call_status: Optional[str] = None,
     include_data: bool = Query(False, description="Include full request/response data"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

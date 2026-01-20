@@ -13,10 +13,8 @@ from app.core.security import get_current_user
 from app.core.permissions import check_project_access
 from app.core.decorators import handle_errors
 from app.models.user import User
-from app.models.project import Project
 from app.models.alert import Alert
 from app.services.alert_service import AlertService
-from app.services.subscription_service import SubscriptionService
 
 router = APIRouter()
 alert_service = AlertService()

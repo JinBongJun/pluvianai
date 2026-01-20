@@ -10,10 +10,8 @@ from app.core.security import get_current_user
 from app.core.permissions import check_project_access
 from app.core.decorators import handle_errors
 from app.models.user import User
-from app.models.project import Project
 from app.services.agent_chain_profiler import AgentChainProfiler
 from app.services.agent_chain_optimizer import AgentChainOptimizer
-from app.services.subscription_service import SubscriptionService
 from app.services.cache_service import cache_service
 
 router = APIRouter()
@@ -33,7 +31,7 @@ async def profile_chain(
 ):
     """Profile agent chains"""
     # Verify project access (any member can view agent chains)
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Check cache first
     cache_key = f"chain_profile:{project_id}:{chain_id or 'all'}:{days}"
@@ -69,7 +67,7 @@ async def get_agent_statistics(
 ):
     """Get statistics for all agents"""
     # Verify project access (any member can view agent chains)
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Check cache first
     cache_key = f"agent_stats:{project_id}:{days}"
@@ -112,7 +110,7 @@ async def get_optimizations(
 ):
     """Get optimization suggestions for a chain"""
     # Verify project access
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Check cache first
     cache_key = f"chain_optimizations:{project_id}:{chain_id}"

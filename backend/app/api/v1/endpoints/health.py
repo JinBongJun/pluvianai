@@ -5,7 +5,7 @@ Note: This module is imported as part of application startup, so it must be
 robust even when optional dependencies (like ``psutil``) are missing.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text

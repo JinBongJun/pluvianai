@@ -6,12 +6,11 @@ Admin endpoints for database initialization
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from app.core.database import get_db, engine, Base
+from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.decorators import handle_errors
 from app.core.logging_config import logger
 from app.models.user import User
-from app.models.project import Project
 from app.models.api_call import APICall
 from app.models.quality_score import QualityScore
 from app.models.drift_detection import DriftDetection
@@ -66,7 +65,7 @@ async def generate_sample_data(
     from app.core.permissions import check_project_access
 
     # Verify project access
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Generate sample API calls with various scenarios
     providers = ["openai", "anthropic", "google"]
