@@ -521,7 +521,6 @@ export default function ChainDetailPage() {
                     </div>
                   </div>
                 ))}
-              </div>
             </div>
           </div>
         )}
