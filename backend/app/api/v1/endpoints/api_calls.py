@@ -5,7 +5,7 @@ API Call endpoints with caching optimization
 from typing import List, Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from pydantic import BaseModel
 from app.core.database import get_db
@@ -15,7 +15,6 @@ from app.core.decorators import handle_errors
 from app.services.data_normalizer import DataNormalizer
 from app.services.background_tasks import background_task_service
 from app.models.user import User
-from app.models.project import Project
 from app.models.api_call import APICall
 from app.services.cache_service import cache_service
 from app.utils.compression import decompress_json
@@ -64,7 +63,7 @@ async def list_api_calls(
 ):
     """List API calls for a project with caching"""
     # Verify project access (any member can view)
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Generate cache key
     cache_key = cache_service.api_calls_key(project_id, limit)
@@ -155,7 +154,7 @@ async def get_api_call_stats(
 ):
     """Get API call statistics including success rate for a project"""
     # Verify project access (any member can view)
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Calculate date range
     period_end = datetime.utcnow()
@@ -230,7 +229,7 @@ async def create_api_call(
     - 자동 데이터 정규화
     """
     # Verify project access
-    project = check_project_access(api_call_data.project_id, user, db)
+    check_project_access(api_call_data.project_id, user, db)
 
     # Normalize data (SDK는 URL이 없으므로 빈 문자열 전달)
     normalizer = DataNormalizer()

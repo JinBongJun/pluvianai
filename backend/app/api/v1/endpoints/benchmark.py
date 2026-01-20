@@ -3,15 +3,13 @@ Benchmark endpoints
 """
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access
-from app.core.decorators import handle_errors
 from app.models.user import User
-from app.models.project import Project
 from app.services.benchmark_service import BenchmarkService
 
 router = APIRouter()
@@ -51,7 +49,7 @@ async def compare_models(
 ):
     """Compare models across multiple dimensions"""
     # Verify project access (any member can view benchmarks)
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Compare models (subscription check removed - available to all users)
     comparisons = benchmark_service.compare_models(project_id=project_id, days=days, db=db)
@@ -73,7 +71,7 @@ async def get_recommendations(
 ):
     """Get model recommendations based on current usage"""
     # Verify project access (any member can view benchmarks)
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Get recommendations
     recommendations = benchmark_service.get_recommendations(project_id=project_id, days=days, db=db)

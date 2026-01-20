@@ -12,7 +12,6 @@ from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole
 from app.core.decorators import handle_errors
 from app.models.user import User
-from app.models.project import Project
 from app.services.cost_analyzer import CostAnalyzer
 from app.services.cost_optimizer import CostOptimizer
 
@@ -57,7 +56,7 @@ async def get_cost_analysis(
 ):
     """Get cost analysis for a project"""
     # Verify project access (any member can view cost)
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Calculate date range
     end_date = datetime.utcnow()
@@ -98,7 +97,7 @@ async def detect_cost_anomalies(
     from app.services.webhook_service import webhook_service
 
     # Verify project access (any member can view cost)
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Detect anomalies
     alerts = cost_analyzer.detect_cost_anomalies(project_id=project_id, db=db)
@@ -137,7 +136,7 @@ async def compare_models(
 ):
     """Compare costs across different models"""
     # Verify project access (any member can view cost)
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Compare models
     comparisons = cost_analyzer.compare_models(project_id=project_id, days=days, db=db)
@@ -162,7 +161,7 @@ async def get_cost_optimizations(
 ):
     """Get cost optimization suggestions"""
     # Verify project access
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Get optimization suggestions
     suggestions = cost_optimizer.suggest_optimizations(project_id=project_id, days=days, db=db)
@@ -180,7 +179,7 @@ async def apply_cost_optimization(
 ):
     """Apply a cost optimization suggestion (requires user confirmation)"""
     # Verify project access (owner/admin only)
-    project = check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
+    check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
 
     # Check user confirmation
     if not request.user_confirmation:
@@ -209,7 +208,7 @@ async def get_cost_predictions(
 ):
     """Get cost predictions for a project"""
     # Verify project access
-    project = check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
     # Get predictions
     predictions = cost_analyzer.predict_future_costs(
