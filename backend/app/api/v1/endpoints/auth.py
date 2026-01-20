@@ -1,6 +1,7 @@
 """
 Authentication endpoints
 """
+
 from datetime import timedelta
 import time
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -39,6 +40,7 @@ router = APIRouter()
 
 class UserCreate(BaseModel):
     """User registration schema"""
+
     email: EmailStr = Field(..., description="User email address")
     password: str = Field(..., min_length=8, max_length=72, description="Password (8-72 characters)")
     full_name: str | None = Field(None, max_length=255, description="Full name")
@@ -46,17 +48,19 @@ class UserCreate(BaseModel):
 
 class UserResponse(BaseModel):
     """User response schema"""
+
     id: int
     email: str
     full_name: str | None
     is_active: bool
-    
+
     class Config:
         from_attributes = True
 
 
 class TokenResponse(BaseModel):
     """Token response schema"""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -64,6 +68,7 @@ class TokenResponse(BaseModel):
 
 class TokenRefresh(BaseModel):
     """Token refresh schema"""
+
     refresh_token: str
 
 
@@ -71,7 +76,7 @@ class TokenRefresh(BaseModel):
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """Register a new user"""
     logger.info(f"User registration attempt: {user_data.email}")
-    
+
     # Enforce password policy
     policy_result = password_policy_service.validate(user_data.password)
     if not policy_result.valid:
@@ -86,40 +91,32 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         logger.warning(f"Registration failed: Email already exists - {user_data.email}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+
     # Create new user
     hashed_password = get_password_hash(user_data.password)
-    user = User(
-        email=user_data.email,
-        hashed_password=hashed_password,
-        full_name=user_data.full_name,
-        is_active=True
-    )
+    user = User(email=user_data.email, hashed_password=hashed_password, full_name=user_data.full_name, is_active=True)
     db.add(user)
     db.flush()  # Flush to get user.id
-    
+
     # Create free plan subscription for new user
     from app.models.subscription import Subscription
     from datetime import datetime, timedelta
-    
+
     now = datetime.utcnow()
     period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     if now.month == 12:
         period_end = period_start.replace(year=now.year + 1, month=1)
     else:
         period_end = period_start.replace(month=now.month + 1)
-    
+
     subscription = Subscription(
         user_id=user.id,
         plan_type="free",
         status="active",
         current_period_start=period_start,
         current_period_end=period_end,
-        cancel_at_period_end="false"
+        cancel_at_period_end="false",
     )
     db.add(subscription)
     db.commit()
@@ -182,7 +179,7 @@ async def login(
 
     # Find user by email (OAuth2PasswordRequestForm uses username field for email)
     user = db.query(User).filter(User.email == form_data.username).first()
-    
+
     if not user or not verify_password(form_data.password, user.hashed_password):
         result = brute_force_service.register_failure(form_data.username, ip)
         login_attempts_total.labels(outcome="failure", reason="invalid_credentials").inc()
@@ -206,7 +203,7 @@ async def login(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     if not user.is_active:
         login_attempts_total.labels(outcome="failure", reason="inactive").inc()
         db.add(
@@ -219,11 +216,8 @@ async def login(
                 failure_reason="inactive",
             )
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive")
+
     # Success path
     brute_force_service.register_success(user.email, ip)
     db.add(
@@ -248,62 +242,37 @@ async def login(
         )
 
     # Create tokens
-    access_token = create_access_token(
-        data={"sub": str(user.id), "email": user.email}
-    )
-    refresh_token = create_refresh_token(
-        data={"sub": str(user.id), "email": user.email}
-    )
+    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
+    refresh_token = create_refresh_token(data={"sub": str(user.id), "email": user.email})
 
     duration = time.time() - start_time
     login_latency_seconds.observe(duration)
-    
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
+
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(token_data: TokenRefresh, db: Session = Depends(get_db)):
     """Refresh access token using refresh token"""
     payload = decode_token(token_data.refresh_token)
-    
+
     if payload is None or payload.get("type") != "refresh":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
     user_id = payload.get("sub")
     user = db.query(User).filter(User.id == int(user_id)).first()
-    
+
     if not user or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+
     # Create new tokens
-    access_token = create_access_token(
-        data={"sub": str(user.id), "email": user.email}
-    )
-    refresh_token = create_refresh_token(
-        data={"sub": str(user.id), "email": user.email}
-    )
-    
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
+    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
+    refresh_token = create_refresh_token(data={"sub": str(user.id), "email": user.email})
+
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information"""
     return current_user
-
-
-

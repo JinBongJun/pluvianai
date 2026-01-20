@@ -1,6 +1,7 @@
 """
 Benchmark endpoints
 """
+
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ benchmark_service = BenchmarkService()
 
 class ModelComparisonResponse(BaseModel):
     """Model comparison response schema"""
+
     model: str
     provider: str
     model_name: str
@@ -35,6 +37,7 @@ class ModelComparisonResponse(BaseModel):
 
 class RecommendationResponse(BaseModel):
     """Recommendation response schema"""
+
     current_primary_model: str
     recommendations: List[dict]
 
@@ -44,24 +47,20 @@ async def compare_models(
     project_id: int = Query(..., description="Project ID"),
     days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Compare models across multiple dimensions"""
     # Verify project access (any member can view benchmarks)
     project = check_project_access(project_id, current_user, db)
-    
+
     # Compare models (subscription check removed - available to all users)
-    comparisons = benchmark_service.compare_models(
-        project_id=project_id,
-        days=days,
-        db=db
-    )
-    
+    comparisons = benchmark_service.compare_models(project_id=project_id, days=days, db=db)
+
     # Ensure all required fields are present
     for comp in comparisons:
         if "recommendation" not in comp:
             comp["recommendation"] = None
-    
+
     return comparisons
 
 
@@ -70,20 +69,13 @@ async def get_recommendations(
     project_id: int = Query(..., description="Project ID"),
     days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get model recommendations based on current usage"""
     # Verify project access (any member can view benchmarks)
     project = check_project_access(project_id, current_user, db)
-    
+
     # Get recommendations
-    recommendations = benchmark_service.get_recommendations(
-        project_id=project_id,
-        days=days,
-        db=db
-    )
-    
+    recommendations = benchmark_service.get_recommendations(project_id=project_id, days=days, db=db)
+
     return recommendations
-
-
-
