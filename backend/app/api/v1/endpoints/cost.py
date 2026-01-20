@@ -8,15 +8,17 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.core.permissions import check_project_access
+from app.core.permissions import check_project_access, ProjectRole
 from app.core.decorators import handle_errors
 from app.models.user import User
 from app.models.project import Project
 from app.services.cost_analyzer import CostAnalyzer
+from app.services.cost_optimizer import CostOptimizer
 
 router = APIRouter()
 
 cost_analyzer = CostAnalyzer()
+cost_optimizer = CostOptimizer()
 
 
 class CostAnalysisResponse(BaseModel):
@@ -147,4 +149,86 @@ async def compare_models(
     return comparisons
 
 
+class ApplyOptimizationRequest(BaseModel):
+    """Request model for applying cost optimization"""
+    optimization_id: str
+    user_confirmation: bool = True
+
+
+@router.get("/optimizations")
+@handle_errors
+async def get_cost_optimizations(
+    project_id: int = Query(..., description="Project ID"),
+    days: int = Query(30, ge=7, le=90, description="Number of days to analyze"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get cost optimization suggestions"""
+    # Verify project access
+    project = check_project_access(project_id, current_user, db)
+    
+    # Get optimization suggestions
+    suggestions = cost_optimizer.suggest_optimizations(
+        project_id=project_id,
+        days=days,
+        db=db
+    )
+    
+    return suggestions
+
+
+@router.post("/optimizations/apply")
+@handle_errors
+async def apply_cost_optimization(
+    project_id: int = Query(..., description="Project ID"),
+    request: ApplyOptimizationRequest = ...,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Apply a cost optimization suggestion (requires user confirmation)"""
+    # Verify project access (owner/admin only)
+    project = check_project_access(
+        project_id, current_user, db,
+        required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN]
+    )
+    
+    # Check user confirmation
+    if not request.user_confirmation:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User confirmation is required to apply optimizations"
+        )
+    
+    # For now, return a placeholder response
+    # Actual implementation would apply the optimization based on optimization_id
+    return {
+        "message": "Cost optimization application is not yet fully implemented",
+        "optimization_id": request.optimization_id,
+        "status": "pending",
+        "note": "This endpoint is a placeholder. Full implementation requires additional work to track and apply optimizations."
+    }
+
+
+@router.get("/predictions")
+@handle_errors
+async def get_cost_predictions(
+    project_id: int = Query(..., description="Project ID"),
+    days: int = Query(30, ge=7, le=90, description="Number of days of historical data"),
+    prediction_days: int = Query(30, ge=7, le=90, description="Number of days to predict ahead"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get cost predictions for a project"""
+    # Verify project access
+    project = check_project_access(project_id, current_user, db)
+    
+    # Get predictions
+    predictions = cost_analyzer.predict_future_costs(
+        project_id=project_id,
+        days=days,
+        prediction_days=prediction_days,
+        db=db
+    )
+    
+    return predictions
 

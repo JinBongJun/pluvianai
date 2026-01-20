@@ -752,3 +752,89 @@ class CostAnalyzer:
             "risk_factors": risk_factors,
             "recommendation": "recommended" if estimated_monthly_savings > 0 and quality_change >= -5 and latency_change <= 20 else "not_recommended",
         }
+    
+    def predict_future_costs(
+        self,
+        project_id: int,
+        days: int = 30,
+        prediction_days: int = 30,
+        db: Optional[Session] = None
+    ) -> Dict[str, Any]:
+        """
+        향후 비용 예측
+        
+        Args:
+            project_id: Project ID
+            days: Number of days of historical data to analyze
+            prediction_days: Number of days to predict ahead (7, 30, 90)
+            db: Database session
+        
+        Returns:
+            Dictionary with cost predictions
+        """
+        if not db:
+            raise ValueError("Database session required")
+        
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+        
+        # Get historical cost data
+        historical_analysis = self.analyze_project_costs(
+            project_id,
+            start_date=start_date,
+            end_date=end_date,
+            db=db
+        )
+        
+        # Calculate daily costs
+        daily_costs = historical_analysis.get("by_day", [])
+        
+        if not daily_costs:
+            return {
+                "predictions": [],
+                "trend": "insufficient_data",
+                "message": "Insufficient historical data for prediction",
+            }
+        
+        # Calculate trend
+        if len(daily_costs) >= 7:
+            recent_avg = sum(d["cost"] for d in daily_costs[-7:]) / 7
+            older_avg = sum(d["cost"] for d in daily_costs[:-7]) / (len(daily_costs) - 7) if len(daily_costs) > 7 else recent_avg
+            trend = ((recent_avg - older_avg) / older_avg * 100) if older_avg > 0 else 0
+        else:
+            trend = 0
+            recent_avg = historical_analysis.get("average_daily_cost", 0)
+        
+        # Predict future costs
+        predictions = []
+        for days_ahead in [7, 30, 90]:
+            if days_ahead <= prediction_days:
+                # Simple linear prediction based on trend
+                predicted_daily_cost = recent_avg * (1 + trend / 100)
+                predicted_total = predicted_daily_cost * days_ahead
+                
+                # Calculate confidence based on data points
+                confidence = min(0.95, 0.5 + (len(daily_costs) / 100))
+                
+                predictions.append({
+                    "days_ahead": days_ahead,
+                    "predicted_cost": predicted_total,
+                    "predicted_daily_avg": predicted_daily_cost,
+                    "confidence": confidence,
+                    "trend_percentage": trend,
+                })
+        
+        # Check for cost spike prediction
+        spike_predicted = trend > 50  # If trend is > 50% increase
+        budget_warning = False
+        # In a real implementation, would compare against set budget
+        
+        return {
+            "predictions": predictions,
+            "trend": "increasing" if trend > 10 else "decreasing" if trend < -10 else "stable",
+            "trend_percentage": trend,
+            "current_daily_avg": recent_avg,
+            "spike_predicted": spike_predicted,
+            "budget_warning": budget_warning,
+            "historical_data_days": len(daily_costs),
+        }

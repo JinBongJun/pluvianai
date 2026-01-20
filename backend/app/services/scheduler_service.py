@@ -13,6 +13,7 @@ from app.services.drift_engine import DriftEngine
 from app.services.cost_analyzer import CostAnalyzer
 from app.services.alert_service import AlertService
 from app.services.webhook_service import webhook_service
+from app.services.health_monitor import health_monitor
 from app.core.logging_config import logger
 
 
@@ -45,11 +46,31 @@ class SchedulerService:
             replace_existing=True
         )
         
+        # Schedule health check: Run hourly
+        self.scheduler.add_job(
+            self.run_health_check,
+            trigger=CronTrigger(minute=0),  # Every hour at :00
+            id="health_check_hourly",
+            name="Hourly Health Check",
+            replace_existing=True
+        )
+        
+        # Schedule infrastructure cost check: Run daily at 9 AM UTC
+        self.scheduler.add_job(
+            self.run_infrastructure_cost_check,
+            trigger=CronTrigger(hour=9, minute=0),  # 9 AM UTC daily
+            id="infrastructure_cost_check_daily",
+            name="Daily Infrastructure Cost Check",
+            replace_existing=True
+        )
+        
         self.scheduler.start()
         logger.info("Background scheduler started")
         logger.info("Scheduled tasks:")
         logger.info("  - Drift Detection: Daily at 2:00 AM UTC")
         logger.info("  - Cost Anomaly Detection: Daily at 3:00 AM UTC")
+        logger.info("  - Health Check: Hourly")
+        logger.info("  - Infrastructure Cost Check: Daily at 9:00 AM UTC")
     
     def shutdown(self):
         """Shutdown the scheduler"""
@@ -156,6 +177,56 @@ class SchedulerService:
             
         except Exception as e:
             logger.error(f"Error in scheduled cost anomaly detection: {str(e)}")
+        finally:
+            db.close()
+    
+    async def run_health_check(self):
+        """Run health check and send alerts if needed"""
+        logger.info("Starting scheduled health check...")
+        db: Session = SessionLocal()
+        try:
+            # Check system health
+            health_result = await health_monitor.monitor_health_and_alert(db=db)
+            
+            if health_result.get("should_alert"):
+                logger.warning(f"Health check found issues: {health_result.get('alert_message')}")
+            else:
+                logger.info("Health check completed: System healthy")
+        except Exception as e:
+            logger.error(f"Error in scheduled health check: {str(e)}")
+        finally:
+            db.close()
+    
+    async def run_infrastructure_cost_check(self):
+        """Run infrastructure cost check and send alerts if budget exceeded"""
+        logger.info("Starting scheduled infrastructure cost check...")
+        db: Session = SessionLocal()
+        try:
+            from app.models.project import Project
+            
+            # Get all active projects
+            projects = db.query(Project).filter(Project.is_active == True).all()
+            logger.info(f"Found {len(projects)} active projects")
+            
+            for project in projects:
+                try:
+                    # Check infrastructure costs (budget limit would come from project settings)
+                    # For now, use None as budget limit
+                    cost_result = await infrastructure_cost_monitor.check_and_alert(
+                        project_id=project.id,
+                        budget_limit=None,  # Would get from project settings
+                        db=db
+                    )
+                    
+                    if cost_result.get("budget_warning") or cost_result.get("budget_exceeded"):
+                        logger.warning(f"Project {project.id}: Budget alert sent")
+                except Exception as e:
+                    logger.error(f"Error checking costs for project {project.id}: {str(e)}")
+                    continue
+            
+            logger.info("Scheduled infrastructure cost check completed")
+        except Exception as e:
+            logger.error(f"Error in scheduled infrastructure cost check: {str(e)}")
         finally:
             db.close()
 

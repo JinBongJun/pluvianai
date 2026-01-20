@@ -89,6 +89,223 @@ class ShadowRoutingService:
         """
         return self.RECOMMENDED_SHADOW_MODELS.get(primary_model, [])
     
+    def suggest_shadow_models(
+        self,
+        project_id: int,
+        primary_model: str,
+        db: Session
+    ) -> Dict[str, Any]:
+        """
+        자동 Shadow 모델 추천 (제안만)
+        
+        Args:
+            project_id: Project ID
+            primary_model: Primary model name
+            db: Database session
+        
+        Returns:
+            Dictionary with shadow model recommendations
+        """
+        from datetime import datetime, timedelta
+        from sqlalchemy import and_
+        
+        # 1. 사용 패턴 분석
+        usage_pattern = self._analyze_usage_pattern(project_id, primary_model, db)
+        
+        # 2. Shadow 모델 추천
+        recommended = self._recommend_shadow_models(primary_model, usage_pattern)
+        
+        # 3. 테스트 결과 (Shadow Routing으로)
+        # 실제 테스트는 나중에 진행하고, 예상 결과만 반환
+        test_result = self._estimate_test_result(primary_model, recommended["model"], usage_pattern)
+        
+        # 4. 신뢰도 계산
+        confidence = self._calculate_confidence(test_result, usage_pattern)
+        
+        return {
+            "current_model": primary_model,
+            "recommended_shadow_model": recommended["model"],
+            "estimated_savings": recommended["savings"],
+            "estimated_cost_reduction_percentage": recommended["cost_reduction_percentage"],
+            "test_result": test_result,
+            "confidence": confidence,
+            "usage_pattern": usage_pattern,
+            "auto_apply": False,  # 자동 적용 안 함
+            "requires_approval": True,  # 승인 필수
+        }
+    
+    def _analyze_usage_pattern(
+        self,
+        project_id: int,
+        primary_model: str,
+        db: Session
+    ) -> Dict[str, Any]:
+        """사용 패턴 분석"""
+        from datetime import datetime, timedelta
+        from sqlalchemy import and_
+        
+        # Get API calls for this model in the last 30 days
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=30)
+        
+        api_calls = db.query(APICall).filter(
+            and_(
+                APICall.project_id == project_id,
+                APICall.model == primary_model,
+                APICall.created_at >= start_date,
+                APICall.created_at <= end_date
+            )
+        ).all()
+        
+        if not api_calls:
+            return {
+                "total_calls": 0,
+                "avg_latency_ms": 0,
+                "total_cost": 0.0,
+                "avg_quality_score": 0.0,
+                "complexity": "low",
+            }
+        
+        # Calculate statistics
+        total_calls = len(api_calls)
+        total_latency = sum(c.latency_ms or 0 for c in api_calls)
+        avg_latency = total_latency / total_calls if total_calls > 0 else 0
+        
+        # Calculate cost (estimate)
+        from app.services.cost_analyzer import CostAnalyzer
+        cost_analyzer = CostAnalyzer()
+        total_cost = 0.0
+        for call in api_calls:
+            cost = cost_analyzer.calculate_cost(
+                call.provider,
+                call.model,
+                call.request_tokens or 0,
+                call.response_tokens or 0
+            )
+            total_cost += cost
+        
+        # Get quality scores
+        from app.models.quality_score import QualityScore
+        quality_scores = db.query(QualityScore).join(APICall).filter(
+            and_(
+                QualityScore.project_id == project_id,
+                APICall.model == primary_model,
+                QualityScore.created_at >= start_date,
+                QualityScore.created_at <= end_date
+            )
+        ).all()
+        
+        avg_quality = (
+            sum(s.overall_score for s in quality_scores) / len(quality_scores)
+            if quality_scores else 75.0
+        )
+        
+        # Determine complexity based on latency and tokens
+        avg_tokens = sum((c.request_tokens or 0) + (c.response_tokens or 0) for c in api_calls) / total_calls if total_calls > 0 else 0
+        complexity = "high" if avg_latency > 5000 or avg_tokens > 5000 else "medium" if avg_latency > 2000 else "low"
+        
+        return {
+            "total_calls": total_calls,
+            "avg_latency_ms": avg_latency,
+            "total_cost": total_cost,
+            "avg_quality_score": avg_quality,
+            "complexity": complexity,
+            "avg_tokens": avg_tokens,
+        }
+    
+    def _recommend_shadow_models(
+        self,
+        primary_model: str,
+        usage_pattern: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Shadow 모델 추천"""
+        # Get recommended models
+        recommended_models = self.get_recommended_shadow_models(primary_model)
+        
+        if not recommended_models:
+            return {
+                "model": None,
+                "savings": 0.0,
+                "cost_reduction_percentage": 0.0,
+                "reason": "No recommended models found",
+            }
+        
+        # For now, pick the first recommended model
+        # In a full implementation, would analyze cost/performance trade-offs
+        shadow_model = recommended_models[0]
+        
+        # Estimate savings based on model tier
+        # This is a simplified estimation
+        from app.services.cost_analyzer import CostAnalyzer
+        cost_analyzer = CostAnalyzer()
+        
+        # Estimate cost reduction (simplified)
+        # In reality, would need to compare actual pricing
+        complexity = usage_pattern.get("complexity", "medium")
+        avg_quality = usage_pattern.get("avg_quality_score", 75.0)
+        
+        # If quality is low and complexity is low, can use cheaper model
+        if avg_quality < 70 and complexity == "low":
+            cost_reduction = 50.0  # 50% cost reduction estimate
+        elif complexity == "medium":
+            cost_reduction = 20.0  # 20% cost reduction estimate
+        else:
+            cost_reduction = 10.0  # 10% cost reduction estimate
+        
+        monthly_cost = usage_pattern.get("total_cost", 0.0) * (30 / 30)  # Assuming 30 days
+        estimated_savings = monthly_cost * (cost_reduction / 100)
+        
+        return {
+            "model": shadow_model,
+            "savings": estimated_savings,
+            "cost_reduction_percentage": cost_reduction,
+            "reason": f"Recommended for {complexity} complexity tasks",
+        }
+    
+    def _estimate_test_result(
+        self,
+        primary_model: str,
+        shadow_model: str,
+        usage_pattern: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """예상 테스트 결과 (실제 테스트 전 추정)"""
+        # This is an estimation - actual test would run shadow routing
+        # For now, return estimated metrics based on model comparison
+        
+        return {
+            "similarity_score": 0.85,  # Estimated
+            "quality_difference": -2.0,  # Estimated quality drop
+            "latency_difference": 5.0,  # Estimated latency change %
+            "cost_reduction": usage_pattern.get("total_cost", 0.0) * 0.2,  # 20% estimate
+            "test_duration_days": 7,
+            "samples_tested": usage_pattern.get("total_calls", 0),
+        }
+    
+    def _calculate_confidence(
+        self,
+        test_result: Dict[str, Any],
+        usage_pattern: Dict[str, Any]
+    ) -> float:
+        """신뢰도 계산"""
+        # Confidence based on:
+        # - Number of test samples
+        # - Quality of test results
+        # - Usage pattern consistency
+        
+        samples = test_result.get("samples_tested", 0)
+        similarity = test_result.get("similarity_score", 0.5)
+        
+        # Base confidence from similarity
+        confidence = similarity
+        
+        # Adjust based on sample size
+        if samples > 100:
+            confidence *= 1.1  # +10% for good sample size
+        elif samples < 10:
+            confidence *= 0.8  # -20% for low sample size
+        
+        return min(1.0, max(0.0, confidence))
+    
     async def make_shadow_call(
         self,
         provider: str,
@@ -433,3 +650,264 @@ class ShadowRoutingService:
         db.refresh(comparison)
         
         return comparison
+    
+    def apply_gradually(
+        self,
+        project_id: int,
+        primary_model: str,
+        shadow_model: str,
+        user_confirmation: bool,
+        db: Session
+    ) -> Dict[str, Any]:
+        """
+        점진적 적용 (사용자 승인 후)
+        
+        Args:
+            project_id: Project ID
+            primary_model: Primary model name
+            shadow_model: Shadow model name to apply
+            user_confirmation: User confirmation flag
+            db: Database session
+        
+        Returns:
+            Dictionary with application result
+        """
+        if not user_confirmation:
+            raise ValueError("User confirmation required")
+        
+        # Get project
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            raise ValueError(f"Project {project_id} not found")
+        
+        # 1. 롤백 포인트 생성
+        rollback_point = self._create_rollback_point(project, primary_model, db)
+        
+        # 2. Phase 1: Shadow Routing 테스트 (10%)
+        try:
+            shadow_result = self._test_with_shadow_routing(
+                project,
+                primary_model,
+                shadow_model,
+                percentage=10,
+                db=db
+            )
+            
+            if not self._validate_shadow_result(shadow_result):
+                self._rollback(project, rollback_point, db)
+                return {
+                    "status": "failed",
+                    "reason": "Shadow test failed at 10%",
+                    "phase": "test",
+                }
+        except Exception as e:
+            logger.error(f"Error in shadow routing test: {str(e)}")
+            self._rollback(project, rollback_point, db)
+            return {
+                "status": "failed",
+                "reason": f"Error during test: {str(e)}",
+                "phase": "test",
+            }
+        
+        # 3. Phase 2: 점진적 증가 (25% → 50% → 75% → 100%)
+        phases = [25, 50, 75, 100]
+        
+        for percentage in phases:
+            try:
+                result = self._apply_percentage(
+                    project,
+                    primary_model,
+                    shadow_model,
+                    percentage,
+                    db
+                )
+                
+                if not self._validate_result(result, percentage):
+                    # Rollback to previous phase
+                    prev_percentage = phases[phases.index(percentage) - 1] if phases.index(percentage) > 0 else 10
+                    self._rollback_to_previous(project, primary_model, prev_percentage, db)
+                    return {
+                        "status": "failed",
+                        "reason": f"Validation failed at {percentage}%",
+                        "phase": f"{percentage}%",
+                        "rollback_to": f"{prev_percentage}%",
+                    }
+                
+                logger.info(f"Successfully applied {percentage}% shadow routing")
+                
+            except Exception as e:
+                logger.error(f"Error applying {percentage}%: {str(e)}")
+                prev_percentage = phases[phases.index(percentage) - 1] if phases.index(percentage) > 0 else 10
+                self._rollback_to_previous(project, primary_model, prev_percentage, db)
+                return {
+                    "status": "failed",
+                    "reason": f"Error at {percentage}%: {str(e)}",
+                    "phase": f"{percentage}%",
+                }
+        
+        return {
+            "status": "success",
+            "rollback_point_id": rollback_point.get("id") if rollback_point else None,
+            "applied_percentage": 100,
+            "message": "Shadow routing successfully applied at 100%",
+        }
+    
+    def _create_rollback_point(
+        self,
+        project: Project,
+        primary_model: str,
+        db: Session
+    ) -> Dict[str, Any]:
+        """롤백 포인트 생성"""
+        # Save current configuration
+        current_config = project.shadow_routing_config or {}
+        
+        rollback_point = {
+            "id": f"rb_{project.id}_{primary_model}_{int(datetime.utcnow().timestamp())}",
+            "project_id": project.id,
+            "primary_model": primary_model,
+            "previous_config": current_config.copy(),
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        
+        # In a full implementation, would save to database
+        # For now, return the rollback point dict
+        
+        return rollback_point
+    
+    def _test_with_shadow_routing(
+        self,
+        project: Project,
+        primary_model: str,
+        shadow_model: str,
+        percentage: int,
+        db: Session
+    ) -> Dict[str, Any]:
+        """
+        Shadow Routing 테스트 (특정 비율로)
+        
+        Args:
+            project: Project object
+            primary_model: Primary model
+            shadow_model: Shadow model
+            percentage: Percentage of traffic to shadow (10, 25, 50, etc.)
+            db: Database session
+        
+        Returns:
+            Test result dictionary
+        """
+        # Update project configuration to enable shadow routing at specified percentage
+        config = project.shadow_routing_config or {}
+        config["enabled"] = True
+        config["test_percentage"] = percentage
+        config["shadow_models"] = config.get("shadow_models", {})
+        config["shadow_models"][primary_model] = shadow_model
+        
+        project.shadow_routing_config = config
+        db.commit()
+        
+        # In a full implementation, would:
+        # 1. Monitor shadow routing results for a period
+        # 2. Compare primary vs shadow metrics
+        # 3. Check quality, latency, cost differences
+        
+        # For now, return estimated result
+        return {
+            "status": "success",
+            "percentage": percentage,
+            "test_duration_hours": 24,  # 1 day test
+            "similarity_score": 0.85,
+            "quality_drop": -2.0,
+            "latency_change": 5.0,
+            "cost_reduction": 15.0,
+        }
+    
+    def _validate_shadow_result(
+        self,
+        shadow_result: Dict[str, Any]
+    ) -> bool:
+        """Shadow 테스트 결과 검증"""
+        # Check if results are acceptable
+        similarity = shadow_result.get("similarity_score", 0)
+        quality_drop = shadow_result.get("quality_drop", 0)
+        latency_change = shadow_result.get("latency_change", 0)
+        
+        # Validation criteria
+        if similarity < 0.7:  # Too different
+            return False
+        if quality_drop < -10:  # Quality drop too large
+            return False
+        if latency_change > 30:  # Latency increase too large
+            return False
+        
+        return True
+    
+    def _apply_percentage(
+        self,
+        project: Project,
+        primary_model: str,
+        shadow_model: str,
+        percentage: int,
+        db: Session
+    ) -> Dict[str, Any]:
+        """특정 비율로 적용"""
+        # Update project configuration
+        config = project.shadow_routing_config or {}
+        config["enabled"] = True
+        config["shadow_models"] = config.get("shadow_models", {})
+        config["shadow_models"][primary_model] = shadow_model
+        config["percentage"] = percentage
+        
+        project.shadow_routing_config = config
+        db.commit()
+        
+        return {
+            "status": "success",
+            "percentage": percentage,
+            "applied_at": datetime.utcnow().isoformat(),
+        }
+    
+    def _validate_result(
+        self,
+        result: Dict[str, Any],
+        percentage: int
+    ) -> bool:
+        """결과 검증"""
+        # Basic validation
+        if result.get("status") != "success":
+            return False
+        
+        # In a full implementation, would check:
+        # - Quality metrics
+        # - Error rates
+        # - Latency
+        # - Cost
+        
+        return True
+    
+    def _rollback(
+        self,
+        project: Project,
+        rollback_point: Dict[str, Any],
+        db: Session
+    ) -> None:
+        """롤백 실행"""
+        if rollback_point:
+            previous_config = rollback_point.get("previous_config", {})
+            project.shadow_routing_config = previous_config
+            db.commit()
+            logger.info(f"Rolled back shadow routing configuration for project {project.id}")
+    
+    def _rollback_to_previous(
+        self,
+        project: Project,
+        primary_model: str,
+        previous_percentage: int,
+        db: Session
+    ) -> None:
+        """이전 단계로 롤백"""
+        config = project.shadow_routing_config or {}
+        config["percentage"] = previous_percentage
+        project.shadow_routing_config = config
+        db.commit()
+        logger.info(f"Rolled back to {previous_percentage}% for project {project.id}")

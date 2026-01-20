@@ -9,7 +9,9 @@ import Button from '@/components/ui/Button';
 import { costAPI } from '@/lib/api';
 import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
-import { ArrowLeft, Download, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, Sparkles, TrendingUp, AlertTriangle, Zap } from 'lucide-react';
+import Modal from '@/components/ui/Modal';
+import Badge from '@/components/ui/Badge';
 import { clsx } from 'clsx';
 import ProjectTabs from '@/components/ProjectTabs';
 import CostChart from '@/components/CostChart';
@@ -36,6 +38,11 @@ export default function CostAnalysisPage() {
   const [costData, setCostData] = useState<CostAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(7);
+  const [optimizations, setOptimizations] = useState<any>(null);
+  const [predictions, setPredictions] = useState<any>(null);
+  const [loadingOptimizations, setLoadingOptimizations] = useState(false);
+  const [showOptimizationModal, setShowOptimizationModal] = useState(false);
+  const [selectedOptimization, setSelectedOptimization] = useState<any>(null);
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
     from: (() => {
       const date = new Date();
@@ -64,6 +71,8 @@ export default function CostAnalysisPage() {
     }
 
     loadCostData();
+    loadOptimizations();
+    loadPredictions();
   }, [projectId, days, router]);
 
   const loadCostData = async () => {
@@ -79,6 +88,41 @@ export default function CostAnalysisPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadOptimizations = async () => {
+    setLoadingOptimizations(true);
+    try {
+      const result = await costAPI.getOptimizations(projectId, 30);
+      setOptimizations(result);
+    } catch (error: any) {
+      console.error('Failed to load optimizations:', error);
+      // Don't show error - optimizations are optional
+    } finally {
+      setLoadingOptimizations(false);
+    }
+  };
+
+  const loadPredictions = async () => {
+    try {
+      const result = await costAPI.getPredictions(projectId, 30, 30);
+      setPredictions(result);
+    } catch (error: any) {
+      console.error('Failed to load predictions:', error);
+      // Don't show error - predictions are optional
+    }
+  };
+
+  const handleApplyOptimization = async (optimizationId: string) => {
+    try {
+      const result = await costAPI.applyOptimization(projectId, optimizationId, true);
+      toast.showToast('Optimization applied successfully', 'success');
+      setShowOptimizationModal(false);
+      loadOptimizations();
+    } catch (error: any) {
+      console.error('Failed to apply optimization:', error);
+      toast.showToast(error.response?.data?.detail || 'Failed to apply optimization', 'error');
     }
   };
 
@@ -277,6 +321,210 @@ export default function CostAnalysisPage() {
             )}
           </div>
         </div>
+
+        {/* Cost Predictions */}
+        {predictions && predictions.predictions && predictions.predictions.length > 0 && (
+          <div className="mb-6 relative rounded-2xl border border-blue-500/30 bg-blue-500/10 backdrop-blur-sm p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <TrendingUp className="h-6 w-6 text-blue-400" />
+                <h2 className="text-lg font-semibold text-blue-400">Cost Predictions</h2>
+              </div>
+              <Badge variant={predictions.trend === 'increasing' ? 'warning' : 'success'}>
+                {predictions.trend}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {predictions.predictions.map((pred: any) => (
+                <div key={pred.days_ahead} className="p-4 bg-white/5 rounded-lg border border-white/10">
+                  <div className="text-sm text-slate-400 mb-1">{pred.days_ahead} Days</div>
+                  <div className="text-xl font-bold text-white mb-1">
+                    ${toFixedSafe(pred.predicted_cost, 2)}
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    ${toFixedSafe(pred.predicted_daily_avg, 2)}/day • {toFixedSafe(pred.confidence * 100, 0)}% confidence
+                  </div>
+                </div>
+              ))}
+            </div>
+            {predictions.spike_predicted && (
+              <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                <div className="flex items-center gap-2 text-yellow-400">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="text-sm font-medium">Cost spike predicted: {toFixedSafe(predictions.trend_percentage, 1)}% increase</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Cost Optimization Suggestions */}
+        {optimizations && optimizations.opportunities && optimizations.opportunities.length > 0 && (
+          <div className="mb-6 relative rounded-2xl border border-purple-500/30 bg-purple-500/10 backdrop-blur-sm p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Sparkles className="h-6 w-6 text-purple-400" />
+                <h2 className="text-lg font-semibold text-purple-400">Optimization Opportunities</h2>
+              </div>
+              <div className="text-sm text-purple-300">
+                Potential Savings: <span className="font-bold text-green-400">
+                  ${toFixedSafe(optimizations.total_potential_savings, 2)}/month
+                </span>
+              </div>
+            </div>
+            <div className="space-y-4">
+              {optimizations.opportunities.slice(0, 3).map((opp: any, idx: number) => (
+                <div key={idx} className="p-4 bg-white/5 rounded-lg border border-white/10">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-white">
+                        {opp.type === "model_downgrade" && "Model Downgrade"}
+                        {opp.type === "cost_optimization" && "Cost Optimization"}
+                        {opp.type === "remove_unused_model" && "Remove Unused Model"}
+                      </span>
+                      <Badge variant={opp.risk === "low" || opp.risk === "none" ? "success" : "warning"}>
+                        {opp.risk} risk
+                      </Badge>
+                    </div>
+                    <div className="text-green-400 font-bold">
+                      ${toFixedSafe(opp.estimated_monthly_savings, 2)}/mo
+                    </div>
+                  </div>
+                  <p className="text-sm text-slate-400 mb-3">{opp.reason}</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <span className="text-slate-400">Current: </span>
+                      <span className="text-white">{opp.current_model}</span>
+                    </div>
+                    {opp.recommended_model && (
+                      <div>
+                        <span className="text-slate-400">Recommended: </span>
+                        <span className="text-purple-400">{opp.recommended_model}</span>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-slate-400">Savings: </span>
+                      <span className="text-green-400">{toFixedSafe(opp.savings_percentage, 1)}%</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Quality: </span>
+                      <span className={clsx(
+                        opp.quality_change >= 0 ? 'text-green-400' : 'text-yellow-400'
+                      )}>
+                        {opp.quality_change > 0 ? '+' : ''}{toFixedSafe(opp.quality_change, 1)}%
+                      </span>
+                    </div>
+                  </div>
+                  {opp.requires_approval && (
+                    <div className="mt-3 pt-3 border-t border-white/10">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setSelectedOptimization(opp);
+                          setShowOptimizationModal(true);
+                        }}
+                        className="w-full"
+                      >
+                        <Zap className="h-4 w-4 mr-2" />
+                        Apply This Optimization
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {optimizations.opportunities.length > 3 && (
+              <div className="mt-4 text-center">
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowOptimizationModal(true)}
+                >
+                  View All {optimizations.opportunities.length} Opportunities
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Optimization Modal */}
+        <Modal
+          isOpen={showOptimizationModal}
+          onClose={() => setShowOptimizationModal(false)}
+          title="Cost Optimization Opportunities"
+          size="large"
+        >
+          <div className="space-y-4">
+            {optimizations && optimizations.opportunities && optimizations.opportunities.length > 0 ? (
+              <>
+                <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg mb-4">
+                  <div className="text-sm font-medium text-purple-400 mb-1">Total Potential Savings</div>
+                  <div className="text-2xl font-bold text-green-400">
+                    ${toFixedSafe(optimizations.total_potential_savings, 2)}/month
+                  </div>
+                </div>
+                {optimizations.opportunities.map((opp: any, idx: number) => (
+                  <div key={idx} className="p-4 bg-white/5 rounded-lg border border-white/10">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-white">
+                          {opp.type === "model_downgrade" && "Model Downgrade"}
+                          {opp.type === "cost_optimization" && "Cost Optimization"}
+                          {opp.type === "remove_unused_model" && "Remove Unused Model"}
+                        </span>
+                        <Badge variant={opp.risk === "low" || opp.risk === "none" ? "success" : "warning"}>
+                          {opp.risk} risk
+                        </Badge>
+                      </div>
+                      <div className="text-green-400 font-bold">
+                        ${toFixedSafe(opp.estimated_monthly_savings, 2)}/mo
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-400 mb-3">{opp.reason}</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-3">
+                      <div>
+                        <span className="text-slate-400">Current: </span>
+                        <span className="text-white">{opp.current_model}</span>
+                      </div>
+                      {opp.recommended_model && (
+                        <div>
+                          <span className="text-slate-400">Recommended: </span>
+                          <span className="text-purple-400">{opp.recommended_model}</span>
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-slate-400">Savings: </span>
+                        <span className="text-green-400">{toFixedSafe(opp.savings_percentage, 1)}%</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Quality: </span>
+                        <span className={clsx(
+                          opp.quality_change >= 0 ? 'text-green-400' : 'text-yellow-400'
+                        )}>
+                          {opp.quality_change > 0 ? '+' : ''}{toFixedSafe(opp.quality_change, 1)}%
+                        </span>
+                      </div>
+                    </div>
+                    {opp.requires_approval && (
+                      <Button
+                        size="sm"
+                        onClick={() => handleApplyOptimization(opp.type + '_' + idx)}
+                        className="w-full"
+                      >
+                        <Zap className="h-4 w-4 mr-2" />
+                        Apply This Optimization
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div className="text-center py-8 text-slate-400">
+                <Sparkles className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>No optimization opportunities available at this time.</p>
+              </div>
+            )}
+          </div>
+        </Modal>
       </div>
     </DashboardLayout>
   );

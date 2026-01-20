@@ -154,7 +154,38 @@ class AgentChainProfiler:
         chain_success = failures == 0
         
         # Find bottleneck (agent with highest latency)
-        bottleneck = max(agent_stats, key=lambda a: a["avg_latency_ms"]) if agent_stats else None
+        # Improved bottleneck detection: check if latency is 2x or more than average
+        bottleneck = None
+        bottleneck_threshold_multiplier = 2.0
+        
+        if agent_stats:
+            avg_agent_latency = sum(a["avg_latency_ms"] for a in agent_stats) / len(agent_stats)
+            
+            # Find agents that are significantly slower than average
+            potential_bottlenecks = [
+                a for a in agent_stats
+                if a["avg_latency_ms"] > avg_agent_latency * bottleneck_threshold_multiplier
+            ]
+            
+            if potential_bottlenecks:
+                # Select the slowest one as the bottleneck
+                bottleneck = max(potential_bottlenecks, key=lambda a: a["avg_latency_ms"])
+            else:
+                # Fallback to slowest agent if no clear bottleneck
+                bottleneck = max(agent_stats, key=lambda a: a["avg_latency_ms"])
+        
+        # Calculate bottleneck severity
+        bottleneck_severity = "none"
+        if bottleneck:
+            avg_agent_latency = sum(a["avg_latency_ms"] for a in agent_stats) / len(agent_stats) if agent_stats else 0
+            if bottleneck["avg_latency_ms"] > avg_agent_latency * 3.0:
+                bottleneck_severity = "critical"
+            elif bottleneck["avg_latency_ms"] > avg_agent_latency * 2.0:
+                bottleneck_severity = "high"
+            elif bottleneck["avg_latency_ms"] > avg_agent_latency * 1.5:
+                bottleneck_severity = "medium"
+            else:
+                bottleneck_severity = "low"
         
         return {
             "chain_id": chain_id,
@@ -167,6 +198,7 @@ class AgentChainProfiler:
             "failure_count": failures,
             "bottleneck_agent": bottleneck["agent_name"] if bottleneck else None,
             "bottleneck_latency_ms": bottleneck["avg_latency_ms"] if bottleneck else 0.0,
+            "bottleneck_severity": bottleneck_severity,
             "agents": agent_stats,
             "first_call_at": calls[0].created_at.isoformat() if calls else None,
             "last_call_at": calls[-1].created_at.isoformat() if calls else None,

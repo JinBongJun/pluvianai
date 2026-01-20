@@ -411,8 +411,42 @@ export const costAPI = {
     });
     return response.data;
   },
+  
+  getOptimizations: async (projectId: number, days: number = 30) => {
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    const response = await apiClient.get('/cost/optimizations', {
+      params: { project_id: Number(projectId), days },
+    });
+    return response.data;
+  },
+  
+  getPredictions: async (projectId: number, days: number = 30, predictionDays: number = 30) => {
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    const response = await apiClient.get('/cost/predictions', {
+      params: { project_id: Number(projectId), days, prediction_days: predictionDays },
+    });
+    return response.data;
+  },
+  
+  applyOptimization: async (projectId: number, optimizationId: string, userConfirmation: boolean = true) => {
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    const response = await apiClient.post('/cost/optimizations/apply', {
+      optimization_id: optimizationId,
+      user_confirmation: userConfirmation,
+    }, {
+      params: { project_id: Number(projectId) },
+    });
+    return response.data;
+  },
 };
 
+// Agent Chain API
 // Agent Chain API
 export const agentChainAPI = {
   profile: async (projectId: number, chainId?: string, days: number = 7) => {
@@ -447,6 +481,35 @@ export const agentChainAPI = {
     }
   },
   
+  getOptimizations: async (projectId: number, chainId: string) => {
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    if (!chainId) {
+      throw new Error('Chain ID is required');
+    }
+    const response = await apiClient.get('/agent-chain/optimizations', {
+      params: { project_id: Number(projectId), chain_id: chainId },
+    });
+    return response.data;
+  },
+  
+  applyOptimization: async (projectId: number, chainId: string, optimizationId: string, userConfirmation: boolean = true) => {
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    if (!chainId) {
+      throw new Error('Chain ID is required');
+    }
+    const response = await apiClient.post('/agent-chain/optimizations/apply', {
+      optimization_id: optimizationId,
+      user_confirmation: userConfirmation,
+    }, {
+      params: { project_id: Number(projectId), chain_id: chainId },
+    });
+    return response.data;
+  },
+  
   getAgentStatistics: async (projectId: number, days: number = 7) => {
     // Validate projectId
     if (!projectId || isNaN(projectId) || projectId <= 0) {
@@ -456,6 +519,51 @@ export const agentChainAPI = {
     const validatedDays = Math.min(Math.max(1, days), 30);
     const response = await apiClient.get('/agent-chain/agents', {
       params: { project_id: Number(projectId), days: validatedDays },
+    });
+    return response.data;
+  },
+};
+
+// Shadow Routing API
+export const shadowRoutingAPI = {
+  getSuggestions: async (projectId: number, primaryModel: string) => {
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    if (!primaryModel) {
+      throw new Error('Primary model is required');
+    }
+    const response = await apiClient.get('/shadow-routing/suggestions', {
+      params: { project_id: Number(projectId), primary_model: primaryModel },
+    });
+    return response.data;
+  },
+  
+  apply: async (projectId: number, primaryModel: string, shadowModel: string, userConfirmation: boolean = true) => {
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    if (!primaryModel || !shadowModel) {
+      throw new Error('Primary model and shadow model are required');
+    }
+    const response = await apiClient.post('/shadow-routing/apply', {
+      primary_model: primaryModel,
+      shadow_model: shadowModel,
+      user_confirmation: userConfirmation,
+    }, {
+      params: { project_id: Number(projectId) },
+    });
+    return response.data;
+  },
+  
+  rollback: async (projectId: number, rollbackPointId?: string) => {
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    const response = await apiClient.post('/shadow-routing/rollback', {
+      rollback_point_id: rollbackPointId || null,
+    }, {
+      params: { project_id: Number(projectId) },
     });
     return response.data;
   },

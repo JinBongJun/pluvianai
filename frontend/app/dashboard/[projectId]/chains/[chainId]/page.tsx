@@ -10,7 +10,8 @@ import ChainFlowDiagram from '@/components/ChainFlowDiagram';
 import { agentChainAPI, apiCallsAPI } from '@/lib/api';
 import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
-import { ArrowLeft, ArrowRight, Clock, CheckCircle, XCircle, Activity, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Clock, CheckCircle, XCircle, Activity, AlertTriangle, TrendingUp, TrendingDown, Sparkles, Zap } from 'lucide-react';
+import Modal from '@/components/ui/Modal';
 import { clsx } from 'clsx';
 import {
   ResponsiveContainer,
@@ -60,6 +61,9 @@ export default function ChainDetailPage() {
   const [chain, setChain] = useState<ChainProfile | null>(null);
   const [relatedCalls, setRelatedCalls] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [optimizations, setOptimizations] = useState<any>(null);
+  const [loadingOptimizations, setLoadingOptimizations] = useState(false);
+  const [showOptimizationModal, setShowOptimizationModal] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -126,6 +130,9 @@ export default function ChainDetailPage() {
         } catch (error) {
           console.error('Failed to load related calls:', error);
         }
+        
+        // Load optimizations
+        loadOptimizations();
       } else {
         toast.showToast('Chain not found', 'error');
         router.push(`/dashboard/${projectId}/chains`);
@@ -142,6 +149,36 @@ export default function ChainDetailPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const loadOptimizations = async () => {
+    if (!chainId) return;
+    
+    setLoadingOptimizations(true);
+    try {
+      const result = await agentChainAPI.getOptimizations(projectId, chainId);
+      setOptimizations(result);
+    } catch (error: any) {
+      console.error('Failed to load optimizations:', error);
+      // Don't show error toast - optimizations are optional
+    } finally {
+      setLoadingOptimizations(false);
+    }
+  };
+  
+  const handleApplyOptimization = async (optimizationId: string) => {
+    if (!chainId) return;
+    
+    try {
+      const result = await agentChainAPI.applyOptimization(projectId, chainId, optimizationId, true);
+      toast.showToast('Optimization applied successfully', 'success');
+      setShowOptimizationModal(false);
+      // Reload chain to see updates
+      loadChain();
+    } catch (error: any) {
+      console.error('Failed to apply optimization:', error);
+      toast.showToast(error.response?.data?.detail || 'Failed to apply optimization', 'error');
     }
   };
 
@@ -268,18 +305,121 @@ export default function ChainDetailPage() {
 
         {/* Bottleneck Warning */}
         {chain.bottleneck_agent && (
-          <div className="mb-6 relative rounded-2xl border border-yellow-500/30 bg-yellow-500/10 backdrop-blur-sm p-6 shadow-2xl">
+          <div className={clsx(
+            "mb-6 relative rounded-2xl border backdrop-blur-sm p-6 shadow-2xl",
+            chain.bottleneck_severity === "critical" ? "border-red-500/30 bg-red-500/10" :
+            chain.bottleneck_severity === "high" ? "border-orange-500/30 bg-orange-500/10" :
+            "border-yellow-500/30 bg-yellow-500/10"
+          )}>
             <div className="flex items-center gap-3">
-              <AlertTriangle className="h-6 w-6 text-yellow-400" />
-              <div>
-                <h3 className="text-lg font-semibold text-yellow-400 mb-1">Bottleneck Detected</h3>
-                <p className="text-sm text-yellow-300">
+              <AlertTriangle className={clsx(
+                "h-6 w-6",
+                chain.bottleneck_severity === "critical" ? "text-red-400" :
+                chain.bottleneck_severity === "high" ? "text-orange-400" :
+                "text-yellow-400"
+              )} />
+              <div className="flex-1">
+                <h3 className={clsx(
+                  "text-lg font-semibold mb-1",
+                  chain.bottleneck_severity === "critical" ? "text-red-400" :
+                  chain.bottleneck_severity === "high" ? "text-orange-400" :
+                  "text-yellow-400"
+                )}>
+                  Bottleneck Detected ({chain.bottleneck_severity || "medium"})
+                </h3>
+                <p className={clsx(
+                  "text-sm",
+                  chain.bottleneck_severity === "critical" ? "text-red-300" :
+                  chain.bottleneck_severity === "high" ? "text-orange-300" :
+                  "text-yellow-300"
+                )}>
                   Agent <strong>{chain.bottleneck_agent}</strong> is the slowest component with an average latency of{' '}
                   <strong>{toFixedSafe(chain.bottleneck_latency_ms / 1000, 2)}s</strong>.
                   Consider optimizing this agent for better overall chain performance.
                 </p>
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowOptimizationModal(true)}
+                className="flex items-center gap-2"
+              >
+                <Sparkles className="h-4 w-4" />
+                View Optimizations
+              </Button>
             </div>
+          </div>
+        )}
+
+        {/* Optimization Suggestions */}
+        {optimizations && optimizations.suggestions && optimizations.suggestions.length > 0 && (
+          <div className="mb-6 relative rounded-2xl border border-purple-500/30 bg-purple-500/10 backdrop-blur-sm p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Sparkles className="h-6 w-6 text-purple-400" />
+                <h3 className="text-lg font-semibold text-purple-400">Optimization Suggestions</h3>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowOptimizationModal(true)}
+              >
+                View All
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {optimizations.suggestions.slice(0, 2).map((opt: any, idx: number) => (
+                <div key={idx} className="p-4 bg-white/5 rounded-lg border border-white/10">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium text-white mb-1">
+                        {opt.type === "parallelization" && "Parallelization Opportunity"}
+                        {opt.type === "order_optimization" && "Order Optimization"}
+                        {opt.type === "model_optimization" && "Model Optimization"}
+                        {opt.type === "cost_optimization" && "Cost Optimization"}
+                      </div>
+                      <p className="text-sm text-slate-400">{opt.description}</p>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-slate-300">
+                        {opt.improvement_percentage && (
+                          <span className="flex items-center gap-1">
+                            <TrendingUp className="h-3 w-3" />
+                            {opt.improvement_percentage > 0 ? '+' : ''}{opt.improvement_percentage}% improvement
+                          </span>
+                        )}
+                        <Badge variant={opt.risk_level === "low" ? "success" : opt.risk_level === "medium" ? "warning" : "error"}>
+                          {opt.risk_level} risk
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {optimizations.predicted_improvement && (
+              <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10">
+                <div className="text-sm font-medium text-white mb-2">Predicted Overall Improvement</div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-xs text-slate-400">Latency Reduction</div>
+                    <div className="text-lg font-bold text-green-400">
+                      {optimizations.predicted_improvement.latency_reduction_percentage}%
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400">Cost Reduction</div>
+                    <div className="text-lg font-bold text-green-400">
+                      {optimizations.predicted_improvement.cost_reduction_percentage}%
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400">Success Rate</div>
+                    <div className="text-lg font-bold text-green-400">
+                      +{optimizations.predicted_improvement.success_rate_improvement_percentage}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -441,6 +581,99 @@ export default function ChainDetailPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Optimization Modal */}
+        {showOptimizationModal && optimizations && (
+          <Modal
+            isOpen={showOptimizationModal}
+            onClose={() => setShowOptimizationModal(false)}
+            title="Optimization Suggestions"
+            size="large"
+          >
+            <div className="space-y-4">
+              {optimizations.suggestions && optimizations.suggestions.length > 0 ? (
+                <>
+                  {optimizations.suggestions.map((opt: any, idx: number) => (
+                    <div key={idx} className="p-4 bg-white/5 rounded-lg border border-white/10">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-medium text-white">
+                          {opt.type === "parallelization" && "Parallelization Opportunity"}
+                          {opt.type === "order_optimization" && "Order Optimization"}
+                          {opt.type === "model_optimization" && "Model Optimization"}
+                          {opt.type === "cost_optimization" && "Cost Optimization"}
+                        </div>
+                        <Badge variant={opt.risk_level === "low" ? "success" : opt.risk_level === "medium" ? "warning" : "error"}>
+                          {opt.risk_level} risk
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-slate-400 mb-3">{opt.description}</p>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        {opt.improvement_percentage && (
+                          <div>
+                            <span className="text-slate-400">Improvement: </span>
+                            <span className="text-green-400 font-medium">
+                              {opt.improvement_percentage > 0 ? '+' : ''}{opt.improvement_percentage}%
+                            </span>
+                          </div>
+                        )}
+                        {opt.current_latency_ms && opt.optimized_latency_ms && (
+                          <div>
+                            <span className="text-slate-400">Latency: </span>
+                            <span className="text-white">
+                              {toFixedSafe(opt.current_latency_ms / 1000, 2)}s → {toFixedSafe(opt.optimized_latency_ms / 1000, 2)}s
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      {opt.requires_approval && (
+                        <div className="mt-3 pt-3 border-t border-white/10">
+                          <Button
+                            size="sm"
+                            onClick={() => handleApplyOptimization(opt.type + '_' + idx)}
+                            className="w-full"
+                          >
+                            <Zap className="h-4 w-4 mr-2" />
+                            Apply This Optimization
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {optimizations.predicted_improvement && (
+                    <div className="p-4 bg-purple-500/10 rounded-lg border border-purple-500/30">
+                      <div className="text-sm font-medium text-purple-400 mb-3">Predicted Overall Improvement</div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <div className="text-xs text-slate-400">Latency Reduction</div>
+                          <div className="text-lg font-bold text-green-400">
+                            {optimizations.predicted_improvement.latency_reduction_percentage}%
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-400">Cost Reduction</div>
+                          <div className="text-lg font-bold text-green-400">
+                            {optimizations.predicted_improvement.cost_reduction_percentage}%
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-400">Success Rate</div>
+                          <div className="text-lg font-bold text-green-400">
+                            +{optimizations.predicted_improvement.success_rate_improvement_percentage}%
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-8 text-slate-400">
+                  <Sparkles className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p>No optimization suggestions available at this time.</p>
+                </div>
+              )}
+            </div>
+          </Modal>
         )}
       </div>
     </DashboardLayout>
