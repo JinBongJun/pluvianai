@@ -116,8 +116,7 @@ async def export_csv(
         media_type="text/csv",
         headers={
             "Content-Disposition": (
-                f"attachment; filename=api-calls-{project_id}-"
-                f"{datetime.now().strftime('%Y%m%d')}.csv"
+                f"attachment; filename=api-calls-{project_id}-" f"{datetime.now().strftime('%Y%m%d')}.csv"
             )
         },
     )

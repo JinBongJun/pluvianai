@@ -4,6 +4,7 @@ Health check endpoints.
 Note: This module is imported as part of application startup, so it must be
 robust even when optional dependencies (like ``psutil``) are missing.
 """
+
 from typing import Dict, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -61,10 +62,11 @@ def detailed_health_check(db: Session = Depends(get_db)):
         "environment": settings.ENVIRONMENT,
         "timestamp": None,
     }
-    
+
     from datetime import datetime
+
     health_status["timestamp"] = datetime.utcnow().isoformat()
-    
+
     # Database check
     try:
         db.execute(text("SELECT 1"))
@@ -79,7 +81,7 @@ def detailed_health_check(db: Session = Depends(get_db)):
             "error": str(e),
         }
         health_status["status"] = "unhealthy"
-    
+
     # Redis check
     try:
         if cache_service.enabled:
@@ -101,7 +103,7 @@ def detailed_health_check(db: Session = Depends(get_db)):
         }
         if health_status["status"] == "healthy":
             health_status["status"] = "degraded"  # Redis failure is not critical
-    
+
     # System resources (optional - depends on psutil availability)
     if psutil is not None:
         try:
@@ -138,10 +140,10 @@ def detailed_health_check(db: Session = Depends(get_db)):
             "status": "unavailable",
             "reason": "psutil not installed",
         }
-    
+
     # External API checks (optional)
     health_status["external_apis"] = {
         "sentry": "configured" if settings.SENTRY_DSN else "not_configured",
     }
-    
+
     return health_status

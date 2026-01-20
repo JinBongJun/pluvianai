@@ -137,6 +137,7 @@ async def update_business_metrics_periodically():
     """Periodically update business metrics (active users, projects)"""
     import asyncio
     from app.core.database import SessionLocal
+
     # Import User and Project here to avoid F811 redefinition error
     from app.models.user import User  # noqa: F811
     from app.models.project import Project  # noqa: F811

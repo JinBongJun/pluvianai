@@ -1,6 +1,7 @@
 """
 Database connection and session management
 """
+
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -16,9 +17,7 @@ engine = create_engine(
     pool_timeout=30,  # Timeout for getting connection
     echo=settings.DEBUG,  # Log SQL queries in debug mode
     # Optimize for JSONB queries
-    connect_args={
-        "options": "-c timezone=utc"
-    } if "postgresql" in settings.DATABASE_URL else {}
+    connect_args={"options": "-c timezone=utc"} if "postgresql" in settings.DATABASE_URL else {},
 )
 
 # Create session factory
@@ -32,7 +31,7 @@ def get_db():
     """
     Dependency function to get database session
     Usage: db: Session = Depends(get_db)
-    
+
     Automatically handles:
     - Connection acquisition from pool
     - Transaction rollback on exception
