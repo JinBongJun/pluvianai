@@ -40,12 +40,12 @@ class WebhookService:
             return {"error": "Project not found"}
 
         # Get project-specific webhooks
-        project_webhooks = db.query(Webhook).filter(Webhook.project_id == project_id, Webhook.is_active == True).all()
+        project_webhooks = db.query(Webhook).filter(Webhook.project_id == project_id, Webhook.is_active.is_(True)).all()
 
         # Get user-level webhooks (project_id is None)
         user_webhooks = (
             db.query(Webhook)
-            .filter(Webhook.user_id == project.owner_id, Webhook.project_id.is_(None), Webhook.is_active == True)
+            .filter(Webhook.user_id == project.owner_id, Webhook.project_id.is_(None), Webhook.is_active.is_(True))
             .all()
         )
 

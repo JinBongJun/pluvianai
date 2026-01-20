@@ -86,7 +86,7 @@ class SchedulerService:
         db: Session = SessionLocal()
         try:
             # Get all active projects
-            projects = db.query(Project).filter(Project.is_active == True).all()
+            projects = db.query(Project).filter(Project.is_active.is_(True)).all()
             logger.info(f"Found {len(projects)} active projects")
 
             total_detections = 0
@@ -150,7 +150,7 @@ class SchedulerService:
         db: Session = SessionLocal()
         try:
             # Get all active projects
-            projects = db.query(Project).filter(Project.is_active == True).all()
+            projects = db.query(Project).filter(Project.is_active.is_(True)).all()
             logger.info(f"Found {len(projects)} active projects")
 
             total_alerts = 0
@@ -210,7 +210,7 @@ class SchedulerService:
             from app.models.project import Project
 
             # Get all active projects
-            projects = db.query(Project).filter(Project.is_active == True).all()
+            projects = db.query(Project).filter(Project.is_active.is_(True)).all()
             logger.info(f"Found {len(projects)} active projects")
 
             for project in projects:

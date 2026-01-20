@@ -139,7 +139,7 @@ async def get_user_from_api_key(authorization: Optional[str] = Header(None), db:
     hashed_key = hashlib.sha256(api_key.encode()).hexdigest()
 
     # Look up API key in database
-    api_key_record = db.query(APIKey).filter(APIKey.key_hash == hashed_key, APIKey.is_active == True).first()
+    api_key_record = db.query(APIKey).filter(APIKey.key_hash == hashed_key, APIKey.is_active.is_(True)).first()
 
     if not api_key_record:
         raise HTTPException(

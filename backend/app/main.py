@@ -145,11 +145,11 @@ async def update_business_metrics_periodically():
             db = SessionLocal()
             try:
                 # Count active users (users with is_active=True)
-                user_count = db.query(User).filter(User.is_active == True).count()
+                user_count = db.query(User).filter(User.is_active.is_(True)).count()
                 active_users.set(user_count)
 
                 # Count active projects (projects with is_active=True)
-                project_count = db.query(Project).filter(Project.is_active == True).count()
+                project_count = db.query(Project).filter(Project.is_active.is_(True)).count()
                 active_projects.set(project_count)
 
                 logger.debug(f"Updated metrics: {user_count} active users, {project_count} active projects")

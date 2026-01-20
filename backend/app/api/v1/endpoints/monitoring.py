@@ -42,10 +42,10 @@ async def monitoring_status() -> Dict[str, Any]:
 async def get_current_metrics(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """Get current metrics summary for widget display"""
     # Get active users count
-    active_users_count = db.query(User).filter(User.is_active == True).count()
+    active_users_count = db.query(User).filter(User.is_active.is_(True)).count()
 
     # Get active projects count
-    active_projects_count = db.query(Project).filter(Project.is_active == True).count()
+    active_projects_count = db.query(Project).filter(Project.is_active.is_(True)).count()
 
     # Note: For real-time request/error/latency metrics, you would query Prometheus
     # For now, we return basic counts. In production, you'd integrate with Prometheus API

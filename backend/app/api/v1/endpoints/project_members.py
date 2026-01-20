@@ -316,7 +316,7 @@ async def remove_project_member(
         user_id=current_user.id,
         activity_type="member_remove",
         action=f"Removed member: {user.email if user else user_id}",
-        description=f"Removed member from project",
+        description="Removed member from project",
         project_id=project_id,
         activity_data={
             "member_user_id": user_id,

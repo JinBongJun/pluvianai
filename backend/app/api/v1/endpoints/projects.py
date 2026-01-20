@@ -71,7 +71,7 @@ async def create_project(
     # Check for duplicate project name (same owner)
     existing = (
         db.query(Project)
-        .filter(Project.name == project_data.name, Project.owner_id == current_user.id, Project.is_active == True)
+        .filter(Project.name == project_data.name, Project.owner_id == current_user.id, Project.is_active.is_(True))
         .first()
     )
 
@@ -140,13 +140,13 @@ async def list_projects(
         return cached
 
     # Build base query for owned projects
-    owned_query = db.query(Project).filter(Project.owner_id == current_user.id, Project.is_active == True)
+    owned_query = db.query(Project).filter(Project.owner_id == current_user.id, Project.is_active.is_(True))
 
     # Build base query for member projects
     member_query = (
         db.query(Project)
         .join(ProjectMember)
-        .filter(ProjectMember.user_id == current_user.id, Project.is_active == True)
+        .filter(ProjectMember.user_id == current_user.id, Project.is_active.is_(True))
     )
 
     # Apply search filter if provided
@@ -217,7 +217,7 @@ async def update_project(
             .filter(
                 Project.name == project_data.name,
                 Project.owner_id == project.owner_id,
-                Project.is_active == True,
+                Project.is_active.is_(True),
                 Project.id != project_id,
             )
             .first()

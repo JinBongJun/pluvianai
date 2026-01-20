@@ -97,7 +97,7 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
     # Create free plan subscription for new user
     from app.models.subscription import Subscription
-    from datetime import datetime, timedelta
+    from datetime import datetime
 
     now = datetime.utcnow()
     period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)

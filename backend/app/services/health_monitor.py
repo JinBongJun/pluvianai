@@ -111,7 +111,7 @@ class HealthMonitor:
                     project = db.query(Project).filter(Project.id == project_id).first()
                 else:
                     # Use first active project as fallback
-                    project = db.query(Project).filter(Project.is_active == True).first()
+                    project = db.query(Project).filter(Project.is_active.is_(True)).first()
 
                 if project:
                     alert = Alert(
