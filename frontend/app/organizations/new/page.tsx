@@ -88,7 +88,7 @@ export default function NewOrganizationPage() {
               disabled={loading}
             />
             <p className="mt-1 text-sm text-gray-400">
-              What's the name of your company or team? You can change this later.
+              What&apos;s the name of your company or team? You can change this later.
             </p>
           </div>
 
