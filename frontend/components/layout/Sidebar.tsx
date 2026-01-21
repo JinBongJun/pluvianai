@@ -77,6 +77,20 @@ export default function Sidebar({
             <span>Dashboard</span>
           </button>
 
+          {/* Organizations */}
+          <button
+            onClick={() => router.push('/organizations')}
+            className={clsx(
+              'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+              pathname?.startsWith('/organizations')
+                ? 'bg-purple-500/20 text-white border-l-2 border-purple-500'
+                : 'text-slate-400 hover:bg-white/5 hover:text-white',
+            )}
+          >
+            <Users className="h-5 w-5" />
+            <span>Organizations</span>
+          </button>
+
           {/* Projects Section */}
           <div>
             <button
