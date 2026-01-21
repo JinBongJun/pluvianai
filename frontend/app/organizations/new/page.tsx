@@ -73,7 +73,7 @@ export default function NewOrganizationPage() {
               maxLength={255}
             />
             <p className="mt-1 text-sm text-slate-400">
-              What's the name of your company or team? You can change this later.
+              What&apos;s the name of your company or team? You can change this later.
             </p>
           </div>
 
@@ -102,8 +102,8 @@ export default function NewOrganizationPage() {
 
           <div className="rounded-lg border border-blue-900 bg-blue-900/10 p-4">
             <p className="text-sm text-blue-200">
-              ℹ️ You'll be the owner of this organization. You can invite team members and transfer ownership later
-              from Settings &gt; Team.
+              ℹ️ You&apos;ll be the owner of this organization. You can invite team members and transfer ownership
+              later from Settings &gt; Team.
             </p>
           </div>
 
