@@ -165,6 +165,21 @@ const normalizeOrganizationProject = (project: any): OrganizationProject => ({
 });
 
 export const organizationsAPI = {
+  create: async (data: { name: string; type?: string | null; plan_type?: PlanType }) => {
+    const response = await apiClient.post('/organizations', {
+      name: data.name,
+      type: data.type ?? null,
+      plan_type: data.plan_type ?? 'free',
+    });
+    try {
+      const parsed = OrganizationSchema.parse(response.data);
+      return normalizeOrganizationDetail(parsed);
+    } catch (error) {
+      console.warn('[API Validation] Organization create schema mismatch:', error);
+      return normalizeOrganizationDetail(response.data);
+    }
+  },
+
   list: async (options?: { includeStats?: boolean; search?: string }) => {
     const response = await apiClient.get('/organizations', {
       params: {

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 import TopHeader from '@/components/layout/TopHeader';
+import { organizationsAPI } from '@/lib/api';
 
 export default function NewOrganizationPage() {
   const router = useRouter();
@@ -20,28 +21,18 @@ export default function NewOrganizationPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/v1/organizations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          type: type || null,
-          plan_type: 'free',
-        }),
+      const org = await organizationsAPI.create({
+        name: name.trim(),
+        type: type || null,
+        plan_type: 'free',
       });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || 'Failed to create organization');
-      }
-
-      const org = await res.json();
       router.push(`/organizations/${org.id}/projects`);
     } catch (err: any) {
-      setError(err.message || 'Failed to create organization');
+      const message =
+        err?.response?.data?.detail ||
+        err?.message ||
+        'Failed to create organization';
+      setError(message);
     } finally {
       setLoading(false);
     }
