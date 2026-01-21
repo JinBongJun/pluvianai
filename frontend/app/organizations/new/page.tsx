@@ -123,7 +123,7 @@ export default function NewOrganizationPage() {
 
           <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4">
             <p className="text-sm text-blue-300">
-              ℹ️  You'll be the owner of this organization. You can invite team
+              ℹ️  You&apos;ll be the owner of this organization. You can invite team
               members and transfer ownership later from Settings &gt; Team.
             </p>
           </div>
