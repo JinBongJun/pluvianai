@@ -17,9 +17,22 @@ from app.core.config import settings
 
 # Import all models to ensure they are registered with Base
 from app.models import (
-    User, Project, ProjectMember, APIKey, APICall,
-    QualityScore, DriftDetection, Alert, Subscription, Usage,
-    NotificationSettings, ActivityLog, Webhook, ShadowComparison
+    User,
+    Project,
+    ProjectMember,
+    APIKey,
+    APICall,
+    QualityScore,
+    DriftDetection,
+    Alert,
+    Subscription,
+    Usage,
+    NotificationSettings,
+    ActivityLog,
+    Webhook,
+    ShadowComparison,
+    Organization,
+    OrganizationMember,
 )
 
 # this is the Alembic Config object, which provides

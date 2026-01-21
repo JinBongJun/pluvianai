@@ -3,8 +3,6 @@ Database models
 """
 
 from app.models.user import User
-from app.models.organization import Organization
-from app.models.organization_member import OrganizationMember
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.api_key import APIKey
@@ -19,11 +17,10 @@ from app.models.webhook import Webhook
 from app.models.notification_settings import NotificationSettings
 from app.models.shadow_comparison import ShadowComparison
 from app.models.login_attempt import LoginAttempt
+from app.models.organization import Organization, OrganizationMember
 
 __all__ = [
     "User",
-    "Organization",
-    "OrganizationMember",
     "Project",
     "ProjectMember",
     "APIKey",
@@ -38,4 +35,6 @@ __all__ = [
     "NotificationSettings",
     "ShadowComparison",
     "LoginAttempt",
+    "Organization",
+    "OrganizationMember",
 ]

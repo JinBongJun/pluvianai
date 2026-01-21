@@ -1,15 +1,15 @@
 """
-Organization model for multi-tenant structure
+Organization and OrganizationMember models
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Index
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
 
 
 class Organization(Base):
-    """Organization model"""
+    """Organization model for org-first architecture"""
 
     __tablename__ = "organizations"
 
@@ -17,22 +17,29 @@ class Organization(Base):
     name = Column(String(255), nullable=False, index=True)
     type = Column(String(50), nullable=True)  # personal, startup, company, agency, educational, na
     plan_type = Column(String(20), nullable=False, default="free")  # free, pro, enterprise
+    paddle_customer_id = Column(String(255), nullable=True, index=True)
+    paddle_subscription_id = Column(String(255), nullable=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    
-    # Paddle billing fields
-    paddle_customer_id = Column(String(255), nullable=True, unique=True, index=True)
-    paddle_subscription_id = Column(String(255), nullable=True, unique=True, index=True)
-    
-    # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
-    owner = relationship("User", foreign_keys=[owner_id])
+    owner = relationship("User", back_populates="organizations")
     members = relationship("OrganizationMember", back_populates="organization", cascade="all, delete-orphan")
-    projects = relationship("Project", back_populates="organization", cascade="all, delete-orphan")
 
-    __table_args__ = (
-        Index("idx_org_owner", "owner_id"),
-        Index("idx_org_plan", "plan_type"),
-    )
+
+class OrganizationMember(Base):
+    """Organization member with role"""
+
+    __tablename__ = "organization_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    role = Column(String(20), nullable=False, default="owner")  # owner, admin, member, viewer
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    organization = relationship("Organization", back_populates="members")
+    user = relationship("User", back_populates="organization_members")
+
