@@ -28,6 +28,7 @@ from app.api.v1.endpoints import (
     feature_flags,
     monitoring,
     shadow_routing,
+    organizations,
 )
 
 api_router = APIRouter()
@@ -56,3 +57,4 @@ api_router.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"]
 api_router.include_router(health.router, prefix="/health", tags=["health"])
 api_router.include_router(feature_flags.router, prefix="/feature-flags", tags=["feature-flags"])
 api_router.include_router(monitoring.router, prefix="/monitoring", tags=["monitoring"])
+api_router.include_router(organizations.router, prefix="/organizations", tags=["organizations"])

@@ -14,6 +14,10 @@ import {
   ProjectSchema,
   APICallSchema,
   AlertSchema,
+  OrganizationSchema,
+  OrganizationArraySchema,
+  OrganizationProjectStatsSchema,
+  OrganizationProjectArraySchema,
 } from '@/lib/schemas';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -110,39 +114,98 @@ export const authAPI = {
   },
 };
 
-// Projects API
 // Organizations API
+const normalizePlan = (plan?: string): PlanType => {
+  const normalized = (plan || 'free').toLowerCase();
+  if (normalized === 'free' || normalized === 'pro' || normalized === 'enterprise') {
+    return normalized;
+  }
+  return (plan as PlanType) || 'free';
+};
+
+const normalizeOrganization = (org: any): OrganizationSummary => {
+  const stats = org?.stats || {};
+  return {
+    id: org?.id,
+    name: org?.name || 'Untitled organization',
+    plan: normalizePlan(org?.plan_type || org?.plan),
+    projects: stats.projects ?? org?.projects_count ?? org?.projects ?? 0,
+    calls7d: stats.calls_7d ?? org?.calls_7d,
+    cost7d: stats.cost_7d ?? org?.cost_7d,
+    alertsOpen: stats.alerts_open ?? org?.alerts ?? org?.alerts_open,
+    driftDetected: stats.drift_detected ?? org?.drift_detected ?? false,
+  };
+};
+
+const normalizeOrganizationDetail = (org: any): OrganizationDetail => {
+  const base = normalizeOrganization(org);
+  const usage = org?.stats?.usage || org?.usage || {};
+  return {
+    ...base,
+    usage: {
+      calls: usage.calls ?? usage.calls_7d ?? 0,
+      callsLimit: usage.calls_limit ?? usage.callsLimit ?? 0,
+      cost: usage.cost ?? usage.cost_7d ?? 0,
+      costLimit: usage.cost_limit ?? usage.costLimit ?? 0,
+      quality: usage.quality ?? 0,
+    },
+    alerts: org?.stats?.alerts || org?.alerts || [],
+  };
+};
+
+const normalizeOrganizationProject = (project: any): OrganizationProject => ({
+  id: project?.id,
+  name: project?.name || 'Untitled project',
+  description: project?.description || null,
+  calls24h: project?.calls_24h ?? project?.calls24h ?? 0,
+  cost7d: project?.cost_7d ?? project?.cost7d ?? 0,
+  quality: project?.quality ?? project?.quality_score ?? null,
+  alerts: project?.alerts_open ?? project?.alerts ?? 0,
+  drift: project?.drift_detected ?? project?.drift ?? false,
+});
+
 export const organizationsAPI = {
-  list: async () => {
-    const response = await apiClient.get('/organizations');
-    return response.data;
-  },
-  
-  get: async (id: number) => {
-    const response = await apiClient.get(`/organizations/${id}`);
-    return response.data;
-  },
-  
-  create: async (data: { name: string; type?: string }) => {
-    const response = await apiClient.post('/organizations', {
-      name: data.name,
-      type: data.type || null,
-      plan_type: 'free',
+  list: async (options?: { includeStats?: boolean; search?: string }) => {
+    const response = await apiClient.get('/organizations', {
+      params: {
+        include_stats: options?.includeStats,
+        search: options?.search,
+      },
     });
-    return response.data;
+    const validated = validateArrayResponse(OrganizationSchema, response.data, '/organizations');
+    return validated.map(normalizeOrganization);
   },
-  
-  update: async (id: number, data: { name?: string; type?: string }) => {
-    const response = await apiClient.patch(`/organizations/${id}`, data);
-    return response.data;
+
+  get: async (id: number | string, options?: { includeStats?: boolean }) => {
+    const response = await apiClient.get(`/organizations/${id}`, {
+      params: { include_stats: options?.includeStats },
+    });
+    try {
+      const parsed = OrganizationSchema.parse(response.data);
+      return normalizeOrganizationDetail(parsed);
+    } catch (error) {
+      console.warn('[API Validation] Organization schema mismatch:', error);
+      return normalizeOrganizationDetail(response.data);
+    }
   },
-  
-  delete: async (id: number) => {
-    const response = await apiClient.delete(`/organizations/${id}`);
-    return response.data;
+
+  listProjects: async (id: number | string, options?: { includeStats?: boolean; search?: string }) => {
+    const response = await apiClient.get(`/organizations/${id}/projects`, {
+      params: {
+        include_stats: options?.includeStats,
+        search: options?.search,
+      },
+    });
+    const validated = validateArrayResponse(
+      OrganizationProjectStatsSchema,
+      response.data,
+      `/organizations/${id}/projects`,
+    );
+    return validated.map(normalizeOrganizationProject);
   },
 };
 
+// Projects API
 export const projectsAPI = {
   list: async (search?: string) => {
     const params = search ? { search } : {};
@@ -894,6 +957,41 @@ export const webhooksAPI = {
 };
 
 // Types
+export type PlanType = 'free' | 'pro' | 'enterprise' | string;
+
+export interface OrganizationSummary {
+  id: number;
+  name: string;
+  plan: PlanType;
+  projects: number;
+  calls7d?: number;
+  cost7d?: number;
+  alertsOpen?: number;
+  driftDetected?: boolean;
+}
+
+export interface OrganizationDetail extends OrganizationSummary {
+  usage: {
+    calls: number;
+    callsLimit: number;
+    cost: number;
+    costLimit: number;
+    quality: number;
+  };
+  alerts: { project?: string; summary?: string; severity?: string }[];
+}
+
+export interface OrganizationProject {
+  id: number;
+  name: string;
+  description: string | null;
+  calls24h?: number;
+  cost7d?: number;
+  quality?: number | null;
+  alerts?: number;
+  drift?: boolean;
+}
+
 export interface Project {
   id: number;
   name: string;

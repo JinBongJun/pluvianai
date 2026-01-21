@@ -20,6 +20,53 @@ export const NumberSchema = z.number().finite().default(0);
 export const StringSchema = z.string().default('');
 export const DateSchema = z.string().datetime().or(z.string()); // Accept ISO string or any string
 
+// Organization schemas
+export const OrganizationStatsSchema = z.object({
+  calls_7d: NumberSchema.optional(),
+  cost_7d: NumberSchema.optional(),
+  alerts_open: NumberSchema.optional(),
+  drift_detected: z.boolean().optional(),
+  projects: NumberSchema.optional(),
+  usage: z
+    .object({
+      calls: NumberSchema.optional(),
+      calls_limit: NumberSchema.optional(),
+      cost: NumberSchema.optional(),
+      cost_limit: NumberSchema.optional(),
+      quality: NumberSchema.optional(),
+    })
+    .partial()
+    .optional(),
+  alerts: z
+    .array(
+      z.object({
+        project: z.string().optional(),
+        summary: z.string().optional(),
+        severity: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
+export const OrganizationSchema = z.object({
+  id: z.number().int().positive(),
+  name: z.string().min(1),
+  type: z.string().nullable().optional(),
+  plan_type: z.enum(['free', 'pro', 'enterprise']).or(z.string()).default('free'),
+  stats: OrganizationStatsSchema.optional(),
+});
+
+export const OrganizationProjectStatsSchema = z.object({
+  id: z.number().int().positive(),
+  name: z.string().min(1),
+  description: z.string().nullable().optional(),
+  calls_24h: NumberSchema.optional(),
+  cost_7d: NumberSchema.optional(),
+  quality: NumberSchema.optional(),
+  alerts_open: NumberSchema.optional(),
+  drift_detected: z.boolean().optional(),
+});
+
 // Project schemas
 export const ProjectSchema = z.object({
   id: z.number().int().positive(),
@@ -184,6 +231,8 @@ export const DriftDetectionArraySchema = z.array(DriftDetectionSchema);
 // ModelComparisonArraySchema uses individual ModelComparisonSchema items
 export const ModelComparisonArraySchema = ModelComparisonSchema;
 export const ChainProfileArraySchema = z.array(ChainProfileSchema);
+export const OrganizationArraySchema = z.array(OrganizationSchema);
+export const OrganizationProjectArraySchema = z.array(OrganizationProjectStatsSchema);
 
 // Response wrapper schemas (for APIs that return {items: [], total: number})
 export const PaginatedResponseSchema = <T extends z.ZodTypeAny>(itemSchema: T) => z.object({
