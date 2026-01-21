@@ -111,6 +111,38 @@ export const authAPI = {
 };
 
 // Projects API
+// Organizations API
+export const organizationsAPI = {
+  list: async () => {
+    const response = await apiClient.get('/organizations');
+    return response.data;
+  },
+  
+  get: async (id: number) => {
+    const response = await apiClient.get(`/organizations/${id}`);
+    return response.data;
+  },
+  
+  create: async (data: { name: string; type?: string }) => {
+    const response = await apiClient.post('/organizations', {
+      name: data.name,
+      type: data.type || null,
+      plan_type: 'free',
+    });
+    return response.data;
+  },
+  
+  update: async (id: number, data: { name?: string; type?: string }) => {
+    const response = await apiClient.patch(`/organizations/${id}`, data);
+    return response.data;
+  },
+  
+  delete: async (id: number) => {
+    const response = await apiClient.delete(`/organizations/${id}`);
+    return response.data;
+  },
+};
+
 export const projectsAPI = {
   list: async (search?: string) => {
     const params = search ? { search } : {};

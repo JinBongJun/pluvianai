@@ -16,6 +16,7 @@ class Project(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Org 연결
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -39,6 +40,7 @@ class Project(Base):
     shadow_routing_config = Column(JSON, nullable=True)
 
     # Relationships
+    organization = relationship("Organization", back_populates="projects")
     owner = relationship("User", back_populates="projects")
     members = relationship("ProjectMember", back_populates="project", cascade="all, delete-orphan")
     api_calls = relationship("APICall", back_populates="project", cascade="all, delete-orphan")

@@ -3,6 +3,8 @@ Database models
 """
 
 from app.models.user import User
+from app.models.organization import Organization
+from app.models.organization_member import OrganizationMember
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.api_key import APIKey
@@ -20,6 +22,8 @@ from app.models.login_attempt import LoginAttempt
 
 __all__ = [
     "User",
+    "Organization",
+    "OrganizationMember",
     "Project",
     "ProjectMember",
     "APIKey",
