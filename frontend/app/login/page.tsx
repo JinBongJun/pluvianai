@@ -51,14 +51,14 @@ export default function LoginPage() {
       if (isLogin) {
         await authAPI.login(email, password);
         posthog.capture('user_login', { method: 'password' });
-        router.push('/dashboard');
+        router.push('/organizations');
       } else {
         await authAPI.register(email, password, fullName);
         posthog.capture('user_register', { method: 'password' });
         // After registration, log in
         await authAPI.login(email, password);
         posthog.capture('user_login', { method: 'password' });
-        router.push('/dashboard');
+        router.push('/organizations');
       }
     } catch (err: any) {
       console.error('Login error:', err);

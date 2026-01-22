@@ -162,20 +162,60 @@ export default function GlobalSearch() {
     }
   }, [isOpen, results, selectedIndex]);
 
-  const handleResultClick = (result: SearchResult) => {
-    switch (result.type) {
-      case 'project':
-        router.push(`/dashboard/${result.projectId}`);
-        break;
-      case 'api_call':
-        router.push(`/dashboard/${result.projectId}/api-calls/${result.id}`);
-        break;
-      case 'drift':
-        router.push(`/dashboard/${result.projectId}/drift/${result.id}`);
-        break;
-      case 'alert':
-        router.push(`/dashboard/${result.projectId}/alerts/${result.id}`);
-        break;
+  const handleResultClick = async (result: SearchResult) => {
+    try {
+      const { projectsAPI } = await import('@/lib/api');
+      const proj = await projectsAPI.get(result.projectId);
+      const orgId = proj.organization_id;
+      
+      if (orgId) {
+        switch (result.type) {
+          case 'project':
+            router.push(`/organizations/${orgId}/projects/${result.projectId}`);
+            break;
+          case 'api_call':
+            router.push(`/organizations/${orgId}/projects/${result.projectId}/api-calls/${result.id}`);
+            break;
+          case 'drift':
+            router.push(`/organizations/${orgId}/projects/${result.projectId}/drift/${result.id}`);
+            break;
+          case 'alert':
+            router.push(`/organizations/${orgId}/projects/${result.projectId}/alerts/${result.id}`);
+            break;
+        }
+      } else {
+        // Fallback to old paths
+        switch (result.type) {
+          case 'project':
+            router.push(`/dashboard/${result.projectId}`);
+            break;
+          case 'api_call':
+            router.push(`/dashboard/${result.projectId}/api-calls/${result.id}`);
+            break;
+          case 'drift':
+            router.push(`/dashboard/${result.projectId}/drift/${result.id}`);
+            break;
+          case 'alert':
+            router.push(`/dashboard/${result.projectId}/alerts/${result.id}`);
+            break;
+        }
+      }
+    } catch {
+      // Fallback to old paths on error
+      switch (result.type) {
+        case 'project':
+          router.push(`/dashboard/${result.projectId}`);
+          break;
+        case 'api_call':
+          router.push(`/dashboard/${result.projectId}/api-calls/${result.id}`);
+          break;
+        case 'drift':
+          router.push(`/dashboard/${result.projectId}/drift/${result.id}`);
+          break;
+        case 'alert':
+          router.push(`/dashboard/${result.projectId}/alerts/${result.id}`);
+          break;
+      }
     }
     setIsOpen(false);
     setQuery('');

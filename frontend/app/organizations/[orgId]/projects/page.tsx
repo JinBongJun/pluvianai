@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
-import TopHeader from '@/components/layout/TopHeader';
+import OrgLayout from '@/components/layout/OrgLayout';
 import { OrganizationDetail, OrganizationProject, organizationsAPI } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/useDebounce';
 
@@ -58,20 +58,19 @@ export default function OrgProjectsPage() {
   const loading = (!org && orgLoading) || (!projects && projectsLoading);
   const firstProjectId = filteredProjects[0]?.id ?? projects?.[0]?.id;
 
-  return (
-    <div className="min-h-screen bg-[#000314] text-white">
-      <TopHeader
-        breadcrumb={[
-          { label: 'Organizations', href: '/organizations' },
-          { label: org?.name || 'Organization' },
-        ]}
-        onSearchClick={() => {
-          const el = document.getElementById('project-search');
-          if (el) el.focus();
-        }}
-      />
+  if (!orgId) {
+    return null;
+  }
 
-      <main className="px-8 py-10 max-w-6xl mx-auto">
+  return (
+    <OrgLayout
+      orgId={orgId}
+      breadcrumb={[
+        { label: 'Organizations', href: '/organizations' },
+        { label: org?.name || 'Organization' },
+      ]}
+    >
+      <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold mb-2">{org?.name || 'Organization'}</h1>
@@ -87,7 +86,7 @@ export default function OrgProjectsPage() {
             </p>
           </div>
           <button
-            onClick={() => router.push(`/dashboard?create=true`)}
+            onClick={() => router.push(`/organizations/${orgId}/projects/new`)}
             className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-700 transition-colors"
           >
             <span className="text-lg leading-none">+</span>
@@ -166,9 +165,7 @@ export default function OrgProjectsPage() {
               <button
                 onClick={() => {
                   if (firstProjectId) {
-                    router.push(`/dashboard/${firstProjectId}/alerts`);
-                  } else {
-                    router.push('/dashboard');
+                    router.push(`/organizations/${orgId}/projects/${firstProjectId}/alerts`);
                   }
                 }}
                 className="text-xs text-purple-300 hover:text-purple-200"
@@ -233,7 +230,7 @@ export default function OrgProjectsPage() {
                 : 'No projects yet. Create your first project to get started.'}
             </p>
             <button
-              onClick={() => router.push('/dashboard?create=true')}
+              onClick={() => router.push(`/organizations/${orgId}/projects/new`)}
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-700 transition-colors"
             >
               <span className="text-lg leading-none">+</span>
@@ -307,7 +304,7 @@ export default function OrgProjectsPage() {
             </table>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </OrgLayout>
   );
 }

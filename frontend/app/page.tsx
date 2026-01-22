@@ -15,7 +15,7 @@ export default function LandingPage() {
     // Check if user is logged in
     const token = localStorage.getItem('access_token');
     if (token) {
-      router.push('/dashboard');
+      router.push('/organizations');
     }
   }, [router]);
 

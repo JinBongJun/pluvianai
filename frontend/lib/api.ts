@@ -244,11 +244,12 @@ export const projectsAPI = {
     }
   },
   
-  create: async (data: { name: string; description?: string; generate_sample_data?: boolean }) => {
+  create: async (data: { name: string; description?: string; generate_sample_data?: boolean; organization_id?: number }) => {
     const response = await apiClient.post('/projects', {
       name: data.name,
       description: data.description,
       generate_sample_data: data.generate_sample_data,
+      organization_id: data.organization_id,
     });
     return response.data;
   },
@@ -1014,6 +1015,7 @@ export interface Project {
   owner_id: number;
   is_active: boolean;
   role?: 'owner' | 'admin' | 'member' | 'viewer'; // Added for team feature
+  organization_id?: number | null; // Organization this project belongs to
 }
 
 export default apiClient;

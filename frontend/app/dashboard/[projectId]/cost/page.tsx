@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import DashboardLayout from '@/components/layout/DashboardLayout';
+import { projectsAPI } from '@/lib/api';
+import OrgLayout from '@/components/layout/OrgLayout';
+import useSWR from 'swr';
+import { organizationsAPI } from '@/lib/api';
 import FilterPanel, { FilterState } from '@/components/filters/FilterPanel';
 import DateRangePicker from '@/components/ui/DateRangePicker';
 import Button from '@/components/ui/Button';
@@ -34,6 +37,7 @@ export default function CostAnalysisPage() {
   const params = useParams();
   const toast = useToast();
   const projectId = Number(params.projectId);
+  const [orgId, setOrgId] = useState<number | string | null>(null);
 
   const [costData, setCostData] = useState<CostAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,6 +67,25 @@ export default function CostAnalysisPage() {
     }
   }, [dateRange]);
 
+  // Get project's organization_id
+  const { data: project } = useSWR(projectId ? ['project', projectId] : null, () =>
+    projectsAPI.get(projectId),
+  );
+
+  useEffect(() => {
+    if (project?.organization_id) {
+      setOrgId(project.organization_id);
+    } else if (project && !project.organization_id) {
+      // Project has no org, redirect to organizations
+      router.push('/organizations');
+      return;
+    }
+  }, [project, router]);
+
+  const { data: org } = useSWR(orgId ? ['organization', orgId] : null, () =>
+    organizationsAPI.get(orgId!, { includeStats: false }),
+  );
+
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     if (!token) {
@@ -70,10 +93,14 @@ export default function CostAnalysisPage() {
       return;
     }
 
+    if (!orgId) {
+      return; // Wait for orgId
+    }
+
     loadCostData();
     loadOptimizations();
     loadPredictions();
-  }, [projectId, days, router]);
+  }, [projectId, days, orgId, router]);
 
   const loadCostData = async () => {
     setLoading(true);
@@ -131,13 +158,31 @@ export default function CostAnalysisPage() {
     toast.showToast('Export functionality coming soon', 'info');
   };
 
+  if (!orgId) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#000314]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-500/20 border-t-purple-500 mx-auto mb-4"></div>
+          <p className="text-slate-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (loading && !costData) {
     return (
-      <DashboardLayout>
+      <OrgLayout
+        orgId={orgId}
+        breadcrumb={[
+          { label: 'Organizations', href: '/organizations' },
+          { label: org?.name || 'Organization', href: `/organizations/${orgId}/projects` },
+          { label: 'Cost Analysis' },
+        ]}
+      >
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
         </div>
-      </DashboardLayout>
+      </OrgLayout>
     );
   }
 
@@ -171,8 +216,15 @@ export default function CostAnalysisPage() {
     : [];
 
   return (
-    <DashboardLayout>
-      <div className="bg-[#000314] min-h-screen">
+    <OrgLayout
+      orgId={orgId}
+      breadcrumb={[
+        { label: 'Organizations', href: '/organizations' },
+        { label: org?.name || 'Organization', href: `/organizations/${orgId}/projects` },
+        { label: 'Cost Analysis' },
+      ]}
+    >
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
@@ -191,7 +243,7 @@ export default function CostAnalysisPage() {
         </div>
 
         {/* Tabs */}
-        <ProjectTabs projectId={projectId} />
+        <ProjectTabs projectId={projectId} orgId={orgId} />
 
         {/* Date Range Selector */}
         <div className="mb-6">
@@ -450,6 +502,6 @@ export default function CostAnalysisPage() {
           </div>
         </Modal>
       </div>
-    </DashboardLayout>
+    </OrgLayout>
   );
 }

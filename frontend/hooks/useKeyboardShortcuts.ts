@@ -53,8 +53,14 @@ export function useGlobalShortcuts() {
     {
       key: 'n',
       ctrlKey: true,
-      action: () => {
-        router.push('/dashboard?create=true');
+      action: async () => {
+        const { getLastSelectedOrgId } = await import('@/components/layout/OrgSelector');
+        const lastOrgId = getLastSelectedOrgId();
+        if (lastOrgId) {
+          router.push(`/organizations/${lastOrgId}/projects/new`);
+        } else {
+          router.push('/organizations');
+        }
       },
       description: 'New project',
     },

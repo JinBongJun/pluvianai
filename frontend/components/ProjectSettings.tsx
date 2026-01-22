@@ -64,7 +64,17 @@ export default function ProjectSettings({ projectId, project, onUpdate }: Projec
     try {
       await projectsAPI.delete(projectId);
       toast.showToast('Project deleted successfully', 'success');
-      router.push('/dashboard');
+      // Get project's org and redirect
+      try {
+        const proj = await projectsAPI.get(projectId);
+        if (proj.organization_id) {
+          router.push(`/organizations/${proj.organization_id}/projects`);
+        } else {
+          router.push('/organizations');
+        }
+      } catch {
+        router.push('/organizations');
+      }
     } catch (err: any) {
       const errorMsg = err.response?.data?.detail || 'Failed to delete project';
       setError(errorMsg);

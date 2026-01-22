@@ -5,22 +5,28 @@ import { clsx } from 'clsx';
 
 interface ProjectTabsProps {
   projectId: number;
+  orgId?: number | string;
   canManage?: boolean;
 }
 
-export default function ProjectTabs({ projectId, canManage = false }: ProjectTabsProps) {
+export default function ProjectTabs({ projectId, orgId, canManage = false }: ProjectTabsProps) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Determine base path - use org path if orgId is provided, otherwise fallback to dashboard
+  const basePath = orgId 
+    ? `/organizations/${orgId}/projects/${projectId}`
+    : `/dashboard/${projectId}`;
+
   const tabs = [
-    { id: 'overview', label: 'Overview', path: `/dashboard/${projectId}` },
-    { id: 'api-calls', label: 'API Calls', path: `/dashboard/${projectId}/api-calls` },
-    { id: 'chains', label: 'Chains', path: `/dashboard/${projectId}/chains` },
-    { id: 'compare', label: 'Compare', path: `/dashboard/${projectId}/compare` },
-    { id: 'reports', label: 'Reports', path: `/dashboard/${projectId}/reports` },
-    { id: 'alerts', label: 'Alerts', path: `/dashboard/${projectId}/alerts` },
-    { id: 'members', label: 'Team Members', path: `/dashboard/${projectId}?tab=members` },
-    ...(canManage ? [{ id: 'settings', label: 'Settings', path: `/dashboard/${projectId}?tab=settings` }] : []),
+    { id: 'overview', label: 'Overview', path: basePath },
+    { id: 'api-calls', label: 'API Calls', path: `${basePath}/api-calls` },
+    { id: 'chains', label: 'Chains', path: `${basePath}/chains` },
+    { id: 'compare', label: 'Compare', path: `${basePath}/compare` },
+    { id: 'reports', label: 'Reports', path: `${basePath}/reports` },
+    { id: 'alerts', label: 'Alerts', path: `${basePath}/alerts` },
+    { id: 'members', label: 'Team Members', path: `${basePath}?tab=members` },
+    ...(canManage ? [{ id: 'settings', label: 'Settings', path: `${basePath}?tab=settings` }] : []),
   ];
 
   const getActiveTab = () => {

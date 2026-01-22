@@ -63,12 +63,12 @@ export default function Sidebar({
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2 py-4">
         <div className="space-y-1">
-          {/* Dashboard */}
+          {/* Dashboard - Redirects to organizations */}
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push('/organizations')}
             className={clsx(
               'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-              isActive('/dashboard')
+              pathname?.startsWith('/organizations') && !pathname?.startsWith('/organizations/')
                 ? 'bg-purple-500/20 text-white border-l-2 border-purple-500'
                 : 'text-slate-400 hover:bg-white/5 hover:text-white'
             )}
@@ -115,27 +115,49 @@ export default function Sidebar({
                     No projects yet
                   </div>
                 ) : (
-                  projects.map((project) => (
-                    <button
-                      key={project.id}
-                      onClick={() => router.push(`/dashboard/${project.id}`)}
-                      className={clsx(
-                        'w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 text-left',
-                        isProjectActive(project.id)
-                          ? 'bg-purple-500/20 text-white font-medium border-l-2 border-purple-500'
-                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                      )}
-                    >
-                      <div className={clsx(
-                        'h-2 w-2 rounded-full transition-colors',
-                        isProjectActive(project.id) ? 'bg-purple-400' : 'bg-slate-500'
-                      )} />
-                      <span className="truncate">{project.name}</span>
-                    </button>
-                  ))
+                  projects.map((project) => {
+                    const handleProjectClick = async () => {
+                      try {
+                        const proj = await import('@/lib/api').then(m => m.projectsAPI.get(project.id));
+                        if (proj.organization_id) {
+                          router.push(`/organizations/${proj.organization_id}/projects/${project.id}`);
+                        } else {
+                          router.push(`/dashboard/${project.id}`);
+                        }
+                      } catch {
+                        router.push(`/dashboard/${project.id}`);
+                      }
+                    };
+                    return (
+                      <button
+                        key={project.id}
+                        onClick={handleProjectClick}
+                        className={clsx(
+                          'w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 text-left',
+                          isProjectActive(project.id)
+                            ? 'bg-purple-500/20 text-white font-medium border-l-2 border-purple-500'
+                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        )}
+                      >
+                        <div className={clsx(
+                          'h-2 w-2 rounded-full transition-colors',
+                          isProjectActive(project.id) ? 'bg-purple-400' : 'bg-slate-500'
+                        )} />
+                        <span className="truncate">{project.name}</span>
+                      </button>
+                    );
+                  })
                 )}
                 <button
-                  onClick={() => router.push('/dashboard?create=true')}
+                  onClick={async () => {
+                    const { getLastSelectedOrgId } = await import('@/components/layout/OrgSelector');
+                    const lastOrgId = getLastSelectedOrgId();
+                    if (lastOrgId) {
+                      router.push(`/organizations/${lastOrgId}/projects/new`);
+                    } else {
+                      router.push('/organizations');
+                    }
+                  }}
                   className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-purple-400 transition-all duration-200"
                 >
                   <span className="text-lg leading-none">+</span>

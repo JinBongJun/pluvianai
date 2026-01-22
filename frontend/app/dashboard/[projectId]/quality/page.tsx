@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import DashboardLayout from '@/components/layout/DashboardLayout';
+import { projectsAPI, organizationsAPI } from '@/lib/api';
+import OrgLayout from '@/components/layout/OrgLayout';
+import useSWR from 'swr';
 import FilterPanel, { FilterState } from '@/components/filters/FilterPanel';
 import Pagination from '@/components/ui/Pagination';
 import Badge from '@/components/ui/Badge';
@@ -37,6 +39,7 @@ export default function QualityScoresPage() {
   const params = useParams();
   const toast = useToast();
   const projectId = Number(params.projectId);
+  const [orgId, setOrgId] = useState<number | string | null>(null);
 
   const [scores, setScores] = useState<QualityScore[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,6 +57,24 @@ export default function QualityScoresPage() {
     to: new Date(),
   });
 
+  // Get project's organization_id
+  const { data: project } = useSWR(projectId ? ['project', projectId] : null, () =>
+    projectsAPI.get(projectId),
+  );
+
+  useEffect(() => {
+    if (project?.organization_id) {
+      setOrgId(project.organization_id);
+    } else if (project && !project.organization_id) {
+      router.push('/organizations');
+      return;
+    }
+  }, [project, router]);
+
+  const { data: org } = useSWR(orgId ? ['organization', orgId] : null, () =>
+    organizationsAPI.get(orgId!, { includeStats: false }),
+  );
+
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     if (!token) {
@@ -61,8 +82,12 @@ export default function QualityScoresPage() {
       return;
     }
 
+    if (!orgId) {
+      return; // Wait for orgId
+    }
+
     loadQualityScores();
-  }, [projectId, filters, sortField, sortDirection, currentPage, itemsPerPage, dateRange, router]);
+  }, [projectId, filters, sortField, sortDirection, currentPage, itemsPerPage, dateRange, orgId, router]);
 
   const loadQualityScores = async () => {
     setLoading(true);
@@ -175,19 +200,44 @@ export default function QualityScoresPage() {
 
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
+  if (!orgId) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#000314]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-500/20 border-t-purple-500 mx-auto mb-4"></div>
+          <p className="text-slate-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (loading && scores.length === 0) {
     return (
-      <DashboardLayout>
+      <OrgLayout
+        orgId={orgId}
+        breadcrumb={[
+          { label: 'Organizations', href: '/organizations' },
+          { label: org?.name || 'Organization', href: `/organizations/${orgId}/projects` },
+          { label: 'Quality Analysis' },
+        ]}
+      >
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
         </div>
-      </DashboardLayout>
+      </OrgLayout>
     );
   }
 
   return (
-    <DashboardLayout>
-      <div className="bg-[#000314] min-h-screen">
+    <OrgLayout
+      orgId={orgId}
+      breadcrumb={[
+        { label: 'Organizations', href: '/organizations' },
+        { label: org?.name || 'Organization', href: `/organizations/${orgId}/projects` },
+        { label: 'Quality Analysis' },
+      ]}
+    >
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white">Quality Scores</h1>
@@ -195,7 +245,7 @@ export default function QualityScoresPage() {
         </div>
 
         {/* Tabs */}
-        <ProjectTabs projectId={projectId} />
+        <ProjectTabs projectId={projectId} orgId={orgId} />
 
         {/* Date Range Selector */}
         <div className="mb-6">
@@ -343,7 +393,13 @@ export default function QualityScoresPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => router.push(`/dashboard/${projectId}/api-calls/${score.api_call_id}`)}
+                            onClick={() => {
+                              if (orgId) {
+                                router.push(`/organizations/${orgId}/projects/${projectId}/api-calls/${score.api_call_id}`);
+                              } else {
+                                router.push(`/dashboard/${projectId}/api-calls/${score.api_call_id}`);
+                              }
+                            }}
                             className="flex items-center gap-2 text-purple-400 hover:text-purple-300"
                           >
                             <Eye className="h-4 w-4" />
@@ -371,6 +427,6 @@ export default function QualityScoresPage() {
           />
         )}
       </div>
-    </DashboardLayout>
+    </OrgLayout>
   );
 }

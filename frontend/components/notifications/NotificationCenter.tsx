@@ -107,9 +107,19 @@ export default function NotificationCenter() {
     }
   };
 
-  const handleNotificationClick = (notification: Notification) => {
+  const handleNotificationClick = async (notification: Notification) => {
     handleMarkRead(notification.id);
-    router.push(`/dashboard/${notification.project_id}/alerts/${notification.id}`);
+    try {
+      const { projectsAPI } = await import('@/lib/api');
+      const proj = await projectsAPI.get(notification.project_id);
+      if (proj.organization_id) {
+        router.push(`/organizations/${proj.organization_id}/projects/${notification.project_id}/alerts/${notification.id}`);
+      } else {
+        router.push(`/dashboard/${notification.project_id}/alerts/${notification.id}`);
+      }
+    } catch {
+      router.push(`/dashboard/${notification.project_id}/alerts/${notification.id}`);
+    }
     setIsOpen(false);
   };
 
