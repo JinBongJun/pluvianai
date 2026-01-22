@@ -53,7 +53,7 @@ export const OrganizationSchema = z.object({
   name: z.string().min(1),
   type: z.string().nullable().optional(),
   plan_type: z.enum(['free', 'pro', 'enterprise']).or(z.string()).default('free'),
-  stats: OrganizationStatsSchema.optional(),
+  stats: OrganizationStatsSchema.nullable().optional(),
 });
 
 export const OrganizationProjectStatsSchema = z.object({

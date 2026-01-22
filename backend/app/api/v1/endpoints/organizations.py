@@ -256,13 +256,29 @@ def get_organization(
     current_user: User = Depends(get_current_user),
 ):
     """Get organization details with optional stats."""
-    org = (
-        db.query(Organization)
-        .filter(Organization.id == org_id, Organization.owner_id == current_user.id)
-        .first()
-    )
+    # Check if user is owner or member
+    org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    
+    # Check access
+    is_owner = org.owner_id == current_user.id
+    is_member = False
+    if not is_owner:
+        is_member = (
+            db.query(OrganizationMember)
+            .filter(
+                OrganizationMember.organization_id == org_id,
+                OrganizationMember.user_id == current_user.id
+            )
+            .first() is not None
+        )
+    
+    if not (is_owner or is_member):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this organization"
+        )
 
     if not include_stats:
         return OrganizationDetail(
@@ -270,6 +286,7 @@ def get_organization(
             name=org.name,
             type=org.type,
             plan_type=org.plan_type,
+            stats=None,  # Explicitly set to None
         )
 
     # Get all projects for this org
@@ -382,14 +399,29 @@ def list_org_projects(
     current_user: User = Depends(get_current_user),
 ):
     """List projects for an organization with basic metrics."""
-    # Verify org access (owner only for now)
-    org = (
-        db.query(Organization)
-        .filter(Organization.id == org_id, Organization.owner_id == current_user.id)
-        .first()
-    )
+    # Verify org access (owner or member)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    
+    # Check access
+    is_owner = org.owner_id == current_user.id
+    is_member = False
+    if not is_owner:
+        is_member = (
+            db.query(OrganizationMember)
+            .filter(
+                OrganizationMember.organization_id == org_id,
+                OrganizationMember.user_id == current_user.id
+            )
+            .first() is not None
+        )
+    
+    if not (is_owner or is_member):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this organization"
+        )
 
     # Base query
     query = db.query(Project).filter(Project.organization_id == org_id)
