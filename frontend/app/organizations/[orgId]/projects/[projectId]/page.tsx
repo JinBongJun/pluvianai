@@ -24,8 +24,8 @@ export default function ProjectDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const toast = useToast();
-  const orgId = params?.orgId as string;
-  const projectId = Number(params.projectId);
+  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
+  const projectId = Number(Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId);
   
   const [project, setProject] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);

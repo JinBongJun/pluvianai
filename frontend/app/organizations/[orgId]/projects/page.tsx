@@ -10,7 +10,7 @@ import { useDebouncedValue } from '@/hooks/useDebounce';
 export default function OrgProjectsPage() {
   const router = useRouter();
   const params = useParams();
-  const orgId = params?.orgId;
+  const orgId = Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId;
   const [projectQuery, setProjectQuery] = useState('');
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const debouncedProjectQuery = useDebouncedValue(projectQuery, 300);

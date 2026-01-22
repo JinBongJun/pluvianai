@@ -10,7 +10,7 @@ import { useToast } from '@/components/ToastContainer';
 export default function NewProjectPage() {
   const router = useRouter();
   const params = useParams();
-  const orgId = params?.orgId as string;
+  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
   const toast = useToast();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
