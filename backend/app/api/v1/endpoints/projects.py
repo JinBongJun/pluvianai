@@ -334,30 +334,8 @@ async def delete_project(
 
     project_name = project.name  # Save name before deletion
 
-    # Delete related data first to avoid foreign key constraint violations
-    # SQLAlchemy cascade should handle this, but we'll do it explicitly to be safe
-    from app.models.api_call import APICall
-    from app.models.quality_score import QualityScore
-    from app.models.drift_detection import DriftDetection
-    from app.models.alert import Alert
-    from app.models.usage import Usage
-    from app.models.activity_log import ActivityLog
-    from app.models.webhook import Webhook
-    from app.models.shadow_comparison import ShadowComparison
-    from app.models.project_member import ProjectMember
-    
-    # Delete in order to respect foreign key constraints
-    db.query(ShadowComparison).filter(ShadowComparison.project_id == project_id).delete()
-    db.query(Webhook).filter(Webhook.project_id == project_id).delete()
-    db.query(ActivityLog).filter(ActivityLog.project_id == project_id).delete()
-    db.query(Usage).filter(Usage.project_id == project_id).delete()
-    db.query(Alert).filter(Alert.project_id == project_id).delete()
-    db.query(DriftDetection).filter(DriftDetection.project_id == project_id).delete()
-    db.query(QualityScore).filter(QualityScore.project_id == project_id).delete()
-    db.query(APICall).filter(APICall.project_id == project_id).delete()
-    db.query(ProjectMember).filter(ProjectMember.project_id == project_id).delete()
-    
-    # Now delete the project
+    # Delete the project - related data will be automatically deleted via DB-level CASCADE
+    # All foreign keys to projects.id now have ON DELETE CASCADE (see migration 20260122)
     db.delete(project)
     db.commit()
 

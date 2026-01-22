@@ -14,7 +14,7 @@ class ShadowComparison(Base):
     __tablename__ = "shadow_comparisons"
 
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Primary (production) API call
     primary_api_call_id = Column(Integer, ForeignKey("api_calls.id"), nullable=False, index=True)

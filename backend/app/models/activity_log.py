@@ -15,7 +15,7 @@ class ActivityLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True)
 
     # Activity metadata
     activity_type = Column(String(50), nullable=False, index=True)  # project_create, project_update, member_add, etc.

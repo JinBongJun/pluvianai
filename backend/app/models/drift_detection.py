@@ -14,7 +14,7 @@ class DriftDetection(Base):
     __tablename__ = "drift_detections"
 
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Detection metadata
     detection_type = Column(String(50), nullable=False, index=True)  # length, structure, semantic, style, latency

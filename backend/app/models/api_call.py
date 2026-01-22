@@ -14,7 +14,7 @@ class APICall(Base):
     __tablename__ = "api_calls"
 
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Provider and model information
     provider = Column(String(50), nullable=False, index=True)  # openai, anthropic, google

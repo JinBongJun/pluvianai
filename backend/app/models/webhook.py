@@ -15,7 +15,7 @@ class Webhook(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)  # None for user-level webhooks
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True)  # None for user-level webhooks
 
     # Webhook configuration
     name = Column(String(255), nullable=False)

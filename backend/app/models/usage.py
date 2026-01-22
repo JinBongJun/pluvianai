@@ -15,7 +15,7 @@ class Usage(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True)
     metric_type = Column(String(50), nullable=False)  # api_calls, storage_gb, team_members, etc.
     current_usage = Column(BigInteger, default=0)  # Use BigInteger for large numbers
     limit = Column(BigInteger, nullable=True)  # -1 means unlimited

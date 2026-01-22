@@ -14,7 +14,7 @@ class Alert(Base):
     __tablename__ = "alerts"
 
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Alert metadata
     alert_type = Column(String(50), nullable=False, index=True)  # drift, cost_spike, error, timeout, model_update

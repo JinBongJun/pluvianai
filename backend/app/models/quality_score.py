@@ -15,7 +15,7 @@ class QualityScore(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     api_call_id = Column(Integer, ForeignKey("api_calls.id"), nullable=False, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Overall quality score (0-100)
     overall_score = Column(Float, nullable=False)
