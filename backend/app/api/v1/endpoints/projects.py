@@ -90,9 +90,12 @@ async def create_project(
         organization_id = project_data.organization_id
         if organization_id:
             from app.models.organization import Organization, OrganizationMember
+            logger.info(f"Creating project in organization {organization_id} for user {current_user.id}")
+            
             # Check if user is owner or member of the organization
             org = db.query(Organization).filter(Organization.id == organization_id).first()
             if not org:
+                logger.warning(f"Organization {organization_id} not found")
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Organization not found"
@@ -100,14 +103,25 @@ async def create_project(
             
             # Check if user is owner
             is_owner = org.owner_id == current_user.id
+            logger.info(f"User {current_user.id} is owner of org {organization_id}: {is_owner}")
             
-            # Check if user is a member
-            is_member = db.query(OrganizationMember).filter(
-                OrganizationMember.organization_id == organization_id,
-                OrganizationMember.user_id == current_user.id
-            ).first() is not None
+            # Check if user is a member (only if not owner, to avoid unnecessary query)
+            is_member = False
+            if not is_owner:
+                member = db.query(OrganizationMember).filter(
+                    OrganizationMember.organization_id == organization_id,
+                    OrganizationMember.user_id == current_user.id
+                ).first()
+                is_member = member is not None
+                logger.info(f"User {current_user.id} is member of org {organization_id}: {is_member}")
+                if member:
+                    logger.info(f"Member role: {member.role}")
             
             if not (is_owner or is_member):
+                logger.warning(
+                    f"User {current_user.id} attempted to create project in org {organization_id} without access. "
+                    f"Org owner: {org.owner_id}, User is owner: {is_owner}, User is member: {is_member}"
+                )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You don't have access to this organization"
@@ -320,6 +334,30 @@ async def delete_project(
 
     project_name = project.name  # Save name before deletion
 
+    # Delete related data first to avoid foreign key constraint violations
+    # SQLAlchemy cascade should handle this, but we'll do it explicitly to be safe
+    from app.models.api_call import APICall
+    from app.models.quality_score import QualityScore
+    from app.models.drift_detection import DriftDetection
+    from app.models.alert import Alert
+    from app.models.usage import Usage
+    from app.models.activity_log import ActivityLog
+    from app.models.webhook import Webhook
+    from app.models.shadow_comparison import ShadowComparison
+    from app.models.project_member import ProjectMember
+    
+    # Delete in order to respect foreign key constraints
+    db.query(ShadowComparison).filter(ShadowComparison.project_id == project_id).delete()
+    db.query(Webhook).filter(Webhook.project_id == project_id).delete()
+    db.query(ActivityLog).filter(ActivityLog.project_id == project_id).delete()
+    db.query(Usage).filter(Usage.project_id == project_id).delete()
+    db.query(Alert).filter(Alert.project_id == project_id).delete()
+    db.query(DriftDetection).filter(DriftDetection.project_id == project_id).delete()
+    db.query(QualityScore).filter(QualityScore.project_id == project_id).delete()
+    db.query(APICall).filter(APICall.project_id == project_id).delete()
+    db.query(ProjectMember).filter(ProjectMember.project_id == project_id).delete()
+    
+    # Now delete the project
     db.delete(project)
     db.commit()
 
