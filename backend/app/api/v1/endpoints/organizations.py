@@ -17,9 +17,12 @@ from app.models.organization import Organization, OrganizationMember
 from app.models.project import Project
 from app.models.api_call import APICall
 from app.models.alert import Alert
+from app.models.quality_score import QualityScore
+from app.services.cost_analyzer import CostAnalyzer
 
 
 router = APIRouter()
+cost_analyzer = CostAnalyzer()
 
 
 class OrganizationCreate(BaseModel):
@@ -44,11 +47,26 @@ class OrganizationSummary(BaseModel):
         from_attributes = True
 
 
+class OrganizationUsage(BaseModel):
+    calls: int = 0
+    calls_limit: int = 0
+    cost: float = 0.0
+    cost_limit: float = 0.0
+    quality: float = 0.0
+
+
+class OrganizationAlert(BaseModel):
+    project: Optional[str] = None
+    summary: Optional[str] = None
+    severity: Optional[str] = None
+
+
 class OrganizationDetail(BaseModel):
     id: int
     name: str
     type: Optional[str]
     plan_type: str
+    stats: Optional[dict] = None  # For backward compatibility
 
     class Config:
         from_attributes = True
@@ -230,13 +248,14 @@ def list_organizations(
     return summaries
 
 
-@router.get("/{org_id}", response_model=OrganizationDetail)
+@router.get("/{org_id}")
 def get_organization(
     org_id: int,
+    include_stats: bool = Query(False, description="Include usage stats and alerts"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get organization details (basic info)."""
+    """Get organization details with optional stats."""
     org = (
         db.query(Organization)
         .filter(Organization.id == org_id, Organization.owner_id == current_user.id)
@@ -244,12 +263,121 @@ def get_organization(
     )
     if not org:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
-    return org
+
+    if not include_stats:
+        return OrganizationDetail(
+            id=org.id,
+            name=org.name,
+            type=org.type,
+            plan_type=org.plan_type,
+        )
+
+    # Get all projects for this org
+    projects = db.query(Project).filter(Project.organization_id == org_id).all()
+    project_ids = [p.id for p in projects]
+
+    now = datetime.utcnow()
+    seven_days_ago = now - timedelta(days=7)
+
+    # Calculate usage stats
+    calls_count = 0
+    total_cost = 0.0
+    quality_scores = []
+
+    if project_ids:
+        # API calls (7d)
+        calls_count = (
+            db.query(func.count(APICall.id))
+            .filter(
+                APICall.project_id.in_(project_ids),
+                APICall.created_at >= seven_days_ago,
+                APICall.created_at <= now,
+            )
+            .scalar()
+            or 0
+        )
+
+        # Cost (7d) - calculate using CostAnalyzer
+        for project_id in project_ids:
+            try:
+                cost_analysis = cost_analyzer.analyze_project_costs(
+                    project_id=project_id,
+                    start_date=seven_days_ago,
+                    end_date=now,
+                    db=db,
+                )
+                total_cost += cost_analysis.get("total_cost", 0.0)
+            except Exception:
+                # Skip if cost calculation fails
+                pass
+
+        # Quality (average of recent quality scores)
+        quality_rows = (
+            db.query(func.avg(QualityScore.overall_score))
+            .filter(
+                QualityScore.project_id.in_(project_ids),
+                QualityScore.created_at >= seven_days_ago,
+            )
+            .scalar()
+        )
+        avg_quality = float(quality_rows) if quality_rows else 0.0
+    else:
+        avg_quality = 0.0
+
+    # Get plan limits (based on plan_type)
+    plan_limits = {
+        "free": {"calls": 1000, "cost": 10.0},
+        "pro": {"calls": 100000, "cost": 1000.0},
+        "enterprise": {"calls": 1000000, "cost": 10000.0},
+    }
+    limits = plan_limits.get(org.plan_type, plan_limits["free"])
+
+    # Get recent alerts
+    alerts_list = []
+    if project_ids:
+        recent_alerts = (
+            db.query(Alert, Project.name)
+            .join(Project, Alert.project_id == Project.id)
+            .filter(
+                Alert.project_id.in_(project_ids),
+                Alert.is_resolved.is_(False),
+            )
+            .order_by(Alert.created_at.desc())
+            .limit(10)
+            .all()
+        )
+        for alert, project_name in recent_alerts:
+            alerts_list.append(
+                {
+                    "project": project_name,
+                    "summary": alert.message or "Alert detected",
+                    "severity": alert.severity or "medium",
+                }
+            )
+
+    return {
+        "id": org.id,
+        "name": org.name,
+        "type": org.type,
+        "plan_type": org.plan_type,
+        "stats": {
+            "usage": {
+                "calls": calls_count,
+                "calls_limit": limits["calls"],
+                "cost": round(total_cost, 2),
+                "cost_limit": limits["cost"],
+                "quality": round(avg_quality, 1),
+            },
+            "alerts": alerts_list,
+        },
+    }
 
 
 @router.get("/{org_id}/projects", response_model=List[OrgProjectSummary])
 def list_org_projects(
     org_id: int,
+    include_stats: bool = Query(True, description="Include project metrics"),
+    search: Optional[str] = Query(None, description="Search projects by name or description"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -263,12 +391,17 @@ def list_org_projects(
     if not org:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
 
-    projects = (
-        db.query(Project)
-        .filter(Project.organization_id == org_id)
-        .order_by(Project.created_at.desc())
-        .all()
-    )
+    # Base query
+    query = db.query(Project).filter(Project.organization_id == org_id)
+
+    # Apply search filter
+    if search:
+        search_term = f"%{search.strip()}%"
+        query = query.filter(
+            (Project.name.ilike(search_term)) | (Project.description.ilike(search_term))
+        )
+
+    projects = query.order_by(Project.created_at.desc()).all()
 
     if not projects:
         return []
@@ -278,42 +411,77 @@ def list_org_projects(
     day_ago = now - timedelta(days=1)
     seven_days_ago = now - timedelta(days=7)
 
-    # Calls 24h
-    calls_rows = (
-        db.query(APICall.project_id, func.count(APICall.id))
-        .filter(
-            APICall.project_id.in_(project_ids),
-            APICall.created_at >= day_ago,
-            APICall.created_at <= now,
+    # Defaults when stats disabled
+    calls_map = {pid: 0 for pid in project_ids}
+    cost_map = {pid: 0.0 for pid in project_ids}
+    quality_map = {pid: None for pid in project_ids}
+    alerts_map = {pid: 0 for pid in project_ids}
+    drift_map = {pid: False for pid in project_ids}
+
+    if include_stats:
+        # Calls 24h
+        calls_rows = (
+            db.query(APICall.project_id, func.count(APICall.id))
+            .filter(
+                APICall.project_id.in_(project_ids),
+                APICall.created_at >= day_ago,
+                APICall.created_at <= now,
+            )
+            .group_by(APICall.project_id)
+            .all()
         )
-        .group_by(APICall.project_id)
-        .all()
-    )
-    calls_map = {pid: count for pid, count in calls_rows}
+        calls_map.update({pid: count for pid, count in calls_rows})
 
-    # Alerts open
-    alerts_rows = (
-        db.query(Alert.project_id, func.count(Alert.id))
-        .filter(Alert.project_id.in_(project_ids), Alert.is_resolved.is_(False))
-        .group_by(Alert.project_id)
-        .all()
-    )
-    alerts_map = {pid: count for pid, count in alerts_rows}
+        # Cost 7d - calculate using CostAnalyzer
+        for project_id in project_ids:
+            try:
+                cost_analysis = cost_analyzer.analyze_project_costs(
+                    project_id=project_id,
+                    start_date=seven_days_ago,
+                    end_date=now,
+                    db=db,
+                )
+                cost_map[project_id] = round(cost_analysis.get("total_cost", 0.0), 2)
+            except Exception:
+                # Skip if cost calculation fails
+                pass
 
-    # Drift flag
-    drift_rows = (
-        db.query(Alert.project_id, func.count(Alert.id))
-        .filter(
-            Alert.project_id.in_(project_ids),
-            Alert.alert_type == "drift",
-            Alert.is_resolved.is_(False),
+        # Quality (average of recent quality scores, 7d)
+        quality_rows = (
+            db.query(
+                QualityScore.project_id,
+                func.avg(QualityScore.overall_score).label("avg_quality"),
+            )
+            .filter(
+                QualityScore.project_id.in_(project_ids),
+                QualityScore.created_at >= seven_days_ago,
+            )
+            .group_by(QualityScore.project_id)
+            .all()
         )
-        .group_by(Alert.project_id)
-        .all()
-    )
-    drift_map = {pid: count > 0 for pid, count in drift_rows}
+        quality_map.update({pid: round(float(avg_q), 1) if avg_q else None for pid, avg_q in quality_rows})
 
-    # TODO: Cost and quality per project – can be added using existing services
+        # Alerts open
+        alerts_rows = (
+            db.query(Alert.project_id, func.count(Alert.id))
+            .filter(Alert.project_id.in_(project_ids), Alert.is_resolved.is_(False))
+            .group_by(Alert.project_id)
+            .all()
+        )
+        alerts_map.update({pid: count for pid, count in alerts_rows})
+
+        # Drift flag
+        drift_rows = (
+            db.query(Alert.project_id, func.count(Alert.id))
+            .filter(
+                Alert.project_id.in_(project_ids),
+                Alert.alert_type == "drift",
+                Alert.is_resolved.is_(False),
+            )
+            .group_by(Alert.project_id)
+            .all()
+        )
+        drift_map.update({pid: count > 0 for pid, count in drift_rows})
 
     results: List[OrgProjectSummary] = []
     for p in projects:
@@ -323,8 +491,8 @@ def list_org_projects(
                 name=p.name,
                 description=p.description,
                 calls_24h=calls_map.get(p.id, 0),
-                cost_7d=0.0,
-                quality=None,
+                cost_7d=cost_map.get(p.id, 0.0),
+                quality=quality_map.get(p.id),
                 alerts_open=alerts_map.get(p.id, 0),
                 drift=drift_map.get(p.id, False),
             )
