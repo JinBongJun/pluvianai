@@ -99,14 +99,20 @@ export default function OrganizationsPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-xl border border-dashed border-white/10 bg-[#0B0C15] p-10 text-center text-slate-400">
-            <p className="mb-4">No organizations found. Create your first organization to get started.</p>
-            <button
-              onClick={() => router.push('/organizations/new')}
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-700 transition-colors"
-            >
-              <span className="text-lg leading-none">+</span>
-              <span>New organization</span>
-            </button>
+            {query.trim() ? (
+              <p>No organizations match "{query}".</p>
+            ) : (
+              <>
+                <p className="mb-4">No organizations found. Create your first organization to get started.</p>
+                <button
+                  onClick={() => router.push('/organizations/new')}
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-700 transition-colors"
+                >
+                  <span className="text-lg leading-none">+</span>
+                  <span>New organization</span>
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <div className="grid gap-4">
