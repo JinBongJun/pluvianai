@@ -100,7 +100,7 @@ export default function OrganizationsPage() {
         ) : filtered.length === 0 ? (
           <div className="rounded-xl border border-dashed border-white/10 bg-[#0B0C15] p-10 text-center text-slate-400">
             {query.trim() ? (
-              <p>No organizations match "{query}".</p>
+              <p>No organizations match &quot;{query}&quot;.</p>
             ) : (
               <>
                 <p className="mb-4">No organizations found. Create your first organization to get started.</p>
