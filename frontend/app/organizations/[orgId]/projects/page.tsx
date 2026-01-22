@@ -33,17 +33,6 @@ export default function OrgProjectsPage() {
     organizationsAPI.listProjects(id as string, { includeStats: true, search: search as string }),
   );
 
-  const usagePerc = useMemo(() => {
-    if (!org) return { callsPct: 0, costPct: 0 };
-    const callsPct = org.usage.callsLimit
-      ? Math.min(100, Math.round((org.usage.calls / org.usage.callsLimit) * 100))
-      : 0;
-    const costPct = org.usage.costLimit
-      ? Math.min(100, Math.round((org.usage.cost / org.usage.costLimit) * 100))
-      : 0;
-    return { callsPct, costPct };
-  }, [org]);
-
   const filteredProjects = useMemo(() => {
     if (!projects) return [];
     const q = debouncedProjectQuery.trim().toLowerCase();
@@ -71,27 +60,63 @@ export default function OrgProjectsPage() {
       ]}
     >
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">{org?.name || 'Organization'}</h1>
-            <p className="text-slate-400">
-              Plan:{' '}
-              {org?.plan === 'free'
-                ? 'Free'
-                : org?.plan === 'pro'
-                ? 'Pro'
-                : org?.plan === 'enterprise'
-                ? 'Enterprise'
-                : org?.plan || 'Free'}
-            </p>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold mb-6">Projects</h1>
+          
+          {/* Search and Actions Bar */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3 flex-1">
+              <div className="relative flex-1 max-w-md">
+                <input
+                  id="project-search"
+                  placeholder="Search for a project"
+                  value={projectQuery}
+                  onChange={(e) => setProjectQuery(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-[#0B0C15] px-4 py-2 pl-10 text-sm text-white placeholder:text-slate-500 focus:border-purple-500 focus:outline-none"
+                />
+                <svg
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <button className="rounded-lg border border-white/10 bg-[#0B0C15] p-2 hover:bg-white/5 transition-colors">
+                <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="inline-flex items-center rounded-lg border border-white/10 bg-[#0B0C15]">
+                <button
+                  onClick={() => setView('grid')}
+                  className={`p-2 ${view === 'grid' ? 'bg-purple-600 text-white rounded-l-lg' : 'text-slate-400 hover:text-white'}`}
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setView('list')}
+                  className={`p-2 ${view === 'list' ? 'bg-purple-600 text-white rounded-r-lg' : 'text-slate-400 hover:text-white'}`}
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+              </div>
+              <button
+                onClick={() => router.push(`/organizations/${orgId}/projects/new`)}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-700 transition-colors"
+              >
+                <span className="text-lg leading-none">+</span>
+                <span>New project</span>
+              </button>
+            </div>
           </div>
-          <button
-            onClick={() => router.push(`/organizations/${orgId}/projects/new`)}
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-700 transition-colors"
-          >
-            <span className="text-lg leading-none">+</span>
-            <span>New project</span>
-          </button>
         </div>
 
         {(orgError || projectsError) && (
@@ -118,41 +143,7 @@ export default function OrgProjectsPage() {
           </div>
         )}
 
-        {/* Usage & Alerts sections */}
-        <div className="grid gap-4 lg:grid-cols-3 mb-6">
-          <div className="rounded-xl border border-white/10 bg-[#0B0C15] p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-slate-400">API Calls (7d)</span>
-              <span className="text-xs text-slate-400">
-                {org?.usage?.calls?.toLocaleString?.() ?? 0} / {org?.usage?.callsLimit?.toLocaleString?.() ?? 0}
-              </span>
-            </div>
-            <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full bg-purple-500" style={{ width: `${usagePerc.callsPct}%` }} />
-            </div>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-[#0B0C15] p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-slate-400">Cost (7d)</span>
-              <span className="text-xs text-slate-400">
-                ${org?.usage?.cost?.toFixed(2) ?? '0.00'} / ${org?.usage?.costLimit?.toFixed(2) ?? '0.00'}
-              </span>
-            </div>
-            <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full bg-emerald-500" style={{ width: `${usagePerc.costPct}%` }} />
-            </div>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-[#0B0C15] p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-slate-400">Quality</span>
-              <span className="text-xs text-slate-200">{org?.usage?.quality?.toFixed(1) ?? '0.0'}%</span>
-            </div>
-            <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full bg-blue-500" style={{ width: `${org?.usage?.quality ?? 0}%` }} />
-            </div>
-          </div>
-        </div>
-
+        {/* Alerts & View sections */}
         <div className="grid gap-4 lg:grid-cols-3 mb-8">
           <div className="rounded-xl border border-white/10 bg-[#0B0C15] p-4 lg:col-span-2">
             <div className="flex items-center justify-between mb-3">
@@ -210,16 +201,6 @@ export default function OrgProjectsPage() {
             </div>
             <p className="text-sm text-slate-400">Switch between grid and list views for projects.</p>
           </div>
-        </div>
-
-        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <input
-            id="project-search"
-            placeholder="Search for a project"
-            value={projectQuery}
-            onChange={(e) => setProjectQuery(e.target.value)}
-            className="w-full sm:max-w-md rounded-lg border border-white/10 bg-[#0B0C15] px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-purple-500 focus:outline-none"
-          />
         </div>
 
         {!filteredProjects.length && !loading ? (
