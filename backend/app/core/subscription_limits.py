@@ -6,7 +6,7 @@ from typing import Dict, Any
 
 PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
     "free": {  # $0 - Onboarding + 문제 발견 압박용
-        "projects": 3,
+        "projects": 100,
         "api_calls_per_month": 1000,
         "team_members_per_project": 1,
         "data_retention_days": 7,

@@ -793,3 +793,47 @@ class CostAnalyzer:
             "budget_warning": budget_warning,
             "historical_data_days": len(daily_costs),
         }
+
+    def check_monthly_budget_alert(
+        self,
+        project_id: int,
+        threshold: float = 500.0,
+        db: Optional[Session] = None
+    ) -> Optional[Alert]:
+        """월 비용 $500 초과 시 알림 생성"""
+        if not db:
+            raise ValueError("Database session required")
+        
+        now = datetime.utcnow()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        analysis = self.analyze_project_costs(
+            project_id,
+            start_date=month_start,
+            end_date=now,
+            db=db
+        )
+        
+        if analysis["total_cost"] > threshold:
+            from app.models.alert import Alert
+            from app.infrastructure.repositories.alert_repository import AlertRepository
+            
+            alert_repo = AlertRepository(db)
+            alert = Alert(
+                project_id=project_id,
+                alert_type="cost_threshold",
+                severity="high",
+                title=f"Monthly cost exceeded ${threshold}",
+                message=f"Current monthly cost: ${analysis['total_cost']:.2f}",
+                alert_data={
+                    "monthly_cost": analysis["total_cost"],
+                    "threshold": threshold,
+                    "period_start": month_start.isoformat(),
+                    "period_end": now.isoformat()
+                },
+                notification_channels=["email"]
+            )
+            # Background task이므로 save_and_commit() 사용
+            return alert_repo.save_and_commit(alert)
+        
+        return None
