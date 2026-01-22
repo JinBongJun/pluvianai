@@ -143,80 +143,50 @@ export default function OrgProjectsPage() {
           </div>
         )}
 
-        {/* Alerts & View sections */}
-        <div className="grid gap-4 lg:grid-cols-3 mb-8">
-          <div className="rounded-xl border border-white/10 bg-[#0B0C15] p-4 lg:col-span-2">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-400">Alerts</span>
-                <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-200">
-                  {org?.alerts?.length ?? 0} open
-                </span>
-              </div>
-              <button
-                onClick={() => {
-                  if (firstProjectId) {
-                    router.push(`/organizations/${orgId}/projects/${firstProjectId}/alerts`);
-                  }
-                }}
-                className="text-xs text-purple-300 hover:text-purple-200"
-              >
-                View all →
-              </button>
-            </div>
-            <div className="space-y-2">
-              {(org?.alerts || []).map((a, idx) => (
-                <div
-                  key={`${a.project}-${idx}`}
-                  className="rounded-lg border border-white/5 bg-white/5 px-3 py-2 text-sm text-slate-200"
-                >
-                  <span className="text-purple-200 font-semibold">{a.project || 'Unknown project'}</span> —{' '}
-                  {a.summary || 'Alert detected'}
+        {/* Alerts section */}
+        {org?.alerts && org.alerts.length > 0 && (
+          <div className="mb-8">
+            <div className="rounded-xl border border-white/10 bg-[#0B0C15] p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-400">Alerts</span>
+                  <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-200">
+                    {org.alerts.length} open
+                  </span>
                 </div>
-              ))}
-              {!org?.alerts?.length && (
-                <div className="rounded-lg border border-dashed border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-400 text-center">
-                  No active alerts.
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-[#0B0C15] p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-slate-400">View</span>
-              <div className="inline-flex items-center rounded-lg border border-white/10 bg-white/5">
                 <button
-                  onClick={() => setView('grid')}
-                  className={`px-3 py-1 text-xs ${view === 'grid' ? 'bg-purple-600 text-white rounded-l-lg' : 'text-slate-300'}`}
+                  onClick={() => {
+                    if (firstProjectId) {
+                      router.push(`/organizations/${orgId}/projects/${firstProjectId}/alerts`);
+                    }
+                  }}
+                  className="text-xs text-purple-300 hover:text-purple-200"
                 >
-                  Grid
-                </button>
-                <button
-                  onClick={() => setView('list')}
-                  className={`px-3 py-1 text-xs ${view === 'list' ? 'bg-purple-600 text-white rounded-r-lg' : 'text-slate-300'}`}
-                >
-                  List
+                  View all →
                 </button>
               </div>
+              <div className="space-y-2">
+                {org.alerts.map((a, idx) => (
+                  <div
+                    key={`${a.project}-${idx}`}
+                    className="rounded-lg border border-white/5 bg-white/5 px-3 py-2 text-sm text-slate-200"
+                  >
+                    <span className="text-purple-200 font-semibold">{a.project || 'Unknown project'}</span> —{' '}
+                    {a.summary || 'Alert detected'}
+                  </div>
+                ))}
+              </div>
             </div>
-            <p className="text-sm text-slate-400">Switch between grid and list views for projects.</p>
           </div>
-        </div>
+        )}
 
         {!filteredProjects.length && !loading ? (
           <div className="rounded-xl border border-dashed border-white/10 bg-[#0B0C15] p-10 text-center text-slate-400">
-            <p className="mb-4">
+            <p>
               {projectQuery.trim()
                 ? `No projects match "${projectQuery}".`
                 : 'No projects yet. Create your first project to get started.'}
             </p>
-            <button
-              onClick={() => router.push(`/organizations/${orgId}/projects/new`)}
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-700 transition-colors"
-            >
-              <span className="text-lg leading-none">+</span>
-              <span>New project</span>
-            </button>
           </div>
         ) : view === 'grid' ? (
           <div className="grid gap-4 sm:grid-cols-2">

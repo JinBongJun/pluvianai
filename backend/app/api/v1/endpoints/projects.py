@@ -20,6 +20,10 @@ from app.models.user import User
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 
+# Repository 패턴 사용 예시 (주석으로 추가)
+# from app.core.dependencies import get_project_repository
+# from app.infrastructure.repositories.project_repository import ProjectRepository
+
 router = APIRouter()
 
 
@@ -29,6 +33,7 @@ class ProjectCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Project name")
     description: str | None = Field(None, max_length=1000, description="Project description")
     generate_sample_data: bool = Field(False, description="Generate sample data for onboarding")
+    organization_id: int | None = Field(None, description="Organization ID this project belongs to")
 
 
 class ProjectUpdate(BaseModel):
@@ -47,6 +52,7 @@ class ProjectResponse(BaseModel):
     owner_id: int
     is_active: bool
     role: str | None = None  # user's role in this project
+    organization_id: int | None = None  # organization this project belongs to
 
     class Config:
         from_attributes = True
@@ -80,8 +86,39 @@ async def create_project(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A project with this name already exists")
 
     try:
+        # Verify organization access if organization_id is provided
+        organization_id = project_data.organization_id
+        if organization_id:
+            from app.models.organization import Organization, OrganizationMember
+            # Check if user is owner or member of the organization
+            org = db.query(Organization).filter(Organization.id == organization_id).first()
+            if not org:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Organization not found"
+                )
+            
+            # Check if user is owner
+            is_owner = org.owner_id == current_user.id
+            
+            # Check if user is a member
+            is_member = db.query(OrganizationMember).filter(
+                OrganizationMember.organization_id == organization_id,
+                OrganizationMember.user_id == current_user.id
+            ).first() is not None
+            
+            if not (is_owner or is_member):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You don't have access to this organization"
+                )
+        
         project = Project(
-            name=project_data.name, description=project_data.description, owner_id=current_user.id, is_active=True
+            name=project_data.name,
+            description=project_data.description,
+            owner_id=current_user.id,
+            is_active=True,
+            organization_id=organization_id
         )
         db.add(project)
         db.commit()
@@ -172,6 +209,7 @@ async def list_projects(
             owner_id=p.owner_id,
             is_active=p.is_active,
             role=get_user_project_role(p.id, current_user.id, db),
+            organization_id=p.organization_id,
         )
         for p in all_projects
     ]
@@ -194,6 +232,7 @@ async def get_project(project_id: int, current_user: User = Depends(get_current_
         owner_id=project.owner_id,
         is_active=project.is_active,
         role=role,
+        organization_id=project.organization_id,
     )
 
 
@@ -265,6 +304,7 @@ async def update_project(
         owner_id=project.owner_id,
         is_active=project.is_active,
         role=role,
+        organization_id=project.organization_id,
     )
 
 
