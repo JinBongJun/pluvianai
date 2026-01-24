@@ -304,16 +304,20 @@ def get_organization(
 
     if project_ids:
         # API calls (7d)
-        calls_count = (
-            db.query(func.count(APICall.id))
-            .filter(
-                APICall.project_id.in_(project_ids),
-                APICall.created_at >= seven_days_ago,
-                APICall.created_at <= now,
+        try:
+            calls_count = (
+                db.query(func.count(APICall.id))
+                .filter(
+                    APICall.project_id.in_(project_ids),
+                    APICall.created_at >= seven_days_ago,
+                    APICall.created_at <= now,
+                )
+                .scalar()
+                or 0
             )
-            .scalar()
-            or 0
-        )
+        except Exception as e:
+            logger.warning(f"Failed to query API calls for org {org_id}: {str(e)}", exc_info=True)
+            calls_count = 0
 
         # Cost (7d) - calculate using CostAnalyzer
         for project_id in project_ids:
@@ -325,20 +329,27 @@ def get_organization(
                     db=db,
                 )
                 total_cost += cost_analysis.get("total_cost", 0.0)
-            except Exception:
+            except Exception as e:
                 # Skip if cost calculation fails
-                pass
+                logger.warning(f"Failed to calculate cost for project {project_id}: {str(e)}", exc_info=True)
 
         # Quality (average of recent quality scores)
-        quality_rows = (
-            db.query(func.avg(QualityScore.overall_score))
-            .filter(
-                QualityScore.project_id.in_(project_ids),
-                QualityScore.created_at >= seven_days_ago,
+        try:
+            quality_rows = (
+                db.query(func.avg(QualityScore.overall_score))
+                .filter(
+                    QualityScore.project_id.in_(project_ids),
+                    QualityScore.created_at >= seven_days_ago,
+                )
+                .scalar()
             )
-            .scalar()
-        )
-        avg_quality = float(quality_rows) if quality_rows else 0.0
+            if quality_rows is not None:
+                avg_quality = float(quality_rows)
+            else:
+                avg_quality = 0.0
+        except (ValueError, TypeError, Exception) as e:
+            logger.warning(f"Failed to query quality scores for org {org_id}: {str(e)}", exc_info=True)
+            avg_quality = 0.0
     else:
         avg_quality = 0.0
 
@@ -353,42 +364,66 @@ def get_organization(
     # Get recent alerts
     alerts_list = []
     if project_ids:
-        recent_alerts = (
-            db.query(Alert, Project.name)
-            .join(Project, Alert.project_id == Project.id)
-            .filter(
-                Alert.project_id.in_(project_ids),
-                Alert.is_resolved.is_(False),
+        try:
+            recent_alerts = (
+                db.query(Alert, Project.name)
+                .join(Project, Alert.project_id == Project.id)
+                .filter(
+                    Alert.project_id.in_(project_ids),
+                    Alert.is_resolved.is_(False),
+                )
+                .order_by(Alert.created_at.desc())
+                .limit(10)
+                .all()
             )
-            .order_by(Alert.created_at.desc())
-            .limit(10)
-            .all()
-        )
-        for alert, project_name in recent_alerts:
-            alerts_list.append(
-                {
-                    "project": project_name,
-                    "summary": alert.message or "Alert detected",
-                    "severity": alert.severity or "medium",
-                }
-            )
+            for alert, project_name in recent_alerts:
+                alerts_list.append(
+                    {
+                        "project": project_name,
+                        "summary": alert.message or "Alert detected",
+                        "severity": alert.severity or "medium",
+                    }
+                )
+        except Exception as e:
+            logger.warning(f"Failed to query alerts for org {org_id}: {str(e)}", exc_info=True)
+            alerts_list = []
 
-    return {
-        "id": org.id,
-        "name": org.name,
-        "type": org.type,
-        "plan_type": org.plan_type,
-        "stats": {
-            "usage": {
-                "calls": calls_count,
-                "calls_limit": limits["calls"],
-                "cost": round(total_cost, 2),
-                "cost_limit": limits["cost"],
-                "quality": round(avg_quality, 1),
+    try:
+        return {
+            "id": org.id,
+            "name": org.name,
+            "type": org.type,
+            "plan_type": org.plan_type,
+            "stats": {
+                "usage": {
+                    "calls": calls_count,
+                    "calls_limit": limits["calls"],
+                    "cost": round(total_cost, 2),
+                    "cost_limit": limits["cost"],
+                    "quality": round(avg_quality, 1),
+                },
+                "alerts": alerts_list,
             },
-            "alerts": alerts_list,
-        },
-    }
+        }
+    except Exception as e:
+        logger.error(f"Failed to build response for org {org_id}: {str(e)}", exc_info=True)
+        # Return basic org info without stats if response building fails
+        return {
+            "id": org.id,
+            "name": org.name,
+            "type": org.type,
+            "plan_type": org.plan_type,
+            "stats": {
+                "usage": {
+                    "calls": 0,
+                    "calls_limit": limits.get("calls", 1000),
+                    "cost": 0.0,
+                    "cost_limit": limits.get("cost", 10.0),
+                    "quality": 0.0,
+                },
+                "alerts": [],
+            },
+        }
 
 
 @router.get("/{org_id}/projects", response_model=List[OrgProjectSummary])
