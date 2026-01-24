@@ -14,13 +14,14 @@ export default function ProjectTabs({ projectId, orgId, canManage = false }: Pro
   const pathname = usePathname();
 
   // Determine base path - use org path if orgId is provided, otherwise fallback to dashboard
-  const basePath = orgId 
+  const basePath = orgId
     ? `/organizations/${orgId}/projects/${projectId}`
     : `/dashboard/${projectId}`;
 
   const tabs = [
     { id: 'overview', label: 'Overview', path: basePath },
     { id: 'api-calls', label: 'API Calls', path: `${basePath}/api-calls` },
+    { id: 'replay', label: 'Time Machine', path: `${basePath}/replay` },
     { id: 'chains', label: 'Chains', path: `${basePath}/chains` },
     { id: 'compare', label: 'Compare', path: `${basePath}/compare` },
     { id: 'reports', label: 'Reports', path: `${basePath}/reports` },
@@ -31,6 +32,7 @@ export default function ProjectTabs({ projectId, orgId, canManage = false }: Pro
 
   const getActiveTab = () => {
     if (pathname?.includes('/api-calls')) return 'api-calls';
+    if (pathname?.includes('/replay')) return 'replay';
     if (pathname?.includes('/chains')) return 'chains';
     if (pathname?.includes('/compare')) return 'compare';
     if (pathname?.includes('/reports')) return 'reports';

@@ -5,6 +5,7 @@ import { projectsAPI } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ToastContainer';
 import Button from '@/components/ui/Button';
+import PanicToggle from '@/components/PanicToggle';
 
 interface Project {
   id: number;
@@ -90,6 +91,10 @@ export default function ProjectSettings({ projectId, project, onUpdate }: Projec
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl space-y-6">
       <h2 className="text-lg font-semibold text-white mb-4">Project Settings</h2>
+
+      <div className="mb-8">
+        <PanicToggle projectId={projectId} />
+      </div>
 
       {error && (
         <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded">

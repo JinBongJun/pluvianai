@@ -43,21 +43,21 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      
+
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
         try {
           const response = await axios.post(`${API_URL}/api/v1/auth/refresh`, {
             refresh_token: refreshToken,
           });
-          
+
           const { access_token, refresh_token } = response.data;
           localStorage.setItem('access_token', access_token);
           localStorage.setItem('refresh_token', refresh_token);
-          
+
           originalRequest.headers.Authorization = `Bearer ${access_token}`;
           return apiClient(originalRequest);
         } catch (refreshError) {
@@ -69,7 +69,7 @@ apiClient.interceptors.response.use(
         }
       }
     }
-    
+
     return Promise.reject(error);
   }
 );
@@ -84,30 +84,30 @@ export const authAPI = {
     });
     return response.data;
   },
-  
+
   login: async (email: string, password: string) => {
     const formData = new FormData();
     formData.append('username', email);
     formData.append('password', password);
-    
+
     const response = await axios.post(`${API_URL}/api/v1/auth/login`, formData, {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
     });
-    
+
     const { access_token, refresh_token } = response.data;
     localStorage.setItem('access_token', access_token);
     localStorage.setItem('refresh_token', refresh_token);
-    
+
     return response.data;
   },
-  
+
   logout: () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
   },
-  
+
   getCurrentUser: async () => {
     const response = await apiClient.get('/auth/me');
     return response.data;
@@ -232,7 +232,7 @@ export const projectsAPI = {
       '/projects'
     );
   },
-  
+
   get: async (id: number) => {
     const response = await apiClient.get(`/projects/${id}`);
     // Validate single item response
@@ -243,7 +243,7 @@ export const projectsAPI = {
       return response.data; // Return raw data on validation failure
     }
   },
-  
+
   create: async (data: { name: string; description?: string; generate_sample_data?: boolean; organization_id?: number }) => {
     const response = await apiClient.post('/projects', {
       name: data.name,
@@ -253,7 +253,7 @@ export const projectsAPI = {
     });
     return response.data;
   },
-  
+
   update: async (id: number, name?: string, description?: string) => {
     const response = await apiClient.patch(`/projects/${id}`, {
       name,
@@ -261,7 +261,7 @@ export const projectsAPI = {
     });
     return response.data;
   },
-  
+
   delete: async (id: number) => {
     await apiClient.delete(`/projects/${id}`);
   },
@@ -273,7 +273,7 @@ export const projectMembersAPI = {
     const response = await apiClient.get(`/projects/${projectId}/members`);
     return response.data;
   },
-  
+
   add: async (projectId: number, userEmail: string, role: 'admin' | 'member' | 'viewer') => {
     const response = await apiClient.post(`/projects/${projectId}/members`, {
       user_email: userEmail,
@@ -281,14 +281,14 @@ export const projectMembersAPI = {
     });
     return response.data;
   },
-  
+
   updateRole: async (projectId: number, userId: number, role: 'admin' | 'member' | 'viewer') => {
     const response = await apiClient.patch(`/projects/${projectId}/members/${userId}`, {
       role,
     });
     return response.data;
   },
-  
+
   remove: async (projectId: number, userId: number) => {
     await apiClient.delete(`/projects/${projectId}/members/${userId}`);
   },
@@ -316,7 +316,7 @@ export const apiCallsAPI = {
       '/api-calls'
     );
   },
-  
+
   get: async (id: number) => {
     const response = await apiClient.get(`/api-calls/${id}`);
     // Validate single item response
@@ -327,7 +327,7 @@ export const apiCallsAPI = {
       return response.data; // Return raw data on validation failure
     }
   },
-  
+
   getStats: async (projectId: number, days: number = 7) => {
     // Validate projectId
     if (!projectId || isNaN(projectId) || projectId <= 0) {
@@ -352,7 +352,7 @@ export const qualityAPI = {
     });
     return response.data;
   },
-  
+
   getScores: async (projectId: number, params?: any) => {
     const response = await apiClient.get('/quality/scores', {
       params: { project_id: projectId, ...params },
@@ -364,7 +364,7 @@ export const qualityAPI = {
       '/quality/scores'
     );
   },
-  
+
   getStats: async (projectId: number, days: number = 7) => {
     const response = await apiClient.get('/quality/stats', {
       params: { project_id: projectId, days },
@@ -381,7 +381,7 @@ export const driftAPI = {
     });
     return response.data;
   },
-  
+
   list: async (projectId: number, params?: any) => {
     const response = await apiClient.get('/drift', {
       params: { project_id: projectId, ...params },
@@ -393,7 +393,7 @@ export const driftAPI = {
       '/drift'
     );
   },
-  
+
   get: async (id: number) => {
     const response = await apiClient.get(`/drift/${id}`);
     // Validate single item response
@@ -428,7 +428,7 @@ export const alertsAPI = {
       '/alerts'
     );
   },
-  
+
   get: async (id: number) => {
     const response = await apiClient.get(`/alerts/${id}`);
     // Validate single item response
@@ -439,12 +439,12 @@ export const alertsAPI = {
       return response.data; // Return raw data on validation failure
     }
   },
-  
+
   resolve: async (id: number) => {
     const response = await apiClient.post(`/alerts/${id}/resolve`);
     return response.data;
   },
-  
+
   send: async (id: number, channels?: string[]) => {
     const response = await apiClient.post(`/alerts/${id}/send`, { channels });
     return response.data;
@@ -473,7 +473,7 @@ export const benchmarkAPI = {
     // Normalize field name variations
     return validated.map(normalizeModelComparison);
   },
-  
+
   getRecommendations: async (projectId: number, days: number = 7) => {
     const response = await apiClient.get('/benchmark/recommendations', {
       params: { project_id: projectId, days },
@@ -508,21 +508,21 @@ export const costAPI = {
       };
     }
   },
-  
+
   detectAnomalies: async (projectId: number) => {
     const response = await apiClient.post('/cost/detect-anomalies', null, {
       params: { project_id: projectId },
     });
     return response.data;
   },
-  
+
   compareModels: async (projectId: number, days: number = 7) => {
     const response = await apiClient.get('/cost/compare-models', {
       params: { project_id: projectId, days },
     });
     return response.data;
   },
-  
+
   getOptimizations: async (projectId: number, days: number = 30) => {
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       throw new Error(`Invalid project ID: ${projectId}`);
@@ -532,7 +532,7 @@ export const costAPI = {
     });
     return response.data;
   },
-  
+
   getPredictions: async (projectId: number, days: number = 30, predictionDays: number = 30) => {
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       throw new Error(`Invalid project ID: ${projectId}`);
@@ -542,7 +542,7 @@ export const costAPI = {
     });
     return response.data;
   },
-  
+
   applyOptimization: async (projectId: number, optimizationId: string, userConfirmation: boolean = true) => {
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       throw new Error(`Invalid project ID: ${projectId}`);
@@ -572,7 +572,7 @@ export const agentChainAPI = {
       params.chain_id = chainId;
     }
     const response = await apiClient.get('/agent-chain/profile', { params });
-    
+
     // Backend returns {total_chains, chains: [], ...} or {message, chains: []}
     // Validate using ChainProfileResponseSchema
     try {
@@ -591,7 +591,7 @@ export const agentChainAPI = {
       };
     }
   },
-  
+
   getOptimizations: async (projectId: number, chainId: string) => {
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       throw new Error(`Invalid project ID: ${projectId}`);
@@ -604,7 +604,7 @@ export const agentChainAPI = {
     });
     return response.data;
   },
-  
+
   applyOptimization: async (projectId: number, chainId: string, optimizationId: string, userConfirmation: boolean = true) => {
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       throw new Error(`Invalid project ID: ${projectId}`);
@@ -620,7 +620,7 @@ export const agentChainAPI = {
     });
     return response.data;
   },
-  
+
   getAgentStatistics: async (projectId: number, days: number = 7) => {
     // Validate projectId
     if (!projectId || isNaN(projectId) || projectId <= 0) {
@@ -649,7 +649,7 @@ export const shadowRoutingAPI = {
     });
     return response.data;
   },
-  
+
   apply: async (projectId: number, primaryModel: string, shadowModel: string, userConfirmation: boolean = true) => {
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       throw new Error(`Invalid project ID: ${projectId}`);
@@ -666,7 +666,7 @@ export const shadowRoutingAPI = {
     });
     return response.data;
   },
-  
+
   rollback: async (projectId: number, rollbackPointId?: string) => {
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       throw new Error(`Invalid project ID: ${projectId}`);
@@ -686,19 +686,19 @@ export const subscriptionAPI = {
     const response = await apiClient.get('/subscription');
     return response.data;
   },
-  
+
   getPlans: async () => {
     const response = await apiClient.get('/subscription/plans');
     return response.data;
   },
-  
+
   upgrade: async (planType: string) => {
     const response = await apiClient.post('/subscription/upgrade', {
       plan_type: planType,
     });
     return response.data;
   },
-  
+
   cancel: async () => {
     const response = await apiClient.post('/subscription/cancel');
     return response.data;
@@ -711,49 +711,49 @@ export const settingsAPI = {
     const response = await apiClient.get('/settings/profile');
     return response.data;
   },
-  
+
   updateProfile: async (data: { full_name?: string }) => {
     const response = await apiClient.patch('/settings/profile', data);
     return response.data;
   },
-  
+
   deleteAccount: async (password: string) => {
     await apiClient.delete('/settings/profile', {
       data: { password },
     });
   },
-  
+
   changePassword: async (currentPassword: string, newPassword: string) => {
     await apiClient.patch('/settings/password', {
       current_password: currentPassword,
       new_password: newPassword,
     });
   },
-  
+
   getAPIKeys: async () => {
     const response = await apiClient.get('/settings/api-keys');
     return response.data;
   },
-  
+
   createAPIKey: async (name: string) => {
     const response = await apiClient.post('/settings/api-keys', { name });
     return response.data;
   },
-  
+
   deleteAPIKey: async (keyId: number) => {
     await apiClient.delete(`/settings/api-keys/${keyId}`);
   },
-  
+
   updateAPIKey: async (keyId: number, name: string) => {
     const response = await apiClient.patch(`/settings/api-keys/${keyId}`, { name });
     return response.data;
   },
-  
+
   getNotificationSettings: async () => {
     const response = await apiClient.get('/settings/notifications');
     return response.data;
   },
-  
+
   updateNotificationSettings: async (settings: any) => {
     const response = await apiClient.patch('/settings/notifications', settings);
     return response.data;
@@ -767,7 +767,7 @@ export const exportAPI = {
       params: { project_id: projectId, ...filters },
       responseType: 'blob',
     });
-    
+
     // Create download link
     const url = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement('a');
@@ -778,12 +778,12 @@ export const exportAPI = {
     link.remove();
     window.URL.revokeObjectURL(url);
   },
-  
+
   exportJSON: async (projectId: number, filters?: any, includeData: boolean = false) => {
     const response = await apiClient.get('/export/json', {
       params: { project_id: projectId, include_data: includeData, ...filters },
     });
-    
+
     // Download as JSON file
     const dataStr = JSON.stringify(response.data, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
@@ -818,15 +818,15 @@ export const notificationsAPI = {
     const response = await apiClient.get('/notifications', { params });
     return response.data;
   },
-  
+
   markRead: async (alertId: number) => {
     await apiClient.patch(`/notifications/${alertId}/read`);
   },
-  
+
   delete: async (alertId: number) => {
     await apiClient.delete(`/notifications/${alertId}`);
   },
-  
+
   getUnreadCount: async () => {
     const response = await apiClient.get('/notifications/unread-count');
     return response.data;
@@ -851,18 +851,18 @@ export const reportsAPI = {
     });
     return response.data;
   },
-  
+
   download: async (projectId: number, params: any) => {
     try {
       const response = await apiClient.get('/reports/download', {
         params: { project_id: projectId, ...params },
         responseType: 'blob',
       });
-      
+
       // Check if response is an error (error responses are also blobs when responseType is 'blob')
       const contentType = response.headers['content-type'] || '';
       const format = params.format || 'json';
-      
+
       // For JSON format, application/json is expected, not an error
       if (format === 'json' && contentType.includes('application/json') && response.status < 400) {
         // This is a valid JSON response, proceed with download
@@ -881,18 +881,18 @@ export const reportsAPI = {
           throw error;
         }
       }
-      
+
       // Determine content type (format was already determined above)
       const fileContentType = format === 'pdf' ? 'application/pdf' : 'application/json';
-      
+
       // Create blob with correct MIME type
       const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: fileContentType });
       const url = window.URL.createObjectURL(blob);
-      
+
       try {
         const link = document.createElement('a');
         link.href = url;
-        
+
         // Try to extract filename from Content-Disposition header
         let filename = `report-${projectId}-${params.template || 'standard'}-${new Date().toISOString().split('T')[0]}.${format}`;
         const contentDisposition = response.headers['content-disposition'];
@@ -908,7 +908,7 @@ export const reportsAPI = {
             }
           }
         }
-        
+
         link.setAttribute('download', filename);
         document.body.appendChild(link);
         link.click();
@@ -946,26 +946,26 @@ export const webhooksAPI = {
     const response = await apiClient.get('/webhooks', { params });
     return response.data;
   },
-  
+
   get: async (id: number) => {
     const response = await apiClient.get(`/webhooks/${id}`);
     return response.data;
   },
-  
+
   create: async (data: any) => {
     const response = await apiClient.post('/webhooks', data);
     return response.data;
   },
-  
+
   update: async (id: number, data: any) => {
     const response = await apiClient.patch(`/webhooks/${id}`, data);
     return response.data;
   },
-  
+
   delete: async (id: number) => {
     await apiClient.delete(`/webhooks/${id}`);
   },
-  
+
   test: async (id: number) => {
     const response = await apiClient.post(`/webhooks/${id}/test`);
     return response.data;
@@ -1017,6 +1017,24 @@ export interface Project {
   role?: 'owner' | 'admin' | 'member' | 'viewer'; // Added for team feature
   organization_id?: number | null; // Organization this project belongs to
 }
+
+// Replay API
+export const replayAPI = {
+  runBatchReplay: async (projectId: number, data: { snapshot_ids: number[]; new_model?: string; new_system_prompt?: string }) => {
+    const response = await apiClient.post(`/replay/${projectId}/run`, data);
+    return response.data;
+  },
+
+  togglePanicMode: async (projectId: number, enabled: boolean) => {
+    const response = await apiClient.post(`/projects/${projectId}/panic`, { enabled });
+    return response.data;
+  },
+
+  getPanicMode: async (projectId: number) => {
+    const response = await apiClient.get(`/projects/${projectId}/panic`);
+    return response.data;
+  },
+};
 
 export default apiClient;
 
