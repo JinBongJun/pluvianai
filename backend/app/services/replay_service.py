@@ -4,6 +4,7 @@ import json
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from app.models.snapshot import Snapshot
+from app.models.evaluation_rubric import EvaluationRubric
 from app.api.v1.endpoints.proxy import PROVIDER_URLS
 from app.core.logging_config import logger
 from app.core.config import settings
