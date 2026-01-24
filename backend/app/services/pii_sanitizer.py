@@ -1,6 +1,6 @@
 import re
 import json
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, List
 
 class PIISanitizer:
     """Service for masking sensitive information in LLM payloads"""
