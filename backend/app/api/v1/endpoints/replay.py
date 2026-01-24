@@ -17,6 +17,7 @@ class ReplayRequest(BaseModel):
     new_model: Optional[str] = None
     new_system_prompt: Optional[str] = None
     rubric_id: Optional[int] = None
+    judge_model: Optional[str] = "gpt-4o-mini"
 
 class ReplayResponseItem(BaseModel):
     snapshot_id: int
@@ -61,7 +62,8 @@ async def trigger_replay(
         snapshots=snapshots,
         new_model=data.new_model,
         new_system_prompt=data.new_system_prompt,
-        rubric=rubric
+        rubric=rubric,
+        judge_model=data.judge_model
     )
 
     return results

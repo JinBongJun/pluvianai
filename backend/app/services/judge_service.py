@@ -18,7 +18,8 @@ class JudgeService:
         self, 
         original_output: str, 
         replayed_output: str, 
-        rubric: EvaluationRubric
+        rubric: EvaluationRubric,
+        judge_model: str = "gpt-4o-mini"
     ) -> Dict[str, Any]:
         """
         Send both outputs to the Judge LLM and get a structured evaluation.
@@ -45,7 +46,7 @@ class JudgeService:
         """
 
         payload = {
-            "model": self.model,
+            "model": judge_model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content}

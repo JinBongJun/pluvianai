@@ -28,6 +28,12 @@ export default function ReplayPage() {
     const [targetPrompt, setTargetPrompt] = useState('');
     const [rubrics, setRubrics] = useState<any[]>([]);
     const [selectedRubricId, setSelectedRubricId] = useState<number | null>(null);
+    const [judgeModel, setJudgeModel] = useState('gpt-4o-mini');
+    const [showRubricModal, setShowRubricModal] = useState(false);
+
+    // New Rubric Form
+    const [newRubricName, setNewRubricName] = useState('');
+    const [newRubricPrompt, setNewRubricPrompt] = useState('');
 
     useEffect(() => {
         loadSnapshots();
@@ -69,7 +75,8 @@ export default function ReplayPage() {
                 snapshot_ids: selectedIds,
                 new_model: targetModel || undefined,
                 new_system_prompt: targetPrompt || undefined,
-                rubric_id: selectedRubricId || undefined
+                rubric_id: selectedRubricId || undefined,
+                judge_model: judgeModel
             });
             setResults(replayResults);
             toast.showToast(`Batch replay of ${selectedIds.length} items completed`, 'success');
@@ -77,6 +84,26 @@ export default function ReplayPage() {
             toast.showToast(err.response?.data?.detail || 'Replay failed', 'error');
         } finally {
             setReplaying(false);
+        }
+    };
+
+    const handleCreateRubric = async () => {
+        if (!newRubricName || !newRubricPrompt) {
+            toast.showToast('Please fill in rubric name and criteria', 'warning');
+            return;
+        }
+        try {
+            await replayAPI.createRubric(projectId, {
+                name: newRubricName,
+                criteria_prompt: newRubricPrompt
+            });
+            toast.showToast('Rubric created successfully', 'success');
+            setShowRubricModal(false);
+            setNewRubricName('');
+            setNewRubricPrompt('');
+            loadRubrics();
+        } catch (err) {
+            toast.showToast('Failed to create rubric', 'error');
         }
     };
 
@@ -135,18 +162,42 @@ export default function ReplayPage() {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-400 uppercase mb-2">Automated Judge (Rubric)</label>
-                                    <select
-                                        className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-purple-500 transition-colors text-white"
-                                        value={selectedRubricId || ''}
-                                        onChange={e => setSelectedRubricId(Number(e.target.value) || null)}
-                                    >
-                                        <option value="">No Automated Judging</option>
-                                        {rubrics.map(r => (
-                                            <option key={r.id} value={r.id}>{r.name}</option>
-                                        ))}
-                                    </select>
-                                    <p className="text-[10px] text-slate-500 mt-1 italic">Select a criteria for AI-to-AI scoring.</p>
+                                    <div className="flex gap-2">
+                                        <select
+                                            className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-purple-500 transition-colors text-white"
+                                            value={selectedRubricId || ''}
+                                            onChange={e => setSelectedRubricId(Number(e.target.value) || null)}
+                                        >
+                                            <option value="">No Automated Judging</option>
+                                            {rubrics.map(r => (
+                                                <option key={r.id} value={r.id}>{r.name}</option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            onClick={() => setShowRubricModal(true)}
+                                            className="p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 text-white font-bold"
+                                            title="Create New Rubric"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 mt-1 italic">Select criteria for AI-to-AI scoring.</p>
                                 </div>
+
+                                {selectedRubricId && (
+                                    <div className="animate-in fade-in slide-in-from-top-2">
+                                        <label className="block text-xs font-medium text-slate-400 uppercase mb-2">Evaluator Model (The Judge)</label>
+                                        <select
+                                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-purple-500 transition-colors text-white"
+                                            value={judgeModel}
+                                            onChange={e => setJudgeModel(e.target.value)}
+                                        >
+                                            <option value="gpt-4o-mini">GPT-4o Mini (Fast & Cheap)</option>
+                                            <option value="gpt-4o">GPT-4o (High Precision)</option>
+                                            <option value="o1-preview">o1-preview (Reasoning)</option>
+                                        </select>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -295,6 +346,58 @@ export default function ReplayPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Rubric Creation Modal */}
+            {showRubricModal && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-[#0D0F17] border border-white/10 rounded-3xl p-8 max-w-md w-full shadow-2xl">
+                        <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                            <Settings2 className="h-5 w-5 text-purple-500" />
+                            Create New Evaluation Rubric
+                        </h2>
+                        <p className="text-slate-400 text-sm mb-6">Define the criteria your AI Judge will use to score responses.</p>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 uppercase mb-2">Rubric Name</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. Technical Accuracy, Politeness"
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:border-purple-500"
+                                    value={newRubricName}
+                                    onChange={e => setNewRubricName(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 uppercase mb-2">Prompt Criteria (The Judge's Rulebook)</label>
+                                <textarea
+                                    rows={5}
+                                    placeholder="Instructions for the AI Judge. Example: Evaluate if the response follows the corporate tone. If it's too casual, score 1."
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:border-purple-500"
+                                    value={newRubricPrompt}
+                                    onChange={e => setNewRubricPrompt(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 mt-8">
+                            <Button
+                                variant="secondary"
+                                onClick={() => setShowRubricModal(false)}
+                                className="flex-1"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={handleCreateRubric}
+                                className="flex-1"
+                            >
+                                Save Rubric
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </DashboardLayout>
     );
 }

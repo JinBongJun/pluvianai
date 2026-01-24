@@ -92,7 +92,8 @@ class ReplayService:
         snapshots: List[Snapshot], 
         new_model: Optional[str] = None,
         new_system_prompt: Optional[str] = None,
-        rubric: Optional[EvaluationRubric] = None
+        rubric: Optional[EvaluationRubric] = None,
+        judge_model: str = "gpt-4o-mini"
     ) -> List[Dict[str, Any]]:
         """Run multiple replays in parallel and evaluate if rubric is provided"""
         results = await asyncio.gather(*[
@@ -127,7 +128,8 @@ class ReplayService:
                         evaluation = await judge_service.evaluate_response(
                             original_output=original_text,
                             replayed_output=replayed_text,
-                            rubric=rubric
+                            rubric=rubric,
+                            judge_model=judge_model
                         )
                         res["evaluation"] = evaluation
 

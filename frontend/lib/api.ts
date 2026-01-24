@@ -1020,7 +1020,7 @@ export interface Project {
 
 // Replay API
 export const replayAPI = {
-  runBatchReplay: async (projectId: number, data: { snapshot_ids: number[]; new_model?: string; new_system_prompt?: string; rubric_id?: number }) => {
+  runBatchReplay: async (projectId: number, data: { snapshot_ids: number[]; new_model?: string; new_system_prompt?: string; rubric_id?: number; judge_model?: string }) => {
     const response = await apiClient.post(`/replay/${projectId}/run`, data);
     return response.data;
   },
