@@ -18,6 +18,8 @@ from app.models.notification_settings import NotificationSettings
 from app.models.shadow_comparison import ShadowComparison
 from app.models.login_attempt import LoginAttempt
 from app.models.organization import Organization, OrganizationMember
+from app.models.trace import Trace
+from app.models.snapshot import Snapshot
 
 __all__ = [
     "User",
@@ -37,4 +39,6 @@ __all__ = [
     "LoginAttempt",
     "Organization",
     "OrganizationMember",
+    "Trace",
+    "Snapshot",
 ]

@@ -29,12 +29,14 @@ from app.api.v1.endpoints import (
     monitoring,
     shadow_routing,
     organizations,
+    replay,
 )
 
 api_router = APIRouter()
 
 api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])
 api_router.include_router(projects.router, prefix="/projects", tags=["projects"])
+api_router.include_router(replay.router, prefix="/replay", tags=["replay"])
 api_router.include_router(project_members.router, prefix="", tags=["project-members"])
 api_router.include_router(api_calls.router, prefix="/api-calls", tags=["api-calls"])
 api_router.include_router(quality.router, prefix="/quality", tags=["quality"])

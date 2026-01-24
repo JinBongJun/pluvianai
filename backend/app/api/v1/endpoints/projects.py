@@ -334,8 +334,6 @@ async def delete_project(
 
     project_name = project.name  # Save name before deletion
 
-    # Delete the project - related data will be automatically deleted via DB-level CASCADE
-    # All foreign keys to projects.id now have ON DELETE CASCADE (see migration 20260122)
     db.delete(project)
     db.commit()
 
@@ -346,7 +344,7 @@ async def delete_project(
         activity_type="project_delete",
         action=f"Deleted project: {project_name}",
         description=f"Deleted project '{project_name}'",
-        project_id=None,  # Project is deleted, so no project_id
+        project_id=None,
         activity_data={"project_name": project_name, "project_id": project_id},
     )
 
@@ -356,3 +354,61 @@ async def delete_project(
 
     logger.info(f"Project deleted successfully: {project_id}")
     return None
+
+
+class PanicModeUpdate(BaseModel):
+    """Panic mode update schema"""
+    enabled: bool
+
+
+class PanicModeResponse(BaseModel):
+    """Panic mode response schema"""
+    project_id: int
+    enabled: bool
+
+
+@router.post("/{project_id}/panic", response_model=PanicModeResponse)
+@handle_errors
+async def toggle_panic_mode(
+    project_id: int,
+    panic_data: PanicModeUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Toggle panic mode for a project (owner/admin only)"""
+    project = check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
+    
+    # 1. Update DB (Persistent State)
+    project.is_panic_mode = panic_data.enabled
+    db.commit()
+    
+    # 2. Sync to Redis (High Performance Proxy check)
+    redis_key = f"project:{project_id}:panic_mode"
+    if cache_service.enabled:
+        # Set "1" for enabled, "0" for disabled
+        cache_service.redis_client.set(redis_key, "1" if panic_data.enabled else "0")
+    
+    # 3. Log activity
+    activity_logger.log_activity(
+        db=db,
+        user_id=current_user.id,
+        activity_type="panic_toggle",
+        action=f"Panic mode {'enabled' if panic_data.enabled else 'disabled'}",
+        project_id=project_id,
+        activity_data={"enabled": panic_data.enabled}
+    )
+    
+    logger.info(f"Panic mode {'enabled' if panic_data.enabled else 'disabled'} for project {project_id}")
+    return PanicModeResponse(project_id=project_id, enabled=panic_data.enabled)
+
+
+@router.get("/{project_id}/panic", response_model=PanicModeResponse)
+@handle_errors
+async def get_panic_mode(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get current panic mode status for a project"""
+    project = check_project_access(project_id, current_user, db)
+    return PanicModeResponse(project_id=project_id, enabled=project.is_panic_mode)
