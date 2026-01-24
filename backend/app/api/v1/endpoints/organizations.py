@@ -12,6 +12,7 @@ from sqlalchemy import func
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.logging_config import logger
 from app.models.user import User
 from app.models.organization import Organization, OrganizationMember
 from app.models.project import Project
@@ -452,17 +453,20 @@ def list_org_projects(
 
     if include_stats:
         # Calls 24h
-        calls_rows = (
-            db.query(APICall.project_id, func.count(APICall.id))
-            .filter(
-                APICall.project_id.in_(project_ids),
-                APICall.created_at >= day_ago,
-                APICall.created_at <= now,
+        try:
+            calls_rows = (
+                db.query(APICall.project_id, func.count(APICall.id))
+                .filter(
+                    APICall.project_id.in_(project_ids),
+                    APICall.created_at >= day_ago,
+                    APICall.created_at <= now,
+                )
+                .group_by(APICall.project_id)
+                .all()
             )
-            .group_by(APICall.project_id)
-            .all()
-        )
-        calls_map.update({pid: count for pid, count in calls_rows})
+            calls_map.update({pid: count for pid, count in calls_rows})
+        except Exception as e:
+            logger.warning(f"Failed to query API calls: {str(e)}", exc_info=True)
 
         # Cost 7d - calculate using CostAnalyzer
         for project_id in project_ids:
@@ -474,46 +478,64 @@ def list_org_projects(
                     db=db,
                 )
                 cost_map[project_id] = round(cost_analysis.get("total_cost", 0.0), 2)
-            except Exception:
+            except Exception as e:
                 # Skip if cost calculation fails
-                pass
+                logger.warning(f"Failed to calculate cost for project {project_id}: {str(e)}", exc_info=True)
+                cost_map[project_id] = 0.0
 
         # Quality (average of recent quality scores, 7d)
-        quality_rows = (
-            db.query(
-                QualityScore.project_id,
-                func.avg(QualityScore.overall_score).label("avg_quality"),
+        try:
+            quality_rows = (
+                db.query(
+                    QualityScore.project_id,
+                    func.avg(QualityScore.overall_score).label("avg_quality"),
+                )
+                .filter(
+                    QualityScore.project_id.in_(project_ids),
+                    QualityScore.created_at >= seven_days_ago,
+                )
+                .group_by(QualityScore.project_id)
+                .all()
             )
-            .filter(
-                QualityScore.project_id.in_(project_ids),
-                QualityScore.created_at >= seven_days_ago,
-            )
-            .group_by(QualityScore.project_id)
-            .all()
-        )
-        quality_map.update({pid: round(float(avg_q), 1) if avg_q else None for pid, avg_q in quality_rows})
+            for row in quality_rows:
+                try:
+                    pid = row[0] if isinstance(row, tuple) else row.project_id
+                    avg_q = row[1] if isinstance(row, tuple) else getattr(row, 'avg_quality', None)
+                    if avg_q is not None:
+                        quality_map[pid] = round(float(avg_q), 1)
+                except (ValueError, TypeError, AttributeError) as e:
+                    logger.warning(f"Failed to process quality row for project {pid}: {str(e)}")
+                    continue
+        except Exception as e:
+            logger.error(f"Failed to query quality scores: {str(e)}", exc_info=True)
 
         # Alerts open
-        alerts_rows = (
-            db.query(Alert.project_id, func.count(Alert.id))
-            .filter(Alert.project_id.in_(project_ids), Alert.is_resolved.is_(False))
-            .group_by(Alert.project_id)
-            .all()
-        )
-        alerts_map.update({pid: count for pid, count in alerts_rows})
+        try:
+            alerts_rows = (
+                db.query(Alert.project_id, func.count(Alert.id))
+                .filter(Alert.project_id.in_(project_ids), Alert.is_resolved.is_(False))
+                .group_by(Alert.project_id)
+                .all()
+            )
+            alerts_map.update({pid: count for pid, count in alerts_rows})
+        except Exception as e:
+            logger.warning(f"Failed to query alerts: {str(e)}", exc_info=True)
 
         # Drift flag
-        drift_rows = (
-            db.query(Alert.project_id, func.count(Alert.id))
-            .filter(
-                Alert.project_id.in_(project_ids),
-                Alert.alert_type == "drift",
-                Alert.is_resolved.is_(False),
+        try:
+            drift_rows = (
+                db.query(Alert.project_id, func.count(Alert.id))
+                .filter(
+                    Alert.project_id.in_(project_ids),
+                    Alert.alert_type == "drift",
+                    Alert.is_resolved.is_(False),
+                )
+                .group_by(Alert.project_id)
+                .all()
             )
-            .group_by(Alert.project_id)
-            .all()
-        )
-        drift_map.update({pid: count > 0 for pid, count in drift_rows})
+            drift_map.update({pid: count > 0 for pid, count in drift_rows})
+        except Exception as e:
+            logger.warning(f"Failed to query drift alerts: {str(e)}", exc_info=True)
 
     results: List[OrgProjectSummary] = []
     for p in projects:
