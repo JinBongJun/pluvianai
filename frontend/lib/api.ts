@@ -1020,8 +1020,18 @@ export interface Project {
 
 // Replay API
 export const replayAPI = {
-  runBatchReplay: async (projectId: number, data: { snapshot_ids: number[]; new_model?: string; new_system_prompt?: string }) => {
+  runBatchReplay: async (projectId: number, data: { snapshot_ids: number[]; new_model?: string; new_system_prompt?: string; rubric_id?: number }) => {
     const response = await apiClient.post(`/replay/${projectId}/run`, data);
+    return response.data;
+  },
+
+  listRubrics: async (projectId: number) => {
+    const response = await apiClient.get(`/projects/${projectId}/rubrics`);
+    return response.data;
+  },
+
+  createRubric: async (projectId: number, data: { name: string; criteria_prompt: string; description?: string }) => {
+    const response = await apiClient.post(`/projects/${projectId}/rubrics`, data);
     return response.data;
   },
 

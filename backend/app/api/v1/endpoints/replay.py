@@ -16,6 +16,7 @@ class ReplayRequest(BaseModel):
     snapshot_ids: List[int]
     new_model: Optional[str] = None
     new_system_prompt: Optional[str] = None
+    rubric_id: Optional[int] = None
 
 class ReplayResponseItem(BaseModel):
     snapshot_id: int
@@ -23,7 +24,8 @@ class ReplayResponseItem(BaseModel):
     status_code: Optional[int] = None
     replay_model: Optional[str] = None
     error: Optional[str] = None
-    # We omit full response data here for brevity in the list view
+    # Judge Evaluation (Phase 3)
+    evaluation: Optional[dict] = None
 
 @router.post("/{project_id}/run", response_model=List[ReplayResponseItem])
 async def trigger_replay(
@@ -45,11 +47,21 @@ async def trigger_replay(
     if not snapshots:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No valid snapshots found for this project")
 
+    # Fetch Rubric if requested (Phase 3)
+    rubric = None
+    if data.rubric_id:
+        from app.models.evaluation_rubric import EvaluationRubric
+        rubric = db.query(EvaluationRubric).filter(
+            EvaluationRubric.id == data.rubric_id,
+            EvaluationRubric.project_id == project_id
+        ).first()
+
     # Run Replay
     results = await replay_service.run_batch_replay(
         snapshots=snapshots,
         new_model=data.new_model,
-        new_system_prompt=data.new_system_prompt
+        new_system_prompt=data.new_system_prompt,
+        rubric=rubric
     )
 
     return results

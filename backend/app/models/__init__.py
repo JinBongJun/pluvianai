@@ -20,6 +20,7 @@ from app.models.login_attempt import LoginAttempt
 from app.models.organization import Organization, OrganizationMember
 from app.models.trace import Trace
 from app.models.snapshot import Snapshot
+from app.models.evaluation_rubric import EvaluationRubric
 
 __all__ = [
     "User",
@@ -41,4 +42,5 @@ __all__ = [
     "OrganizationMember",
     "Trace",
     "Snapshot",
+    "EvaluationRubric",
 ]

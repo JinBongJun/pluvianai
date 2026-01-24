@@ -26,10 +26,22 @@ export default function ReplayPage() {
     // Overrides
     const [targetModel, setTargetModel] = useState('');
     const [targetPrompt, setTargetPrompt] = useState('');
+    const [rubrics, setRubrics] = useState<any[]>([]);
+    const [selectedRubricId, setSelectedRubricId] = useState<number | null>(null);
 
     useEffect(() => {
         loadSnapshots();
+        loadRubrics();
     }, [projectId]);
+
+    const loadRubrics = async () => {
+        try {
+            const data = await replayAPI.listRubrics(projectId);
+            setRubrics(data);
+        } catch (err) {
+            console.error('Failed to load rubrics');
+        }
+    };
 
     const loadSnapshots = async () => {
         setLoading(true);
@@ -56,7 +68,8 @@ export default function ReplayPage() {
             const replayResults = await replayAPI.runBatchReplay(projectId, {
                 snapshot_ids: selectedIds,
                 new_model: targetModel || undefined,
-                new_system_prompt: targetPrompt || undefined
+                new_system_prompt: targetPrompt || undefined,
+                rubric_id: selectedRubricId || undefined
             });
             setResults(replayResults);
             toast.showToast(`Batch replay of ${selectedIds.length} items completed`, 'success');
@@ -121,14 +134,18 @@ export default function ReplayPage() {
                                     <p className="text-[10px] text-slate-500 mt-1">Leave empty to keep original model.</p>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-400 uppercase mb-2">New System Prompt</label>
-                                    <textarea
-                                        rows={4}
-                                        placeholder="Enter new system instructions..."
-                                        className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-purple-500 transition-colors"
-                                        value={targetPrompt}
-                                        onChange={e => setTargetPrompt(e.target.value)}
-                                    />
+                                    <label className="block text-xs font-medium text-slate-400 uppercase mb-2">Automated Judge (Rubric)</label>
+                                    <select
+                                        className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-purple-500 transition-colors text-white"
+                                        value={selectedRubricId || ''}
+                                        onChange={e => setSelectedRubricId(Number(e.target.value) || null)}
+                                    >
+                                        <option value="">No Automated Judging</option>
+                                        {rubrics.map(r => (
+                                            <option key={r.id} value={r.id}>{r.name}</option>
+                                        ))}
+                                    </select>
+                                    <p className="text-[10px] text-slate-500 mt-1 italic">Select a criteria for AI-to-AI scoring.</p>
                                 </div>
                             </div>
                         </div>
@@ -223,14 +240,53 @@ export default function ReplayPage() {
                                                 </div>
                                             </div>
 
-                                            {/* Semantic Judge Placeholder */}
-                                            <div className="p-3 bg-black/40 border-t border-white/5 flex justify-between items-center italic">
-                                                <span className="text-[11px] text-slate-500">LLM-as-a-Judge analysis coming in Phase 3...</span>
-                                                <div className="flex gap-2">
-                                                    <Button size="sm" variant="ghost" className="text-xs h-7">Diff Highlight</Button>
-                                                    <Button size="sm" variant="ghost" className="text-xs h-7">Accept Change</Button>
+                                            {/* AI Judge Evaluation (Phase 3) */}
+                                            {res.evaluation && (
+                                                <div className="p-4 bg-purple-900/20 border-t border-purple-500/20 hover:bg-purple-900/30 transition-colors">
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="bg-purple-500 rounded p-1">
+                                                                <History className="h-3 w-3 text-white" />
+                                                            </div>
+                                                            <span className="text-xs font-bold text-purple-300">AI JUDGE RESULT</span>
+                                                        </div>
+                                                        <div className="flex gap-4">
+                                                            <div className="text-center">
+                                                                <p className="text-[9px] text-slate-500 uppercase">Original</p>
+                                                                <p className="text-lg font-black text-slate-400">{res.evaluation.original_score}/5</p>
+                                                            </div>
+                                                            <div className="text-center">
+                                                                <p className="text-[9px] text-purple-400 uppercase">Replay</p>
+                                                                <p className={clsx(
+                                                                    "text-lg font-black",
+                                                                    res.evaluation.regression_detected ? "text-red-500" : "text-green-400"
+                                                                )}>
+                                                                    {res.evaluation.replayed_score}/5
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-xs text-slate-300 leading-relaxed italic border-l-2 border-purple-500/50 pl-3 py-1">
+                                                        &quot;{res.evaluation.reasoning}&quot;
+                                                    </p>
+                                                    {res.evaluation.regression_detected && (
+                                                        <div className="mt-2 flex items-center gap-2 text-[10px] text-red-400 font-bold">
+                                                            <Trash2 className="h-3 w-3" />
+                                                            REGRESSION DETECTED: New response score is lower.
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            </div>
+                                            )}
+
+                                            {!res.evaluation && (
+                                                <div className="p-3 bg-black/40 border-t border-white/5 flex justify-between items-center italic">
+                                                    <span className="text-[11px] text-slate-500">Enable a Rubric on the left for automated scoring.</span>
+                                                    <div className="flex gap-2">
+                                                        <Button size="sm" variant="ghost" className="text-xs h-7">Diff Highlight</Button>
+                                                        <Button size="sm" variant="ghost" className="text-xs h-7">Accept Change</Button>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}

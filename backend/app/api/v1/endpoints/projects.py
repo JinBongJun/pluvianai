@@ -412,3 +412,62 @@ async def get_panic_mode(
     """Get current panic mode status for a project"""
     project = check_project_access(project_id, current_user, db)
     return PanicModeResponse(project_id=project_id, enabled=project.is_panic_mode)
+
+
+# Evaluation Rubrics (Phase 3)
+from app.models.evaluation_rubric import EvaluationRubric
+
+class RubricCreate(BaseModel):
+    name: str = Field(..., max_length=255)
+    description: Optional[str] = None
+    criteria_prompt: str
+    min_score: int = 1
+    max_score: int = 5
+
+class RubricResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    criteria_prompt: str
+    min_score: int
+    max_score: int
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+@router.post("/{project_id}/rubrics", response_model=RubricResponse)
+@handle_errors
+async def create_rubric(
+    project_id: int,
+    data: RubricCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new evaluation rubric for LLM-as-a-Judge"""
+    check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
+    
+    rubric = EvaluationRubric(
+        project_id=project_id,
+        name=data.name,
+        description=data.description,
+        criteria_prompt=data.criteria_prompt,
+        min_score=data.min_score,
+        max_score=data.max_score
+    )
+    db.add(rubric)
+    db.commit()
+    db.refresh(rubric)
+    
+    return rubric
+
+@router.get("/{project_id}/rubrics", response_model=List[RubricResponse])
+@handle_errors
+async def list_rubrics(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List all evaluation rubrics for a project"""
+    check_project_access(project_id, current_user, db)
+    return db.query(EvaluationRubric).filter(EvaluationRubric.project_id == project_id).all()

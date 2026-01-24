@@ -90,14 +90,47 @@ class ReplayService:
         self, 
         snapshots: List[Snapshot], 
         new_model: Optional[str] = None,
-        new_system_prompt: Optional[str] = None
+        new_system_prompt: Optional[str] = None,
+        rubric: Optional[EvaluationRubric] = None
     ) -> List[Dict[str, Any]]:
-        """Run multiple replays in parallel"""
-        tasks = [
+        """Run multiple replays in parallel and evaluate if rubric is provided"""
+        results = await asyncio.gather(*[
             self.replay_snapshot(s, new_model, new_system_prompt) 
             for s in snapshots
-        ]
-        return await asyncio.gather(*tasks)
+        ])
+
+        if rubric:
+            from app.services.judge_service import judge_service
+            from app.services.data_normalizer import DataNormalizer
+            normalizer = DataNormalizer()
+            
+            for res in results:
+                if res["success"]:
+                    # 1. Extract texts
+                    snapshot = next(s for s in snapshots if s.id == res["snapshot_id"])
+                    
+                    # We need the original response text. 
+                    # For MVP, we extract it from the snapshot metadata or associated APICall.
+                    # Since Snapshot doesn't store response_text directly, we normalize the replayed response.
+                    replayed_text = normalizer._extract_response_text(res["response_data"])
+                    
+                    # Original text extraction (from associated APICall)
+                    from app.core.database import SessionLocal
+                    with SessionLocal() as db:
+                        from app.models.api_call import APICall
+                        api_call = db.query(APICall).filter(APICall.chain_id == snapshot.trace_id).first()
+                        original_text = api_call.response_text if api_call else "Original not found"
+
+                    # 2. Judge
+                    if original_text and replayed_text:
+                        evaluation = await judge_service.evaluate_response(
+                            original_output=original_text,
+                            replayed_output=replayed_text,
+                            rubric=rubric
+                        )
+                        res["evaluation"] = evaluation
+
+        return results
 
 # Global instance
 replay_service = ReplayService()

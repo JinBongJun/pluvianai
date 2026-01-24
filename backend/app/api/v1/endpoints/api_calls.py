@@ -36,6 +36,7 @@ class APICallResponse(BaseModel):
     agent_name: Optional[str]
     chain_id: Optional[str]
     created_at: datetime
+    response_text: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -47,6 +48,7 @@ class APICallDetailResponse(APICallResponse):
     request_data: dict
     response_data: dict
     error_message: Optional[str]
+    snapshot_id: Optional[int] = None
 
 
 @router.get("", response_model=List[APICallResponse])
@@ -119,7 +121,17 @@ async def get_api_call(api_call_id: int, current_user: User = Depends(get_curren
     if isinstance(api_call.response_data, dict) and "compressed" in api_call.response_data:
         api_call.response_data = decompress_json(api_call.response_data["compressed"]) or {}
 
-    return api_call
+    # Attach snapshot_id if it exists (for Replay navigation)
+    # We match by trace_id (chain_id in APICall table)
+    from app.models.snapshot import Snapshot
+    snapshot = db.query(Snapshot).filter(Snapshot.trace_id == api_call.chain_id).first()
+    
+    # We use a custom object to include the snapshot_id
+    response_data = APICallDetailResponse.from_orm(api_call)
+    if snapshot:
+        response_data.snapshot_id = snapshot.id
+
+    return response_data
 
 
 class APICallCreateRequest(BaseModel):
