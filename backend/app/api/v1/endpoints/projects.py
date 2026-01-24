@@ -378,9 +378,12 @@ async def toggle_panic_mode(
     """Toggle panic mode for a project (owner/admin only)"""
     project = check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
     
+    # TODO: Uncomment after running migration: alembic upgrade head
     # 1. Update DB (Persistent State)
-    project.is_panic_mode = panic_data.enabled
-    db.commit()
+    # project.is_panic_mode = panic_data.enabled
+    # db.commit()
+    
+    # Temporary: Store in Redis only until migration is run
     
     # 2. Sync to Redis (High Performance Proxy check)
     redis_key = f"project:{project_id}:panic_mode"
@@ -411,7 +414,16 @@ async def get_panic_mode(
 ):
     """Get current panic mode status for a project"""
     project = check_project_access(project_id, current_user, db)
-    return PanicModeResponse(project_id=project_id, enabled=project.is_panic_mode)
+    # TODO: Uncomment after running migration: alembic upgrade head
+    # return PanicModeResponse(project_id=project_id, enabled=project.is_panic_mode)
+    
+    # Temporary: Get from Redis only until migration is run
+    redis_key = f"project:{project_id}:panic_mode"
+    enabled = False
+    if cache_service.enabled:
+        value = cache_service.redis_client.get(redis_key)
+        enabled = value == b"1" if value else False
+    return PanicModeResponse(project_id=project_id, enabled=enabled)
 
 
 # Evaluation Rubrics (Phase 3)

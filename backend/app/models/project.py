@@ -19,7 +19,8 @@ class Project(Base):
     description = Column(Text, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     is_active = Column(Boolean, default=True)
-    is_panic_mode = Column(Boolean, default=False)
+    # TODO: Uncomment after running migration: alembic upgrade head
+    # is_panic_mode = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
