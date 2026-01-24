@@ -32,21 +32,40 @@ graph TD
 
 ---
 
-## 🛠️ Implementation Phases
+## 🛠️ Key Features (MVP)
 
-### Phase 1: Safe Harbor (The Engine) - ✅ COMPLETED
-*   **Zero-Friction Interception**: A Proxy Gateway that clones requests asynchronously using `BackgroundTasks`. 
-*   **PII Sanitization**: Automatic masking of sensitive data (Emails, API Keys) before saving to DB.
-*   **Snapshot Store**: Relational schema (`traces` & `snapshots`) to group and preserve AI context.
+### 1. Proxy (Zero-Friction Interception)
+*   **Auto-Capture**: Intercept all LLM requests by simply changing the Base URL.
+*   **Multi-Provider**: Full support for OpenAI, Anthropic, and Google APIs.
 
-### Phase 2: Speed & Control (The Safety Net) - ✅ COMPLETED
-*   **Panic Button (Circuit Breaker)**: Redis-backed global toggle to block all AI traffic in <5ms during emergencies.
-*   **Time Machine UI**: Side-by-Side comparison interface for production traffic vs. test runs.
+### 2. Snapshot/Replay
+*   **Production Context**: Automatically store production traffic for testing.
+*   **Regression Testing**: Re-run saved requests with new versions of models or prompts.
 
-### Phase 3: Intelligence (The Judge) - ✅ COMPLETED
-*   **Evaluation Rubrics**: Developer-defined JSON criteria for what makes a "good" response.
-*   **LLM-as-a-Judge**: Automated scoring (1-5) and reasoning using GPT-4o-mini as a semantic arbitrator.
-*   **Regression Detection**: Visual alerts when new models/prompts perform worse than the production original.
+### 3. LLM-as-a-Judge
+*   **Evaluation Rubrics**: Define custom criteria for what a "good" response looks like.
+*   **Automated Scoring**: Use high-performance models (GPT-4o-mini) to score and detect regressions.
+
+### 4. Panic Mode (Circuit Breaker)
+*   **Safety Lock**: Instantly block all AI traffic (<5ms) during emergencies via a global toggle.
+
+### 5. Projects, Auth & Organizations
+*   **Multi-Tenant**: Secure project management for multiple teams.
+*   **Access Control**: JWT-based authentication and organization-level permissions.
+
+### 6. Monitoring & Analysis
+*   **API Stats**: Track throughput, success rates, and latency.
+*   **Quality & Drift**: Monitor quality scores and detect performance shifts over time.
+*   **Cost Analysis**: Real-time tracking of LLM API expenditures.
+
+---
+
+## 🚀 Future Vision: Phase 4 & Beyond
+
+### Phase 4: The Visual Control Plane (vIaC)
+*   **Agent Discovery**: Automatically scan source code to map out agent architecture.
+*   **Visual Orchestration**: Manage and monitor agents through an interactive "Railway-style" map.
+*   **Git-Sync Integration**: Sync UI-driven prompt updates directly back to the GitHub repository.
 
 ---
 
