@@ -26,7 +26,7 @@ def handle_errors(func):
             # Log unexpected errors
             logger.error(
                 f"Unexpected error in {func.__name__}: {str(e)}",
-                extra={"function": func.__name__, "args": str(args)[:200], "kwargs": str(kwargs)[:200]},  # Limit length
+                extra={"function": func.__name__, "func_args": str(args)[:200], "func_kwargs": str(kwargs)[:200]},  # Limit length
                 exc_info=True,
             )
             # Raise HTTPException for FastAPI to handle
@@ -43,7 +43,7 @@ def handle_errors(func):
         except Exception as e:
             logger.error(
                 f"Unexpected error in {func.__name__}: {str(e)}",
-                extra={"function": func.__name__, "args": str(args)[:200], "kwargs": str(kwargs)[:200]},
+                extra={"function": func.__name__, "func_args": str(args)[:200], "func_kwargs": str(kwargs)[:200]},
                 exc_info=True,
             )
             raise HTTPException(
