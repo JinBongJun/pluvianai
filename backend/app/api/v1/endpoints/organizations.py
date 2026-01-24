@@ -13,6 +13,7 @@ from sqlalchemy import func
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.logging_config import logger
+from app.core.decorators import handle_errors
 from app.models.user import User
 from app.models.organization import Organization, OrganizationMember
 from app.models.project import Project
@@ -250,6 +251,7 @@ def list_organizations(
 
 
 @router.get("/{org_id}")
+@handle_errors
 def get_organization(
     org_id: int,
     include_stats: bool = Query(False, description="Include usage stats and alerts"),
@@ -408,17 +410,23 @@ def get_organization(
     except Exception as e:
         logger.error(f"Failed to build response for org {org_id}: {str(e)}", exc_info=True)
         # Return basic org info without stats if response building fails
+        plan_limits = {
+            "free": {"calls": 1000, "cost": 10.0},
+            "pro": {"calls": 100000, "cost": 1000.0},
+            "enterprise": {"calls": 1000000, "cost": 10000.0},
+        }
+        fallback_limits = plan_limits.get(org.plan_type if org else "free", plan_limits["free"])
         return {
-            "id": org.id,
-            "name": org.name,
-            "type": org.type,
-            "plan_type": org.plan_type,
+            "id": org.id if org else org_id,
+            "name": org.name if org else "Unknown",
+            "type": org.type if org else None,
+            "plan_type": org.plan_type if org else "free",
             "stats": {
                 "usage": {
                     "calls": 0,
-                    "calls_limit": limits.get("calls", 1000),
+                    "calls_limit": fallback_limits["calls"],
                     "cost": 0.0,
-                    "cost_limit": limits.get("cost", 10.0),
+                    "cost_limit": fallback_limits["cost"],
                     "quality": 0.0,
                 },
                 "alerts": [],
@@ -427,6 +435,7 @@ def get_organization(
 
 
 @router.get("/{org_id}/projects", response_model=List[OrgProjectSummary])
+@handle_errors
 def list_org_projects(
     org_id: int,
     include_stats: bool = Query(True, description="Include project metrics"),

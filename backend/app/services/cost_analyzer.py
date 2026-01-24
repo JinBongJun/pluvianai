@@ -9,6 +9,7 @@ from sqlalchemy import func, and_
 from app.models.api_call import APICall
 from app.models.alert import Alert
 from app.services.pricing_updater import pricing_updater
+from app.core.logging_config import logger
 
 
 class CostAnalyzer:
@@ -21,7 +22,18 @@ class CostAnalyzer:
     @property
     def PRICING(self):
         """Get current pricing from PricingUpdater"""
-        return self.pricing_updater.get_pricing()
+        try:
+            pricing = self.pricing_updater.get_pricing()
+            if not pricing:
+                # Fallback to base pricing if get_pricing returns None
+                from app.services.pricing_updater import PricingUpdater
+                return PricingUpdater.BASE_PRICING
+            return pricing
+        except Exception as e:
+            # Fallback to base pricing if get_pricing fails
+            from app.services.pricing_updater import PricingUpdater
+            logger.warning(f"Failed to get pricing from updater: {str(e)}, using base pricing", exc_info=True)
+            return PricingUpdater.BASE_PRICING
 
     def calculate_cost(self, provider: str, model: str, input_tokens: int, output_tokens: int) -> float:
         """
