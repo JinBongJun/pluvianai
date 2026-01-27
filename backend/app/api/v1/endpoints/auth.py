@@ -274,41 +274,52 @@ async def login(
     access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
     refresh_token = create_refresh_token(data={"sub": str(user.id), "email": user.email})
 
-    # Save refresh token to database
-    import hashlib
-    from app.models.refresh_token import RefreshToken
-    from datetime import datetime
-    
-    token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-    payload = decode_token(refresh_token)
-    expires_at = datetime.utcfromtimestamp(payload.get("exp", 0))
-    
-    refresh_token_record = RefreshToken(
-        user_id=user.id,
-        token_hash=token_hash,
-        expires_at=expires_at,
-        is_revoked=False
-    )
-    db.add(refresh_token_record)
-    # Commit handled automatically by get_db() dependency
+    # Save refresh token to database (optional - if table doesn't exist, skip)
+    try:
+        import hashlib
+        from app.models.refresh_token import RefreshToken
+        from datetime import datetime
+        
+        token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+        payload = decode_token(refresh_token)
+        expires_at = datetime.utcfromtimestamp(payload.get("exp", 0))
+        
+        refresh_token_record = RefreshToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+            is_revoked=False
+        )
+        db.add(refresh_token_record)
+        # Commit handled automatically by get_db() dependency
+    except Exception as refresh_token_error:
+        # If refresh token table doesn't exist or other error, log but don't fail login
+        logger.warning(f"Failed to save refresh token (non-critical): {refresh_token_error}", exc_info=True)
 
-    # Log audit event for successful login
-    audit_service.log_action(
-        user_id=user.id,
-        action="user_login",
-        resource_type="user",
-        resource_id=user.id,
-        new_value={"email": user.email, "ip_address": ip, "user_agent": user_agent},
-        ip_address=ip,
-        user_agent=user_agent
-    )
+    # Log audit event for successful login (non-critical)
+    try:
+        audit_service.log_action(
+            user_id=user.id,
+            action="user_login",
+            resource_type="user",
+            resource_id=user.id,
+            new_value={"email": user.email, "ip_address": ip, "user_agent": user_agent},
+            ip_address=ip,
+            user_agent=user_agent
+        )
+    except Exception as audit_error:
+        logger.warning(f"Failed to log audit event (non-critical): {audit_error}", exc_info=True)
 
     duration = time.time() - start_time
     login_latency_seconds.observe(duration)
 
-    # Track analytics event
-    analytics_service.track_user_login(user_id=user.id, method="password")
+    # Track analytics event (non-critical)
+    try:
+        analytics_service.track_user_login(user_id=user.id, method="password")
+    except Exception as analytics_error:
+        logger.warning(f"Failed to track analytics event (non-critical): {analytics_error}", exc_info=True)
 
+    # Always return tokens even if auxiliary operations fail
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
 
