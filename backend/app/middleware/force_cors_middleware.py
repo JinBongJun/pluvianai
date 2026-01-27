@@ -12,19 +12,20 @@ class ForceCORSMiddleware(BaseHTTPMiddleware):
     """Middleware to FORCE CORS headers on ALL responses"""
     
     async def dispatch(self, request: Request, call_next):
+        # Log ALL requests to verify they reach the server
+        origin = request.headers.get("origin", "none")
+        logger.info(f"🔵 FORCE CORS MIDDLEWARE: {request.method} {request.url.path} from origin: {origin}")
+        
         # Process request
         response: Response = await call_next(request)
         
-        # FORCE CORS headers on ALL responses
+        # FORCE CORS headers on ALL responses - this MUST happen
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD"
         response.headers["Access-Control-Allow-Headers"] = "*"
         response.headers["Access-Control-Expose-Headers"] = "*"
         response.headers["Access-Control-Max-Age"] = "3600"
         
-        # Log OPTIONS requests for debugging
-        if request.method == "OPTIONS":
-            origin = request.headers.get("origin", "unknown")
-            logger.info(f"FORCE CORS: OPTIONS {request.url.path} from origin: {origin}")
+        logger.info(f"🟢 FORCE CORS: Added headers to {request.method} {request.url.path}, status: {response.status_code}")
         
         return response

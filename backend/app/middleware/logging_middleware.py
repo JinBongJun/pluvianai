@@ -13,22 +13,27 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     """Middleware to log all requests and responses"""
 
     async def dispatch(self, request: Request, call_next):
-        # Skip detailed logging for health checks and docs
+        # Log ALL requests immediately - even before processing
+        origin = request.headers.get("origin", "none")
+        ip = request.client.host if request.client else "unknown"
+        logger.info(f"🟡 LOGGING MIDDLEWARE: {request.method} {request.url.path} from origin: {origin}, ip: {ip}")
+        
+        # Skip detailed logging for health checks and docs (but still log that they were accessed)
         if request.url.path in ["/health", "/docs", "/openapi.json", "/redoc"]:
-            return await call_next(request)
+            response = await call_next(request)
+            logger.info(f"🟢 Health/docs request: {request.method} {request.url.path} - {response.status_code}")
+            return response
         
         # Log ALL requests including OPTIONS (CORS preflight) for debugging
-        origin = request.headers.get("origin", "unknown")
-        ip = request.client.host if request.client else None
-        
         if request.method == "OPTIONS":
-            logger.info(f"CORS PREFLIGHT: {request.method} {request.url.path} from origin: {origin}, ip: {ip}")
+            logger.info(f"🟠 CORS PREFLIGHT: {request.method} {request.url.path} from origin: {origin}, ip: {ip}")
             try:
                 response = await call_next(request)
-                logger.info(f"CORS PREFLIGHT RESPONSE: {response.status_code}, Access-Control-Allow-Origin: {response.headers.get('access-control-allow-origin', 'not set')}")
+                cors_header = response.headers.get('access-control-allow-origin', 'NOT SET')
+                logger.info(f"🟢 CORS PREFLIGHT RESPONSE: {response.status_code}, Access-Control-Allow-Origin: {cors_header}")
                 return response
             except Exception as e:
-                logger.error(f"CORS PREFLIGHT ERROR: {str(e)}", exc_info=True)
+                logger.error(f"🔴 CORS PREFLIGHT ERROR: {str(e)}", exc_info=True)
                 raise
 
         # Record start time
