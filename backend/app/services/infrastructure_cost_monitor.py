@@ -17,6 +17,7 @@ class InfrastructureCostMonitor:
 
     def __init__(self):
         # AlertService will be created with DB session when needed
+        pass
 
     def _get_alert_service(self, db: Session) -> AlertService:
         """Get AlertService instance with DB session"""
