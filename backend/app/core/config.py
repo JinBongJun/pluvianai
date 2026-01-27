@@ -121,11 +121,17 @@ class Settings(BaseSettings):
         if isinstance(self.CORS_ORIGINS, list):
             return self.CORS_ORIGINS
 
+        # Handle empty or None values - default to "*" for flexibility
+        cors_origins_str = str(self.CORS_ORIGINS).strip() if self.CORS_ORIGINS else "*"
+        
         # If "*" is specified, return special marker
-        if self.CORS_ORIGINS.strip() == "*":
+        if cors_origins_str == "*":
             return ["*"]
 
-        origins = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
+        # If parsing resulted in empty list, default to "*"
+        if not origins:
+            return ["*"]
         return origins
 
 
