@@ -3,7 +3,7 @@ Problem Analysis endpoints for identifying problem nodes
 """
 
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query, Path, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.core.database import get_db
@@ -92,7 +92,7 @@ async def analyze_problems(
 @handle_errors
 async def get_problem_analysis(
     project_id: int = Query(..., description="Project ID"),
-    analysis_id: str = Query(..., description="Analysis ID (timestamp)"),
+    analysis_id: str = Path(..., description="Analysis ID (timestamp)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -121,7 +121,7 @@ async def get_problem_analysis(
 @handle_errors
 async def get_problem_analysis_mapping(
     project_id: int = Query(..., description="Project ID"),
-    analysis_id: str = Query(..., description="Analysis ID"),
+    analysis_id: str = Path(..., description="Analysis ID"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     mapping_service: MappingService = Depends(get_mapping_service),
