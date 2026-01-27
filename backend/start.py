@@ -30,6 +30,7 @@ for output in [sys.stdout, sys.stderr]:
 
 # Start uvicorn (Railway runs this from backend directory)
 # Enable access log to see ALL incoming requests
+# CRITICAL: Use --log-config or ensure all logs are captured
 cmd = [
     sys.executable,
     "-m",
@@ -42,9 +43,12 @@ cmd = [
     "--log-level",
     "info",
     "--access-log",  # Enable access logging
+    "--no-use-colors",  # Disable colors for Railway logs
 ]
 
 print(f"🔧 Executing: {' '.join(cmd)}", file=sys.stderr)
+print(f"🔧 Starting uvicorn on 0.0.0.0:{port}", file=sys.stderr)
 
 # Use execvp to replace current process
+# This will block until uvicorn exits
 os.execvp(cmd[0], cmd)

@@ -335,6 +335,13 @@ async def startup_event():
     logger.info(f"✅ Server listening on port {os.environ.get('PORT', '8000')}")
     logger.info(f"✅ CORS is configured to allow all origins: {settings.cors_origins_list}")
     logger.info("=" * 80)
+    
+    # CRITICAL: Also print to stdout/stderr so Railway captures it
+    import sys
+    print("=" * 80, file=sys.stderr)
+    print("✅✅✅ APPLICATION STARTUP COMPLETE - SERVER IS READY TO ACCEPT REQUESTS ✅✅✅", file=sys.stderr)
+    print(f"✅ Server listening on port {os.environ.get('PORT', '8000')}", file=sys.stderr)
+    print("=" * 80, file=sys.stderr)
     logger.info(f"✅ CORS is configured to allow all origins: {allow_origins}")
     logger.info("✅ Server listening and ready for connections")
 
