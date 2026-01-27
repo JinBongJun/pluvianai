@@ -13,9 +13,21 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     """Middleware to log all requests and responses"""
 
     async def dispatch(self, request: Request, call_next):
-        # Skip logging for health checks, docs, and OPTIONS requests (CORS preflight)
-        if request.url.path in ["/health", "/docs", "/openapi.json", "/redoc"] or request.method == "OPTIONS":
+        # Skip detailed logging for health checks and docs
+        if request.url.path in ["/health", "/docs", "/openapi.json", "/redoc"]:
             return await call_next(request)
+        
+        # Log OPTIONS requests (CORS preflight) for debugging
+        if request.method == "OPTIONS":
+            origin = request.headers.get("origin", "unknown")
+            logger.debug(f"CORS preflight: {request.method} {request.url.path} from origin: {origin}")
+            try:
+                response = await call_next(request)
+                logger.debug(f"CORS preflight response: {response.status_code}, Access-Control-Allow-Origin: {response.headers.get('access-control-allow-origin', 'not set')}")
+                return response
+            except Exception as e:
+                logger.error(f"CORS preflight error: {str(e)}", exc_info=True)
+                raise
 
         # Record start time
         start_time = time.time()

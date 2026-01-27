@@ -105,14 +105,16 @@ app.add_exception_handler(Exception, general_exception_handler)
 # Parse CORS_ORIGINS from settings (supports comma-separated list or "*")
 cors_origins = settings.cors_origins_list
 
-# Default to allowing all origins if not configured (for flexibility)
-if not cors_origins or cors_origins == ["*"]:
+# For Vercel preview deployments, always allow all origins to avoid CORS issues
+# Vercel creates new preview URLs for each deployment, making it impractical to whitelist
+# In production with a fixed domain, you can set CORS_ORIGINS to specific domains
+if not cors_origins or cors_origins == ["*"] or any("vercel.app" in str(origin) for origin in cors_origins):
     # Allow all origins (for development/Vercel preview deployments)
     allow_origins = ["*"]
     allow_credentials = False  # Must be False when using allow_origins=["*"]
-    logger.info("CORS configured to allow all origins (*)")
+    logger.info("CORS configured to allow all origins (*) - Vercel preview mode")
 else:
-    # Specific origins (for production)
+    # Specific origins (for production with fixed domain)
     allow_origins = cors_origins
     allow_credentials = True  # Can use credentials with specific origins
     logger.info(f"CORS configured with specific origins: {allow_origins}")
