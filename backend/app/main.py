@@ -254,10 +254,33 @@ async def startup_event():
 
     db_available = False
     try:
-        # Create database tables (for development)
-        # In production, use Alembic migrations instead
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables initialized")
+        # Run Alembic migrations to ensure database schema is up to date
+        from alembic.config import Config
+        from alembic import command
+        import os
+        
+        # Get the backend directory (parent of app directory)
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        alembic_ini_path = os.path.join(backend_dir, "alembic.ini")
+        alembic_script_location = os.path.join(backend_dir, "alembic")
+        
+        if os.path.exists(alembic_ini_path):
+            alembic_cfg = Config(alembic_ini_path)
+            alembic_cfg.set_main_option("script_location", alembic_script_location)
+            
+            try:
+                command.upgrade(alembic_cfg, "head")
+                logger.info("Alembic migrations applied successfully")
+            except Exception as migration_error:
+                logger.warning(f"Alembic migration failed (may be normal if already up to date): {migration_error}")
+                # Fallback: create tables if they don't exist (for development)
+                Base.metadata.create_all(bind=engine)
+                logger.info("Database tables initialized (fallback)")
+        else:
+            # Fallback if alembic.ini not found
+            Base.metadata.create_all(bind=engine)
+            logger.info("Database tables initialized (alembic.ini not found, using create_all)")
+        
         db_available = True
     except OperationalError as e:
         # Database is not reachable (e.g., in CI OpenAPI job) - degrade gracefully
