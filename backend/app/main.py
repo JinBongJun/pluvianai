@@ -246,7 +246,6 @@ async def startup_event():
         # Run Alembic migrations to ensure database schema is up to date
         from alembic.config import Config
         from alembic import command
-        import os
         
         # Get the backend directory (parent of app directory)
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -258,8 +257,9 @@ async def startup_event():
             alembic_cfg.set_main_option("script_location", alembic_script_location)
             
             try:
+                logger.info("🔄 Starting Alembic migrations...")
                 command.upgrade(alembic_cfg, "head")
-                logger.info("Alembic migrations applied successfully")
+                logger.info("✅ Alembic migrations applied successfully")
             except Exception as migration_error:
                 logger.error(f"Alembic migration failed: {migration_error}", exc_info=True)
                 # Try to manually add missing columns if migration fails
@@ -317,8 +317,13 @@ async def startup_event():
         logger.info("Business metrics update task started")
     else:
         logger.warning("Skipping scheduler startup because database is unavailable.")
-    
-    logger.info("✅ Application startup complete - Server is ready to accept requests")
+
+    # CRITICAL: Log startup completion - this confirms server is ready
+    logger.info("=" * 80)
+    logger.info("✅✅✅ APPLICATION STARTUP COMPLETE - SERVER IS READY TO ACCEPT REQUESTS ✅✅✅")
+    logger.info(f"✅ Server listening on port {os.environ.get('PORT', '8000')}")
+    logger.info(f"✅ CORS is configured to allow all origins: {settings.cors_origins_list}")
+    logger.info("=" * 80)
     logger.info(f"✅ CORS is configured to allow all origins: {allow_origins}")
     logger.info("✅ Server listening and ready for connections")
 
