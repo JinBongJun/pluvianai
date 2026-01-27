@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.services.subscription_service import SubscriptionService
+from app.services.billing_service import BillingService
+from app.core.logging_config import logger
 
 
 async def usage_enforcement_middleware(request: Request, call_next):
@@ -15,16 +17,12 @@ async def usage_enforcement_middleware(request: Request, call_next):
     This should be applied to specific routes that need limit checking
     """
     # Skip middleware for certain paths
-    skip_paths = ["/docs", "/openapi.json", "/redoc", "/health", "/webhooks"]
+    skip_paths = ["/docs", "/openapi.json", "/redoc", "/health", "/webhooks", "/billing/webhook"]
     if any(request.url.path.startswith(path) for path in skip_paths):
         return await call_next(request)
 
-    # Get user from request (if authenticated)
-    # This assumes you have a way to get current user from request
-    # For now, we'll skip enforcement in middleware and do it in endpoints
-
-    # TODO: Implement actual usage checking here if needed
-    # For now, usage checking is done at the endpoint level
+    # Usage checking is done at the endpoint level for better control
+    # See: billing_service.py, subscription_service.py for usage tracking
 
     response = await call_next(request)
     return response
@@ -80,5 +78,7 @@ def check_team_member_limit(user_id: int, project_id: int, db: Session) -> tuple
 
 def check_api_call_limit(user_id: int, db: Session) -> tuple[bool, str | None]:
     """Check if user can make an API call"""
-    service = SubscriptionService(db)
-    return service.check_usage_limit(user_id, "api_calls", 1)
+    billing_service = BillingService(db)
+    # Increment usage and check soft cap
+    is_allowed, warning = billing_service.increment_usage(user_id, "api_calls", 1)
+    return (is_allowed, warning)

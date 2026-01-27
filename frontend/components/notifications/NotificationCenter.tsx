@@ -37,12 +37,22 @@ export default function NotificationCenter() {
 
   useEffect(() => {
     // Poll for unread count
-    const interval = setInterval(() => {
+    let interval: NodeJS.Timeout | null = null;
+    
+    const setupPolling = () => {
       loadUnreadCount();
-    }, 30000); // Every 30 seconds
-
-    loadUnreadCount();
-    return () => clearInterval(interval);
+      interval = setInterval(() => {
+        loadUnreadCount();
+      }, 30000); // Every 30 seconds
+    };
+    
+    setupPolling();
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
   }, []);
 
   // Close dropdown when clicking outside
@@ -68,7 +78,13 @@ export default function NotificationCenter() {
       const data = await notificationsAPI.list({ limit: 20 });
       setNotifications(data);
     } catch (error) {
-      console.error('Failed to load notifications:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load notifications:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error);
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -91,7 +107,9 @@ export default function NotificationCenter() {
       ));
       setUnreadCount(Math.max(0, unreadCount - 1));
     } catch (error) {
-      console.error('Failed to mark notification as read:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to mark notification as read:', error);
+      }
     }
   };
 

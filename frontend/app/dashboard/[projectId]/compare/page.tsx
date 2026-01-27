@@ -57,7 +57,13 @@ export default function ComparePage() {
         setError({ type: 'empty', message: 'No comparison data available for the selected date range.' });
       }
     } catch (error: any) {
-      console.error('Failed to load comparisons:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load comparisons:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId } });
+        });
+      }
       const errorMessage = error.response?.data?.detail || 'Failed to load comparisons';
       
       if (error.response?.status === 404 || error.response?.status === 400) {

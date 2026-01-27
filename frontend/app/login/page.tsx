@@ -8,6 +8,8 @@ import { useLoading } from '@/hooks/useLoading';
 import { useFormSubmit } from '@/hooks/useFormSubmit';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { validateEmail, validatePassword, passwordStrength } from '@/lib/validation';
+import { logger } from '@/lib/logger';
+import * as Sentry from '@sentry/nextjs';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,6 +20,7 @@ export default function LoginPage() {
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [liabilityAgreementAccepted, setLiabilityAgreementAccepted] = useState(false);
   const { isLoading, start, stop } = useLoading({ minDuration: 300 });
   const pwdStrength = passwordStrength(password);
 
@@ -53,7 +56,11 @@ export default function LoginPage() {
         posthog.capture('user_login', { method: 'password' });
         router.push('/organizations');
       } else {
-        await authAPI.register(email, password, fullName);
+        if (!liabilityAgreementAccepted) {
+          setError('You must accept the liability agreement to register');
+          return;
+        }
+        await authAPI.register(email, password, fullName, liabilityAgreementAccepted);
         posthog.capture('user_register', { method: 'password' });
         // After registration, log in
         await authAPI.login(email, password);
@@ -61,7 +68,7 @@ export default function LoginPage() {
         router.push('/organizations');
       }
     } catch (err: any) {
-      console.error('Login error:', err);
+      logger.error('Login error', err);
       let errorMessage = 'An error occurred';
       
       if (err.response) {
@@ -175,19 +182,45 @@ export default function LoginPage() {
           </div>
 
           {!isLogin && (
-            <div className="text-xs text-slate-400" role="status" aria-live="polite">
-              Password strength:
-              <span className="ml-2" aria-label={`Strength ${pwdStrength} of 5`}>
-                {'●'.repeat(pwdStrength)}
-                {'○'.repeat(Math.max(0, 5 - pwdStrength))}
-              </span>
-            </div>
+            <>
+              <div className="text-xs text-slate-400" role="status" aria-live="polite">
+                Password strength:
+                <span className="ml-2" aria-label={`Strength ${pwdStrength} of 5`}>
+                  {'●'.repeat(pwdStrength)}
+                  {'○'.repeat(Math.max(0, 5 - pwdStrength))}
+                </span>
+              </div>
+
+              {/* Liability Agreement */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <input
+                    id="liability-agreement"
+                    type="checkbox"
+                    checked={liabilityAgreementAccepted}
+                    onChange={(e) => setLiabilityAgreementAccepted(e.target.checked)}
+                    required
+                    className="mt-1 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                    aria-required="true"
+                  />
+                  <label htmlFor="liability-agreement" className="text-sm text-gray-700 cursor-pointer">
+                    <span className="font-semibold text-yellow-900">AI Judge Liability Agreement</span>
+                    <p className="mt-1 text-xs text-yellow-800">
+                      I understand that AI Judge results are non-deterministic and may contain errors. 
+                      I acknowledge that AgentGuard is a tool to assist decision-making, and the final 
+                      responsibility for deployment decisions lies with me. I will not hold AgentGuard 
+                      liable for any consequences resulting from decisions made based on AI Judge evaluations.
+                    </p>
+                  </label>
+                </div>
+              </div>
+            </>
           )}
 
           <div>
             <button
               type="submit"
-              disabled={isLoading || submitting}
+              disabled={isLoading || submitting || (!isLogin && !liabilityAgreementAccepted)}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 transition-colors"
             >
               {isLoading || submitting ? 'Loading...' : isLogin ? 'Sign in' : 'Sign up'}

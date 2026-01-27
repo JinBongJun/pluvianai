@@ -18,6 +18,10 @@ import { clsx } from 'clsx';
 import ProjectTabs from '@/components/ProjectTabs';
 import { HelpCircle } from 'lucide-react';
 import useSWR from 'swr';
+import ModelValidation from '@/components/model/ModelValidation';
+import ProblemAnalysis from '@/components/analysis/ProblemAnalysis';
+import DependencyAnalysis from '@/components/analysis/DependencyAnalysis';
+import PerformanceAnalysis from '@/components/analysis/PerformanceAnalysis';
 
 export default function ProjectDetailPage() {
   const router = useRouter();
@@ -33,6 +37,7 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [userRole, setUserRole] = useState<'owner' | 'admin' | 'member' | 'viewer'>('viewer');
+  const [activeAnalysis, setActiveAnalysis] = useState<'model' | 'problem' | 'dependency' | 'performance'>('model');
   
   // Get active tab from URL params
   const activeTab = (searchParams?.get('tab') || 'overview') as 'overview' | 'members' | 'settings';
@@ -50,7 +55,9 @@ export default function ProjectDetailPage() {
 
     // Validate projectId
     if (!projectId || isNaN(projectId) || projectId <= 0) {
-      console.error('Invalid project ID:', params.projectId);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Invalid project ID:', params.projectId);
+      }
       if (orgId) {
         router.push(`/organizations/${orgId}/projects`);
       } else {
@@ -250,6 +257,76 @@ export default function ProjectDetailPage() {
                   value={stats?.success_rate != null ? `${toFixedSafe(stats.success_rate * 100, 1)}%` : 'N/A'}
                   subtitle="Success rate"
                 />
+              </div>
+            </div>
+
+            {/* One-Click Results Section */}
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-lg font-semibold text-white">Quick Actions</h2>
+                <div className="group relative">
+                  <HelpCircle className="h-4 w-4 text-slate-400 cursor-help" />
+                  <div className="absolute left-0 top-6 w-64 p-3 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                    <p>One-Click results to quickly validate models and find issues.</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Analysis Tabs */}
+              <div className="mb-4">
+                <div className="flex gap-2 border-b border-white/10">
+                  <button
+                    onClick={() => setActiveAnalysis('model')}
+                    className={clsx(
+                      'px-4 py-2 text-sm font-medium transition-colors border-b-2',
+                      activeAnalysis === 'model'
+                        ? 'text-white border-purple-500'
+                        : 'text-slate-400 border-transparent hover:text-slate-300'
+                    )}
+                  >
+                    Model Validation
+                  </button>
+                  <button
+                    onClick={() => setActiveAnalysis('problem')}
+                    className={clsx(
+                      'px-4 py-2 text-sm font-medium transition-colors border-b-2',
+                      activeAnalysis === 'problem'
+                        ? 'text-white border-purple-500'
+                        : 'text-slate-400 border-transparent hover:text-slate-300'
+                    )}
+                  >
+                    Problem Analysis
+                  </button>
+                  <button
+                    onClick={() => setActiveAnalysis('dependency')}
+                    className={clsx(
+                      'px-4 py-2 text-sm font-medium transition-colors border-b-2',
+                      activeAnalysis === 'dependency'
+                        ? 'text-white border-purple-500'
+                        : 'text-slate-400 border-transparent hover:text-slate-300'
+                    )}
+                  >
+                    Dependencies
+                  </button>
+                  <button
+                    onClick={() => setActiveAnalysis('performance')}
+                    className={clsx(
+                      'px-4 py-2 text-sm font-medium transition-colors border-b-2',
+                      activeAnalysis === 'performance'
+                        ? 'text-white border-purple-500'
+                        : 'text-slate-400 border-transparent hover:text-slate-300'
+                    )}
+                  >
+                    Performance
+                  </button>
+                </div>
+              </div>
+              
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                {activeAnalysis === 'model' && <ModelValidation projectId={projectId} />}
+                {activeAnalysis === 'problem' && <ProblemAnalysis projectId={projectId} />}
+                {activeAnalysis === 'dependency' && <DependencyAnalysis projectId={projectId} />}
+                {activeAnalysis === 'performance' && <PerformanceAnalysis projectId={projectId} />}
               </div>
             </div>
 

@@ -61,7 +61,13 @@ export default function MemberActivity({ projectId, userId, userEmail, userName 
         lastActivity: data.length > 0 ? data[0].created_at : null,
       });
     } catch (error: any) {
-      console.error('Failed to load member activities:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load member activities:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, userId } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to load activities', 'error');
     } finally {
       setLoading(false);

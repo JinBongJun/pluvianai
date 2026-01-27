@@ -167,7 +167,13 @@ export default function QualityScoresPage() {
       setScores(paginated);
       setTotalItems(filtered.length);
     } catch (error: any) {
-      console.error('Failed to load quality scores:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load quality scores:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to load quality scores', 'error');
       if (error.response?.status === 401) {
         router.push('/login');

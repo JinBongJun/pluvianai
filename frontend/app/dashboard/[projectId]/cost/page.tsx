@@ -19,6 +19,7 @@ import { clsx } from 'clsx';
 import ProjectTabs from '@/components/ProjectTabs';
 import CostChart from '@/components/CostChart';
 import StatsCard from '@/components/StatsCard';
+import ExportButton from '@/components/export/ExportButton';
 
 interface CostAnalysis {
   total_cost: number;
@@ -108,7 +109,13 @@ export default function CostAnalysisPage() {
       const data = await costAPI.getAnalysis(projectId, days);
       setCostData(data);
     } catch (error: any) {
-      console.error('Failed to load cost data:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load cost data:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to load cost data', 'error');
       if (error.response?.status === 401) {
         router.push('/login');
@@ -124,7 +131,13 @@ export default function CostAnalysisPage() {
       const result = await costAPI.getOptimizations(projectId, 30);
       setOptimizations(result);
     } catch (error: any) {
-      console.error('Failed to load optimizations:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load optimizations:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId } });
+        });
+      }
       // Don't show error - optimizations are optional
     } finally {
       setLoadingOptimizations(false);
@@ -136,7 +149,13 @@ export default function CostAnalysisPage() {
       const result = await costAPI.getPredictions(projectId, 30, 30);
       setPredictions(result);
     } catch (error: any) {
-      console.error('Failed to load predictions:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load predictions:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId } });
+        });
+      }
       // Don't show error - predictions are optional
     }
   };
@@ -148,15 +167,19 @@ export default function CostAnalysisPage() {
       setShowOptimizationModal(false);
       loadOptimizations();
     } catch (error: any) {
-      console.error('Failed to apply optimization:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to apply optimization:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, optimization } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to apply optimization', 'error');
     }
   };
 
-  const handleExport = () => {
-    // TODO: Implement export functionality
-    toast.showToast('Export functionality coming soon', 'info');
-  };
+  // Export functionality is handled by ExportButton component
+  // No need for separate handleExport function
 
   if (!orgId) {
     return (
@@ -238,6 +261,7 @@ export default function CostAnalysisPage() {
               <Button variant="ghost" size="sm" onClick={loadCostData}>
                 <RefreshCw className="h-4 w-4" />
               </Button>
+              <ExportButton projectId={projectId} />
             </div>
           </div>
         </div>

@@ -17,6 +17,8 @@ from app.core.security import (
     get_current_user,
 )
 from app.core.logging_config import logger
+from app.core.dependencies import get_user_service, get_audit_service, get_audit_service
+from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.models.user import User
 from app.models.login_attempt import LoginAttempt
 from app.services.brute_force_protection import brute_force_service
@@ -30,6 +32,7 @@ from app.core.metrics import (
     password_policy_rejections_total,
     login_latency_seconds,
 )
+from app.core.analytics import analytics_service
 
 router = APIRouter()
 
@@ -40,6 +43,7 @@ class UserCreate(BaseModel):
     email: EmailStr = Field(..., description="User email address")
     password: str = Field(..., min_length=8, max_length=72, description="Password (8-72 characters)")
     full_name: str | None = Field(None, max_length=255, description="Full name")
+    liability_agreement_accepted: bool = Field(False, description="User must accept liability agreement")
 
 
 class UserResponse(BaseModel):
@@ -69,7 +73,13 @@ class TokenRefresh(BaseModel):
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate, db: Session = Depends(get_db)):
+async def register(
+    user_data: UserCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user_service = Depends(get_user_service),
+    audit_service = Depends(get_audit_service)
+):
     """Register a new user"""
     logger.info(f"User registration attempt: {user_data.email}")
 
@@ -83,42 +93,60 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
             detail={"message": "Password policy violation", "reasons": policy_result.reasons},
         )
 
-    # Check if user already exists
-    existing_user = db.query(User).filter(User.email == user_data.email).first()
-    if existing_user:
+    # Check liability agreement
+    if not user_data.liability_agreement_accepted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You must accept the liability agreement to register",
+        )
+
+    try:
+        # Use service to create user (RequestDTO → Domain Model conversion)
+        user = user_service.create_user(
+            email=user_data.email,
+            password=user_data.password,
+            full_name=user_data.full_name
+        )
+        
+        # Create user agreement record
+        from app.models.user_agreement import UserAgreement
+        from datetime import datetime
+        agreement = UserAgreement(
+            user_id=user.id,
+            liability_agreement_accepted=True,
+            liability_agreement_accepted_at=datetime.utcnow(),
+            terms_of_service_accepted=True,
+            terms_of_service_accepted_at=datetime.utcnow(),
+            privacy_policy_accepted=True,
+            privacy_policy_accepted_at=datetime.utcnow(),
+        )
+        db.add(agreement)
+        
+        # Track analytics event
+        analytics_service.track_user_registration(
+            user_id=user.id,
+            email=user.email,
+            plan="free",  # Default plan
+        )
+        
+        # Log audit event
+        ip_address = request.client.host if request and request.client else None
+        user_agent = request.headers.get("user-agent") if request else None
+        audit_service.log_action(
+            user_id=user.id,
+            action="user_registered",
+            resource_type="user",
+            resource_id=user.id,
+            new_value={"email": user.email, "full_name": user.full_name},
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        
+        # Transaction is committed by get_db() dependency
+        return user
+    except EntityAlreadyExistsError as e:
         logger.warning(f"Registration failed: Email already exists - {user_data.email}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
-
-    # Create new user
-    hashed_password = get_password_hash(user_data.password)
-    user = User(email=user_data.email, hashed_password=hashed_password, full_name=user_data.full_name, is_active=True)
-    db.add(user)
-    db.flush()  # Flush to get user.id
-
-    # Create free plan subscription for new user
-    from app.models.subscription import Subscription
-    from datetime import datetime
-
-    now = datetime.utcnow()
-    period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    if now.month == 12:
-        period_end = period_start.replace(year=now.year + 1, month=1)
-    else:
-        period_end = period_start.replace(month=now.month + 1)
-
-    subscription = Subscription(
-        user_id=user.id,
-        plan_type="free",
-        status="active",
-        current_period_start=period_start,
-        current_period_end=period_end,
-        cancel_at_period_end="false",
-    )
-    db.add(subscription)
-    db.commit()
-    db.refresh(user)
-    logger.info(f"User registered successfully: {user.email}")
-    return user
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -126,6 +154,7 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
     request: Request = None,
+    audit_service = Depends(get_audit_service),
 ):
     """Login and get access token"""
     start_time = time.time()
@@ -173,8 +202,9 @@ async def login(
                 detail=f"Too many attempts. Try again in {precheck.wait_seconds} seconds.",
             )
 
-    # Find user by email (OAuth2PasswordRequestForm uses username field for email)
-    user = db.query(User).filter(User.email == form_data.username).first()
+    # Find user by email using service (OAuth2PasswordRequestForm uses username field for email)
+    user_service = get_user_service(db)
+    user = user_service.get_user_by_email(form_data.username)
 
     if not user or not verify_password(form_data.password, user.hashed_password):
         result = brute_force_service.register_failure(form_data.username, ip)
@@ -241,29 +271,79 @@ async def login(
     access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
     refresh_token = create_refresh_token(data={"sub": str(user.id), "email": user.email})
 
+    # Save refresh token to database
+    import hashlib
+    from app.models.refresh_token import RefreshToken
+    from datetime import datetime
+    
+    token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+    payload = decode_token(refresh_token)
+    expires_at = datetime.utcfromtimestamp(payload.get("exp", 0))
+    
+    refresh_token_record = RefreshToken(
+        user_id=user.id,
+        token_hash=token_hash,
+        expires_at=expires_at,
+        is_revoked=False
+    )
+    db.add(refresh_token_record)
+    # Commit handled automatically by get_db() dependency
+
+    # Log audit event for successful login
+    audit_service.log_action(
+        user_id=user.id,
+        action="user_login",
+        resource_type="user",
+        resource_id=user.id,
+        new_value={"email": user.email, "ip_address": ip, "user_agent": user_agent},
+        ip_address=ip,
+        user_agent=user_agent
+    )
+
     duration = time.time() - start_time
     login_latency_seconds.observe(duration)
+
+    # Track analytics event
+    analytics_service.track_user_login(user_id=user.id, method="password")
 
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(token_data: TokenRefresh, db: Session = Depends(get_db)):
-    """Refresh access token using refresh token"""
+async def refresh_token(
+    token_data: TokenRefresh,
+    request: Request,
+    db: Session = Depends(get_db),
+    audit_service = Depends(get_audit_service)
+):
+    """Refresh access token using refresh token with rotation"""
+    from app.core.security import rotate_refresh_token
+    
     payload = decode_token(token_data.refresh_token)
 
     if payload is None or payload.get("type") != "refresh":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
-    user_id = payload.get("sub")
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    user_id = int(payload.get("sub"))
+    
+    # Use rotation to issue new tokens (old token will be invalidated when token tracking is added)
+    access_token, refresh_token = rotate_refresh_token(
+        old_refresh_token=token_data.refresh_token,
+        user_id=user_id,
+        db=db
+    )
 
-    if not user or not user.is_active:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
-
-    # Create new tokens
-    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
-    refresh_token = create_refresh_token(data={"sub": str(user.id), "email": user.email})
+    # Log audit event for token refresh
+    ip_address = request.client.host if request and request.client else None
+    user_agent = request.headers.get("user-agent") if request else None
+    audit_service.log_action(
+        user_id=user_id,
+        action="token_refresh",
+        resource_type="user",
+        resource_id=user_id,
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
 
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 

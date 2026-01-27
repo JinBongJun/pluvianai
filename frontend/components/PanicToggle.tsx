@@ -26,7 +26,13 @@ export default function PanicToggle({ projectId }: PanicToggleProps) {
             const data = await replayAPI.getPanicMode(projectId);
             setEnabled(data.enabled);
         } catch (err) {
-            console.error('Failed to load panic status:', err);
+            if (process.env.NODE_ENV === 'development') {
+              console.error('Failed to load panic status:', err);
+            } else {
+              import('@sentry/nextjs').then((Sentry) => {
+                Sentry.captureException(err as Error, { extra: { projectId } });
+              });
+            }
         } finally {
             setLoading(false);
         }

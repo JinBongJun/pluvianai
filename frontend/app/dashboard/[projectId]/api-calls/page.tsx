@@ -12,6 +12,8 @@ import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
 import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, RefreshCw } from 'lucide-react';
 import ExportButton from '@/components/export/ExportButton';
+import PulseIndicator from '@/components/streaming/PulseIndicator';
+import LiveStreamView from '@/components/streaming/LiveStreamView';
 import { clsx } from 'clsx';
 import ProjectTabs from '@/components/ProjectTabs';
 
@@ -146,7 +148,13 @@ export default function APICallsListPage() {
       setApiCalls(paginatedResults);
       setTotalItems(filtered.length); // Total filtered count for pagination
     } catch (error: any) {
-      console.error('Failed to load API calls:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load API calls:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to load API calls', 'error');
       if (error.response?.status === 401) {
         router.push('/login');
@@ -238,17 +246,25 @@ export default function APICallsListPage() {
         <ProjectTabs projectId={projectId} />
 
         {/* Actions */}
-        <div className="flex items-center justify-between mb-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={loadAPICalls}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
+        <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={loadAPICalls}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+            <PulseIndicator projectId={projectId} show5m />
+          </div>
           <ExportButton projectId={projectId} filters={filters} />
+        </div>
+
+        {/* Live stream */}
+        <div className="mb-6">
+          <LiveStreamView projectId={projectId} limit={20} linkToCalls={false} />
         </div>
 
         {/* Filters */}

@@ -13,10 +13,12 @@ from app.models.project import Project
 from app.services.drift_engine import DriftEngine
 from app.services.cost_analyzer import CostAnalyzer
 from app.services.alert_service import AlertService
+from app.infrastructure.repositories.alert_repository import AlertRepository
 from app.services.webhook_service import webhook_service
 from app.services.health_monitor import health_monitor
 from app.services.infrastructure_cost_monitor import infrastructure_cost_monitor
 from app.core.logging_config import logger
+from app.core.config import settings
 
 
 class SchedulerService:
@@ -26,7 +28,12 @@ class SchedulerService:
         self.scheduler = AsyncIOScheduler()
         self.drift_engine = DriftEngine()
         self.cost_analyzer = CostAnalyzer()
-        self.alert_service = AlertService()
+        # AlertService will be created with DB session when needed
+
+    def _get_alert_service(self, db: Session) -> AlertService:
+        """Get AlertService instance with DB session"""
+        alert_repo = AlertRepository(db)
+        return AlertService(alert_repo, db)
 
     def start(self):
         """Start the scheduler"""
@@ -66,6 +73,33 @@ class SchedulerService:
             replace_existing=True,
         )
 
+        # Schedule data lifecycle cleanup: Run daily at 4 AM UTC
+        self.scheduler.add_job(
+            self.run_data_lifecycle_cleanup,
+            trigger=CronTrigger(hour=4, minute=0),  # 4 AM UTC daily
+            id="data_lifecycle_cleanup_daily",
+            name="Daily Data Lifecycle Cleanup",
+            replace_existing=True,
+        )
+
+        # Schedule monthly usage reset: Run on the 1st of each month at 1 AM UTC
+        self.scheduler.add_job(
+            self.run_monthly_usage_reset,
+            trigger=CronTrigger(day=1, hour=1, minute=0),  # 1st of month at 1 AM UTC
+            id="monthly_usage_reset",
+            name="Monthly Usage Reset",
+            replace_existing=True,
+        )
+
+        # Schedule daily database backup: Run daily at 5 AM UTC
+        self.scheduler.add_job(
+            self.run_daily_backup,
+            trigger=CronTrigger(hour=5, minute=0),  # 5 AM UTC daily
+            id="daily_backup",
+            name="Daily Database Backup",
+            replace_existing=True,
+        )
+
         self.scheduler.start()
         logger.info("Background scheduler started")
         logger.info("Scheduled tasks:")
@@ -73,6 +107,9 @@ class SchedulerService:
         logger.info("  - Cost Anomaly Detection: Daily at 3:00 AM UTC")
         logger.info("  - Health Check: Hourly")
         logger.info("  - Infrastructure Cost Check: Daily at 9:00 AM UTC")
+        logger.info("  - Data Lifecycle Cleanup: Daily at 4:00 AM UTC")
+        logger.info("  - Monthly Usage Reset: 1st of month at 1:00 AM UTC")
+        logger.info("  - Daily Database Backup: Daily at 5:00 AM UTC")
 
     def shutdown(self):
         """Shutdown the scheduler"""
@@ -121,9 +158,10 @@ class SchedulerService:
                         )
 
                         # Send alerts and trigger webhooks
+                        alert_service = self._get_alert_service(db)
                         for alert in alerts:
                             try:
-                                await self.alert_service.send_alert(alert, db=db)
+                                await alert_service.send_alert(alert, ["email"], db=db)
                                 await webhook_service.trigger_alert_webhooks(alert, db)
                                 total_alerts += 1
                             except Exception as e:
@@ -167,7 +205,8 @@ class SchedulerService:
                         # Send alerts and trigger webhooks
                         for alert in alerts:
                             try:
-                                await self.alert_service.send_alert(alert, db=db)
+                                alert_service = self._get_alert_service(db)
+                                await alert_service.send_alert(alert, ["email"], db=db)
                                 await webhook_service.trigger_alert_webhooks(alert, db)
                             except Exception as e:
                                 logger.error(f"Error sending alert {alert.id}: {str(e)}")
@@ -230,6 +269,116 @@ class SchedulerService:
             logger.info("Scheduled infrastructure cost check completed")
         except Exception as e:
             logger.error(f"Error in scheduled infrastructure cost check: {str(e)}")
+        finally:
+            db.close()
+
+    async def run_data_lifecycle_cleanup(self):
+        """Run data lifecycle cleanup (TTL enforcement) for all projects"""
+        logger.info("Starting scheduled data lifecycle cleanup...")
+        db: Session = SessionLocal()
+        try:
+            from app.services.data_lifecycle_service import DataLifecycleService
+
+            # Get all active projects
+            projects = db.query(Project).filter(Project.is_active.is_(True)).all()
+            logger.info(f"Found {len(projects)} active projects")
+
+            total_cleaned = 0
+            lifecycle_service = DataLifecycleService(db)
+
+            for project in projects:
+                try:
+                    # Run cleanup for this project
+                    result = lifecycle_service.cleanup_expired_data(project_id=project.id)
+                    if result.get("deleted_count", 0) > 0:
+                        total_cleaned += result["deleted_count"]
+                        logger.info(
+                            f"Project {project.id}: Cleaned up {result['deleted_count']} expired snapshots"
+                        )
+                except Exception as e:
+                    logger.error(f"Error cleaning up data for project {project.id}: {str(e)}")
+                    continue
+
+            logger.info(f"Scheduled data lifecycle cleanup completed: {total_cleaned} snapshots cleaned")
+        except Exception as e:
+            logger.error(f"Error in scheduled data lifecycle cleanup: {str(e)}")
+        finally:
+            db.close()
+
+    async def run_monthly_usage_reset(self):
+        """Run monthly usage reset for all users"""
+        logger.info("Starting scheduled monthly usage reset...")
+        db: Session = SessionLocal()
+        try:
+            from app.services.subscription_service import SubscriptionService
+
+            subscription_service = SubscriptionService(db)
+            reset_count = subscription_service.reset_monthly_usage()
+            logger.info(f"Scheduled monthly usage reset completed: {reset_count} users reset")
+        except Exception as e:
+            logger.error(f"Error in scheduled monthly usage reset: {str(e)}")
+        finally:
+            db.close()
+
+    async def run_daily_backup(self):
+        """Run daily database backup"""
+        logger.info("Starting scheduled daily database backup...")
+        db: Session = SessionLocal()
+        try:
+            # Import BackupService from scripts
+            import sys
+            from pathlib import Path
+            scripts_path = Path(__file__).parent.parent.parent / "scripts"
+            if str(scripts_path) not in sys.path:
+                sys.path.insert(0, str(scripts_path))
+            
+            from backup import BackupService
+
+            backup_service = BackupService(backup_dir=settings.BACKUP_DIR)
+            try:
+                backup_path = backup_service.create_backup()
+                logger.info(f"Daily backup created successfully: {backup_path}")
+                
+                # Cleanup old backups (keep 30 days)
+                deleted = backup_service.cleanup_old_backups(keep_days=30)
+                if deleted > 0:
+                    logger.info(f"Cleaned up {deleted} old backups")
+            except Exception as backup_error:
+                logger.error(f"Backup failed: {str(backup_error)}", exc_info=True)
+                
+                # Send alert for backup failure
+                try:
+                    from app.models.alert import Alert
+                    from app.models.project import Project
+                    
+                    # Find first active project to associate alert with
+                    project = db.query(Project).filter(Project.is_active.is_(True)).first()
+                    if project:
+                        alert = Alert(
+                            project_id=project.id,
+                            alert_type="system_backup",
+                            severity="critical",
+                            title="Database Backup Failed",
+                            message=f"Daily database backup failed: {str(backup_error)}",
+                            alert_data={
+                                "error": str(backup_error),
+                                "backup_dir": settings.BACKUP_DIR,
+                            },
+                            notification_channels=["email"],
+                        )
+                        db.add(alert)
+                        db.commit()
+                        
+                        # Send alert
+                        alert_service = self._get_alert_service(db)
+                        await alert_service.send_alert(alert, ["email"], db=db)
+                        logger.warning("Backup failure alert sent")
+                    else:
+                        logger.warning("No active project found to associate backup failure alert with")
+                except Exception as alert_error:
+                    logger.error(f"Failed to send backup failure alert: {str(alert_error)}", exc_info=True)
+        except Exception as e:
+            logger.error(f"Error in scheduled daily backup: {str(e)}", exc_info=True)
         finally:
             db.close()
 

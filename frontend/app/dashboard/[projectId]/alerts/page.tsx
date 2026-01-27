@@ -144,7 +144,13 @@ export default function AlertsPage() {
       setAlerts(paginated);
       setTotalItems(filtered.length);
     } catch (error: any) {
-      console.error('Failed to load alerts:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load alerts:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId } });
+        });
+      }
       
       // Only show error toast for actual API failures, not empty results
       const status = error.response?.status;
@@ -184,7 +190,13 @@ export default function AlertsPage() {
       toast.showToast('Alert resolved successfully', 'success');
       loadAlerts();
     } catch (error: any) {
-      console.error('Failed to resolve alert:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to resolve alert:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, alertId } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to resolve alert', 'error');
     }
   };
@@ -195,7 +207,13 @@ export default function AlertsPage() {
       toast.showToast('Alert sent successfully', 'success');
       loadAlerts();
     } catch (error: any) {
-      console.error('Failed to send alert:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to send alert:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, alertId } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to send alert', 'error');
     }
   };

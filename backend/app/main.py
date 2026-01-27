@@ -46,11 +46,13 @@ from app.core.exceptions import (
     general_exception_handler,
 )
 from app.api.v1 import api_router
+from app.api.v2 import api_router_v2
 from app.middleware.api_hook import APIHookMiddleware
 from app.middleware.gzip_middleware import GZipMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.logging_middleware import LoggingMiddleware
 from app.middleware.metrics_middleware import MetricsMiddleware
+from app.middleware.security_middleware import SecurityHeadersMiddleware
 from app.core.metrics import update_app_info
 from app.services.cache_service import cache_service
 
@@ -100,19 +102,29 @@ app.add_exception_handler(Exception, general_exception_handler)
 # CRITICAL: CORS middleware MUST be added LAST (last in list = first to execute)
 # FastAPI middleware executes in REVERSE order (last added = first executed)
 # CORS must handle preflight OPTIONS requests before any other middleware
-# Always allow all origins to support Vercel preview deployments
-# Vercel creates unique preview URLs for each deployment (e.g., agent-guard-xxx.vercel.app)
-# Note: allow_credentials=False is required when allow_origins=["*"]
-# Authorization header works fine with allow_credentials=False (it's not a cookie/credential)
+# Parse CORS_ORIGINS from settings (supports comma-separated list or "*")
+cors_origins = settings.cors_origins_list
+if cors_origins == ["*"]:
+    # Allow all origins (for development/Vercel preview deployments)
+    allow_origins = ["*"]
+    allow_credentials = False  # Must be False when using allow_origins=["*"]
+else:
+    # Specific origins (for production)
+    allow_origins = cors_origins
+    allow_credentials = True  # Can use credentials with specific origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Hardcoded to always allow all origins for flexibility
-    allow_credentials=False,  # Must be False when using allow_origins=["*"]
+    allow_origins=allow_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers including Authorization, Content-Type, etc.
     expose_headers=["*"],  # Expose all response headers to frontend
     max_age=3600,  # Cache preflight requests for 1 hour
 )
+
+# Security headers middleware (add security headers to all responses)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Metrics middleware (collect API metrics)
 app.add_middleware(MetricsMiddleware)
@@ -129,8 +141,58 @@ app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
 # API Hook middleware for capturing LLM API calls
 app.add_middleware(APIHookMiddleware, enabled=True)
 
-# Include API router
+# Include API routers
 app.include_router(api_router, prefix="/api/v1")
+
+# Include API v2 router (for future breaking changes)
+# v2 is currently in development - v1 remains stable
+app.include_router(api_router_v2, prefix="/api/v2")
+
+# Add deprecation notice middleware for v1 (when v2 alternatives exist)
+# This will be enabled when specific v1 endpoints are deprecated
+@app.middleware("http")
+async def add_api_version_headers(request, call_next):
+    """Add API version headers for versioning strategy"""
+    response = await call_next(request)
+    
+    # Add API version header
+    if request.url.path.startswith("/api/v1"):
+        response.headers["X-API-Version"] = "v1"
+        response.headers["X-API-Status"] = "stable"
+    elif request.url.path.startswith("/api/v2"):
+        response.headers["X-API-Version"] = "v2"
+        response.headers["X-API-Status"] = "development"
+    
+    # Future: Add deprecation notice when v1 endpoints are deprecated
+    # Example:
+    # if request.url.path.startswith("/api/v1/deprecated-endpoint"):
+    #     response.headers["X-API-Deprecation"] = "This endpoint will be deprecated on 2026-06-01. Migrate to /api/v2/..."
+    #     response.headers["X-API-Deprecation-Date"] = "2026-06-01"
+    #     response.headers["X-API-Migration-Guide"] = "https://docs.agentguard.dev/api/migration/v1-to-v2"
+    
+    return response
+
+
+# Start stream processor background task
+@app.on_event("startup")
+async def startup_event():
+    """Start background tasks on application startup"""
+    from app.services.stream_processor import stream_processor
+    import asyncio
+    
+    # Start stream processor in background
+    asyncio.create_task(stream_processor.start())
+    logger.info("Stream processor background task started")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop background tasks on application shutdown"""
+    from app.services.stream_processor import stream_processor
+    
+    # Stop stream processor
+    await stream_processor.stop()
+    logger.info("Stream processor background task stopped")
 
 
 async def update_business_metrics_periodically():
@@ -169,9 +231,15 @@ async def update_business_metrics_periodically():
 async def startup_event():
     """Initialize application on startup (tolerant to missing DB in non-prod/CI)."""
     from sqlalchemy.exc import OperationalError
+    from app.services.stream_processor import stream_processor
+    import asyncio
 
     logger.info("Starting AgentGuard API...")
     logger.info(f"Environment: {'DEBUG' if settings.DEBUG else 'PRODUCTION'}")
+    
+    # Start stream processor background task
+    asyncio.create_task(stream_processor.start())
+    logger.info("Stream processor background task started")
 
     # Update app info metrics
     update_app_info(
@@ -191,25 +259,6 @@ async def startup_event():
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables initialized")
         db_available = True
-
-        # Safe migration: Add shadow_routing_config column if it doesn't exist
-        # This handles the case where the column was added to the model but not migrated
-        try:
-            from sqlalchemy import inspect, text
-
-            inspector = inspect(engine)
-            columns = [col["name"] for col in inspector.get_columns("projects")]
-
-            if "shadow_routing_config" not in columns:
-                logger.info("Adding shadow_routing_config column to projects table...")
-                with engine.connect() as conn:
-                    conn.execute(text("ALTER TABLE projects ADD COLUMN shadow_routing_config JSONB"))
-                    conn.commit()
-                logger.info("Migration: shadow_routing_config column added")
-        except Exception as e:
-            # Column might already exist, which is fine
-            if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
-                logger.warning(f"Migration check failed (non-critical): {str(e)}")
     except OperationalError as e:
         # Database is not reachable (e.g., in CI OpenAPI job) - degrade gracefully
         logger.warning(

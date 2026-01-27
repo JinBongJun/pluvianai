@@ -48,7 +48,14 @@ export default function DashboardPage() {
         localStorage.setItem('lastSelectedOrgId', String(firstOrg.id));
         router.push(`/organizations/${firstOrg.id}/projects`);
       } catch (error) {
-        console.error('Failed to redirect:', error);
+        // Log error to Sentry in production
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to redirect:', error);
+        } else {
+          import('@sentry/nextjs').then((Sentry) => {
+            Sentry.captureException(error as Error);
+          });
+        }
         // Fallback to organizations list
         router.push('/organizations');
       }

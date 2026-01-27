@@ -93,7 +93,9 @@ class ReplayService:
         new_model: Optional[str] = None,
         new_system_prompt: Optional[str] = None,
         rubric: Optional[EvaluationRubric] = None,
-        judge_model: str = "gpt-4o-mini"
+        judge_model: str = "gpt-4o-mini",
+        project_id: Optional[int] = None,
+        db: Optional[Session] = None
     ) -> List[Dict[str, Any]]:
         """Run multiple replays in parallel and evaluate if rubric is provided"""
         results = await asyncio.gather(*[
@@ -125,13 +127,47 @@ class ReplayService:
 
                     # 2. Judge
                     if original_text and replayed_text:
+                        # Track judge call usage for subscription limits
+                        # Get project owner from snapshot's trace
+                        from app.core.database import SessionLocal
+                        judge_db = db or SessionLocal()
+                        user_api_key = None
+                        try:
+                            from app.models.project import Project
+                            from app.models.trace import Trace
+                            from app.services.billing_service import BillingService
+                            from app.services.user_api_key_service import UserApiKeyService
+                            
+                            trace = judge_db.query(Trace).filter(Trace.id == snapshot.trace_id).first()
+                            if trace:
+                                project = judge_db.query(Project).filter(Project.id == (project_id or trace.project_id)).first()
+                                if project:
+                                    # Get user API key for Judge if available
+                                    user_api_key_service = UserApiKeyService(judge_db)
+                                    user_api_key = user_api_key_service.get_user_api_key(project.id, "openai")
+                                    
+                                    billing_service = BillingService(judge_db)
+                                    # Check limit before calling judge
+                                    is_allowed, warning = billing_service.increment_usage(
+                                        project.owner_id, "judge_calls", 1
+                                    )
+                                    if not is_allowed:
+                                        res["judge_evaluation"] = {
+                                            "error": "Judge call limit exceeded. Please upgrade your plan.",
+                                            "limit_warning": warning
+                                        }
+                                        continue
+                        except Exception as e:
+                            logger.warning(f"Failed to track judge call usage: {str(e)}")
+                        
                         evaluation = await judge_service.evaluate_response(
                             original_output=original_text,
                             replayed_output=replayed_text,
                             rubric=rubric,
-                            judge_model=judge_model
+                            judge_model=judge_model,
+                            user_api_key=user_api_key  # Use user API key if available
                         )
-                        res["evaluation"] = evaluation
+                        res["judge_evaluation"] = evaluation
 
         return results
 

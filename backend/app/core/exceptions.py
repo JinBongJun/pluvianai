@@ -2,6 +2,7 @@
 Custom exceptions and exception handlers
 """
 
+from typing import Optional
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -40,39 +41,90 @@ class ValidationError(AgentGuardException):
         super().__init__(message, status_code=400)
 
 
+class UpgradeRequiredException(AgentGuardException):
+    """Upgrade required exception for Pro/Enterprise features"""
+
+    def __init__(
+        self,
+        message: str = "This feature requires a higher plan",
+        current_plan: str = "free",
+        required_plan: str = "pro",
+        feature: Optional[str] = None,
+        upgrade_url: Optional[str] = None,
+    ):
+        self.current_plan = current_plan
+        self.required_plan = required_plan
+        self.feature = feature
+        self.upgrade_url = upgrade_url or f"/settings/subscription?upgrade={required_plan}"
+        super().__init__(message, status_code=403)
+
+
 async def agentguard_exception_handler(request: Request, exc: AgentGuardException):
-    """Handle custom AgentGuard exceptions"""
+    """Handle custom AgentGuard exceptions following API_REFERENCE.md format"""
     logger.error(f"AgentGuardException: {exc.message}", extra={"path": request.url.path, "method": request.method})
-    return JSONResponse(
+    
+    from app.core.responses import error_response
+    
+    # Special handling for UpgradeRequiredException
+    if isinstance(exc, UpgradeRequiredException):
+        headers = {"X-Upgrade-Required": "true"}
+        return error_response(
+            code="UPGRADE_REQUIRED",
+            message=exc.message,
+            details={
+                "current_plan": exc.current_plan,
+                "required_plan": exc.required_plan,
+                "feature": exc.feature,
+                "upgrade_url": exc.upgrade_url,
+            },
+            status_code=exc.status_code,
+            origin="Proxy",  # AgentGuard server error
+            headers=headers,
+        )
+    
+    # Determine error code based on exception type
+    error_code = "AGENTGUARD_ERROR"
+    if isinstance(exc, NotFoundError):
+        error_code = "NOT_FOUND"
+    elif isinstance(exc, PermissionDeniedError):
+        error_code = "PERMISSION_DENIED"
+    elif isinstance(exc, ValidationError):
+        error_code = "VALIDATION_ERROR"
+    
+    return error_response(
+        code=error_code,
+        message=exc.message,
         status_code=exc.status_code,
-        content={"error": True, "message": exc.message, "status_code": exc.status_code},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
-        },
+        origin="Proxy",  # AgentGuard server error
     )
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    """Handle HTTP exceptions"""
+    """Handle HTTP exceptions following API_REFERENCE.md format"""
     logger.warning(
         f"HTTPException: {exc.detail}",
         extra={"path": request.url.path, "method": request.method, "status_code": exc.status_code},
     )
-    return JSONResponse(
+    
+    # Extract error code from detail if possible, otherwise generate from status code
+    error_code = f"HTTP_{exc.status_code}"
+    if hasattr(exc, "error_code"):
+        error_code = exc.error_code
+    
+    # Extract origin from headers if available (for proxy errors)
+    origin = request.headers.get("X-AgentGuard-Origin")
+    
+    from app.core.responses import error_response
+    return error_response(
+        code=error_code,
+        message=exc.detail,
+        origin=origin,
         status_code=exc.status_code,
-        content={"error": True, "message": exc.detail, "status_code": exc.status_code},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
-        },
     )
 
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handle validation errors"""
+    """Handle validation errors following API_REFERENCE.md format"""
     errors = exc.errors()
     # Extract more detailed error messages
     error_messages = []
@@ -86,64 +138,51 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         f"ValidationError: {error_messages}",
         extra={"path": request.url.path, "method": request.method, "query_params": dict(request.query_params)},
     )
-    return JSONResponse(
+    
+    from app.core.responses import error_response
+    return error_response(
+        code="VALIDATION_ERROR",
+        message="Validation error",
+        details={"errors": errors, "error_messages": error_messages},
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "error": True,
-            "message": "Validation error",
-            "details": errors,
-            "error_messages": error_messages,
-            "status_code": 422,
-        },
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
-        },
+        origin="Proxy",  # AgentGuard validation error
     )
 
 
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
-    """Handle SQLAlchemy exceptions"""
+    """Handle SQLAlchemy exceptions following API_REFERENCE.md format"""
     logger.error(
         f"Database error: {str(exc)}", extra={"path": request.url.path, "method": request.method}, exc_info=True
     )
 
-    cors_headers = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "*",
-        "Access-Control-Allow-Headers": "*",
-    }
+    from app.core.responses import error_response
 
     if isinstance(exc, IntegrityError):
-        return JSONResponse(
+        return error_response(
+            code="DATABASE_INTEGRITY_ERROR",
+            message="Database integrity error. The resource may already exist.",
             status_code=status.HTTP_409_CONFLICT,
-            content={
-                "error": True,
-                "message": "Database integrity error. The resource may already exist.",
-                "status_code": 409,
-            },
-            headers=cors_headers,
+            origin="Proxy",  # AgentGuard database error
         )
 
-    return JSONResponse(
+    return error_response(
+        code="DATABASE_ERROR",
+        message="Database error occurred",
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"error": True, "message": "Database error occurred", "status_code": 500},
-        headers=cors_headers,
+        origin="Proxy",  # AgentGuard database error
     )
 
 
 async def general_exception_handler(request: Request, exc: Exception):
-    """Handle all other exceptions"""
+    """Handle all other exceptions following API_REFERENCE.md format"""
     logger.error(
         f"Unhandled exception: {str(exc)}", extra={"path": request.url.path, "method": request.method}, exc_info=True
     )
-    return JSONResponse(
+    
+    from app.core.responses import error_response
+    return error_response(
+        code="INTERNAL_SERVER_ERROR",
+        message="An unexpected error occurred",
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"error": True, "message": "An unexpected error occurred", "status_code": 500},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
-        },
+        origin="Proxy",  # AgentGuard server error
     )

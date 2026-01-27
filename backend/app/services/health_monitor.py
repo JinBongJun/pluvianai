@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from app.core.database import SessionLocal
 from app.services.alert_service import AlertService
+from app.infrastructure.repositories.alert_repository import AlertRepository
 from app.core.logging_config import logger
+from app.core.config import settings
 import httpx
 
 
@@ -15,8 +17,14 @@ class HealthMonitor:
     """Service for monitoring system health and sending alerts"""
 
     def __init__(self):
-        self.alert_service = AlertService()
-        self.base_url = "http://localhost:8000"  # Default, should use settings
+        # AlertService will be created with DB session when needed
+        # Use API_URL from settings if available, otherwise default to localhost
+        self.base_url = getattr(settings, "API_URL", None) or "http://localhost:8000"
+
+    def _get_alert_service(self, db: Session) -> AlertService:
+        """Get AlertService instance with DB session"""
+        alert_repo = AlertRepository(db)
+        return AlertService(alert_repo, db)
 
     async def check_system_health(self, db: Optional[Session] = None) -> Dict[str, Any]:
         """
@@ -36,6 +44,7 @@ class HealthMonitor:
 
         try:
             # Check health endpoint
+            health_data = None
             try:
                 async with httpx.AsyncClient() as client:
                     response = await client.get(f"{self.base_url}/api/v1/health/detailed", timeout=5.0)
@@ -46,6 +55,21 @@ class HealthMonitor:
                     "status": "error",
                     "error": str(e),
                 }
+            
+            # Also check Redis directly as fallback
+            try:
+                from app.services.cache_service import cache_service
+                if cache_service.enabled:
+                    cache_service.redis_client.ping()
+                else:
+                    # Redis not configured - not an error, just not available
+                    if health_data and health_data.get("redis", {}).get("status") != "not_configured":
+                        health_data.setdefault("redis", {})["status"] = "not_configured"
+            except Exception as redis_error:
+                logger.error(f"Direct Redis check failed: {str(redis_error)}")
+                if health_data:
+                    health_data.setdefault("redis", {})["status"] = "error"
+                    health_data.setdefault("redis", {})["error"] = str(redis_error)
 
             # Determine if alert should be sent
             should_alert = False
@@ -67,6 +91,12 @@ class HealthMonitor:
                     should_alert = True
                     alert_severity = "critical"
                     alert_message = "Database connection failed"
+                
+                # Check Redis
+                if health_data.get("redis", {}).get("status") == "error":
+                    should_alert = True
+                    alert_severity = "critical"
+                    alert_message = "Redis connection failed"
 
             return {
                 "health_data": health_data,
@@ -130,7 +160,8 @@ class HealthMonitor:
                     db.commit()
 
                     # Send alert
-                    await self.alert_service.send_alert(alert, db=db)
+                    alert_service = self._get_alert_service(db)
+                    await alert_service.send_alert(alert, ["email"], db=db)
                     logger.warning(f"Health alert sent: {health_result.get('alert_message')}")
         finally:
             if should_close:

@@ -29,7 +29,13 @@ export default function MonitoringPage() {
         setLoading(false);
       })
       .catch(err => {
-        console.error('Failed to fetch monitoring status:', err);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to fetch monitoring status:', err);
+        } else {
+          import('@sentry/nextjs').then((Sentry) => {
+            Sentry.captureException(err as Error);
+          });
+        }
         setLoading(false);
       });
   }, []);

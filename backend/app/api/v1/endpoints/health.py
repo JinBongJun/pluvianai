@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.services.cache_service import cache_service
+from app.services.statuspage_service import statuspage_service
 
 try:
     import psutil  # type: ignore[import-not-found]
@@ -144,6 +145,15 @@ def detailed_health_check(db: Session = Depends(get_db)):
     # External API checks (optional)
     health_status["external_apis"] = {
         "sentry": "configured" if settings.SENTRY_DSN else "not_configured",
+        "statuspage": "configured" if statuspage_service.enabled else "not_configured",
     }
+
+    # Sync to StatusPage.io if enabled (async, fire and forget)
+    if statuspage_service.enabled:
+        try:
+            import asyncio
+            asyncio.create_task(statuspage_service.sync_health_status(health_status))
+        except Exception as e:
+            logger.warning(f"Failed to sync to StatusPage: {str(e)}")
 
     return health_status

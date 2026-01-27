@@ -1,318 +1,530 @@
-"""
-Alert service for notifications.
-"""
-
-import httpx
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
+from datetime import datetime
 from app.models.alert import Alert
-from app.core.config import settings
+from app.models.project import Project
+from app.models.user import User
+from app.infrastructure.repositories.alert_repository import AlertRepository
 from app.core.logging_config import logger
+from app.services.email_service import EmailService
+from app.services.slack_service import SlackService
+from app.services.discord_service import DiscordService
 
 
 class AlertService:
-    """Service for sending alerts via various channels"""
+    """Service for alert management business logic"""
 
-    def __init__(self):
-        self.slack_webhook_url = None  # Should be configured per project
-        self.discord_webhook_url = None  # Should be configured per project
-        self.email_enabled = bool(settings.RESEND_API_KEY)  # Enable if Resend API key is configured
+    def __init__(
+        self,
+        alert_repo: AlertRepository,
+        db: Session
+    ):
+        self.alert_repo = alert_repo
+        self.db = db
+        # Initialize notification channels
+        self.email_service = EmailService()
+        self.slack_service = SlackService()
+        self.discord_service = DiscordService()
+
+    @property
+    def email_enabled(self) -> bool:
+        """Check if email notifications are enabled"""
+        return self.email_service.enabled
+
+    @email_enabled.setter
+    def email_enabled(self, value: bool):
+        """Set email enabled status (for testing)"""
+        self.email_service.enabled = value
+
+    def get_alert_by_id(self, alert_id: int) -> Optional[Alert]:
+        """Get alert by ID"""
+        return self.alert_repo.find_by_id(alert_id)
+
+    def get_alerts_by_project_id(
+        self,
+        project_id: int,
+        limit: int = 100,
+        offset: int = 0,
+        alert_type: Optional[str] = None,
+        severity: Optional[str] = None,
+        is_resolved: Optional[bool] = None
+    ) -> List[Alert]:
+        """
+        Get alerts for a project with optional filters
+        
+        Args:
+            project_id: Project ID
+            limit: Maximum number of results
+            offset: Offset for pagination
+            alert_type: Optional alert type filter
+            severity: Optional severity filter
+            is_resolved: Optional resolved status filter
+        
+        Returns:
+            List of Alert entities
+        """
+        # Use repository's base query and filter
+        query = self.db.query(Alert).filter(Alert.project_id == project_id)
+        
+        if alert_type:
+            query = query.filter(Alert.alert_type == alert_type)
+        if severity:
+            query = query.filter(Alert.severity == severity)
+        if is_resolved is not None:
+            query = query.filter(Alert.is_resolved == is_resolved)
+        
+        return query.order_by(Alert.created_at.desc()).offset(offset).limit(limit).all()
+
+    def resolve_alert(self, alert_id: int, resolved_by: int) -> Optional[Alert]:
+        """
+        Resolve an alert
+        
+        Args:
+            alert_id: Alert ID
+            resolved_by: User ID who resolved the alert
+        
+        Returns:
+            Updated Alert entity or None if not found
+        """
+        from datetime import datetime
+        alert = self.alert_repo.find_by_id(alert_id)
+        if not alert:
+            return None
+        
+        alert.is_resolved = True
+        alert.resolved_by = resolved_by
+        alert.resolved_at = datetime.utcnow()
+        # Transaction is managed by get_db() dependency
+        return self.alert_repo.save(alert)
+
+    def unresolve_alert(self, alert_id: int) -> Optional[Alert]:
+        """
+        Unresolve an alert
+        
+        Args:
+            alert_id: Alert ID
+        
+        Returns:
+            Updated Alert entity or None if not found
+        """
+        alert = self.alert_repo.find_by_id(alert_id)
+        if not alert:
+            return None
+        
+        alert.is_resolved = False
+        alert.resolved_by = None
+        # Transaction is managed by get_db() dependency
+        return self.alert_repo.save(alert)
+
+    async def _send_email(
+        self,
+        alert: Alert,
+        db: Optional[Session] = None
+    ) -> Dict[str, Any]:
+        """
+        Send email alert to project owner
+        
+        Args:
+            alert: Alert entity
+            db: Database session (optional, uses self.db if not provided)
+        
+        Returns:
+            Dict with status and result information
+        """
+        if not db:
+            return {
+                "status": "error",
+                "message": "Database session required",
+                "channel": "email",
+            }
+
+        # Get project to find owner
+        project = db.query(Project).filter(Project.id == alert.project_id).first()
+        if not project:
+            return {
+                "status": "error",
+                "message": "Project not found",
+                "channel": "email",
+            }
+
+        # Get project owner
+        user = db.query(User).filter(User.id == project.owner_id).first()
+        if not user or not user.email:
+            return {
+                "status": "error",
+                "message": "User not found or email not set",
+                "channel": "email",
+            }
+
+        # Check if email is enabled
+        if not self.email_enabled:
+            return {
+                "status": "error",
+                "message": "Email notifications are disabled",
+                "channel": "email",
+            }
+
+        # Send email using Resend
+        return await self._send_email_resend(alert, user.email, project.name)
+
+    async def _send_email_resend(
+        self,
+        alert: Alert,
+        user_email: str,
+        project_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Send email alert via Resend
+        
+        Args:
+            alert: Alert entity
+            user_email: Recipient email address
+            project_name: Optional project name (will query if not provided)
+        
+        Returns:
+            Dict with status and result information
+        """
+        # Get project name if not provided
+        if not project_name:
+            project = self.db.query(Project).filter(Project.id == alert.project_id).first()
+            project_name = project.name if project else "Unknown Project"
+
+        # Format timestamp
+        timestamp = alert.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") if alert.created_at else "Unknown"
+
+        # Build dashboard URL
+        dashboard_url = None
+        if alert.project_id:
+            # In production, this would be the actual dashboard URL
+            dashboard_url = f"https://app.agentguard.ai/projects/{alert.project_id}/alerts/{alert.id}"
+
+        # Render HTML email
+        html_content = self.email_service._render_alert_email_html(
+            level=alert.severity,
+            project_name=project_name,
+            message=alert.message,
+            title=alert.title,
+            timestamp=timestamp,
+            dashboard_url=dashboard_url,
+        )
+
+        # Send email
+        subject = f"AgentGuard Alert: {alert.title}"
+        result = await self.email_service.send_alert_email(
+            to=user_email,
+            subject=subject,
+            html_content=html_content,
+        )
+
+        return result
 
     async def send_alert(
         self,
         alert: Alert,
-        channels: Optional[List[str]] = None,
-        db: Optional[Session] = None,
-        severity: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        channels: List[str],
+        db: Optional[Session] = None
+    ) -> Dict[str, Dict[str, Any]]:
         """
-        Send alert through specified channels
-
+        Send alert through multiple notification channels
+        
         Args:
-            alert: Alert object to send
-            channels: List of channels to use (slack, discord, email)
-            db: Database session (required for email)
-            severity: override severity if provided
-
+            alert: Alert entity
+            channels: List of channel names (e.g., ["email", "slack"])
+            db: Database session (optional, uses self.db if not provided)
+        
         Returns:
-            Dictionary with send status for each channel
+            Dict mapping channel names to their send results
         """
-        if channels is None:
-            channels = alert.notification_channels or ["email"]
-
-        if severity:
-            alert.severity = severity
+        if not db:
+            db = self.db
 
         results = {}
 
+        # Get project and user info for all channels
+        project = self.db.query(Project).filter(Project.id == alert.project_id).first()
+        project_name = project.name if project else "Unknown Project"
+        dashboard_url = f"https://app.agentguard.ai/projects/{alert.project_id}/alerts/{alert.id}" if alert.project_id else None
+        
+        # Get user email for email channel
+        user_email = None
+        if "email" in channels:
+            user = self.db.query(User).filter(User.id == project.owner_id).first() if project else None
+            user_email = user.email if user else None
+        
+        # Get Discord webhook URL for Discord channel
+        discord_webhook_url = None
+        if "discord" in channels:
+            from app.models.project_notification_settings import ProjectNotificationSettings
+            settings = (
+                self.db.query(ProjectNotificationSettings)
+                .filter(ProjectNotificationSettings.project_id == alert.project_id)
+                .first()
+            )
+            discord_webhook_url = settings.discord_webhook_url if settings else None
+        
+        # Channel mapping
+        channel_services = {
+            "email": (self.email_service, {"to": user_email}),
+            "slack": (self.slack_service, {}),
+            "discord": (self.discord_service, {"webhook_url": discord_webhook_url}),
+        }
+        
+        # Send to each channel using unified interface
         for channel in channels:
             try:
-                if channel == "slack":
-                    result = await self._send_slack(alert)
-                elif channel == "discord":
-                    result = await self._send_discord(alert)
-                elif channel == "email":
-                    result = await self._send_email(alert, db)
-                else:
-                    result = {"status": "error", "message": f"Unknown channel: {channel}"}
-
+                if channel not in channel_services:
+                    results[channel] = {
+                        "status": "error",
+                        "message": f"Unknown channel: {channel}",
+                        "channel": channel,
+                    }
+                    continue
+                
+                service, kwargs = channel_services[channel]
+                
+                # Check if channel is enabled
+                if not service.enabled:
+                    results[channel] = {
+                        "status": "error",
+                        "message": f"{channel} channel not enabled",
+                        "channel": channel,
+                    }
+                    continue
+                
+                # Send alert using unified interface
+                result = await service.send_alert(
+                    title=alert.title,
+                    message=alert.message,
+                    level=alert.severity,
+                    project_name=project_name,
+                    dashboard_url=dashboard_url,
+                    timestamp=alert.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") if alert.created_at else "Unknown",
+                    **kwargs
+                )
                 results[channel] = result
+                
             except Exception as e:
-                results[channel] = {"status": "error", "message": str(e)}
+                logger.error(
+                    f"Error sending alert to {channel}: {str(e)}",
+                    extra={"alert_id": alert.id, "channel": channel},
+                    exc_info=True,
+                )
+                results[channel] = {
+                    "status": "error",
+                    "message": f"Error: {str(e)}",
+                    "channel": channel,
+                }
 
         return results
 
-    async def _send_slack(self, alert: Alert) -> Dict[str, Any]:
-        """Send alert to Slack via webhook"""
-        # In production, webhook URL should be stored per project
-        webhook_url = self.slack_webhook_url
-
-        if not webhook_url:
-            return {"status": "skipped", "message": "Slack webhook not configured"}
-
-        # Determine color based on severity
-        color_map = {
-            "critical": "#ff0000",
-            "high": "#ff8800",
-            "medium": "#ffbb00",
-            "low": "#888888",
-        }
-        color = color_map.get(alert.severity, "#888888")
-
-        payload = {
-            "attachments": [
-                {
-                    "color": color,
-                    "title": alert.title,
-                    "text": alert.message,
-                    "fields": [
-                        {
-                            "title": "Alert Type",
-                            "value": alert.alert_type,
-                            "short": True,
-                        },
-                        {
-                            "title": "Severity",
-                            "value": alert.severity,
-                            "short": True,
-                        },
-                    ],
-                    "ts": int(alert.created_at.timestamp()),
-                }
-            ]
-        }
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(webhook_url, json=payload)
-            response.raise_for_status()
-
-        return {"status": "sent", "channel": "slack"}
-
-    async def _send_discord(self, alert: Alert) -> Dict[str, Any]:
-        """Send alert to Discord via webhook"""
-        webhook_url = self.discord_webhook_url
-
-        if not webhook_url:
-            return {"status": "skipped", "message": "Discord webhook not configured"}
-
-        # Determine color based on severity (Discord uses integer colors)
-        color_map = {
-            "critical": 0xFF0000,  # Red
-            "high": 0xFF8800,  # Orange
-            "medium": 0xFFBB00,  # Yellow
-            "low": 0x888888,  # Gray
-        }
-        color = color_map.get(alert.severity, 0x888888)
-
-        payload = {
-            "embeds": [
-                {
-                    "title": alert.title,
-                    "description": alert.message,
-                    "color": color,
-                    "fields": [
-                        {
-                            "name": "Alert Type",
-                            "value": alert.alert_type,
-                            "inline": True,
-                        },
-                        {
-                            "name": "Severity",
-                            "value": alert.severity,
-                            "inline": True,
-                        },
-                    ],
-                    "timestamp": alert.created_at.isoformat(),
-                }
-            ]
-        }
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(webhook_url, json=payload)
-            response.raise_for_status()
-
-        return {"status": "sent", "channel": "discord"}
-
-    async def _send_email(self, alert: Alert, db: Optional[Session] = None) -> Dict[str, Any]:
-        """Send alert via email"""
-        # Check for database first - it's required for email
-        if not db:
-            return {"status": "error", "message": "Database session required"}
-
-        # Check if email is enabled (after DB check)
-        if not self.email_enabled:
-            return {"status": "skipped", "message": "Email not enabled"}
-
-        # Get user email from project
-        from app.models.project import Project
-
-        project = db.query(Project).filter(Project.id == alert.project_id).first()
-        if not project:
-            return {"status": "error", "message": "Project not found"}
-
-        from app.models.user import User
-
-        user = db.query(User).filter(User.id == project.owner_id).first()
-        if not user or not user.email:
-            return {"status": "error", "message": "User email not found"}
-
-        recipient_email = user.email
-
-        # Use Resend for email delivery
-        if settings.RESEND_API_KEY:
-            return await self._send_email_resend(alert, recipient_email)
-        else:
-            return {
-                "status": "error",
-                "message": "Resend API key not configured. Please set RESEND_API_KEY environment variable.",
-            }
-
-    async def _send_email_resend(self, alert: Alert, recipient_email: str) -> Dict[str, Any]:
-        """Send email using Resend"""
-        try:
-            import resend
-
-            resend.api_key = settings.RESEND_API_KEY
-
-            # Determine severity color
-            severity_colors = {
-                "critical": "#FF0000",
-                "high": "#FF8800",
-                "medium": "#FFBB00",
-                "low": "#888888",
-            }
-            color = severity_colors.get(alert.severity, "#888888")
-
-            # Create HTML email
-            html_content = f"""
-            <html>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: {color}; border-bottom: 2px solid {color}; padding-bottom: 10px;">
-                        {alert.title}
-                    </h2>
-                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                        <p><strong>Alert Type:</strong> {alert.alert_type}</p>
-                        <p><strong>Severity:</strong> {alert.severity.upper()}</p>
-                        <p><strong>Project ID:</strong> {alert.project_id}</p>
-                    </div>
-                    <div style="margin: 20px 0;">
-                        <p>{alert.message}</p>
-                    </div>
-                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #888; font-size: 12px;">
-                        <p>This is an automated alert from AgentGuard.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """
-
-            # Plain text version
-            text_content = f"""
-{alert.title}
-
-Alert Type: {alert.alert_type}
-Severity: {alert.severity.upper()}
-Project ID: {alert.project_id}
-
-{alert.message}
-
----
-This is an automated alert from AgentGuard.
-            """.strip()
-
-            params = {
-                "from": f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM or 'onboarding@resend.dev'}>",
-                "to": [recipient_email],
-                "subject": f"[AgentGuard Alert] {alert.title}",
-                "html": html_content,
-                "text": text_content,
-            }
-
-            email = resend.Emails.send(params)
-
-            logger.info(f"Email sent successfully to {recipient_email} via Resend. Email ID: {email.get('id')}")
-            return {"status": "sent", "channel": "email", "service": "resend", "email_id": email.get("id")}
-
-        except ImportError:
-            return {"status": "error", "message": "Resend library not installed. Install with: pip install resend"}
-        except Exception as e:
-            logger.error(f"Error sending email via Resend: {str(e)}")
-            return {"status": "error", "message": str(e)}
-
-    async def send_batch(
-        self, alerts: List[Alert], channels: Optional[List[str]] = None, db: Optional[Session] = None
-    ) -> Dict[str, Any]:
+    def _get_notification_settings(
+        self,
+        project_id: int,
+        user_id: int,
+        db: Optional[Session] = None
+    ) -> Optional[Any]:
         """
-        Send multiple alerts in batch
-
+        Get notification settings for a project and user
+        
+        Args:
+            project_id: Project ID
+            user_id: User ID
+            db: Database session (optional, uses self.db if not provided)
+        
         Returns:
-            Summary of send results
+            ProjectNotificationSettings entity or None
         """
-        results = {
-            "total": len(alerts),
-            "sent": 0,
-            "failed": 0,
-            "skipped": 0,
-            "details": [],
-        }
+        if not db:
+            db = self.db
 
-        for alert in alerts:
-            try:
-                send_results = await self.send_alert(alert, channels, db)
+        from app.models.project_notification_settings import ProjectNotificationSettings
 
-                # Check if at least one channel succeeded
-                any_sent = any(r.get("status") == "sent" for r in send_results.values())
+        settings = (
+            db.query(ProjectNotificationSettings)
+            .filter(
+                ProjectNotificationSettings.project_id == project_id,
+                ProjectNotificationSettings.user_id == user_id
+            )
+            .first()
+        )
 
-                if any_sent:
-                    results["sent"] += 1
+        return settings
+
+    def _should_send_alert(
+        self,
+        settings: Any,
+        alert: Alert,
+        db: Optional[Session] = None
+    ) -> bool:
+        """
+        Check if alert should be sent based on settings
+        
+        Args:
+            settings: ProjectNotificationSettings entity
+            alert: Alert entity
+            db: Database session (optional, uses self.db if not provided)
+        
+        Returns:
+            True if alert should be sent, False otherwise
+        """
+        if not settings:
+            # No settings configured, use defaults (send all)
+            return True
+
+        if not db:
+            db = self.db
+
+        # Check alert type
+        if alert.alert_type not in settings.alert_types:
+            return False
+
+        # Check severity threshold
+        severity_levels = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+        alert_severity_level = severity_levels.get(alert.severity, 0)
+        threshold_level = severity_levels.get(settings.severity_threshold, 0)
+        
+        if alert_severity_level < threshold_level:
+            return False
+
+        # Check minimum interval (prevent spam)
+        if settings.min_interval_minutes > 0:
+            from datetime import timedelta
+            cutoff_time = datetime.utcnow() - timedelta(minutes=settings.min_interval_minutes)
+            
+            recent_alert = (
+                db.query(Alert)
+                .filter(
+                    Alert.project_id == alert.project_id,
+                    Alert.created_at >= cutoff_time,
+                    Alert.is_sent == True
+                )
+                .first()
+            )
+            
+            if recent_alert:
+                return False
+
+        return True
+
+    async def check_and_trigger_alerts(
+        self,
+        project_id: int,
+        event_type: str,
+        data: Dict[str, Any],
+        db: Optional[Session] = None
+    ) -> Optional[Alert]:
+        """
+        Check conditions and automatically trigger alerts
+        
+        Args:
+            project_id: Project ID
+            event_type: Type of event (quality_drop, error_rate_spike, drift_detection, cost_spike)
+            data: Event data containing relevant metrics
+            db: Database session (optional, uses self.db if not provided)
+        
+        Returns:
+            Created Alert entity or None if no alert was triggered
+        """
+        if not db:
+            db = self.db
+
+        # Get project owner
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            return None
+
+        # Get notification settings for project owner
+        settings = self._get_notification_settings(project_id, project.owner_id, db)
+
+        # Determine if alert should be created based on event type and data
+        should_alert = False
+        alert_type = event_type
+        severity = "medium"
+        title = ""
+        message = ""
+
+        if event_type == "quality_drop":
+            current_score = data.get("quality_score")
+            threshold = settings.quality_score_threshold if settings else None
+            
+            if threshold and current_score is not None and current_score < threshold:
+                should_alert = True
+                severity = "high" if current_score < threshold * 0.8 else "medium"
+                title = f"Quality Score Dropped Below Threshold"
+                message = f"Quality score ({current_score:.1f}) has dropped below the threshold ({threshold:.1f})"
+
+        elif event_type == "error_rate_spike":
+            error_rate = data.get("error_rate")
+            threshold = settings.error_rate_threshold if settings else None
+            
+            if threshold and error_rate is not None and error_rate > threshold:
+                should_alert = True
+                severity = "critical" if error_rate > threshold * 2 else "high"
+                title = f"Error Rate Exceeded Threshold"
+                message = f"Error rate ({error_rate:.2f}%) has exceeded the threshold ({threshold:.2f}%)"
+
+        elif event_type == "drift_detection":
+            drift_score = data.get("drift_score")
+            threshold = settings.drift_threshold if settings else None
+            
+            if threshold and drift_score is not None and drift_score > threshold:
+                should_alert = True
+                severity = data.get("severity", "medium")
+                title = f"Drift Detection: {data.get('detection_type', 'Unknown')}"
+                message = f"Drift detected with score {drift_score:.2f} (threshold: {threshold:.2f})"
+
+        elif event_type == "cost_spike":
+            # Cost spike detection (can be enhanced with threshold from settings)
+            should_alert = True
+            severity = "high"
+            title = f"Cost Spike Detected"
+            message = f"Unusual cost increase detected: ${data.get('cost', 0):.2f}"
+
+        if not should_alert:
+            return None
+
+        # Create alert
+        alert = Alert(
+            project_id=project_id,
+            alert_type=alert_type,
+            severity=severity,
+            title=title,
+            message=message,
+            alert_data=data
+        )
+        db.add(alert)
+        db.commit()
+        db.refresh(alert)
+
+        # Check if alert should be sent based on settings
+        if self._should_send_alert(settings, alert, db):
+            # Determine channels
+            channels = []
+            if settings:
+                if settings.email_enabled:
+                    channels.append("email")
+                if settings.slack_enabled and settings.slack_webhook_url:
+                    channels.append("slack")
+                if settings.discord_enabled and settings.discord_webhook_url:
+                    channels.append("discord")
+            else:
+                # Default: email only
+                channels = ["email"]
+
+            # Send alert
+            if channels:
+                results = await self.send_alert(alert, channels, db)
+                
+                # Update alert status
+                if any(r.get("status") == "sent" for r in results.values()):
                     alert.is_sent = True
-                    from datetime import datetime
-
                     alert.sent_at = datetime.utcnow()
-                else:
-                    results["skipped"] += 1
+                    alert.notification_channels = channels
+                    db.commit()
 
-                results["details"].append(
-                    {
-                        "alert_id": alert.id,
-                        "results": send_results,
-                    }
-                )
-            except Exception as e:
-                results["failed"] += 1
-                results["details"].append(
-                    {
-                        "alert_id": alert.id,
-                        "error": str(e),
-                    }
-                )
+        logger.info(
+            f"Auto-triggered alert for project {project_id}: {event_type}",
+            extra={"project_id": project_id, "alert_id": alert.id, "event_type": event_type}
+        )
 
-        return results
-
-    def configure_webhooks(self, slack_webhook_url: Optional[str] = None, discord_webhook_url: Optional[str] = None):
-        """Configure webhook URLs"""
-        if slack_webhook_url:
-            self.slack_webhook_url = slack_webhook_url
-        if discord_webhook_url:
-            self.discord_webhook_url = discord_webhook_url
+        return alert

@@ -24,9 +24,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
-    
-    // Report to Sentry
+    // Always report to Sentry (even in development for testing)
     Sentry.captureException(error, {
       contexts: {
         react: {
@@ -34,6 +32,11 @@ export default class ErrorBoundary extends Component<Props, State> {
         },
       },
     });
+    
+    // Only log to console in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('ErrorBoundary caught an error:', error, errorInfo);
+    }
   }
 
   render() {

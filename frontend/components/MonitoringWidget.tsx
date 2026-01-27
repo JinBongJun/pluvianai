@@ -29,7 +29,13 @@ export function MonitoringWidget() {
         setMetrics(data);
         setError(null);
       } catch (err) {
-        console.error('Failed to fetch metrics:', err);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to fetch metrics:', err);
+        } else {
+          import('@sentry/nextjs').then((Sentry) => {
+            Sentry.captureException(err as Error);
+          });
+        }
         setError('Unable to load metrics');
       } finally {
         setLoading(false);

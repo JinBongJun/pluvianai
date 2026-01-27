@@ -45,18 +45,6 @@ class APICall(Base):
     # Relationships
     project = relationship("Project", back_populates="api_calls")
     quality_scores = relationship("QualityScore", back_populates="api_call", cascade="all, delete-orphan")
-    primary_shadow_comparisons = relationship(
-        "ShadowComparison",
-        foreign_keys="ShadowComparison.primary_api_call_id",
-        back_populates="primary_api_call",
-        cascade="all, delete-orphan",
-    )
-    shadow_shadow_comparisons = relationship(
-        "ShadowComparison",
-        foreign_keys="ShadowComparison.shadow_api_call_id",
-        back_populates="shadow_api_call",
-        cascade="all, delete-orphan",
-    )
 
     # Indexes for common queries
     __table_args__ = (

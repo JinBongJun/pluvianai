@@ -26,7 +26,13 @@ export default function DriftChart({ projectId }: { projectId: number }) {
       const detections = await driftAPI.list(projectId, { limit: 50 });
       setData(Array.isArray(detections) ? (detections as unknown as DriftDetection[]) : []);
     } catch (error) {
-      console.error('Failed to load drift detections:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load drift detections:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId } });
+        });
+      }
     } finally {
       setLoading(false);
     }

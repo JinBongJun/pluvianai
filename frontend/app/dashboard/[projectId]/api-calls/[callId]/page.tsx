@@ -70,7 +70,13 @@ export default function APICallDetailPage() {
         // Quality score not available, ignore
       }
     } catch (error: any) {
-      console.error('Failed to load API call:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load API call:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, callId } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to load API call', 'error');
       if (error.response?.status === 401) {
         router.push('/login');

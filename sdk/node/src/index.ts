@@ -10,6 +10,15 @@ interface AgentGuardConfig {
   apiUrl?: string;
   agentName?: string;
   enabled?: boolean;
+  proxyTimeout?: number;  // milliseconds
+  firewallTimeout?: number;  // milliseconds
+  piiTimeout?: number;  // milliseconds
+  circuitBreaker?: {
+    failureThreshold?: number;
+    recoveryTimeSeconds?: number;
+    halfOpenMaxCalls?: number;
+  };
+  healthCheckInterval?: number;  // milliseconds
 }
 
 interface APICallData {
@@ -30,6 +39,22 @@ class AgentGuard {
   private originalFunctions: Map<string, any> = new Map();
   private axiosInstance: AxiosInstance;
   
+  // Timeout configuration
+  private proxyTimeout: number;
+  private firewallTimeout: number;
+  private piiTimeout: number;
+  private healthCheckInterval: number;
+  
+  // Circuit Breaker state
+  private circuitState: 'closed' | 'open' | 'half-open' = 'closed';
+  private circuitFailures: number = 0;
+  private circuitOpenedAt: number | null = null;
+  private circuitBreakerConfig: {
+    failureThreshold: number;
+    recoveryTimeSeconds: number;
+    halfOpenMaxCalls: number;
+  };
+  
   // Context for chain_id and agent_name (using AsyncLocalStorage for async context)
   private context: Map<string, any> = new Map();
 
@@ -42,13 +67,31 @@ class AgentGuard {
     this.agentName = config.agentName || process.env.AGENTGUARD_AGENT_NAME;
     this.enabled = (config.enabled !== false) && !!this.apiKey && !!this.projectId;
 
+    // Timeout configuration
+    this.proxyTimeout = config.proxyTimeout || 30000;  // 30 seconds
+    this.firewallTimeout = config.firewallTimeout || 1000;  // 1 second
+    this.piiTimeout = config.piiTimeout || 100;  // 100ms
+    this.healthCheckInterval = config.healthCheckInterval || 30000;  // 30 seconds
+
+    // Circuit Breaker configuration
+    this.circuitBreakerConfig = {
+      failureThreshold: config.circuitBreaker?.failureThreshold || 5,
+      recoveryTimeSeconds: config.circuitBreaker?.recoveryTimeSeconds || 30,
+      halfOpenMaxCalls: config.circuitBreaker?.halfOpenMaxCalls || 3,
+    };
+
     this.axiosInstance = axios.create({
-      timeout: 2000,
+      timeout: this.proxyTimeout,
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
       },
     });
+    
+    // Start health check monitoring
+    if (this.enabled) {
+      this.startHealthCheck();
+    }
   }
 
   /**
@@ -267,8 +310,22 @@ class AgentGuard {
         payload.chain_id = chainId;
       }
 
+      // Check Circuit Breaker state before sending
+      if (!this.checkCircuitBreaker()) {
+        // Circuit is open, bypass AgentGuard (fail-open)
+        return;
+      }
+
       // Send asynchronously (fire and forget)
-      await this.axiosInstance.post(`${this.apiUrl}/api/v1/api-calls`, payload);
+      try {
+        await this.axiosInstance.post(`${this.apiUrl}/api/v1/api-calls`, payload);
+        // Success - reset circuit breaker
+        this.resetCircuitBreaker();
+      } catch (error) {
+        // Record failure for circuit breaker
+        this.recordCircuitFailure();
+        // Silently fail - don't block the application (fail-open)
+      }
     } catch (error) {
       // Silently fail - don't block the application
     }
@@ -326,6 +383,59 @@ class AgentGuard {
       }
     }
   }
+  
+  private checkCircuitBreaker(): boolean {
+    if (this.circuitState === 'closed') {
+      return true;
+    } else if (this.circuitState === 'open') {
+      // Check if recovery time has passed
+      if (this.circuitOpenedAt) {
+        const elapsed = (Date.now() - this.circuitOpenedAt) / 1000;
+        if (elapsed >= this.circuitBreakerConfig.recoveryTimeSeconds) {
+          this.circuitState = 'half-open';
+          this.circuitFailures = 0;
+          return true;
+        }
+      }
+      return false;
+    } else if (this.circuitState === 'half-open') {
+      return true;
+    }
+    return true;
+  }
+  
+  private recordCircuitFailure(): void {
+    this.circuitFailures++;
+    if (this.circuitFailures >= this.circuitBreakerConfig.failureThreshold) {
+      this.circuitState = 'open';
+      this.circuitOpenedAt = Date.now();
+    }
+  }
+  
+  private resetCircuitBreaker(): void {
+    if (this.circuitState === 'half-open') {
+      this.circuitState = 'closed';
+      this.circuitFailures = 0;
+    } else if (this.circuitState === 'closed') {
+      this.circuitFailures = 0;
+    }
+  }
+  
+  private startHealthCheck(): void {
+    setInterval(async () => {
+      try {
+        const response = await axios.get(`${this.apiUrl}/api/v1/health`, { timeout: 5000 });
+        if (response.status === 200) {
+          this.resetCircuitBreaker();
+        } else {
+          this.recordCircuitFailure();
+        }
+      } catch (error) {
+        this.recordCircuitFailure();
+      }
+    }, this.healthCheckInterval);
+  }
+  
 }
 
 // Global instance

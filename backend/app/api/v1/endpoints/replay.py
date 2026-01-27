@@ -25,8 +25,10 @@ class ReplayResponseItem(BaseModel):
     status_code: Optional[int] = None
     replay_model: Optional[str] = None
     error: Optional[str] = None
-    # Judge Evaluation (Phase 3)
+    # Judge Evaluation results
     evaluation: Optional[dict] = None
+    # Regression detection flag (from AI Judge evaluation)
+    regression_detected: Optional[bool] = None
 
 @router.post("/{project_id}/run", response_model=List[ReplayResponseItem])
 async def trigger_replay(
@@ -39,31 +41,49 @@ async def trigger_replay(
     # Verify access
     check_project_access(project_id, current_user, db, required_roles=[ProjectRole.ADMIN, ProjectRole.OWNER, ProjectRole.MEMBER])
 
-    # Fetch snapshots
-    snapshots = db.query(Snapshot).join(Trace).filter(
-        Snapshot.id.in_(data.snapshot_ids),
-        Trace.project_id == project_id
-    ).all()
-
-    if not snapshots:
+    # Fetch snapshots using repository
+    from app.infrastructure.repositories.snapshot_repository import SnapshotRepository
+    from app.infrastructure.repositories.trace_repository import TraceRepository
+    from app.infrastructure.repositories.evaluation_rubric_repository import EvaluationRubricRepository
+    
+    snapshot_repo = SnapshotRepository(db)
+    trace_repo = TraceRepository(db)
+    rubric_repo = EvaluationRubricRepository(db)
+    
+    # Fetch snapshots by IDs and verify they belong to the project
+    all_snapshots = []
+    for snapshot_id in data.snapshot_ids:
+        snapshot = snapshot_repo.find_by_id(snapshot_id)
+        if snapshot:
+            # Verify snapshot belongs to project via trace
+            trace = trace_repo.find_by_id(snapshot.trace_id)
+            if trace and trace.project_id == project_id:
+                all_snapshots.append(snapshot)
+    
+    if not all_snapshots:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No valid snapshots found for this project")
 
-    # Fetch Rubric if requested (Phase 3)
+    # Fetch Rubric if requested
     rubric = None
     if data.rubric_id:
-        from app.models.evaluation_rubric import EvaluationRubric
-        rubric = db.query(EvaluationRubric).filter(
-            EvaluationRubric.id == data.rubric_id,
-            EvaluationRubric.project_id == project_id
-        ).first()
+        rubric = rubric_repo.find_by_id(data.rubric_id)
+        if rubric and rubric.project_id != project_id:
+            rubric = None
 
     # Run Replay
     results = await replay_service.run_batch_replay(
-        snapshots=snapshots,
+        project_id=project_id,
+        db=db,
+        snapshots=all_snapshots,
         new_model=data.new_model,
         new_system_prompt=data.new_system_prompt,
         rubric=rubric,
         judge_model=data.judge_model
     )
+
+    # Extract regression_detected from evaluation if present
+    for result in results:
+        if result.get("evaluation") and isinstance(result["evaluation"], dict):
+            result["regression_detected"] = result["evaluation"].get("regression_detected")
 
     return results

@@ -9,6 +9,7 @@ import { replayAPI, apiCallsAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
 import { Play, History, Split, ArrowRight, Settings2, Trash2 } from 'lucide-react';
 import ProjectTabs from '@/components/ProjectTabs';
+import posthog from 'posthog-js';
 import { clsx } from 'clsx';
 
 export default function ReplayPage() {
@@ -45,7 +46,9 @@ export default function ReplayPage() {
             const data = await replayAPI.listRubrics(projectId);
             setRubrics(data);
         } catch (err) {
-            console.error('Failed to load rubrics');
+            if (process.env.NODE_ENV === 'development') {
+              console.error('Failed to load rubrics');
+            }
         }
     };
 
@@ -78,6 +81,16 @@ export default function ReplayPage() {
                 rubric_id: selectedRubricId || undefined,
                 judge_model: judgeModel
             });
+            
+            // Track replay execution event
+            posthog.capture('replay_executed', {
+                project_id: projectId,
+                item_count: selectedIds.length,
+                has_rubric: !!selectedRubricId,
+                has_target_model: !!targetModel,
+                success_count: replayResults.filter((r: any) => r.success).length,
+            });
+            
             setResults(replayResults);
             toast.showToast(`Batch replay of ${selectedIds.length} items completed`, 'success');
         } catch (err: any) {

@@ -37,7 +37,13 @@ export default function AlertDetailPage() {
       const data = await alertsAPI.get(alertId);
       setAlert(data);
     } catch (error: any) {
-      console.error('Failed to load alert:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load alert:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, alertId } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to load alert', 'error');
       if (error.response?.status === 401) {
         router.push('/login');
@@ -60,7 +66,13 @@ export default function AlertDetailPage() {
       setAlert(updated);
       toast.showToast('Alert marked as resolved', 'success');
     } catch (error: any) {
-      console.error('Failed to resolve alert:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to resolve alert:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, alertId } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to resolve alert', 'error');
     } finally {
       setResolving(false);
@@ -73,7 +85,13 @@ export default function AlertDetailPage() {
       toast.showToast('Alert sent successfully', 'success');
       await loadAlert();
     } catch (error: any) {
-      console.error('Failed to send alert:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to send alert:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, alertId } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to send alert', 'error');
     }
   };

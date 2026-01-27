@@ -1,164 +1,266 @@
 """
-In-app notifications endpoints
+Notification settings endpoints
 """
 
-from typing import List, Optional, Dict
-from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, and_
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models.user import User
-from app.models.alert import Alert
-from app.models.project import Project
 from app.core.permissions import check_project_access
+from app.core.decorators import handle_errors
+from app.core.logging_config import logger
+from app.core.responses import success_response
+from app.models.user import User
+from app.models.project_notification_settings import ProjectNotificationSettings
+from app.services.alert_service import AlertService
+from app.infrastructure.repositories.alert_repository import AlertRepository
 
 router = APIRouter()
 
 
-class NotificationResponse(BaseModel):
-    """Notification response schema"""
+class NotificationSettingsRequest(BaseModel):
+    """Request schema for notification settings"""
+    email_enabled: bool = True
+    slack_enabled: bool = False
+    slack_webhook_url: Optional[str] = Field(None, max_length=500)
+    discord_enabled: bool = False
+    discord_webhook_url: Optional[str] = Field(None, max_length=500)
+    alert_types: List[str] = Field(default=["drift", "cost_spike", "error"])
+    severity_threshold: str = Field(default="medium", pattern="^(low|medium|high|critical)$")
+    min_interval_minutes: int = Field(default=15, ge=1, le=1440)
+    quality_score_threshold: Optional[float] = Field(None, ge=0, le=100)
+    error_rate_threshold: Optional[float] = Field(None, ge=0, le=100)
+    drift_threshold: Optional[float] = Field(None, ge=0, le=100)
 
+
+class NotificationSettingsResponse(BaseModel):
+    """Response schema for notification settings"""
     id: int
     project_id: int
-    alert_type: str
-    severity: str
-    title: str
-    message: str
-    is_read: bool = False
+    user_id: int
+    email_enabled: bool
+    slack_enabled: bool
+    slack_webhook_url: Optional[str]
+    discord_enabled: bool
+    discord_webhook_url: Optional[str]
+    alert_types: List[str]
+    severity_threshold: str
+    min_interval_minutes: int
+    quality_score_threshold: Optional[float]
+    error_rate_threshold: Optional[float]
+    drift_threshold: Optional[float]
     created_at: str
+    updated_at: Optional[str]
 
     class Config:
         from_attributes = True
 
 
-# In-memory notification read status (in production, use database)
-notification_read_status: Dict[int, set] = {}  # user_id -> set of alert_ids
+class TestNotificationRequest(BaseModel):
+    """Request schema for test notification"""
+    channel: str = Field(..., pattern="^(email|slack|discord)$")
 
 
-@router.get("", response_model=List[NotificationResponse])
-async def list_notifications(
-    project_id: Optional[int] = Query(None, description="Optional project ID filter"),
-    is_read: Optional[bool] = Query(None, description="Filter by read status"),
-    limit: int = Query(50, ge=1, le=100),
+def get_alert_service(db: Session = Depends(get_db)) -> AlertService:
+    """Dependency to get alert service"""
+    alert_repo = AlertRepository(db)
+    return AlertService(alert_repo, db)
+
+
+@router.get("/projects/{project_id}/notifications/settings", response_model=NotificationSettingsResponse)
+@handle_errors
+async def get_notification_settings(
+    project_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List notifications for current user"""
-    # Get alerts from projects user has access to
-    # For now, get alerts from all projects user owns or is a member of
-    from app.models.project_member import ProjectMember
+    """
+    Get notification settings for a project and user
+    """
+    # Verify project access
+    check_project_access(project_id, current_user, db)
 
-    # Get project IDs user has access to
-    owned_projects = db.query(Project.id).filter(Project.owner_id == current_user.id).all()
-    member_projects = db.query(ProjectMember.project_id).filter(ProjectMember.user_id == current_user.id).all()
-
-    project_ids = [p.id for p in owned_projects] + [p for p in member_projects]
-
-    if project_id:
-        # Verify access
-        check_project_access(project_id, current_user, db)
-        project_ids = [project_id]
-
-    if not project_ids:
-        return []
-
-    # Get alerts
-    query = db.query(Alert).filter(Alert.project_id.in_(project_ids))
-
-    if is_read is not None:
-        # Filter by read status (in-memory for now)
-        read_alerts = notification_read_status.get(current_user.id, set())
-        if is_read:
-            query = query.filter(Alert.id.in_(read_alerts))
-        else:
-            query = query.filter(~Alert.id.in_(read_alerts))
-
-    alerts = query.order_by(desc(Alert.created_at)).limit(limit).all()
-
-    # Get read status
-    read_alerts = notification_read_status.get(current_user.id, set())
-
-    return [
-        NotificationResponse(
-            id=alert.id,
-            project_id=alert.project_id,
-            alert_type=alert.alert_type,
-            severity=alert.severity,
-            title=alert.title,
-            message=alert.message,
-            is_read=alert.id in read_alerts,
-            created_at=alert.created_at.isoformat(),
+    # Get or create settings
+    settings = (
+        db.query(ProjectNotificationSettings)
+        .filter(
+            ProjectNotificationSettings.project_id == project_id,
+            ProjectNotificationSettings.user_id == current_user.id
         )
-        for alert in alerts
-    ]
+        .first()
+    )
+
+    if not settings:
+        # Create default settings
+        settings = ProjectNotificationSettings(
+            project_id=project_id,
+            user_id=current_user.id,
+            email_enabled=True,
+            slack_enabled=False,
+            alert_types=["drift", "cost_spike", "error"],
+            severity_threshold="medium",
+            min_interval_minutes=15
+        )
+        db.add(settings)
+        # Commit handled automatically by get_db() dependency
+        db.refresh(settings)
+
+    return success_response(data=settings)
 
 
-@router.patch("/{alert_id}/read", status_code=status.HTTP_204_NO_CONTENT)
-async def mark_notification_read(
-    alert_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+@router.put("/projects/{project_id}/notifications/settings", response_model=NotificationSettingsResponse)
+@handle_errors
+async def update_notification_settings(
+    project_id: int,
+    request: NotificationSettingsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """Mark a notification as read"""
-    alert = db.query(Alert).filter(Alert.id == alert_id).first()
-
-    if not alert:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
-
+    """
+    Update notification settings for a project and user
+    """
     # Verify project access
-    check_project_access(alert.project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
-    # Mark as read (in-memory for now)
-    if current_user.id not in notification_read_status:
-        notification_read_status[current_user.id] = set()
-    notification_read_status[current_user.id].add(alert_id)
+    # Get or create settings
+    settings = (
+        db.query(ProjectNotificationSettings)
+        .filter(
+            ProjectNotificationSettings.project_id == project_id,
+            ProjectNotificationSettings.user_id == current_user.id
+        )
+        .first()
+    )
 
-    return None
+    if not settings:
+        settings = ProjectNotificationSettings(
+            project_id=project_id,
+            user_id=current_user.id
+        )
+        db.add(settings)
+
+    # Update settings
+    settings.email_enabled = request.email_enabled
+    settings.slack_enabled = request.slack_enabled
+    settings.slack_webhook_url = request.slack_webhook_url
+    settings.discord_enabled = request.discord_enabled
+    settings.discord_webhook_url = request.discord_webhook_url
+    settings.alert_types = request.alert_types
+    settings.severity_threshold = request.severity_threshold
+    settings.min_interval_minutes = request.min_interval_minutes
+    settings.quality_score_threshold = request.quality_score_threshold
+    settings.error_rate_threshold = request.error_rate_threshold
+    settings.drift_threshold = request.drift_threshold
+
+    # Commit handled automatically by get_db() dependency
+    db.refresh(settings)
+
+    logger.info(
+        f"Notification settings updated for project {project_id} by user {current_user.id}",
+        extra={"project_id": project_id, "user_id": current_user.id}
+    )
+
+    return success_response(data=settings)
 
 
-@router.delete("/{alert_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_notification(
-    alert_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+@router.post("/projects/{project_id}/notifications/test")
+@handle_errors
+async def send_test_notification(
+    project_id: int,
+    request: TestNotificationRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    alert_service: AlertService = Depends(get_alert_service),
 ):
-    """Delete a notification (mark as read and hide)"""
-    alert = db.query(Alert).filter(Alert.id == alert_id).first()
-
-    if not alert:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
-
+    """
+    Send a test notification to verify settings
+    """
     # Verify project access
-    check_project_access(alert.project_id, current_user, db)
+    check_project_access(project_id, current_user, db)
 
-    # Mark as read (in-memory for now)
-    if current_user.id not in notification_read_status:
-        notification_read_status[current_user.id] = set()
-    notification_read_status[current_user.id].add(alert_id)
+    # Get settings
+    settings = (
+        db.query(ProjectNotificationSettings)
+        .filter(
+            ProjectNotificationSettings.project_id == project_id,
+            ProjectNotificationSettings.user_id == current_user.id
+        )
+        .first()
+    )
 
-    return None
+    if not settings:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification settings not found. Please configure settings first."
+        )
 
+    # Check if channel is enabled
+    if request.channel == "email" and not settings.email_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email notifications are not enabled"
+        )
 
-@router.get("/unread-count")
-async def get_unread_count(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Get count of unread notifications"""
-    from app.models.project_member import ProjectMember
+    if request.channel == "slack" and not settings.slack_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Slack notifications are not enabled"
+        )
 
-    # Get project IDs user has access to
-    owned_projects = db.query(Project.id).filter(Project.owner_id == current_user.id).all()
-    member_projects = db.query(ProjectMember.project_id).filter(ProjectMember.user_id == current_user.id).all()
+    if request.channel == "slack" and not settings.slack_webhook_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Slack webhook URL is not configured"
+        )
 
-    project_ids = [p.id for p in owned_projects] + [p for p in member_projects]
+    if request.channel == "discord" and not settings.discord_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Discord notifications are not enabled"
+        )
 
-    if not project_ids:
-        return {"count": 0}
+    if request.channel == "discord" and not settings.discord_webhook_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Discord webhook URL is not configured"
+        )
 
-    # Get all alerts
-    all_alerts = db.query(Alert.id).filter(Alert.project_id.in_(project_ids)).all()
-    alert_ids = [a.id for a in all_alerts]
+    # Create a test alert
+    from app.models.alert import Alert
+    from app.models.project import Project
+    
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
 
-    # Get read status
-    read_alerts = notification_read_status.get(current_user.id, set())
+    test_alert = Alert(
+        project_id=project_id,
+        alert_type="test",
+        severity="low",
+        title="Test Notification",
+        message="This is a test notification to verify your notification settings are working correctly.",
+        alert_data={"test": True}
+    )
+    db.add(test_alert)
+    # Commit handled automatically by get_db() dependency
+    db.refresh(test_alert)
 
-    unread_count = len([aid for aid in alert_ids if aid not in read_alerts])
+    # Send test notification
+    channels = [request.channel]
+    results = await alert_service.send_alert(test_alert, channels, db=db)
 
-    return {"count": unread_count}
+    if results.get(request.channel, {}).get("status") == "sent":
+        return success_response(
+            data={"message": f"Test notification sent successfully via {request.channel}"}
+        )
+    else:
+        error_msg = results.get(request.channel, {}).get("message", "Unknown error")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to send test notification: {error_msg}"
+        )

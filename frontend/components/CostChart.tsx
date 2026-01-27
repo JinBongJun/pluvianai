@@ -29,7 +29,13 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
       const data = await costAPI.getAnalysis(projectId, days);
       setCostData(data);
     } catch (error) {
-      console.error('Failed to load cost data:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load cost data:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, days } });
+        });
+      }
     } finally {
       setLoading(false);
     }

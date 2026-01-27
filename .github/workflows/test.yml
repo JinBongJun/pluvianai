@@ -72,6 +72,16 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           SECRET_KEY: test-secret-key
       
+      - name: Run performance benchmarks
+        working-directory: ./backend
+        run: |
+          pytest tests/performance -v --benchmark-only || pytest tests/performance -v
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key
+        continue-on-error: true
+      
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:

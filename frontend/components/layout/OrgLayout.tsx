@@ -39,7 +39,9 @@ export default function OrgLayout({ children, orgId, breadcrumb = [] }: OrgLayou
         const user = await authAPI.getCurrentUser();
         setUserEmail(user.email || '');
       } catch (error) {
-        console.error('Failed to load user:', error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to load user:', error);
+        }
       }
     };
     loadUser();

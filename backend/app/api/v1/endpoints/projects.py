@@ -3,7 +3,7 @@ Project endpoints
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
@@ -13,12 +13,17 @@ from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole, get_user_project_role
 from app.core.decorators import handle_errors
 from app.core.logging_config import logger
+from app.core.dependencies import get_project_service, get_evaluation_rubric_repository, get_audit_service
+from app.infrastructure.repositories.evaluation_rubric_repository import EvaluationRubricRepository
 from app.services.cache_service import cache_service
+from app.services.firewall_service import firewall_service
 from app.middleware.usage_middleware import check_project_limit
 from app.services.activity_logger import activity_logger
+from app.core.analytics import analytics_service
 from app.models.user import User
 from app.models.project import Project
 from app.models.project_member import ProjectMember
+from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 
 # Repository 패턴 사용 예시 (주석으로 추가)
 # from app.core.dependencies import get_project_repository
@@ -41,6 +46,7 @@ class ProjectUpdate(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=255, description="Project name")
     description: str | None = Field(None, max_length=1000, description="Project description")
+    global_block: bool | None = Field(None, description="Enable global block (panic mode) for this project")
 
 
 class ProjectResponse(BaseModel):
@@ -61,7 +67,12 @@ class ProjectResponse(BaseModel):
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 @handle_errors
 async def create_project(
-    project_data: ProjectCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    project_data: ProjectCreate,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    project_service = Depends(get_project_service),
+    audit_service = Depends(get_audit_service)
 ):
     """Create a new project"""
     logger.info(f"Creating project: {project_data.name}", extra={"user_id": current_user.id})
@@ -74,73 +85,33 @@ async def create_project(
             detail=error_msg or "Project limit reached. Please upgrade your plan.",
         )
 
-    # Check for duplicate project name (same owner)
-    existing = (
-        db.query(Project)
-        .filter(Project.name == project_data.name, Project.owner_id == current_user.id, Project.is_active.is_(True))
-        .first()
-    )
-
-    if existing:
-        logger.warning(f"Duplicate project name: {project_data.name}")
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A project with this name already exists")
-
     try:
-        # Verify organization access if organization_id is provided
-        organization_id = project_data.organization_id
-        if organization_id:
-            from app.models.organization import Organization, OrganizationMember
-            logger.info(f"Creating project in organization {organization_id} for user {current_user.id}")
-            
-            # Check if user is owner or member of the organization
-            org = db.query(Organization).filter(Organization.id == organization_id).first()
-            if not org:
-                logger.warning(f"Organization {organization_id} not found")
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Organization not found"
-                )
-            
-            # Check if user is owner
-            is_owner = org.owner_id == current_user.id
-            logger.info(f"User {current_user.id} is owner of org {organization_id}: {is_owner}")
-            
-            # Check if user is a member (only if not owner, to avoid unnecessary query)
-            is_member = False
-            if not is_owner:
-                member = db.query(OrganizationMember).filter(
-                    OrganizationMember.organization_id == organization_id,
-                    OrganizationMember.user_id == current_user.id
-                ).first()
-                is_member = member is not None
-                logger.info(f"User {current_user.id} is member of org {organization_id}: {is_member}")
-                if member:
-                    logger.info(f"Member role: {member.role}")
-            
-            if not (is_owner or is_member):
-                logger.warning(
-                    f"User {current_user.id} attempted to create project in org {organization_id} without access. "
-                    f"Org owner: {org.owner_id}, User is owner: {is_owner}, User is member: {is_member}"
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You don't have access to this organization"
-                )
-        
-        project = Project(
+        # Use service to create project (RequestDTO → Domain Model conversion happens here)
+        project = project_service.create_project(
             name=project_data.name,
             description=project_data.description,
             owner_id=current_user.id,
-            is_active=True,
-            organization_id=organization_id
+            organization_id=project_data.organization_id
         )
-        db.add(project)
-        db.commit()
-        db.refresh(project)
+        # Transaction is committed by get_db() dependency
+    except EntityAlreadyExistsError as e:
+        logger.warning(f"Duplicate project name: {project_data.name}")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except ValueError as e:
+        # Organization access errors
+        logger.warning(f"Organization access error: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
         # Invalidate user's project list cache
         cache_service.invalidate_user_projects_cache(current_user.id)
 
+        # Track analytics event
+        analytics_service.track_project_created(
+            user_id=current_user.id,
+            project_id=project.id,
+            project_name=project.name,
+        )
+        
         # Log activity
         activity_logger.log_activity(
             db=db,
@@ -150,6 +121,19 @@ async def create_project(
             description=f"Created new project '{project.name}'",
             project_id=project.id,
             activity_data={"project_name": project.name, "project_id": project.id},
+        )
+        
+        # Log audit event
+        ip_address = request.client.host if request and request.client else None
+        user_agent = request.headers.get("user-agent") if request else None
+        audit_service.log_action(
+            user_id=current_user.id,
+            action="project_created",
+            resource_type="project",
+            resource_id=project.id,
+            new_value={"name": project.name, "description": project.description, "organization_id": project.organization_id},
+            ip_address=ip_address,
+            user_agent=user_agent
         )
 
         # Generate sample data if requested (for onboarding)
@@ -181,7 +165,10 @@ async def create_project(
 
 @router.get("", response_model=List[ProjectResponse])
 async def list_projects(
-    search: str | None = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    search: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    project_service = Depends(get_project_service),
 ):
     """List all projects user has access to (owned or member) with optional search"""
     # Try to get from cache
@@ -190,29 +177,11 @@ async def list_projects(
     if cached:
         return cached
 
-    # Build base query for owned projects
-    owned_query = db.query(Project).filter(Project.owner_id == current_user.id, Project.is_active.is_(True))
-
-    # Build base query for member projects
-    member_query = (
-        db.query(Project)
-        .join(ProjectMember)
-        .filter(ProjectMember.user_id == current_user.id, Project.is_active.is_(True))
+    # Use service to get projects
+    all_projects = project_service.get_projects_for_user(
+        user_id=current_user.id,
+        search=search
     )
-
-    # Apply search filter if provided
-    if search:
-        search_filter = or_(Project.name.ilike(f"%{search}%"), Project.description.ilike(f"%{search}%"))
-        owned_query = owned_query.filter(search_filter)
-        member_query = member_query.filter(search_filter)
-
-    # Get projects
-    owned_projects = owned_query.all()
-    member_projects = member_query.all()
-
-    # Combine and remove duplicates
-    all_projects_dict = {p.id: p for p in owned_projects + member_projects}
-    all_projects = list(all_projects_dict.values())
 
     # Convert to response models
     result = [
@@ -255,8 +224,11 @@ async def get_project(project_id: int, current_user: User = Depends(get_current_
 async def update_project(
     project_id: int,
     project_data: ProjectUpdate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    project_service = Depends(get_project_service),
+    audit_service = Depends(get_audit_service)
 ):
     """Update a project (owner/admin only)"""
     project = check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
@@ -265,29 +237,41 @@ async def update_project(
 
     # Check for duplicate name if name is being updated
     if project_data.name and project_data.name != project.name:
-        existing = (
-            db.query(Project)
-            .filter(
-                Project.name == project_data.name,
-                Project.owner_id == project.owner_id,
-                Project.is_active.is_(True),
-                Project.id != project_id,
-            )
-            .first()
-        )
-
-        if existing:
+        existing = project_service.project_repo.find_by_name_and_owner(project_data.name, project.owner_id)
+        if existing and existing.id != project_id:
             logger.warning(f"Duplicate project name: {project_data.name}")
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A project with this name already exists")
 
-    # Update fields
-    if project_data.name is not None:
-        project.name = project_data.name
-    if project_data.description is not None:
-        project.description = project_data.description
+    # Use service to update project
+    updated_project = project_service.update_project(
+        project_id=project_id,
+        name=project_data.name,
+        description=project_data.description
+    )
+    
+    if not updated_project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    
+    project = updated_project
 
-    db.commit()
-    db.refresh(project)
+    # Handle Global Block (Panic Mode) integration
+    if project_data.global_block is not None:
+        # Set project-level panic mode in Redis
+        redis_key = f"project:{project_id}:panic_mode"
+        if cache_service.enabled:
+            cache_service.redis_client.set(redis_key, "1" if project_data.global_block else "0")
+        
+        # Log activity
+        activity_logger.log_activity(
+            db=db,
+            user_id=current_user.id,
+            activity_type="global_block_toggle",
+            action=f"Global block {'enabled' if project_data.global_block else 'disabled'}",
+            project_id=project_id,
+            activity_data={"global_block": project_data.global_block}
+        )
+        
+        logger.info(f"Global block {'enabled' if project_data.global_block else 'disabled'} for project {project_id}")
 
     # Invalidate cache
     cache_service.invalidate_project_cache(project_id)
@@ -307,6 +291,22 @@ async def update_project(
             "changes": project_data.dict(exclude_unset=True),
         },
     )
+    
+    # Log audit event
+    ip_address = request.client.host if request and request.client else None
+    user_agent = request.headers.get("user-agent") if request else None
+    old_value = {"name": project.name, "description": project.description}
+    new_value = project_data.dict(exclude_unset=True)
+    audit_service.log_action(
+        user_id=current_user.id,
+        action="project_updated",
+        resource_type="project",
+        resource_id=project_id,
+        old_value=old_value,
+        new_value=new_value,
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
 
     role = get_user_project_role(project_id, current_user.id, db)
     logger.info(f"Project updated successfully: {project_id}")
@@ -325,7 +325,12 @@ async def update_project(
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 @handle_errors
 async def delete_project(
-    project_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    project_id: int,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    project_service = Depends(get_project_service),
+    audit_service = Depends(get_audit_service)
 ):
     """Delete a project (owner only)"""
     project = check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER])
@@ -334,8 +339,10 @@ async def delete_project(
 
     project_name = project.name  # Save name before deletion
 
-    db.delete(project)
-    db.commit()
+    # Use service to delete project (soft delete)
+    deleted = project_service.delete_project(project_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
     # Log activity
     activity_logger.log_activity(
@@ -346,6 +353,20 @@ async def delete_project(
         description=f"Deleted project '{project_name}'",
         project_id=None,
         activity_data={"project_name": project_name, "project_id": project_id},
+    )
+    
+    # Log audit event
+    ip_address = request.client.host if request and request.client else None
+    user_agent = request.headers.get("user-agent") if request else None
+    old_value = {"name": project_name, "project_id": project_id}
+    audit_service.log_action(
+        user_id=current_user.id,
+        action="project_deleted",
+        resource_type="project",
+        resource_id=project_id,
+        old_value=old_value,
+        ip_address=ip_address,
+        user_agent=user_agent
     )
 
     # Invalidate cache
@@ -367,6 +388,7 @@ class PanicModeResponse(BaseModel):
     enabled: bool
 
 
+# Panic Mode (Global Block) - Emergency kill switch for all API calls in a project
 @router.post("/{project_id}/panic", response_model=PanicModeResponse)
 @handle_errors
 async def toggle_panic_mode(
@@ -378,14 +400,10 @@ async def toggle_panic_mode(
     """Toggle panic mode for a project (owner/admin only)"""
     project = check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
     
-    # TODO: Uncomment after running migration: alembic upgrade head
     # 1. Update DB (Persistent State)
-    # project.is_panic_mode = panic_data.enabled
-    # db.commit()
+    project.is_panic_mode = panic_data.enabled
     
-    # Temporary: Store in Redis only until migration is run
-    
-    # 2. Sync to Redis (High Performance Proxy check)
+    # 2. Sync to Redis (High Performance Proxy check - for fast lookups)
     redis_key = f"project:{project_id}:panic_mode"
     if cache_service.enabled:
         # Set "1" for enabled, "0" for disabled
@@ -405,6 +423,7 @@ async def toggle_panic_mode(
     return PanicModeResponse(project_id=project_id, enabled=panic_data.enabled)
 
 
+# Panic Mode (Global Block) - Get current status
 @router.get("/{project_id}/panic", response_model=PanicModeResponse)
 @handle_errors
 async def get_panic_mode(
@@ -414,19 +433,11 @@ async def get_panic_mode(
 ):
     """Get current panic mode status for a project"""
     project = check_project_access(project_id, current_user, db)
-    # TODO: Uncomment after running migration: alembic upgrade head
-    # return PanicModeResponse(project_id=project_id, enabled=project.is_panic_mode)
-    
-    # Temporary: Get from Redis only until migration is run
-    redis_key = f"project:{project_id}:panic_mode"
-    enabled = False
-    if cache_service.enabled:
-        value = cache_service.redis_client.get(redis_key)
-        enabled = value == b"1" if value else False
-    return PanicModeResponse(project_id=project_id, enabled=enabled)
+    # Return from DB (also synced to Redis for high-performance proxy checks)
+    return PanicModeResponse(project_id=project_id, enabled=project.is_panic_mode)
 
 
-# Evaluation Rubrics (Phase 3)
+    # Evaluation Rubrics
 from app.models.evaluation_rubric import EvaluationRubric
 
 class RubricCreate(BaseModel):
@@ -454,7 +465,8 @@ async def create_rubric(
     project_id: int,
     data: RubricCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    rubric_repo: EvaluationRubricRepository = Depends(get_evaluation_rubric_repository)
 ):
     """Create a new evaluation rubric for LLM-as-a-Judge"""
     check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
@@ -467,19 +479,17 @@ async def create_rubric(
         min_score=data.min_score,
         max_score=data.max_score
     )
-    db.add(rubric)
-    db.commit()
-    db.refresh(rubric)
-    
-    return rubric
+    # Use repository to save (transaction managed by get_db())
+    return rubric_repo.save(rubric)
 
 @router.get("/{project_id}/rubrics", response_model=List[RubricResponse])
 @handle_errors
 async def list_rubrics(
     project_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    rubric_repo: EvaluationRubricRepository = Depends(get_evaluation_rubric_repository)
 ):
     """List all evaluation rubrics for a project"""
     check_project_access(project_id, current_user, db)
-    return db.query(EvaluationRubric).filter(EvaluationRubric.project_id == project_id).all()
+    return rubric_repo.find_by_project_id(project_id, active_only=False)

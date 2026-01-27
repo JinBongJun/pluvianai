@@ -2,7 +2,7 @@
 Project model for multi-tenancy
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -19,27 +19,9 @@ class Project(Base):
     description = Column(Text, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     is_active = Column(Boolean, default=True)
-    # TODO: Uncomment after running migration: alembic upgrade head
-    # is_panic_mode = Column(Boolean, default=False)
+    is_panic_mode = Column(Boolean, default=False)  # Panic Mode (Global Block) - stored in DB and synced to Redis
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-    # Shadow Routing configuration (JSON)
-    # Example structure:
-    # {
-    #   "enabled": true,
-    #   "shadow_models": {
-    #     "gpt-4": "gpt-4-turbo",  # Same provider, newer model
-    #     "gpt-4-turbo": "claude-3-opus",  # Cross-provider comparison
-    #     "claude-3-opus": "claude-3-haiku"  # Cost optimization
-    #   },
-    #   "comparison_threshold": 0.15  # 15% difference triggers alert
-    # }
-    # Shadow models can be:
-    # - Same provider: gpt-4 -> gpt-4-turbo, gpt-4 -> o1-preview
-    # - Different provider: gpt-4 -> claude-3-opus, claude-3 -> gemini-ultra
-    # - Cost optimization: gpt-4 -> gpt-3.5-turbo, claude-3-opus -> claude-3-haiku
-    shadow_routing_config = Column(JSON, nullable=True)
 
     # Relationships
     owner = relationship("User", back_populates="projects")
@@ -51,4 +33,6 @@ class Project(Base):
     usage_records = relationship("Usage", back_populates="project", cascade="all, delete-orphan")
     activity_logs = relationship("ActivityLog", back_populates="project", cascade="all, delete-orphan")
     webhooks = relationship("Webhook", back_populates="project", cascade="all, delete-orphan")
-    shadow_comparisons = relationship("ShadowComparison", back_populates="project", cascade="all, delete-orphan")
+    firewall_rules = relationship("FirewallRule", back_populates="project", cascade="all, delete-orphan")
+    judge_feedback = relationship("JudgeFeedback", back_populates="project", cascade="all, delete-orphan")
+    notification_settings = relationship("ProjectNotificationSettings", back_populates="project", cascade="all, delete-orphan")

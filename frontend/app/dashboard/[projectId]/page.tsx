@@ -21,7 +21,13 @@ export default function ProjectRedirectPage() {
           router.push('/organizations');
         }
       } catch (error) {
-        console.error('Failed to redirect project:', error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to redirect project:', error);
+        } else {
+          import('@sentry/nextjs').then((Sentry) => {
+            Sentry.captureException(error as Error);
+          });
+        }
         router.push('/organizations');
       }
     };

@@ -130,7 +130,13 @@ export default function ChainDetailPage() {
           const filteredCalls = calls.filter((call: any) => call.chain_id === chainId);
           setRelatedCalls(filteredCalls);
         } catch (error) {
-          console.error('Failed to load related calls:', error);
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Failed to load related calls:', error);
+          } else {
+            import('@sentry/nextjs').then((Sentry) => {
+              Sentry.captureException(error as Error, { extra: { projectId, chainId } });
+            });
+          }
         }
         
         // Load optimizations
@@ -140,7 +146,13 @@ export default function ChainDetailPage() {
         router.push(`/dashboard/${projectId}/chains`);
       }
     } catch (error: any) {
-      console.error('Failed to load chain:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load chain:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, chainId } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to load chain', 'error');
       if (error.response?.status === 403) {
         toast.showToast('Agent Chain Profiling requires Pro plan or higher. Please upgrade your subscription.', 'error');
@@ -162,7 +174,13 @@ export default function ChainDetailPage() {
       const result = await agentChainAPI.getOptimizations(projectId, chainId);
       setOptimizations(result);
     } catch (error: any) {
-      console.error('Failed to load optimizations:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load optimizations:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, chainId } });
+        });
+      }
       // Don't show error toast - optimizations are optional
     } finally {
       setLoadingOptimizations(false);
@@ -179,7 +197,13 @@ export default function ChainDetailPage() {
       // Reload chain to see updates
       loadChain();
     } catch (error: any) {
-      console.error('Failed to apply optimization:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to apply optimization:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, chainId, optimization } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to apply optimization', 'error');
     }
   };

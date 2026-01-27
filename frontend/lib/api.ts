@@ -4,6 +4,27 @@
 import axios from 'axios';
 import { toNumber } from '@/lib/format';
 import { validateArrayResponse, normalizeModelComparison } from '@/lib/validate';
+
+// Helper to log errors (development: console, production: Sentry)
+const logError = (message: string, error?: unknown, context?: Record<string, unknown>) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.error(message, error, context);
+  } else {
+    import('@sentry/nextjs').then((Sentry) => {
+      if (error instanceof Error) {
+        Sentry.captureException(error, { extra: { message, ...context } });
+      } else {
+        Sentry.captureMessage(message, { level: 'error', extra: { error, ...context } });
+      }
+    });
+  }
+};
+
+const logWarn = (message: string, context?: Record<string, unknown>) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(message, context);
+  }
+};
 import {
   ModelComparisonSchema,
   CostAnalysisSchema,
@@ -38,11 +59,20 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle token refresh on 401
+// Handle token refresh on 401 and upgrade required errors
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    // Handle Upgrade Required (403 with X-Upgrade-Required header)
+    if (error.response?.status === 403 && error.response?.headers['x-upgrade-required'] === 'true') {
+      // Store upgrade info in error for component handling
+      error.upgradeRequired = true;
+      error.upgradeDetails = error.response?.data?.error?.details || {};
+      // Don't throw here - let components handle it with QuotaExceededState
+      return Promise.reject(error);
+    }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
@@ -70,17 +100,27 @@ apiClient.interceptors.response.use(
       }
     }
 
+    // Handle upgrade required errors (403 with X-Upgrade-Required header)
+    if (error.response?.status === 403 && error.response?.headers?.['x-upgrade-required'] === 'true') {
+      // Store upgrade info in error for component handling
+      const errorData = error.response?.data;
+      if (errorData?.error?.details) {
+        error.upgradeInfo = errorData.error.details;
+      }
+    }
+
     return Promise.reject(error);
   }
 );
 
 // Auth API
 export const authAPI = {
-  register: async (email: string, password: string, fullName?: string) => {
+  register: async (email: string, password: string, fullName?: string, liabilityAgreementAccepted: boolean = false) => {
     const response = await apiClient.post('/auth/register', {
       email,
       password,
       full_name: fullName,
+      liability_agreement_accepted: liabilityAgreementAccepted,
     });
     return response.data;
   },
@@ -175,7 +215,7 @@ export const organizationsAPI = {
       const parsed = OrganizationSchema.parse(response.data);
       return normalizeOrganizationDetail(parsed);
     } catch (error) {
-      console.warn('[API Validation] Organization create schema mismatch:', error);
+      logWarn('[API Validation] Organization create schema mismatch', { error });
       return normalizeOrganizationDetail(response.data);
     }
   },
@@ -199,7 +239,7 @@ export const organizationsAPI = {
       const parsed = OrganizationSchema.parse(response.data);
       return normalizeOrganizationDetail(parsed);
     } catch (error) {
-      console.warn('[API Validation] Organization schema mismatch:', error);
+      logWarn('[API Validation] Organization schema mismatch', { error });
       return normalizeOrganizationDetail(response.data);
     }
   },
@@ -239,7 +279,7 @@ export const projectsAPI = {
     try {
       return ProjectSchema.parse(response.data);
     } catch (error) {
-      console.warn(`[API Validation] Project ${id} schema mismatch:`, error);
+      logWarn(`[API Validation] Project ${id} schema mismatch`, { error });
       return response.data; // Return raw data on validation failure
     }
   },
@@ -323,7 +363,7 @@ export const apiCallsAPI = {
     try {
       return APICallSchema.parse(response.data);
     } catch (error) {
-      console.warn(`[API Validation] API call ${id} schema mismatch:`, error);
+      logWarn(`[API Validation] API call ${id} schema mismatch`, { error });
       return response.data; // Return raw data on validation failure
     }
   },
@@ -339,6 +379,17 @@ export const apiCallsAPI = {
     }
     const response = await apiClient.get('/api-calls/stats', {
       params: { project_id: Number(projectId), days: Number(days) },
+    });
+    return response.data;
+  },
+
+  /** For Streaming UI: recent items + last-1m/5m counts. Poll every 2–3s. */
+  streamRecent: async (projectId: number, limit: number = 25) => {
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      throw new Error(`Invalid project ID: ${projectId}`);
+    }
+    const response = await apiClient.get('/api-calls/stream/recent', {
+      params: { project_id: Number(projectId), limit },
     });
     return response.data;
   },
@@ -400,7 +451,7 @@ export const driftAPI = {
     try {
       return DriftDetectionSchema.parse(response.data);
     } catch (error) {
-      console.warn(`[API Validation] Drift detection ${id} schema mismatch:`, error);
+      logWarn(`[API Validation] Drift detection ${id} schema mismatch`, { error });
       return response.data; // Return raw data on validation failure
     }
   },
@@ -435,7 +486,7 @@ export const alertsAPI = {
     try {
       return AlertSchema.parse(response.data);
     } catch (error) {
-      console.warn(`[API Validation] Alert ${id} schema mismatch:`, error);
+      logWarn(`[API Validation] Alert ${id} schema mismatch`, { error });
       return response.data; // Return raw data on validation failure
     }
   },
@@ -498,7 +549,7 @@ export const costAPI = {
     try {
       return CostAnalysisSchema.parse(response.data);
     } catch (error) {
-      console.warn('[API Validation] Cost analysis schema mismatch, using defaults:', error);
+      logWarn('[API Validation] Cost analysis schema mismatch, using defaults', { error });
       return {
         total_cost: 0,
         by_model: {},
@@ -579,7 +630,7 @@ export const agentChainAPI = {
       const validated = ChainProfileResponseSchema.parse(response.data);
       return validated;
     } catch (error) {
-      console.warn('[API Validation] Chain profile response schema mismatch:', error);
+      logWarn('[API Validation] Chain profile response schema mismatch', { error });
       // Return safe default structure
       return {
         total_chains: 0,
@@ -677,6 +728,28 @@ export const shadowRoutingAPI = {
       params: { project_id: Number(projectId) },
     });
     return response.data;
+  },
+};
+
+// Billing API
+export const billingAPI = {
+  getUsage: async () => {
+    const response = await apiClient.get('/billing/usage');
+    return response.data?.data || response.data;
+  },
+
+  getLimits: async () => {
+    const response = await apiClient.get('/billing/limits');
+    return response.data?.data || response.data;
+  },
+
+  createCheckoutSession: async (planType: string, successUrl: string, cancelUrl: string) => {
+    const response = await apiClient.post('/billing/checkout', {
+      plan_type: planType,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+    });
+    return response.data?.data || response.data;
   },
 };
 
@@ -1043,6 +1116,474 @@ export const replayAPI = {
   getPanicMode: async (projectId: number) => {
     const response = await apiClient.get(`/projects/${projectId}/panic`);
     return response.data;
+  },
+};
+
+// Onboarding API
+export const onboardingAPI = {
+  getQuickStart: async (projectId?: number) => {
+    const params = projectId ? { project_id: projectId } : {};
+    const response = await apiClient.get('/onboarding/quick-start', { params });
+    return response.data;
+  },
+
+  simulateTraffic: async (projectId: number) => {
+    const response = await apiClient.post('/onboarding/simulate', { project_id: projectId });
+    return response.data;
+  },
+
+  getStatus: async () => {
+    const response = await apiClient.get('/onboarding/status');
+    return response.data;
+  },
+
+  checkFirstSnapshot: async (projectId: number) => {
+    const response = await apiClient.get('/onboarding/first-snapshot-celebration', {
+      params: { project_id: projectId },
+    });
+    return response.data;
+  },
+  acceptAgreement: async (agreementData: {
+    liability_agreement_accepted: boolean;
+    terms_of_service_accepted: boolean;
+    privacy_policy_accepted: boolean;
+  }) => {
+    const response = await apiClient.post('/onboarding/accept-agreement', agreementData);
+    return response.data.data || response.data;
+  },
+};
+
+// Model Validation API
+// Mapping API
+export const mappingAPI = {
+  getMapping: async (projectId: number, days: number = 7) => {
+    const response = await apiClient.get(`/projects/${projectId}/mapping`, {
+      params: { days },
+    });
+    return response.data?.data || response.data;
+  },
+
+  getDependencyGraph: async (projectId: number, days: number = 7) => {
+    const response = await apiClient.get(`/projects/${projectId}/mapping/graph`, {
+      params: { days },
+    });
+    return response.data?.data || response.data;
+  },
+
+  getNodeDetails: async (projectId: number, nodeId: string, days: number = 7) => {
+    const response = await apiClient.get(`/projects/${projectId}/mapping/nodes/${nodeId}`, {
+      params: { days },
+    });
+    return response.data?.data || response.data;
+  },
+
+  filterMapping: async (projectId: number, filters: {
+    agent_name?: string;
+    min_score?: number;
+    max_latency?: number;
+    has_problems?: boolean;
+  }, days: number = 7) => {
+    const response = await apiClient.post(`/projects/${projectId}/mapping/filter`, filters, {
+      params: { days },
+    });
+    return response.data?.data || response.data;
+  },
+
+  getSubgraph: async (projectId: number, focusNodeId: string, depth: number = 2, days: number = 7) => {
+    const response = await apiClient.get(`/projects/${projectId}/mapping/subgraph`, {
+      params: { focus_node_id: focusNodeId, depth, days },
+    });
+    return response.data?.data || response.data;
+  },
+};
+
+// Problem Analysis API
+export const problemAnalysisAPI = {
+  analyzeProblems: async (projectId: number, days: number = 7, thresholdScore: number = 3.0) => {
+    const response = await apiClient.post(`/projects/${projectId}/problem-analysis`, null, {
+      params: { days, threshold_score: thresholdScore },
+    });
+    return response.data?.data || response.data;
+  },
+
+  getAnalysis: async (projectId: number, analysisId: string) => {
+    const response = await apiClient.get(`/projects/${projectId}/problem-analysis/${analysisId}`);
+    return response.data?.data || response.data;
+  },
+
+  getAnalysisMapping: async (projectId: number, analysisId: string) => {
+    const response = await apiClient.get(`/projects/${projectId}/problem-analysis/${analysisId}/mapping`);
+    return response.data?.data || response.data;
+  },
+};
+
+export const dependencyAnalysisAPI = {
+  analyzeDependencies: async (projectId: number, days: number = 7) => {
+    const response = await apiClient.post(`/projects/${projectId}/dependency-analysis`, null, {
+      params: { days },
+    });
+    return response.data?.data || response.data;
+  },
+
+  getAnalysis: async (projectId: number, analysisId: string) => {
+    const response = await apiClient.get(`/projects/${projectId}/dependency-analysis/${analysisId}`);
+    return response.data?.data || response.data;
+  },
+
+  getAnalysisMapping: async (projectId: number, analysisId: string) => {
+    const response = await apiClient.get(`/projects/${projectId}/dependency-analysis/${analysisId}/mapping`);
+    return response.data?.data || response.data;
+  },
+};
+
+export const performanceAnalysisAPI = {
+  analyzePerformance: async (projectId: number, days: number = 7, percentileThreshold: number = 0.95) => {
+    const response = await apiClient.post(`/projects/${projectId}/performance-analysis`, null, {
+      params: { days, percentile_threshold: percentileThreshold },
+    });
+    return response.data?.data || response.data;
+  },
+
+  getAnalysis: async (projectId: number, analysisId: string) => {
+    const response = await apiClient.get(`/projects/${projectId}/performance-analysis/${analysisId}`);
+    return response.data?.data || response.data;
+  },
+
+  getAnalysisMapping: async (projectId: number, analysisId: string) => {
+    const response = await apiClient.get(`/projects/${projectId}/performance-analysis/${analysisId}/mapping`);
+    return response.data?.data || response.data;
+  },
+};
+
+export const modelValidationAPI = {
+  validateModel: async (projectId: number, data: { new_model: string; provider: string; rubric_id?: number }) => {
+    const response = await apiClient.post(`/projects/${projectId}/validate-model`, data);
+    // Handle standard response format {data: {...}, meta: {...}}
+    return response.data?.data || response.data;
+  },
+};
+
+// Shared Results API
+export const sharedResultsAPI = {
+  shareResult: async (projectId: number, resultId: number, data: {
+    result_type: string;
+    result_data: any;
+    expires_in_days?: number;
+  }) => {
+    const response = await apiClient.post(`/projects/${projectId}/results/${resultId}/share`, data);
+    return response.data?.data || response.data;
+  },
+
+  share: async (projectId: number, data: {
+    result_type: string;
+    result_data: any;
+    result_id?: number;
+    expires_in_days?: number;
+  }) => {
+    // If result_id is provided, use the existing endpoint
+    if (data.result_id) {
+      const response = await apiClient.post(`/projects/${projectId}/results/${data.result_id}/share`, {
+        result_type: data.result_type,
+        result_data: data.result_data,
+        expires_in_days: data.expires_in_days,
+      });
+      return response.data?.data || response.data;
+    }
+    
+    // Otherwise, create a temporary result ID (0) or use a different endpoint
+    // For now, we'll use 0 as a placeholder - backend should handle this
+    const response = await apiClient.post(`/projects/${projectId}/results/0/share`, {
+      result_type: data.result_type,
+      result_data: data.result_data,
+      expires_in_days: data.expires_in_days,
+    });
+    return response.data?.data || response.data;
+  },
+
+  getShared: async (token: string) => {
+    const response = await apiClient.get(`/shared/${token}`);
+    return response.data?.data || response.data;
+  },
+};
+
+// Firewall API
+export const firewallAPI = {
+  getRules: async (projectId: number) => {
+    const response = await apiClient.get(`/projects/${projectId}/firewall/rules`);
+    return response.data?.data || response.data;
+  },
+
+  createRule: async (projectId: number, data: {
+    rule_type: string;
+    name: string;
+    description?: string;
+    pattern?: string;
+    pattern_type?: string;
+    action?: string;
+    severity?: string;
+    enabled?: boolean;
+    config?: any;
+  }) => {
+    const response = await apiClient.post(`/projects/${projectId}/firewall/rules`, data);
+    return response.data?.data || response.data;
+  },
+
+  updateRule: async (projectId: number, ruleId: number, data: {
+    name?: string;
+    description?: string;
+    pattern?: string;
+    pattern_type?: string;
+    action?: string;
+    severity?: string;
+    enabled?: boolean;
+    config?: any;
+  }) => {
+    const response = await apiClient.put(`/projects/${projectId}/firewall/rules/${ruleId}`, data);
+    return response.data?.data || response.data;
+  },
+
+  deleteRule: async (projectId: number, ruleId: number) => {
+    await apiClient.delete(`/projects/${projectId}/firewall/rules/${ruleId}`);
+  },
+
+  togglePanicMode: async (enabled: boolean) => {
+    const response = await apiClient.post('/admin/firewall/panic-mode', { enabled });
+    return response.data?.data || response.data;
+  },
+
+  getPanicModeStatus: async () => {
+    const response = await apiClient.get('/admin/firewall/panic-mode');
+    return response.data?.data || response.data;
+  },
+};
+
+// Judge Feedback API
+export const judgeFeedbackAPI = {
+  createFeedback: async (projectId: number, data: {
+    evaluation_id: number;
+    judge_score: number;
+    human_score: number;
+    comment?: string;
+    correction_reason?: string;
+    metadata?: any;
+  }) => {
+    const response = await apiClient.post(`/projects/${projectId}/judge/feedback`, data);
+    return response.data?.data || response.data;
+  },
+
+  getFeedback: async (projectId: number, evaluationId?: number) => {
+    const params: any = {};
+    if (evaluationId) params.evaluation_id = evaluationId;
+    const response = await apiClient.get(`/projects/${projectId}/judge/feedback`, { params });
+    return response.data?.data || response.data;
+  },
+
+  updateFeedback: async (projectId: number, feedbackId: number, data: {
+    human_score?: number;
+    comment?: string;
+    correction_reason?: string;
+    metadata?: any;
+  }) => {
+    const response = await apiClient.put(`/projects/${projectId}/judge/feedback/${feedbackId}`, data);
+    return response.data?.data || response.data;
+  },
+
+  getReliabilityMetrics: async (projectId: number, days: number = 30) => {
+    const response = await apiClient.get(`/projects/${projectId}/judge/reliability`, {
+      params: { days },
+    });
+    return response.data?.data || response.data;
+  },
+
+  runMetaValidation: async (projectId: number, evaluationId: number, primaryJudge: string, secondaryJudge: string) => {
+    const response = await apiClient.post(`/projects/${projectId}/judge/meta-validate/${evaluationId}`, null, {
+      params: {
+        primary_judge_model: primaryJudge,
+        secondary_judge_model: secondaryJudge,
+      },
+    });
+    return response.data?.data || response.data;
+  },
+};
+
+// Self-hosted API
+export const selfHostedAPI = {
+  getStatus: async () => {
+    const response = await apiClient.get('/self-hosted/status');
+    return response.data?.data || response.data;
+  },
+
+  verifyLicense: async (licenseKey: string) => {
+    const response = await apiClient.post('/self-hosted/license', { license_key: licenseKey });
+    return response.data?.data || response.data;
+  },
+};
+
+// Dashboard API
+export const dashboardAPI = {
+  getMetrics: async (projectId: number, period: '24h' | '7d' | '30d' = '24h') => {
+    const response = await apiClient.get(`/projects/${projectId}/dashboard/metrics`, {
+      params: { period },
+    });
+    return response.data?.data || response.data;
+  },
+
+  getTrends: async (projectId: number, period: '1d' | '7d' | '30d' | '90d' = '7d', groupBy: 'hour' | 'day' | 'week' = 'hour') => {
+    const response = await apiClient.get(`/projects/${projectId}/dashboard/trends`, {
+      params: { period, group_by: groupBy },
+    });
+    return response.data?.data || response.data;
+  },
+};
+
+// Notification Settings API
+export const notificationSettingsAPI = {
+  getSettings: async (projectId: number) => {
+    const response = await apiClient.get(`/projects/${projectId}/notifications/settings`);
+    return response.data?.data || response.data;
+  },
+
+  updateSettings: async (projectId: number, settings: any) => {
+    const response = await apiClient.put(`/projects/${projectId}/notifications/settings`, settings);
+    return response.data?.data || response.data;
+  },
+
+  sendTest: async (projectId: number, channel: 'email' | 'slack') => {
+    const response = await apiClient.post(`/projects/${projectId}/notifications/test`, { channel });
+    return response.data?.data || response.data;
+  },
+};
+
+// Rule Market API
+export const ruleMarketAPI = {
+  list: async (params?: {
+    category?: string;
+    rule_type?: string;
+    tags?: string;
+    search?: string;
+    sort?: 'popular' | 'recent' | 'rating';
+    limit?: number;
+    offset?: number;
+  }) => {
+    const response = await apiClient.get('/rule-market', { params });
+    return Array.isArray(response.data) ? response.data : (response.data?.data || []);
+  },
+
+  getFeatured: async (limit: number = 10) => {
+    const response = await apiClient.get('/rule-market/featured', { params: { limit } });
+    return Array.isArray(response.data) ? response.data : (response.data?.data || []);
+  },
+
+  get: async (ruleId: number) => {
+    const response = await apiClient.get(`/rule-market/${ruleId}`);
+    return response.data?.data || response.data;
+  },
+
+  create: async (rule: {
+    name: string;
+    description?: string;
+    rule_type: 'pii' | 'toxicity' | 'hallucination' | 'custom';
+    pattern: string;
+    pattern_type: 'regex' | 'keyword' | 'ml';
+    category?: string;
+    tags?: string[];
+  }) => {
+    const response = await apiClient.post('/rule-market', rule);
+    return response.data?.data || response.data;
+  },
+
+  download: async (ruleId: number, projectId: number) => {
+    const response = await apiClient.post(`/rule-market/${ruleId}/download`, { project_id: projectId });
+    return response.data?.data || response.data;
+  },
+
+  rate: async (ruleId: number, rating: number) => {
+    const response = await apiClient.post(`/rule-market/${ruleId}/rate`, { rating });
+    return response.data?.data || response.data;
+  },
+};
+
+// Insights API
+export const insightsAPI = {
+  getDaily: async (projectId: number, date?: string) => {
+    const params = date ? { project_id: projectId, date } : { project_id: projectId };
+    const response = await apiClient.get('/insights/daily', { params });
+    return response.data?.data || response.data;
+  },
+};
+
+// Admin API
+export const adminAPI = {
+  getCurrentUser: async () => {
+    const response = await apiClient.get('/auth/me');
+    return response.data?.data || response.data;
+  },
+  
+  getStats: async () => {
+    const response = await apiClient.get('/admin/stats');
+    return response.data?.data || response.data;
+  },
+  
+  listUsers: async (params?: { limit?: number; offset?: number; search?: string }) => {
+    const response = await apiClient.get('/admin/users', { params });
+    return response.data?.data || response.data || response;
+  },
+  
+  startImpersonation: async (userId: number, data: { reason?: string; duration_minutes?: number }) => {
+    const response = await apiClient.post(`/admin/users/${userId}/impersonate`, data);
+    return response.data?.data || response.data;
+  },
+  
+  endImpersonation: async (sessionId: string) => {
+    const response = await apiClient.delete(`/admin/impersonate/${sessionId}`);
+    return response.data?.data || response.data;
+  },
+};
+
+// Health API
+export const healthAPI = {
+  getHealth: async () => {
+    const response = await apiClient.get('/health');
+    return response.data?.data || response.data;
+  },
+};
+
+// Public Benchmarks API
+export const publicBenchmarksAPI = {
+  list: async (params?: {
+    category?: string;
+    benchmark_type?: string;
+    tags?: string;
+    search?: string;
+    sort?: 'recent' | 'popular' | 'featured';
+    limit?: number;
+    offset?: number;
+  }) => {
+    const response = await apiClient.get('/public/benchmarks', { params });
+    return Array.isArray(response.data) ? response.data : (response.data?.data || []);
+  },
+
+  getFeatured: async (limit: number = 10) => {
+    const response = await apiClient.get('/public/benchmarks/featured', { params: { limit } });
+    return Array.isArray(response.data) ? response.data : (response.data?.data || []);
+  },
+
+  get: async (benchmarkId: number) => {
+    const response = await apiClient.get(`/public/benchmarks/${benchmarkId}`);
+    return response.data?.data || response.data;
+  },
+
+  publish: async (benchmark: {
+    name: string;
+    description?: string;
+    benchmark_type: 'model_comparison' | 'task_performance';
+    benchmark_data: any;
+    test_cases_count: number;
+    category?: string;
+    tags?: string[];
+  }) => {
+    const response = await apiClient.post('/benchmarks/publish', benchmark);
+    return response.data?.data || response.data;
   },
 };
 

@@ -151,11 +151,23 @@ export default function AgentChainsPage() {
             agents: Array.isArray(statsData?.agents) ? statsData.agents : [],
           });
         } catch (statsError: any) {
-          console.error('Failed to load agent statistics:', statsError);
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Failed to load agent statistics:', statsError);
+          } else {
+            import('@sentry/nextjs').then((Sentry) => {
+              Sentry.captureException(statsError as Error, { extra: { projectId } });
+            });
+          }
           setAgentStats({ agents: [] });
         }
       } catch (error: any) {
-        console.error('Failed to load agent chain data:', error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to load agent chain data:', error);
+        } else {
+          import('@sentry/nextjs').then((Sentry) => {
+            Sentry.captureException(error as Error, { extra: { projectId } });
+          });
+        }
         // Use toast.showToast but don't include in deps to avoid infinite loop
         toast.showToast(error.response?.data?.detail || 'Failed to load agent chain data', 'error');
         setChainProfile({ chains: [] });
@@ -216,7 +228,9 @@ export default function AgentChainsPage() {
             ))
           );
         } catch (e) {
-          console.error('Error filtering chain:', e);
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Error filtering chain:', e);
+          }
           return false;
         }
       });
@@ -264,7 +278,9 @@ export default function AgentChainsPage() {
         }
       });
     } catch (e) {
-      console.error('Error sorting chains:', e);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error sorting chains:', e);
+      }
     }
     
     return Array.isArray(filtered) ? filtered : [];
@@ -391,7 +407,13 @@ export default function AgentChainsPage() {
       
       toast.showToast('Chain data exported successfully', 'success');
     } catch (error) {
-      console.error('Export error:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Export error:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId } });
+        });
+      }
       toast.showToast('Failed to export chain data', 'error');
     }
   };

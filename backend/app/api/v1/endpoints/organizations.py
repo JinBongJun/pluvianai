@@ -14,6 +14,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.logging_config import logger
 from app.core.decorators import handle_errors
+from app.core.dependencies import get_organization_service
+from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.models.user import User
 from app.models.organization import Organization, OrganizationMember
 from app.models.project import Project
@@ -88,24 +90,21 @@ class OrgProjectSummary(BaseModel):
         from_attributes = True
 
 
-def _get_user_orgs(db: Session, user: User) -> List[Organization]:
+def _get_user_orgs(org_service, user: User) -> List[Organization]:
     """
     Get organizations where user is owner or member.
-    For now, we only support owner-based orgs to keep it simple.
+    Uses OrganizationService to get all orgs for user.
     """
-    return (
-        db.query(Organization)
-        .filter(Organization.owner_id == user.id)
-        .order_by(Organization.created_at.desc())
-        .all()
-    )
+    return org_service.get_organizations_by_user_id(user.id)
 
 
 @router.post("", response_model=OrganizationDetail, status_code=status.HTTP_201_CREATED)
+@handle_errors
 def create_organization(
     org_data: OrganizationCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    org_service = Depends(get_organization_service),
 ):
     """Create a new organization for the current user."""
     name = org_data.name.strip()
@@ -115,38 +114,21 @@ def create_organization(
             detail="Organization name is required",
         )
 
-    # Optional: Check duplicate name for this owner
-    existing = (
-        db.query(Organization)
-        .filter(Organization.owner_id == current_user.id, Organization.name == name)
-        .first()
-    )
-    if existing:
+    try:
+        # Use service to create organization (RequestDTO → Domain Model conversion)
+        org = org_service.create_organization(
+            name=name,
+            owner_id=current_user.id,
+            org_type=org_data.type,
+            plan_type=org_data.plan_type or "free"
+        )
+        # Transaction is committed by get_db() dependency
+        return org
+    except EntityAlreadyExistsError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="An organization with this name already exists",
+            detail=str(e)
         )
-
-    org = Organization(
-        name=name,
-        type=org_data.type,
-        plan_type=org_data.plan_type or "free",
-        owner_id=current_user.id,
-    )
-    db.add(org)
-    db.flush()  # get org.id
-
-    # Create owner membership
-    member = OrganizationMember(
-        organization_id=org.id,
-        user_id=current_user.id,
-        role="owner",
-    )
-    db.add(member)
-    db.commit()
-    db.refresh(org)
-
-    return org
 
 
 @router.get("", response_model=List[OrganizationSummary])
@@ -154,9 +136,10 @@ def list_organizations(
     include_stats: bool = Query(True, description="Include basic usage stats"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    org_service = Depends(get_organization_service),
 ):
     """List organizations for the current user with optional stats."""
-    orgs = _get_user_orgs(db, current_user)
+    orgs = _get_user_orgs(org_service, current_user)
 
     if not orgs:
         return []
@@ -230,7 +213,7 @@ def list_organizations(
         )
         drift_map.update({oid: count for oid, count in drift_rows})
 
-        # TODO: Cost per org (7d) – can be computed using cost analyzer in future
+        # Cost per org can be computed using cost_analyzer.analyze_project_costs() if needed
 
     summaries: List[OrganizationSummary] = []
     for org in orgs:
@@ -257,10 +240,11 @@ def get_organization(
     include_stats: bool = Query(False, description="Include usage stats and alerts"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    org_service = Depends(get_organization_service),
 ):
     """Get organization details with optional stats."""
-    # Check if user is owner or member
-    org = db.query(Organization).filter(Organization.id == org_id).first()
+    # Use service to get organization
+    org = org_service.get_organization_by_id(org_id)
     if not org:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
     
@@ -442,43 +426,37 @@ def list_org_projects(
     search: Optional[str] = Query(None, description="Search projects by name or description"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    org_service = Depends(get_organization_service),
+    project_service = Depends(get_project_service),
 ):
     """List projects for an organization with basic metrics."""
-    # Verify org access (owner or member)
-    org = db.query(Organization).filter(Organization.id == org_id).first()
+    # Use service to get organization
+    org = org_service.get_organization_by_id(org_id)
     if not org:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
     
-    # Check access
-    is_owner = org.owner_id == current_user.id
-    is_member = False
-    if not is_owner:
-        is_member = (
-            db.query(OrganizationMember)
-            .filter(
-                OrganizationMember.organization_id == org_id,
-                OrganizationMember.user_id == current_user.id
-            )
-            .first() is not None
-        )
-    
-    if not (is_owner or is_member):
+    # Check access using service
+    user_orgs = org_service.get_organizations_by_user_id(current_user.id)
+    user_org_ids = [o.id for o in user_orgs]
+    if org_id not in user_org_ids:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this organization"
         )
 
-    # Base query
-    query = db.query(Project).filter(Project.organization_id == org_id)
-
-    # Apply search filter
+    # Use service to get projects
+    projects = project_service.get_projects_by_organization_id(org_id)
+    
+    # Apply search filter if provided
     if search:
-        search_term = f"%{search.strip()}%"
-        query = query.filter(
-            (Project.name.ilike(search_term)) | (Project.description.ilike(search_term))
-        )
-
-    projects = query.order_by(Project.created_at.desc()).all()
+        search_term = search.strip().lower()
+        projects = [
+            p for p in projects
+            if search_term in (p.name or "").lower() or search_term in (p.description or "").lower()
+        ]
+    
+    # Sort by created_at descending
+    projects = sorted(projects, key=lambda p: p.created_at, reverse=True)
 
     if not projects:
         return []

@@ -43,7 +43,13 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
       const data = await projectMembersAPI.list(projectId);
       setMembers(data);
     } catch (error) {
-      console.error('Failed to load members:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load members:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId } });
+        });
+      }
     } finally {
       setLoading(false);
     }

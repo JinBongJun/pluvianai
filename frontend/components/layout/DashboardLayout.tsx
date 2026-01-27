@@ -66,7 +66,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         setUserPlan(subscriptionData.plan_type || 'free');
       }
     } catch (error) {
-      console.error('Failed to load data:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load data:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error);
+        });
+      }
     } finally {
       setLoading(false);
     }

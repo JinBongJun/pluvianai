@@ -6,12 +6,13 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import and_, desc, func
 from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user, get_user_from_api_key
 from app.core.permissions import check_project_access
 from app.core.decorators import handle_errors
+from app.core.dependencies import get_api_call_service, get_snapshot_repository
 from app.services.data_normalizer import DataNormalizer
 from app.services.background_tasks import background_task_service
 from app.models.user import User
@@ -62,6 +63,7 @@ async def list_api_calls(
     agent_name: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    api_call_service = Depends(get_api_call_service),
 ):
     """List API calls for a project with caching"""
     # Verify project access (any member can view)
@@ -83,18 +85,15 @@ async def list_api_calls(
         if cached:
             return cached
 
-    # Build query
-    query = db.query(APICall).filter(APICall.project_id == project_id)
-
-    if provider:
-        query = query.filter(APICall.provider == provider)
-    if model:
-        query = query.filter(APICall.model == model)
-    if agent_name:
-        query = query.filter(APICall.agent_name == agent_name)
-
-    # Order by created_at descending and paginate
-    api_calls = query.order_by(desc(APICall.created_at)).offset(offset).limit(limit).all()
+    # Use service to get API calls
+    api_calls = api_call_service.get_api_calls_by_project_id(
+        project_id=project_id,
+        limit=limit,
+        offset=offset,
+        provider=provider,
+        model=model,
+        agent_name=agent_name
+    )
 
     # Cache result (only for first page, no filters, TTL 5 minutes)
     if offset == 0 and not provider and not model and not agent_name:
@@ -103,10 +102,160 @@ async def list_api_calls(
     return api_calls
 
 
+class StreamRecentResponse(BaseModel):
+    """Stream recent API calls + live stats for Streaming UI"""
+
+    items: List[APICallResponse]
+    last_1m_count: int
+    last_5m_count: int
+
+
+@router.get("/stream/recent", response_model=StreamRecentResponse)
+@handle_errors
+async def stream_recent(
+    project_id: int = Query(..., description="Project ID", gt=0),
+    limit: int = Query(25, ge=1, le=100, description="Max items to return"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    api_call_service = Depends(get_api_call_service),
+):
+    """Recent API calls + last-1m/5m counts for LiveStreamView and PulseIndicator. Poll every 2–3s."""
+    check_project_access(project_id, current_user, db)
+    now = datetime.utcnow()
+    t1 = now - timedelta(minutes=1)
+    t5 = now - timedelta(minutes=5)
+
+    recent = api_call_service.get_api_calls_by_project_id(
+        project_id=project_id, limit=limit, offset=0, provider=None, model=None, agent_name=None
+    )
+    c1 = (
+        db.query(func.count(APICall.id))
+        .filter(and_(APICall.project_id == project_id, APICall.created_at >= t1, APICall.created_at <= now))
+        .scalar()
+        or 0
+    )
+    c5 = (
+        db.query(func.count(APICall.id))
+        .filter(and_(APICall.project_id == project_id, APICall.created_at >= t5, APICall.created_at <= now))
+        .scalar()
+        or 0
+    )
+    return StreamRecentResponse(items=recent, last_1m_count=int(c1), last_5m_count=int(c5))
+
+
+@router.get("/stream/live")
+@handle_errors
+async def stream_live(
+    project_id: int = Query(..., description="Project ID", gt=0),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Server-Sent Events (SSE) stream for real-time API call monitoring
+    Returns live updates every 2-3 seconds with recent API calls and statistics
+    """
+    from fastapi.responses import StreamingResponse
+    import json
+    import asyncio
+    
+    check_project_access(project_id, current_user, db)
+    
+    async def event_generator():
+        """Generate SSE events with live API call data"""
+        last_count = 0
+        
+        while True:
+            try:
+                # Get current time windows
+                now = datetime.utcnow()
+                t1 = now - timedelta(minutes=1)
+                t5 = now - timedelta(minutes=5)
+                
+                # Get recent API calls
+                recent_calls = (
+                    db.query(APICall)
+                    .filter(
+                        and_(
+                            APICall.project_id == project_id,
+                            APICall.created_at >= now - timedelta(minutes=5)
+                        )
+                    )
+                    .order_by(APICall.created_at.desc())
+                    .limit(25)
+                    .all()
+                )
+                
+                # Count calls in time windows
+                c1 = (
+                    db.query(func.count(APICall.id))
+                    .filter(and_(APICall.project_id == project_id, APICall.created_at >= t1, APICall.created_at <= now))
+                    .scalar() or 0
+                )
+                c5 = (
+                    db.query(func.count(APICall.id))
+                    .filter(and_(APICall.project_id == project_id, APICall.created_at >= t5, APICall.created_at <= now))
+                    .scalar() or 0
+                )
+                
+                # Convert to response format
+                items = [
+                    {
+                        "id": call.id,
+                        "provider": call.provider,
+                        "model": call.model,
+                        "agent_name": call.agent_name,
+                        "status_code": call.status_code,
+                        "latency_ms": call.latency_ms,
+                        "created_at": call.created_at.isoformat() if call.created_at else None,
+                    }
+                    for call in recent_calls
+                ]
+                
+                # Only send if there are new calls (optimization)
+                current_count = len(recent_calls)
+                if current_count != last_count or True:  # Always send for now
+                    data = {
+                        "items": items,
+                        "last_1m_count": int(c1),
+                        "last_5m_count": int(c5),
+                        "timestamp": now.isoformat(),
+                    }
+                    
+                    # Format as SSE
+                    yield f"data: {json.dumps(data)}\n\n"
+                    last_count = current_count
+                
+                # Wait 2-3 seconds before next update
+                await asyncio.sleep(2.5)
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in live stream: {str(e)}")
+                yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+                await asyncio.sleep(5)  # Wait longer on error
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
+
+
 @router.get("/{api_call_id}", response_model=APICallDetailResponse)
-async def get_api_call(api_call_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_api_call(
+    api_call_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    api_call_service = Depends(get_api_call_service),
+    snapshot_repo = Depends(get_snapshot_repository),
+):
     """Get a specific API call with decompression"""
-    api_call = db.query(APICall).filter(APICall.id == api_call_id).first()
+    api_call = api_call_service.get_api_call_by_id(api_call_id)
 
     if not api_call:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API call not found")
@@ -123,8 +272,11 @@ async def get_api_call(api_call_id: int, current_user: User = Depends(get_curren
 
     # Attach snapshot_id if it exists (for Replay navigation)
     # We match by trace_id (chain_id in APICall table)
-    from app.models.snapshot import Snapshot
-    snapshot = db.query(Snapshot).filter(Snapshot.trace_id == api_call.chain_id).first()
+    snapshot = None
+    if api_call.chain_id:
+        snapshots = snapshot_repo.find_by_trace_id(api_call.chain_id)
+        if snapshots:
+            snapshot = snapshots[0]  # Get first snapshot for the trace
     
     # We use a custom object to include the snapshot_id
     response_data = APICallDetailResponse.from_orm(api_call)

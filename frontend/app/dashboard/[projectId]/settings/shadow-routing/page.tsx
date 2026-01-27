@@ -65,7 +65,13 @@ export default function ShadowRoutingPage() {
         setPrimaryModel(models[0]);
       }
     } catch (error: any) {
-      console.error('Failed to load models:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load models:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId } });
+        });
+      }
     }
   };
 
@@ -77,7 +83,13 @@ export default function ShadowRoutingPage() {
       const result = await shadowRoutingAPI.getSuggestions(projectId, primaryModel);
       setSuggestions(result);
     } catch (error: any) {
-      console.error('Failed to load suggestions:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load suggestions:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to load shadow routing suggestions', 'error');
     } finally {
       setLoading(false);
@@ -111,7 +123,13 @@ export default function ShadowRoutingPage() {
         toast.showToast(result.reason || 'Failed to apply shadow routing', 'error');
       }
     } catch (error: any) {
-      console.error('Failed to apply shadow routing:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to apply shadow routing:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, config } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to apply shadow routing', 'error');
     } finally {
       setApplying(false);
@@ -124,7 +142,13 @@ export default function ShadowRoutingPage() {
       toast.showToast('Shadow routing rolled back successfully', 'success');
       loadSuggestions();
     } catch (error: any) {
-      console.error('Failed to rollback:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to rollback:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to rollback', 'error');
     }
   };

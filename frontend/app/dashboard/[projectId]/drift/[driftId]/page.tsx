@@ -52,7 +52,13 @@ export default function DriftDetailPage() {
         }
       }
     } catch (error: any) {
-      console.error('Failed to load drift detection:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load drift detection:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, driftId } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to load drift detection', 'error');
       if (error.response?.status === 401) {
         router.push('/login');

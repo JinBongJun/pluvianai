@@ -19,6 +19,10 @@ import random
 
 router = APIRouter()
 
+# Include impersonation routes
+from app.api.v1.endpoints.admin.impersonation import router as impersonation_router
+router.include_router(impersonation_router, tags=["admin-impersonation"])
+
 
 @router.post("/init-db", status_code=status.HTTP_201_CREATED)
 @handle_errors
@@ -270,7 +274,7 @@ async def generate_sample_data(
             )
             db.add(alert)
 
-        db.commit()
+        # Commit handled automatically by get_db() dependency
 
         logger.info(f"Comprehensive sample data generated for project {project_id}")
         return {
