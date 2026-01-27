@@ -105,11 +105,7 @@ class APIHookMiddleware(BaseHTTPMiddleware):
         agent_name = request.headers.get("X-Agent-Name")
         chain_id = request.headers.get("X-Chain-ID")
 
-        # Get API key for Shadow Routing
-        api_key = None
-        auth_header = request.headers.get("Authorization")
-        if auth_header:
-            api_key = auth_header.replace("Bearer ", "").replace("Api-Key ", "")
+        # API key extraction removed - Shadow Routing removed in Phase 2
 
         # Fire and forget - don't wait for completion
         try:
@@ -123,7 +119,7 @@ class APIHookMiddleware(BaseHTTPMiddleware):
                     status_code=status_code,
                     agent_name=agent_name,
                     chain_id=chain_id,
-                    api_key=api_key,
+                    api_key=None,  # Shadow Routing removed in Phase 2
                 )
             )
         except Exception as e:

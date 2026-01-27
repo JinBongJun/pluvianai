@@ -7,6 +7,11 @@ from app.infrastructure.repositories.user_repository import UserRepository
 from app.infrastructure.repositories.api_call_repository import APICallRepository
 from app.infrastructure.repositories.alert_repository import AlertRepository
 from app.infrastructure.repositories.organization_repository import OrganizationRepository
+from app.infrastructure.repositories.snapshot_repository import SnapshotRepository
+from app.infrastructure.repositories.trace_repository import TraceRepository
+from app.infrastructure.repositories.evaluation_rubric_repository import EvaluationRubricRepository
+from app.infrastructure.repositories.organization_member_repository import OrganizationMemberRepository
+from app.infrastructure.repositories.project_member_repository import ProjectMemberRepository
 from app.infrastructure.repositories.exceptions import (
     RepositoryException,
     EntityNotFoundError,
@@ -21,6 +26,11 @@ __all__ = [
     "APICallRepository",
     "AlertRepository",
     "OrganizationRepository",
+    "SnapshotRepository",
+    "TraceRepository",
+    "EvaluationRubricRepository",
+    "OrganizationMemberRepository",
+    "ProjectMemberRepository",
     "RepositoryException",
     "EntityNotFoundError",
     "EntityAlreadyExistsError",

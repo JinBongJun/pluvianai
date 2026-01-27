@@ -418,6 +418,9 @@ init({
               © {new Date().getFullYear()} AgentGuard. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
+              <Link href="/trust-center" className="text-slate-400 hover:text-white transition-colors text-sm">
+                Trust Center
+              </Link>
               <div className="flex items-center gap-4">
                 <a href="https://github.com/agentguard" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-colors" aria-label="GitHub">
                   <Github className="h-5 w-5" />

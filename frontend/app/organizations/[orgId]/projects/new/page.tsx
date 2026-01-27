@@ -6,6 +6,7 @@ import useSWR from 'swr';
 import OrgLayout from '@/components/layout/OrgLayout';
 import { projectsAPI, organizationsAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
+import posthog from 'posthog-js';
 
 export default function NewProjectPage() {
   const router = useRouter();
@@ -36,6 +37,13 @@ export default function NewProjectPage() {
         name: name.trim(),
         description: description.trim() || undefined,
         organization_id: Number(orgId),
+      });
+
+      // Track project creation event
+      posthog.capture('project_created', {
+        project_id: project.id,
+        organization_id: Number(orgId),
+        has_description: !!description.trim(),
       });
 
       toast.showToast('Project created successfully', 'success');

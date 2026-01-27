@@ -24,12 +24,27 @@ export default function ExportButton({ projectId, filters, className }: ExportBu
   const handleExportCSV = async () => {
     setExporting(true);
     try {
+      // CSV export returns streaming response, so we track start
+      posthog.capture('export_started', { format: 'csv', project_id: projectId });
+      
       await exportAPI.exportCSV(projectId, filters);
-      posthog.capture('export_started', { format: 'csv' });
+      
+      // Track export completion (CSV is streaming, so completion is immediate)
+      posthog.capture('export_completed', {
+        format: 'csv',
+        project_id: projectId,
+      });
+      
       toast.showToast('CSV export started', 'success');
       setShowModal(false);
     } catch (error: any) {
-      console.error('Failed to export CSV:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to export CSV:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, format: 'csv' } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to export CSV', 'error');
     } finally {
       setExporting(false);
@@ -39,12 +54,27 @@ export default function ExportButton({ projectId, filters, className }: ExportBu
   const handleExportJSON = async () => {
     setExporting(true);
     try {
-      await exportAPI.exportJSON(projectId, filters, includeData);
+      const result = await exportAPI.exportJSON(projectId, filters, includeData);
+      
+      // Track export completion event
+      posthog.capture('export_completed', {
+        format: 'json',
+        project_id: projectId,
+        include_data: includeData,
+        total_records: result.total_records || 0,
+      });
+      
       posthog.capture('export_started', { format: 'json', include_data: includeData });
       toast.showToast('JSON export started', 'success');
       setShowModal(false);
     } catch (error: any) {
-      console.error('Failed to export JSON:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to export JSON:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error, { extra: { projectId, format: 'json', includeData } });
+        });
+      }
       toast.showToast(error.response?.data?.detail || 'Failed to export JSON', 'error');
     } finally {
       setExporting(false);

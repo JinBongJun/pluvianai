@@ -1,82 +1,48 @@
-# 🛡️ AgentGuard: The AI Reliability Platform
+# 🗺️ AgentGuard Master Blueprint (YC-Optimized)
 
-This document serves as the master blueprint for AgentGuard, outlining the vision, architecture, and implementation phases.
-
-## 👤 Vision
-**Target**: The AI Product Engineer who fears "Silent Regressions."
-**Mission**: Move AI deployment from "Vibe-testing" to "Scientific reliability." AgentGuard is the infrastructure layer (The "Vercel for Agents") that makes AI updates predictable and safe.
+## 🎯 Global Vision
+AgentGuard is the **"Vercel for AI Reliability."** We move LLM development from "Vibe-testing" to "Scientific Reliability" by providing an active security layer and automated CI/CD for AI Agents.
 
 ---
 
-## 🏗️ High-Level Architecture
+## 🚀 Killer Features (The Winning Edge)
 
-```mermaid
-graph TD
-    User((User/Client)) --> Proxy[AgentGuard Proxy]
-    Proxy --> Provider[LLM Provider: OpenAI/Gemini]
-    
-    subgraph "AgentGuard Core"
-        Proxy -- "Clone (Async)" --> Snapshotter[Snapshot Engine]
-        Snapshotter --> DB[(Postgres Snapshot Store)]
-        Proxy -- "Middleware" --> PanicCheck{Panic Check}
-        PanicCheck -- "Yes" --> Block[503 Service Unavailable]
-        
-        Dashboard[Frontend Dashboard] --> ReplayService[Replay Engine]
-        ReplayService -- "Load Snapshots" --> DB
-        ReplayService -- "Execute Overrides" --> MultiProvider[New Models/Prompts]
-        
-        ReplayService --> Judge[LLM-as-a-Judge]
-        Judge -- "Score Rubrics" --> Dashboard
-    end
-```
+### 1. 🛡️ Production Guard (The Firewall)
+*   **The Problem**: AI "hallucinating" or leaking private data in production.
+*   **The Solution**: A multi-layered safety barrier that intercepts bad responses *before* they reach the user.
+*   **Tier Strategy**: 
+    *   **Free**: Monitoring only (Logs of dangerous responses).
+    *   **Pro ($49/mo)**: **Active Blocking**. Physically disconnects the socket if a policy is violated.
+
+### 2. 🧪 Regression Guard (Automated CI/CD)
+*   **The Problem**: Updating a prompt or model used to take hours of manual checking.
+*   **The Solution**: **"One-Click Regression Testing."** Automatically runs a "Golden Set" of 100 tests in parallel.
+*   **Tier Strategy**:
+    *   **Free**: Manual execution via UI.
+    *   **Pro ($49/mo)**: **CI/CD Integration**. Automatically fails a GitHub Pull Request if quality scores drop.
+
+### 3. 🔍 Auto-Mapping & Git-Sync (The Cockpit)
+*   **The Vision**: A "Railway-style" visual map that shows the flow of data between agents.
+*   **Uniqueness**: Click a box on the map to edit a prompt, and we sync that change back to your GitHub repository.
 
 ---
 
-## 🛠️ Key Features (MVP)
+## 🛠️ Implementation Phases
 
-### 1. Proxy (Zero-Friction Interception)
-*   **Auto-Capture**: Intercept all LLM requests by simply changing the Base URL.
-*   **Multi-Provider**: Full support for OpenAI, Anthropic, and Google APIs.
+### Phase 1: Engine Stabilization - ✅ COMPLETED
+*   Transparent Proxy (Base URL swap)
+*   Relational Snapshot Store (PostgreSQL)
+*   Standard Judge (GPT-4o-mini scoring)
 
-### 2. Snapshot/Replay
-*   **Production Context**: Automatically store production traffic for testing.
-*   **Regression Testing**: Re-run saved requests with new versions of models or prompts.
+### Phase 2: Production Guard (Security) - 🏗️ IN PROGRESS
+*   **PII Sanitizer**: Regex + Presidio masking.
+*   **Selective Panic**: Redis-backed kill switch.
+*   **Active Firewall**: Parallel streaming scanner to block toxicity/leaks (Pro feature).
 
-### 3. LLM-as-a-Judge
-*   **Evaluation Rubrics**: Define custom criteria for what a "good" response looks like.
-*   **Automated Scoring**: Use high-performance models (GPT-4o-mini) to score and detect regressions.
+### Phase 3: Regression Guard (Automation)
+*   **Golden Case Miner**: Automatic extraction of high-value test cases from production logs.
+*   **CI/CD Connector**: GitHub Actions integration to fail builds on quality regression.
 
-### 4. Panic Mode (Circuit Breaker)
-*   **Safety Lock**: Instantly block all AI traffic (<5ms) during emergencies via a global toggle.
-
-### 5. Projects, Auth & Organizations
-*   **Multi-Tenant**: Secure project management for multiple teams.
-*   **Access Control**: JWT-based authentication and organization-level permissions.
-
-### 6. Monitoring & Analysis
-*   **API Stats**: Track throughput, success rates, and latency.
-*   **Quality & Drift**: Monitor quality scores and detect performance shifts over time.
-*   **Cost Analysis**: Real-time tracking of LLM API expenditures.
-
----
-
-## 🚀 Future Vision: Phase 4 & Beyond
-
-### Phase 4: The Visual Control Plane (vIaC)
-*   **Agent Discovery**: Automatically scan source code to map out agent architecture.
-*   **Visual Orchestration**: Manage and monitor agents through an interactive "Railway-style" map.
-*   **Git-Sync Integration**: Sync UI-driven prompt updates directly back to the GitHub repository.
-
----
-
-## 🛡️ Coding Standards
-1.  **Strict Isolation**: `project_id` must be present in every DB query.
-2.  **Clean Architecture**: Controllers -> Services -> Repositories.
-3.  **Non-Blocking**: Heavy operations (Snapshotting, Judging) must never block the primary AI request path.
-4.  **Redis First**: Global states (Panic Mode) are checked in Redis for ultra-low latency.
-
----
-
-## 💰 Strategy & Roadmap
-*   **Switzerland Strategy**: Total neutrality. Migration tools to move between OpenAI, Anthropic, and Google with confidence.
-*   **Moat**: Deep integration into the developer's "Vibe-to-Code" loop.
+### Phase 4: Visual Control Plane
+*   Auto-Mapping (Dynamic Traces)
+*   Git-Sync (UI-to-Code integration)

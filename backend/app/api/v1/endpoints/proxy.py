@@ -6,13 +6,15 @@ import json
 import uuid
 import httpx
 from fastapi import APIRouter, Request, Response, HTTPException, status, Header, Depends, BackgroundTasks
+from fastapi.responses import StreamingResponse, JSONResponse
 from typing import Optional, Dict
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db, SessionLocal
 from app.models.project import Project
 from app.services.cache_service import cache_service
-from app.services.snapshot_service import snapshot_service
+from app.services.firewall_service import firewall_service
+from app.core.dependencies import get_snapshot_service
 from app.middleware.usage_middleware import check_api_call_limit
 from app.utils.circuit_breaker import CircuitBreaker, CircuitBreakerOpen
 from app.utils.bulkhead import Bulkhead
@@ -34,6 +36,78 @@ PROVIDER_URLS = {
 
 _breaker = CircuitBreaker(failure_threshold=5, recovery_time_seconds=30, exception_types=(httpx.RequestError,))
 _bulkhead = Bulkhead(max_concurrent=20)
+
+
+async def _stream_with_firewall(
+    response: httpx.Response,
+    project_id: int,
+    rules: list,
+    resp_headers: dict,
+    trace_id: str
+) -> StreamingResponse:
+    """
+    Stream response with real-time firewall scanning
+    
+    Args:
+        response: httpx response object
+        project_id: Project ID
+        rules: List of firewall rules
+        resp_headers: Response headers to include
+        trace_id: Trace ID
+        
+    Returns:
+        StreamingResponse with firewall scanning
+    """
+    accumulated_text = ""
+    
+    async def generate():
+        nonlocal accumulated_text
+        async for chunk_bytes in response.aiter_bytes():
+            try:
+                # Decode chunk
+                chunk = chunk_bytes.decode("utf-8", errors="ignore")
+                accumulated_text += chunk
+                
+                # Scan chunk with firewall
+                scan_result = await firewall_service.scan_streaming_response(
+                    response_chunk=chunk,
+                    project_id=project_id,
+                    rules=rules,
+                    accumulated_text=accumulated_text
+                )
+                
+                # If blocked, stop streaming and return error
+                if scan_result.get("blocked"):
+                    logger.warning(
+                        f"Firewall blocked response for project {project_id}: "
+                        f"{scan_result.get('reason')} (rule: {scan_result.get('rule_id')})"
+                    )
+                    # Return error JSON instead of continuing stream
+                    error_response = {
+                        "error": {
+                            "message": f"AgentGuard Firewall: {scan_result.get('reason')}",
+                            "type": "firewall_blocked",
+                            "severity": scan_result.get("severity"),
+                            "rule_id": scan_result.get("rule_id")
+                        }
+                    }
+                    yield f"data: {json.dumps(error_response)}\n\n".encode("utf-8")
+                    return
+                
+                # Not blocked: yield chunk as-is
+                yield chunk_bytes
+                
+            except Exception as e:
+                logger.error(f"Firewall streaming error: {str(e)}")
+                # On error, continue streaming (fail-open for resilience)
+                yield chunk_bytes
+    
+    return StreamingResponse(
+        generate(),
+        status_code=response.status_code,
+        headers=resp_headers,
+        media_type=response.headers.get("content-type", "text/event-stream"),
+    )
 
 
 async def _proxy_request(
@@ -86,6 +160,19 @@ async def _proxy_request(
     base_url = PROVIDER_URLS[provider]
     target_url = f"{base_url}/{path}"
 
+    # SSRF Protection: Validate URL before making request
+    from app.utils.ssrf_protection import validate_provider_url
+    
+    if not validate_provider_url(target_url, provider, PROVIDER_URLS):
+        logger.error(
+            f"SSRF protection blocked request to: {target_url}",
+            extra={"provider": provider, "path": path, "project_id": x_project_id}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid or unsafe URL. SSRF protection blocked this request."
+        )
+
     # Get request body
     body = await request.body()
 
@@ -97,14 +184,32 @@ async def _proxy_request(
             # Parse body to JSON to capture context
             payload = json.loads(body)
             
-            # Sub-task to handle DB operations in its own session
+            # Sub-task to handle snapshot (async buffering via Redis Stream)
             def bg_snapshot(p_id: int, t_id: str, prov: str, mod: str, pay: Dict):
                 with SessionLocal() as bg_db:
                     try:
-                        snapshot_service.create_trace(bg_db, p_id, t_id)
-                        snapshot_service.save_snapshot(bg_db, t_id, prov, mod, pay)
+                        from app.services.snapshot_service import SnapshotService
+                        from app.infrastructure.repositories.trace_repository import TraceRepository
+                        from app.infrastructure.repositories.snapshot_repository import SnapshotRepository
+                        
+                        # Create service instance for background task
+                        trace_repo = TraceRepository(bg_db)
+                        snapshot_repo = SnapshotRepository(bg_db)
+                        bg_snapshot_service = SnapshotService(trace_repo, snapshot_repo, bg_db)
+                        
+                        # Create trace first
+                        bg_snapshot_service.create_trace(p_id, t_id)
+                        
+                        # Save snapshot (will use Redis Stream if available, fail-silent if not)
+                        result = bg_snapshot_service.save_snapshot(t_id, prov, mod, pay, project_id=p_id)
+                        
+                        # Only commit if snapshot was saved directly (fallback mode)
+                        if result is not None:
+                            bg_db.commit()
+                        # If result is None, snapshot was queued to Redis Stream (async)
                     except Exception as ex:
-                        logger.error(f"Background snapshot error: {str(ex)}")
+                        logger.warning(f"Background snapshot error (fail-silent): {str(ex)}")
+                        bg_db.rollback()
 
             background_tasks.add_task(
                 bg_snapshot, 
@@ -151,6 +256,16 @@ async def _proxy_request(
         for attempt in range(3):
             try:
                 async with _bulkhead.acquire():
+                    # Check if this is a streaming request
+                    is_streaming_request = False
+                    if body and request.method == "POST":
+                        try:
+                            payload = json.loads(body)
+                            is_streaming_request = payload.get("stream", False)
+                        except (json.JSONDecodeError, KeyError):
+                            pass
+                    
+                    # Use stream=True for streaming requests to enable chunk-by-chunk processing
                     response = await _breaker.call_async(
                         client.request,
                         method=request.method,
@@ -158,6 +273,7 @@ async def _proxy_request(
                         headers=headers,
                         content=body,
                         params=dict(request.query_params),
+                        stream=is_streaming_request,  # Enable streaming for stream=true requests
                     )
                 
                 # Update metrics
@@ -165,10 +281,41 @@ async def _proxy_request(
                     {"closed": 0, "open": 1, "half-open": 2}.get(_breaker.state, 0)
                 )
 
-                # Inject Trace-ID into response and return
+                # Inject Trace-ID and Error Namespace into response
                 resp_headers = dict(response.headers)
                 resp_headers["X-AgentGuard-Trace-ID"] = trace_id
+                resp_headers["X-AgentGuard-Origin"] = "Upstream"  # Response from original LLM
                 
+                # Check if this is a streaming response (chat completions with stream=true)
+                content_type = response.headers.get("content-type", "")
+                is_streaming = (
+                    "text/event-stream" in content_type or
+                    "application/x-ndjson" in content_type or
+                    (x_project_id and request.method == "POST" and body)
+                )
+                
+                # If streaming and project_id provided, apply firewall
+                if is_streaming and x_project_id:
+                    try:
+                        project_id = int(x_project_id)
+                        # Get firewall rules for this project
+                        rules = firewall_service.get_project_firewall_rules(project_id, db)
+                        
+                        if rules:
+                            # Stream with firewall scanning
+                            return await _stream_with_firewall(
+                                response,
+                                project_id,
+                                rules,
+                                resp_headers,
+                                trace_id
+                            )
+                    except (ValueError, TypeError):
+                        pass
+                    except Exception as e:
+                        logger.warning(f"Firewall check failed: {str(e)}")
+                
+                # Non-streaming or no firewall rules: return as-is
                 return Response(
                     content=response.content,
                     status_code=response.status_code,
@@ -177,17 +324,44 @@ async def _proxy_request(
                 )
             except CircuitBreakerOpen:
                 circuit_breaker_open_total.labels(service="proxy").inc()
-                raise HTTPException(
+                from fastapi.responses import JSONResponse
+                error_response = JSONResponse(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Upstream temporarily unavailable (circuit open)",
+                    content={"error": "Upstream temporarily unavailable (circuit open)"},
+                    headers={"X-AgentGuard-Origin": "Proxy"},  # AgentGuard proxy error
                 )
-            except Exception as e:
+                return error_response
+            except httpx.RequestError as e:
+                # Network error
                 last_error = e
                 retry_attempts_total.labels(service="proxy").inc()
                 if attempt == 2:
-                    raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(last_error))
+                    from fastapi.responses import JSONResponse
+                    error_response = JSONResponse(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        content={"error": str(last_error)},
+                        headers={"X-AgentGuard-Origin": "Network"},  # Network error
+                    )
+                    return error_response
+            except Exception as e:
+                # AgentGuard proxy error
+                last_error = e
+                retry_attempts_total.labels(service="proxy").inc()
+                if attempt == 2:
+                    from fastapi.responses import JSONResponse
+                    error_response = JSONResponse(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        content={"error": str(last_error)},
+                        headers={"X-AgentGuard-Origin": "Proxy"},  # AgentGuard error
+                    )
+                    return error_response
         
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Proxy failed after retries")
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={"error": "Proxy failed after retries"},
+            headers={"X-AgentGuard-Origin": "Proxy"},
+        )
 
 
 @router.get("/{provider}/{path:path}")

@@ -41,3 +41,4 @@ class QualityScore(Base):
     # Relationships
     api_call = relationship("APICall", back_populates="quality_scores")
     project = relationship("Project", back_populates="quality_scores")
+    judge_feedback = relationship("JudgeFeedback", back_populates="evaluation", cascade="all, delete-orphan")

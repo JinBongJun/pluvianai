@@ -12,6 +12,8 @@ from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole
 from app.core.decorators import handle_errors
 from app.core.logging_config import logger
+from app.core.dependencies import get_project_member_service, get_user_service
+from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.services.cache_service import cache_service
 from app.middleware.usage_middleware import check_team_member_limit
 from app.services.activity_logger import activity_logger
@@ -81,6 +83,8 @@ async def add_project_member(
     member_data: ProjectMemberCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    member_service = Depends(get_project_member_service),
+    user_service = Depends(get_user_service),
 ):
     """Add a member to project (owner/admin only)"""
     logger.info(
@@ -91,8 +95,8 @@ async def add_project_member(
     # Check access (owner or admin only)
     project = check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
 
-    # Find user by email
-    user = db.query(User).filter(User.email == member_data.user_email).first()
+    # Find user by email using service
+    user = user_service.get_user_by_email(member_data.user_email)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -111,19 +115,18 @@ async def add_project_member(
             detail=error_msg or "Team member limit reached. Please upgrade your plan.",
         )
 
-    # Check if user is already a member
-    existing = (
-        db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == user.id).first()
-    )
-
-    if existing:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is already a member of this project")
-
-    # Create member
-    member = ProjectMember(project_id=project_id, user_id=user.id, role=member_data.role.value)
-    db.add(member)
-    db.commit()
-    db.refresh(member)
+    try:
+        # Use service to add member (RequestDTO → Domain Model conversion)
+        member = member_service.add_member(
+            project_id=project_id,
+            user_email=member_data.user_email,
+            role=member_data.role.value
+        )
+        # Transaction is committed by get_db() dependency
+    except EntityAlreadyExistsError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
     # Invalidate cache
     cache_service.invalidate_project_cache(project_id)
@@ -158,7 +161,11 @@ async def add_project_member(
 @router.get("/projects/{project_id}/members", response_model=List[ProjectMemberResponse])
 @handle_errors
 async def list_project_members(
-    project_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    member_service = Depends(get_project_member_service),
+    user_service = Depends(get_user_service),
 ):
     """List all members of a project (all members can view)"""
     # Check access (any member can view)
@@ -170,16 +177,11 @@ async def list_project_members(
     if cached:
         return cached
 
-    # Get all members with eager loading (N+1 문제 해결)
-    members = (
-        db.query(ProjectMember)
-        .options(joinedload(ProjectMember.user))
-        .filter(ProjectMember.project_id == project_id)
-        .all()
-    )
+    # Get all members using service
+    members = member_service.get_members_by_project_id(project_id)
 
-    # Get owner info with eager loading
-    owner = db.query(User).filter(User.id == project.owner_id).first()
+    # Get owner info using service
+    owner = user_service.get_user_by_id(project.owner_id)
 
     # Build response
     result = []
@@ -227,6 +229,8 @@ async def update_project_member_role(
     member_data: ProjectMemberUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    member_service = Depends(get_project_member_service),
+    user_service = Depends(get_user_service),
 ):
     """Update a member's role (owner/admin only)"""
     logger.info(
@@ -241,24 +245,21 @@ async def update_project_member_role(
     if project.owner_id == user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change owner role")
 
-    # Find member
-    member = (
-        db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == user_id).first()
+    # Use service to update member role
+    member = member_service.update_member_role(
+        project_id=project_id,
+        user_id=user_id,
+        new_role=member_data.role.value
     )
 
     if not member:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
 
-    # Update role
-    member.role = member_data.role.value
-    db.commit()
-    db.refresh(member)
-
     # Invalidate cache
     cache_service.invalidate_project_cache(project_id)
 
-    # Get user info for logging
-    user = db.query(User).filter(User.id == user_id).first()
+    # Get user info for logging using service
+    user = user_service.get_user_by_id(user_id)
 
     # Log activity
     activity_logger.log_activity(
@@ -286,7 +287,12 @@ async def update_project_member_role(
 
 @router.delete("/projects/{project_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_project_member(
-    project_id: int, user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    project_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    member_service = Depends(get_project_member_service),
+    user_service = Depends(get_user_service),
 ):
     """Remove a member from project (owner/admin only)"""
     # Check access (owner or admin only)
@@ -296,19 +302,13 @@ async def remove_project_member(
     if project.owner_id == user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove project owner")
 
-    # Find and remove member
-    member = (
-        db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == user_id).first()
-    )
+    # Get user info before deletion using service
+    user = user_service.get_user_by_id(user_id)
 
-    if not member:
+    # Use service to remove member
+    removed = member_service.remove_member(project_id, user_id)
+    if not removed:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
-
-    # Get user info before deletion
-    user = db.query(User).filter(User.id == user_id).first()
-
-    db.delete(member)
-    db.commit()
 
     # Log activity
     activity_logger.log_activity(

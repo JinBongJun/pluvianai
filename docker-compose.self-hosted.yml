@@ -1,0 +1,135 @@
+version: '3.8'
+
+# AgentGuard Self-hosted Deployment
+# For Enterprise customers who need to run AgentGuard on their own infrastructure
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: agentguard-postgres-selfhosted
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agentguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-production}
+      POSTGRES_DB: ${POSTGRES_DB:-agentguard}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agentguard}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: agentguard-redis-selfhosted
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-change-me-in-production}
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: agentguard-backend-selfhosted
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-agentguard}:${POSTGRES_PASSWORD:-change-me-in-production}@postgres:5432/${POSTGRES_DB:-agentguard}
+      
+      # Redis
+      REDIS_URL: redis://:${REDIS_PASSWORD:-change-me-in-production}@redis:6379/0
+      
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production-generate-strong-key}
+      ALGORITHM: HS256
+      
+      # Self-hosted mode
+      SELF_HOSTED_MODE: "true"
+      SELF_HOSTED_LICENSE_KEY: ${SELF_HOSTED_LICENSE_KEY:-}
+      
+      # CORS (configure for your domain)
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      
+      # Optional: LLM Provider API Keys (if using AgentGuard's proxy)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      
+      # Optional: Email (Resend)
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-AgentGuard}
+      
+      # Optional: Slack
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      
+      # Optional: Sentry
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-self-hosted}
+      
+      # Feature flags
+      ENABLE_FREE_PLAN_HARD_LIMIT: ${ENABLE_FREE_PLAN_HARD_LIMIT:-false}
+      
+      # Port
+      PORT: 8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: agentguard-frontend-selfhosted
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      # Optional: Analytics
+      NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
+      NEXT_PUBLIC_POSTHOG_HOST: ${NEXT_PUBLIC_POSTHOG_HOST:-}
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: agentguard-network

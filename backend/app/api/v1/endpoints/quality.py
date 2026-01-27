@@ -12,6 +12,9 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access
 from app.core.decorators import handle_errors
+from app.core.feature_access import check_feature_access
+from app.core.logging_config import logger
+from app.core.responses import success_response
 from app.models.user import User
 from app.models.project import Project
 from app.models.quality_score import QualityScore
@@ -62,7 +65,7 @@ class EvaluateRequest(BaseModel):
     required_fields: List[str] | None = None
 
 
-@router.post("/evaluate", response_model=List[QualityScoreResponse])
+@router.post("/evaluate")
 @handle_errors
 async def evaluate_quality(
     project_id: int = Query(..., description="Project ID"),
@@ -70,16 +73,40 @@ async def evaluate_quality(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Evaluate quality of API calls"""
+    """
+    Evaluate quality of API calls
+    Following API_REFERENCE.md: Returns standard response format
+    """
+    logger.info(
+        f"User {current_user.id} requested quality evaluation for project {project_id}",
+        extra={
+            "user_id": current_user.id,
+            "project_id": project_id,
+            "api_call_ids": request.api_call_ids,
+            "has_schema": request.expected_schema is not None,
+        }
+    )
+    
     # Verify project access (any member can evaluate)
     project = check_project_access(project_id, current_user, db)
 
     # Check if advanced quality checks are available
+    # Advanced quality checks require Startup+ plan, basic checks are always available
     subscription_service = SubscriptionService(db)
-    use_advanced = subscription_service.check_feature_access(project.owner_id, "quality_checks")
-    # Advanced quality checks require "advanced" level, basic checks are always available
     plan_info = subscription_service.get_user_plan(project.owner_id)
     use_advanced = plan_info["features"].get("quality_checks") == "advanced"
+    
+    # If user requests advanced features but doesn't have access, raise exception
+    if request.expected_schema or request.required_fields:
+        # Schema validation is an advanced feature
+        check_feature_access(
+            db=db,
+            user_id=current_user.id,
+            feature_name="quality_checks",
+            required_plan="startup",
+            message="Advanced quality checks (schema validation) require Startup plan or higher. Basic quality checks are available on all plans."
+        )
+        use_advanced = True
 
     # Get API calls to evaluate
     if request.api_call_ids:
@@ -108,10 +135,16 @@ async def evaluate_quality(
         use_advanced=use_advanced,
     )
 
-    return scores
+    logger.info(
+        f"Quality evaluation completed for project {project_id}: {len(scores)} scores generated",
+        extra={"user_id": current_user.id, "project_id": project_id, "score_count": len(scores)}
+    )
+
+    # Return using standard response format
+    return success_response(data=scores)
 
 
-@router.get("/scores", response_model=List[QualityScoreResponse])
+@router.get("/scores")
 @handle_errors
 async def list_quality_scores(
     project_id: int = Query(..., description="Project ID"),
@@ -120,9 +153,20 @@ async def list_quality_scores(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List quality scores for a project"""
+    """
+    List quality scores for a project
+    Following API_REFERENCE.md: Returns standard response format with pagination
+    """
+    logger.info(
+        f"User {current_user.id} requested quality scores for project {project_id} (limit: {limit}, offset: {offset})",
+        extra={"user_id": current_user.id, "project_id": project_id, "limit": limit, "offset": offset}
+    )
+    
     # Verify project access (any member can view)
     project = check_project_access(project_id, current_user, db)
+
+    # Get total count for pagination
+    total = db.query(QualityScore).filter(QualityScore.project_id == project_id).count()
 
     scores = (
         db.query(QualityScore)
@@ -133,17 +177,34 @@ async def list_quality_scores(
         .all()
     )
 
-    return scores
+    logger.info(
+        f"Quality scores retrieved for project {project_id}: {len(scores)} scores (total: {total})",
+        extra={"user_id": current_user.id, "project_id": project_id, "count": len(scores), "total": total}
+    )
+
+    # Return using standard response format with pagination
+    from app.core.responses import paginated_response
+    page = (offset // limit) + 1
+    return paginated_response(data=scores, page=page, per_page=limit, total=total)
 
 
-@router.get("/stats", response_model=QualityStatsResponse)
+@router.get("/stats")
+@handle_errors
 async def get_quality_stats(
     project_id: int = Query(..., description="Project ID"),
     days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get quality statistics for a project"""
+    """
+    Get quality statistics for a project
+    Following API_REFERENCE.md: Returns standard response format
+    """
+    logger.info(
+        f"User {current_user.id} requested quality stats for project {project_id} (days: {days})",
+        extra={"user_id": current_user.id, "project_id": project_id, "days": days}
+    )
+    
     # Verify project access (any member can view)
     project = check_project_access(project_id, current_user, db)
 
@@ -178,7 +239,7 @@ async def get_quality_stats(
             period_end=period_end,
         )
 
-    return QualityStatsResponse(
+    result = QualityStatsResponse(
         average_score=float(stats.avg_score) if stats.avg_score else 0.0,
         min_score=float(stats.min_score) if stats.min_score else 0.0,
         max_score=float(stats.max_score) if stats.max_score else 0.0,
@@ -186,3 +247,11 @@ async def get_quality_stats(
         period_start=period_start,
         period_end=period_end,
     )
+
+    logger.info(
+        f"Quality stats retrieved for project {project_id}: avg={result.average_score}, total={result.total_evaluations}",
+        extra={"user_id": current_user.id, "project_id": project_id, "avg_score": result.average_score}
+    )
+
+    # Return using standard response format
+    return success_response(data=result.dict())

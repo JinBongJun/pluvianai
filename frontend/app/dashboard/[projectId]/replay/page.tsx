@@ -382,7 +382,7 @@ export default function ReplayPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-slate-400 uppercase mb-2">Prompt Criteria (The Judge's Rulebook)</label>
+                                <label className="block text-xs font-medium text-slate-400 uppercase mb-2">Prompt Criteria (The Judge&apos;s Rulebook)</label>
                                 <textarea
                                     rows={5}
                                     placeholder="Instructions for the AI Judge. Example: Evaluate if the response follows the corporate tone. If it's too casual, score 1."

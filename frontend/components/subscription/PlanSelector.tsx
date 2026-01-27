@@ -7,6 +7,7 @@ import Badge from '@/components/ui/Badge';
 import { Check, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { toFixedSafe } from '@/lib/format';
+import posthog from 'posthog-js';
 
 interface Plan {
   plan_type: string;
@@ -38,7 +39,13 @@ export default function PlanSelector({ currentPlan, onSelectPlan }: PlanSelector
       const data = await subscriptionAPI.getPlans();
       setPlans(data);
     } catch (error) {
-      console.error('Failed to load plans:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load plans:', error);
+      } else {
+        import('@sentry/nextjs').then((Sentry) => {
+          Sentry.captureException(error as Error);
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -65,11 +72,25 @@ export default function PlanSelector({ currentPlan, onSelectPlan }: PlanSelector
     } else {
       try {
         const result = await subscriptionAPI.upgrade(planType);
+        
+        // Track upgrade event
+        posthog.capture('free_to_pro_upgrade', {
+          from_plan: currentPlan,
+          to_plan: planType,
+          has_checkout_url: !!result.checkout_url,
+        });
+        
         if (result.checkout_url) {
           window.location.href = result.checkout_url;
         }
       } catch (error) {
-        console.error('Failed to upgrade:', error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to upgrade:', error);
+        } else {
+          import('@sentry/nextjs').then((Sentry) => {
+            Sentry.captureException(error as Error, { extra: { planType } });
+          });
+        }
       }
     }
   };

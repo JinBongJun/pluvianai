@@ -1,6 +1,8 @@
 """
-Pricing updater service for automatic model pricing updates
-This service can be extended to fetch pricing from provider APIs or websites
+Pricing updater service for model pricing information
+
+Pricing is maintained manually and updated periodically.
+This service provides a simple interface for accessing pricing data.
 """
 
 from typing import Dict, Any
@@ -79,83 +81,65 @@ class PricingUpdater:
         },
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize pricing updater with base pricing data."""
         self.pricing = self.BASE_PRICING.copy()
         self.last_updated = datetime.utcnow()
 
     def get_pricing(self) -> Dict[str, Dict[str, Dict[str, float]]]:
-        """Get current pricing"""
+        """
+        Get current pricing for all providers and models.
+        
+        Returns:
+            Nested dict: {provider: {model: {input: float, output: float}}}
+        """
         return self.pricing
 
-    def update_pricing(self, provider: str, model: str, input_price: float, output_price: float):
-        """Update pricing for a specific model"""
+    def update_pricing(
+        self,
+        provider: str,
+        model: str,
+        input_price: float,
+        output_price: float
+    ) -> None:
+        """
+        Update pricing for a specific model.
+        
+        Args:
+            provider: Provider name (e.g., 'openai', 'anthropic')
+            model: Model name (e.g., 'gpt-4-turbo', 'claude-3-sonnet')
+            input_price: Input price per 1M tokens
+            output_price: Output price per 1M tokens
+        """
         if provider not in self.pricing:
             self.pricing[provider] = {}
 
         self.pricing[provider][model] = {"input": input_price, "output": output_price}
         self.last_updated = datetime.utcnow()
-        logger.info(f"Updated pricing for {provider}/{model}: ${input_price}/${output_price} per 1M tokens")
+        logger.info(
+            f"Updated pricing for {provider}/{model}: ${input_price}/${output_price} per 1M tokens"
+        )
 
     def get_model_pricing(self, provider: str, model: str) -> Dict[str, float]:
-        """Get pricing for a specific model"""
+        """
+        Get pricing for a specific model.
+        
+        Args:
+            provider: Provider name
+            model: Model name
+            
+        Returns:
+            Dict with 'input' and 'output' prices per 1M tokens
+            Returns default pricing if model not found
+        """
         provider_pricing = self.pricing.get(provider, {})
-        model_pricing = provider_pricing.get(model, {})
+        model_pricing = provider_pricing.get(model)
 
         if not model_pricing:
-            # Return default pricing
             logger.warning(f"Pricing not found for {provider}/{model}, using defaults")
             return {"input": 1.0, "output": 2.0}
 
         return model_pricing
-
-    async def fetch_pricing_from_openai(self) -> Dict[str, Any]:
-        """
-        Fetch pricing from OpenAI API (future implementation)
-
-        Note: OpenAI doesn't provide a public pricing API, so this would
-        need to scrape their website or use a pricing database.
-        """
-        # TODO: Implement OpenAI pricing fetch
-        # This could:
-        # 1. Scrape OpenAI pricing page
-        # 2. Use a pricing API service
-        # 3. Maintain a pricing database with manual updates
-        logger.info("OpenAI pricing fetch not yet implemented")
-        return {}
-
-    async def fetch_pricing_from_anthropic(self) -> Dict[str, Any]:
-        """
-        Fetch pricing from Anthropic API (future implementation)
-        """
-        # TODO: Implement Anthropic pricing fetch
-        logger.info("Anthropic pricing fetch not yet implemented")
-        return {}
-
-    async def update_all_pricing(self):
-        """
-        Update pricing for all providers
-
-        This should be called periodically (e.g., daily via cron job)
-        """
-        logger.info("Starting pricing update...")
-
-        try:
-            # Fetch from OpenAI
-            openai_pricing = await self.fetch_pricing_from_openai()
-            if openai_pricing:
-                # Update OpenAI pricing
-                pass
-
-            # Fetch from Anthropic
-            anthropic_pricing = await self.fetch_pricing_from_anthropic()
-            if anthropic_pricing:
-                # Update Anthropic pricing
-                pass
-
-            self.last_updated = datetime.utcnow()
-            logger.info(f"Pricing update completed at {self.last_updated}")
-        except Exception as e:
-            logger.error(f"Error updating pricing: {e}")
 
 
 # Global instance

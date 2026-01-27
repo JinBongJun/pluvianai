@@ -110,14 +110,15 @@ async def export_csv(
 
     output.seek(0)
 
-    # Return as streaming response
+    # Return as streaming response with data ownership header
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={
             "Content-Disposition": (
                 f"attachment; filename=api-calls-{project_id}-" f"{datetime.now().strftime('%Y%m%d')}.csv"
-            )
+            ),
+            "X-Data-Ownership": "Your data is yours. You can export it anytime.",
         },
     )
 
@@ -183,10 +184,15 @@ async def export_json(
 
         data.append(call_data)
 
-    # Return as JSON response
+    # Return as JSON response with data ownership message
     return {
         "project_id": project_id,
         "exported_at": datetime.utcnow().isoformat(),
         "total_records": len(data),
         "data": data,
+        "data_ownership": {
+            "message": "Your data is yours. You can export it anytime.",
+            "gdpr_compliant": True,
+            "export_format": "JSON",
+        },
     }

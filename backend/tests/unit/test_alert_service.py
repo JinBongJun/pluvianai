@@ -4,6 +4,7 @@ Unit tests for AlertService - Enterprise-grade comprehensive testing
 import pytest
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from app.services.alert_service import AlertService
+from app.infrastructure.repositories.alert_repository import AlertRepository
 from app.models.alert import Alert
 from app.models.project import Project
 from app.models.user import User
@@ -13,12 +14,18 @@ from app.models.user import User
 class TestAlertService:
     """Comprehensive tests for Alert Service - all edge cases and error conditions"""
     
+    def _create_alert_service(self, db):
+        """Helper to create AlertService with proper dependencies"""
+        alert_repo = AlertRepository(db)
+        return AlertService(alert_repo, db)
+    
     # ========== Error Cases: Database Session ==========
     
     @pytest.mark.asyncio
     async def test_send_email_no_db(self, db, test_project, test_user):
         """Test sending email alert without database session"""
-        service = AlertService()
+        alert_repo = AlertRepository(db)
+        service = AlertService(alert_repo, db)
         
         alert = Alert(
             project_id=test_project.id,
@@ -41,85 +48,89 @@ class TestAlertService:
     @pytest.mark.asyncio
     async def test_send_email_project_not_found(self, db, test_user):
         """Test sending email alert when project not found"""
-        service = AlertService()
-        service.email_enabled = True
+        alert_repo = AlertRepository(db)
+        service = AlertService(alert_repo, db)
+        # Enable email by mocking email service
+        with patch.object(service.email_service, 'enabled', True):
         
-        alert = Alert(
-            project_id=99999,  # Non-existent project
-            alert_type="drift",
-            severity="high",
-            title="Test",
-            message="Test",
-            notification_channels=["email"]
-        )
-        db.add(alert)
-        db.commit()
-        
-        result = await service._send_email(alert, db=db)
-        
-        assert result["status"] == "error"
-        assert "Project not found" in result["message"]
+            alert = Alert(
+                project_id=99999,  # Non-existent project
+                alert_type="drift",
+                severity="high",
+                title="Test",
+                message="Test",
+                notification_channels=["email"]
+            )
+            db.add(alert)
+            db.commit()
+            
+            result = await service._send_email(alert, db=db)
+            
+            assert result["status"] == "error"
+            assert "Project not found" in result["message"]
     
     @pytest.mark.asyncio
     async def test_send_email_user_not_found(self, db, test_user):
         """Test sending email alert when user not found"""
-        service = AlertService()
-        service.email_enabled = True
+        service = self._create_alert_service(db)
+        # Enable email by mocking email service
+        with patch.object(service.email_service, 'enabled', True):
         
-        # Create project with owner
-        project = Project(name="Test Project", description="Test", owner_id=test_user.id)
-        db.add(project)
-        db.commit()
-        db.refresh(project)
-        
-        alert = Alert(
-            project_id=project.id,
-            alert_type="drift",
-            severity="high",
-            title="Test",
-            message="Test",
-            notification_channels=["email"]
-        )
-        db.add(alert)
-        db.commit()
-        
-        # Set owner_id to non-existent user ID (simulate user deleted)
-        project.owner_id = 99999
-        db.commit()
-        
-        result = await service._send_email(alert, db=db)
-        
-        assert result["status"] == "error"
-        assert "User email not found" in result["message"]
+            # Create project with owner
+            project = Project(name="Test Project", description="Test", owner_id=test_user.id)
+            db.add(project)
+            db.commit()
+            db.refresh(project)
+            
+            alert = Alert(
+                project_id=project.id,
+                alert_type="drift",
+                severity="high",
+                title="Test",
+                message="Test",
+                notification_channels=["email"]
+            )
+            db.add(alert)
+            db.commit()
+            
+            # Set owner_id to non-existent user ID (simulate user deleted)
+            project.owner_id = 99999
+            db.commit()
+            
+            result = await service._send_email(alert, db=db)
+            
+            assert result["status"] == "error"
+            assert "User not found or email not set" in result["message"]
     
     # ========== Edge Cases: Email Configuration ==========
     
     @pytest.mark.asyncio
     async def test_send_email_disabled(self, db, test_project, test_user):
         """Test sending email alert when email is disabled"""
-        service = AlertService()
-        service.email_enabled = False
+        service = self._create_alert_service(db)
+        # Disable email by mocking email service
+        with patch.object(service.email_service, 'enabled', False):
         
-        alert = Alert(
-            project_id=test_project.id,
-            alert_type="drift",
-            severity="high",
-            title="Test",
-            message="Test",
-            notification_channels=["email"]
-        )
-        db.add(alert)
-        db.commit()
-        
-        result = await service._send_email(alert, db=db)
-        
-        assert result["status"] == "skipped"
-        assert "Email not enabled" in result["message"]
+            alert = Alert(
+                project_id=test_project.id,
+                alert_type="drift",
+                severity="high",
+                title="Test",
+                message="Test",
+                notification_channels=["email"]
+            )
+            db.add(alert)
+            db.commit()
+            
+            result = await service._send_email(alert, db=db)
+            
+            assert result["status"] == "error"
+            assert "Email notifications are disabled" in result["message"]
     
     @pytest.mark.asyncio
     async def test_send_email_no_resend_key(self, db, test_project, test_user):
         """Test sending email alert when Resend API key not configured"""
-        service = AlertService()
+        service = self._create_alert_service(db)
         service.email_enabled = True
         
         alert = Alert(
@@ -148,7 +159,7 @@ class TestAlertService:
     @pytest.mark.asyncio
     async def test_send_email_success(self, db, test_project, test_user):
         """Test successfully sending email alert"""
-        service = AlertService()
+        service = self._create_alert_service(db)
         service.email_enabled = True
         
         alert = Alert(
@@ -183,7 +194,7 @@ class TestAlertService:
     @pytest.mark.asyncio
     async def test_send_email_different_severities(self, db, test_project, test_user):
         """Test sending email alerts with different severities"""
-        service = AlertService()
+        service = self._create_alert_service(db)
         service.email_enabled = True
         
         severities = ["critical", "high", "medium", "low"]
@@ -223,7 +234,7 @@ class TestAlertService:
     @pytest.mark.asyncio
     async def test_send_email_resend_not_installed(self, db, test_project, test_user):
         """Test sending email when Resend library not installed"""
-        service = AlertService()
+        service = self._create_alert_service(db)
         service.email_enabled = True
         
         alert = Alert(
@@ -247,7 +258,7 @@ class TestAlertService:
     @pytest.mark.asyncio
     async def test_send_email_resend_api_error(self, db, test_project, test_user):
         """Test sending email when Resend API returns error"""
-        service = AlertService()
+        service = self._create_alert_service(db)
         service.email_enabled = True
         
         alert = Alert(
@@ -276,7 +287,7 @@ class TestAlertService:
     @pytest.mark.asyncio
     async def test_send_alert_single_channel(self, db, test_project, test_user):
         """Test sending alert to single channel"""
-        service = AlertService()
+        service = self._create_alert_service(db)
         service.email_enabled = True
         
         alert = Alert(
@@ -302,7 +313,7 @@ class TestAlertService:
     @pytest.mark.asyncio
     async def test_send_alert_multiple_channels(self, db, test_project, test_user):
         """Test sending alert to multiple channels"""
-        service = AlertService()
+        service = self._create_alert_service(db)
         service.email_enabled = True
         
         alert = Alert(
@@ -335,7 +346,7 @@ class TestAlertService:
     @pytest.mark.asyncio
     async def test_send_alert_channel_error_does_not_stop_others(self, db, test_project, test_user):
         """Test that one channel error doesn't stop other channels"""
-        service = AlertService()
+        service = self._create_alert_service(db)
         service.email_enabled = True
         
         alert = Alert(

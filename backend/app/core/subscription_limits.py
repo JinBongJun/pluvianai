@@ -8,6 +8,8 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
     "free": {  # $0 - Onboarding + 문제 발견 압박용
         "projects": 100,
         "api_calls_per_month": 1000,
+        "snapshots_per_month": 500,  # Free plan snapshot limit
+        "judge_calls_per_month": 100,  # Free plan Judge call limit
         "team_members_per_project": 1,
         "data_retention_days": 7,
         "features": {
@@ -18,9 +20,9 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
             "error_monitoring": False,
             "alerts": False,  # No alerts at all
             "multi_model_comparison": False,
-            "agent_chain_profiler": False,
-            "reports": False,
             "cost_anomaly_detection": False,
+            "auto_mapping": False,  # Pro feature
+            "production_guard": False,  # Pro feature
         },
     },
     "indie": {  # $19/month - Personal/Indie developers
@@ -36,8 +38,6 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
             "error_monitoring": True,
             "alerts": "email",  # Email alerts only
             "multi_model_comparison": False,
-            "agent_chain_profiler": False,
-            "reports": "manual",  # Manual report generation
             "cost_anomaly_detection": True,
         },
     },
@@ -58,7 +58,6 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
             "weekly_reports": True,  # Weekly AI Health Report
             "api_token_cost_prediction": True,  # API 토큰 예측 비용 그래프
             "model_optimization_advisor": True,  # Model optimization recommendations
-            "agent_chain_profiler": False,
             "region_latency": False,
             "advanced_cost_optimizer": False,
             "model_auto_switch": False,
@@ -81,7 +80,6 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
             "weekly_reports": True,
             "api_token_cost_prediction": True,
             "model_optimization_advisor": True,
-            "agent_chain_profiler": True,  # Agent Chain Profiler (핵심 기능)
             "drift_per_agent_stage": True,  # Drift per Agent Stage
             "region_latency": True,  # Region latency analysis
             "advanced_cost_optimizer": True,  # Advanced Cost Optimizer
@@ -111,7 +109,6 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
             "weekly_reports": True,
             "api_token_cost_prediction": True,
             "model_optimization_advisor": True,
-            "agent_chain_profiler": True,
             "drift_per_agent_stage": True,
             "region_latency": True,
             "advanced_cost_optimizer": True,

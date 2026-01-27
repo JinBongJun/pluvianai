@@ -92,6 +92,44 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
 
 
+async def get_current_user_optional(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """
+    Dependency to get the current user if authenticated, otherwise None
+    Useful for public endpoints that have optional authentication
+    """
+    from app.models.user import User
+
+    if not authorization:
+        return None
+
+    # Extract token from "Bearer {token}" format
+    if authorization.startswith("Bearer "):
+        token = authorization.replace("Bearer ", "").strip()
+    else:
+        return None
+
+    payload = decode_token(token)
+    if payload is None:
+        return None
+
+    # Extract user ID from token
+    user_id: Optional[str] = payload.get("sub")
+    if user_id is None:
+        return None
+
+    # Fetch user from database
+    try:
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if user is None or not user.is_active:
+            return None
+        return user
+    except (ValueError, TypeError):
+        return None
+
+
 async def get_user_from_api_key(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)):
     """
     Get user from API Key (for SDK authentication)
@@ -167,3 +205,157 @@ async def get_user_from_api_key(authorization: Optional[str] = Header(None), db:
     db.commit()
 
     return user
+
+
+def rotate_refresh_token(
+    old_refresh_token: str,
+    user_id: int,
+    db: Session
+) -> tuple[str, str]:
+    """
+    Rotate refresh token: invalidate old and issue new access + refresh tokens.
+    
+    Args:
+        old_refresh_token: The refresh token to rotate
+        user_id: User ID
+        db: Database session
+    
+    Returns:
+        Tuple of (new_access_token, new_refresh_token)
+    """
+    import hashlib
+    from app.models.user import User
+    from app.models.refresh_token import RefreshToken
+    
+    # Verify old refresh token
+    payload = decode_token(old_refresh_token)
+    if payload is None or payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token"
+        )
+    
+    # Verify user
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user"
+        )
+    
+    # Calculate hash of old refresh token
+    old_token_hash = hashlib.sha256(old_refresh_token.encode()).hexdigest()
+    
+    # Find the refresh token in database
+    refresh_token_record = (
+        db.query(RefreshToken)
+        .filter(
+            RefreshToken.token_hash == old_token_hash,
+            RefreshToken.user_id == user_id
+        )
+        .first()
+    )
+    
+    # Check if token exists and is valid
+    if not refresh_token_record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token not found"
+        )
+    
+    # Check if token is already revoked
+    if refresh_token_record.is_revoked:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked"
+        )
+    
+    # Check if token is expired
+    if refresh_token_record.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has expired"
+        )
+    
+    # Revoke old refresh token
+    refresh_token_record.is_revoked = True
+    refresh_token_record.revoked_at = datetime.utcnow()
+    
+    # Create new tokens
+    new_access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
+    new_refresh_token = create_refresh_token(data={"sub": str(user.id), "email": user.email})
+    
+    # Calculate hash of new refresh token
+    new_token_hash = hashlib.sha256(new_refresh_token.encode()).hexdigest()
+    
+    # Get expiration time for new refresh token
+    new_payload = decode_token(new_refresh_token)
+    expires_at = datetime.utcfromtimestamp(new_payload.get("exp", 0))
+    
+    # Save new refresh token to database
+    new_refresh_token_record = RefreshToken(
+        user_id=user_id,
+        token_hash=new_token_hash,
+        expires_at=expires_at,
+        is_revoked=False
+    )
+    db.add(new_refresh_token_record)
+    db.commit()
+    
+    return new_access_token, new_refresh_token
+
+
+def rotate_api_key(
+    user_id: int,
+    old_key_id: Optional[int] = None,
+    revoke_old: bool = True,
+    db: Optional[Session] = None
+) -> tuple[str, int]:
+    """
+    Rotate API key: create new key, optionally revoke old.
+    
+    Args:
+        user_id: User ID
+        old_key_id: Optional old key ID to revoke
+        revoke_old: Whether to revoke the old key (default: True)
+        db: Database session
+    
+    Returns:
+        Tuple of (new_api_key, new_key_id)
+    
+    Raises:
+        ValueError: If db is not provided
+    """
+    import secrets
+    import hashlib
+    from app.models.api_key import APIKey
+    
+    if not db:
+        raise ValueError("Database session required")
+    
+    # Generate new API key
+    key_prefix = "ag_live_"
+    random_part = secrets.token_urlsafe(32)
+    new_api_key = f"{key_prefix}{random_part}"
+    key_hash = hashlib.sha256(new_api_key.encode()).hexdigest()
+    
+    # Create new API key record
+    new_key_record = APIKey(
+        user_id=user_id,
+        key_hash=key_hash,
+        name="Rotated key",
+        is_active=True,
+    )
+    db.add(new_key_record)
+    db.flush()
+    
+    # Revoke old key if requested
+    if revoke_old and old_key_id:
+        old_key = db.query(APIKey).filter(APIKey.id == old_key_id, APIKey.user_id == user_id).first()
+        if old_key:
+            old_key.is_active = False
+            db.commit()
+    
+    db.commit()
+    
+    return new_api_key, new_key_record.id

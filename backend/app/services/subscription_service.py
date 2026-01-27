@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.subscription import Subscription
 from app.models.usage import Usage
 from app.core.subscription_limits import PLAN_LIMITS, PLAN_PRICING
+from app.core.logging_config import logger
 
 
 class SubscriptionService:
@@ -198,11 +199,48 @@ class SubscriptionService:
     def reset_monthly_usage(self) -> int:
         """
         Background job to reset monthly usage counters
-        Returns number of records reset
+        Deletes all monthly usage keys from Redis (they will be recreated on next increment)
+        Returns number of users processed
         """
-        # This should be called by a scheduled task (e.g., Celery, cron)
-        # For now, just return 0 - implementation depends on background job system
-        return 0
+        from app.services.cache_service import cache_service
+        from app.models.user import User
+        
+        if not cache_service.enabled:
+            logger.warning("Redis not available, cannot reset monthly usage")
+            return 0
+        
+        try:
+            # Get all users
+            users = self.db.query(User).filter(User.is_active.is_(True)).all()
+            reset_count = 0
+            
+            # Get current year-month for pattern matching
+            from datetime import datetime
+            now = datetime.utcnow()
+            current_year_month = now.strftime("%Y-%m")
+            
+            # Delete monthly usage keys for all users
+            for user in users:
+                # Delete all monthly usage keys (they will be recreated with new month on next increment)
+                keys_to_delete = [
+                    f"user:{user.id}:usage:monthly:{current_year_month}",
+                    f"user:{user.id}:snapshots:monthly:{current_year_month}",
+                    f"user:{user.id}:judge_calls:monthly:{current_year_month}",
+                ]
+                
+                for key in keys_to_delete:
+                    try:
+                        cache_service.redis_client.delete(key)
+                    except Exception as e:
+                        logger.warning(f"Failed to delete key {key}: {str(e)}")
+                
+                reset_count += 1
+            
+            logger.info(f"Reset monthly usage for {reset_count} users")
+            return reset_count
+        except Exception as e:
+            logger.error(f"Error resetting monthly usage: {str(e)}")
+            return 0
 
     def create_or_update_subscription(
         self,
@@ -212,16 +250,26 @@ class SubscriptionService:
         paddle_subscription_id: Optional[str] = None,
         paddle_customer_id: Optional[str] = None,
         price_per_month: Optional[float] = None,
+        current_period_start: Optional[datetime] = None,
+        current_period_end: Optional[datetime] = None,
     ) -> Subscription:
         """Create or update user subscription"""
         subscription = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
 
         now = datetime.utcnow()
-        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        if now.month == 12:
-            period_end = period_start.replace(year=now.year + 1, month=1)
+        # Use provided period dates or default to current month
+        if current_period_start is not None:
+            period_start = current_period_start
         else:
-            period_end = period_start.replace(month=now.month + 1)
+            period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        if current_period_end is not None:
+            period_end = current_period_end
+        else:
+            if now.month == 12:
+                period_end = period_start.replace(year=now.year + 1, month=1)
+            else:
+                period_end = period_start.replace(month=now.month + 1)
 
         if subscription:
             subscription.plan_type = plan_type

@@ -20,7 +20,12 @@ class AgentGuard:
         project_id: Optional[int] = None,
         api_url: Optional[str] = None,
         agent_name: Optional[str] = None,
-        enabled: bool = True
+        enabled: bool = True,
+        proxy_timeout: float = 30.0,
+        firewall_timeout: float = 1.0,
+        pii_timeout: float = 0.1,
+        circuit_breaker: Optional[Dict[str, Any]] = None,
+        health_check_interval: float = 30.0
     ):
         """
         Initialize AgentGuard SDK
@@ -31,6 +36,11 @@ class AgentGuard:
             api_url: AgentGuard API URL (defaults to AGENTGUARD_API_URL env var)
             agent_name: Agent name for tracking (defaults to AGENTGUARD_AGENT_NAME env var)
             enabled: Whether monitoring is enabled (defaults to True)
+            proxy_timeout: Proxy timeout in seconds (default: 30.0)
+            firewall_timeout: Firewall timeout in seconds (default: 1.0)
+            pii_timeout: PII sanitization timeout in seconds (default: 0.1)
+            circuit_breaker: Circuit breaker config (default: failure_threshold=5, recovery_time=30)
+            health_check_interval: Health check interval in seconds (default: 30.0)
         """
         self.api_key = api_key or os.getenv("AGENTGUARD_API_KEY")
         self.project_id = project_id or os.getenv("AGENTGUARD_PROJECT_ID")
@@ -38,11 +48,31 @@ class AgentGuard:
         self.agent_name = agent_name or os.getenv("AGENTGUARD_AGENT_NAME")
         self.enabled = enabled and self.api_key and self.project_id
         
+        # Timeout configuration
+        self.proxy_timeout = proxy_timeout
+        self.firewall_timeout = firewall_timeout
+        self.pii_timeout = pii_timeout
+        self.health_check_interval = health_check_interval
+        
+        # Circuit Breaker configuration
+        self.circuit_breaker_config = circuit_breaker or {
+            "failure_threshold": 5,
+            "recovery_time_seconds": 30,
+            "half_open_max_calls": 3,
+        }
+        self._circuit_state = "closed"  # closed, open, half-open
+        self._circuit_failures = 0
+        self._circuit_opened_at = None
+        
         self._patched = False
         self._original_functions = {}
         
         # Thread-local storage for chain_id and agent_name context
         self._local = threading.local()
+        
+        # Start health check monitoring
+        if self.enabled:
+            self._start_health_check()
     
     def init(self):
         """
@@ -220,11 +250,16 @@ class AgentGuard:
             if chain_id:
                 payload["chain_id"] = chain_id
             
+            # Check Circuit Breaker state
+            if not self._check_circuit_breaker():
+                # Circuit is open, bypass AgentGuard (fail-open)
+                return
+            
             # Send asynchronously (fire and forget)
             # In production, use a background thread or queue
             try:
-                with httpx.Client(timeout=2.0) as client:
-                    client.post(
+                with httpx.Client(timeout=self.proxy_timeout) as client:
+                    response = client.post(
                         f"{self.api_url}/api/v1/api-calls",
                         json=payload,
                         headers={
@@ -232,8 +267,12 @@ class AgentGuard:
                             "Content-Type": "application/json",
                         },
                     )
-            except Exception:
-                # Silently fail - don't block the application
+                    # Success - reset circuit breaker
+                    self._reset_circuit_breaker()
+            except Exception as e:
+                # Record failure for circuit breaker
+                self._record_circuit_failure()
+                # Silently fail - don't block the application (fail-open)
                 pass
                 
         except Exception:
@@ -292,6 +331,58 @@ class AgentGuard:
                 self._local.agent_name = old_agent_name
             elif hasattr(self._local, 'agent_name') and not agent_name:
                 delattr(self._local, 'agent_name')
+    
+    def _check_circuit_breaker(self) -> bool:
+        """Check if circuit breaker allows requests"""
+        if self._circuit_state == "closed":
+            return True
+        elif self._circuit_state == "open":
+            # Check if recovery time has passed
+            if self._circuit_opened_at:
+                elapsed = time.time() - self._circuit_opened_at
+                if elapsed >= self.circuit_breaker_config["recovery_time_seconds"]:
+                    self._circuit_state = "half-open"
+                    self._circuit_failures = 0
+                    return True
+            return False
+        elif self._circuit_state == "half-open":
+            return True
+        return True
+    
+    def _record_circuit_failure(self):
+        """Record a circuit breaker failure"""
+        self._circuit_failures += 1
+        if self._circuit_failures >= self.circuit_breaker_config["failure_threshold"]:
+            self._circuit_state = "open"
+            self._circuit_opened_at = time.time()
+    
+    def _reset_circuit_breaker(self):
+        """Reset circuit breaker on success"""
+        if self._circuit_state == "half-open":
+            self._circuit_state = "closed"
+            self._circuit_failures = 0
+        elif self._circuit_state == "closed":
+            self._circuit_failures = 0
+    
+    def _start_health_check(self):
+        """Start periodic health check monitoring"""
+        def health_check_loop():
+            while True:
+                try:
+                    with httpx.Client(timeout=5.0) as client:
+                        response = client.get(f"{self.api_url}/api/v1/health")
+                        if response.status_code == 200:
+                            self._reset_circuit_breaker()
+                        else:
+                            self._record_circuit_failure()
+                except Exception:
+                    self._record_circuit_failure()
+                
+                time.sleep(self.health_check_interval)
+        
+        # Start health check in background thread
+        thread = threading.Thread(target=health_check_loop, daemon=True)
+        thread.start()
 
 
 # Global instance
@@ -302,7 +393,12 @@ def init(
     api_key: Optional[str] = None,
     project_id: Optional[int] = None,
     api_url: Optional[str] = None,
-    agent_name: Optional[str] = None
+    agent_name: Optional[str] = None,
+    proxy_timeout: float = 30.0,
+    firewall_timeout: float = 1.0,
+    pii_timeout: float = 0.1,
+    circuit_breaker: Optional[Dict[str, Any]] = None,
+    health_check_interval: float = 30.0
 ):
     """
     Initialize AgentGuard with zero-config setup
@@ -329,7 +425,12 @@ def init(
         api_key=api_key,
         project_id=project_id,
         api_url=api_url,
-        agent_name=agent_name
+        agent_name=agent_name,
+        proxy_timeout=proxy_timeout,
+        firewall_timeout=firewall_timeout,
+        pii_timeout=pii_timeout,
+        circuit_breaker=circuit_breaker,
+        health_check_interval=health_check_interval
     )
     _global_instance.init()
 
@@ -395,3 +496,15 @@ def track_call(
             agent_name,
             chain_id
         )
+
+
+# CI Integration
+from .ci import CIClient
+
+__all__ = [
+    "AgentGuard",
+    "init",
+    "chain",
+    "track_call",
+    "CIClient",
+]

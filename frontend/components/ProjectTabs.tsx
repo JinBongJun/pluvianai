@@ -4,27 +4,29 @@ import { useRouter, usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
 
 interface ProjectTabsProps {
-  projectId: number;
+  projectId?: number;
   orgId?: number | string;
   canManage?: boolean;
+  basePath?: string; // Optional basePath override
 }
 
-export default function ProjectTabs({ projectId, orgId, canManage = false }: ProjectTabsProps) {
+export default function ProjectTabs({ projectId, orgId, canManage = false, basePath: basePathProp }: ProjectTabsProps) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Determine base path - use org path if orgId is provided, otherwise fallback to dashboard
-  const basePath = orgId
+  // Determine base path - use provided basePath, or use org path if orgId is provided, otherwise fallback to dashboard
+  const basePath = basePathProp || (orgId && projectId
     ? `/organizations/${orgId}/projects/${projectId}`
-    : `/dashboard/${projectId}`;
+    : projectId
+    ? `/dashboard/${projectId}`
+    : '');
 
   const tabs = [
     { id: 'overview', label: 'Overview', path: basePath },
+    // Keep only a minimal, production-focused surface:
     { id: 'api-calls', label: 'API Calls', path: `${basePath}/api-calls` },
+    { id: 'firewall', label: 'Firewall', path: `${basePath}/firewall` },
     { id: 'replay', label: 'Time Machine', path: `${basePath}/replay` },
-    { id: 'chains', label: 'Chains', path: `${basePath}/chains` },
-    { id: 'compare', label: 'Compare', path: `${basePath}/compare` },
-    { id: 'reports', label: 'Reports', path: `${basePath}/reports` },
     { id: 'alerts', label: 'Alerts', path: `${basePath}/alerts` },
     { id: 'members', label: 'Team Members', path: `${basePath}?tab=members` },
     ...(canManage ? [{ id: 'settings', label: 'Settings', path: `${basePath}?tab=settings` }] : []),
@@ -32,10 +34,8 @@ export default function ProjectTabs({ projectId, orgId, canManage = false }: Pro
 
   const getActiveTab = () => {
     if (pathname?.includes('/api-calls')) return 'api-calls';
+    if (pathname?.includes('/firewall')) return 'firewall';
     if (pathname?.includes('/replay')) return 'replay';
-    if (pathname?.includes('/chains')) return 'chains';
-    if (pathname?.includes('/compare')) return 'compare';
-    if (pathname?.includes('/reports')) return 'reports';
     if (pathname?.includes('/alerts')) return 'alerts';
     if (pathname?.includes('/quality')) return 'overview'; // Quality is part of overview
     if (pathname?.includes('/drift')) return 'overview'; // Drift is part of overview

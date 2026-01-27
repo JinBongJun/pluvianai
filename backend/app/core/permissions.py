@@ -109,3 +109,20 @@ def get_project_with_access(project_id: int, required_roles: Optional[List[str]]
         return check_project_access(project_id, current_user, db, required_roles)
 
     return _get_project
+
+
+def require_admin(user: User) -> None:
+    """
+    Require admin access (superuser)
+    
+    Args:
+        user: Current user
+        
+    Raises:
+        HTTPException: If user is not admin
+    """
+    if not user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )

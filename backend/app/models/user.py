@@ -2,7 +2,7 @@
 User model for authentication and authorization
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -22,6 +22,14 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+    # Referral (viral engine)
+    referral_code = Column(String(50), unique=True, nullable=True, index=True)
+    referral_credits = Column(Integer, nullable=True, server_default="0")
+    referred_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Stripe integration
+    stripe_customer_id = Column(String(255), nullable=True, index=True)
+
     # Relationships
     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
     project_members = relationship("ProjectMember", back_populates="user", cascade="all, delete-orphan")
@@ -38,3 +46,5 @@ class User(Base):
     organization_members = relationship(
         "OrganizationMember", back_populates="user", cascade="all, delete-orphan"
     )
+    user_agreement = relationship("UserAgreement", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")

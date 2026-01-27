@@ -12,12 +12,13 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access
 from app.core.decorators import handle_errors
+from app.core.feature_access import check_feature_access
+from app.core.dependencies import get_alert_service
 from app.models.user import User
 from app.models.alert import Alert
-from app.services.alert_service import AlertService
+# Legacy alert service import removed - using dependency injection instead
 
 router = APIRouter()
-alert_service = AlertService()
 
 
 class AlertResponse(BaseModel):
@@ -59,23 +60,30 @@ async def list_alerts(
     is_resolved: bool | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    alert_service = Depends(get_alert_service),
 ):
     """List alerts for a project"""
     # Verify project access (any member can view alerts)
     check_project_access(project_id, current_user, db)
+    
+    # Check feature access: alerts require Indie+ plan
+    check_feature_access(
+        db=db,
+        user_id=current_user.id,
+        feature_name="alerts",
+        required_plan="indie",
+        message="Alerts require Indie plan or higher. Upgrade to receive notifications about your AI health."
+    )
 
-    # Build query
-    query = db.query(Alert).filter(Alert.project_id == project_id)
-
-    if alert_type:
-        query = query.filter(Alert.alert_type == alert_type)
-    if severity:
-        query = query.filter(Alert.severity == severity)
-    if is_resolved is not None:
-        query = query.filter(Alert.is_resolved == is_resolved)
-
-    # Order by created_at descending and paginate
-    alerts = query.order_by(desc(Alert.created_at)).offset(offset).limit(limit).all()
+    # Use service to get alerts
+    alerts = alert_service.get_alerts_by_project_id(
+        project_id=project_id,
+        limit=limit,
+        offset=offset,
+        alert_type=alert_type,
+        severity=severity,
+        is_resolved=is_resolved
+    )
 
     return alerts
 
@@ -87,9 +95,10 @@ async def send_alert(
     request: SendAlertRequest = SendAlertRequest(),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    alert_service = Depends(get_alert_service),
 ):
     """Send an alert through notification channels"""
-    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    alert = alert_service.get_alert_by_id(alert_id)
 
     if not alert:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
@@ -100,7 +109,7 @@ async def send_alert(
     # Use channels from request, or default to alert's notification_channels, or ["email"]
     channels = request.channels or alert.notification_channels or ["email"]
 
-    # Send alert (simplified - remove complex subscription checks for now)
+    # Send alert through notification channels
     results = await alert_service.send_alert(alert, channels, db=db)
 
     # Update alert status
@@ -109,16 +118,21 @@ async def send_alert(
         alert.sent_at = datetime.utcnow()
         if alert.notification_channels is None:
             alert.notification_channels = channels
-        db.commit()
-        db.refresh(alert)
+        alert_service.alert_repo.save(alert)
+        # Transaction is committed by get_db() dependency
 
     return {"alert_id": alert_id, "results": results}
 
 
 @router.post("/{alert_id}/resolve", response_model=AlertResponse)
-async def resolve_alert(alert_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def resolve_alert(
+    alert_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    alert_service = Depends(get_alert_service),
+):
     """Mark an alert as resolved"""
-    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    alert = alert_service.get_alert_by_id(alert_id)
 
     if not alert:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
@@ -126,22 +140,24 @@ async def resolve_alert(alert_id: int, current_user: User = Depends(get_current_
     # Verify project access (any member can resolve alerts)
     project = check_project_access(alert.project_id, current_user, db)
 
-    alert.is_resolved = True
-    alert.resolved_by = current_user.id
-    from datetime import datetime
-
-    alert.resolved_at = datetime.utcnow()
-
-    db.commit()
-    db.refresh(alert)
+    # Use service to resolve alert
+    alert = alert_service.resolve_alert(alert_id, current_user.id)
+    if not alert:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    # Transaction is committed by get_db() dependency
 
     return alert
 
 
 @router.get("/{alert_id}", response_model=AlertResponse)
-async def get_alert(alert_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_alert(
+    alert_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    alert_service = Depends(get_alert_service),
+):
     """Get a specific alert"""
-    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    alert = alert_service.get_alert_by_id(alert_id)
 
     if not alert:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")

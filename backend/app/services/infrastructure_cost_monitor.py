@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from app.core.database import SessionLocal
 from app.models.alert import Alert
 from app.services.alert_service import AlertService
+from app.infrastructure.repositories.alert_repository import AlertRepository
 from app.core.logging_config import logger
 
 
@@ -15,7 +16,12 @@ class InfrastructureCostMonitor:
     """Service for monitoring infrastructure costs (Railway, Vercel, etc.)"""
 
     def __init__(self):
-        self.alert_service = AlertService()
+        # AlertService will be created with DB session when needed
+
+    def _get_alert_service(self, db: Session) -> AlertService:
+        """Get AlertService instance with DB session"""
+        alert_repo = AlertRepository(db)
+        return AlertService(alert_repo, db)
 
     def check_infrastructure_costs(
         self, budget_limit: Optional[float] = None, days: int = 30, db: Optional[Session] = None
@@ -103,7 +109,8 @@ class InfrastructureCostMonitor:
                     db.add(alert)
                     db.commit()
 
-                    await self.alert_service.send_alert(alert, db=db)
+                    alert_service = self._get_alert_service(db)
+                    await alert_service.send_alert(alert, ["email"], db=db)
 
             return cost_result
         finally:
