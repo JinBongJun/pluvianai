@@ -13,6 +13,9 @@ port = os.environ.get("PORT", "8000")
 print(f"🚀 Starting AgentGuard backend on port {port}", file=sys.stderr)
 print(f"📡 PORT environment variable: {port}", file=sys.stderr)
 print(f"📡 All environment variables with PORT: {[k for k in os.environ.keys() if 'PORT' in k]}", file=sys.stderr)
+print(f"📡 All environment variables: {list(os.environ.keys())}", file=sys.stderr)
+print(f"📡 RAILWAY_ENVIRONMENT: {os.environ.get('RAILWAY_ENVIRONMENT', 'NOT SET')}", file=sys.stderr)
+print(f"📡 RAILWAY_SERVICE_NAME: {os.environ.get('RAILWAY_SERVICE_NAME', 'NOT SET')}", file=sys.stderr)
 
 # Start uvicorn (Railway runs this from backend directory)
 # Enable access log to see ALL incoming requests
