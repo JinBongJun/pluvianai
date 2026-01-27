@@ -54,6 +54,7 @@ from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.logging_middleware import LoggingMiddleware
 from app.middleware.metrics_middleware import MetricsMiddleware
 from app.middleware.security_middleware import SecurityHeadersMiddleware
+from app.middleware.force_cors_middleware import ForceCORSMiddleware
 from app.core.metrics import update_app_info
 from app.services.cache_service import cache_service
 
@@ -124,6 +125,10 @@ app.add_middleware(
 )
 
 logger.info("✅ CORS middleware configured successfully")
+
+# Force CORS middleware - ALWAYS add CORS headers as final fallback
+# This runs FIRST (last added = first executed) to ensure CORS headers are never missing
+app.add_middleware(ForceCORSMiddleware)
 
 # Logging middleware (added immediately after CORS to catch all requests)
 # This MUST be early in the chain to log requests even if they fail later
