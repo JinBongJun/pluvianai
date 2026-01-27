@@ -17,16 +17,18 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         if request.url.path in ["/health", "/docs", "/openapi.json", "/redoc"]:
             return await call_next(request)
         
-        # Log OPTIONS requests (CORS preflight) for debugging
+        # Log ALL requests including OPTIONS (CORS preflight) for debugging
+        origin = request.headers.get("origin", "unknown")
+        ip = request.client.host if request.client else None
+        
         if request.method == "OPTIONS":
-            origin = request.headers.get("origin", "unknown")
-            logger.debug(f"CORS preflight: {request.method} {request.url.path} from origin: {origin}")
+            logger.info(f"CORS PREFLIGHT: {request.method} {request.url.path} from origin: {origin}, ip: {ip}")
             try:
                 response = await call_next(request)
-                logger.debug(f"CORS preflight response: {response.status_code}, Access-Control-Allow-Origin: {response.headers.get('access-control-allow-origin', 'not set')}")
+                logger.info(f"CORS PREFLIGHT RESPONSE: {response.status_code}, Access-Control-Allow-Origin: {response.headers.get('access-control-allow-origin', 'not set')}")
                 return response
             except Exception as e:
-                logger.error(f"CORS preflight error: {str(e)}", exc_info=True)
+                logger.error(f"CORS PREFLIGHT ERROR: {str(e)}", exc_info=True)
                 raise
 
         # Record start time

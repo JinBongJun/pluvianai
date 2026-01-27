@@ -129,14 +129,15 @@ app.add_middleware(
     max_age=3600,  # Cache preflight requests for 1 hour
 )
 
+# Logging middleware (added immediately after CORS to catch all requests)
+# This MUST be early in the chain to log requests even if they fail later
+app.add_middleware(LoggingMiddleware)
+
 # Security headers middleware (add security headers to all responses)
 app.add_middleware(SecurityHeadersMiddleware)
 
 # Metrics middleware (collect API metrics)
 app.add_middleware(MetricsMiddleware)
-
-# Logging middleware (added after CORS so CORS handles preflight first)
-app.add_middleware(LoggingMiddleware)
 
 # Gzip compression middleware (reduce bandwidth)
 app.add_middleware(GZipMiddleware)
