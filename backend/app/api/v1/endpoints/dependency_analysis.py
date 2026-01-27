@@ -3,7 +3,7 @@ Dependency Analysis endpoints for analyzing agent dependencies
 """
 
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query, Path, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -79,7 +79,7 @@ async def analyze_dependencies(
 @handle_errors
 async def get_dependency_analysis(
     project_id: int = Query(..., description="Project ID"),
-    analysis_id: str = Query(..., description="Analysis ID"),
+    analysis_id: str = Path(..., description="Analysis ID"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -107,7 +107,7 @@ async def get_dependency_analysis(
 @handle_errors
 async def get_dependency_analysis_mapping(
     project_id: int = Query(..., description="Project ID"),
-    analysis_id: str = Query(..., description="Analysis ID"),
+    analysis_id: str = Path(..., description="Analysis ID"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     mapping_service: MappingService = Depends(get_mapping_service),
