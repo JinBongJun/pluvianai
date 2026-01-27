@@ -47,12 +47,15 @@ class JudgeFeedbackResponse(BaseModel):
     alignment_score: Optional[float]
     comment: Optional[str]
     correction_reason: Optional[str]
-    metadata: Optional[dict]
+    # Map API field "metadata" to model attribute "extra_metadata"
+    metadata: Optional[dict] = Field(default=None, alias="extra_metadata")
     created_at: str
     updated_at: Optional[str]
 
     class Config:
+        # Pydantic v2 style; enables ORM mode and population by field name
         from_attributes = True
+        populate_by_name = True
 
 
 class JudgeReliabilityMetricsResponse(BaseModel):
@@ -102,7 +105,7 @@ async def create_judge_feedback(
         alignment_score=alignment_score,
         comment=feedback_data.comment,
         correction_reason=feedback_data.correction_reason,
-        metadata=feedback_data.metadata
+        extra_metadata=feedback_data.metadata
     )
 
     db.add(feedback)
@@ -177,7 +180,7 @@ async def update_judge_feedback(
     if feedback_data.correction_reason is not None:
         feedback.correction_reason = feedback_data.correction_reason
     if feedback_data.metadata is not None:
-        feedback.metadata = feedback_data.metadata
+        feedback.extra_metadata = feedback_data.metadata
 
     # Commit handled automatically by get_db() dependency
     db.refresh(feedback)

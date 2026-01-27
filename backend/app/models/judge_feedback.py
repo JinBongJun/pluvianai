@@ -27,7 +27,10 @@ class JudgeFeedback(Base):
     correction_reason = Column(Text, nullable=True)  # Why the correction was made
     
     # Additional metadata
-    metadata = Column(JSON, nullable=True)  # Additional feedback data
+    # NOTE: SQLAlchemy reserves the attribute name "metadata" on declarative bases,
+    # so we store the column as "metadata" in the database but expose it as
+    # "extra_metadata" on the model.
+    extra_metadata = Column("metadata", JSON, nullable=True)  # Additional feedback data
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
