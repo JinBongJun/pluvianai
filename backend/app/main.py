@@ -337,8 +337,23 @@ async def shutdown_event():
 
 
 @app.get("/")
-async def root():
+async def root(request: Request):
+    """Root endpoint with CORS headers"""
+    origin = request.headers.get("origin", "unknown")
+    logger.info(f"Root endpoint accessed from origin: {origin}")
     return {"message": settings.APP_NAME, "version": settings.APP_VERSION}
+
+@app.get("/health")
+async def health():
+    """Health check endpoint"""
+    db_ok = check_database_health()
+    cache_ok = cache_service.enabled
+    status_code = status.HTTP_200_OK if db_ok else status.HTTP_503_SERVICE_UNAVAILABLE
+    return {
+        "status": "ready" if db_ok else "not_ready",
+        "database": "connected" if db_ok else "unreachable",
+        "cache": "connected" if cache_ok else "disabled_or_unreachable",
+    }, status_code
 
 
 @app.get("/health")
