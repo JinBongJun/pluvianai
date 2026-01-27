@@ -151,9 +151,9 @@ async def register(
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
-    request: Request = None,
     audit_service = Depends(get_audit_service),
 ):
     """Login and get access token"""
@@ -203,6 +203,7 @@ async def login(
             )
 
     # Find user by email using service (OAuth2PasswordRequestForm uses username field for email)
+    from app.core.dependencies import get_user_service
     user_service = get_user_service(db)
     user = user_service.get_user_by_email(form_data.username)
 
