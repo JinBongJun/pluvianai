@@ -15,6 +15,7 @@ print(f"📡 PORT environment variable: {port}", file=sys.stderr)
 print(f"📡 All environment variables with PORT: {[k for k in os.environ.keys() if 'PORT' in k]}", file=sys.stderr)
 
 # Start uvicorn (Railway runs this from backend directory)
+# Enable access log to see ALL incoming requests
 cmd = [
     sys.executable,
     "-m",
@@ -26,6 +27,7 @@ cmd = [
     str(port),
     "--log-level",
     "info",
+    "--access-log",  # Enable access logging
 ]
 
 print(f"🔧 Executing: {' '.join(cmd)}", file=sys.stderr)

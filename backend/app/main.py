@@ -355,21 +355,29 @@ async def shutdown_event():
 @app.get("/")
 async def root(request: Request):
     """Root endpoint with CORS headers"""
-    origin = request.headers.get("origin", "unknown")
-    logger.info(f"Root endpoint accessed from origin: {origin}")
+    origin = request.headers.get("origin", "none")
+    ip = request.client.host if request.client else "unknown"
+    logger.info(f"🌐 ROOT ENDPOINT: {request.method} {request.url.path} from origin: {origin}, IP: {ip}")
     return {"message": settings.APP_NAME, "version": settings.APP_VERSION}
 
 @app.get("/health")
-async def health():
-    """Health check endpoint"""
+async def health(request: Request):
+    """Health check endpoint - Railway uses this for health checks"""
+    origin = request.headers.get("origin", "none")
+    logger.info(f"🏥 HEALTH CHECK: {request.method} {request.url.path} from origin: {origin}, IP: {request.client.host if request.client else 'unknown'}")
+    
     db_ok = check_database_health()
     cache_ok = cache_service.enabled
     status_code = status.HTTP_200_OK if db_ok else status.HTTP_503_SERVICE_UNAVAILABLE
-    return {
+    
+    response_data = {
         "status": "ready" if db_ok else "not_ready",
         "database": "connected" if db_ok else "unreachable",
         "cache": "connected" if cache_ok else "disabled_or_unreachable",
-    }, status_code
+    }
+    
+    logger.info(f"🏥 HEALTH CHECK RESPONSE: {status_code}, {response_data}")
+    return response_data, status_code
 
 
 @app.get("/health")
@@ -385,8 +393,10 @@ async def health():
 
 
 @app.get("/health/live")
-async def health_live():
-    """Liveness probe"""
+async def health_live(request: Request):
+    """Liveness probe - Railway may use this"""
+    origin = request.headers.get("origin", "none")
+    logger.info(f"💓 LIVENESS PROBE: {request.method} {request.url.path} from origin: {origin}, IP: {request.client.host if request.client else 'unknown'}")
     return {"status": "ok"}
 
 
