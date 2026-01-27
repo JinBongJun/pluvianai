@@ -159,9 +159,22 @@ async def login(
     audit_service = Depends(get_audit_service),
 ):
     """Login and get access token"""
-    # Log login attempt immediately for debugging
+    # Log login attempt immediately for debugging - BEFORE any processing
     origin = request.headers.get("origin", "unknown")
-    logger.info(f"Login attempt from origin: {origin}, email: {form_data.username}")
+    ip = request.client.host if request and request.client else None
+    user_agent = request.headers.get("user-agent", "unknown")
+    
+    logger.info(
+        f"LOGIN REQUEST RECEIVED: origin={origin}, email={form_data.username}, ip={ip}",
+        extra={
+            "endpoint": "/api/v1/auth/login",
+            "method": "POST",
+            "origin": origin,
+            "email": form_data.username,
+            "ip": ip,
+            "user_agent": user_agent[:100] if user_agent else None,
+        }
+    )
     
     start_time = time.time()
     ip = request.client.host if request and request.client else None
