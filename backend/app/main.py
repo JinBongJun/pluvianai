@@ -380,18 +380,6 @@ async def health(request: Request):
     return response_data, status_code
 
 
-@app.get("/health")
-async def health():
-    """Health check endpoint"""
-    db_ok = check_database_health()
-    cache_ok = cache_service.enabled
-    return {
-        "status": "healthy" if db_ok and cache_ok else "degraded",
-        "database": "connected" if db_ok else "unreachable",
-        "cache": "connected" if cache_ok else "disabled_or_unreachable",
-    }
-
-
 @app.get("/health/live")
 async def health_live(request: Request):
     """Liveness probe - Railway may use this"""
