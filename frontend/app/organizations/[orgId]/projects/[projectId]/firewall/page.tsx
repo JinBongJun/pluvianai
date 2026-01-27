@@ -69,7 +69,7 @@ export default function FirewallPage() {
   };
 
   return (
-    <OrgLayout>
+    <OrgLayout orgId={orgId}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <ProjectTabs projectId={projectId} orgId={orgId} canManage={true} />
 

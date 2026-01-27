@@ -39,7 +39,10 @@ export default function SelfHostedSettingsPage() {
       const data = await selfHostedAPI.getStatus();
       setStatus(data);
     } catch (error: any) {
-      toast.error('Failed to load self-hosted status', error.response?.data?.detail || error.message);
+      toast.showToast(
+        error.response?.data?.detail || error.message || 'Failed to load self-hosted status',
+        'error',
+      );
     } finally {
       setLoading(false);
     }
@@ -47,7 +50,7 @@ export default function SelfHostedSettingsPage() {
 
   const handleVerifyLicense = async () => {
     if (!licenseKey.trim()) {
-      toast.error('Please enter a license key');
+      toast.showToast('Please enter a license key', 'error');
       return;
     }
 
@@ -57,13 +60,16 @@ export default function SelfHostedSettingsPage() {
       const result = await selfHostedAPI.verifyLicense(licenseKey);
       
       if (result.valid) {
-        toast.success('License key is valid');
+        toast.showToast('License key is valid', 'success');
         loadStatus();
       } else {
-        toast.error(result.message || 'Invalid license key');
+        toast.showToast(result.message || 'Invalid license key', 'error');
       }
     } catch (error: any) {
-      toast.error('Failed to verify license', error.response?.data?.detail || error.message);
+      toast.showToast(
+        error.response?.data?.detail || error.message || 'Failed to verify license',
+        'error',
+      );
     } finally {
       setVerifying(false);
     }

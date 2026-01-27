@@ -21,13 +21,13 @@ export default function SharedResultPage() {
 
   useEffect(() => {
     // Check if user is authenticated
-    const token = localStorage.getItem('access_token');
-    setIsAuthenticated(!!token);
+    const accessToken = localStorage.getItem('access_token');
+    setIsAuthenticated(!!accessToken);
 
     const fetchShared = async () => {
       try {
         // Guest view - no authentication required
-        const data = await sharedResultsAPI.getShared(token);
+        const data = await sharedResultsAPI.getShared(token!);
         setResult(data);
       } catch (err: any) {
         setError(err.response?.data?.detail || 'Failed to load shared result');

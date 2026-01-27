@@ -61,7 +61,7 @@ export default function ExportButton({ projectId, filters, className }: ExportBu
         format: 'json',
         project_id: projectId,
         include_data: includeData,
-        total_records: result.total_records || 0,
+        total_records: (result as any)?.total_records || 0,
       });
       
       posthog.capture('export_started', { format: 'json', include_data: includeData });

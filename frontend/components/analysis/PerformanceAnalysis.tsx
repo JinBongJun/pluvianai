@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Gauge, Map, Clock, TrendingUp } from 'lucide-react';
 import { performanceAnalysisAPI, mappingAPI } from '@/lib/api';
 import AgentMap from '@/components/mapping/AgentMap';
-import { UpgradePrompt } from '@/components/subscription/UpgradePrompt';
+import UpgradePrompt from '@/components/subscription/UpgradePrompt';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorMessage from '@/components/ErrorMessage';
 import { clsx } from 'clsx';
@@ -87,9 +87,10 @@ export default function PerformanceAnalysis({ projectId, onClose }: PerformanceA
     return (
       <div className="p-6">
         <UpgradePrompt
+          isOpen={true}
+          onClose={onClose || (() => {})}
           feature="Performance Analysis"
-          requiredPlan="Pro"
-          message="Full performance analysis with mapping visualization requires Pro plan or higher."
+          requiredPlan="pro"
         />
       </div>
     );
@@ -307,9 +308,10 @@ export default function PerformanceAnalysis({ projectId, onClose }: PerformanceA
       {!analysis.mapping_available && (
         <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg">
           <UpgradePrompt
+            isOpen={true}
+            onClose={onClose || (() => {})}
             feature="Performance Analysis Map"
-            requiredPlan="Pro"
-            message="Visualize performance bottlenecks on the agent map with Pro plan."
+            requiredPlan="pro"
           />
         </div>
       )}
