@@ -59,9 +59,12 @@ export default function FirewallPage() {
       const newStatus = !panicMode;
       await firewallAPI.togglePanicMode(newStatus);
       setPanicMode(newStatus);
-      toast.success(`Panic mode ${newStatus ? 'enabled' : 'disabled'}`);
+      toast.showToast(`Panic mode ${newStatus ? 'enabled' : 'disabled'}`, 'success');
     } catch (error: any) {
-      toast.error('Failed to toggle panic mode', error.response?.data?.detail || error.message);
+      toast.showToast(
+        error.response?.data?.detail || error.message || 'Failed to toggle panic mode',
+        'error'
+      );
     }
   };
 

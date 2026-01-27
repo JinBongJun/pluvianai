@@ -692,32 +692,32 @@ def _save_api_call_sync(...):
 
 1. **트랜잭션 관리 원칙**
 
-                                                - FastAPI 엔드포인트: `save()` 사용 (get_db()가 commit)
-                                                - Background tasks: `save_and_commit()` 사용 (명시적 commit)
-                                                - 복잡한 트랜잭션: 여러 Repository 사용 시 get_db()가 하나의 트랜잭션으로 관리
+                                                                                                                                                                                                - FastAPI 엔드포인트: `save()` 사용 (get_db()가 commit)
+                                                                                                                                                                                                - Background tasks: `save_and_commit()` 사용 (명시적 commit)
+                                                                                                                                                                                                - 복잡한 트랜잭션: 여러 Repository 사용 시 get_db()가 하나의 트랜잭션으로 관리
 
 2. **사용 예시**
 
-                                                - 기본 사용법 (FastAPI 엔드포인트)
-                                                - Background tasks에서 사용
-                                                - 복잡한 트랜잭션 시나리오
+                                                                                                                                                                                                - 기본 사용법 (FastAPI 엔드포인트)
+                                                                                                                                                                                                - Background tasks에서 사용
+                                                                                                                                                                                                - 복잡한 트랜잭션 시나리오
 
 3. **테스트 방법**
 
-                                                - Unit test 작성법
-                                                - Integration test 작성법
-                                                - Mock test 작성법
+                                                                                                                                                                                                - Unit test 작성법
+                                                                                                                                                                                                - Integration test 작성법
+                                                                                                                                                                                                - Mock test 작성법
 
 4. **주의사항**
 
-                                                - Repository는 commit하지 않음 (get_db()가 처리)
-                                                - Background tasks는 `save_and_commit()` 사용
-                                                - 세션 생명주기는 get_db()가 관리
+                                                                                                                                                                                                - Repository는 commit하지 않음 (get_db()가 처리)
+                                                                                                                                                                                                - Background tasks는 `save_and_commit()` 사용
+                                                                                                                                                                                                - 세션 생명주기는 get_db()가 관리
 
 5. **Supabase 전환 시 변경 사항**
 
-                                                - SupabaseRepository 구현 시 동일한 패턴 유지
-                                                - BaseRepository 인터페이스는 변경 없음
+                                                                                                                                                                                                - SupabaseRepository 구현 시 동일한 패턴 유지
+                                                                                                                                                                                                - BaseRepository 인터페이스는 변경 없음
 
 ### Phase 6: 비용 알림 기능 추가 (0.5일)
 
@@ -775,34 +775,34 @@ def check_monthly_budget_alert(
 
 1. **인프라 구조**
 
-                                                                                                - `backend/app/infrastructure/__init__.py`
-                                                                                                - `backend/app/infrastructure/repositories/__init__.py` (초기 버전)
-                                                                                                - `backend/app/infrastructure/repositories/exceptions.py`
-                                                                                                - `backend/app/infrastructure/repositories/base.py`
-                                                                                                - `backend/app/infrastructure/repositories/sqlalchemy_repository.py`
-                                                                                                - `backend/app/infrastructure/repositories/__init__.py` (최종 export 버전)
+                                                                                                                                                                                                                                                                                                                                                                                                - `backend/app/infrastructure/__init__.py`
+                                                                                                                                                                                                                                                                                                                                                                                                - `backend/app/infrastructure/repositories/__init__.py` (초기 버전)
+                                                                                                                                                                                                                                                                                                                                                                                                - `backend/app/infrastructure/repositories/exceptions.py`
+                                                                                                                                                                                                                                                                                                                                                                                                - `backend/app/infrastructure/repositories/base.py`
+                                                                                                                                                                                                                                                                                                                                                                                                - `backend/app/infrastructure/repositories/sqlalchemy_repository.py`
+                                                                                                                                                                                                                                                                                                                                                                                                - `backend/app/infrastructure/repositories/__init__.py` (최종 export 버전)
 
 2. **구체적인 Repository**
 
-                                                                                                - `backend/app/infrastructure/repositories/project_repository.py`
-                                                                                                - `backend/app/infrastructure/repositories/user_repository.py`
-                                                                                                - `backend/app/infrastructure/repositories/api_call_repository.py`
-                                                                                                - `backend/app/infrastructure/repositories/alert_repository.py`
-                                                                                                - `backend/app/infrastructure/repositories/organization_repository.py`
+                                                                                                                                                                                                                                                                                                                                                                                                - `backend/app/infrastructure/repositories/project_repository.py`
+                                                                                                                                                                                                                                                                                                                                                                                                - `backend/app/infrastructure/repositories/user_repository.py`
+                                                                                                                                                                                                                                                                                                                                                                                                - `backend/app/infrastructure/repositories/api_call_repository.py`
+                                                                                                                                                                                                                                                                                                                                                                                                - `backend/app/infrastructure/repositories/alert_repository.py`
+                                                                                                                                                                                                                                                                                                                                                                                                - `backend/app/infrastructure/repositories/organization_repository.py`
 
 3. **의존성 주입**
 
-                                                                                                - `backend/app/core/dependencies.py`
+                                                                                                                                                                                                                                                                                                                                                                                                - `backend/app/core/dependencies.py`
 
 4. **문서**
 
-                                                                                                - `docs/ARCHITECTURE_FUTURE.md`
-                                                                                                - `docs/TRIGGER_POINTS.md`
-                                                                                                - `docs/REPOSITORY_PATTERN_GUIDE.md`
+                                                                                                                                                                                                                                                                                                                                                                                                - `docs/ARCHITECTURE_FUTURE.md`
+                                                                                                                                                                                                                                                                                                                                                                                                - `docs/TRIGGER_POINTS.md`
+                                                                                                                                                                                                                                                                                                                                                                                                - `docs/REPOSITORY_PATTERN_GUIDE.md`
 
 5. **기능 추가**
 
-                                                                                                - `backend/app/services/cost_analyzer.py` (수정)
+                                                                                                                                                                                                                                                                                                                                                                                                - `backend/app/services/cost_analyzer.py` (수정)
 
 ## OCP 준수 확인
 

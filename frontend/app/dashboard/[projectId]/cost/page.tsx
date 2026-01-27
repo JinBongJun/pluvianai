@@ -171,7 +171,7 @@ export default function CostAnalysisPage() {
         console.error('Failed to apply optimization:', error);
       } else {
         import('@sentry/nextjs').then((Sentry) => {
-          Sentry.captureException(error as Error, { extra: { projectId, optimization } });
+          Sentry.captureException(error as Error, { extra: { projectId, optimizationId } });
         });
       }
       toast.showToast(error.response?.data?.detail || 'Failed to apply optimization', 'error');

@@ -906,16 +906,6 @@ export const notificationsAPI = {
   },
 };
 
-// Admin API
-export const adminAPI = {
-  generateSampleData: async (projectId: number) => {
-    const response = await apiClient.post('/admin/generate-sample-data', null, {
-      params: { project_id: projectId },
-    });
-    return response.data;
-  },
-};
-
 // Reports API
 export const reportsAPI = {
   generate: async (projectId: number, params: any) => {
@@ -1514,6 +1504,13 @@ export const insightsAPI = {
 
 // Admin API
 export const adminAPI = {
+  generateSampleData: async (projectId: number) => {
+    const response = await apiClient.post('/admin/generate-sample-data', null, {
+      params: { project_id: projectId },
+    });
+    return response.data?.data || response.data;
+  },
+
   getCurrentUser: async () => {
     const response = await apiClient.get('/auth/me');
     return response.data?.data || response.data;

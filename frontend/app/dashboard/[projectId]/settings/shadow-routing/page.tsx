@@ -127,7 +127,7 @@ export default function ShadowRoutingPage() {
         console.error('Failed to apply shadow routing:', error);
       } else {
         import('@sentry/nextjs').then((Sentry) => {
-          Sentry.captureException(error as Error, { extra: { projectId, config } });
+          Sentry.captureException(error as Error, { extra: { projectId } });
         });
       }
       toast.showToast(error.response?.data?.detail || 'Failed to apply shadow routing', 'error');

@@ -6,7 +6,7 @@ import { mappingAPI } from '@/lib/api';
 import AgentMap from '@/components/mapping/AgentMap';
 import NodeDetail from '@/components/mapping/NodeDetail';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import { UpgradePrompt } from '@/components/subscription/UpgradePrompt';
+import UpgradePrompt from '@/components/subscription/UpgradePrompt';
 import MapRenderFailedState from '@/components/states/MapRenderFailedState';
 import { Filter, Search, Focus } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -120,9 +120,10 @@ export default function MappingPage() {
     return (
       <div className="p-6">
         <UpgradePrompt
+          isOpen={true}
+          onClose={() => {}}
           feature="Auto-Mapping"
-          requiredPlan="Pro"
-          message="Auto-Mapping requires Pro plan or higher. Upgrade to visualize your agent structure."
+          requiredPlan="pro"
         />
       </div>
     );

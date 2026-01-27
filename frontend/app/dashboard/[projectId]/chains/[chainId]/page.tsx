@@ -201,7 +201,7 @@ export default function ChainDetailPage() {
         console.error('Failed to apply optimization:', error);
       } else {
         import('@sentry/nextjs').then((Sentry) => {
-          Sentry.captureException(error as Error, { extra: { projectId, chainId, optimization } });
+          Sentry.captureException(error as Error, { extra: { projectId, chainId, optimizationId } });
         });
       }
       toast.showToast(error.response?.data?.detail || 'Failed to apply optimization', 'error');

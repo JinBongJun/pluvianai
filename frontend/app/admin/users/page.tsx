@@ -204,6 +204,8 @@ export default function AdminUsersPage() {
                 <Pagination
                   currentPage={currentPage}
                   totalPages={totalPages}
+                  totalItems={totalUsers}
+                  itemsPerPage={itemsPerPage}
                   onPageChange={setCurrentPage}
                 />
               </div>
