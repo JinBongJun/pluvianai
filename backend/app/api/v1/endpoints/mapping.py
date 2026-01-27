@@ -3,7 +3,7 @@ Auto-Mapping endpoints for agent structure visualization
 """
 
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query, Path, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.core.database import get_db
@@ -114,7 +114,7 @@ async def get_dependency_graph(
 @handle_errors
 async def get_node_details(
     project_id: int = Query(..., description="Project ID"),
-    node_id: str = Query(..., description="Node ID (agent name)"),
+    node_id: str = Path(..., description="Node ID (agent name)"),
     days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
