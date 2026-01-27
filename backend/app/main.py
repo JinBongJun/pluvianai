@@ -105,29 +105,24 @@ app.add_exception_handler(Exception, general_exception_handler)
 # Parse CORS_ORIGINS from settings (supports comma-separated list or "*")
 cors_origins = settings.cors_origins_list
 
-# For Vercel preview deployments, always allow all origins to avoid CORS issues
-# Vercel creates new preview URLs for each deployment, making it impractical to whitelist
-# In production with a fixed domain, you can set CORS_ORIGINS to specific domains
-if not cors_origins or cors_origins == ["*"] or any("vercel.app" in str(origin) for origin in cors_origins):
-    # Allow all origins (for development/Vercel preview deployments)
-    allow_origins = ["*"]
-    allow_credentials = False  # Must be False when using allow_origins=["*"]
-    logger.info("CORS configured to allow all origins (*) - Vercel preview mode")
-else:
-    # Specific origins (for production with fixed domain)
-    allow_origins = cors_origins
-    allow_credentials = True  # Can use credentials with specific origins
-    logger.info(f"CORS configured with specific origins: {allow_origins}")
+# ALWAYS allow all origins for Railway/Vercel deployments
+# This ensures CORS works regardless of Vercel preview URL changes
+allow_origins = ["*"]
+allow_credentials = False  # Must be False when using allow_origins=["*"]
+
+logger.info(f"CORS configuration: allow_origins={allow_origins}, allow_credentials={allow_credentials}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
     allow_credentials=allow_credentials,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],  # Explicitly allow all methods
-    allow_headers=["*"],  # Allow all headers including Authorization, Content-Type, etc.
-    expose_headers=["*"],  # Expose all response headers to frontend
-    max_age=3600,  # Cache preflight requests for 1 hour
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],  # Expose all response headers
+    max_age=3600,  # Cache preflight for 1 hour
 )
+
+logger.info("✅ CORS middleware configured successfully")
 
 # Logging middleware (added immediately after CORS to catch all requests)
 # This MUST be early in the chain to log requests even if they fail later
@@ -318,6 +313,8 @@ async def startup_event():
         logger.warning("Skipping scheduler startup because database is unavailable.")
     
     logger.info("✅ Application startup complete - Server is ready to accept requests")
+    logger.info(f"✅ CORS is configured to allow all origins: {allow_origins}")
+    logger.info("✅ Server listening and ready for connections")
 
 
 @app.on_event("shutdown")
