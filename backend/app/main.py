@@ -104,20 +104,24 @@ app.add_exception_handler(Exception, general_exception_handler)
 # CORS must handle preflight OPTIONS requests before any other middleware
 # Parse CORS_ORIGINS from settings (supports comma-separated list or "*")
 cors_origins = settings.cors_origins_list
-if cors_origins == ["*"]:
+
+# Default to allowing all origins if not configured (for flexibility)
+if not cors_origins or cors_origins == ["*"]:
     # Allow all origins (for development/Vercel preview deployments)
     allow_origins = ["*"]
     allow_credentials = False  # Must be False when using allow_origins=["*"]
+    logger.info("CORS configured to allow all origins (*)")
 else:
     # Specific origins (for production)
     allow_origins = cors_origins
     allow_credentials = True  # Can use credentials with specific origins
+    logger.info(f"CORS configured with specific origins: {allow_origins}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
     allow_credentials=allow_credentials,
-    allow_methods=["*"],  # Allow all HTTP methods
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],  # Explicitly allow all methods
     allow_headers=["*"],  # Allow all headers including Authorization, Content-Type, etc.
     expose_headers=["*"],  # Expose all response headers to frontend
     max_age=3600,  # Cache preflight requests for 1 hour
