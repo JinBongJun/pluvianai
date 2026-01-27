@@ -57,7 +57,10 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
       const data = await firewallAPI.getRules(projectId);
       setRules(Array.isArray(data) ? data : []);
     } catch (error: any) {
-      toast.error('Failed to load firewall rules', error.response?.data?.detail || error.message);
+      toast.showToast(
+        error.response?.data?.detail || error.message || 'Failed to load firewall rules',
+        'error',
+      );
     } finally {
       setLoading(false);
     }
@@ -74,12 +77,15 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
         rule_id: rule.id,
       });
       
-      toast.success('Firewall rule created successfully');
+      toast.showToast('Firewall rule created successfully', 'success');
       setShowCreateModal(false);
       resetForm();
       loadRules();
     } catch (error: any) {
-      toast.error('Failed to create rule', error.response?.data?.detail || error.message);
+      toast.showToast(
+        error.response?.data?.detail || error.message || 'Failed to create rule',
+        'error',
+      );
     }
   };
 
@@ -87,12 +93,15 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
     if (!editingRule) return;
     try {
       await firewallAPI.updateRule(projectId, editingRule.id, formData);
-      toast.success('Firewall rule updated successfully');
+      toast.showToast('Firewall rule updated successfully', 'success');
       setEditingRule(null);
       resetForm();
       loadRules();
     } catch (error: any) {
-      toast.error('Failed to update rule', error.response?.data?.detail || error.message);
+      toast.showToast(
+        error.response?.data?.detail || error.message || 'Failed to update rule',
+        'error',
+      );
     }
   };
 
@@ -100,20 +109,29 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
     if (!confirm('Are you sure you want to delete this rule?')) return;
     try {
       await firewallAPI.deleteRule(projectId, ruleId);
-      toast.success('Firewall rule deleted successfully');
+      toast.showToast('Firewall rule deleted successfully', 'success');
       loadRules();
     } catch (error: any) {
-      toast.error('Failed to delete rule', error.response?.data?.detail || error.message);
+      toast.showToast(
+        error.response?.data?.detail || error.message || 'Failed to delete rule',
+        'error',
+      );
     }
   };
 
   const handleToggle = async (rule: FirewallRule) => {
     try {
       await firewallAPI.updateRule(projectId, rule.id, { enabled: !rule.enabled });
-      toast.success(`Rule ${rule.enabled ? 'disabled' : 'enabled'} successfully`);
+      toast.showToast(
+        `Rule ${rule.enabled ? 'disabled' : 'enabled'} successfully`,
+        'success',
+      );
       loadRules();
     } catch (error: any) {
-      toast.error('Failed to toggle rule', error.response?.data?.detail || error.message);
+      toast.showToast(
+        error.response?.data?.detail || error.message || 'Failed to toggle rule',
+        'error',
+      );
     }
   };
 
@@ -273,7 +291,12 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
             <label className="block text-sm font-medium text-slate-300 mb-1">Rule Type</label>
             <Select
               value={formData.rule_type}
-              onChange={(e) => setFormData({ ...formData, rule_type: e.target.value })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  rule_type: (e as any)?.target?.value ?? formData.rule_type,
+                })
+              }
               options={[
                 { value: 'pii', label: 'PII Detection' },
                 { value: 'toxicity', label: 'Toxicity' },
@@ -287,7 +310,9 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
             <label className="block text-sm font-medium text-slate-300 mb-1">Name</label>
             <Input
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, name: (e as any)?.target?.value ?? formData.name })
+              }
               placeholder="Rule name"
             />
           </div>
@@ -296,7 +321,12 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
             <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
             <Input
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  description: (e as any)?.target?.value ?? formData.description,
+                })
+              }
               placeholder="Rule description (optional)"
             />
           </div>
@@ -305,7 +335,12 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
             <label className="block text-sm font-medium text-slate-300 mb-1">Pattern (Regex/Keyword)</label>
             <Input
               value={formData.pattern}
-              onChange={(e) => setFormData({ ...formData, pattern: e.target.value })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  pattern: (e as any)?.target?.value ?? formData.pattern,
+                })
+              }
               placeholder="Regular expression or keyword"
             />
           </div>
@@ -314,7 +349,12 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
             <label className="block text-sm font-medium text-slate-300 mb-1">Pattern Type</label>
             <Select
               value={formData.pattern_type}
-              onChange={(e) => setFormData({ ...formData, pattern_type: e.target.value })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  pattern_type: (e as any)?.target?.value ?? formData.pattern_type,
+                })
+              }
               options={[
                 { value: 'regex', label: 'Regular Expression' },
                 { value: 'keyword', label: 'Keyword' },
@@ -327,7 +367,12 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
             <label className="block text-sm font-medium text-slate-300 mb-1">Action</label>
             <Select
               value={formData.action}
-              onChange={(e) => setFormData({ ...formData, action: e.target.value })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  action: (e as any)?.target?.value ?? formData.action,
+                })
+              }
               options={[
                 { value: 'block', label: 'Block' },
                 { value: 'warn', label: 'Warn' },
@@ -340,7 +385,12 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
             <label className="block text-sm font-medium text-slate-300 mb-1">Severity</label>
             <Select
               value={formData.severity}
-              onChange={(e) => setFormData({ ...formData, severity: e.target.value })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  severity: (e as any)?.target?.value ?? formData.severity,
+                })
+              }
               options={[
                 { value: 'low', label: 'Low' },
                 { value: 'medium', label: 'Medium' },
@@ -355,7 +405,12 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
               type="checkbox"
               id="enabled"
               checked={formData.enabled}
-              onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  enabled: (e as any)?.target?.checked ?? formData.enabled,
+                })
+              }
               className="w-4 h-4 rounded border-dark-border bg-dark-card text-purple-500 focus:ring-purple-500"
             />
             <label htmlFor="enabled" className="text-sm text-slate-300">

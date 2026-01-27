@@ -53,7 +53,10 @@ export default function JudgeFeedbackComponent({ projectId, evaluationId }: Judg
       const data = await judgeFeedbackAPI.getFeedback(projectId, evaluationId);
       setFeedbacks(Array.isArray(data) ? data : []);
     } catch (error: any) {
-      toast.error('Failed to load judge feedback', error.response?.data?.detail || error.message);
+      toast.showToast(
+        error.response?.data?.detail || error.message || 'Failed to load judge feedback',
+        'error',
+      );
     } finally {
       setLoading(false);
     }
@@ -73,13 +76,16 @@ export default function JudgeFeedbackComponent({ projectId, evaluationId }: Judg
     try {
       const { judgeFeedbackAPI } = await import('@/lib/api');
       await judgeFeedbackAPI.createFeedback(projectId, formData);
-      toast.success('Judge feedback created successfully');
+      toast.showToast('Judge feedback created successfully', 'success');
       setShowCreateModal(false);
       resetForm();
       loadFeedbacks();
       loadReliabilityMetrics();
     } catch (error: any) {
-      toast.error('Failed to create feedback', error.response?.data?.detail || error.message);
+      toast.showToast(
+        error.response?.data?.detail || error.message || 'Failed to create feedback',
+        'error',
+      );
     }
   };
 
@@ -92,13 +98,16 @@ export default function JudgeFeedbackComponent({ projectId, evaluationId }: Judg
         comment: formData.comment,
         correction_reason: formData.correction_reason,
       });
-      toast.success('Judge feedback updated successfully');
+      toast.showToast('Judge feedback updated successfully', 'success');
       setEditingFeedback(null);
       resetForm();
       loadFeedbacks();
       loadReliabilityMetrics();
     } catch (error: any) {
-      toast.error('Failed to update feedback', error.response?.data?.detail || error.message);
+      toast.showToast(
+        error.response?.data?.detail || error.message || 'Failed to update feedback',
+        'error',
+      );
     }
   };
 

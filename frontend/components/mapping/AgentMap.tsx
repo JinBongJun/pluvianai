@@ -182,6 +182,8 @@ export default function AgentMap({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const reactFlowInstance = useRef<any>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const [showNodeDetails, setShowNodeDetails] = useState(false);
+  const [selectedNodeData, setSelectedNodeData] = useState<AgentNode | null>(null);
   
   // Filtering state
   const [filters, setFilters] = useState<MapFiltersType>({});
@@ -194,6 +196,7 @@ export default function AgentMap({
   const [focusDepth, setFocusDepth] = useState(2);
   const [isLoadingSubgraph, setIsLoadingSubgraph] = useState(false);
   const [breadcrumb, setBreadcrumb] = useState<string[]>([]);
+  const [mapRenderError, setMapRenderError] = useState(false);
   
   // Original data (for resetting focus mode)
   const [originalNodes, setOriginalNodes] = useState<AgentNode[]>(agentNodes);
@@ -319,16 +322,10 @@ export default function AgentMap({
           setBreadcrumb([...breadcrumb, node.id]);
         } catch (error) {
           if (process.env.NODE_ENV === 'development') {
-            if (process.env.NODE_ENV === 'development') {
             console.error('Failed to load subgraph:', error);
           } else {
             import('@sentry/nextjs').then((Sentry) => {
-              Sentry.captureException(error as Error, { extra: { projectId, focusNode } });
-            });
-          }
-          } else {
-            import('@sentry/nextjs').then((Sentry) => {
-              Sentry.captureException(error as Error, { extra: { projectId, focusNode } });
+              Sentry.captureException(error as Error, { extra: { projectId, focusNodeId } });
             });
           }
         } finally {
@@ -472,16 +469,10 @@ export default function AgentMap({
           }}
           onError={(error) => {
             if (process.env.NODE_ENV === 'development') {
-              if (process.env.NODE_ENV === 'development') {
               console.error('ReactFlow error:', error);
             } else {
               import('@sentry/nextjs').then((Sentry) => {
-                Sentry.captureException(error as Error);
-              });
-            }
-            } else {
-              import('@sentry/nextjs').then((Sentry) => {
-                Sentry.captureException(error as Error);
+                Sentry.captureException(error as unknown as Error);
               });
             }
             setMapRenderError(true);

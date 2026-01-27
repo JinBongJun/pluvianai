@@ -48,7 +48,10 @@ export default function NotificationSettings({ projectId }: NotificationSettings
           Sentry.captureException(error as Error, { extra: { projectId } });
         });
       }
-      toast.error('Failed to load notification settings');
+      toast.showToast(
+        error.response?.data?.detail || error.message || 'Failed to load notification settings',
+        'error',
+      );
     } finally {
       setLoading(false);
     }
@@ -60,7 +63,7 @@ export default function NotificationSettings({ projectId }: NotificationSettings
     try {
       setSaving(true);
       await notificationSettingsAPI.updateSettings(projectId, settings);
-      toast.success('Notification settings saved successfully');
+      toast.showToast('Notification settings saved successfully', 'success');
     } catch (error: any) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Failed to save notification settings:', error);
@@ -69,7 +72,10 @@ export default function NotificationSettings({ projectId }: NotificationSettings
           Sentry.captureException(error as Error, { extra: { projectId } });
         });
       }
-      toast.error('Failed to save notification settings');
+      toast.showToast(
+        error.response?.data?.detail || error.message || 'Failed to save notification settings',
+        'error',
+      );
     } finally {
       setSaving(false);
     }
@@ -79,7 +85,7 @@ export default function NotificationSettings({ projectId }: NotificationSettings
     try {
       setTesting(channel);
       await notificationSettingsAPI.sendTest(projectId, channel);
-      toast.success(`Test ${channel} notification sent successfully`);
+      toast.showToast(`Test ${channel} notification sent successfully`, 'success');
     } catch (error: any) {
       if (process.env.NODE_ENV === 'development') {
         console.error(`Failed to send test ${channel} notification:`, error);
@@ -88,7 +94,12 @@ export default function NotificationSettings({ projectId }: NotificationSettings
           Sentry.captureException(error as Error, { extra: { projectId, channel } });
         });
       }
-      toast.error(`Failed to send test ${channel} notification: ${error.response?.data?.detail || error.message}`);
+      toast.showToast(
+        `Failed to send test ${channel} notification: ${
+          error.response?.data?.detail || error.message || ''
+        }`,
+        'error',
+      );
     } finally {
       setTesting(null);
     }
