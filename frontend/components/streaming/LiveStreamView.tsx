@@ -77,7 +77,7 @@ export default function LiveStreamView({
         console.error('SSE connection error:', err);
       } else {
         import('@sentry/nextjs').then((Sentry) => {
-          Sentry.captureException(err as Error, { extra: { projectId } });
+          Sentry.captureException(err as unknown as Error, { extra: { projectId } });
         });
       }
       setError(true);

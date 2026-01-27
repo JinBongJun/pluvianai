@@ -58,7 +58,7 @@ export default function RuleMarketDetail({ ruleId, onDownload }: RuleMarketDetai
           Sentry.captureException(error as Error, { extra: { ruleId } });
         });
       }
-      toast.error('Failed to load rule');
+      toast.showToast('Failed to load rule', 'error');
     } finally {
       setLoading(false);
     }
@@ -84,14 +84,14 @@ export default function RuleMarketDetail({ ruleId, onDownload }: RuleMarketDetai
 
   const handleDownload = async () => {
     if (!selectedProjectId) {
-      toast.error('Please select a project');
+      toast.showToast('Please select a project', 'error');
       return;
     }
 
     try {
       setDownloading(true);
       await ruleMarketAPI.download(ruleId, selectedProjectId);
-      toast.success('Rule downloaded successfully');
+      toast.showToast('Rule downloaded successfully', 'success');
       
       if (onDownload) {
         onDownload(ruleId, selectedProjectId);
@@ -104,10 +104,10 @@ export default function RuleMarketDetail({ ruleId, onDownload }: RuleMarketDetai
         console.error('Failed to download rule:', error);
       } else {
         import('@sentry/nextjs').then((Sentry) => {
-          Sentry.captureException(error as Error, { extra: { ruleId, projectId } });
+          Sentry.captureException(error as Error, { extra: { ruleId, selectedProjectId } });
         });
       }
-      toast.error(error.response?.data?.detail || 'Failed to download rule');
+      toast.showToast(error.response?.data?.detail || 'Failed to download rule', 'error');
     } finally {
       setDownloading(false);
     }
@@ -118,7 +118,7 @@ export default function RuleMarketDetail({ ruleId, onDownload }: RuleMarketDetai
       setUserRating(newRating);
       const updated = await ruleMarketAPI.rate(ruleId, newRating);
       setRating(updated.rating);
-      toast.success('Rating submitted');
+      toast.showToast('Rating submitted', 'success');
     } catch (error: any) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Failed to rate rule:', error);
@@ -127,7 +127,7 @@ export default function RuleMarketDetail({ ruleId, onDownload }: RuleMarketDetai
           Sentry.captureException(error as Error, { extra: { ruleId } });
         });
       }
-      toast.error('Failed to submit rating');
+      toast.showToast('Failed to submit rating', 'error');
       setUserRating(null);
     }
   };
