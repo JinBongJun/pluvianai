@@ -330,6 +330,22 @@ async def shutdown_event():
     # Additional cleanup tasks can be added here
 
 
+@app.options("/{full_path:path}")
+async def options_handler(full_path: str, request: Request):
+    """Explicit OPTIONS handler for CORS preflight"""
+    origin = request.headers.get("origin", "*")
+    logger.info(f"OPTIONS request for {full_path} from origin: {origin}")
+    from fastapi.responses import Response
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Max-Age": "3600",
+        }
+    )
+
 @app.get("/")
 async def root():
     return {"message": settings.APP_NAME, "version": settings.APP_VERSION}

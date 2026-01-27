@@ -180,9 +180,14 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
     
     from app.core.responses import error_response
-    return error_response(
+    response = error_response(
         code="INTERNAL_SERVER_ERROR",
         message="An unexpected error occurred",
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         origin="Proxy",  # AgentGuard server error
     )
+    # Ensure CORS headers are added even on errors
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response

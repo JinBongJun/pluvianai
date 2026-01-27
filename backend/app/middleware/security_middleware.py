@@ -15,6 +15,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response: Response = await call_next(request)
 
+        # CRITICAL: Never override CORS headers - they must be set by CORS middleware
+        # Only add security headers if CORS headers are not already present
+        if "access-control-allow-origin" not in response.headers:
+            # If CORS headers are missing, add them (fallback)
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "*"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+
         # HSTS (HTTP Strict Transport Security) - only for HTTPS
         if request.url.scheme == "https":
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -32,13 +40,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
         # Content-Security-Policy: Restrict resource loading
-        # Note: Adjust CSP based on your frontend needs
+        # Note: Adjust CSP based on your frontend needs - relaxed for CORS
         csp = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "  # Allow inline scripts for Next.js
-            "style-src 'self' 'unsafe-inline'; "  # Allow inline styles
+            "default-src 'self' https:; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "  # Allow inline scripts for Next.js
+            "style-src 'self' 'unsafe-inline' https:; "  # Allow inline styles
             "img-src 'self' data: https:; "
-            "font-src 'self' data:; "
+            "font-src 'self' data: https:; "
             "connect-src 'self' https:; "
             "frame-ancestors 'none';"
         )
