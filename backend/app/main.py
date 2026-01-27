@@ -180,26 +180,7 @@ async def add_api_version_headers(request, call_next):
     return response
 
 
-# Start stream processor background task
-@app.on_event("startup")
-async def startup_event():
-    """Start background tasks on application startup"""
-    from app.services.stream_processor import stream_processor
-    import asyncio
-    
-    # Start stream processor in background
-    asyncio.create_task(stream_processor.start())
-    logger.info("Stream processor background task started")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Stop background tasks on application shutdown"""
-    from app.services.stream_processor import stream_processor
-    
-    # Stop stream processor
-    await stream_processor.stop()
-    logger.info("Stream processor background task stopped")
+# Note: startup_event is defined below (line 237) - duplicate removed
 
 
 async def update_business_metrics_periodically():
@@ -335,6 +316,8 @@ async def startup_event():
         logger.info("Business metrics update task started")
     else:
         logger.warning("Skipping scheduler startup because database is unavailable.")
+    
+    logger.info("✅ Application startup complete - Server is ready to accept requests")
 
 
 @app.on_event("shutdown")
