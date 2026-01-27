@@ -17,6 +17,7 @@ from app.core.security import (
     get_current_user,
 )
 from app.core.logging_config import logger
+from app.core.decorators import handle_errors
 from app.core.dependencies import get_user_service, get_audit_service, get_audit_service
 from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.models.user import User
@@ -150,6 +151,7 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
+@handle_errors
 async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
