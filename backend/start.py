@@ -5,12 +5,11 @@ Railway provides PORT environment variable
 """
 import os
 import sys
-import subprocess
 
 # Get PORT from environment variable, default to 8000
 port = os.environ.get("PORT", "8000")
 
-# Start uvicorn
+# Start uvicorn (Railway runs this from backend directory)
 cmd = [
     sys.executable,
     "-m",
@@ -22,4 +21,5 @@ cmd = [
     str(port),
 ]
 
+# Use execvp to replace current process
 os.execvp(cmd[0], cmd)
