@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.logging_config import logger
 from app.core.decorators import handle_errors
-from app.core.dependencies import get_organization_service
+from app.core.dependencies import get_organization_service, get_project_service
 from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.models.user import User
 from app.models.organization import Organization, OrganizationMember
