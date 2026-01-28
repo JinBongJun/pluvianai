@@ -13,6 +13,7 @@ from app.core.security import get_current_user, get_user_from_api_key
 from app.core.permissions import check_project_access
 from app.core.decorators import handle_errors
 from app.core.logging_config import logger
+from app.core.responses import success_response
 from app.core.dependencies import get_api_call_service, get_snapshot_repository
 from app.services.data_normalizer import DataNormalizer
 from app.services.background_tasks import background_task_service
@@ -310,7 +311,7 @@ class APICallStatsResponse(BaseModel):
     period_end: datetime
 
 
-@router.get("/stats", response_model=APICallStatsResponse)
+@router.get("/stats")
 @handle_errors
 async def get_api_call_stats(
     project_id: int = Query(..., description="Project ID", gt=0),
@@ -318,8 +319,15 @@ async def get_api_call_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get API call statistics including success rate for a project"""
+    """
+    Get API call statistics including success rate for a project
+    Following API_REFERENCE.md: Returns standard response format
+    """
     logger.info(f"🔵 GET API CALL STATS: project_id={project_id}, days={days}, user_id={current_user.id}")
+    logger.info(
+        f"User {current_user.id} requested API call stats for project {project_id} (days: {days})",
+        extra={"user_id": current_user.id, "project_id": project_id, "days": days}
+    )
     # Verify project access (any member can view)
     check_project_access(project_id, current_user, db)
 
@@ -341,7 +349,7 @@ async def get_api_call_stats(
 
     # Handle None stats result
     if stats is None:
-        return APICallStatsResponse(
+        result = APICallStatsResponse(
             total_calls=0,
             successful_calls=0,
             failed_calls=0,
@@ -349,13 +357,18 @@ async def get_api_call_stats(
             period_start=period_start,
             period_end=period_end,
         )
+        logger.info(
+            f"API call stats retrieved for project {project_id}: no data found",
+            extra={"user_id": current_user.id, "project_id": project_id}
+        )
+        return success_response(data=result.model_dump())
 
     total_calls = int(stats.total_calls) if stats.total_calls else 0
     successful_calls = int(stats.successful_calls) if stats.successful_calls else 0
     failed_calls = total_calls - successful_calls
     success_rate = (successful_calls / total_calls) if total_calls > 0 else 0.0
 
-    return APICallStatsResponse(
+    result = APICallStatsResponse(
         total_calls=total_calls,
         successful_calls=successful_calls,
         failed_calls=failed_calls,
@@ -363,6 +376,14 @@ async def get_api_call_stats(
         period_start=period_start,
         period_end=period_end,
     )
+
+    logger.info(
+        f"API call stats retrieved for project {project_id}: total={result.total_calls}, success_rate={result.success_rate:.2%}",
+        extra={"user_id": current_user.id, "project_id": project_id, "total_calls": result.total_calls}
+    )
+
+    # Return using standard response format
+    return success_response(data=result.model_dump())
 
 
 @router.post("", response_model=APICallResponse, status_code=status.HTTP_201_CREATED)

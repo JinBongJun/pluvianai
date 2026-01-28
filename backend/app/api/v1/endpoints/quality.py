@@ -231,7 +231,7 @@ async def get_quality_stats(
 
     # Handle None stats result
     if stats is None:
-        return QualityStatsResponse(
+        result = QualityStatsResponse(
             average_score=0.0,
             min_score=0.0,
             max_score=0.0,
@@ -239,6 +239,11 @@ async def get_quality_stats(
             period_start=period_start,
             period_end=period_end,
         )
+        logger.info(
+            f"Quality stats retrieved for project {project_id}: no data found",
+            extra={"user_id": current_user.id, "project_id": project_id}
+        )
+        return success_response(data=result.model_dump())
 
     result = QualityStatsResponse(
         average_score=float(stats.avg_score) if stats.avg_score else 0.0,
