@@ -292,12 +292,20 @@ class AlertService:
                 if channel not in channel_services:
                     results[channel] = {
                         "status": "error",
-                        "message": f"Unknown channel: {channel}",
+                        "message": f"Channel {channel} not available or not configured",
                         "channel": channel,
                     }
                     continue
                 
                 service, kwargs = channel_services[channel]
+                
+                if not service:
+                    results[channel] = {
+                        "status": "error",
+                        "message": f"Service for {channel} not available",
+                        "channel": channel,
+                    }
+                    continue
                 
                 # Check if channel is enabled
                 if not service.enabled:
