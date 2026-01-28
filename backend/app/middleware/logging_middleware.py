@@ -16,7 +16,11 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         # Log ALL requests immediately - even before processing
         origin = request.headers.get("origin", "none")
         ip = request.client.host if request.client else "unknown"
-        logger.info(f"🟡 LOGGING MIDDLEWARE: {request.method} {request.url.path} from origin: {origin}, ip: {ip}")
+        # Enhanced logging for API endpoints to debug routing issues
+        if request.url.path.startswith("/api/v1/"):
+            logger.info(f"🟡 LOGGING MIDDLEWARE: {request.method} {request.url.path} from origin: {origin}, ip: {ip}")
+        else:
+            logger.debug(f"🟡 LOGGING MIDDLEWARE: {request.method} {request.url.path} from origin: {origin}, ip: {ip}")
         
         # Skip detailed logging for health checks and docs (but still log that they were accessed)
         if request.url.path in ["/health", "/docs", "/openapi.json", "/redoc"]:
