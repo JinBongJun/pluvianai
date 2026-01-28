@@ -221,9 +221,9 @@ export default function OrgProjectsPage() {
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-ag-bg border border-white/5 px-2.5 py-1 text-ag-text">
                     <span className="text-ag-accent">⭐</span> {p.quality?.toFixed(1) ?? '–'}%
                   </span>
-                  {p.alerts > 0 && (
+                  {(p.alerts ?? 0) > 0 && (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 border border-red-500/20 px-2.5 py-1 text-red-300">
-                      <span className="text-xs">⚠️</span> {p.alerts} alerts
+                      <span className="text-xs">⚠️</span> {p.alerts ?? 0} alerts
                     </span>
                   )}
                 </div>
