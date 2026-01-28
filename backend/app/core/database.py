@@ -22,17 +22,29 @@ if "@" in db_url_for_logging:
             db_url_for_logging = f"{user_part}:***@{parts[1]}"
 logger.info(f"Database URL: {db_url_for_logging}")
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,  # Verify connections before using
-    pool_size=10,  # Base pool size
-    max_overflow=20,  # Additional connections when needed
-    pool_recycle=3600,  # Recycle connections after 1 hour
-    pool_timeout=30,  # Timeout for getting connection
-    echo=settings.DEBUG,  # Log SQL queries in debug mode
-    # Optimize for JSONB queries
-    connect_args={"options": "-c timezone=utc"} if "postgresql" in settings.DATABASE_URL else {},
-)
+# Create engine with connection retry and better error handling
+try:
+    connect_args = {}
+    if "postgresql" in settings.DATABASE_URL:
+        connect_args = {
+            "options": "-c timezone=utc",
+            "connect_timeout": 10,  # 10 second connection timeout
+        }
+    
+    engine = create_engine(
+        settings.DATABASE_URL,
+        pool_pre_ping=True,  # Verify connections before using
+        pool_size=10,  # Base pool size
+        max_overflow=20,  # Additional connections when needed
+        pool_recycle=3600,  # Recycle connections after 1 hour
+        pool_timeout=30,  # Timeout for getting connection
+        echo=settings.DEBUG,  # Log SQL queries in debug mode
+        connect_args=connect_args,
+    )
+    logger.info("Database engine created successfully")
+except Exception as e:
+    logger.error(f"Failed to create database engine: {type(e).__name__}: {str(e)}")
+    raise
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -67,15 +79,33 @@ def check_database_health() -> bool:
     Lightweight health check to verify DB connectivity.
     """
     from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError, SQLAlchemyError
     from app.core.logging_config import logger
+    import traceback
     
     try:
+        logger.debug("Attempting database health check...")
         with engine.connect() as connection:
             # Use text() for SQLAlchemy 2.0 compatibility
             result = connection.execute(text("SELECT 1"))
             result.fetchone()  # Actually fetch the result
+        logger.debug("Database health check succeeded")
         return True
+    except OperationalError as e:
+        # Network/connection errors
+        error_msg = str(e)
+        logger.error(f"Database health check failed (OperationalError): {error_msg}")
+        logger.error(f"Full error: {traceback.format_exc()}")
+        return False
+    except SQLAlchemyError as e:
+        # Other SQLAlchemy errors
+        error_msg = str(e)
+        logger.error(f"Database health check failed (SQLAlchemyError): {error_msg}")
+        logger.error(f"Full error: {traceback.format_exc()}")
+        return False
     except Exception as e:
-        # Log the error for debugging
-        logger.error(f"Database health check failed: {type(e).__name__}: {str(e)}")
+        # Any other errors
+        error_msg = str(e)
+        logger.error(f"Database health check failed (Unexpected): {type(e).__name__}: {error_msg}")
+        logger.error(f"Full error: {traceback.format_exc()}")
         return False
