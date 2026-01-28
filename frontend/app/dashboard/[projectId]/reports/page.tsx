@@ -6,10 +6,21 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import Button from '@/components/ui/Button';
 import DateRangePicker from '@/components/ui/DateRangePicker';
 import Select from '@/components/ui/Select';
+import Badge from '@/components/ui/Badge';
 import { reportsAPI } from '@/lib/api';
 import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
-import { FileText, Download, Calendar, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import {
+  FileText,
+  Download,
+  Calendar,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  CheckCircle,
+  Info,
+  Loader2,
+} from 'lucide-react';
 import ProjectTabs from '@/components/ProjectTabs';
 import { clsx } from 'clsx';
 
@@ -642,9 +653,6 @@ function ExecutiveReportView({ report }: { report: any }) {
           </div>
         </div>
       )}
-    </div>
-  );
-}
     </div>
   );
 }

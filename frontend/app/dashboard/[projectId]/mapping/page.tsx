@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import Button from '@/components/ui/Button';
+import Select from '@/components/ui/Select';
 import { mappingAPI } from '@/lib/api';
 import AgentMap from '@/components/mapping/AgentMap';
 import NodeDetail from '@/components/mapping/NodeDetail';
@@ -291,7 +294,5 @@ export default function MappingPage() {
         )}
       </div>
     </DashboardLayout>
-  );
-}
   );
 }
