@@ -3,6 +3,7 @@ AgentGuard FastAPI Application
 """
 
 import os
+import sys
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
@@ -262,30 +263,53 @@ async def startup_event():
                     alembic_cfg.set_main_option("script_location", alembic_script_location)
                     
                     logger.info("🔄 Starting Alembic migrations (non-blocking)...")
+                    print("🔄 Starting Alembic migrations (non-blocking)...", file=sys.stderr)
                     # Run in executor to avoid blocking event loop
                     loop = asyncio.get_event_loop()
                     await loop.run_in_executor(None, command.upgrade, alembic_cfg, "head")
                     logger.info("✅ Alembic migrations applied successfully")
+                    print("✅ Alembic migrations applied successfully", file=sys.stderr)
                 else:
                     # Fallback if alembic.ini not found
+                    logger.warning("alembic.ini not found, using create_all fallback")
                     loop = asyncio.get_event_loop()
                     await loop.run_in_executor(None, Base.metadata.create_all, engine)
                     logger.info("Database tables initialized (alembic.ini not found, using create_all)")
             except Exception as migration_error:
-                logger.error(f"Alembic migration failed: {migration_error}", exc_info=True)
+                logger.error(f"🔴 Alembic migration failed: {migration_error}", exc_info=True)
+                print(f"🔴 Alembic migration failed: {migration_error}", file=sys.stderr)
                 # Try to manually add missing columns if migration fails
                 try:
                     from sqlalchemy import text
+                    logger.info("🔧 Attempting to manually add missing columns...")
+                    print("🔧 Attempting to manually add missing columns...", file=sys.stderr)
                     loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(None, lambda: engine.begin().execute(text("""
-                        SELECT column_name 
-                        FROM information_schema.columns 
-                        WHERE table_name='users' AND column_name='referral_code'
-                    """)))
-                    # If we get here, check result and add columns if needed
-                    # (simplified - full logic would check result)
+                    with engine.begin() as conn:
+                        # Check if stripe_customer_id column exists
+                        result = conn.execute(text("""
+                            SELECT column_name 
+                            FROM information_schema.columns 
+                            WHERE table_name='users' AND column_name='stripe_customer_id'
+                        """))
+                        if result.fetchone() is None:
+                            logger.info("🔧 Adding stripe_customer_id column manually...")
+                            print("🔧 Adding stripe_customer_id column manually...", file=sys.stderr)
+                            conn.execute(text("""
+                                ALTER TABLE users 
+                                ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)
+                            """))
+                            conn.execute(text("""
+                                CREATE INDEX IF NOT EXISTS ix_users_stripe_customer_id 
+                                ON users(stripe_customer_id)
+                            """))
+                            logger.info("✅ stripe_customer_id column added manually")
+                            print("✅ stripe_customer_id column added manually", file=sys.stderr)
+                        else:
+                            logger.info("✅ stripe_customer_id column already exists")
+                            print("✅ stripe_customer_id column already exists", file=sys.stderr)
                 except Exception as manual_fix_error:
-                    logger.error(f"Failed to manually add columns: {manual_fix_error}", exc_info=True)
+                    logger.error(f"🔴 Failed to manually add columns: {manual_fix_error}", exc_info=True)
+                    print(f"🔴 Failed to manually add columns: {manual_fix_error}", file=sys.stderr)
         
         # Start migration task but don't wait for it - server starts immediately
         asyncio.create_task(run_migrations_async())
