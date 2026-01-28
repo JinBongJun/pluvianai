@@ -300,7 +300,7 @@ export default function TrustCenterPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-white/10 bg-[#0B0C15] mt-12 py-8">
+      <footer className="border-t border-white/10 bg-ag-surface mt-12 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-sm text-slate-400">

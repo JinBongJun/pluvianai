@@ -88,149 +88,149 @@ export default function NotificationsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <div className="space-y-8 max-w-4xl mx-auto">
         <div>
-          <h1 className="text-3xl font-bold text-white">Notification Settings</h1>
-          <p className="text-gray-400 mt-1">Configure how and when you receive notifications</p>
+          <h1 className="text-3xl font-bold text-ag-text">Notification Settings</h1>
+          <p className="text-ag-muted mt-1">Configure how and when you receive notifications</p>
         </div>
 
         {/* Email Notifications */}
-        <div className="bg-[#0A0F1C] rounded-lg shadow-sm border border-gray-700 p-6">
+        <div className="bg-ag-surface rounded-lg shadow-2xl border border-white/10 p-6">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-blue-900/20 rounded-lg">
-              <Mail className="h-5 w-5 text-blue-400" />
+            <div className="p-2 bg-ag-primary/20 rounded-lg">
+              <Mail className="h-5 w-5 text-ag-accent" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-white">Email Notifications</h2>
-              <p className="text-sm text-gray-400">Receive notifications via email</p>
+              <h2 className="text-xl font-semibold text-ag-text">Email Notifications</h2>
+              <p className="text-sm text-ag-muted">Receive notifications via email</p>
             </div>
           </div>
 
           <div className="space-y-4">
-            <label className="flex items-center justify-between p-4 border border-gray-700 rounded-lg hover:bg-gray-800 cursor-pointer">
+            <label className="flex items-center justify-between p-4 border border-white/10 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
               <div>
-                <div className="font-medium text-white">Drift Detection</div>
-                <div className="text-sm text-gray-400">Get notified when model drift is detected</div>
+                <div className="font-medium text-ag-text">Drift Detection</div>
+                <div className="text-sm text-ag-muted">Get notified when model drift is detected</div>
               </div>
               <input
                 type="checkbox"
                 checked={settings.email_drift}
                 onChange={(e) => setSettings({ ...settings, email_drift: e.target.checked })}
-                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-white/20 rounded bg-ag-bg"
               />
             </label>
 
-            <label className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+            <label className="flex items-center justify-between p-4 border border-white/10 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
               <div>
-                <div className="font-medium text-white">Cost Anomaly</div>
-                <div className="text-sm text-gray-400">Get notified when unusual cost patterns are detected</div>
+                <div className="font-medium text-ag-text">Cost Anomaly</div>
+                <div className="text-sm text-ag-muted">Get notified when unusual cost patterns are detected</div>
               </div>
               <input
                 type="checkbox"
                 checked={settings.email_cost_anomaly}
                 onChange={(e) => setSettings({ ...settings, email_cost_anomaly: e.target.checked })}
-                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-white/20 rounded bg-ag-bg"
               />
             </label>
 
-            <label className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+            <label className="flex items-center justify-between p-4 border border-white/10 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
               <div>
-                <div className="font-medium text-white">Quality Drop</div>
-                <div className="text-sm text-gray-400">Get notified when quality scores drop significantly</div>
+                <div className="font-medium text-ag-text">Quality Drop</div>
+                <div className="text-sm text-ag-muted">Get notified when quality scores drop significantly</div>
               </div>
               <input
                 type="checkbox"
                 checked={settings.email_quality_drop}
                 onChange={(e) => setSettings({ ...settings, email_quality_drop: e.target.checked })}
-                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-white/20 rounded bg-ag-bg"
               />
             </label>
           </div>
         </div>
 
         {/* In-App Notifications */}
-        <div className="bg-[#0A0F1C] rounded-lg shadow-sm border border-gray-700 p-6">
+        <div className="bg-ag-surface rounded-lg shadow-2xl border border-white/10 p-6">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-orange-900/20 rounded-lg">
-              <Bell className="h-5 w-5 text-orange-400" />
+            <div className="p-2 bg-ag-primary/20 rounded-lg">
+              <Bell className="h-5 w-5 text-ag-accent" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-white">In-App Notifications</h2>
-              <p className="text-sm text-gray-400">Receive notifications within the application</p>
+              <h2 className="text-xl font-semibold text-ag-text">In-App Notifications</h2>
+              <p className="text-sm text-ag-muted">Receive notifications within the application</p>
             </div>
           </div>
 
           <div className="space-y-4">
-            <label className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+            <label className="flex items-center justify-between p-4 border border-white/10 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
               <div>
-                <div className="font-medium text-white">Drift Detection</div>
-                <div className="text-sm text-gray-400">Show in-app notifications for drift detection</div>
+                <div className="font-medium text-ag-text">Drift Detection</div>
+                <div className="text-sm text-ag-muted">Show in-app notifications for drift detection</div>
               </div>
               <input
                 type="checkbox"
                 checked={settings.in_app_drift}
                 onChange={(e) => setSettings({ ...settings, in_app_drift: e.target.checked })}
-                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-white/20 rounded bg-ag-bg"
               />
             </label>
 
-            <label className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+            <label className="flex items-center justify-between p-4 border border-white/10 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
               <div>
-                <div className="font-medium text-white">Cost Anomaly</div>
-                <div className="text-sm text-gray-400">Show in-app notifications for cost anomalies</div>
+                <div className="font-medium text-ag-text">Cost Anomaly</div>
+                <div className="text-sm text-ag-muted">Show in-app notifications for cost anomalies</div>
               </div>
               <input
                 type="checkbox"
                 checked={settings.in_app_cost_anomaly}
                 onChange={(e) => setSettings({ ...settings, in_app_cost_anomaly: e.target.checked })}
-                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-white/20 rounded bg-ag-bg"
               />
             </label>
 
-            <label className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+            <label className="flex items-center justify-between p-4 border border-white/10 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
               <div>
-                <div className="font-medium text-white">Quality Drop</div>
-                <div className="text-sm text-gray-400">Show in-app notifications for quality drops</div>
+                <div className="font-medium text-ag-text">Quality Drop</div>
+                <div className="text-sm text-ag-muted">Show in-app notifications for quality drops</div>
               </div>
               <input
                 type="checkbox"
                 checked={settings.in_app_quality_drop}
                 onChange={(e) => setSettings({ ...settings, in_app_quality_drop: e.target.checked })}
-                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-white/20 rounded bg-ag-bg"
               />
             </label>
           </div>
         </div>
 
         {/* Slack Integration */}
-        <div className="bg-[#0A0F1C] rounded-lg shadow-sm border border-gray-700 p-6">
+        <div className="bg-ag-surface rounded-lg shadow-2xl border border-white/10 p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-ag-primary/20 rounded-lg">
               <MessageSquare className="h-5 w-5 text-ag-accent" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-white">Slack Integration</h2>
-              <p className="text-sm text-gray-400">Send notifications to a Slack channel</p>
+              <h2 className="text-xl font-semibold text-ag-text">Slack Integration</h2>
+              <p className="text-sm text-ag-muted">Send notifications to a Slack channel</p>
             </div>
           </div>
 
           <div className="space-y-4">
-            <label className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+            <label className="flex items-center justify-between p-4 border border-white/10 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
               <div>
-                <div className="font-medium text-white">Enable Slack Notifications</div>
-                <div className="text-sm text-gray-400">Send notifications to your Slack workspace</div>
+                <div className="font-medium text-ag-text">Enable Slack Notifications</div>
+                <div className="text-sm text-ag-muted">Send notifications to your Slack workspace</div>
               </div>
               <input
                 type="checkbox"
                 checked={settings.slack_enabled}
                 onChange={(e) => setSettings({ ...settings, slack_enabled: e.target.checked })}
-                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-white/20 rounded bg-ag-bg"
               />
             </label>
 
             {settings.slack_enabled && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
+              <div className="animate-in fade-in slide-in-from-top-2">
+                <label className="block text-sm font-medium text-ag-muted mb-1">
                   Slack Webhook URL
                 </label>
                 <Input
@@ -238,8 +238,9 @@ export default function NotificationsPage() {
                   value={settings.slack_webhook_url}
                   onChange={(e) => setSettings({ ...settings, slack_webhook_url: e.target.value })}
                   placeholder="https://hooks.slack.com/services/..."
+                  className="bg-ag-bg border-white/10 focus:border-ag-accent"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-ag-muted/60 mt-1">
                   Create a webhook in your Slack workspace settings
                 </p>
               </div>
@@ -248,34 +249,34 @@ export default function NotificationsPage() {
         </div>
 
         {/* Discord Integration */}
-        <div className="bg-[#0A0F1C] rounded-lg shadow-sm border border-gray-700 p-6">
+        <div className="bg-ag-surface rounded-lg shadow-2xl border border-white/10 p-6">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-indigo-900/20 rounded-lg">
-              <MessageSquare className="h-5 w-5 text-indigo-400" />
+            <div className="p-2 bg-ag-primary/20 rounded-lg">
+              <MessageSquare className="h-5 w-5 text-ag-accent" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-white">Discord Integration</h2>
-              <p className="text-sm text-gray-400">Send notifications to a Discord channel</p>
+              <h2 className="text-xl font-semibold text-ag-text">Discord Integration</h2>
+              <p className="text-sm text-ag-muted">Send notifications to a Discord channel</p>
             </div>
           </div>
 
           <div className="space-y-4">
-            <label className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+            <label className="flex items-center justify-between p-4 border border-white/10 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
               <div>
-                <div className="font-medium text-white">Enable Discord Notifications</div>
-                <div className="text-sm text-gray-400">Send notifications to your Discord server</div>
+                <div className="font-medium text-ag-text">Enable Discord Notifications</div>
+                <div className="text-sm text-ag-muted">Send notifications to your Discord server</div>
               </div>
               <input
                 type="checkbox"
                 checked={settings.discord_enabled}
                 onChange={(e) => setSettings({ ...settings, discord_enabled: e.target.checked })}
-                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-white/20 rounded bg-ag-bg"
               />
             </label>
 
             {settings.discord_enabled && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
+              <div className="animate-in fade-in slide-in-from-top-2">
+                <label className="block text-sm font-medium text-ag-muted mb-1">
                   Discord Webhook URL
                 </label>
                 <Input
@@ -283,8 +284,9 @@ export default function NotificationsPage() {
                   value={settings.discord_webhook_url}
                   onChange={(e) => setSettings({ ...settings, discord_webhook_url: e.target.value })}
                   placeholder="https://discord.com/api/webhooks/..."
+                  className="bg-ag-bg border-white/10 focus:border-ag-accent"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-ag-muted/60 mt-1">
                   Create a webhook in your Discord channel settings
                 </p>
               </div>
@@ -293,14 +295,23 @@ export default function NotificationsPage() {
         </div>
 
         {/* Save Button */}
-        <div className="flex justify-end">
+        <div className="flex justify-end pt-4">
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2"
+            className="min-w-[160px]"
           >
-            <Save className="h-4 w-4" />
-            {saving ? 'Saving...' : 'Save Changes'}
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 h-4 w-4" />
+                Save Changes
+              </>
+            )}
           </Button>
         </div>
       </div>

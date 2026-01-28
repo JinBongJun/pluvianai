@@ -15,15 +15,26 @@ interface SearchResult {
   icon: React.ReactNode;
 }
 
-export default function GlobalSearch() {
+interface GlobalSearchProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export default function GlobalSearch({ isOpen: propIsOpen, onClose }: GlobalSearchProps) {
   const router = useRouter();
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+
+  const isOpen = propIsOpen !== undefined ? propIsOpen : internalIsOpen;
+  const setIsOpen = (val: boolean) => {
+    if (onClose && !val) onClose();
+    setInternalIsOpen(val);
+  };
 
   useEffect(() => {
     const handleOpenSearch = () => {
@@ -225,7 +236,7 @@ export default function GlobalSearch() {
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-center pt-[20vh]"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center pt-[20vh]"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           setIsOpen(false);
@@ -234,12 +245,12 @@ export default function GlobalSearch() {
     >
       <div
         ref={modalRef}
-        className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4"
+        className="bg-ag-surface border border-white/10 rounded-lg shadow-2xl w-full max-w-2xl mx-4 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input */}
-        <div className="flex items-center gap-3 p-4 border-b border-gray-200">
-          <Search className="h-5 w-5 text-gray-400" />
+        <div className="flex items-center gap-3 p-4 border-b border-white/10">
+          <Search className="h-5 w-5 text-ag-muted" />
           <input
             ref={inputRef}
             type="text"
@@ -249,10 +260,10 @@ export default function GlobalSearch() {
               setSelectedIndex(0);
             }}
             placeholder="Search projects, API calls, drift detections..."
-            className="flex-1 outline-none text-gray-900 placeholder-gray-400"
+            className="flex-1 bg-transparent outline-none text-ag-text placeholder-ag-muted"
           />
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <kbd className="px-2 py-1 bg-gray-100 rounded">Esc</kbd>
+          <div className="flex items-center gap-2 text-xs text-ag-muted">
+            <kbd className="px-2 py-1 bg-white/5 border border-white/10 rounded">Esc</kbd>
             <span>to close</span>
           </div>
         </div>
@@ -260,36 +271,36 @@ export default function GlobalSearch() {
         {/* Results */}
         <div className="max-h-96 overflow-y-auto">
           {loading ? (
-            <div className="p-8 text-center text-gray-500">Searching...</div>
+            <div className="p-8 text-center text-ag-muted">Searching...</div>
           ) : query.length < 2 ? (
-            <div className="p-8 text-center text-gray-500">
-              <Search className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+            <div className="p-8 text-center text-ag-muted">
+              <Search className="h-12 w-12 text-white/10 mx-auto mb-2" />
               <p>Type at least 2 characters to search</p>
-              <div className="mt-4 text-xs text-gray-400 space-y-1">
+              <div className="mt-4 text-xs text-ag-muted/60 space-y-1">
                 <div>Search across projects, API calls, and drift detections</div>
               </div>
             </div>
           ) : results.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-ag-muted">
               <p>No results found</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-white/5">
               {results.map((result, index) => (
                 <button
                   key={`${result.type}-${result.id}`}
                   onClick={() => handleResultClick(result)}
                   className={clsx(
-                    'w-full flex items-center gap-3 p-4 text-left hover:bg-gray-50 transition-colors',
-                    index === selectedIndex && 'bg-gray-50'
+                    'w-full flex items-center gap-3 p-4 text-left transition-colors',
+                    index === selectedIndex ? 'bg-white/10' : 'hover:bg-white/5'
                   )}
                 >
-                  <div className="text-gray-400">{result.icon}</div>
+                  <div className="text-ag-muted">{result.icon}</div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-gray-900">{result.title}</div>
-                    <div className="text-sm text-gray-600 truncate">{result.subtitle}</div>
+                    <div className="font-medium text-ag-text">{result.title}</div>
+                    <div className="text-sm text-ag-muted truncate">{result.subtitle}</div>
                   </div>
-                  <div className="text-xs text-gray-400 capitalize">{result.type.replace('_', ' ')}</div>
+                  <div className="text-xs text-ag-muted uppercase tracking-wider">{result.type.replace('_', ' ')}</div>
                 </button>
               ))}
             </div>
@@ -298,7 +309,7 @@ export default function GlobalSearch() {
 
         {/* Footer */}
         {results.length > 0 && (
-          <div className="p-3 border-t border-gray-200 text-xs text-gray-500 text-center">
+          <div className="p-3 border-t border-white/10 text-xs text-ag-muted text-center">
             Use arrow keys to navigate, Enter to select
           </div>
         )}

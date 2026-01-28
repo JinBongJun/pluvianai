@@ -22,10 +22,10 @@ export default function EmptyState({
   className,
 }: EmptyStateProps) {
   return (
-    <div className={clsx('text-center py-12', className)}>
-      {icon && <div className="mb-4 flex justify-center">{icon}</div>}
-      <h3 className="text-lg font-medium text-gray-900 mb-2">{title}</h3>
-      <p className="text-sm text-gray-600 mb-6 max-w-md mx-auto">{description}</p>
+    <div className={clsx('text-center py-12 px-6 bg-ag-surface border border-white/10 rounded-2xl shadow-xl', className)}>
+      {icon && <div className="mb-4 flex justify-center text-ag-accent">{icon}</div>}
+      <h3 className="text-xl font-bold text-ag-text mb-2">{title}</h3>
+      <p className="text-sm text-ag-muted mb-8 max-w-md mx-auto">{description}</p>
       {actionLabel && onAction && (
         <Button onClick={onAction}>{actionLabel}</Button>
       )}

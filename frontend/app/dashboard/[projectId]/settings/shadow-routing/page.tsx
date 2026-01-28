@@ -155,7 +155,7 @@ export default function ShadowRoutingPage() {
 
   return (
     <DashboardLayout>
-      <div className="bg-[#000314] min-h-screen">
+      <div className="bg-ag-bg min-h-screen">
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
@@ -208,7 +208,7 @@ export default function ShadowRoutingPage() {
             >
               <option value="">Select model...</option>
               {availableModels.map((model) => (
-                <option key={model} value={model} className="bg-[#0B0C15]">
+                <option key={model} value={model} className="bg-ag-surface">
                   {model}
                 </option>
               ))}

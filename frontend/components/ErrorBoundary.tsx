@@ -46,10 +46,10 @@ export default class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-bold text-red-600 mb-4">Something went wrong</h2>
-            <p className="text-gray-700 mb-4">
+        <div className="min-h-screen flex items-center justify-center bg-ag-bg">
+          <div className="max-w-md w-full bg-ag-surface border border-white/10 rounded-lg shadow-2xl p-6 text-center">
+            <h2 className="text-xl font-bold text-red-400 mb-4">Something went wrong</h2>
+            <p className="text-ag-muted mb-6">
               {this.state.error?.message || 'An unexpected error occurred'}
             </p>
             <button
@@ -57,7 +57,7 @@ export default class ErrorBoundary extends Component<Props, State> {
                 this.setState({ hasError: false, error: null });
                 window.location.reload();
               }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="w-full px-4 py-2 bg-ag-primary text-ag-accent-light rounded-md hover:bg-ag-primaryHover transition-colors font-medium"
             >
               Reload Page
             </button>

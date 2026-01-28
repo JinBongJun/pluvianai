@@ -467,10 +467,10 @@ export default function DateRangePicker({
                 className={clsx(
                   'h-8 w-8 rounded text-sm transition-all duration-150 relative flex items-center justify-center',
                   isFrom || isTo
-                    ? 'bg-gray-900 text-white font-medium rounded-md'
+                    ? 'bg-ag-accent text-black font-medium rounded-md'
                     : isInRange
-                    ? 'bg-gray-100 text-gray-900'
-                    : 'text-gray-700 hover:bg-gray-50'
+                    ? 'bg-ag-accent/20 text-ag-accentLight'
+                    : 'text-ag-muted hover:bg-white/5 hover:text-ag-text'
                 )}
               >
                 {date.getDate()}
@@ -515,7 +515,7 @@ export default function DateRangePicker({
       {typeof window !== 'undefined' && isOpen && dropdownPosition && createPortal(
         <div 
           data-datepicker-dropdown
-          className="fixed bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden animate-fade-in" 
+          className="fixed bg-ag-surface rounded-lg shadow-2xl border border-white/10 overflow-hidden animate-fade-in" 
           onClick={(e) => {
             e.stopPropagation();
             e.preventDefault();
@@ -535,8 +535,8 @@ export default function DateRangePicker({
         >
           <div className="flex">
             {/* Left Panel - Presets */}
-            <div className="w-48 border-r border-gray-200 bg-gray-50 p-4">
-              <div className="text-xs font-medium text-gray-500 mb-2">Quick Select</div>
+            <div className="w-48 border-r border-white/10 bg-white/5 p-4">
+              <div className="text-xs font-medium text-ag-muted mb-2">Quick Select</div>
               <div className="space-y-1">
                 {(presets || defaultPresets).map((preset, index) => {
                   const isActive = isPresetActive(preset);
@@ -547,8 +547,8 @@ export default function DateRangePicker({
                       className={clsx(
                         'w-full text-left px-3 py-2 text-sm rounded transition-colors',
                         isActive
-                          ? 'bg-blue-500 text-white font-medium'
-                          : 'text-gray-700 hover:bg-gray-100'
+                          ? 'bg-ag-primary text-ag-accent-light font-medium'
+                          : 'text-ag-muted hover:bg-white/5 hover:text-ag-text'
                       )}
                     >
                       {preset.label}
@@ -559,7 +559,7 @@ export default function DateRangePicker({
             </div>
 
             {/* Right Panel - Calendar */}
-            <div className="flex-1 p-6 bg-white">
+            <div className="flex-1 p-6 bg-ag-surface">
               <div className="flex items-center justify-between mb-6">
                 <button
                   onClick={() => {
@@ -567,11 +567,11 @@ export default function DateRangePicker({
                     prev.setMonth(prev.getMonth() - 1);
                     setCurrentMonth(prev);
                   }}
-                  className="p-1 hover:bg-gray-100 rounded text-gray-600 transition-colors"
+                  className="p-1 hover:bg-white/5 rounded text-ag-muted transition-colors"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
-                <div className="font-semibold text-gray-900">
+                <div className="font-semibold text-ag-text">
                   {currentMonth.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}
                 </div>
                 <button
@@ -580,7 +580,7 @@ export default function DateRangePicker({
                     next.setMonth(next.getMonth() + 1);
                     setCurrentMonth(next);
                   }}
-                  className="p-1 hover:bg-gray-100 rounded text-gray-600 transition-colors"
+                  className="p-1 hover:bg-white/5 rounded text-ag-muted transition-colors"
                 >
                   <ChevronRight className="h-5 w-5" />
                 </button>
@@ -588,10 +588,10 @@ export default function DateRangePicker({
               {renderCalendar()}
               
               {/* Actions */}
-              <div className="flex items-center justify-end gap-3 mt-6 pt-6 border-t border-gray-200">
+              <div className="flex items-center justify-end gap-3 mt-6 pt-6 border-t border-white/10">
                 <button
                   onClick={handleClear}
-                  className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                  className="text-sm text-ag-muted hover:text-ag-text transition-colors"
                 >
                   Clear
                 </button>

@@ -61,7 +61,7 @@ export default function OrgProjectsPage() {
     >
       <div className="max-w-6xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-6">Projects</h1>
+          <h1 className="text-3xl font-bold mb-6 text-ag-text">Projects</h1>
           
           {/* Search and Actions Bar */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -72,10 +72,10 @@ export default function OrgProjectsPage() {
                   placeholder="Search for a project"
                   value={projectQuery}
                   onChange={(e) => setProjectQuery(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-ag-surface px-4 py-2 pl-10 text-sm text-white placeholder:text-ag-muted focus:border-ag-accent focus:outline-none"
+                  className="w-full rounded-lg border border-white/10 bg-ag-surface px-4 py-2 pl-10 text-sm text-ag-text placeholder:text-ag-muted focus:border-ag-accent focus:outline-none"
                 />
                 <svg
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400"
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-ag-muted"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -83,17 +83,20 @@ export default function OrgProjectsPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
-              <button className="rounded-lg border border-white/10 bg-ag-surface p-2 hover:bg-white/5 transition-colors">
-                <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <button className="rounded-lg border border-white/10 bg-ag-surface p-2 hover:bg-white/5 transition-colors text-ag-muted hover:text-ag-text">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                 </svg>
               </button>
             </div>
             <div className="flex items-center gap-3">
-              <div className="inline-flex items-center rounded-lg border border-white/10 bg-ag-surface">
+              <div className="inline-flex items-center rounded-lg border border-white/10 bg-ag-surface overflow-hidden">
                 <button
                   onClick={() => setView('grid')}
-                  className={`p-2 ${view === 'grid' ? 'bg-ag-primary text-ag-accent-light rounded-l-lg' : 'text-slate-400 hover:text-white'}`}
+                  className={clsx(
+                    'p-2 transition-colors',
+                    view === 'grid' ? 'bg-ag-primary text-ag-accent-light' : 'text-ag-muted hover:bg-white/5 hover:text-ag-text'
+                  )}
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -101,20 +104,23 @@ export default function OrgProjectsPage() {
                 </button>
                 <button
                   onClick={() => setView('list')}
-                  className={`p-2 ${view === 'list' ? 'bg-ag-primary text-ag-accent-light rounded-r-lg' : 'text-slate-400 hover:text-white'}`}
+                  className={clsx(
+                    'p-2 transition-colors border-l border-white/10',
+                    view === 'list' ? 'bg-ag-primary text-ag-accent-light' : 'text-ag-muted hover:bg-white/5 hover:text-ag-text'
+                  )}
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                   </svg>
                 </button>
               </div>
-              <button
+              <Button
                 onClick={() => router.push(`/organizations/${orgId}/projects/new`)}
-                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-700 transition-colors"
+                className="flex items-center gap-2"
               >
                 <span className="text-lg leading-none">+</span>
                 <span>New project</span>
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -194,31 +200,30 @@ export default function OrgProjectsPage() {
               <button
                 key={p.id}
                 onClick={() => router.push(`/organizations/${orgId}/projects/${p.id}`)}
-                className="w-full text-left rounded-xl border border-white/10 bg-ag-surface px-5 py-4 hover:border-ag-accent/50 hover:bg-white/5 transition-colors"
+                className="w-full text-left rounded-xl border border-white/10 bg-ag-surface px-5 py-4 hover:border-ag-accent/50 hover:bg-white/5 transition-all duration-200 shadow-lg hover:shadow-ag-accent/5"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div>
-                    <div className="text-lg font-semibold">{p.name}</div>
-                    {p.description && <div className="text-slate-400 text-sm">{p.description}</div>}
+                    <div className="text-lg font-bold text-ag-text">{p.name}</div>
+                    {p.description && <div className="text-ag-muted text-sm line-clamp-1">{p.description}</div>}
                   </div>
-                  <span className="text-xs text-slate-500">#{p.id}</span>
+                  <span className="text-[10px] font-mono text-ag-muted/50 bg-white/5 px-1.5 py-0.5 rounded">#{p.id}</span>
                 </div>
-                <div className="mt-2 flex flex-wrap gap-2 text-sm text-slate-300">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-1">
-                    📊 {p.calls24h?.toLocaleString() ?? 0} (24h)
+                <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-ag-bg border border-white/5 px-2.5 py-1 text-ag-text">
+                    <span className="text-ag-accent">📊</span> {p.calls24h?.toLocaleString() ?? 0} <span className="text-[10px] text-ag-muted">24h</span>
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-1">
-                    💰 ${p.cost7d?.toFixed(2) ?? '0.00'} (7d)
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-ag-bg border border-white/5 px-2.5 py-1 text-ag-text">
+                    <span className="text-ag-accent">💰</span> ${p.cost7d?.toFixed(2) ?? '0.00'} <span className="text-[10px] text-ag-muted">7d</span>
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-1">
-                    ⭐ {p.quality?.toFixed(1) ?? '–'}%
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-ag-bg border border-white/5 px-2.5 py-1 text-ag-text">
+                    <span className="text-ag-accent">⭐</span> {p.quality?.toFixed(1) ?? '–'}%
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-1">
-                    ⚠️ {p.alerts ?? 0} alerts
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-1">
-                    🔄 {p.drift ? 'Drift' : 'No drift'}
-                  </span>
+                  {p.alerts > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 border border-red-500/20 px-2.5 py-1 text-red-300">
+                      <span className="text-xs">⚠️</span> {p.alerts} alerts
+                    </span>
+                  )}
                 </div>
               </button>
             ))}

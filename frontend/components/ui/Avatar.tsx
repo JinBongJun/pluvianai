@@ -41,7 +41,7 @@ export default function Avatar({
   return (
     <div
       className={clsx(
-        'inline-flex items-center justify-center rounded-full bg-gray-200 text-gray-700 font-medium',
+        'inline-flex items-center justify-center rounded-full bg-ag-primary/20 text-ag-accentLight font-medium border border-ag-primary/30',
         sizeClasses[size],
         className
       )}

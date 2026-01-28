@@ -51,23 +51,23 @@ export default function Modal({
         />
         <div
           className={clsx(
-            'relative bg-white rounded-lg shadow-xl w-full',
+            'relative bg-ag-surface border border-white/10 rounded-lg shadow-2xl w-full',
             sizeClasses[size]
           )}
           onClick={(e) => e.stopPropagation()}
         >
           {title && (
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+              <h3 className="text-lg font-semibold text-ag-text">{title}</h3>
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-ag-muted hover:text-ag-text transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
           )}
-          <div className="px-6 py-4">{children}</div>
+          <div className="px-6 py-4 text-ag-text">{children}</div>
         </div>
       </div>
     </div>

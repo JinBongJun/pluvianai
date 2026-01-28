@@ -89,29 +89,29 @@ export default function ProjectSettings({ projectId, project, onUpdate }: Projec
   }
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl space-y-6">
-      <h2 className="text-lg font-semibold text-white mb-4">Project Settings</h2>
+    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-6 shadow-2xl space-y-6">
+      <h2 className="text-lg font-semibold text-ag-text mb-4">Project Settings</h2>
 
       <div className="mb-8">
         <PanicToggle projectId={projectId} />
       </div>
 
       {error && (
-        <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded">
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded text-sm font-medium">
           {error}
         </div>
       )}
 
       {/* Project Name */}
       <div>
-        <label className="block text-sm font-medium text-white mb-1">
+        <label className="block text-sm font-medium text-ag-text mb-1">
           Project Name *
         </label>
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full bg-white/5 border border-white/10 rounded-md shadow-sm px-3 py-2 text-white placeholder:text-slate-500 focus:ring-ag-accent focus:border-ag-accent"
+          className="w-full bg-ag-bg border border-white/10 rounded-md shadow-sm px-3 py-2 text-ag-text placeholder:text-ag-muted focus:ring-ag-accent focus:border-ag-accent"
           placeholder="My Project"
           maxLength={255}
         />
@@ -119,13 +119,13 @@ export default function ProjectSettings({ projectId, project, onUpdate }: Projec
 
       {/* Project Description */}
       <div>
-        <label className="block text-sm font-medium text-white mb-1">
+        <label className="block text-sm font-medium text-ag-text mb-1">
           Description
         </label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="w-full bg-white/5 border border-white/10 rounded-md shadow-sm px-3 py-2 text-white placeholder:text-slate-500 focus:ring-ag-accent focus:border-ag-accent"
+          className="w-full bg-ag-bg border border-white/10 rounded-md shadow-sm px-3 py-2 text-ag-text placeholder:text-ag-muted focus:ring-ag-accent focus:border-ag-accent"
           rows={4}
           placeholder="Project description"
           maxLength={1000}
@@ -162,9 +162,9 @@ export default function ProjectSettings({ projectId, project, onUpdate }: Projec
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-md p-6 max-w-md w-full shadow-2xl">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-6 max-w-md w-full shadow-2xl">
             <h3 className="text-lg font-semibold text-red-400 mb-4">Delete Project</h3>
-            <p className="text-slate-300 mb-4">
+            <p className="text-ag-muted mb-4 leading-relaxed">
               Are you sure you want to delete &quot;{project.name}&quot;? This action cannot be undone and will
               delete all associated data.
             </p>

@@ -55,31 +55,31 @@ export default function PanicToggle({ projectId }: PanicToggleProps) {
         }
     };
 
-    if (loading) return <div className="h-20 animate-pulse bg-white/5 rounded-lg"></div>;
+    if (loading) return <div className="h-20 animate-pulse bg-ag-surface rounded-lg"></div>;
 
     return (
         <div className={clsx(
             "relative overflow-hidden rounded-xl border p-5 transition-all duration-300",
             enabled
                 ? "border-red-500/50 bg-red-500/10 shadow-[0_0_20px_rgba(239,68,68,0.2)]"
-                : "border-white/10 bg-white/5"
+                : "border-white/10 bg-ag-surface"
         )}>
             <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                     <div className={clsx(
                         "p-2 rounded-lg",
-                        enabled ? "bg-red-500 text-white animate-pulse" : "bg-slate-700 text-slate-300"
+                        enabled ? "bg-red-500 text-white animate-pulse" : "bg-ag-primary/20 text-ag-accent"
                     )}>
                         {enabled ? <ShieldAlert className="h-6 w-6" /> : <ShieldCheck className="h-6 w-6" />}
                     </div>
                     <div>
                         <h3 className={clsx(
                             "text-lg font-bold",
-                            enabled ? "text-red-400" : "text-white"
+                            enabled ? "text-red-400" : "text-ag-text"
                         )}>
                             Panic Button (Circuit Breaker)
                         </h3>
-                        <p className="text-sm text-slate-400">
+                        <p className="text-sm text-ag-muted">
                             {enabled
                                 ? "Immediate shutdown active. All AI requests return 503."
                                 : "System running normally. Toggle to block all traffic."}

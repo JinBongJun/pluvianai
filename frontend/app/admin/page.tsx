@@ -59,7 +59,7 @@ export default function AdminPage() {
 
   return (
     <DashboardLayout>
-      <div className="bg-[#000314] min-h-screen p-6">
+      <div className="bg-ag-bg min-h-screen p-6">
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-2">

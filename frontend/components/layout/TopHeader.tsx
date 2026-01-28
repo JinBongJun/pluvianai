@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Search, HelpCircle, MessageSquare, Lightbulb, User } from 'lucide-react';
 import { clsx } from 'clsx';
 
+import ProfileMenu from './ProfileMenu';
+
 interface TopHeaderProps {
   breadcrumb?: { label: string; href?: string }[];
   showSearch?: boolean;
@@ -12,7 +14,11 @@ interface TopHeaderProps {
   onFeedbackClick?: () => void;
   onHelpClick?: () => void;
   onSuggestionsClick?: () => void;
-  onProfileClick?: () => void;
+  userEmail?: string;
+  userName?: string;
+  userPlan?: string;
+  onLogout?: () => void;
+  leftContent?: React.ReactNode;
   rightContent?: React.ReactNode;
 }
 
@@ -23,7 +29,11 @@ export default function TopHeader({
   onFeedbackClick,
   onHelpClick,
   onSuggestionsClick,
-  onProfileClick,
+  userEmail,
+  userName,
+  userPlan,
+  onLogout,
+  leftContent,
   rightContent,
 }: TopHeaderProps) {
   const router = useRouter();
@@ -39,20 +49,22 @@ export default function TopHeader({
             <span className="text-ag-accent-light font-bold text-sm">AG</span>
           </div>
         </button>
+        {leftContent}
         {breadcrumb.length > 0 && (
           <div className="flex items-center gap-2 text-ag-muted">
+            <span className="text-ag-muted/50 mx-1">/</span>
             {breadcrumb.map((item, idx) => (
               <div key={item.label} className="flex items-center gap-2">
-                <span className={clsx(idx === 0 && 'text-ag-text font-semibold')}>
+                <span className={clsx(idx === breadcrumb.length - 1 ? 'text-ag-text font-semibold' : 'hover:text-ag-text transition-colors')}>
                   {item.href ? (
-                    <Link href={item.href} className="hover:text-ag-text transition-colors">
+                    <Link href={item.href}>
                       {item.label}
                     </Link>
                   ) : (
                     item.label
                   )}
                 </span>
-                {idx < breadcrumb.length - 1 && <span className="text-ag-muted/70">/</span>}
+                {idx < breadcrumb.length - 1 && <span className="text-ag-muted/50 mx-1">/</span>}
               </div>
             ))}
           </div>
@@ -60,43 +72,42 @@ export default function TopHeader({
       </div>
 
       <div className="flex items-center gap-2 text-ag-text">
-        <button
-          onClick={onFeedbackClick}
-          className="hidden md:inline-flex items-center gap-1 px-3 py-1 rounded-lg text-sm hover:bg-white/5 transition-colors"
-        >
-          Feedback
-        </button>
+        {onFeedbackClick && (
+          <button
+            onClick={onFeedbackClick}
+            className="hidden md:inline-flex items-center gap-1 px-3 py-1 rounded-lg text-sm hover:bg-white/5 transition-colors text-ag-muted hover:text-ag-text"
+          >
+            Feedback
+          </button>
+        )}
         {showSearch && (
           <button
             onClick={onSearchClick}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-lg text-sm hover:bg-white/5 transition-colors"
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-lg text-sm hover:bg-white/5 transition-colors text-ag-muted hover:text-ag-text"
           >
             <Search className="h-4 w-4" />
             <span className="hidden md:inline">Search</span>
-            <span className="hidden sm:inline text-xs text-ag-muted">⌘K</span>
+            <span className="hidden sm:inline text-xs opacity-50">⌘K</span>
           </button>
         )}
         <button
-          onClick={onHelpClick}
-          className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-sm hover:bg-white/5 transition-colors"
+          onClick={onHelpClick || (() => router.push('/help'))}
+          className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-sm hover:bg-white/5 transition-colors text-ag-muted hover:text-ag-text"
         >
           <HelpCircle className="h-4 w-4" />
           <span className="hidden md:inline">Help</span>
         </button>
-        <button
-          onClick={onSuggestionsClick}
-          className="hidden md:inline-flex items-center gap-1 px-3 py-1 rounded-lg text-sm hover:bg-white/5 transition-colors"
-        >
-          <Lightbulb className="h-4 w-4" />
-          <span>Suggestions</span>
-        </button>
-        <button
-          onClick={onProfileClick}
-          className="inline-flex items-center gap-2 px-3 py-1 rounded-lg text-sm hover:bg-white/5 transition-colors"
-        >
-          <User className="h-4 w-4" />
-          <span className="hidden md:inline">Profile</span>
-        </button>
+        
+        {userEmail && onLogout && (
+          <div className="ml-2 border-l border-white/10 pl-4 h-8 flex items-center">
+            <ProfileMenu 
+              userEmail={userEmail} 
+              userName={userName} 
+              userPlan={userPlan} 
+              onLogout={onLogout} 
+            />
+          </div>
+        )}
         {rightContent}
       </div>
     </header>

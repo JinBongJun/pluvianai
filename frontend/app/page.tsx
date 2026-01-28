@@ -347,20 +347,20 @@ init({
 
             {/* Product */}
             <div>
-              <h4 className="font-semibold mb-4">Product</h4>
-              <ul className="space-y-2 text-sm text-slate-400">
+              <h4 className="font-semibold text-ag-text mb-4">Product</h4>
+              <ul className="space-y-2 text-sm text-ag-muted">
                 <li>
-                  <Link href="#features" className="hover:text-white transition-colors">
+                  <Link href="#features" className="hover:text-ag-text transition-colors">
                     Features
                   </Link>
                 </li>
                 <li>
-                  <Link href="#integrations" className="hover:text-white transition-colors">
+                  <Link href="#integrations" className="hover:text-ag-text transition-colors">
                     Integrations
                   </Link>
                 </li>
                 <li>
-                  <Link href="#pricing" className="hover:text-white transition-colors">
+                  <Link href="#pricing" className="hover:text-ag-text transition-colors">
                     Pricing
                   </Link>
                 </li>
@@ -369,20 +369,20 @@ init({
 
             {/* Resources */}
             <div>
-              <h4 className="font-semibold mb-4">Resources</h4>
-              <ul className="space-y-2 text-sm text-slate-400">
+              <h4 className="font-semibold text-ag-text mb-4">Resources</h4>
+              <ul className="space-y-2 text-sm text-ag-muted">
                 <li>
-                  <a href="https://docs.agentguard.ai" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
+                  <a href="https://docs.agentguard.ai" target="_blank" rel="noopener noreferrer" className="hover:text-ag-text transition-colors">
                     Documentation
                   </a>
                 </li>
                 <li>
-                  <a href="https://docs.agentguard.ai/api" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
+                  <a href="https://docs.agentguard.ai/api" target="_blank" rel="noopener noreferrer" className="hover:text-ag-text transition-colors">
                     API Reference
                   </a>
                 </li>
                 <li>
-                  <a href="mailto:support@agentguard.ai" className="hover:text-white transition-colors">
+                  <a href="mailto:support@agentguard.ai" className="hover:text-ag-text transition-colors">
                     Support
                   </a>
                 </li>
@@ -391,20 +391,20 @@ init({
 
             {/* Company */}
             <div>
-              <h4 className="font-semibold mb-4">Company</h4>
-              <ul className="space-y-2 text-sm text-slate-400">
+              <h4 className="font-semibold text-ag-text mb-4">Company</h4>
+              <ul className="space-y-2 text-sm text-ag-muted">
                 <li>
-                  <Link href="/about" className="hover:text-white transition-colors">
+                  <Link href="/about" className="hover:text-ag-text transition-colors">
                     About
                   </Link>
                 </li>
                 <li>
-                  <Link href="/blog" className="hover:text-white transition-colors">
+                  <Link href="/blog" className="hover:text-ag-text transition-colors">
                     Blog
                   </Link>
                 </li>
                 <li>
-                  <a href="mailto:contact@agentguard.ai" className="hover:text-white transition-colors">
+                  <a href="mailto:contact@agentguard.ai" className="hover:text-ag-text transition-colors">
                     Contact
                   </a>
                 </li>
@@ -414,21 +414,21 @@ init({
 
           {/* Bottom Bar */}
             <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-ag-muted">
               © {new Date().getFullYear()} AgentGuard. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
-              <Link href="/trust-center" className="text-slate-400 hover:text-white transition-colors text-sm">
+              <Link href="/trust-center" className="text-ag-muted hover:text-ag-text transition-colors text-sm">
                 Trust Center
               </Link>
               <div className="flex items-center gap-4">
-                <a href="https://github.com/agentguard" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-colors" aria-label="GitHub">
+                <a href="https://github.com/agentguard" target="_blank" rel="noopener noreferrer" className="text-ag-muted hover:text-ag-text transition-colors" aria-label="GitHub">
                   <Github className="h-5 w-5" />
                 </a>
-                <a href="https://twitter.com/agentguard" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-colors" aria-label="Twitter">
+                <a href="https://twitter.com/agentguard" target="_blank" rel="noopener noreferrer" className="text-ag-muted hover:text-ag-text transition-colors" aria-label="Twitter">
                   <Twitter className="h-5 w-5" />
                 </a>
-                <a href="https://linkedin.com/company/agentguard" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-colors" aria-label="LinkedIn">
+                <a href="https://linkedin.com/company/agentguard" target="_blank" rel="noopener noreferrer" className="text-ag-muted hover:text-ag-text transition-colors" aria-label="LinkedIn">
                   <Linkedin className="h-5 w-5" />
                 </a>
               </div>

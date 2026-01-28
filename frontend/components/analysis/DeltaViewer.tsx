@@ -68,17 +68,17 @@ export default function DeltaViewer({
   const diff = highlightDifferences(modelA.response, modelB.response);
 
   return (
-    <div className={clsx('rounded-xl border border-white/10 bg-white/5 p-6', className)}>
+    <div className={clsx('rounded-xl border border-white/10 bg-ag-surface p-6 shadow-xl', className)}>
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-white">Model Comparison</h3>
-        <div className="flex gap-2">
+        <h3 className="text-lg font-semibold text-ag-text">Model Comparison</h3>
+        <div className="flex bg-white/5 rounded-lg p-1">
           <button
             onClick={() => setSelectedView('side-by-side')}
             className={clsx(
-              'px-3 py-1.5 rounded text-sm transition-colors',
+              'px-3 py-1.5 rounded-md text-sm transition-all',
               selectedView === 'side-by-side'
-                ? 'bg-purple-600 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                ? 'bg-ag-primary text-ag-accent-light shadow-sm'
+                : 'text-ag-muted hover:text-ag-text'
             )}
           >
             Side-by-Side
@@ -86,10 +86,10 @@ export default function DeltaViewer({
           <button
             onClick={() => setSelectedView('diff')}
             className={clsx(
-              'px-3 py-1.5 rounded text-sm transition-colors',
+              'px-3 py-1.5 rounded-md text-sm transition-all',
               selectedView === 'diff'
-                ? 'bg-purple-600 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                ? 'bg-ag-primary text-ag-accent-light shadow-sm'
+                : 'text-ag-muted hover:text-ag-text'
             )}
           >
             Diff View
@@ -100,36 +100,36 @@ export default function DeltaViewer({
       {selectedView === 'side-by-side' ? (
         <div className="grid md:grid-cols-2 gap-4">
           {/* Model A */}
-          <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+          <div className="bg-ag-bg/50 rounded-lg p-4 border border-white/5">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="font-semibold text-white">{modelA.name}</h4>
+              <h4 className="font-semibold text-ag-text">{modelA.name}</h4>
               {modelA.score !== undefined && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-400">Score:</span>
-                  <span className="text-lg font-bold text-white">{modelA.score.toFixed(1)}</span>
+                  <span className="text-sm text-ag-muted">Score:</span>
+                  <span className="text-lg font-bold text-ag-text">{modelA.score.toFixed(1)}</span>
                 </div>
               )}
             </div>
             <div className="prose prose-invert max-w-none">
-              <p className="text-slate-300 whitespace-pre-wrap text-sm leading-relaxed">
+              <p className="text-ag-muted whitespace-pre-wrap text-sm leading-relaxed">
                 {modelA.response}
               </p>
             </div>
             {modelA.reasoning && (
               <div className="mt-3 pt-3 border-t border-white/10">
-                <p className="text-xs text-slate-400">{modelA.reasoning}</p>
+                <p className="text-xs text-ag-muted/70">{modelA.reasoning}</p>
               </div>
             )}
           </div>
 
           {/* Model B */}
-          <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+          <div className="bg-ag-bg/50 rounded-lg p-4 border border-white/5">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="font-semibold text-white">{modelB.name}</h4>
+              <h4 className="font-semibold text-ag-text">{modelB.name}</h4>
               {modelB.score !== undefined && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-400">Score:</span>
-                  <span className="text-lg font-bold text-white">{modelB.score.toFixed(1)}</span>
+                  <span className="text-sm text-ag-muted">Score:</span>
+                  <span className="text-lg font-bold text-ag-text">{modelB.score.toFixed(1)}</span>
                   {judgeFeedback?.regression_detected && modelB.score < (modelA.score || 0) && (
                     <AlertTriangle className="h-4 w-4 text-red-400" />
                   )}
@@ -137,13 +137,13 @@ export default function DeltaViewer({
               )}
             </div>
             <div className="prose prose-invert max-w-none">
-              <p className="text-slate-300 whitespace-pre-wrap text-sm leading-relaxed">
+              <p className="text-ag-muted whitespace-pre-wrap text-sm leading-relaxed">
                 {modelB.response}
               </p>
             </div>
             {modelB.reasoning && (
               <div className="mt-3 pt-3 border-t border-white/10">
-                <p className="text-xs text-slate-400">{modelB.reasoning}</p>
+                <p className="text-xs text-ag-muted/70">{modelB.reasoning}</p>
               </div>
             )}
           </div>
@@ -152,24 +152,24 @@ export default function DeltaViewer({
         <div className="space-y-4">
           {/* Diff View */}
           <div className="grid md:grid-cols-2 gap-4">
-            <div className="bg-slate-800/50 rounded-lg p-4 border border-red-500/20">
+            <div className="bg-ag-bg/50 rounded-lg p-4 border border-red-500/20">
               <div className="flex items-center gap-2 mb-3">
                 <XCircle className="h-4 w-4 text-red-400" />
                 <h4 className="font-semibold text-red-300">{modelA.name}</h4>
               </div>
               <div
-                className="text-slate-300 whitespace-pre-wrap text-sm leading-relaxed"
+                className="text-ag-muted whitespace-pre-wrap text-sm leading-relaxed"
                 dangerouslySetInnerHTML={{ __html: diff.a }}
               />
             </div>
 
-            <div className="bg-slate-800/50 rounded-lg p-4 border border-green-500/20">
+            <div className="bg-ag-bg/50 rounded-lg p-4 border border-emerald-500/20">
               <div className="flex items-center gap-2 mb-3">
-                <CheckCircle className="h-4 w-4 text-green-400" />
-                <h4 className="font-semibold text-green-300">{modelB.name}</h4>
+                <CheckCircle className="h-4 w-4 text-emerald-400" />
+                <h4 className="font-semibold text-emerald-300">{modelB.name}</h4>
               </div>
               <div
-                className="text-slate-300 whitespace-pre-wrap text-sm leading-relaxed"
+                className="text-ag-muted whitespace-pre-wrap text-sm leading-relaxed"
                 dangerouslySetInnerHTML={{ __html: diff.b }}
               />
             </div>
@@ -179,32 +179,32 @@ export default function DeltaViewer({
 
       {/* Judge Feedback */}
       {judgeFeedback && (
-        <div className="mt-6 p-4 bg-slate-800/50 rounded-lg border border-white/5">
+        <div className="mt-6 p-4 bg-ag-bg border border-white/5 rounded-lg shadow-inner">
           <div className="flex items-start gap-3">
             {judgeFeedback.regression_detected ? (
               <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
             ) : (
-              <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0 mt-0.5" />
+              <CheckCircle className="h-5 w-5 text-emerald-400 flex-shrink-0 mt-0.5" />
             )}
             <div className="flex-1">
-              <h4 className="font-semibold text-white mb-2">AI Judge Evaluation</h4>
+              <h4 className="font-semibold text-ag-text mb-2 text-sm uppercase tracking-wider">AI Judge Evaluation</h4>
               {judgeFeedback.original_score !== undefined && judgeFeedback.replayed_score !== undefined && (
                 <div className="flex items-center gap-4 mb-2">
                   <div>
-                    <span className="text-xs text-slate-400">Original:</span>
-                    <span className="ml-2 text-sm font-medium text-white">
+                    <span className="text-xs text-ag-muted">Original:</span>
+                    <span className="ml-2 text-sm font-medium text-ag-text">
                       {judgeFeedback.original_score.toFixed(1)}
                     </span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-slate-500" />
+                  <ArrowRight className="h-4 w-4 text-ag-muted/30" />
                   <div>
-                    <span className="text-xs text-slate-400">Replayed:</span>
+                    <span className="text-xs text-ag-muted">Replayed:</span>
                     <span
                       className={clsx(
                         'ml-2 text-sm font-medium',
                         judgeFeedback.replayed_score < judgeFeedback.original_score
                           ? 'text-red-400'
-                          : 'text-green-400'
+                          : 'text-emerald-400'
                       )}
                     >
                       {judgeFeedback.replayed_score.toFixed(1)}
@@ -213,11 +213,11 @@ export default function DeltaViewer({
                 </div>
               )}
               {judgeFeedback.reasoning && (
-                <p className="text-sm text-slate-300 mt-2">{judgeFeedback.reasoning}</p>
+                <p className="text-sm text-ag-muted/90 mt-2 italic leading-relaxed border-l-2 border-ag-accent/30 pl-3">{judgeFeedback.reasoning}</p>
               )}
               {judgeFeedback.regression_detected && (
-                <div className="mt-3 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded text-sm text-red-300">
-                  ⚠️ Regression detected: Quality decreased
+                <div className="mt-3 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded text-xs font-bold text-red-300">
+                  ⚠️ REGRESSION DETECTED
                 </div>
               )}
             </div>
@@ -227,29 +227,29 @@ export default function DeltaViewer({
 
       {/* Score Comparison */}
       {modelA.score !== undefined && modelB.score !== undefined && (
-        <div className="mt-4 flex items-center justify-center gap-4">
+        <div className="mt-6 flex items-center justify-center gap-8 py-4 border-t border-white/5">
           <div className="text-center">
-            <div className="text-xs text-slate-400 mb-1">{modelA.name}</div>
-            <div className="text-2xl font-bold text-white">{modelA.score.toFixed(1)}</div>
+            <div className="text-xs text-ag-muted uppercase tracking-widest mb-1">{modelA.name}</div>
+            <div className="text-3xl font-bold text-ag-text">{modelA.score.toFixed(1)}</div>
           </div>
-          <ArrowRight className="h-6 w-6 text-slate-500" />
+          <ArrowRight className="h-6 w-6 text-ag-muted/20" />
           <div className="text-center">
-            <div className="text-xs text-slate-400 mb-1">{modelB.name}</div>
+            <div className="text-xs text-ag-muted uppercase tracking-widest mb-1">{modelB.name}</div>
             <div
               className={clsx(
-                'text-2xl font-bold',
-                modelB.score < modelA.score ? 'text-red-400' : 'text-green-400'
+                'text-3xl font-bold',
+                modelB.score < modelA.score ? 'text-red-400' : 'text-emerald-400'
               )}
             >
               {modelB.score.toFixed(1)}
             </div>
           </div>
-          <div className="text-center">
-            <div className="text-xs text-slate-400 mb-1">Change</div>
+          <div className="text-center pl-8 border-l border-white/5">
+            <div className="text-xs text-ag-muted uppercase tracking-widest mb-1">Delta</div>
             <div
               className={clsx(
-                'text-lg font-semibold',
-                modelB.score < modelA.score ? 'text-red-400' : 'text-green-400'
+                'text-2xl font-black',
+                modelB.score < modelA.score ? 'text-red-400' : 'text-emerald-400'
               )}
             >
               {modelB.score >= modelA.score ? '+' : ''}

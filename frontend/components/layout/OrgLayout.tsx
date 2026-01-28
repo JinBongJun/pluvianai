@@ -8,6 +8,10 @@ import OrgSelector, { getLastSelectedOrgId } from './OrgSelector';
 import OrgSidebar from './OrgSidebar';
 import { authAPI } from '@/lib/api';
 
+import TopHeader from './TopHeader';
+import NotificationCenter from '@/components/notifications/NotificationCenter';
+import GlobalSearch from '@/components/search/GlobalSearch';
+
 interface OrgLayoutContextType {
   orgId: number | string;
 }
@@ -32,46 +36,36 @@ export default function OrgLayout({ children, orgId, breadcrumb = [] }: OrgLayou
   const router = useRouter();
   const pathname = usePathname();
   const [userEmail, setUserEmail] = useState<string>('');
+  const [userName, setUserName] = useState<string>('');
+  const [userPlan, setUserPlan] = useState<string>('free');
+  const [showSearch, setShowSearch] = useState(false);
 
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const user = await authAPI.getCurrentUser();
+        const { authAPI, subscriptionAPI } = await import('@/lib/api');
+        const [user, subscription] = await Promise.all([
+          authAPI.getCurrentUser(),
+          subscriptionAPI.getCurrent().catch(() => null)
+        ]);
         setUserEmail(user.email || '');
+        setUserName(user.full_name || '');
+        if (subscription) {
+          setUserPlan(subscription.plan_type || 'free');
+        }
       } catch (error) {
         if (process.env.NODE_ENV === 'development') {
-          console.error('Failed to load user:', error);
+          console.error('Failed to load user info:', error);
         }
       }
     };
     loadUser();
   }, []);
 
-  const handleSearchClick = () => {
-    // Global search functionality
-    const input = document.getElementById('global-search-input');
-    if (input) {
-      input.focus();
-    }
-  };
-
-  const handleFeedbackClick = () => {
-    // Feedback functionality
-    console.log('Feedback clicked');
-  };
-
-  const handleHelpClick = () => {
-    // Help functionality
-    console.log('Help clicked');
-  };
-
-  const handleSuggestionsClick = () => {
-    // Suggestions functionality
-    console.log('Suggestions clicked');
-  };
-
-  const handleProfileClick = () => {
-    router.push('/settings');
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    router.push('/login');
   };
 
   const handleOrgChange = (newOrgId: number) => {
@@ -81,92 +75,26 @@ export default function OrgLayout({ children, orgId, breadcrumb = [] }: OrgLayou
   return (
     <OrgLayoutContext.Provider value={{ orgId }}>
       <div className="min-h-screen bg-ag-bg text-ag-text">
-        {/* Top Header */}
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-white/10 bg-ag-bg/90 px-4 backdrop-blur">
-          <div className="flex items-center gap-3 text-sm text-ag-text">
-            <button
-              onClick={() => router.push('/organizations')}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-            >
-              <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center shadow-lg shadow-ag-primary/40">
-                <span className="text-ag-accent-light font-bold text-sm">AG</span>
-              </div>
-            </button>
-            <OrgSelector currentOrgId={orgId} onOrgChange={handleOrgChange} />
-            {breadcrumb.length > 0 && (
-              <div className="flex items-center gap-2 text-ag-muted">
-                {breadcrumb.map((item, idx) => (
-                  <div key={item.label} className="flex items-center gap-2">
-                    <span className={clsx(idx === 0 && 'text-ag-text font-semibold')}>
-                      {item.href ? (
-                        <a
-                          href={item.href}
-                          className="hover:text-ag-text transition-colors"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            router.push(item.href!);
-                          }}
-                        >
-                          {item.label}
-                        </a>
-                      ) : (
-                        item.label
-                      )}
-                    </span>
-                    {idx < breadcrumb.length - 1 && <span className="text-ag-muted/70">/</span>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+        <TopHeader 
+          breadcrumb={breadcrumb}
+          leftContent={<OrgSelector currentOrgId={orgId} onOrgChange={handleOrgChange} />}
+          onSearchClick={() => setShowSearch(true)}
+          userEmail={userEmail}
+          userName={userName}
+          userPlan={userPlan}
+          onLogout={handleLogout}
+          rightContent={
+            <div className="flex items-center gap-2">
+              <NotificationCenter />
+            </div>
+          }
+        />
 
-          <div className="flex items-center gap-2 text-ag-text">
-            <button
-              onClick={handleFeedbackClick}
-              className="hidden md:inline-flex items-center gap-1 px-3 py-1 rounded-lg text-sm hover:bg-white/5 transition-colors"
-            >
-              Feedback
-            </button>
-            <button
-              onClick={handleSearchClick}
-              className="inline-flex items-center gap-2 px-3 py-1 rounded-lg text-sm hover:bg-white/5 transition-colors"
-            >
-              <Search className="h-4 w-4" />
-              <span className="hidden md:inline">Search</span>
-              <span className="hidden sm:inline text-xs text-ag-muted">⌘K</span>
-            </button>
-            <button
-              onClick={handleHelpClick}
-              className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-sm hover:bg-white/5 transition-colors"
-            >
-              <HelpCircle className="h-4 w-4" />
-              <span className="hidden md:inline">Help</span>
-            </button>
-            <button
-              onClick={handleSuggestionsClick}
-              className="hidden md:inline-flex items-center gap-1 px-3 py-1 rounded-lg text-sm hover:bg-white/5 transition-colors"
-            >
-              <Lightbulb className="h-4 w-4" />
-              <span>Suggestions</span>
-            </button>
-            <button
-              onClick={handleProfileClick}
-              className="inline-flex items-center gap-2 px-3 py-1 rounded-lg text-sm hover:bg-white/5 transition-colors"
-            >
-              <User className="h-4 w-4" />
-              <span className="hidden md:inline">Profile</span>
-            </button>
-          </div>
-        </header>
-
-        {/* Main Layout */}
         <div className="flex">
-          {/* Sidebar */}
           <OrgSidebar orgId={orgId} />
-
-          {/* Main Content */}
-          <main className="flex-1 ml-64 mt-14">
-            <div className="p-8">
+          <main className="flex-1 ml-64 overflow-auto">
+            <div className="p-8 max-w-7xl mx-auto">
+              <GlobalSearch isOpen={showSearch} onClose={() => setShowSearch(false)} />
               {children}
             </div>
           </main>

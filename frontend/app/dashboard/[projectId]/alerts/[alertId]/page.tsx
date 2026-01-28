@@ -124,7 +124,7 @@ export default function AlertDetailPage() {
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="bg-[#000314] min-h-screen flex items-center justify-center">
+        <div className="bg-ag-bg min-h-screen flex items-center justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ag-accent border-t-transparent"></div>
         </div>
       </DashboardLayout>
@@ -134,7 +134,7 @@ export default function AlertDetailPage() {
   if (!alert) {
     return (
       <DashboardLayout>
-        <div className="bg-[#000314] min-h-screen">
+        <div className="bg-ag-bg min-h-screen">
           <div className="text-center py-12">
             <AlertTriangle className="h-12 w-12 text-slate-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-white mb-2">Alert Not Found</h3>
@@ -152,7 +152,7 @@ export default function AlertDetailPage() {
 
   return (
     <DashboardLayout>
-      <div className="bg-[#000314] min-h-screen">
+      <div className="bg-ag-bg min-h-screen">
         <div className="space-y-6">
         {/* Header */}
         <div className="mb-8">

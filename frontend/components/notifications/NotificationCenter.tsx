@@ -156,23 +156,23 @@ export default function NotificationCenter() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+        className="relative p-2 text-ag-muted hover:text-ag-text hover:bg-white/5 rounded-md transition-colors"
       >
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="absolute top-0 right-0 h-4 w-4 bg-red-600 text-white text-xs rounded-full flex items-center justify-center">
+          <span className="absolute top-0 right-0 h-4 w-4 bg-red-600 text-white text-[10px] rounded-full flex items-center justify-center border-2 border-ag-bg">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-[600px] flex flex-col">
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
+        <div className="absolute right-0 mt-2 w-96 bg-ag-surface rounded-lg shadow-2xl border border-white/10 z-50 max-h-[600px] flex flex-col overflow-hidden animate-fade-in">
+          <div className="p-4 border-b border-white/10 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-ag-text">Notifications</h3>
             <button
               onClick={() => setIsOpen(false)}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-ag-muted hover:text-ag-text"
             >
               <X className="h-5 w-5" />
             </button>
@@ -180,40 +180,40 @@ export default function NotificationCenter() {
 
           <div className="overflow-y-auto flex-1">
             {loading ? (
-              <div className="p-8 text-center text-gray-500">Loading...</div>
+              <div className="p-8 text-center text-ag-muted">Loading...</div>
             ) : notifications.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <Bell className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+              <div className="p-8 text-center text-ag-muted">
+                <Bell className="h-12 w-12 text-white/10 mx-auto mb-2" />
                 <p>No notifications</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-200">
+              <div className="divide-y divide-white/5">
                 {notifications.map((notification) => (
                   <div
                     key={notification.id}
                     className={clsx(
-                      'p-4 hover:bg-gray-50 cursor-pointer transition-colors',
-                      !notification.is_read && 'bg-blue-50'
+                      'p-4 hover:bg-white/5 cursor-pointer transition-colors relative',
+                      !notification.is_read && 'bg-ag-accent/5'
                     )}
                     onClick={() => handleNotificationClick(notification)}
                   >
+                    {!notification.is_read && (
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-ag-accent" />
+                    )}
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <Badge variant={getSeverityColor(notification.severity)} size="sm">
                             {notification.severity}
                           </Badge>
-                          {!notification.is_read && (
-                            <div className="h-2 w-2 bg-blue-600 rounded-full" />
-                          )}
                         </div>
-                        <div className="font-medium text-gray-900 text-sm mb-1">
+                        <div className="font-medium text-ag-text text-sm mb-1">
                           {notification.title}
                         </div>
-                        <div className="text-xs text-gray-600 line-clamp-2">
+                        <div className="text-xs text-ag-muted line-clamp-2">
                           {notification.message}
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className="text-xs text-ag-muted/60 mt-1">
                           {new Date(notification.created_at).toLocaleString()}
                         </div>
                       </div>
@@ -224,7 +224,7 @@ export default function NotificationCenter() {
                               e.stopPropagation();
                               handleMarkRead(notification.id);
                             }}
-                            className="p-1 text-gray-400 hover:text-gray-600"
+                            className="p-1 text-ag-muted hover:text-ag-accent"
                             title="Mark as read"
                           >
                             <Check className="h-4 w-4" />
@@ -235,7 +235,7 @@ export default function NotificationCenter() {
                             e.stopPropagation();
                             handleDelete(notification.id);
                           }}
-                          className="p-1 text-gray-400 hover:text-red-600"
+                          className="p-1 text-ag-muted hover:text-red-400"
                           title="Delete"
                         >
                           <X className="h-4 w-4" />
@@ -249,7 +249,7 @@ export default function NotificationCenter() {
           </div>
 
           {notifications.length > 0 && (
-            <div className="p-3 border-t border-gray-200">
+            <div className="p-3 border-t border-white/10">
               <Button
                 variant="secondary"
                 onClick={() => {

@@ -128,7 +128,7 @@ export default function ReplayPage() {
 
     return (
         <DashboardLayout>
-            <div className="bg-[#000314] min-h-screen text-white">
+            <div className="bg-ag-bg min-h-screen text-white">
                 {/* Header */}
                 <div className="mb-8 flex items-center justify-between">
                     <div>

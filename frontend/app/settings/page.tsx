@@ -55,7 +55,7 @@ export default function SettingsPage() {
       description: 'View your account activity history',
       icon: Activity,
       href: '/settings/activity',
-      color: 'text-gray-600 bg-gray-50',
+      color: 'text-ag-muted bg-white/5',
     },
     {
       title: 'Monitoring',

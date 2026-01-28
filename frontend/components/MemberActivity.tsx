@@ -93,17 +93,17 @@ export default function MemberActivity({ projectId, userId, userEmail, userName 
     <div className="space-y-4">
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="p-3 bg-white/5 rounded-lg border border-white/10">
-          <div className="text-xs text-slate-400 mb-1">Total Activities</div>
-          <div className="text-lg font-semibold text-white">{stats.totalActivities}</div>
+        <div className="p-3 bg-ag-bg rounded-lg border border-white/5">
+          <div className="text-xs text-ag-muted mb-1">Total Activities</div>
+          <div className="text-lg font-semibold text-ag-text">{stats.totalActivities}</div>
         </div>
-        <div className="p-3 bg-white/5 rounded-lg border border-white/10">
-          <div className="text-xs text-slate-400 mb-1">Last 7 Days</div>
-          <div className="text-lg font-semibold text-white">{stats.recentActivities}</div>
+        <div className="p-3 bg-ag-bg rounded-lg border border-white/5">
+          <div className="text-xs text-ag-muted mb-1">Last 7 Days</div>
+          <div className="text-lg font-semibold text-ag-text">{stats.recentActivities}</div>
         </div>
-        <div className="p-3 bg-white/5 rounded-lg border border-white/10">
-          <div className="text-xs text-slate-400 mb-1">Last Activity</div>
-          <div className="text-sm font-medium text-white">
+        <div className="p-3 bg-ag-bg rounded-lg border border-white/5">
+          <div className="text-xs text-ag-muted mb-1">Last Activity</div>
+          <div className="text-sm font-medium text-ag-text">
             {stats.lastActivity ? (
               new Date(stats.lastActivity).toLocaleDateString()
             ) : (

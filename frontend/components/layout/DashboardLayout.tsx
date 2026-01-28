@@ -9,17 +9,21 @@ import { useGlobalShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { Project } from '@/lib/api';
 import { projectsAPI } from '@/lib/api';
 
+import TopHeader from './TopHeader';
+
 interface DashboardLayoutProps {
   children: ReactNode;
+  breadcrumb?: { label: string; href?: string }[];
 }
 
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
+export default function DashboardLayout({ children, breadcrumb }: DashboardLayoutProps) {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [userEmail, setUserEmail] = useState<string>('');
   const [userName, setUserName] = useState<string>('');
   const [userPlan, setUserPlan] = useState<string>('free');
   const [loading, setLoading] = useState(true);
+  const [showSearch, setShowSearch] = useState(false);
 
   useGlobalShortcuts();
 
@@ -93,7 +97,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   return (
-      <div className="flex min-h-screen bg-ag-bg text-ag-text">
+    <div className="flex min-h-screen bg-ag-bg text-ag-text">
       <Sidebar
         projects={projects}
         userEmail={userEmail}
@@ -101,17 +105,27 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         userPlan={userPlan}
         onLogout={handleLogout}
       />
-      <main className="flex-1 ml-64">
-        <div className="p-8">
-          {/* Notification Center - Fixed position */}
-          <div className="fixed top-4 right-4 z-50">
-            <NotificationCenter />
+      <div className="flex-1 ml-64 flex flex-col">
+        <TopHeader 
+          breadcrumb={breadcrumb}
+          onSearchClick={() => setShowSearch(true)}
+          userEmail={userEmail}
+          userName={userName}
+          userPlan={userPlan}
+          onLogout={handleLogout}
+          rightContent={
+            <div className="flex items-center gap-2">
+              <NotificationCenter />
+            </div>
+          }
+        />
+        <main className="flex-1 overflow-auto">
+          <div className="p-8 max-w-7xl mx-auto">
+            <GlobalSearch isOpen={showSearch} onClose={() => setShowSearch(false)} />
+            {children}
           </div>
-          {/* Global Search */}
-          <GlobalSearch />
-          {children}
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

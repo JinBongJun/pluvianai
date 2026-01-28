@@ -226,7 +226,7 @@ export default function APICallsListPage() {
   if (loading && apiCalls.length === 0) {
     return (
       <DashboardLayout>
-        <div className="bg-[#000314] min-h-screen flex items-center justify-center">
+        <div className="bg-ag-bg min-h-screen flex items-center justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ag-accent border-t-transparent"></div>
         </div>
       </DashboardLayout>
@@ -234,12 +234,17 @@ export default function APICallsListPage() {
   }
 
   return (
-    <DashboardLayout>
-      <div className="bg-[#000314] min-h-screen">
+    <DashboardLayout
+      breadcrumb={[
+        { label: 'Dashboard', href: '/organizations' },
+        { label: 'API Calls' },
+      ]}
+    >
+      <div className="bg-ag-bg">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white">API Calls</h1>
-          <p className="text-slate-400 mt-2">View and analyze all API calls for this project</p>
+          <h1 className="text-4xl font-bold text-ag-text">API Calls</h1>
+          <p className="text-ag-muted mt-2">View and analyze all API calls for this project</p>
         </div>
 
         {/* Tabs */}
@@ -249,12 +254,12 @@ export default function APICallsListPage() {
         <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
           <div className="flex items-center gap-3">
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={loadAPICalls}
               className="flex items-center gap-2"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className={clsx('h-4 w-4', loading && 'animate-spin')} />
               Refresh
             </Button>
             <PulseIndicator projectId={projectId} show5m />
@@ -283,15 +288,15 @@ export default function APICallsListPage() {
         </div>
 
         {/* Table */}
-        <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm shadow-2xl">
+        <div className="relative rounded-2xl border border-white/10 bg-ag-surface shadow-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-white/10">
               <thead className="bg-white/5">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ag-muted uppercase tracking-wider">
                     <button
                       onClick={() => handleSort('created_at')}
-                      className="flex items-center gap-1 hover:text-white transition-colors"
+                      className="flex items-center gap-1 hover:text-ag-text transition-colors"
                     >
                       Time
                       {sortField === 'created_at' ? (
@@ -305,10 +310,10 @@ export default function APICallsListPage() {
                       )}
                     </button>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ag-muted uppercase tracking-wider">
                     <button
                       onClick={() => handleSort('provider')}
-                      className="flex items-center gap-1 hover:text-white transition-colors"
+                      className="flex items-center gap-1 hover:text-ag-text transition-colors"
                     >
                       Provider
                       {sortField === 'provider' ? (
@@ -322,10 +327,10 @@ export default function APICallsListPage() {
                       )}
                     </button>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ag-muted uppercase tracking-wider">
                     <button
                       onClick={() => handleSort('model')}
-                      className="flex items-center gap-1 hover:text-white transition-colors"
+                      className="flex items-center gap-1 hover:text-ag-text transition-colors"
                     >
                       Model
                       {sortField === 'model' ? (
@@ -339,13 +344,13 @@ export default function APICallsListPage() {
                       )}
                     </button>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ag-muted uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ag-muted uppercase tracking-wider">
                     <button
                       onClick={() => handleSort('latency_ms')}
-                      className="flex items-center gap-1 hover:text-white transition-colors"
+                      className="flex items-center gap-1 hover:text-ag-text transition-colors"
                     >
                       Latency
                       {sortField === 'latency_ms' ? (
@@ -359,21 +364,21 @@ export default function APICallsListPage() {
                       )}
                     </button>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ag-muted uppercase tracking-wider">
                     Tokens
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ag-muted uppercase tracking-wider">
                     Agent
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-ag-muted uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/10">
+              <tbody className="divide-y divide-white/5">
                 {apiCalls.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
+                    <td colSpan={8} className="px-6 py-12 text-center text-ag-muted">
                       {loading ? (
                         <div className="flex items-center justify-center">
                           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-ag-accent border-t-transparent"></div>
@@ -381,7 +386,7 @@ export default function APICallsListPage() {
                       ) : filters.search || filters.dateFrom || filters.dateTo || filters.status || filters.provider || filters.model || filters.agentName ? (
                         <div>
                           <p>No API calls found matching the current filters.</p>
-                          <p className="text-sm mt-2 text-slate-500">
+                          <p className="text-sm mt-2 opacity-60">
                             {filters.search && `Search: "${filters.search}"`}
                           </p>
                           <Button
@@ -399,7 +404,7 @@ export default function APICallsListPage() {
                       ) : (
                         <div>
                           <p>No API calls found for this project.</p>
-                          <p className="text-sm mt-2 text-slate-500">
+                          <p className="text-sm mt-2 opacity-60">
                             Start making API calls to see them here.
                           </p>
                         </div>
@@ -409,26 +414,26 @@ export default function APICallsListPage() {
                 ) : (
                   apiCalls.map((call) => (
                     <tr key={call.id} className="hover:bg-white/5 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-ag-text">
                         {new Date(call.created_at).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-ag-text">
                           {call.provider || 'unknown'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-ag-text">
                           {call.model || 'unknown'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getStatusBadge(call.status_code)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-ag-text">
                         {call.latency_ms ? `${toFixedSafe(call.latency_ms, 0)}ms` : 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-ag-muted">
                         {call.request_tokens && call.response_tokens ? (
                           <>
                             {call.request_tokens.toLocaleString()} / {call.response_tokens.toLocaleString()}
@@ -437,7 +442,7 @@ export default function APICallsListPage() {
                           'N/A'
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-ag-muted">
                         {call.agent_name || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -476,8 +481,8 @@ export default function APICallsListPage() {
         
         {/* Show info when client-side filtering is applied */}
         {(filters.dateFrom || filters.dateTo || filters.status || filters.search) && totalItems > 0 && (
-          <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-            <p className="text-sm text-blue-400">
+          <div className="mt-4 p-3 bg-ag-primary/10 border border-ag-primary/20 rounded-lg">
+            <p className="text-sm text-ag-accent">
               Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} filtered results
             </p>
           </div>

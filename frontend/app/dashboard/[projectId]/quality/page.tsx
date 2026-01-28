@@ -208,7 +208,7 @@ export default function QualityScoresPage() {
 
   if (!orgId) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#000314]">
+      <div className="flex items-center justify-center min-h-screen bg-ag-bg">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent mx-auto mb-4"></div>
           <p className="text-slate-400">Loading...</p>

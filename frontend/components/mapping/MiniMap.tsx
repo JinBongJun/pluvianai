@@ -46,7 +46,7 @@ export default function MiniMap({ nodes, viewport, className }: MiniMapProps) {
   return (
     <div
       className={clsx(
-        'absolute bottom-4 right-4 bg-white border border-gray-300 rounded-lg shadow-lg p-2',
+        'absolute bottom-4 right-4 bg-ag-surface border border-white/10 rounded-lg shadow-2xl p-2',
         className
       )}
       style={{ width: '200px', height: '150px' }}

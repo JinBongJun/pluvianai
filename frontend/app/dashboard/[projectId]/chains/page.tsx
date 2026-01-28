@@ -431,7 +431,7 @@ export default function AgentChainsPage() {
 
   return (
     <DashboardLayout>
-      <div className="bg-[#000314] min-h-screen">
+      <div className="bg-ag-bg min-h-screen">
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-white">Agent Chains</h1>

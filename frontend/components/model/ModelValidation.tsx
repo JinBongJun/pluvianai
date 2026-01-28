@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { modelValidationAPI, sharedResultsAPI } from '@/lib/api';
 import Button from '@/components/ui/Button';
+import Select from '@/components/ui/Select';
 import { Zap, CheckCircle, XCircle, Loader2, AlertTriangle, Share2, Copy, Check } from 'lucide-react';
 import { useToast } from '@/components/ToastContainer';
 import AsyncJudgeState from '@/components/states/AsyncJudgeState';
@@ -101,54 +102,49 @@ export default function ModelValidation({ projectId }: ModelValidationProps) {
   const availableModels = ALLOWED_MODELS[selectedProvider as keyof typeof ALLOWED_MODELS] || [];
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
+    <div className="bg-ag-surface rounded-lg border border-white/10 p-6">
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2">
-          <Zap className="h-6 w-6 text-primary-600" />
-          <h2 className="text-2xl font-bold text-gray-900">One-Click Model Safety Validation</h2>
+          <Zap className="h-6 w-6 text-ag-accent" />
+          <h2 className="text-2xl font-bold text-ag-text">One-Click Model Safety Validation</h2>
         </div>
-        <p className="text-gray-600">
+        <p className="text-ag-muted">
           Test a new model against your last 100 snapshots to ensure it&apos;s safe to deploy
         </p>
       </div>
 
       <div className="space-y-4 mb-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-ag-text mb-2">
             Provider
           </label>
-          <select
+          <Select
             value={selectedProvider}
-            onChange={(e) => {
-              setSelectedProvider(e.target.value);
-              const models = ALLOWED_MODELS[e.target.value as keyof typeof ALLOWED_MODELS] || [];
+            onChange={(val) => {
+              const newVal = val || 'openai';
+              setSelectedProvider(newVal);
+              const models = ALLOWED_MODELS[newVal as keyof typeof ALLOWED_MODELS] || [];
               setSelectedModel(models[0] || '');
             }}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          >
-            {Object.keys(ALLOWED_MODELS).map((provider) => (
-              <option key={provider} value={provider}>
-                {provider.charAt(0).toUpperCase() + provider.slice(1)}
-              </option>
-            ))}
-          </select>
+            options={Object.keys(ALLOWED_MODELS).map((provider) => ({
+              value: provider,
+              label: provider.charAt(0).toUpperCase() + provider.slice(1)
+            }))}
+          />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-ag-text mb-2">
             Model
           </label>
-          <select
+          <Select
             value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          >
-            {availableModels.map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
+            onChange={(val) => setSelectedModel(val || '')}
+            options={availableModels.map((model) => ({
+              value: model,
+              label: model
+            }))}
+          />
         </div>
       </div>
 
@@ -188,9 +184,9 @@ export default function ModelValidation({ projectId }: ModelValidationProps) {
       )}
 
       {result && (
-        <div className="mt-6 border-t pt-6">
+        <div className="mt-6 border-t border-white/10 pt-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Validation Result</h3>
+            <h3 className="text-lg font-semibold text-ag-text">Validation Result</h3>
             <Button
               onClick={async () => {
                 setIsSharing(true);
@@ -238,9 +234,9 @@ export default function ModelValidation({ projectId }: ModelValidationProps) {
           </div>
 
           {shareUrl && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="mb-4 p-3 bg-ag-primary/10 border border-ag-primary/30 rounded-lg">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-blue-800">Share URL:</span>
+                <span className="text-sm text-ag-text">Share URL:</span>
                 <button
                   onClick={async () => {
                     await navigator.clipboard.writeText(shareUrl);
@@ -248,7 +244,7 @@ export default function ModelValidation({ projectId }: ModelValidationProps) {
                     toast.showToast('Copied!', 'success');
                     setTimeout(() => setCopied(false), 2000);
                   }}
-                  className="text-blue-600 hover:text-blue-800"
+                  className="text-ag-accent hover:text-ag-accentLight"
                 >
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 </button>
@@ -257,30 +253,30 @@ export default function ModelValidation({ projectId }: ModelValidationProps) {
                 type="text"
                 value={shareUrl}
                 readOnly
-                className="mt-2 w-full px-3 py-2 text-sm border border-blue-300 rounded bg-white text-gray-700"
+                className="mt-2 w-full px-3 py-2 text-sm border border-white/10 rounded bg-ag-surface text-ag-text"
               />
             </div>
           )}
 
           <div className={`rounded-lg p-4 mb-4 ${
             result.safe 
-              ? 'bg-green-50 border border-green-200' 
-              : 'bg-red-50 border border-red-200'
+              ? 'bg-emerald-500/10 border border-emerald-500/30' 
+              : 'bg-red-500/10 border border-red-500/30'
           }`}>
             <div className="flex items-start gap-3">
               {result.safe ? (
-                <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0 mt-0.5" />
+                <CheckCircle className="h-6 w-6 text-emerald-400 flex-shrink-0 mt-0.5" />
               ) : (
-                <XCircle className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
+                <XCircle className="h-6 w-6 text-red-400 flex-shrink-0 mt-0.5" />
               )}
               <div className="flex-1">
                 <h3 className={`font-semibold mb-1 ${
-                  result.safe ? 'text-green-900' : 'text-red-900'
+                  result.safe ? 'text-emerald-300' : 'text-red-300'
                 }`}>
                   {result.safe ? '✅ Safe to Deploy' : '❌ Risky Deployment'}
                 </h3>
                 <p className={`text-sm ${
-                  result.safe ? 'text-green-800' : 'text-red-800'
+                  result.safe ? 'text-emerald-400/90' : 'text-red-400/90'
                 }`}>
                   {result.summary}
                 </p>
@@ -289,37 +285,37 @@ export default function ModelValidation({ projectId }: ModelValidationProps) {
           </div>
 
           <div className="grid grid-cols-3 gap-4 mb-4">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="text-sm text-gray-600 mb-1">Total Tested</div>
-              <div className="text-2xl font-bold text-gray-900">{result.total_tested}</div>
+            <div className="bg-ag-bg border border-white/5 rounded-lg p-4">
+              <div className="text-sm text-ag-muted mb-1">Total Tested</div>
+              <div className="text-2xl font-bold text-ag-text">{result.total_tested}</div>
             </div>
-            <div className="bg-green-50 rounded-lg p-4">
-              <div className="text-sm text-green-600 mb-1">Passed</div>
-              <div className="text-2xl font-bold text-green-900">{result.passed}</div>
+            <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-lg p-4">
+              <div className="text-sm text-emerald-400/80 mb-1">Passed</div>
+              <div className="text-2xl font-bold text-emerald-400">{result.passed}</div>
             </div>
-            <div className="bg-red-50 rounded-lg p-4">
-              <div className="text-sm text-red-600 mb-1">Failed</div>
-              <div className="text-2xl font-bold text-red-900">{result.failed}</div>
+            <div className="bg-red-500/5 border border-red-500/10 rounded-lg p-4">
+              <div className="text-sm text-red-400/80 mb-1">Failed</div>
+              <div className="text-2xl font-bold text-red-400">{result.failed}</div>
             </div>
           </div>
 
           {result.average_score > 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <div className="bg-ag-accent/5 border border-ag-accent/20 rounded-lg p-4 mb-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-blue-900">Average Score</span>
-                <span className="text-lg font-bold text-blue-900">
+                <span className="text-sm font-medium text-ag-text">Average Score</span>
+                <span className="text-lg font-bold text-ag-accent">
                   {result.average_score.toFixed(2)}/5.0
                 </span>
               </div>
               {result.score_drop_percentage !== undefined && (
                 <div className="mt-2 flex items-center justify-between">
-                  <span className="text-sm text-blue-700">Score Change</span>
+                  <span className="text-sm text-ag-muted">Score Change</span>
                   <span className={`text-sm font-medium ${
                     result.score_drop_percentage < 0 
-                      ? 'text-green-700' 
+                      ? 'text-emerald-400' 
                       : result.score_drop_percentage < 15 
-                        ? 'text-yellow-700' 
-                        : 'text-red-700'
+                        ? 'text-amber-300' 
+                        : 'text-red-400'
                   }`}>
                     {result.score_drop_percentage > 0 ? '+' : ''}
                     {result.score_drop_percentage.toFixed(1)}%
@@ -331,36 +327,36 @@ export default function ModelValidation({ projectId }: ModelValidationProps) {
 
           {result.details && result.details.length > 0 && (
             <div className="mt-4">
-              <h4 className="text-sm font-semibold text-gray-900 mb-2">Test Details</h4>
+              <h4 className="text-sm font-semibold text-ag-text mb-2">Test Details</h4>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {result.details.slice(0, 10).map((detail, index) => (
                   <div
                     key={index}
-                    className="bg-gray-50 rounded p-3 text-sm"
+                    className="bg-ag-bg border border-white/5 rounded p-3 text-sm"
                   >
                     {detail.snapshot_id && (
-                      <div className="font-medium text-gray-700 mb-1">
+                      <div className="font-medium text-ag-text mb-1">
                         Snapshot #{detail.snapshot_id}
                       </div>
                     )}
                     {detail.score !== undefined && (
-                      <div className="text-gray-600">
+                      <div className="text-ag-muted">
                         Score: {detail.score.toFixed(2)}/5.0
                       </div>
                     )}
                     {detail.regression_detected && (
-                      <div className="flex items-center gap-1 text-red-600 mt-1">
+                      <div className="flex items-center gap-1 text-red-400 mt-1">
                         <AlertTriangle className="h-4 w-4" />
                         <span>Regression detected</span>
                       </div>
                     )}
                     {detail.reasoning && (
-                      <div className="text-gray-500 mt-1 text-xs">
+                      <div className="text-ag-muted/70 mt-1 text-xs">
                         {detail.reasoning}
                       </div>
                     )}
                     {detail.error && (
-                      <div className="text-red-600 mt-1">
+                      <div className="text-red-400 mt-1">
                         Error: {detail.error}
                       </div>
                     )}

@@ -261,7 +261,7 @@ export default function AlertsPage() {
   if (loading && alerts.length === 0) {
     return (
       <DashboardLayout>
-        <div className="bg-[#000314] min-h-screen flex items-center justify-center">
+        <div className="bg-ag-bg min-h-screen flex items-center justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ag-accent border-t-transparent"></div>
         </div>
       </DashboardLayout>
@@ -269,12 +269,17 @@ export default function AlertsPage() {
   }
 
   return (
-    <DashboardLayout>
-      <div className="bg-[#000314] min-h-screen">
+    <DashboardLayout
+      breadcrumb={[
+        { label: 'Dashboard', href: '/organizations' },
+        { label: 'Alerts' },
+      ]}
+    >
+      <div className="bg-ag-bg">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white">Alerts</h1>
-          <p className="text-slate-400 mt-2">View and manage project alerts</p>
+          <h1 className="text-4xl font-bold text-ag-text">Alerts</h1>
+          <p className="text-ag-muted mt-2">View and manage project alerts</p>
         </div>
 
         {/* Tabs */}
@@ -283,12 +288,12 @@ export default function AlertsPage() {
         {/* Actions */}
         <div className="flex items-center justify-end mb-6">
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={loadAlerts}
             className="flex items-center gap-2"
           >
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className={clsx('h-4 w-4', loading && 'animate-spin')} />
             Refresh
           </Button>
         </div>
@@ -301,7 +306,7 @@ export default function AlertsPage() {
         {/* Filters */}
         <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-white mb-2">Alert Type</label>
+            <label className="block text-sm font-medium text-ag-text mb-2">Alert Type</label>
             <Select
               value={filters.alert_type}
               onChange={(value) => {
@@ -320,7 +325,7 @@ export default function AlertsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-white mb-2">Severity</label>
+            <label className="block text-sm font-medium text-ag-text mb-2">Severity</label>
             <Select
               value={filters.severity}
               onChange={(value) => {
@@ -339,7 +344,7 @@ export default function AlertsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-white mb-2">Status</label>
+            <label className="block text-sm font-medium text-ag-text mb-2">Status</label>
             <Select
               value={filters.is_resolved}
               onChange={(value) => {
@@ -358,15 +363,15 @@ export default function AlertsPage() {
         </div>
 
         {/* Table */}
-        <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm shadow-2xl">
+        <div className="relative rounded-2xl border border-white/10 bg-ag-surface shadow-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-white/10">
               <thead className="bg-white/5">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ag-muted uppercase tracking-wider">
                     <button
                       onClick={() => handleSort('created_at')}
-                      className="flex items-center gap-1 hover:text-white transition-colors"
+                      className="flex items-center gap-1 hover:text-ag-text transition-colors"
                     >
                       Created At
                       {sortField === 'created_at' ? (
@@ -380,10 +385,10 @@ export default function AlertsPage() {
                       )}
                     </button>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ag-muted uppercase tracking-wider">
                     <button
                       onClick={() => handleSort('alert_type')}
-                      className="flex items-center gap-1 hover:text-white transition-colors"
+                      className="flex items-center gap-1 hover:text-ag-text transition-colors"
                     >
                       Type
                       {sortField === 'alert_type' ? (
@@ -397,13 +402,13 @@ export default function AlertsPage() {
                       )}
                     </button>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ag-muted uppercase tracking-wider">
                     Title
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ag-muted uppercase tracking-wider">
                     <button
                       onClick={() => handleSort('severity')}
-                      className="flex items-center gap-1 hover:text-white transition-colors"
+                      className="flex items-center gap-1 hover:text-ag-text transition-colors"
                     >
                       Severity
                       {sortField === 'severity' ? (
@@ -417,30 +422,30 @@ export default function AlertsPage() {
                       )}
                     </button>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ag-muted uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ag-muted uppercase tracking-wider">
                     Notification
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-ag-muted uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/10">
+              <tbody className="divide-y divide-white/5">
                 {alerts.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
+                    <td colSpan={7} className="px-6 py-12 text-center text-ag-muted">
                       {loading ? (
                         <div className="flex items-center justify-center">
                           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-ag-accent border-t-transparent"></div>
                         </div>
                       ) : (
                         <div>
-                          <Bell className="h-12 w-12 text-slate-500 mx-auto mb-4" />
+                          <Bell className="h-12 w-12 text-white/10 mx-auto mb-4" />
                           <p>No alerts found</p>
-                          <p className="text-sm mt-2 text-slate-500">
+                          <p className="text-sm mt-2 opacity-60">
                             {filters.alert_type !== 'all' || filters.severity !== 'all' || filters.is_resolved !== 'all' || dateRange.from || dateRange.to
                               ? 'Try adjusting your filters'
                               : 'Alerts will appear here when issues are detected'}
@@ -466,19 +471,19 @@ export default function AlertsPage() {
                 ) : (
                   alerts.map((alert) => (
                     <tr key={alert.id} className="hover:bg-white/5 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-ag-text">
                         {new Date(alert.created_at).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-white">
+                        <span className="text-sm font-medium text-ag-text">
                           {getAlertTypeLabel(alert.alert_type)}
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-white max-w-md truncate" title={alert.title}>
+                        <div className="text-sm font-medium text-ag-text max-w-md truncate" title={alert.title}>
                           {alert.title}
                         </div>
-                        <div className="text-xs text-slate-400 mt-1 max-w-md truncate" title={alert.message}>
+                        <div className="text-xs text-ag-muted mt-1 max-w-md truncate" title={alert.message}>
                           {alert.message}
                         </div>
                       </td>
@@ -508,7 +513,7 @@ export default function AlertsPage() {
                           <Badge variant="default">Not Sent</Badge>
                         )}
                         {alert.sent_at && (
-                          <div className="text-xs text-slate-400 mt-1">
+                          <div className="text-xs text-ag-muted mt-1">
                             {new Date(alert.sent_at).toLocaleString()}
                           </div>
                         )}
@@ -520,7 +525,7 @@ export default function AlertsPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleSend(alert.id)}
-                              className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300"
+                              className="flex items-center gap-1.5 text-sky-400 hover:text-sky-300"
                               title="Send alert"
                             >
                               <Send className="h-4 w-4" />
@@ -531,7 +536,7 @@ export default function AlertsPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleResolve(alert.id)}
-                              className="flex items-center gap-1.5 text-green-400 hover:text-green-300"
+                              className="flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300"
                               title="Resolve alert"
                             >
                               <CheckCircle className="h-4 w-4" />
@@ -577,8 +582,8 @@ export default function AlertsPage() {
 
         {/* Show info when filters are applied */}
         {(filters.alert_type !== 'all' || filters.severity !== 'all' || filters.is_resolved !== 'all' || dateRange.from || dateRange.to) && totalItems > 0 && (
-          <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-            <p className="text-sm text-blue-400">
+          <div className="mt-4 p-3 bg-ag-primary/10 border border-ag-primary/20 rounded-lg">
+            <p className="text-sm text-ag-accent">
               Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} filtered results
             </p>
           </div>

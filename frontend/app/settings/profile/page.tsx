@@ -97,7 +97,7 @@ export default function ProfilePage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent"></div>
         </div>
       </DashboardLayout>
     );
@@ -105,37 +105,37 @@ export default function ProfilePage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <div className="space-y-8 max-w-4xl mx-auto">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Profile Settings</h1>
-          <p className="text-gray-600 mt-1">Manage your profile information</p>
+          <h1 className="text-3xl font-bold text-ag-text">Profile Settings</h1>
+          <p className="text-ag-muted mt-1">Manage your profile information</p>
         </div>
 
         {/* Profile Information */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-ag-surface rounded-lg shadow-2xl border border-white/10 p-6">
           <div className="flex items-start gap-6">
             <div className="flex-shrink-0">
               <Avatar name={profile?.full_name || profile?.email} email={profile?.email} size="lg" />
             </div>
             <div className="flex-1">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">Profile Information</h2>
+              <h2 className="text-xl font-semibold text-ag-text mb-6">Profile Information</h2>
               
               <div className="space-y-4 max-w-md">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-ag-text mb-1">
                     Email
                   </label>
                   <Input
                     type="email"
                     value={profile?.email || ''}
                     disabled
-                    className="bg-gray-50"
+                    className="bg-ag-bg/50 border-white/10 text-ag-muted"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+                  <p className="text-xs text-ag-muted mt-1">Email cannot be changed</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-ag-text mb-1">
                     Full Name
                   </label>
                   <Input
@@ -143,18 +143,19 @@ export default function ProfilePage() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Enter your full name"
+                    className="bg-ag-bg border-white/10 text-ag-text focus:border-ag-accent"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-ag-text mb-1">
                     Member Since
                   </label>
                   <Input
                     type="text"
                     value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : ''}
                     disabled
-                    className="bg-gray-50"
+                    className="bg-ag-bg/50 border-white/10 text-ag-muted"
                   />
                 </div>
 
@@ -162,10 +163,19 @@ export default function ProfilePage() {
                   <Button
                     onClick={handleSave}
                     disabled={saving || fullName === (profile?.full_name || '')}
-                    className="flex items-center gap-2"
+                    className="min-w-[140px]"
                   >
-                    <Save className="h-4 w-4" />
-                    {saving ? 'Saving...' : 'Save Changes'}
+                    {saving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        Save Changes
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>
@@ -174,10 +184,10 @@ export default function ProfilePage() {
         </div>
 
         {/* Danger Zone */}
-        <div className="bg-white rounded-lg shadow-sm border border-red-200 p-6">
-          <h2 className="text-xl font-semibold text-red-900 mb-4">Danger Zone</h2>
-          <p className="text-sm text-gray-600 mb-4">
-            Once you delete your account, there is no going back. Please be certain.
+        <div className="bg-ag-surface rounded-lg shadow-2xl border border-red-500/20 p-6">
+          <h2 className="text-xl font-semibold text-red-400 mb-4 uppercase tracking-wider">Danger Zone</h2>
+          <p className="text-sm text-ag-muted mb-6 leading-relaxed">
+            Once you delete your account, there is no going back. All your organizations and project data will be permanently removed.
           </p>
           <Button
             variant="danger"
@@ -199,11 +209,11 @@ export default function ProfilePage() {
           title="Delete Account"
         >
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-ag-muted leading-relaxed">
               This will permanently delete your account and all associated data. This action cannot be undone.
             </p>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-ag-text mb-1">
                 Enter your password to confirm
               </label>
               <Input
@@ -211,12 +221,12 @@ export default function ProfilePage() {
                 value={deletePassword}
                 onChange={(e) => setDeletePassword(e.target.value)}
                 placeholder="Your password"
-                className="w-full"
+                className="w-full bg-ag-bg border-white/10 text-ag-text focus:border-red-500"
               />
             </div>
-            <div className="flex gap-3 justify-end pt-4">
+            <div className="flex gap-3 justify-end pt-4 border-t border-white/10 mt-6">
               <Button
-                variant="secondary"
+                variant="outline"
                 onClick={() => {
                   setShowDeleteModal(false);
                   setDeletePassword('');

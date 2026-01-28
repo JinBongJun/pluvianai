@@ -14,31 +14,31 @@ export default function ProjectCard({ project, onClick, isSelected }: ProjectCar
       onClick={onClick}
       className={`group p-6 rounded-xl border cursor-pointer transition-all duration-300 transform hover:scale-[1.02] ${
         isSelected
-          ? 'border-primary-500 bg-gradient-to-br from-primary-50 to-white shadow-lg shadow-primary-500/20'
-          : 'border-gray-200 bg-white hover:border-primary-300 hover:shadow-xl hover:shadow-primary-500/10'
+          ? 'border-ag-accent bg-ag-accent/5 shadow-lg shadow-ag-accent/10'
+          : 'border-white/10 bg-ag-surface hover:border-ag-accent/50 hover:shadow-xl hover:shadow-ag-accent/5'
       }`}
     >
       <div className="flex items-start justify-between mb-3">
-        <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-lg shadow-primary-500/30 group-hover:shadow-xl group-hover:shadow-primary-500/40 transition-shadow">
-          <span className="text-white font-bold text-sm">{project.name.charAt(0).toUpperCase()}</span>
+        <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-ag-primary to-ag-primaryHover flex items-center justify-center shadow-lg shadow-ag-primary/30 group-hover:shadow-xl group-hover:shadow-ag-primary/40 transition-shadow">
+          <span className="text-ag-accent-light font-bold text-sm">{project.name.charAt(0).toUpperCase()}</span>
         </div>
         {project.role && (
           <span className={`inline-block px-2.5 py-1 text-xs font-medium rounded-full ${
             project.role === 'owner'
-              ? 'bg-primary-100 text-primary-700'
+              ? 'bg-ag-accent/20 text-ag-accentLight'
               : project.role === 'admin'
-              ? 'bg-blue-100 text-blue-700'
+              ? 'bg-sky-500/20 text-sky-300'
               : project.role === 'member'
-              ? 'bg-green-100 text-green-700'
-              : 'bg-gray-100 text-gray-700'
+              ? 'bg-emerald-500/20 text-emerald-300'
+              : 'bg-white/10 text-ag-muted'
           }`}>
             {project.role}
           </span>
         )}
       </div>
-      <h3 className="font-semibold text-gray-900 mb-2 group-hover:text-primary-700 transition-colors">{project.name}</h3>
+      <h3 className="font-semibold text-ag-text mb-2 group-hover:text-ag-accent transition-colors">{project.name}</h3>
       {project.description && (
-        <p className="text-sm text-gray-600 line-clamp-2">{project.description}</p>
+        <p className="text-sm text-ag-muted line-clamp-2">{project.description}</p>
       )}
     </div>
   );

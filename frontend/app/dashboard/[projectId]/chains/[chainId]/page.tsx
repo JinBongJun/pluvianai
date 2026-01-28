@@ -221,7 +221,7 @@ export default function ChainDetailPage() {
   if (!chain) {
     return (
       <DashboardLayout>
-        <div className="bg-[#000314] min-h-screen">
+        <div className="bg-ag-bg min-h-screen">
           <div className="text-center py-12">
             <Activity className="h-12 w-12 text-slate-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-white mb-2">Chain Not Found</h3>
@@ -239,7 +239,7 @@ export default function ChainDetailPage() {
 
   return (
     <DashboardLayout>
-      <div className="bg-[#000314] min-h-screen">
+      <div className="bg-ag-bg min-h-screen">
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">

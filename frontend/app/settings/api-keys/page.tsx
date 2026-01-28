@@ -142,7 +142,7 @@ export default function APIKeysPage() {
 
   return (
     <DashboardLayout>
-      <div className="bg-[#000314] min-h-screen">
+      <div className="bg-ag-bg min-h-screen">
         <div className="space-y-8">
           <div className="flex items-center justify-between">
             <div>

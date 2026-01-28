@@ -150,134 +150,148 @@ export default function MappingPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header with controls */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Agent Map</h1>
-          <p className="text-slate-400 mt-1">Visualize your agent structure and dependencies</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* Days selector */}
-          <select
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value))}
-            className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
-          >
-            <option value={1}>Last 1 day</option>
-            <option value={7}>Last 7 days</option>
-            <option value={30}>Last 30 days</option>
-          </select>
-
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search agents..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  applyFilters();
-                }
-              }}
-              className="pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm w-64"
+    <DashboardLayout
+      breadcrumb={[
+        { label: 'Dashboard', href: '/organizations' },
+        { label: 'Agent Map' },
+      ]}
+    >
+      <div className="space-y-6">
+        {/* Header with controls */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-ag-text">Agent Map</h1>
+            <p className="text-ag-muted mt-1">Visualize your agent structure and dependencies</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Days selector */}
+            <Select
+              value={String(days)}
+              onChange={(val) => setDays(Number(val))}
+              options={[
+                { value: '1', label: 'Last 1 day' },
+                { value: '7', label: 'Last 7 days' },
+                { value: '30', label: 'Last 30 days' },
+              ]}
+              className="min-w-[140px]"
             />
+
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-ag-muted" />
+              <input
+                type="text"
+                placeholder="Search agents..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    applyFilters();
+                  }
+                }}
+                className="pl-10 pr-4 py-2 bg-ag-surface border border-white/10 rounded-lg text-ag-text text-sm w-64 focus:border-ag-accent focus:outline-none transition-colors"
+              />
+            </div>
+
+            {/* Filter button */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={clsx(
+                'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border flex items-center gap-2',
+                showFilters
+                  ? 'bg-ag-primary border-ag-accent text-ag-accent-light'
+                  : 'bg-ag-surface border-white/10 text-ag-muted hover:text-ag-text hover:bg-white/5'
+              )}
+            >
+              <Filter className="w-4 h-4" />
+              Filters
+            </button>
           </div>
-
-          {/* Filter button */}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={clsx(
-              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-              showFilters
-                ? 'bg-purple-600 text-white'
-                : 'bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700'
-            )}
-          >
-            <Filter className="w-4 h-4 inline mr-2" />
-            Filters
-          </button>
         </div>
-      </div>
 
-      {/* Filters panel */}
-      {showFilters && (
-        <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg">
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm text-slate-300 mb-1">Min Score</label>
-              <input
-                type="number"
-                min="0"
-                max="5"
-                step="0.1"
-                value={filters.min_score || ''}
-                onChange={(e) =>
-                  setFilters({ ...filters, min_score: e.target.value ? Number(e.target.value) : undefined })
-                }
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm"
-                placeholder="0.0"
-              />
+        {/* Filters panel */}
+        {showFilters && (
+          <div className="p-4 bg-ag-surface border border-white/10 rounded-lg shadow-xl animate-fade-in">
+            <div className="grid grid-cols-3 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-ag-text mb-2">Min Score</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="5"
+                  step="0.1"
+                  value={filters.min_score || ''}
+                  onChange={(e) =>
+                    setFilters({ ...filters, min_score: e.target.value ? Number(e.target.value) : undefined })
+                  }
+                  className="w-full px-3 py-2 bg-ag-bg border border-white/10 rounded-lg text-ag-text text-sm focus:border-ag-accent focus:outline-none"
+                  placeholder="0.0"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-ag-text mb-2">Max Latency (ms)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={filters.max_latency || ''}
+                  onChange={(e) =>
+                    setFilters({ ...filters, max_latency: e.target.value ? Number(e.target.value) : undefined })
+                  }
+                  className="w-full px-3 py-2 bg-ag-bg border border-white/10 rounded-lg text-ag-text text-sm focus:border-ag-accent focus:outline-none"
+                  placeholder="No limit"
+                />
+              </div>
+              <div className="flex items-center pt-8">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={filters.has_problems || false}
+                    onChange={(e) => setFilters({ ...filters, has_problems: e.target.checked || undefined })}
+                    className="w-4 h-4 text-ag-accent bg-ag-bg border-white/20 rounded focus:ring-ag-accent"
+                  />
+                  <span className="text-sm text-ag-text group-hover:text-ag-accent transition-colors">Show Problems Only</span>
+                </label>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm text-slate-300 mb-1">Max Latency (ms)</label>
-              <input
-                type="number"
-                min="0"
-                value={filters.max_latency || ''}
-                onChange={(e) =>
-                  setFilters({ ...filters, max_latency: e.target.value ? Number(e.target.value) : undefined })
-                }
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm"
-                placeholder="No limit"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-slate-300 mb-1">Show Problems Only</label>
-              <input
-                type="checkbox"
-                checked={filters.has_problems || false}
-                onChange={(e) => setFilters({ ...filters, has_problems: e.target.checked || undefined })}
-                className="w-4 h-4 text-purple-600 bg-slate-900 border-slate-700 rounded"
-              />
+            <div className="mt-6 flex justify-end">
+              <Button
+                onClick={applyFilters}
+                size="sm"
+              >
+                Apply Filters
+              </Button>
             </div>
           </div>
-          <button
-            onClick={applyFilters}
-            className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors"
-          >
-            Apply Filters
-          </button>
+        )}
+
+        {/* Map */}
+        <div className="h-[600px] bg-ag-bg border border-white/10 rounded-xl overflow-hidden shadow-2xl">
+          <AgentMap
+            projectId={projectId}
+            nodes={nodes}
+            edges={edges}
+            onNodeClick={handleNodeClick}
+          />
         </div>
-      )}
 
-      {/* Map */}
-      <div className="h-[600px] bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
-        <AgentMap
-          projectId={projectId}
-          nodes={nodes}
-          edges={edges}
-          onNodeClick={handleNodeClick}
-        />
+        {/* Node Detail Modal */}
+        {showNodeDetail && selectedNodeDetails && (
+          <NodeDetail
+            nodeId={selectedNodeId || ''}
+            nodeName={selectedNodeDetails.node_id || ''}
+            metrics={selectedNodeDetails.metrics || {}}
+            recentMessages={selectedNodeDetails.recent_messages || []}
+            isOpen={showNodeDetail}
+            onClose={() => {
+              setShowNodeDetail(false);
+              setSelectedNodeId(null);
+              setSelectedNodeDetails(null);
+            }}
+          />
+        )}
       </div>
-
-      {/* Node Detail Modal */}
-      {showNodeDetail && selectedNodeDetails && (
-        <NodeDetail
-          nodeId={selectedNodeId || ''}
-          nodeName={selectedNodeDetails.node_id || ''}
-          metrics={selectedNodeDetails.metrics || {}}
-          recentMessages={selectedNodeDetails.recent_messages || []}
-          isOpen={showNodeDetail}
-          onClose={() => {
-            setShowNodeDetail(false);
-            setSelectedNodeId(null);
-            setSelectedNodeDetails(null);
-          }}
-        />
-      )}
-    </div>
+    </DashboardLayout>
+  );
+}
   );
 }

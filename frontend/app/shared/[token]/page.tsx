@@ -43,7 +43,7 @@ export default function SharedResultPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#000314]">
+      <div className="flex items-center justify-center min-h-screen bg-ag-bg">
         <LoadingSpinner />
       </div>
     );
@@ -51,7 +51,7 @@ export default function SharedResultPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#000314] p-6">
+      <div className="min-h-screen bg-ag-bg p-6">
         <ConnectionFailedState
           title="Shared result not found"
           description={error}

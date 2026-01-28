@@ -111,9 +111,9 @@ export default function PlanSelector({ currentPlan, onSelectPlan }: PlanSelector
           <div
             key={plan.plan_type}
             className={clsx(
-              'relative bg-white rounded-lg border-2 p-6 flex flex-col',
+              'relative bg-ag-surface rounded-lg border-2 p-6 flex flex-col',
               isPopular ? 'border-ag-accent' : 'border-white/10',
-              isCurrent && 'ring-2 ring-black'
+              isCurrent && 'ring-2 ring-ag-accent'
             )}
           >
             {isPopular && (
