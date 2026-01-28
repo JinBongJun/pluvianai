@@ -27,7 +27,7 @@ export default function SettingsPage() {
       description: 'Manage API keys for programmatic access',
       icon: Key,
       href: '/settings/api-keys',
-      color: 'text-purple-600 bg-purple-50',
+      color: 'text-ag-accent bg-ag-accent/10',
     },
     {
       title: 'Notifications',
@@ -48,7 +48,7 @@ export default function SettingsPage() {
       description: 'Configure webhooks for external integrations',
       icon: Link2,
       href: '/settings/webhooks',
-      color: 'text-purple-600 bg-purple-50',
+      color: 'text-ag-accent bg-ag-accent/10',
     },
     {
       title: 'Activity Log',
@@ -62,16 +62,16 @@ export default function SettingsPage() {
       description: 'View system metrics and monitoring dashboards',
       icon: BarChart3,
       href: '/settings/monitoring',
-      color: 'text-cyan-600 bg-cyan-50',
+      color: 'text-ag-primary bg-ag-primary/10',
     },
   ];
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <div className="space-y-8 text-ag-text">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-          <p className="text-gray-600 mt-1">Manage your account settings and preferences</p>
+          <h1 className="text-3xl font-bold text-ag-text">Settings</h1>
+          <p className="text-ag-muted mt-1">Manage your account settings and preferences</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -81,17 +81,17 @@ export default function SettingsPage() {
               <button
                 key={item.href}
                 onClick={() => router.push(item.href)}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-left hover:shadow-md transition-shadow"
+                className="bg-ag-surface rounded-lg border border-white/10 p-6 text-left hover:border-white/20 transition-shadow"
               >
                 <div className="flex items-start gap-4">
-                  <div className={`p-3 rounded-lg ${item.color}`}>
+                  <div className="p-3 rounded-lg bg-white/5 text-ag-accent">
                     <Icon className="h-6 w-6" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                    <h3 className="text-lg font-semibold text-ag-text mb-1">
                       {item.title}
                     </h3>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-ag-muted">
                       {item.description}
                     </p>
                   </div>

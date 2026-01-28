@@ -203,9 +203,9 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
                     <span
                       className={`px-2 py-1 text-xs font-medium rounded capitalize ${
                         member.role === 'owner'
-                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                          ? 'bg-ag-accent/20 text-ag-accentLight border border-ag-accent/30'
                           : member.role === 'admin'
-                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                          ? 'bg-ag-primary/20 text-ag-accentLight border border-ag-primary/30'
                           : member.role === 'member'
                           ? 'bg-green-500/20 text-green-300 border border-green-500/30'
                           : 'bg-slate-500/20 text-slate-300 border border-slate-500/30'
@@ -224,7 +224,7 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
                               e.target.value as 'admin' | 'member' | 'viewer'
                             )
                           }
-                          className="text-xs bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white focus:ring-purple-500 focus:border-purple-500 transition-colors"
+                          className="text-xs bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white focus:ring-ag-accent focus:border-ag-accent transition-colors"
                           title="Change role"
                         >
                           <option value="admin" className="bg-[#0B0C15]">Admin</option>

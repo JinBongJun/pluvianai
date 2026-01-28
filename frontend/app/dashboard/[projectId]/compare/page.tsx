@@ -104,7 +104,7 @@ export default function ComparePage() {
         {/* Comparison Results */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ag-accent border-t-transparent"></div>
           </div>
         ) : error.type === 'empty' || comparisons.length === 0 ? (
           <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-12 text-center shadow-2xl">
@@ -175,7 +175,7 @@ export default function ComparePage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-cyan-400" />
+                    <Clock className="h-5 w-5 text-ag-accent" />
                     <div>
                       <div className="text-xs text-slate-400">Avg Latency</div>
                       <div className="font-medium text-white">
@@ -185,7 +185,7 @@ export default function ComparePage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-purple-400" />
+                    <TrendingUp className="h-5 w-5 text-ag-accent" />
                     <div>
                       <div className="text-xs text-slate-400">Success Rate</div>
                       <div className="font-medium text-white">
@@ -206,8 +206,8 @@ export default function ComparePage() {
                 </div>
 
                 {comparison.recommendation && (
-                  <div className="mt-4 p-3 bg-purple-500/20 border border-purple-500/30 rounded-md">
-                    <div className="text-sm font-medium text-purple-300 mb-1">Recommendation</div>
+                  <div className="mt-4 p-3 bg-ag-accent/20 border border-ag-accent/30 rounded-md">
+                    <div className="text-sm font-medium text-ag-accentLight mb-1">Recommendation</div>
                     <div className="text-sm text-slate-300">{comparison.recommendation}</div>
                   </div>
                 )}
