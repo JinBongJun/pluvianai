@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, desc, func
+from sqlalchemy import and_, desc, func, case
 from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user, get_user_from_api_key
@@ -339,11 +339,18 @@ async def get_api_call_stats(
     stats = (
         db.query(
             func.count(APICall.id).label("total_calls"),
-            func.sum(func.case((func.and_(APICall.status_code >= 200, APICall.status_code < 300), 1), else_=0)).label(
-                "successful_calls"
-            ),
+            func.sum(
+                case(
+                    (and_(APICall.status_code >= 200, APICall.status_code < 300), 1),
+                    else_=0,
+                )
+            ).label("successful_calls"),
         )
-        .filter(APICall.project_id == project_id, APICall.created_at >= period_start, APICall.created_at <= period_end)
+        .filter(
+            APICall.project_id == project_id,
+            APICall.created_at >= period_start,
+            APICall.created_at <= period_end,
+        )
         .first()
     )
 

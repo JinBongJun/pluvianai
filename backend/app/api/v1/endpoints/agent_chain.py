@@ -6,7 +6,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, desc
+from sqlalchemy import func, and_, desc, case
 from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -273,7 +273,12 @@ async def get_agent_statistics(
         db.query(
             APICall.agent_name,
             func.count(APICall.id).label("total_calls"),
-            func.sum(func.case((func.and_(APICall.status_code >= 200, APICall.status_code < 300), 1), else_=0)).label("successful_calls"),
+            func.sum(
+                case(
+                    (and_(APICall.status_code >= 200, APICall.status_code < 300), 1),
+                    else_=0,
+                )
+            ).label("successful_calls"),
             func.avg(APICall.latency_ms).label("avg_latency"),
         )
         .filter(
