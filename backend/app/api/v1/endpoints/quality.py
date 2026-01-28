@@ -200,6 +200,7 @@ async def get_quality_stats(
     Get quality statistics for a project
     Following API_REFERENCE.md: Returns standard response format
     """
+    logger.info(f"🔵 GET QUALITY STATS: project_id={project_id}, days={days}, user_id={current_user.id}")
     logger.info(
         f"User {current_user.id} requested quality stats for project {project_id} (days: {days})",
         extra={"user_id": current_user.id, "project_id": project_id, "days": days}

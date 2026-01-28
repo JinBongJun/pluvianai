@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user, get_user_from_api_key
 from app.core.permissions import check_project_access
 from app.core.decorators import handle_errors
+from app.core.logging_config import logger
 from app.core.dependencies import get_api_call_service, get_snapshot_repository
 from app.services.data_normalizer import DataNormalizer
 from app.services.background_tasks import background_task_service
@@ -318,6 +319,7 @@ async def get_api_call_stats(
     db: Session = Depends(get_db),
 ):
     """Get API call statistics including success rate for a project"""
+    logger.info(f"🔵 GET API CALL STATS: project_id={project_id}, days={days}, user_id={current_user.id}")
     # Verify project access (any member can view)
     check_project_access(project_id, current_user, db)
 

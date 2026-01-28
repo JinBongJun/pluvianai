@@ -122,6 +122,7 @@ async def list_drift_detections(
     """
     List drift detections for a project
     """
+    logger.info(f"🔵 GET DRIFT DETECTIONS: project_id={project_id}, limit={limit}, offset={offset}, user_id={current_user.id}")
     logger.info(
         f"User {current_user.id} requested drift detections for project {project_id} (limit: {limit}, offset: {offset})",
         extra={"user_id": current_user.id, "project_id": project_id, "limit": limit, "offset": offset}

@@ -41,6 +41,7 @@ async def get_cost_analysis(
     Get cost analysis for a project
     Following API_REFERENCE.md: Returns standard response format
     """
+    logger.info(f"🔵 GET COST ANALYSIS: project_id={project_id}, days={days}, user_id={current_user.id}")
     logger.info(
         f"User {current_user.id} requested cost analysis for project {project_id} (days: {days})",
         extra={"user_id": current_user.id, "project_id": project_id, "days": days}
