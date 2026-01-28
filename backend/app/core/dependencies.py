@@ -100,9 +100,28 @@ def get_api_call_service(db: Session = Depends(get_db)):
 
 def get_alert_service(db: Session = Depends(get_db)):
     """Get alert service with repository dependencies"""
-    from app.services.alert_service import AlertService
-    alert_repo = AlertRepository(db)
-    return AlertService(alert_repo, db)
+    import sys
+    import traceback
+    from app.core.logging_config import logger
+    
+    try:
+        logger.info("🔧 Creating AlertService...")
+        print("🔧 Creating AlertService...", file=sys.stderr)
+        from app.services.alert_service import AlertService
+        logger.info("🔧 Creating AlertRepository...")
+        print("🔧 Creating AlertRepository...", file=sys.stderr)
+        alert_repo = AlertRepository(db)
+        logger.info("🔧 Creating AlertService instance...")
+        print("🔧 Creating AlertService instance...", file=sys.stderr)
+        service = AlertService(alert_repo, db)
+        logger.info("✅ AlertService created successfully")
+        print("✅ AlertService created successfully", file=sys.stderr)
+        return service
+    except Exception as e:
+        logger.error(f"🔴🔴🔴 FAILED TO CREATE ALERT SERVICE: {type(e).__name__}: {str(e)}", exc_info=True)
+        print(f"🔴🔴🔴 FAILED TO CREATE ALERT SERVICE: {type(e).__name__}: {str(e)}", file=sys.stderr)
+        print(traceback.format_exc(), file=sys.stderr)
+        raise
 
 def get_onboarding_service(db: Session = Depends(get_db)):
     """Get onboarding service"""

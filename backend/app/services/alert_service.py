@@ -21,20 +21,33 @@ class AlertService:
     ):
         self.alert_repo = alert_repo
         self.db = db
-        # Initialize notification channels
-        self.email_service = EmailService()
-        self.slack_service = SlackService()
-        self.discord_service = DiscordService()
+        # Initialize notification channels (with error handling)
+        try:
+            self.email_service = EmailService()
+        except Exception as e:
+            logger.warning(f"Failed to initialize EmailService (non-critical): {str(e)}")
+            self.email_service = None
+        try:
+            self.slack_service = SlackService()
+        except Exception as e:
+            logger.warning(f"Failed to initialize SlackService (non-critical): {str(e)}")
+            self.slack_service = None
+        try:
+            self.discord_service = DiscordService()
+        except Exception as e:
+            logger.warning(f"Failed to initialize DiscordService (non-critical): {str(e)}")
+            self.discord_service = None
 
     @property
     def email_enabled(self) -> bool:
         """Check if email notifications are enabled"""
-        return self.email_service.enabled
+        return self.email_service.enabled if self.email_service else False
 
     @email_enabled.setter
     def email_enabled(self, value: bool):
         """Set email enabled status (for testing)"""
-        self.email_service.enabled = value
+        if self.email_service:
+            self.email_service.enabled = value
 
     def get_alert_by_id(self, alert_id: int) -> Optional[Alert]:
         """Get alert by ID"""
@@ -199,6 +212,8 @@ class AlertService:
             dashboard_url = f"https://app.agentguard.ai/projects/{alert.project_id}/alerts/{alert.id}"
 
         # Render HTML email
+        if not self.email_service:
+            return {"status": "skipped", "reason": "Email service not available"}
         html_content = self.email_service._render_alert_email_html(
             level=alert.severity,
             project_name=project_name,
@@ -262,12 +277,14 @@ class AlertService:
             )
             discord_webhook_url = settings.discord_webhook_url if settings else None
         
-        # Channel mapping
-        channel_services = {
-            "email": (self.email_service, {"to": user_email}),
-            "slack": (self.slack_service, {}),
-            "discord": (self.discord_service, {"webhook_url": discord_webhook_url}),
-        }
+        # Channel mapping (only include available services)
+        channel_services = {}
+        if "email" in channels and self.email_service:
+            channel_services["email"] = (self.email_service, {"to": user_email})
+        if "slack" in channels and self.slack_service:
+            channel_services["slack"] = (self.slack_service, {})
+        if "discord" in channels and self.discord_service:
+            channel_services["discord"] = (self.discord_service, {"webhook_url": discord_webhook_url})
         
         # Send to each channel using unified interface
         for channel in channels:
