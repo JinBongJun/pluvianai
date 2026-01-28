@@ -175,7 +175,7 @@ export default function ComparePage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-ag-accent" />
+                    <Clock className="h-5 w-5 text-cyan-400" />
                     <div>
                       <div className="text-xs text-slate-400">Avg Latency</div>
                       <div className="font-medium text-white">

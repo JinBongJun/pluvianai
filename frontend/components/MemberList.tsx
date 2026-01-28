@@ -205,7 +205,7 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
                         member.role === 'owner'
                           ? 'bg-ag-accent/20 text-ag-accentLight border border-ag-accent/30'
                           : member.role === 'admin'
-                          ? 'bg-ag-primary/20 text-ag-accentLight border border-ag-primary/30'
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
                           : member.role === 'member'
                           ? 'bg-green-500/20 text-green-300 border border-green-500/30'
                           : 'bg-slate-500/20 text-slate-300 border border-slate-500/30'

@@ -599,7 +599,7 @@ export default function AgentChainsPage() {
                       {avgLatency ? `${toFixedSafe(avgLatency / 1000, 2)}s` : 'N/A'}
                     </p>
                   </div>
-                  <Clock className="h-8 w-8 text-ag-accent" />
+                  <Clock className="h-8 w-8 text-cyan-400" />
                 </div>
               </div>
               <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">

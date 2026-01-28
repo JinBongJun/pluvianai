@@ -27,7 +27,7 @@ export default function SettingsPage() {
       description: 'Manage API keys for programmatic access',
       icon: Key,
       href: '/settings/api-keys',
-      color: 'text-ag-accent bg-ag-accent/10',
+      color: 'text-purple-600 bg-purple-50',
     },
     {
       title: 'Notifications',
@@ -48,7 +48,7 @@ export default function SettingsPage() {
       description: 'Configure webhooks for external integrations',
       icon: Link2,
       href: '/settings/webhooks',
-      color: 'text-ag-accent bg-ag-accent/10',
+      color: 'text-purple-600 bg-purple-50',
     },
     {
       title: 'Activity Log',
@@ -62,7 +62,7 @@ export default function SettingsPage() {
       description: 'View system metrics and monitoring dashboards',
       icon: BarChart3,
       href: '/settings/monitoring',
-      color: 'text-ag-primary bg-ag-primary/10',
+      color: 'text-cyan-600 bg-cyan-50',
     },
   ];
 

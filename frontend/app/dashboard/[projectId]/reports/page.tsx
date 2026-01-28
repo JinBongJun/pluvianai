@@ -492,12 +492,12 @@ function ExecutiveReportView({ report }: { report: any }) {
               ${toFixedSafe(report.key_metrics.avg_daily_cost, 2)}/day avg
             </div>
           </div>
-          <div className="p-6 bg-gradient-to-br from-ag-primary/20 to-ag-primary/5 rounded-lg border border-ag-primary/30">
-            <div className="text-sm text-ag-accentLight mb-2">Quality Score</div>
+          <div className="p-6 bg-gradient-to-br from-cyan-500/20 to-cyan-500/5 rounded-lg border border-cyan-500/30">
+            <div className="text-sm text-cyan-300 mb-2">Quality Score</div>
             <div className="text-3xl font-bold text-white mb-1">
               {report.key_metrics.avg_quality_score != null ? toFixedSafe(report.key_metrics.avg_quality_score, 1) : 'N/A'}
             </div>
-            <div className="text-xs text-ag-accent">Average quality</div>
+            <div className="text-xs text-cyan-400">Average quality</div>
           </div>
         </div>
       </div>
