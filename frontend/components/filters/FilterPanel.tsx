@@ -46,17 +46,17 @@ export default function FilterPanel({
   ).length;
 
   return (
-    <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm shadow-2xl">
+    <div className="relative rounded-2xl border border-white/10 bg-ag-surface shadow-2xl">
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="flex items-center gap-2 text-sm font-medium text-white hover:text-purple-300 transition-colors"
+            className="flex items-center gap-2 text-sm font-medium text-ag-text hover:text-ag-accentLight transition-colors"
           >
             <Filter className="h-4 w-4" />
             Filters
             {activeFiltersCount > 0 && (
-              <span className="bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full">
+              <span className="bg-ag-accent text-ag-text text-xs px-2 py-0.5 rounded-full">
                 {activeFiltersCount}
               </span>
             )}
@@ -64,7 +64,7 @@ export default function FilterPanel({
           {activeFiltersCount > 0 && (
             <button
               onClick={onReset}
-              className="text-sm text-slate-400 hover:text-white transition-colors"
+              className="text-sm text-ag-muted hover:text-ag-text transition-colors"
             >
               Clear all
             </button>
@@ -94,17 +94,17 @@ export default function FilterPanel({
             {/* Provider */}
             {availableProviders.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-white mb-1">
+                <label className="block text-sm font-medium text-ag-text mb-1">
                   Provider
                 </label>
                 <select
                   value={filters.provider || ''}
                   onChange={(e) => updateFilter('provider', e.target.value || undefined)}
-                  className="w-full bg-white/5 border border-white/10 rounded-md text-white focus:ring-purple-500 focus:border-purple-500 px-3 py-2"
+                  className="w-full bg-ag-surface border border-white/10 rounded-md text-ag-text focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
                 >
-                  <option value="" className="bg-[#0B0C15]">All providers</option>
+                  <option value="" className="bg-ag-surface">All providers</option>
                   {availableProviders.map((provider) => (
-                    <option key={provider} value={provider} className="bg-[#0B0C15]">
+                    <option key={provider} value={provider} className="bg-ag-surface">
                       {provider}
                     </option>
                   ))}
@@ -115,17 +115,17 @@ export default function FilterPanel({
             {/* Model */}
             {availableModels.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-white mb-1">
+                <label className="block text-sm font-medium text-ag-text mb-1">
                   Model
                 </label>
                 <select
                   value={filters.model || ''}
                   onChange={(e) => updateFilter('model', e.target.value || undefined)}
-                  className="w-full bg-white/5 border border-white/10 rounded-md text-white focus:ring-purple-500 focus:border-purple-500 px-3 py-2"
+                  className="w-full bg-ag-surface border border-white/10 rounded-md text-ag-text focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
                 >
-                  <option value="" className="bg-[#0B0C15]">All models</option>
+                  <option value="" className="bg-ag-surface">All models</option>
                   {availableModels.map((model) => (
-                    <option key={model} value={model} className="bg-[#0B0C15]">
+                    <option key={model} value={model} className="bg-ag-surface">
                       {model}
                     </option>
                   ))}
@@ -135,34 +135,34 @@ export default function FilterPanel({
 
             {/* Status */}
             <div>
-              <label className="block text-sm font-medium text-white mb-1">
+              <label className="block text-sm font-medium text-ag-text mb-1">
                 Status
               </label>
               <select
                 value={filters.status || 'all'}
                 onChange={(e) => updateFilter('status', e.target.value as any)}
-                className="w-full bg-white/5 border border-white/10 rounded-md text-white focus:ring-purple-500 focus:border-purple-500 px-3 py-2"
+                className="w-full bg-ag-surface border border-white/10 rounded-md text-ag-text focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
               >
-                <option value="all" className="bg-[#0B0C15]">All statuses</option>
-                <option value="success" className="bg-[#0B0C15]">Success</option>
-                <option value="error" className="bg-[#0B0C15]">Error</option>
+                <option value="all" className="bg-ag-surface">All statuses</option>
+                <option value="success" className="bg-ag-surface">Success</option>
+                <option value="error" className="bg-ag-surface">Error</option>
               </select>
             </div>
 
             {/* Agent Name */}
             {availableAgents.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-white mb-1">
+                <label className="block text-sm font-medium text-ag-text mb-1">
                   Agent
                 </label>
                 <select
                   value={filters.agentName || ''}
                   onChange={(e) => updateFilter('agentName', e.target.value || undefined)}
-                  className="w-full bg-white/5 border border-white/10 rounded-md text-white focus:ring-purple-500 focus:border-purple-500 px-3 py-2"
+                  className="w-full bg-ag-surface border border-white/10 rounded-md text-ag-text focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
                 >
-                  <option value="" className="bg-[#0B0C15]">All agents</option>
+                  <option value="" className="bg-ag-surface">All agents</option>
                   {availableAgents.map((agent) => (
-                    <option key={agent} value={agent} className="bg-[#0B0C15]">
+                    <option key={agent} value={agent} className="bg-ag-surface">
                       {agent}
                     </option>
                   ))}
@@ -195,12 +195,12 @@ export default function FilterPanel({
               return (
                 <span
                   key={key}
-                  className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-white text-xs rounded border border-purple-500/30"
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-ag-accent/20 text-ag-text text-xs rounded border border-ag-accent/30"
                 >
                   {key}: {String(value)}
                   <button
                     onClick={() => updateFilter(key as keyof FilterState, undefined)}
-                    className="hover:text-purple-300 transition-colors"
+                    className="hover:text-ag-accentLight transition-colors"
                   >
                     <X className="h-3 w-3" />
                   </button>

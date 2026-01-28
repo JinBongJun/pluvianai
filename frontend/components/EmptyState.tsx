@@ -126,12 +126,12 @@ export default function EmptyState({
   const Icon = content.icon;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-12 text-center shadow-2xl">
-      <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-purple-500/20 blur-[60px]" />
+    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-12 text-center shadow-2xl">
+      <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-ag-accent/20 blur-[60px]" />
       <div className="relative z-10">
-        <Icon className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-white mb-2">{content.title}</h3>
-        <p className="text-sm text-slate-400 mb-6 max-w-md mx-auto">
+        <Icon className="h-12 w-12 text-ag-muted mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-ag-text mb-2">{content.title}</h3>
+        <p className="text-sm text-ag-muted mb-6 max-w-md mx-auto">
           {content.description}
         </p>
         <div className="flex items-center justify-center gap-3">

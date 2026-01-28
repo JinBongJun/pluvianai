@@ -128,7 +128,7 @@ export default function HealthDashboardPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
+          <Loader2 className="h-8 w-8 animate-spin text-ag-accent" />
         </div>
       </DashboardLayout>
     );
@@ -136,7 +136,7 @@ export default function HealthDashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="bg-[#000314] min-h-screen">
+      <div className="bg-ag-bg min-h-screen">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
@@ -149,7 +149,7 @@ export default function HealthDashboardPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setAutoRefresh(!autoRefresh)}
-                className={clsx(autoRefresh && 'bg-purple-500/20')}
+                className={clsx(autoRefresh && 'bg-ag-accent/20')}
               >
                 Auto Refresh: {autoRefresh ? 'ON' : 'OFF'}
               </Button>
@@ -275,7 +275,7 @@ export default function HealthDashboardPage() {
         {healthStatus?.system && healthStatus.system.cpu_percent !== undefined && (
           <div className="mb-6 relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
-              <Server className="h-6 w-6 text-purple-400" />
+              <Server className="h-6 w-6 text-ag-accent" />
               <h3 className="text-lg font-semibold text-white">System Resources</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

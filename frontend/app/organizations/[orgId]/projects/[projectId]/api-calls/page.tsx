@@ -253,7 +253,7 @@ export default function APICallsListPage() {
         ]}
       >
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-500/20 border-t-purple-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent"></div>
         </div>
       </OrgLayout>
     );
@@ -409,7 +409,7 @@ export default function APICallsListPage() {
                     <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
                       {loading ? (
                         <div className="flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 border-t-transparent"></div>
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-ag-accent border-t-transparent"></div>
                         </div>
                       ) : filters.search || filters.dateFrom || filters.dateTo || filters.status || filters.provider || filters.model || filters.agentName ? (
                         <div>
@@ -476,7 +476,7 @@ export default function APICallsListPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
                           onClick={() => router.push(`/organizations/${orgId}/projects/${projectId}/api-calls/${call.id}`)}
-                          className="text-purple-400 hover:text-purple-300 transition-colors"
+                          className="text-ag-accent hover:text-ag-accentLight transition-colors"
                         >
                           View
                         </button>

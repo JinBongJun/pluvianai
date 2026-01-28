@@ -68,7 +68,7 @@ export default function AdminBillingPage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <CreditCard className="h-8 w-8 text-purple-400" />
+                  <CreditCard className="h-8 w-8 text-ag-accent" />
                   <h1 className="text-4xl font-bold text-white">Billing Management</h1>
                 </div>
                 <p className="text-slate-400 mt-2">View subscription details and manage billing</p>
@@ -111,7 +111,7 @@ export default function AdminBillingPage() {
               <div className="bg-white/5 rounded-lg p-6 border border-white/10">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-slate-400">MRR</span>
-                  <TrendingUp className="h-5 w-5 text-purple-400" />
+                  <TrendingUp className="h-5 w-5 text-ag-accent" />
                 </div>
                 <p className="text-3xl font-bold text-white">
                   ${billingStats.mrr?.toFixed(2) || billingStats.total_revenue?.toFixed(2) || '0.00'}

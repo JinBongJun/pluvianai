@@ -92,7 +92,7 @@ export default function AdminUsersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <Users className="h-8 w-8 text-purple-400" />
+                  <Users className="h-8 w-8 text-ag-accent" />
                   <h1 className="text-4xl font-bold text-white">User Management</h1>
                 </div>
                 <p className="text-slate-400 mt-2">View and manage all users</p>
@@ -119,7 +119,7 @@ export default function AdminUsersPage() {
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-ag-accent"
               />
             </div>
           </div>
@@ -156,8 +156,8 @@ export default function AdminUsersPage() {
                       <tr key={user.id} className="hover:bg-white/5 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
-                              <UserIcon className="h-5 w-5 text-purple-400" />
+                            <div className="w-10 h-10 rounded-full bg-ag-accent/20 flex items-center justify-center">
+                              <UserIcon className="h-5 w-5 text-ag-accent" />
                             </div>
                             <div>
                               <div className="text-sm font-medium text-white">{user.email}</div>
@@ -169,7 +169,7 @@ export default function AdminUsersPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           {user.is_superuser ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-purple-500/20 text-purple-300">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-ag-accent/20 text-ag-accentLight">
                               <Shield className="h-3 w-3" />
                               Admin
                             </span>

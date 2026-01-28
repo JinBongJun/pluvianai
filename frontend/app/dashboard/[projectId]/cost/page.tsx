@@ -185,7 +185,7 @@ export default function CostAnalysisPage() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#000314]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-500/20 border-t-purple-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent mx-auto mb-4"></div>
           <p className="text-slate-400">Loading...</p>
         </div>
       </div>
@@ -203,7 +203,7 @@ export default function CostAnalysisPage() {
         ]}
       >
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ag-accent border-t-transparent"></div>
         </div>
       </OrgLayout>
     );
@@ -333,7 +333,7 @@ export default function CostAnalysisPage() {
                       </div>
                       <div className="w-full bg-slate-700/50 rounded-full h-2 overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-purple-500 to-purple-600 transition-all duration-500"
+                          className="h-full bg-gradient-to-r from-ag-primary to-ag-primaryHover transition-all duration-500"
                           style={{ width: `${percentage}%` }}
                         />
                       </div>
@@ -420,15 +420,15 @@ export default function CostAnalysisPage() {
 
         {/* Cost Optimization Suggestions - Collapsible */}
         {optimizations && optimizations.opportunities && optimizations.opportunities.length > 0 && (
-          <div className="mb-4 rounded-lg border border-purple-500/30 bg-purple-500/10">
+          <div className="mb-4 rounded-lg border border-ag-accent/30 bg-ag-accent/10">
             <button
               onClick={() => setShowOptimizationModal(true)}
-              className="w-full flex items-center justify-between p-3 text-left hover:bg-purple-500/20 transition-colors"
+              className="w-full flex items-center justify-between p-3 text-left hover:bg-ag-accent/20 transition-colors"
             >
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-purple-400" />
+                <Sparkles className="h-4 w-4 text-ag-accent" />
                 <div>
-                  <span className="text-sm font-medium text-purple-400 block">
+                  <span className="text-sm font-medium text-ag-accent block">
                     {optimizations.opportunities.length} Cost Optimization Suggestions
                   </span>
                   <span className="text-xs text-slate-400 mt-0.5">
@@ -456,8 +456,8 @@ export default function CostAnalysisPage() {
           <div className="space-y-4">
             {optimizations && optimizations.opportunities && optimizations.opportunities.length > 0 ? (
               <>
-                <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg mb-4">
-                  <div className="text-sm font-medium text-purple-400 mb-1">Total Potential Savings</div>
+                <div className="p-4 bg-ag-accent/10 border border-ag-accent/30 rounded-lg mb-4">
+                  <div className="text-sm font-medium text-ag-accent mb-1">Total Potential Savings</div>
                   <div className="text-2xl font-bold text-green-400">
                     ${toFixedSafe(optimizations.total_potential_savings, 2)}/month
                   </div>
@@ -488,7 +488,7 @@ export default function CostAnalysisPage() {
                       {opp.recommended_model && (
                         <div>
                           <span className="text-slate-400">Recommended: </span>
-                          <span className="text-purple-400">{opp.recommended_model}</span>
+                          <span className="text-ag-accent">{opp.recommended_model}</span>
                         </div>
                       )}
                       <div>

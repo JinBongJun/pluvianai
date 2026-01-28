@@ -467,12 +467,12 @@ function ExecutiveReportView({ report }: { report: any }) {
       <div>
         <h3 className="text-md font-semibold text-white mb-3">Key Performance Indicators</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="p-6 bg-gradient-to-br from-purple-500/20 to-purple-500/5 rounded-lg border border-purple-500/30">
-            <div className="text-sm text-purple-300 mb-2">Total API Calls</div>
+          <div className="p-6 bg-gradient-to-br from-ag-accent/20 to-ag-accent/5 rounded-lg border border-ag-accent/30">
+            <div className="text-sm text-ag-accentLight mb-2">Total API Calls</div>
             <div className="text-3xl font-bold text-white mb-1">
               {report.key_metrics.total_api_calls.toLocaleString()}
             </div>
-            <div className="text-xs text-purple-400">Period total</div>
+            <div className="text-xs text-ag-accent">Period total</div>
           </div>
           <div className="p-6 bg-gradient-to-br from-green-500/20 to-green-500/5 rounded-lg border border-green-500/30">
             <div className="text-sm text-green-300 mb-2">Success Rate</div>
@@ -492,12 +492,12 @@ function ExecutiveReportView({ report }: { report: any }) {
               ${toFixedSafe(report.key_metrics.avg_daily_cost, 2)}/day avg
             </div>
           </div>
-          <div className="p-6 bg-gradient-to-br from-cyan-500/20 to-cyan-500/5 rounded-lg border border-cyan-500/30">
-            <div className="text-sm text-cyan-300 mb-2">Quality Score</div>
+          <div className="p-6 bg-gradient-to-br from-ag-primary/20 to-ag-primary/5 rounded-lg border border-ag-primary/30">
+            <div className="text-sm text-ag-accentLight mb-2">Quality Score</div>
             <div className="text-3xl font-bold text-white mb-1">
               {report.key_metrics.avg_quality_score != null ? toFixedSafe(report.key_metrics.avg_quality_score, 1) : 'N/A'}
             </div>
-            <div className="text-xs text-cyan-400">Average quality</div>
+            <div className="text-xs text-ag-accent">Average quality</div>
           </div>
         </div>
       </div>
@@ -550,7 +550,7 @@ function ExecutiveReportView({ report }: { report: any }) {
               <div key={index} className="p-4 bg-white/5 rounded-lg border border-white/10">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-white">#{index + 1}</span>
-                  <span className="text-xs text-purple-400 px-2 py-1 bg-purple-500/20 rounded">Top Performer</span>
+                  <span className="text-xs text-ag-accent px-2 py-1 bg-ag-accent/20 rounded">Top Performer</span>
                 </div>
                 <div className="font-mono text-sm text-white mb-3">{model.model}</div>
                 <div className="space-y-1 text-sm">

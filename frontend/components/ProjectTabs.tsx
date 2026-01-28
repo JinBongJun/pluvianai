@@ -65,8 +65,8 @@ export default function ProjectTabs({ projectId, orgId, canManage = false, baseP
             className={clsx(
               'py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200',
               activeTab === tab.id
-                ? 'border-purple-500 text-white'
-                : 'border-transparent text-slate-400 hover:text-slate-300 hover:border-white/20'
+                ? 'border-ag-accent text-ag-text'
+                : 'border-transparent text-ag-muted hover:text-ag-text hover:border-white/20'
             )}
           >
             {tab.label}

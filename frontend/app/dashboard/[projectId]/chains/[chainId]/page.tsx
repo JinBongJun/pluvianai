@@ -212,7 +212,7 @@ export default function ChainDetailPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ag-accent border-t-transparent"></div>
         </div>
       </DashboardLayout>
     );
@@ -358,15 +358,15 @@ export default function ChainDetailPage() {
 
         {/* Optimization Suggestions - Collapsible */}
         {optimizations && optimizations.suggestions && optimizations.suggestions.length > 0 && (
-          <div className="mb-4 rounded-lg border border-purple-500/30 bg-purple-500/10">
+          <div className="mb-4 rounded-lg border border-ag-accent/30 bg-ag-accent/10">
             <button
               onClick={() => setShowOptimizations(!showOptimizations)}
-              className="w-full flex items-center justify-between p-3 text-left hover:bg-purple-500/20 transition-colors"
+              className="w-full flex items-center justify-between p-3 text-left hover:bg-ag-accent/20 transition-colors"
             >
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-purple-400" />
+                <Sparkles className="h-4 w-4 text-ag-accent" />
                 <div>
-                  <span className="text-sm font-medium text-purple-400 block">
+                  <span className="text-sm font-medium text-ag-accent block">
                     {optimizations.suggestions.length} Optimization Suggestions
                   </span>
                   <span className="text-xs text-slate-400 mt-0.5">
@@ -384,7 +384,7 @@ export default function ChainDetailPage() {
               </div>
             </button>
             {showOptimizations && (
-              <div className="p-3 pt-0 border-t border-purple-500/20 space-y-2">
+              <div className="p-3 pt-0 border-t border-ag-accent/20 space-y-2">
                 {optimizations.suggestions.slice(0, 2).map((opt: any, idx: number) => (
                   <div key={idx} className="p-2 bg-white/5 rounded text-xs">
                     <div className="flex items-center justify-between mb-1">
@@ -609,8 +609,8 @@ export default function ChainDetailPage() {
                     </div>
                   ))}
                   {optimizations.predicted_improvement && (
-                    <div className="p-4 bg-purple-500/10 rounded-lg border border-purple-500/30">
-                      <div className="text-sm font-medium text-purple-400 mb-3">Predicted Overall Improvement</div>
+                    <div className="p-4 bg-ag-accent/10 rounded-lg border border-ag-accent/30">
+                      <div className="text-sm font-medium text-ag-accent mb-3">Predicted Overall Improvement</div>
                       <div className="grid grid-cols-3 gap-4">
                         <div>
                           <div className="text-xs text-slate-400">Latency Reduction</div>

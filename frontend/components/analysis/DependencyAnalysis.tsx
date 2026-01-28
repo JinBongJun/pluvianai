@@ -136,7 +136,7 @@ export default function DependencyAnalysis({ projectId, onClose }: DependencyAna
           {analysis.mapping_available && (
             <button
               onClick={() => setShowMap(!showMap)}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-ag-primary text-ag-accent-light rounded-lg text-sm font-medium hover:bg-ag-primaryHover transition-colors flex items-center gap-2"
             >
               <Map className="w-4 h-4" />
               {showMap ? 'Hide Map' : 'Show Map'}
@@ -159,7 +159,7 @@ export default function DependencyAnalysis({ projectId, onClose }: DependencyAna
           </div>
           <div className="p-4 bg-slate-900 rounded-lg">
             <div className="text-sm text-slate-400 mb-1">Leaf Nodes</div>
-            <div className="text-2xl font-bold text-purple-500">{leafNodes.length}</div>
+            <div className="text-2xl font-bold text-ag-accent">{leafNodes.length}</div>
           </div>
         </div>
 
@@ -230,7 +230,7 @@ export default function DependencyAnalysis({ projectId, onClose }: DependencyAna
                         <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded">Root</span>
                       )}
                       {leafNodes.includes(nodeId) && (
-                        <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded">Leaf</span>
+                        <span className="px-2 py-1 bg-ag-accent/20 text-ag-accent rounded">Leaf</span>
                       )}
                     </div>
                   </div>
@@ -266,7 +266,7 @@ export default function DependencyAnalysis({ projectId, onClose }: DependencyAna
                             return (
                               <div
                                 key={depId}
-                                className="text-sm text-purple-400 px-2 py-1 bg-purple-500/10 rounded"
+                                className="text-sm text-ag-accent px-2 py-1 bg-ag-accent/10 rounded"
                               >
                                 {depNode?.name || depId}
                               </div>

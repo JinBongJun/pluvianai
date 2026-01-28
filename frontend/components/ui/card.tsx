@@ -11,7 +11,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={clsx(
-          'rounded-lg border border-gray-200 bg-white shadow-sm',
+          'rounded-lg border border-white/10 bg-ag-surface shadow-sm',
           className
         )}
         {...props}
@@ -70,7 +70,7 @@ const CardDescription = forwardRef<HTMLParagraphElement, CardDescriptionProps>(
     return (
       <p
         ref={ref}
-        className={clsx('text-sm text-gray-600', className)}
+        className={clsx('text-sm text-ag-muted', className)}
         {...props}
       >
         {children}

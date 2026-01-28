@@ -95,7 +95,7 @@ export default function NewProjectPage() {
               onChange={(e) => setName(e.target.value)}
               placeholder="My Project"
               required
-              className="w-full rounded-lg border border-white/10 bg-[#0B0C15] px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-purple-500 focus:outline-none"
+              className="w-full rounded-lg border border-white/10 bg-ag-surface px-4 py-3 text-sm text-white placeholder:text-ag-muted focus:border-ag-accent focus:outline-none"
             />
             <p className="mt-1 text-xs text-slate-400">
               Choose a descriptive name for your project.
@@ -112,7 +112,7 @@ export default function NewProjectPage() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description of your project"
               rows={4}
-              className="w-full rounded-lg border border-white/10 bg-[#0B0C15] px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-purple-500 focus:outline-none resize-none"
+              className="w-full rounded-lg border border-white/10 bg-ag-surface px-4 py-3 text-sm text-white placeholder:text-ag-muted focus:border-ag-accent focus:outline-none resize-none"
             />
             <p className="mt-1 text-xs text-slate-400">
               Add a description to help your team understand this project.

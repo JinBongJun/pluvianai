@@ -144,7 +144,7 @@ export default function WebhooksPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-500/20 border-t-purple-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent"></div>
         </div>
       </DashboardLayout>
     );
@@ -287,7 +287,7 @@ export default function WebhooksPage() {
                     project_id: e.target.value ? Number(e.target.value) : null,
                   })
                 }
-                className="w-full border-gray-600 bg-[#0A0F1C] text-white rounded-md focus:ring-purple-500 focus:border-purple-500"
+                className="w-full border-gray-600 bg-[#0A0F1C] text-white rounded-md focus:ring-ag-accent focus:border-ag-accent"
               >
                 <option value="">All Projects</option>
                 {projects.map((project) => (
@@ -312,7 +312,7 @@ export default function WebhooksPage() {
                       type="checkbox"
                       checked={newWebhook.events.includes(event)}
                       onChange={() => toggleEvent(event)}
-                      className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-600 rounded"
+                      className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
                     />
                     <span className="text-sm text-gray-300 capitalize">
                       {event.replace('_', ' ')}

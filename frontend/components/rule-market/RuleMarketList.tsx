@@ -104,7 +104,7 @@ export default function RuleMarketList({ onRuleSelect }: RuleMarketListProps) {
                 placeholder="Search rules..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full pl-10 pr-4 py-2 bg-ag-surface border border-white/10 rounded text-ag-text placeholder-ag-muted focus:outline-none focus:ring-2 focus:ring-ag-accent"
               />
             </div>
           </div>
@@ -113,7 +113,7 @@ export default function RuleMarketList({ onRuleSelect }: RuleMarketListProps) {
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="px-3 py-2 bg-ag-surface border border-white/10 rounded text-ag-text focus:outline-none focus:ring-2 focus:ring-ag-accent"
           >
             <option value="">All Categories</option>
             <option value="security">Security</option>
@@ -125,7 +125,7 @@ export default function RuleMarketList({ onRuleSelect }: RuleMarketListProps) {
           <select
             value={ruleType}
             onChange={(e) => setRuleType(e.target.value)}
-            className="px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="px-3 py-2 bg-ag-surface border border-white/10 rounded text-ag-text focus:outline-none focus:ring-2 focus:ring-ag-accent"
           >
             <option value="">All Types</option>
             <option value="pii">PII</option>
@@ -145,7 +145,7 @@ export default function RuleMarketList({ onRuleSelect }: RuleMarketListProps) {
                 onClick={() => setSort(sortOption)}
                 className={`px-3 py-1 text-sm rounded ${
                   sort === sortOption
-                    ? 'bg-purple-600 text-white'
+                    ? 'bg-ag-primary text-ag-accent-light'
                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                 }`}
               >
@@ -176,12 +176,12 @@ export default function RuleMarketList({ onRuleSelect }: RuleMarketListProps) {
           {rules.map((rule) => (
             <div
               key={rule.id}
-              className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50 hover:border-purple-500/50 cursor-pointer transition-colors"
+              className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50 hover:border-ag-accent/50 cursor-pointer transition-colors"
               onClick={() => handleRuleClick(rule)}
             >
               {rule.is_featured && (
                 <div className="mb-2">
-                  <span className="inline-block px-2 py-1 text-xs bg-purple-600 text-white rounded">
+                  <span className="inline-block px-2 py-1 text-xs bg-ag-primary text-ag-accent-light rounded">
                     Featured
                   </span>
                 </div>

@@ -131,12 +131,12 @@ export default function ActivityLogPage() {
               <div className="flex items-center justify-between mb-4">
                 <button
                   onClick={() => setShowFilters(!showFilters)}
-                  className="flex items-center gap-2 text-sm font-medium text-white hover:text-purple-300 transition-colors"
+                  className="flex items-center gap-2 text-sm font-medium text-ag-text hover:text-ag-accentLight transition-colors"
                 >
                   <Filter className="h-4 w-4" />
                   Filters
                   {activeFiltersCount > 0 && (
-                    <span className="bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full">
+                    <span className="bg-ag-accent text-ag-text text-xs px-2 py-0.5 rounded-full">
                       {activeFiltersCount}
                     </span>
                   )}
@@ -162,7 +162,7 @@ export default function ActivityLogPage() {
                       <select
                         value={filters.project_id || ''}
                         onChange={(e) => setFilters({ ...filters, project_id: e.target.value || undefined })}
-                        className="w-full bg-white/5 border border-white/10 rounded-md text-white focus:ring-purple-500 focus:border-purple-500 px-3 py-2"
+                        className="w-full bg-white/5 border border-white/10 rounded-md text-white focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
                       >
                         <option value="" className="bg-[#0B0C15]">All projects</option>
                         {projects.map((project) => (
@@ -182,7 +182,7 @@ export default function ActivityLogPage() {
                     <select
                       value={filters.activity_type || ''}
                       onChange={(e) => setFilters({ ...filters, activity_type: e.target.value || undefined })}
-                      className="w-full bg-white/5 border border-white/10 rounded-md text-white focus:ring-purple-500 focus:border-purple-500 px-3 py-2"
+                      className="w-full bg-white/5 border border-white/10 rounded-md text-white focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
                     >
                       <option value="" className="bg-[#0B0C15]">All types</option>
                       <option value="project_create" className="bg-[#0B0C15]">Project Created</option>
@@ -207,12 +207,12 @@ export default function ActivityLogPage() {
                     return (
                       <span
                         key={key}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-white text-xs rounded border border-purple-500/30"
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-ag-accent/20 text-ag-text text-xs rounded border border-ag-accent/30"
                       >
                         {key === 'project_id' ? 'Project' : key}: {displayValue}
                         <button
                           onClick={() => setFilters({ ...filters, [key]: undefined })}
-                          className="hover:text-purple-300 transition-colors"
+                          className="hover:text-ag-accentLight transition-colors"
                         >
                           ×
                         </button>
@@ -266,7 +266,7 @@ export default function ActivityLogPage() {
                               <span className="text-xs text-slate-400">Project:</span>
                               <Link
                                 href={`/dashboard/${projectId}`}
-                                className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 transition-colors"
+                                className="text-xs text-ag-accent hover:text-ag-accentLight flex items-center gap-1 transition-colors"
                               >
                                 {projectName}
                                 <ExternalLink className="h-3 w-3" />

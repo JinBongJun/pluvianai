@@ -68,7 +68,7 @@ export default function DashboardPage() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-[#000314]">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-500/20 border-t-purple-500 mx-auto mb-4"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent mx-auto mb-4"></div>
         <p className="text-slate-400">Redirecting...</p>
       </div>
     </div>

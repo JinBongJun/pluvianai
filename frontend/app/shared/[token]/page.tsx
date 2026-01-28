@@ -65,18 +65,18 @@ export default function SharedResultPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#000314] p-6">
+    <div className="min-h-screen bg-ag-bg p-6 text-ag-text">
       <div className="max-w-4xl mx-auto">
         {/* Guest View Header */}
         <div className="mb-6 p-4 bg-slate-800/50 border border-slate-700 rounded-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
-                <Lock className="h-5 w-5 text-purple-400" />
+              <div className="w-10 h-10 rounded-full bg-ag-accent/20 flex items-center justify-center">
+                <Lock className="h-5 w-5 text-ag-accent" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">Shared Result</h1>
-                <p className="text-slate-400 text-sm mt-1">
+                <h1 className="text-2xl font-bold text-ag-text">Shared Result</h1>
+                <p className="text-ag-muted text-sm mt-1">
                   {isAuthenticated ? 'Read-only view' : 'Guest view - Read-only'}
                 </p>
               </div>

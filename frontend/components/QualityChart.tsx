@@ -51,7 +51,7 @@ export default function QualityChart({ projectId }: { projectId: number }) {
   if (loading) {
     return (
       <div className="h-64 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-purple-500 border-t-transparent"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-ag-accent border-t-transparent"></div>
       </div>
     );
   }

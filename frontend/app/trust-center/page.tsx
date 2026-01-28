@@ -94,26 +94,26 @@ export default function TrustCenterPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#000314] flex items-center justify-center">
+      <div className="min-h-screen bg-ag-bg flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-500/20 border-t-purple-500 mx-auto mb-4"></div>
-          <p className="text-slate-400">Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent mx-auto mb-4"></div>
+          <p className="text-ag-muted">Loading...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#000314]">
+    <div className="min-h-screen bg-ag-bg text-ag-text">
       {/* Header */}
-      <header className="border-b border-white/10 bg-[#0B0C15]">
+      <header className="border-b border-white/10 bg-ag-surface">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
-              <div className="h-8 w-8 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">AG</span>
+              <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center">
+                <span className="text-ag-accent-light font-bold text-sm">AG</span>
               </div>
-              <span className="text-white font-semibold">AgentGuard</span>
+              <span className="text-ag-text font-semibold">AgentGuard</span>
             </Link>
             <Link href="/login">
               <Button variant="outline" size="sm">Sign In</Button>
@@ -125,11 +125,11 @@ export default function TrustCenterPage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="mb-12 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-ag-primary to-ag-primaryHover mb-4">
             <Shield className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-4xl font-bold text-white mb-4">Trust Center</h1>
-          <p className="text-xl text-slate-400 max-w-2xl mx-auto">
+          <h1 className="text-4xl font-bold text-ag-text mb-4">Trust Center</h1>
+          <p className="text-xl text-ag-muted max-w-2xl mx-auto">
             Transparency in security, compliance, and data protection
           </p>
         </div>
@@ -137,65 +137,65 @@ export default function TrustCenterPage() {
         {/* Security Policies */}
         {policies && (
           <div className="mb-12">
-            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-              <Lock className="h-6 w-6 text-purple-500" />
+            <h2 className="text-2xl font-bold text-ag-text mb-6 flex items-center gap-2">
+              <Lock className="h-6 w-6 text-ag-accent" />
               Security Policies
             </h2>
             <div className="grid md:grid-cols-2 gap-6">
-              <div className="bg-white/5 border border-white/10 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-white mb-4">Data Encryption</h3>
+              <div className="bg-ag-surface border border-white/10 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-ag-text mb-4">Data Encryption</h3>
                 <dl className="space-y-3">
                   <div>
-                    <dt className="text-sm text-slate-400">At Rest</dt>
-                    <dd className="text-white font-medium">{policies.data_encryption.at_rest}</dd>
+                    <dt className="text-sm text-ag-muted">At Rest</dt>
+                    <dd className="text-ag-text font-medium">{policies.data_encryption.at_rest}</dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-slate-400">In Transit</dt>
-                    <dd className="text-white font-medium">{policies.data_encryption.in_transit}</dd>
+                    <dt className="text-sm text-ag-muted">In Transit</dt>
+                    <dd className="text-ag-text font-medium">{policies.data_encryption.in_transit}</dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-slate-400">Key Management</dt>
-                    <dd className="text-white font-medium">{policies.data_encryption.key_management}</dd>
+                    <dt className="text-sm text-ag-muted">Key Management</dt>
+                    <dd className="text-ag-text font-medium">{policies.data_encryption.key_management}</dd>
                   </div>
                 </dl>
               </div>
 
-              <div className="bg-white/5 border border-white/10 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-white mb-4">Access Control</h3>
+              <div className="bg-ag-surface border border-white/10 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-ag-text mb-4">Access Control</h3>
                 <dl className="space-y-3">
                   <div>
-                    <dt className="text-sm text-slate-400">Authentication</dt>
-                    <dd className="text-white font-medium">{policies.access_control.authentication}</dd>
+                    <dt className="text-sm text-ag-muted">Authentication</dt>
+                    <dd className="text-ag-text font-medium">{policies.access_control.authentication}</dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-slate-400">Authorization</dt>
-                    <dd className="text-white font-medium">{policies.access_control.authorization}</dd>
+                    <dt className="text-sm text-ag-muted">Authorization</dt>
+                    <dd className="text-ag-text font-medium">{policies.access_control.authorization}</dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-slate-400">API Keys</dt>
-                    <dd className="text-white font-medium">{policies.access_control.api_keys}</dd>
+                    <dt className="text-sm text-ag-muted">API Keys</dt>
+                    <dd className="text-ag-text font-medium">{policies.access_control.api_keys}</dd>
                   </div>
                 </dl>
               </div>
 
-              <div className="bg-white/5 border border-white/10 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-white mb-4">Data Retention</h3>
+              <div className="bg-ag-surface border border-white/10 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-ag-text mb-4">Data Retention</h3>
                 <dl className="space-y-3">
                   <div>
-                    <dt className="text-sm text-slate-400">Free Plan</dt>
-                    <dd className="text-white font-medium">{policies.data_retention.free}</dd>
+                    <dt className="text-sm text-ag-muted">Free Plan</dt>
+                    <dd className="text-ag-text font-medium">{policies.data_retention.free}</dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-slate-400">Pro Plan</dt>
-                    <dd className="text-white font-medium">{policies.data_retention.pro}</dd>
+                    <dt className="text-sm text-ag-muted">Pro Plan</dt>
+                    <dd className="text-ag-text font-medium">{policies.data_retention.pro}</dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-slate-400">Enterprise Plan</dt>
-                    <dd className="text-white font-medium">{policies.data_retention.enterprise}</dd>
+                    <dt className="text-sm text-ag-muted">Enterprise Plan</dt>
+                    <dd className="text-ag-text font-medium">{policies.data_retention.enterprise}</dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-slate-400">Auto-Archiving</dt>
-                    <dd className="text-white font-medium">{policies.data_retention.auto_archiving}</dd>
+                    <dt className="text-sm text-ag-muted">Auto-Archiving</dt>
+                    <dd className="text-ag-text font-medium">{policies.data_retention.auto_archiving}</dd>
                   </div>
                 </dl>
               </div>
@@ -206,13 +206,13 @@ export default function TrustCenterPage() {
         {/* Compliance Status */}
         {compliance && (
           <div className="mb-12">
-            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-              <FileText className="h-6 w-6 text-purple-500" />
+            <h2 className="text-2xl font-bold text-ag-text mb-6 flex items-center gap-2">
+              <FileText className="h-6 w-6 text-ag-accent" />
               Compliance Status
             </h2>
             <div className="grid md:grid-cols-3 gap-6">
               {/* GDPR */}
-              <div className="bg-white/5 border border-white/10 rounded-lg p-6">
+              <div className="bg-ag-surface border border-white/10 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-4">
                   {compliance.gdpr.status === 'Compliant' ? (
                     <CheckCircle className="h-5 w-5 text-green-500" />
@@ -292,7 +292,7 @@ export default function TrustCenterPage() {
           </p>
           <a
             href="mailto:security@agentguard.ai"
-            className="text-purple-400 hover:text-purple-300 transition-colors"
+            className="text-ag-accent hover:text-ag-accentLight transition-colors"
           >
             security@agentguard.ai
           </a>
@@ -310,7 +310,7 @@ export default function TrustCenterPage() {
               <Link href="/" className="text-slate-400 hover:text-white transition-colors">
                 Home
               </Link>
-              <Link href="/trust-center" className="text-purple-400 font-medium">
+              <Link href="/trust-center" className="text-ag-accent font-medium">
                 Trust Center
               </Link>
             </div>

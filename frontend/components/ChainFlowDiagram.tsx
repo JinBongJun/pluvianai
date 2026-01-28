@@ -109,7 +109,7 @@ export default function ChainFlowDiagram({
                     <Activity className={clsx(
                       'h-4 w-4',
                       isBottleneck ? 'text-yellow-400' :
-                      hasFailures ? 'text-red-400' : 'text-purple-400'
+                      hasFailures ? 'text-red-400' : 'text-ag-accent'
                     )} />
                     <span className="font-semibold text-white text-sm">{agent.agent_name}</span>
                   </div>
@@ -185,7 +185,7 @@ export default function ChainFlowDiagram({
                   'absolute h-full transition-all duration-300 flex items-center justify-center',
                   agent.failure_count > 0
                     ? 'bg-red-500/30 border-r border-red-500/50'
-                    : 'bg-purple-500/30 border-r border-purple-500/50'
+                    : 'bg-ag-accent/30 border-r border-ag-accent/50'
                 )}
                 style={{
                   left: `${leftPercent}%`,

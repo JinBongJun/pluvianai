@@ -39,7 +39,7 @@ export default function NewOrganizationPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#000314] text-white">
+    <div className="min-h-screen bg-ag-bg text-ag-text">
       <TopHeader breadcrumb={[{ label: 'Organizations', href: '/organizations' }, { label: 'New' }]} />
 
       <main className="px-8 py-10 max-w-3xl mx-auto">
@@ -59,7 +59,7 @@ export default function NewOrganizationPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Organization name"
-              className="w-full rounded-lg border border-white/10 bg-[#0B0C15] px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-purple-500 focus:outline-none"
+              className="w-full rounded-lg border border-white/10 bg-ag-surface px-4 py-3 text-sm text-white placeholder:text-ag-muted focus:border-ag-accent focus:outline-none"
               required
               maxLength={255}
             />
@@ -73,7 +73,7 @@ export default function NewOrganizationPage() {
             <select
               value={type}
               onChange={(e) => setType(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-[#0B0C15] px-4 py-3 text-sm text-white focus:border-purple-500 focus:outline-none"
+              className="w-full rounded-lg border border-white/10 bg-ag-surface px-4 py-3 text-sm text-white focus:border-ag-accent focus:outline-none"
             >
               <option value="personal">Personal</option>
               <option value="startup">Startup</option>
@@ -108,7 +108,7 @@ export default function NewOrganizationPage() {
             <button
               type="button"
               onClick={() => router.push('/organizations')}
-              className="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5 transition-colors"
+              className="rounded-lg border border-white/10 px-4 py-2 text-sm text-ag-muted hover:bg-white/5 transition-colors"
             >
               Cancel
             </button>

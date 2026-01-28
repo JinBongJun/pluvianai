@@ -58,7 +58,7 @@ export default function JSONViewer({ data, title, searchable = true, className }
     }
 
     if (typeof value === 'boolean') {
-      return <span className="text-purple-600">{value.toString()}</span>;
+      return <span className="text-ag-accent">{value.toString()}</span>;
     }
 
     if (Array.isArray(value)) {

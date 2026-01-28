@@ -288,7 +288,7 @@ export default function AlertsPage() {
         ]}
       >
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-500/20 border-t-purple-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent"></div>
         </div>
       </OrgLayout>
     );
@@ -467,7 +467,7 @@ export default function AlertsPage() {
                     <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
                       {loading ? (
                         <div className="flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 border-t-transparent"></div>
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-ag-accent border-t-transparent"></div>
                         </div>
                       ) : (
                         <div>
@@ -574,7 +574,7 @@ export default function AlertsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => router.push(`/organizations/${orgId}/projects/${projectId}/alerts/${alert.id}`)}
-                            className="flex items-center gap-1.5 text-purple-400 hover:text-purple-300"
+                            className="flex items-center gap-1.5 text-ag-accent hover:text-ag-accentLight"
                             title="View details"
                           >
                             <Eye className="h-4 w-4" />

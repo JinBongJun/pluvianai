@@ -126,7 +126,7 @@ export default function LiveStreamView({
           className
         )}
       >
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-purple-500 border-t-transparent" />
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-ag-accent border-t-transparent" />
       </div>
     );
   }
@@ -155,7 +155,7 @@ export default function LiveStreamView({
           <button
             type="button"
             onClick={() => router.push(`/dashboard/${projectId}/api-calls`)}
-            className="text-xs text-purple-400 hover:text-purple-300 transition-colors ml-auto"
+            className="text-xs text-ag-accent hover:text-ag-accentLight transition-colors ml-auto"
           >
             View all →
           </button>
@@ -191,7 +191,7 @@ export default function LiveStreamView({
                 <button
                   type="button"
                   onClick={() => router.push(`/dashboard/${projectId}/api-calls/${call.id}`)}
-                  className="ml-auto text-purple-400 hover:text-purple-300 text-xs shrink-0"
+                  className="ml-auto text-ag-accent hover:text-ag-accentLight text-xs shrink-0"
                 >
                   View
                 </button>

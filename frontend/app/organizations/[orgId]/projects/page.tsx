@@ -72,7 +72,7 @@ export default function OrgProjectsPage() {
                   placeholder="Search for a project"
                   value={projectQuery}
                   onChange={(e) => setProjectQuery(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-[#0B0C15] px-4 py-2 pl-10 text-sm text-white placeholder:text-slate-500 focus:border-purple-500 focus:outline-none"
+                  className="w-full rounded-lg border border-white/10 bg-ag-surface px-4 py-2 pl-10 text-sm text-white placeholder:text-ag-muted focus:border-ag-accent focus:outline-none"
                 />
                 <svg
                   className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400"
@@ -83,17 +83,17 @@ export default function OrgProjectsPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
-              <button className="rounded-lg border border-white/10 bg-[#0B0C15] p-2 hover:bg-white/5 transition-colors">
+              <button className="rounded-lg border border-white/10 bg-ag-surface p-2 hover:bg-white/5 transition-colors">
                 <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                 </svg>
               </button>
             </div>
             <div className="flex items-center gap-3">
-              <div className="inline-flex items-center rounded-lg border border-white/10 bg-[#0B0C15]">
+              <div className="inline-flex items-center rounded-lg border border-white/10 bg-ag-surface">
                 <button
                   onClick={() => setView('grid')}
-                  className={`p-2 ${view === 'grid' ? 'bg-purple-600 text-white rounded-l-lg' : 'text-slate-400 hover:text-white'}`}
+                  className={`p-2 ${view === 'grid' ? 'bg-ag-primary text-ag-accent-light rounded-l-lg' : 'text-slate-400 hover:text-white'}`}
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -101,7 +101,7 @@ export default function OrgProjectsPage() {
                 </button>
                 <button
                   onClick={() => setView('list')}
-                  className={`p-2 ${view === 'list' ? 'bg-purple-600 text-white rounded-r-lg' : 'text-slate-400 hover:text-white'}`}
+                  className={`p-2 ${view === 'list' ? 'bg-ag-primary text-ag-accent-light rounded-r-lg' : 'text-slate-400 hover:text-white'}`}
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -146,7 +146,7 @@ export default function OrgProjectsPage() {
         {/* Alerts section */}
         {org?.alerts && org.alerts.length > 0 && (
           <div className="mb-8">
-            <div className="rounded-xl border border-white/10 bg-[#0B0C15] p-4">
+            <div className="rounded-xl border border-white/10 bg-ag-surface p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-slate-400">Alerts</span>
@@ -160,7 +160,7 @@ export default function OrgProjectsPage() {
                       router.push(`/organizations/${orgId}/projects/${firstProjectId}/alerts`);
                     }
                   }}
-                  className="text-xs text-purple-300 hover:text-purple-200"
+                  className="text-xs text-ag-accentLight hover:text-ag-accent"
                 >
                   View all →
                 </button>
@@ -171,7 +171,7 @@ export default function OrgProjectsPage() {
                     key={`${a.project}-${idx}`}
                     className="rounded-lg border border-white/5 bg-white/5 px-3 py-2 text-sm text-slate-200"
                   >
-                    <span className="text-purple-200 font-semibold">{a.project || 'Unknown project'}</span> —{' '}
+                    <span className="text-ag-accentLight font-semibold">{a.project || 'Unknown project'}</span> —{' '}
                     {a.summary || 'Alert detected'}
                   </div>
                 ))}
@@ -181,7 +181,7 @@ export default function OrgProjectsPage() {
         )}
 
         {!filteredProjects.length && !loading ? (
-          <div className="rounded-xl border border-dashed border-white/10 bg-[#0B0C15] p-10 text-center text-slate-400">
+          <div className="rounded-xl border border-dashed border-white/10 bg-ag-surface p-10 text-center text-slate-400">
             <p>
               {projectQuery.trim()
                 ? `No projects match "${projectQuery}".`
@@ -194,7 +194,7 @@ export default function OrgProjectsPage() {
               <button
                 key={p.id}
                 onClick={() => router.push(`/organizations/${orgId}/projects/${p.id}`)}
-                className="w-full text-left rounded-xl border border-white/10 bg-[#0B0C15] px-5 py-4 hover:border-purple-500/50 hover:bg-white/5 transition-colors"
+                className="w-full text-left rounded-xl border border-white/10 bg-ag-surface px-5 py-4 hover:border-ag-accent/50 hover:bg-white/5 transition-colors"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div>
@@ -224,7 +224,7 @@ export default function OrgProjectsPage() {
             ))}
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-white/10 bg-[#0B0C15]">
+          <div className="overflow-hidden rounded-xl border border-white/10 bg-ag-surface">
             <table className="min-w-full text-sm text-slate-200">
               <thead className="bg-white/5 text-slate-400">
                 <tr>

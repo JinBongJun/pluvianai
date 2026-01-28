@@ -153,7 +153,7 @@ export default function NotificationSettings({ projectId }: NotificationSettings
                 id="email_enabled"
                 checked={settings.email_enabled}
                 onChange={(e) => setSettings({ ...settings, email_enabled: e.target.checked })}
-                className="w-4 h-4 text-purple-600 bg-slate-700 border-slate-600 rounded focus:ring-purple-500"
+                className="w-4 h-4 text-ag-accent bg-ag-surface border-white/10 rounded focus:ring-ag-accent"
               />
               <label htmlFor="email_enabled" className="text-white font-medium">
                 Email Notifications
@@ -183,7 +183,7 @@ export default function NotificationSettings({ projectId }: NotificationSettings
                   id="slack_enabled"
                   checked={settings.slack_enabled}
                   onChange={(e) => setSettings({ ...settings, slack_enabled: e.target.checked })}
-                  className="w-4 h-4 text-purple-600 bg-slate-700 border-slate-600 rounded focus:ring-purple-500"
+                  className="w-4 h-4 text-ag-accent bg-ag-surface border-white/10 rounded focus:ring-ag-accent"
                 />
                 <label htmlFor="slack_enabled" className="text-white font-medium">
                   Slack Notifications
@@ -213,7 +213,7 @@ export default function NotificationSettings({ projectId }: NotificationSettings
                 value={settings.slack_webhook_url || ''}
                 onChange={(e) => setSettings({ ...settings, slack_webhook_url: e.target.value })}
                 placeholder="https://hooks.slack.com/services/..."
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full px-3 py-2 bg-ag-surface border border-white/10 rounded text-ag-text placeholder-ag-muted focus:outline-none focus:ring-2 focus:ring-ag-accent"
               />
               <p className="text-xs text-slate-500 mt-1">
                 Create a webhook in your Slack workspace settings
@@ -251,7 +251,7 @@ export default function NotificationSettings({ projectId }: NotificationSettings
                       });
                     }
                   }}
-                  className="w-4 h-4 text-purple-600 bg-slate-700 border-slate-600 rounded focus:ring-purple-500"
+                  className="w-4 h-4 text-ag-accent bg-ag-surface border-white/10 rounded focus:ring-ag-accent"
                 />
                 <span className="text-sm text-slate-300">{option.label}</span>
               </label>
@@ -268,7 +268,7 @@ export default function NotificationSettings({ projectId }: NotificationSettings
             id="severity_threshold"
             value={settings.severity_threshold}
             onChange={(e) => setSettings({ ...settings, severity_threshold: e.target.value as any })}
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-full px-3 py-2 bg-ag-surface border border-white/10 rounded text-ag-text focus:outline-none focus:ring-2 focus:ring-ag-accent"
           >
             <option value="low">Low</option>
             <option value="medium">Medium</option>
@@ -292,7 +292,7 @@ export default function NotificationSettings({ projectId }: NotificationSettings
             onChange={(e) => setSettings({ ...settings, min_interval_minutes: parseInt(e.target.value) || 15 })}
             min={1}
             max={1440}
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-full px-3 py-2 bg-ag-surface border border-white/10 rounded text-ag-text focus:outline-none focus:ring-2 focus:ring-ag-accent"
           />
           <p className="text-xs text-slate-500 mt-1">
             Minimum time between notifications to prevent spam
@@ -321,7 +321,7 @@ export default function NotificationSettings({ projectId }: NotificationSettings
             max={100}
             step={0.1}
             placeholder="Leave empty to disable"
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-full px-3 py-2 bg-ag-surface border border-white/10 rounded text-ag-text placeholder-ag-muted focus:outline-none focus:ring-2 focus:ring-ag-accent"
           />
           <p className="text-xs text-slate-500 mt-1">
             Alert when quality score drops below this value
@@ -345,7 +345,7 @@ export default function NotificationSettings({ projectId }: NotificationSettings
             max={100}
             step={0.1}
             placeholder="Leave empty to disable"
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-full px-3 py-2 bg-ag-surface border border-white/10 rounded text-ag-text placeholder-ag-muted focus:outline-none focus:ring-2 focus:ring-ag-accent"
           />
           <p className="text-xs text-slate-500 mt-1">
             Alert when error rate exceeds this percentage
@@ -369,7 +369,7 @@ export default function NotificationSettings({ projectId }: NotificationSettings
             max={100}
             step={0.1}
             placeholder="Leave empty to disable"
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-full px-3 py-2 bg-ag-surface border border-white/10 rounded text-ag-text placeholder-ag-muted focus:outline-none focus:ring-2 focus:ring-ag-accent"
           />
           <p className="text-xs text-slate-500 mt-1">
             Alert when drift score exceeds this value

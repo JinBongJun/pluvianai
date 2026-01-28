@@ -675,36 +675,49 @@ const { register, handleSubmit, formState: { errors } } = useForm();
 
 ## 8. 색상 및 타이포그래피
 
-### 8.1 색상 시스템
+### 8.1 색상 시스템 (Guardian Prestige 톤)
 
-**Primary (브랜드 색상)**:
-- Primary-50 ~ Primary-900
-- 주요 액션 버튼, 링크
+> **컨셉**: 조용한 고급스러움, 신뢰, 관제실 무드  
+> **원칙**: 딥 그린 베이스 + 은은한 골드 포인트, 순수 흰색 배경은 사용하지 않음
 
-**Semantic Colors**:
-- Success: 초록색 (성공 메시지)
-- Error: 빨간색 (에러 메시지)
-- Warning: 노란색 (경고)
-- Info: 파란색 (정보)
+**Base / Surface**
+- Base (앱 배경): `#0A0D0B`
+- Surface (카드/섹션): `#121712`
 
-**Neutral (텍스트/배경)**:
-- Gray-50 ~ Gray-900
-- 텍스트: Gray-900 (기본), Gray-600 (보조)
-- 배경: White, Gray-50, Gray-100
+**Primary (Deep Emerald)**
+- Primary: `#0E4A2F`
+- Primary Hover: `#14653D`
 
-**구현**:
-```tsx
-// Tailwind config
-colors: {
-  primary: {
-    50: '#f0f9ff',
-    500: '#3b82f6',
-    900: '#1e3a8a',
-  },
-  success: '#10b981',
-  error: '#ef4444',
-  warning: '#f59e0b',
-  info: '#3b82f6',
+**Accent (Muted Gold)**
+- Accent: `#B79A3E`
+- Accent Light: `#D1B45F`
+
+**Text**
+- Main Text: `#E7E7E2`
+- Sub Text: `#A7ADA3`
+
+**Semantic Colors**
+- Success: `#22C55E`
+- Error: `#EF4444`
+- Warning: `#F59E0B`
+- Info: `#38BDF8`
+
+**사용 원칙**
+- 골드 포인트는 전체 UI의 10~15% 이내로 제한
+- 버튼, 활성 탭, 배지, 핵심 그래프 라인 정도에만 적용
+- 카드/섹션은 항상 Surface 톤을 사용하고 `#FFFFFF` 배경 금지
+
+**구현 예시 (Tailwind 변수 형태)**:
+```css
+:root {
+  --ag-bg: #0a0d0b;
+  --ag-surface: #121712;
+  --ag-primary: #0e4a2f;
+  --ag-primary-hover: #14653d;
+  --ag-accent: #b79a3e;
+  --ag-accent-light: #d1b45f;
+  --ag-text: #e7e7e2;
+  --ag-text-muted: #a7ada3;
 }
 ```
 

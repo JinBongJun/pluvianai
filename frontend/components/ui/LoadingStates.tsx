@@ -48,7 +48,7 @@ export function LongLoading({
   return (
     <div className={clsx('space-y-4', className)}>
       <div className="flex items-center gap-2">
-        <div className="h-2 w-2/3 rounded-full bg-purple-500 animate-pulse" />
+        <div className="h-2 w-2/3 rounded-full bg-ag-accent animate-pulse" />
         <span className={clsx('text-sm', tone === 'muted' ? 'text-slate-500' : 'text-white')}>{text}</span>
       </div>
       <div className="space-y-3">

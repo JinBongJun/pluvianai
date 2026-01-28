@@ -21,8 +21,8 @@ export default function MetricCard({
 }: MetricCardProps) {
   const statusColors = {
     normal: {
-      glow: 'bg-purple-500/20',
-      chart: '#818cf8',
+      glow: 'bg-ag-accent/20',
+      chart: '#D1B45F',
       border: 'border-white/10',
     },
     warning: {
@@ -41,20 +41,20 @@ export default function MetricCard({
   const cardId = title.toLowerCase().replace(/\s+/g, '-');
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl border ${colors.border} bg-[#0B0C15] p-6 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-purple`}>
+    <div className={`relative overflow-hidden rounded-2xl border ${colors.border} bg-ag-surface p-6 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-gold`}>
       {/* 배경 Glow 효과 */}
       <div className={`pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full ${colors.glow} blur-[60px]`} />
       
       <div className="relative z-10 flex flex-col justify-between h-full">
         <div>
-          <h3 className="text-sm font-medium text-slate-400 mb-2">{title}</h3>
+          <h3 className="text-sm font-medium text-ag-muted mb-2">{title}</h3>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-semibold text-white tracking-tight font-mono">
+            <span className="text-3xl font-semibold text-ag-text tracking-tight font-mono">
               {typeof value === 'number' ? value.toLocaleString() : value}
             </span>
             {change !== undefined && (
               <span className={`text-xs font-medium ${
-                change > 0 ? 'text-emerald-400' : change < 0 ? 'text-rose-400' : 'text-slate-400'
+                change > 0 ? 'text-emerald-400' : change < 0 ? 'text-rose-400' : 'text-ag-muted'
               }`}>
                 {change > 0 ? '+' : ''}{change}%
               </span>
@@ -86,10 +86,10 @@ export default function MetricCard({
                 <YAxis hide />
                 <Tooltip 
                   contentStyle={{ 
-                    backgroundColor: '#0B0C15', 
+                    backgroundColor: '#121712', 
                     border: '1px solid rgba(255, 255, 255, 0.1)',
                     borderRadius: '8px',
-                    color: '#fff'
+                    color: '#E7E7E2'
                   }}
                 />
               </AreaChart>

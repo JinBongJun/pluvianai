@@ -142,7 +142,7 @@ export default function JudgeFeedbackComponent({ projectId, evaluationId }: Judg
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-purple-500/20 border-t-purple-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-ag-accent/20 border-t-ag-accent"></div>
       </div>
     );
   }
@@ -195,7 +195,7 @@ export default function JudgeFeedbackComponent({ projectId, evaluationId }: Judg
           {feedbacks.map((feedback) => (
             <div
               key={feedback.id}
-              className="bg-dark-card rounded-lg border border-dark-border p-6 hover:border-purple-500/30 transition-colors"
+              className="bg-dark-card rounded-lg border border-dark-border p-6 hover:border-ag-accent/30 transition-colors"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">

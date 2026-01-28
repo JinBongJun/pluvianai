@@ -599,7 +599,7 @@ export default function AgentMap({
                     {selectedNodeData.dependencies.map((dep) => (
                       <span
                         key={dep}
-                        className="px-2 py-1 bg-purple-500/20 text-purple-300 rounded text-xs"
+                        className="px-2 py-1 bg-ag-accent/20 text-ag-accentLight rounded text-xs"
                       >
                         {dep}
                       </span>

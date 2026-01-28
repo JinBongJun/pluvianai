@@ -9,7 +9,7 @@ import { useDebouncedValue } from '@/hooks/useDebounce';
 
 const planBadge: Record<string, string> = {
   free: 'bg-slate-800 text-slate-100',
-  pro: 'bg-purple-600 text-white',
+  pro: 'bg-ag-primary text-ag-accent-light',
   enterprise: 'bg-emerald-600 text-white',
 };
 
@@ -45,7 +45,7 @@ export default function OrganizationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#000314] text-white">
+    <div className="min-h-screen bg-ag-bg text-ag-text">
       <TopHeader
         breadcrumb={[{ label: 'Organizations' }]}
         onSearchClick={() => {
@@ -75,7 +75,7 @@ export default function OrganizationsPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search for an organization"
-            className="w-full sm:max-w-md rounded-lg border border-white/10 bg-[#0B0C15] px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-purple-500 focus:outline-none"
+            className="w-full sm:max-w-md rounded-lg border border-white/10 bg-ag-surface px-4 py-3 text-sm text-white placeholder:text-ag-muted focus:border-ag-accent focus:outline-none"
           />
         </div>
 
@@ -98,7 +98,7 @@ export default function OrganizationsPage() {
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-white/10 bg-[#0B0C15] p-10 text-center text-slate-400">
+          <div className="rounded-xl border border-dashed border-white/10 bg-ag-surface p-10 text-center text-slate-400">
             {query.trim() ? (
               <p>No organizations match &quot;{query}&quot;.</p>
             ) : (
@@ -120,11 +120,11 @@ export default function OrganizationsPage() {
               <button
                 key={org.id}
                 onClick={() => router.push(`/organizations/${org.id}/projects`)}
-                className="w-full text-left rounded-xl border border-white/10 bg-[#0B0C15] px-5 py-4 hover:border-purple-500/50 hover:bg-white/5 transition-colors"
+                className="w-full text-left rounded-xl border border-white/10 bg-ag-surface px-5 py-4 hover:border-ag-accent/50 hover:bg-white/5 transition-colors"
               >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-purple-500/70 to-purple-700/70 flex items-center justify-center text-white font-semibold">
+                    <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-ag-primary/70 to-ag-primaryHover/70 flex items-center justify-center text-white font-semibold">
                       {org.name.slice(0, 2).toUpperCase()}
                     </div>
                     <div>

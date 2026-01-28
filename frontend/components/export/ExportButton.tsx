@@ -98,7 +98,7 @@ export default function ExportButton({ projectId, filters, className }: ExportBu
         title="Export Data"
       >
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-ag-muted">
             Choose a format to export your API calls data.
           </p>
 
@@ -106,48 +106,48 @@ export default function ExportButton({ projectId, filters, className }: ExportBu
             <button
               onClick={handleExportCSV}
               disabled={exporting}
-              className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
+              className="w-full flex items-center gap-3 p-4 border border-white/10 rounded-lg hover:bg-white/5 transition-colors text-left"
             >
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <FileText className="h-5 w-5 text-blue-600" />
+              <div className="p-2 bg-white/5 rounded-lg">
+                <FileText className="h-5 w-5 text-sky-400" />
               </div>
               <div className="flex-1">
-                <div className="font-medium text-gray-900">Export as CSV</div>
-                <div className="text-sm text-gray-600">Comma-separated values, easy to open in Excel</div>
+                <div className="font-medium text-ag-text">Export as CSV</div>
+                <div className="text-sm text-ag-muted">Comma-separated values, easy to open in Excel</div>
               </div>
             </button>
 
             <button
               onClick={handleExportJSON}
               disabled={exporting}
-              className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
+              className="w-full flex items-center gap-3 p-4 border border-white/10 rounded-lg hover:bg-white/5 transition-colors text-left"
             >
-              <div className="p-2 bg-green-50 rounded-lg">
-                <FileJson className="h-5 w-5 text-green-600" />
+              <div className="p-2 bg-white/5 rounded-lg">
+                <FileJson className="h-5 w-5 text-emerald-400" />
               </div>
               <div className="flex-1">
-                <div className="font-medium text-gray-900">Export as JSON</div>
-                <div className="text-sm text-gray-600">Structured data format, includes metadata</div>
+                <div className="font-medium text-ag-text">Export as JSON</div>
+                <div className="text-sm text-ag-muted">Structured data format, includes metadata</div>
               </div>
             </button>
           </div>
 
-          <div className="pt-4 border-t border-gray-200">
+          <div className="pt-4 border-t border-white/10">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={includeData}
                 onChange={(e) => setIncludeData(e.target.checked)}
-                className="h-4 w-4 text-black focus:ring-black border-gray-300 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-white/20 rounded"
               />
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-ag-muted">
                 Include full request/response data (JSON only, larger file size)
               </span>
             </label>
           </div>
 
           {exporting && (
-            <div className="text-sm text-gray-600 text-center py-2">
+            <div className="text-sm text-ag-muted text-center py-2">
               Exporting... This may take a moment.
             </div>
           )}

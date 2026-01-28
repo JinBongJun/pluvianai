@@ -99,7 +99,7 @@ export default function BenchmarkDetail({ benchmarkId }: BenchmarkDetailProps) {
       {/* Header */}
       <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700/50">
         {benchmark.is_featured && (
-          <span className="inline-block px-2 py-1 text-xs bg-purple-600 text-white rounded mb-4">
+          <span className="inline-block px-2 py-1 text-xs bg-ag-primary text-ag-accent-light rounded mb-4">
             Featured
           </span>
         )}

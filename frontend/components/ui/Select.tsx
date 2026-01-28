@@ -159,7 +159,7 @@ export default function Select({
       {typeof window !== 'undefined' && isOpen && dropdownPosition && createPortal(
         <div
           data-select-dropdown
-          className="fixed bg-[#0B0C15] rounded-lg shadow-2xl border border-white/20 overflow-hidden z-[999999] animate-fade-in"
+          className="fixed bg-ag-surface rounded-lg shadow-2xl border border-white/20 overflow-hidden z-[999999] animate-fade-in"
           onClick={(e) => {
             e.stopPropagation();
             e.preventDefault();
@@ -189,13 +189,13 @@ export default function Select({
                   className={clsx(
                     'w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2',
                     isSelected
-                      ? 'bg-purple-500/20 text-white font-medium'
-                      : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                      ? 'bg-ag-primary/20 text-ag-text font-medium'
+                      : 'text-ag-muted hover:bg-white/10 hover:text-ag-text'
                   )}
                 >
                   <span className="flex-1 truncate">{option.label}</span>
                   {isSelected && (
-                    <Check className="h-4 w-4 text-purple-400 flex-shrink-0" />
+                    <Check className="h-4 w-4 text-ag-accent flex-shrink-0" />
                   )}
                 </button>
               );

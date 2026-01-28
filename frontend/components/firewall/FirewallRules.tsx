@@ -193,7 +193,7 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-purple-500/20 border-t-purple-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-ag-accent/20 border-t-ag-accent"></div>
       </div>
     );
   }
@@ -222,7 +222,7 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
           {rules.map((rule) => (
             <div
               key={rule.id}
-              className="bg-dark-card rounded-lg border border-dark-border p-6 hover:border-purple-500/30 transition-colors"
+              className="bg-dark-card rounded-lg border border-dark-border p-6 hover:border-ag-accent/30 transition-colors"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -231,7 +231,7 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
                     <span className={`px-2 py-1 rounded text-xs font-medium ${getSeverityColor(rule.severity)}`}>
                       {rule.severity}
                     </span>
-                    <span className="px-2 py-1 rounded text-xs font-medium bg-purple-500/10 text-purple-400">
+                    <span className="px-2 py-1 rounded text-xs font-medium bg-ag-accent/10 text-ag-accent">
                       {rule.rule_type}
                     </span>
                     {getActionIcon(rule.action)}
@@ -411,7 +411,7 @@ export default function FirewallRules({ projectId }: FirewallRulesProps) {
                   enabled: (e as any)?.target?.checked ?? formData.enabled,
                 })
               }
-              className="w-4 h-4 rounded border-dark-border bg-dark-card text-purple-500 focus:ring-purple-500"
+              className="w-4 h-4 rounded border-dark-border bg-dark-card text-ag-accent focus:ring-ag-accent"
             />
             <label htmlFor="enabled" className="text-sm text-slate-300">
               Enabled

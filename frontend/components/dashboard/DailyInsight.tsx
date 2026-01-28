@@ -61,7 +61,7 @@ export default function DailyInsight({ projectId, date, className }: DailyInsigh
     return (
       <div className={clsx('rounded-xl border border-white/10 bg-white/5 p-6', className)}>
         <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-purple-500 border-t-transparent" />
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-ag-accent border-t-transparent" />
         </div>
       </div>
     );
@@ -86,7 +86,7 @@ export default function DailyInsight({ projectId, date, className }: DailyInsigh
     <div className={clsx('rounded-xl border border-white/10 bg-white/5 p-6', className)}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-ag-primary to-ag-primaryHover flex items-center justify-center">
             <Sparkles className="h-5 w-5 text-white" />
           </div>
           <div>

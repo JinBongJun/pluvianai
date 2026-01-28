@@ -210,7 +210,7 @@ export default function QualityScoresPage() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#000314]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-500/20 border-t-purple-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent mx-auto mb-4"></div>
           <p className="text-slate-400">Loading...</p>
         </div>
       </div>
@@ -228,7 +228,7 @@ export default function QualityScoresPage() {
         ]}
       >
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ag-accent border-t-transparent"></div>
         </div>
       </OrgLayout>
     );
@@ -406,7 +406,7 @@ export default function QualityScoresPage() {
                                 router.push(`/dashboard/${projectId}/api-calls/${score.api_call_id}`);
                               }
                             }}
-                            className="flex items-center gap-2 text-purple-400 hover:text-purple-300"
+                            className="flex items-center gap-2 text-ag-accent hover:text-ag-accentLight"
                           >
                             <Eye className="h-4 w-4" />
                             View

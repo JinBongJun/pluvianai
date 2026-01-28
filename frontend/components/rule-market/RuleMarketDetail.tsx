@@ -178,7 +178,7 @@ export default function RuleMarketDetail({ ruleId, onDownload }: RuleMarketDetai
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
             {rule.is_featured && (
-              <span className="inline-block px-2 py-1 text-xs bg-purple-600 text-white rounded mb-2">
+              <span className="inline-block px-2 py-1 text-xs bg-ag-primary text-ag-accent-light rounded mb-2">
                 Featured
               </span>
             )}
@@ -262,7 +262,7 @@ export default function RuleMarketDetail({ ruleId, onDownload }: RuleMarketDetai
             <select
               value={selectedProjectId || ''}
               onChange={(e) => setSelectedProjectId(Number(e.target.value))}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full px-3 py-2 bg-ag-surface border border-white/10 rounded text-ag-text focus:outline-none focus:ring-2 focus:ring-ag-accent"
             >
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>

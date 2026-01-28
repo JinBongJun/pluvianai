@@ -51,7 +51,7 @@ export default function OrgSidebar({ orgId }: OrgSidebarProps) {
   ];
 
   return (
-    <div className="fixed left-0 top-14 h-[calc(100vh-3.5rem)] w-64 bg-[#0B0C15] border-r border-white/10 flex flex-col overflow-y-auto">
+    <div className="fixed left-0 top-14 h-[calc(100vh-3.5rem)] w-64 bg-ag-surface border-r border-white/10 flex flex-col overflow-y-auto">
       <nav className="flex-1 px-2 py-4">
         <div className="space-y-1">
           {navItems.map((item) => {
@@ -64,10 +64,10 @@ export default function OrgSidebar({ orgId }: OrgSidebarProps) {
                 className={clsx(
                   'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
                   item.active && !item.disabled
-                    ? 'bg-purple-500/20 text-white border-l-2 border-purple-500'
+                    ? 'bg-ag-primary/20 text-ag-text border-l-2 border-ag-accent'
                     : item.disabled
-                    ? 'text-slate-500 cursor-not-allowed'
-                    : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                    ? 'text-ag-muted/70 cursor-not-allowed'
+                    : 'text-ag-muted hover:bg-white/5 hover:text-ag-text'
                 )}
               >
                 <Icon className="h-5 w-5" />

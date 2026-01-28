@@ -101,7 +101,7 @@ export default function AdminMonitoringPage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <Activity className="h-8 w-8 text-purple-400" />
+                  <Activity className="h-8 w-8 text-ag-accent" />
                   <h1 className="text-4xl font-bold text-white">System Monitoring</h1>
                 </div>
                 <p className="text-slate-400 mt-2">Monitor system health and performance metrics</p>

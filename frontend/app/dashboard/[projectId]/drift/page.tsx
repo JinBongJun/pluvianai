@@ -224,7 +224,7 @@ export default function DriftDetectionsPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ag-accent border-t-transparent"></div>
         </div>
       </DashboardLayout>
     );
@@ -417,7 +417,7 @@ export default function DriftDetectionsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => router.push(`/dashboard/${projectId}/drift/${detection.id}`)}
-                            className="flex items-center gap-2 text-purple-400 hover:text-purple-300"
+                            className="flex items-center gap-2 text-ag-accent hover:text-ag-accentLight"
                           >
                             <Eye className="h-4 w-4" />
                             View

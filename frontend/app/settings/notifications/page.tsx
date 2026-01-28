@@ -80,7 +80,7 @@ export default function NotificationsPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-500/20 border-t-purple-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent"></div>
         </div>
       </DashboardLayout>
     );
@@ -116,7 +116,7 @@ export default function NotificationsPage() {
                 type="checkbox"
                 checked={settings.email_drift}
                 onChange={(e) => setSettings({ ...settings, email_drift: e.target.checked })}
-                className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
               />
             </label>
 
@@ -129,7 +129,7 @@ export default function NotificationsPage() {
                 type="checkbox"
                 checked={settings.email_cost_anomaly}
                 onChange={(e) => setSettings({ ...settings, email_cost_anomaly: e.target.checked })}
-                className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
               />
             </label>
 
@@ -142,7 +142,7 @@ export default function NotificationsPage() {
                 type="checkbox"
                 checked={settings.email_quality_drop}
                 onChange={(e) => setSettings({ ...settings, email_quality_drop: e.target.checked })}
-                className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
               />
             </label>
           </div>
@@ -170,7 +170,7 @@ export default function NotificationsPage() {
                 type="checkbox"
                 checked={settings.in_app_drift}
                 onChange={(e) => setSettings({ ...settings, in_app_drift: e.target.checked })}
-                className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
               />
             </label>
 
@@ -183,7 +183,7 @@ export default function NotificationsPage() {
                 type="checkbox"
                 checked={settings.in_app_cost_anomaly}
                 onChange={(e) => setSettings({ ...settings, in_app_cost_anomaly: e.target.checked })}
-                className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
               />
             </label>
 
@@ -196,7 +196,7 @@ export default function NotificationsPage() {
                 type="checkbox"
                 checked={settings.in_app_quality_drop}
                 onChange={(e) => setSettings({ ...settings, in_app_quality_drop: e.target.checked })}
-                className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
               />
             </label>
           </div>
@@ -205,8 +205,8 @@ export default function NotificationsPage() {
         {/* Slack Integration */}
         <div className="bg-[#0A0F1C] rounded-lg shadow-sm border border-gray-700 p-6">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-purple-900/20 rounded-lg">
-              <MessageSquare className="h-5 w-5 text-purple-400" />
+            <div className="p-2 bg-ag-primary/20 rounded-lg">
+              <MessageSquare className="h-5 w-5 text-ag-accent" />
             </div>
             <div>
               <h2 className="text-xl font-semibold text-white">Slack Integration</h2>
@@ -224,7 +224,7 @@ export default function NotificationsPage() {
                 type="checkbox"
                 checked={settings.slack_enabled}
                 onChange={(e) => setSettings({ ...settings, slack_enabled: e.target.checked })}
-                className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
               />
             </label>
 
@@ -269,7 +269,7 @@ export default function NotificationsPage() {
                 type="checkbox"
                 checked={settings.discord_enabled}
                 onChange={(e) => setSettings({ ...settings, discord_enabled: e.target.checked })}
-                className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-600 rounded"
+                className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
               />
             </label>
 

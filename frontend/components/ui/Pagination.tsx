@@ -64,7 +64,7 @@ export default function Pagination({
   return (
     <div className={clsx('flex items-center justify-between', className)}>
       <div className="flex items-center gap-4">
-        <div className="text-sm text-gray-700">
+        <div className="text-sm text-ag-muted">
           Showing <span className="font-medium">{startItem}</span> to{' '}
           <span className="font-medium">{endItem}</span> of{' '}
           <span className="font-medium">{totalItems}</span> results
@@ -73,7 +73,7 @@ export default function Pagination({
           <div className="flex items-center gap-2">
             <label className={clsx(
               'text-sm',
-              className?.includes('bg-transparent') ? 'text-slate-400' : 'text-gray-700'
+              className?.includes('bg-transparent') ? 'text-ag-muted' : 'text-ag-muted'
             )}>Per page:</label>
             <select
               value={itemsPerPage}
@@ -81,8 +81,8 @@ export default function Pagination({
               className={clsx(
                 'text-sm rounded-md',
                 className?.includes('bg-transparent')
-                  ? 'bg-white/5 border-white/10 text-white focus:ring-purple-500 focus:border-purple-500'
-                  : 'border-gray-300 focus:ring-black focus:border-black'
+                  ? 'bg-white/5 border-white/10 text-ag-text focus:ring-ag-accent focus:border-ag-accent'
+                  : 'border-white/10 bg-ag-surface text-ag-text focus:ring-ag-accent focus:border-ag-accent'
               )}
             >
               <option value={10}>10</option>
@@ -113,7 +113,7 @@ export default function Pagination({
                   key={`ellipsis-${index}`} 
                   className={clsx(
                     'px-2',
-                    className?.includes('bg-transparent') ? 'text-slate-500' : 'text-gray-500'
+                    className?.includes('bg-transparent') ? 'text-ag-muted' : 'text-ag-muted'
                   )}
                 >
                   ...
@@ -130,11 +130,11 @@ export default function Pagination({
                   'px-3 py-1.5 text-sm rounded-md transition-colors',
                   currentPage === pageNum
                     ? className?.includes('bg-transparent')
-                      ? 'bg-purple-500/20 text-white border border-purple-500/50'
-                      : 'bg-black text-white'
+                      ? 'bg-ag-primary/20 text-ag-text border border-ag-accent/50'
+                      : 'bg-ag-surface text-ag-text'
                     : className?.includes('bg-transparent')
-                      ? 'text-slate-400 hover:bg-white/10 hover:text-white border border-white/10'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'text-ag-muted hover:bg-white/10 hover:text-ag-text border border-white/10'
+                      : 'text-ag-muted hover:bg-white/5'
                 )}
               >
                 {pageNum}

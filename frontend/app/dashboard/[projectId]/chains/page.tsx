@@ -423,7 +423,7 @@ export default function AgentChainsPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 border-t-transparent"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ag-accent border-t-transparent"></div>
         </div>
       </DashboardLayout>
     );
@@ -577,7 +577,7 @@ export default function AgentChainsPage() {
                     <p className="text-sm text-slate-400 mb-1">Total Chains</p>
                     <p className="text-2xl font-bold text-white">{totalChains}</p>
                   </div>
-                  <GitBranch className="h-8 w-8 text-purple-400" />
+                  <GitBranch className="h-8 w-8 text-ag-accent" />
                 </div>
               </div>
               <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
@@ -599,7 +599,7 @@ export default function AgentChainsPage() {
                       {avgLatency ? `${toFixedSafe(avgLatency / 1000, 2)}s` : 'N/A'}
                     </p>
                   </div>
-                  <Clock className="h-8 w-8 text-cyan-400" />
+                  <Clock className="h-8 w-8 text-ag-accent" />
                 </div>
               </div>
               <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">

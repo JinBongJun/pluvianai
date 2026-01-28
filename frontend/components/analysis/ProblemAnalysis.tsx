@@ -62,15 +62,15 @@ export default function ProblemAnalysis({ projectId, onClose }: ProblemAnalysisP
   }, [projectId]);
 
   const getSeverityColor = (severity: number) => {
-    if (severity >= 0.7) return 'text-red-600 bg-red-50 border-red-200';
-    if (severity >= 0.4) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-    return 'text-blue-600 bg-blue-50 border-blue-200';
+    if (severity >= 0.7) return 'text-red-300 bg-red-500/10 border-red-500/30';
+    if (severity >= 0.4) return 'text-amber-300 bg-amber-500/10 border-amber-500/30';
+    return 'text-sky-300 bg-sky-500/10 border-sky-500/30';
   };
 
   const getSeverityIcon = (severity: number) => {
-    if (severity >= 0.7) return <XCircle className="w-5 h-5 text-red-600" />;
-    if (severity >= 0.4) return <AlertCircle className="w-5 h-5 text-yellow-600" />;
-    return <CheckCircle className="w-5 h-5 text-blue-600" />;
+    if (severity >= 0.7) return <XCircle className="w-5 h-5 text-red-300" />;
+    if (severity >= 0.4) return <AlertCircle className="w-5 h-5 text-amber-300" />;
+    return <CheckCircle className="w-5 h-5 text-sky-300" />;
   };
 
   if (loading) {
@@ -117,7 +117,7 @@ export default function ProblemAnalysis({ projectId, onClose }: ProblemAnalysisP
           {analysis.mapping_available && (
             <button
               onClick={() => setShowMap(!showMap)}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-ag-primary text-ag-accent-light rounded-lg text-sm font-medium hover:bg-ag-primaryHover transition-colors flex items-center gap-2"
             >
               <Map className="w-4 h-4" />
               {showMap ? 'Hide Map' : 'Show Map'}
@@ -160,13 +160,13 @@ export default function ProblemAnalysis({ projectId, onClose }: ProblemAnalysisP
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
                     {getSeverityIcon(node.severity)}
-                    <h4 className="font-semibold text-gray-900">{node.name}</h4>
+                    <h4 className="font-semibold text-ag-text">{node.name}</h4>
                   </div>
-                  <span className="text-xs text-gray-600">
+                  <span className="text-xs text-ag-muted">
                     Severity: {(node.severity * 100).toFixed(0)}%
                   </span>
                 </div>
-                <div className="space-y-1 text-sm text-gray-700">
+                <div className="space-y-1 text-sm text-ag-text">
                   {node.problem_reasons.map((reason, idx) => (
                     <div key={idx} className="flex items-center gap-2">
                       <span className="w-1 h-1 bg-current rounded-full" />
@@ -174,17 +174,17 @@ export default function ProblemAnalysis({ projectId, onClose }: ProblemAnalysisP
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 pt-3 border-t border-gray-200 grid grid-cols-3 gap-3 text-xs">
+                <div className="mt-3 pt-3 border-t border-white/10 grid grid-cols-3 gap-3 text-xs">
                   <div>
-                    <span className="text-gray-500">Score:</span>
+                    <span className="text-ag-muted">Score:</span>
                     <span className="ml-2 font-medium">{node.metrics.score.toFixed(1)}/5.0</span>
                   </div>
                   <div>
-                    <span className="text-gray-500">Latency:</span>
+                    <span className="text-ag-muted">Latency:</span>
                     <span className="ml-2 font-medium">{node.metrics.latency.toFixed(0)}ms</span>
                   </div>
                   <div>
-                    <span className="text-gray-500">Success:</span>
+                    <span className="text-ag-muted">Success:</span>
                     <span className="ml-2 font-medium">{(node.metrics.success_rate * 100).toFixed(0)}%</span>
                   </div>
                 </div>

@@ -31,7 +31,7 @@ export default function FocusModeControls({
     <div className={clsx('bg-slate-800 border border-slate-700 rounded-lg p-4', className)}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Focus className="w-5 h-5 text-purple-500" />
+          <Focus className="w-5 h-5 text-ag-accent" />
           <h3 className="text-sm font-semibold text-white">Focus Mode</h3>
         </div>
         <button
@@ -58,7 +58,7 @@ export default function FocusModeControls({
             </div>
           ))}
           <ChevronRight className="w-3 h-3" />
-          <span className="text-purple-400 font-medium">{focusNodeId}</span>
+          <span className="text-ag-accent font-medium">{focusNodeId}</span>
         </div>
       )}
 
@@ -80,7 +80,7 @@ export default function FocusModeControls({
           step="1"
           value={depth}
           onChange={(e) => onDepthChange(parseInt(e.target.value))}
-          className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-600"
+          className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-green-600"
         />
         <div className="flex justify-between text-xs text-slate-500 mt-1">
           <span>1</span>

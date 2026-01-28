@@ -20,7 +20,7 @@ export default function LoadingSpinner({
   return (
     <div className={`flex flex-col items-center justify-center ${className}`}>
       <div
-        className={`animate-spin rounded-full border-2 border-purple-500 border-t-transparent ${sizeClasses[size]}`}
+        className={`animate-spin rounded-full border-2 border-ag-accent border-t-transparent ${sizeClasses[size]}`}
         role="status"
         aria-label="Loading"
       >

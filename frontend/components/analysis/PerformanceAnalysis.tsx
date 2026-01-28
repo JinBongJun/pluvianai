@@ -121,7 +121,7 @@ export default function PerformanceAnalysis({ projectId, onClose }: PerformanceA
           {analysis.mapping_available && (
             <button
               onClick={() => setShowMap(!showMap)}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-ag-primary text-ag-accent-light rounded-lg text-sm font-medium hover:bg-ag-primaryHover transition-colors flex items-center gap-2"
             >
               <Map className="w-4 h-4" />
               {showMap ? 'Hide Map' : 'Show Map'}
@@ -146,7 +146,7 @@ export default function PerformanceAnalysis({ projectId, onClose }: PerformanceA
           </div>
           <div className="p-4 bg-slate-900 rounded-lg">
             <div className="text-sm text-slate-400 mb-1">P95 Latency</div>
-            <div className="text-2xl font-bold text-purple-500">
+            <div className="text-2xl font-bold text-ag-accent">
               {globalStats.p95 ? formatLatency(globalStats.p95) : 'N/A'}
             </div>
           </div>

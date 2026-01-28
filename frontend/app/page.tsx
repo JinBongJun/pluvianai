@@ -40,28 +40,28 @@ init({
 // That's it! Your OpenAI calls are now monitored.`;
 
   return (
-    <div className="min-h-screen bg-[#000314] text-white">
+    <div className="min-h-screen bg-ag-bg text-ag-text">
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#000314]/80 backdrop-blur-md border-b border-white/10">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-ag-bg/80 backdrop-blur-md border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2">
-              <div className="h-8 w-8 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/50">
-                <span className="text-white font-bold text-sm">AG</span>
+              <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center shadow-lg shadow-ag-primary/40">
+                <span className="text-ag-accent-light font-bold text-sm">AG</span>
               </div>
               <span className="font-semibold text-lg">AgentGuard</span>
             </Link>
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-8">
-              <Link href="#features" className="text-slate-400 hover:text-white transition-colors text-sm font-medium">
+              <Link href="#features" className="text-ag-muted hover:text-ag-text transition-colors text-sm font-medium">
                 Features
               </Link>
-              <Link href="#integrations" className="text-slate-400 hover:text-white transition-colors text-sm font-medium">
+              <Link href="#integrations" className="text-ag-muted hover:text-ag-text transition-colors text-sm font-medium">
                 Integrations
               </Link>
-              <Link href="#pricing" className="text-slate-400 hover:text-white transition-colors text-sm font-medium">
+              <Link href="#pricing" className="text-ag-muted hover:text-ag-text transition-colors text-sm font-medium">
                 Pricing
               </Link>
               <Link href="/login">
@@ -77,7 +77,7 @@ init({
             {/* Mobile Menu Button */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden p-2 text-slate-400 hover:text-white"
+              className="md:hidden p-2 text-ag-muted hover:text-ag-text"
             >
               {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
@@ -86,26 +86,26 @@ init({
 
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-white/10 bg-[#0B0C15]">
+          <div className="md:hidden border-t border-white/10 bg-ag-surface">
             <div className="px-4 py-4 space-y-4">
               <Link
                 href="#features"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="block text-slate-400 hover:text-white transition-colors"
+                className="block text-ag-muted hover:text-ag-text transition-colors"
               >
                 Features
               </Link>
               <Link
                 href="#integrations"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="block text-slate-400 hover:text-white transition-colors"
+                className="block text-ag-muted hover:text-ag-text transition-colors"
               >
                 Integrations
               </Link>
               <Link
                 href="#pricing"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="block text-slate-400 hover:text-white transition-colors"
+                className="block text-ag-muted hover:text-ag-text transition-colors"
               >
                 Pricing
               </Link>
@@ -128,14 +128,14 @@ init({
       <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-4xl mx-auto animate-fade-in">
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-6 bg-gradient-to-r from-white via-purple-200 to-cyan-200 bg-clip-text text-transparent animate-scale-in">
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-6 bg-gradient-to-r from-ag-text via-ag-accentLight to-ag-text bg-clip-text text-transparent animate-scale-in">
               Monitor Your LLM Agents
               <br />
-              <span className="bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-ag-accent to-ag-accentLight bg-clip-text text-transparent">
                 With Confidence
               </span>
             </h1>
-            <p className="text-xl sm:text-2xl text-slate-400 mb-8 max-w-2xl mx-auto">
+            <p className="text-xl sm:text-2xl text-ag-muted mb-8 max-w-2xl mx-auto">
               Track quality, detect drift, analyze costs, and benchmark models—all in one place.
               Zero-config SDK integration.
             </p>
@@ -155,15 +155,15 @@ init({
 
             {/* Code Snippet */}
             <div className="mt-16 max-w-3xl mx-auto animate-slide-in">
-              <div className="bg-[#0B0C15] rounded-2xl border border-white/10 overflow-hidden shadow-2xl transition-all duration-300 hover:shadow-glow-purple hover:border-white/20">
+              <div className="bg-ag-surface rounded-2xl border border-white/10 overflow-hidden shadow-2xl transition-all duration-300 hover:shadow-glow-gold hover:border-white/20">
                 {/* Code Tabs */}
-                <div className="flex border-b border-white/10 bg-[#0B0C15]">
+                <div className="flex border-b border-white/10 bg-ag-surface">
                   <button
                     onClick={() => setCodeTab('python')}
                     className={`px-6 py-3 text-sm font-medium transition-colors ${
                       codeTab === 'python'
-                        ? 'text-white border-b-2 border-purple-500 bg-purple-500/10'
-                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        ? 'text-ag-text border-b-2 border-ag-accent bg-ag-accent/10'
+                        : 'text-ag-muted hover:text-ag-text hover:bg-white/5'
                     }`}
                   >
                     Python
@@ -172,8 +172,8 @@ init({
                     onClick={() => setCodeTab('node')}
                     className={`px-6 py-3 text-sm font-medium transition-colors ${
                       codeTab === 'node'
-                        ? 'text-white border-b-2 border-purple-500 bg-purple-500/10'
-                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        ? 'text-ag-text border-b-2 border-ag-accent bg-ag-accent/10'
+                        : 'text-ag-muted hover:text-ag-text hover:bg-white/5'
                     }`}
                   >
                     Node.js
@@ -181,7 +181,7 @@ init({
                 </div>
                 {/* Code Content */}
                 <div className="p-6">
-                  <pre className="text-sm font-mono text-slate-300 overflow-x-auto">
+                  <pre className="text-sm font-mono text-ag-muted overflow-x-auto">
                     <code>{codeTab === 'python' ? pythonCode : nodeCode}</code>
                   </pre>
                 </div>
@@ -192,11 +192,11 @@ init({
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 bg-[#0B0C15]/50">
+      <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 bg-ag-bg/60">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16 animate-fade-in">
             <h2 className="text-4xl sm:text-5xl font-bold mb-4">Everything You Need</h2>
-            <p className="text-xl text-slate-400 max-w-2xl mx-auto">
+            <p className="text-xl text-ag-muted max-w-2xl mx-auto">
               Comprehensive monitoring and analytics for your LLM applications
             </p>
           </div>
@@ -204,10 +204,10 @@ init({
           {/* Bento Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Feature 1: Quality Assurance */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-8 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-purple">
-              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-purple-500/20 blur-[60px]" />
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-gold">
+              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-ag-accent/20 blur-[60px]" />
               <div className="relative z-10">
-                <div className="h-12 w-12 bg-gradient-to-br from-purple-500 to-purple-700 rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-purple-500/50">
+                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-ag-primary/40">
                   <Check className="h-6 w-6 text-white" />
                 </div>
                 <h3 className="text-2xl font-bold mb-2">Quality Assurance</h3>
@@ -219,14 +219,14 @@ init({
             </div>
 
             {/* Feature 2: Drift Detection */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-8 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-cyan">
-              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-cyan-500/20 blur-[60px]" />
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-emerald">
+              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-ag-accent/20 blur-[60px]" />
               <div className="relative z-10">
-                <div className="h-12 w-12 bg-gradient-to-br from-cyan-500 to-cyan-700 rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-cyan-500/50">
+                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-ag-primary/40">
                   <Zap className="h-6 w-6 text-white" />
                 </div>
                 <h3 className="text-2xl font-bold mb-2">Drift Detection</h3>
-                <p className="text-slate-400 leading-relaxed">
+                <p className="text-ag-muted leading-relaxed">
                   Real-time detection of model drift. Get alerted when response patterns change,
                   with detailed evidence and before/after comparisons.
                 </p>
@@ -234,14 +234,14 @@ init({
             </div>
 
             {/* Feature 3: Cost Analysis */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-8 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-purple">
-              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-purple-500/20 blur-[60px]" />
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-gold">
+              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-ag-accent/20 blur-[60px]" />
               <div className="relative z-10">
-                <div className="h-12 w-12 bg-gradient-to-br from-purple-500 to-purple-700 rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-purple-500/50">
+                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-ag-primary/40">
                   <BarChart3 className="h-6 w-6 text-white" />
                 </div>
                 <h3 className="text-2xl font-bold mb-2">Cost Analysis</h3>
-                <p className="text-slate-400 leading-relaxed">
+                <p className="text-ag-muted leading-relaxed">
                   Track spending across models and projects. Get cost optimization recommendations
                   and detect unexpected cost spikes automatically.
                 </p>
@@ -249,14 +249,14 @@ init({
             </div>
 
             {/* Feature 4: Model Benchmarking */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-8 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-cyan">
-              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-cyan-500/20 blur-[60px]" />
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-emerald">
+              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-ag-accent/20 blur-[60px]" />
               <div className="relative z-10">
-                <div className="h-12 w-12 bg-gradient-to-br from-cyan-500 to-cyan-700 rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-cyan-500/50">
+                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-ag-primary/40">
                   <Code2 className="h-6 w-6 text-white" />
                 </div>
                 <h3 className="text-2xl font-bold mb-2">Model Benchmarking</h3>
-                <p className="text-slate-400 leading-relaxed">
+                <p className="text-ag-muted leading-relaxed">
                   Compare models side-by-side. Get recommendations for optimal model selection
                   based on your specific use case and requirements.
                 </p>
@@ -271,52 +271,52 @@ init({
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16 animate-fade-in">
             <h2 className="text-4xl sm:text-5xl font-bold mb-4">Works With Your Stack</h2>
-            <p className="text-xl text-slate-400 max-w-2xl mx-auto">
+            <p className="text-xl text-ag-muted max-w-2xl mx-auto">
               Seamless integration with popular LLM providers and frameworks
             </p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8 items-center justify-items-center">
             {/* OpenAI */}
-            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-[#0B0C15] hover:border-white/20 transition-all">
-              <div className="text-3xl font-bold text-white">OpenAI</div>
-              <div className="text-xs text-slate-400">Native Support</div>
+            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-ag-surface hover:border-white/20 transition-all">
+              <div className="text-3xl font-bold text-ag-text">OpenAI</div>
+              <div className="text-xs text-ag-muted">Native Support</div>
             </div>
 
             {/* Anthropic */}
-            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-[#0B0C15] hover:border-white/20 transition-all">
-              <div className="text-2xl font-bold text-white">Anthropic</div>
-              <div className="text-xs text-slate-400">Native Support</div>
+            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-ag-surface hover:border-white/20 transition-all">
+              <div className="text-2xl font-bold text-ag-text">Anthropic</div>
+              <div className="text-xs text-ag-muted">Native Support</div>
             </div>
 
             {/* Google */}
-            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-[#0B0C15] hover:border-white/20 transition-all">
-              <div className="text-2xl font-bold text-white">Google</div>
-              <div className="text-xs text-slate-400">Native Support</div>
+            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-ag-surface hover:border-white/20 transition-all">
+              <div className="text-2xl font-bold text-ag-text">Google</div>
+              <div className="text-xs text-ag-muted">Native Support</div>
             </div>
 
             {/* Python SDK */}
-            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-[#0B0C15] hover:border-white/20 transition-all">
-              <div className="text-xl font-bold text-white font-mono">Python</div>
-              <div className="text-xs text-slate-400">SDK Available</div>
+            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-ag-surface hover:border-white/20 transition-all">
+              <div className="text-xl font-bold text-ag-text font-mono">Python</div>
+              <div className="text-xs text-ag-muted">SDK Available</div>
             </div>
 
             {/* Node.js SDK */}
-            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-[#0B0C15] hover:border-white/20 transition-all">
-              <div className="text-xl font-bold text-white font-mono">Node.js</div>
-              <div className="text-xs text-slate-400">SDK Available</div>
+            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-ag-surface hover:border-white/20 transition-all">
+              <div className="text-xl font-bold text-ag-text font-mono">Node.js</div>
+              <div className="text-xs text-ag-muted">SDK Available</div>
             </div>
           </div>
         </div>
       </section>
 
       {/* Final CTA Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-[#0B0C15]/50 to-[#000314]">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-ag-bg/60 to-ag-bg">
         <div className="max-w-4xl mx-auto text-center animate-fade-in">
           <h2 className="text-4xl sm:text-5xl font-bold mb-6">
             Ready to Get Started?
           </h2>
-          <p className="text-xl text-slate-400 mb-8">
+          <p className="text-xl text-ag-muted mb-8">
             Start monitoring your LLM agents in minutes. No credit card required.
           </p>
           <Link href="/login?mode=signup">
@@ -329,18 +329,18 @@ init({
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-white/10 bg-[#0B0C15] py-12 px-4 sm:px-6 lg:px-8">
+      <footer className="border-t border-white/10 bg-ag-surface py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             {/* Brand */}
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="h-8 w-8 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/50">
-                  <span className="text-white font-bold text-sm">AG</span>
+                <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center shadow-lg shadow-ag-primary/40">
+                  <span className="text-ag-accent-light font-bold text-sm">AG</span>
                 </div>
                 <span className="font-semibold">AgentGuard</span>
               </div>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-ag-muted">
                 Monitor your LLM agents with confidence.
               </p>
             </div>

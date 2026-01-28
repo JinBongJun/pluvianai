@@ -80,28 +80,28 @@ export default function OrgLayout({ children, orgId, breadcrumb = [] }: OrgLayou
 
   return (
     <OrgLayoutContext.Provider value={{ orgId }}>
-      <div className="min-h-screen bg-[#000314] text-white">
+      <div className="min-h-screen bg-ag-bg text-ag-text">
         {/* Top Header */}
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-white/10 bg-[#0A0C14]/90 px-4 backdrop-blur">
-          <div className="flex items-center gap-3 text-sm text-white">
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-white/10 bg-ag-bg/90 px-4 backdrop-blur">
+          <div className="flex items-center gap-3 text-sm text-ag-text">
             <button
               onClick={() => router.push('/organizations')}
               className="flex items-center gap-2 hover:opacity-80 transition-opacity"
             >
-              <div className="h-8 w-8 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/50">
-                <span className="text-white font-bold text-sm">AG</span>
+              <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center shadow-lg shadow-ag-primary/40">
+                <span className="text-ag-accent-light font-bold text-sm">AG</span>
               </div>
             </button>
             <OrgSelector currentOrgId={orgId} onOrgChange={handleOrgChange} />
             {breadcrumb.length > 0 && (
-              <div className="flex items-center gap-2 text-slate-300">
+              <div className="flex items-center gap-2 text-ag-muted">
                 {breadcrumb.map((item, idx) => (
                   <div key={item.label} className="flex items-center gap-2">
-                    <span className={clsx(idx === 0 && 'text-white font-semibold')}>
+                    <span className={clsx(idx === 0 && 'text-ag-text font-semibold')}>
                       {item.href ? (
                         <a
                           href={item.href}
-                          className="hover:text-white transition-colors"
+                          className="hover:text-ag-text transition-colors"
                           onClick={(e) => {
                             e.preventDefault();
                             router.push(item.href!);
@@ -113,14 +113,14 @@ export default function OrgLayout({ children, orgId, breadcrumb = [] }: OrgLayou
                         item.label
                       )}
                     </span>
-                    {idx < breadcrumb.length - 1 && <span className="text-slate-500">/</span>}
+                    {idx < breadcrumb.length - 1 && <span className="text-ag-muted/70">/</span>}
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="flex items-center gap-2 text-slate-200">
+          <div className="flex items-center gap-2 text-ag-text">
             <button
               onClick={handleFeedbackClick}
               className="hidden md:inline-flex items-center gap-1 px-3 py-1 rounded-lg text-sm hover:bg-white/5 transition-colors"
@@ -133,7 +133,7 @@ export default function OrgLayout({ children, orgId, breadcrumb = [] }: OrgLayou
             >
               <Search className="h-4 w-4" />
               <span className="hidden md:inline">Search</span>
-              <span className="hidden sm:inline text-xs text-slate-400">⌘K</span>
+              <span className="hidden sm:inline text-xs text-ag-muted">⌘K</span>
             </button>
             <button
               onClick={handleHelpClick}

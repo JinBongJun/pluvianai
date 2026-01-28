@@ -204,7 +204,7 @@ export default function ShadowRoutingPage() {
             <select
               value={primaryModel}
               onChange={(e) => setPrimaryModel(e.target.value)}
-              className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-ag-accent"
             >
               <option value="">Select model...</option>
               {availableModels.map((model) => (
@@ -227,7 +227,7 @@ export default function ShadowRoutingPage() {
         {/* Loading State */}
         {loading && (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
+            <Loader2 className="h-8 w-8 animate-spin text-ag-accent" />
           </div>
         )}
 
@@ -235,12 +235,12 @@ export default function ShadowRoutingPage() {
         {!loading && suggestions && (
           <div className="space-y-4">
             {/* Recommendation Card */}
-            <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-4">
+            <div className="rounded-lg border border-ag-accent/30 bg-ag-accent/10 p-4">
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <Sparkles className="h-4 w-4 text-purple-400" />
-                    <span className="text-sm font-medium text-purple-400">Recommended Shadow Model</span>
+                    <Sparkles className="h-4 w-4 text-ag-accent" />
+                    <span className="text-sm font-medium text-ag-accent">Recommended Shadow Model</span>
                     <div className="group relative">
                       <HelpCircle className="h-3 w-3 text-slate-400 cursor-help" />
                       <div className="absolute left-0 top-6 w-64 p-3 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
@@ -262,7 +262,7 @@ export default function ShadowRoutingPage() {
                 </div>
                 <div>
                   <div className="text-xs text-slate-400 mb-1">Recommended Shadow Model</div>
-                  <div className="text-sm font-bold text-purple-400">{suggestions.recommended_shadow_model}</div>
+                  <div className="text-sm font-bold text-ag-accent">{suggestions.recommended_shadow_model}</div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-400 mb-1">Estimated Savings</div>
@@ -339,7 +339,7 @@ export default function ShadowRoutingPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Shadow Model:</span>
-                <span className="text-purple-400 font-medium">{selectedModel}</span>
+                <span className="text-ag-accent font-medium">{selectedModel}</span>
               </div>
             </div>
 

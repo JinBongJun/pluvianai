@@ -6,16 +6,26 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-  --foreground-rgb: 255, 255, 255;
-  --background-rgb: 0, 3, 20; /* #000314 */
-  --primary-color: 139, 92, 246; /* Purple #8B5CF6 */
-  --primary-dark: 124, 58, 237;
-  --border-color: 49, 48, 53; /* #313035 */
+  --foreground-rgb: 231, 231, 226; /* #E7E7E2 */
+  --background-rgb: 10, 13, 11; /* #0A0D0B */
+  --primary-color: 183, 154, 62; /* Accent #B79A3E */
+  --primary-dark: 14, 74, 47; /* Deep Emerald #0E4A2F */
+  --border-color: 255, 255, 255; /* Used with alpha */
+
+  /* Guardian Prestige palette */
+  --ag-bg: 10, 13, 11; /* #0A0D0B */
+  --ag-surface: 18, 23, 18; /* #121712 */
+  --ag-primary: 14, 74, 47; /* #0E4A2F */
+  --ag-primary-hover: 20, 101, 61; /* #14653D */
+  --ag-accent: 183, 154, 62; /* #B79A3E */
+  --ag-accent-light: 209, 180, 95; /* #D1B45F */
+  --ag-text: 231, 231, 226; /* #E7E7E2 */
+  --ag-text-muted: 167, 173, 163; /* #A7ADA3 */
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-rgb));
+  color: rgb(var(--ag-text));
+  background: rgb(var(--ag-bg));
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -30,7 +40,7 @@ body {
 
 /* Focus styles */
 *:focus-visible {
-  outline: 2px solid rgb(var(--primary-color));
+  outline: 2px solid rgb(var(--ag-accent));
   outline-offset: 2px;
 }
 
@@ -41,27 +51,27 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.18);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.28);
 }
 
 /* Glow effects utility classes */
-.glow-purple {
+.glow-emerald {
   filter: blur(173px);
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.3) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(14, 74, 47, 0.35) 0%, transparent 70%);
 }
 
-.glow-cyan {
+.glow-gold {
   filter: blur(173px);
-  background: radial-gradient(circle, rgba(6, 182, 212, 0.3) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(183, 154, 62, 0.35) 0%, transparent 70%);
 }
 
 .glow-red {

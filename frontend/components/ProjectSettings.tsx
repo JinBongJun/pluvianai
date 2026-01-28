@@ -111,7 +111,7 @@ export default function ProjectSettings({ projectId, project, onUpdate }: Projec
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full bg-white/5 border border-white/10 rounded-md shadow-sm px-3 py-2 text-white placeholder:text-slate-500 focus:ring-purple-500 focus:border-purple-500"
+          className="w-full bg-white/5 border border-white/10 rounded-md shadow-sm px-3 py-2 text-white placeholder:text-slate-500 focus:ring-ag-accent focus:border-ag-accent"
           placeholder="My Project"
           maxLength={255}
         />
@@ -125,7 +125,7 @@ export default function ProjectSettings({ projectId, project, onUpdate }: Projec
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="w-full bg-white/5 border border-white/10 rounded-md shadow-sm px-3 py-2 text-white placeholder:text-slate-500 focus:ring-purple-500 focus:border-purple-500"
+          className="w-full bg-white/5 border border-white/10 rounded-md shadow-sm px-3 py-2 text-white placeholder:text-slate-500 focus:ring-ag-accent focus:border-ag-accent"
           rows={4}
           placeholder="Project description"
           maxLength={1000}

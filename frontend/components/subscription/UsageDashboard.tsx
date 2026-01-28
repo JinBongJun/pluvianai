@@ -187,22 +187,22 @@ export default function UsageDashboard({ userId }: UsageDashboardProps) {
                 </div>
                 {!metric.unlimited && (
                   <>
-                    <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                    <div className="w-full bg-white/10 rounded-full h-2 mb-2">
                       <div
                         className={clsx(
                           'h-2 rounded-full transition-all',
-                          isExceeded ? 'bg-red-500' : isNear ? 'bg-yellow-500' : 'bg-purple-500'
+                          isExceeded ? 'bg-red-500' : isNear ? 'bg-yellow-500' : 'bg-ag-primary'
                         )}
                         style={{ width: `${Math.min(percentage, 100)}%` }}
                       />
                     </div>
                     {isExceeded && (
-                      <div className="text-xs text-red-600 mt-1">
+                      <div className="text-xs text-red-400 mt-1">
                         Limit exceeded. Upgrade to continue.
                       </div>
                     )}
                     {isNear && !isExceeded && (
-                      <div className="text-xs text-yellow-600 mt-1">
+                      <div className="text-xs text-yellow-400 mt-1">
                         Near limit. Consider upgrading.
                       </div>
                     )}

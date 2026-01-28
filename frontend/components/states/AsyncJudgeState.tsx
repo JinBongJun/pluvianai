@@ -17,7 +17,7 @@ export default function AsyncJudgeState({ message = 'Evaluating…', className }
         className
       )}
     >
-      <Loader2 className="w-10 h-10 text-purple-400 animate-spin mb-4" />
+      <Loader2 className="w-10 h-10 text-ag-accent animate-spin mb-4" />
       <p className="text-sm text-slate-400">{message}</p>
     </div>
   );

@@ -77,8 +77,8 @@ export default function SelfHostedSettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#000314]">
-        <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-500/20 border-t-purple-500"></div>
+      <div className="flex items-center justify-center min-h-screen bg-ag-bg">
+        <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent"></div>
       </div>
     );
   }
@@ -95,7 +95,7 @@ export default function SelfHostedSettingsPage() {
         <div className="bg-dark-card rounded-lg border border-dark-border p-6 mb-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
-              <Shield className="w-6 h-6 text-purple-500" />
+              <Shield className="w-6 h-6 text-ag-accent" />
               <div>
                 <h2 className="text-xl font-semibold text-white">Self-hosted Status</h2>
                 <p className="text-sm text-slate-400 mt-1">{status.message}</p>
@@ -180,14 +180,14 @@ export default function SelfHostedSettingsPage() {
             href="/docs/guides/SELF_HOSTED_SETUP.md"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 text-purple-400 hover:text-purple-300 transition-colors"
+            className="flex items-center gap-2 text-ag-accent hover:text-ag-accentLight transition-colors"
           >
             <ExternalLink className="w-4 h-4" />
             <span>View Setup Guide</span>
           </a>
           <a
             href="mailto:enterprise@agentguard.ai"
-            className="flex items-center gap-2 text-purple-400 hover:text-purple-300 transition-colors"
+            className="flex items-center gap-2 text-ag-accent hover:text-ag-accentLight transition-colors"
           >
             <ExternalLink className="w-4 h-4" />
             <span>Contact Enterprise Support</span>
