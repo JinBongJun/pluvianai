@@ -80,7 +80,7 @@ export default function DailyInsight({ projectId, date, className }: DailyInsigh
   }
 
   const hasAnomalies = insight.anomalies.length > 0;
-  const highSeverityAnomalies = insight.anomalies.filter(a => a.severity === high);
+  const highSeverityAnomalies = insight.anomalies.filter((a) => a.severity === 'high');
 
   return (
     <div className={clsx('rounded-xl border border-white/10 bg-ag-surface p-6 shadow-xl', className)}>
