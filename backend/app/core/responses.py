@@ -4,8 +4,10 @@ Following API_REFERENCE.md format: {"data": {...}, "meta": {...}}
 """
 
 from typing import Any, Dict, Optional, List
-from fastapi.responses import JSONResponse
+
 from fastapi import status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 
 
 def success_response(
@@ -15,41 +17,39 @@ def success_response(
     headers: Optional[Dict[str, str]] = None,
 ) -> JSONResponse:
     """
-    Create a standard success response following API_REFERENCE.md format
-    
-    Args:
-        data: Response data (can be dict, list, or any serializable object)
-        meta: Optional metadata (pagination, totals, etc.)
-        status_code: HTTP status code (default: 200)
-        headers: Optional custom headers
-    
-    Returns:
-        JSONResponse with standard format: {"data": {...}, "meta": {...}}
+    Create a standard success response following API_REFERENCE.md format.
+
+    This helper is used across many endpoints, so we also take care of
+    serializing Pydantic models, datetime objects, etc. using
+    `fastapi.encoders.jsonable_encoder` before returning the JSONResponse.
     """
     response_content: Dict[str, Any] = {}
-    
+
     if data is not None:
         response_content["data"] = data
-    
+
     if meta is not None:
         response_content["meta"] = meta
-    
+
     # If no data or meta, return empty dict (will be {"data": None} if data is None)
     if not response_content and data is None:
         response_content["data"] = None
-    
+
     default_headers = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "*",
         "Access-Control-Allow-Headers": "*",
     }
-    
+
     if headers:
         default_headers.update(headers)
-    
+
+    # Ensure everything is JSON-serializable (handles datetime, Pydantic models, etc.)
+    encoded_content = jsonable_encoder(response_content)
+
     return JSONResponse(
         status_code=status_code,
-        content=response_content,
+        content=encoded_content,
         headers=default_headers,
     )
 
