@@ -6,17 +6,30 @@ import { toNumber } from '@/lib/format';
 import { validateArrayResponse, normalizeModelComparison } from '@/lib/validate';
 
 // Helper to log errors (development: console, production: Sentry)
+// Only send critical errors to Sentry to avoid rate limits
 const logError = (message: string, error?: unknown, context?: Record<string, unknown>) => {
   if (process.env.NODE_ENV === 'development') {
     console.error(message, error, context);
   } else {
-    import('@sentry/nextjs').then((Sentry) => {
-      if (error instanceof Error) {
-        Sentry.captureException(error, { extra: { message, ...context } });
-      } else {
-        Sentry.captureMessage(message, { level: 'error', extra: { error, ...context } });
-      }
-    });
+    // Only send to Sentry if it's a real error (not just a failed API call)
+    // This reduces Sentry load and prevents rate limiting
+    const shouldReportToSentry = 
+      error instanceof Error && 
+      !error.message.includes('Network Error') &&
+      !error.message.includes('timeout') &&
+      !message.includes('Failed to fetch');
+    
+    if (shouldReportToSentry) {
+      import('@sentry/nextjs').then((Sentry) => {
+        if (error instanceof Error) {
+          Sentry.captureException(error, { extra: { message, ...context } });
+        } else {
+          Sentry.captureMessage(message, { level: 'error', extra: { error, ...context } });
+        }
+      }).catch(() => {
+        // Silently fail if Sentry is unavailable (e.g., rate limited)
+      });
+    }
   }
 };
 

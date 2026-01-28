@@ -29,9 +29,9 @@ if settings.SENTRY_DSN:
             SqlalchemyIntegration(),
             HttpxIntegration(),
         ],
-        # Set profiles_sample_rate to 1.0 to profile 100% of sampled transactions.
-        # We recommend adjusting this value in production.
-        profiles_sample_rate=1.0,
+        # Set profiles_sample_rate to 0.0 to disable profiling (reduces Sentry load)
+        # Profiling generates a lot of data and can hit rate limits quickly
+        profiles_sample_rate=0.0,
         # Enable sending of PII (Personally Identifiable Information)
         send_default_pii=False,
         # Set release version

@@ -13,11 +13,13 @@ Sentry.init({
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: false,
   
-  replaysOnErrorSampleRate: 1.0,
+  // Reduce replay rates to avoid hitting Sentry rate limits
+  // Only replay 10% of errors (was 100%)
+  replaysOnErrorSampleRate: 0.1,
   
-  // This sets the sample rate to be 10%. You may want this to be 100% while
-  // in development and sample at a lower rate in production
-  replaysSessionSampleRate: 0.1,
+  // This sets the sample rate to be 1% (reduced from 10% to reduce load)
+  // in production
+  replaysSessionSampleRate: 0.01,
   
   // You can remove this option if you're not planning to use the Sentry Session Replay feature:
   integrations: [
