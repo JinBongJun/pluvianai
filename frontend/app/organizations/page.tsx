@@ -48,10 +48,7 @@ export default function OrganizationsPage() {
     <div className="min-h-screen bg-ag-bg text-ag-text">
       <TopHeader
         breadcrumb={[{ label: 'Organizations' }]}
-        onSearchClick={() => {
-          const input = document.getElementById('org-search');
-          if (input) input.focus();
-        }}
+        showSearch={false}
       />
 
       <main className="px-8 py-10 max-w-6xl mx-auto">
