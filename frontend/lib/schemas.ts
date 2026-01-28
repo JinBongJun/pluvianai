@@ -62,7 +62,7 @@ export const OrganizationProjectStatsSchema = z.object({
   description: z.string().nullable().optional(),
   calls_24h: NumberSchema.optional(),
   cost_7d: NumberSchema.optional(),
-  quality: NumberSchema.optional(),
+  quality: z.number().nullable().optional(), // Allow null for projects without quality scores
   alerts_open: NumberSchema.optional(),
   drift_detected: z.boolean().optional(),
 });
