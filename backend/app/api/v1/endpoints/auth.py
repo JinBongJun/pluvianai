@@ -151,7 +151,6 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
-@handle_errors
 async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -159,10 +158,17 @@ async def login(
     audit_service = Depends(get_audit_service),
 ):
     """Login and get access token"""
-    # Log login attempt immediately for debugging - BEFORE any processing
-    origin = request.headers.get("origin", "unknown")
-    ip = request.client.host if request and request.client else None
+    # CRITICAL: Log login attempt immediately - BEFORE any processing
+    # This must be the FIRST thing to verify request reaches the endpoint
+    origin = request.headers.get("origin", "none")
+    ip = request.client.host if request and request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
+    
+    # Log to both logger and stderr for maximum visibility
+    import sys
+    log_msg = f"🔴🔴🔴 LOGIN REQUEST RECEIVED: origin={origin}, email={form_data.username}, ip={ip}"
+    logger.info(log_msg)
+    print(log_msg, file=sys.stderr)
     
     logger.info(
         f"LOGIN REQUEST RECEIVED: origin={origin}, email={form_data.username}, ip={ip}",
@@ -175,6 +181,9 @@ async def login(
             "user_agent": user_agent[:100] if user_agent else None,
         }
     )
+    
+    # Wrap entire function in try-except to catch ALL errors
+    try:
     
     start_time = time.time()
     ip = request.client.host if request and request.client else None
@@ -337,7 +346,36 @@ async def login(
         logger.warning(f"Failed to track analytics event (non-critical): {analytics_error}", exc_info=True)
 
     # Always return tokens even if auxiliary operations fail
+    logger.info(f"✅ LOGIN SUCCESS: user_id={user.id}, email={user.email}")
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+    
+    except HTTPException:
+        # Re-raise HTTPException - FastAPI handlers will catch it
+        raise
+    except Exception as e:
+        # Log unexpected errors with full traceback
+        import traceback
+        error_traceback = traceback.format_exc()
+        logger.error(
+            f"🔴🔴🔴 LOGIN ERROR: {type(e).__name__}: {str(e)}",
+            extra={
+                "endpoint": "/api/v1/auth/login",
+                "method": "POST",
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "traceback": error_traceback,
+            },
+            exc_info=True,
+        )
+        # Also print to stderr for Railway logs
+        import sys
+        print(f"🔴🔴🔴 LOGIN ERROR: {type(e).__name__}: {str(e)}", file=sys.stderr)
+        print(error_traceback, file=sys.stderr)
+        # Raise HTTPException for FastAPI to handle
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
 
 @router.post("/refresh", response_model=TokenResponse)
