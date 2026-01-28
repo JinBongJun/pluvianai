@@ -234,7 +234,6 @@ def list_organizations(
 
 
 @router.get("/{org_id}")
-@handle_errors
 def get_organization(
     org_id: int,
     include_stats: bool = Query(False, description="Include usage stats and alerts"),
@@ -243,10 +242,18 @@ def get_organization(
     org_service = Depends(get_organization_service),
 ):
     """Get organization details with optional stats."""
-    # Use service to get organization
-    org = org_service.get_organization_by_id(org_id)
-    if not org:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    import sys
+    import traceback
+    logger.info(f"🔵 GET ORGANIZATION: org_id={org_id}, include_stats={include_stats}, user_id={current_user.id}")
+    print(f"🔵 GET ORGANIZATION: org_id={org_id}, include_stats={include_stats}, user_id={current_user.id}", file=sys.stderr)
+    
+    try:
+        # Use service to get organization
+        org = org_service.get_organization_by_id(org_id)
+        if not org:
+            logger.warning(f"🔴 Organization not found: org_id={org_id}")
+            print(f"🔴 Organization not found: org_id={org_id}", file=sys.stderr)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
     
     # Check access
     is_owner = org.owner_id == current_user.id
@@ -261,13 +268,15 @@ def get_organization(
             .first() is not None
         )
     
-    if not (is_owner or is_member):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have access to this organization"
-        )
+        if not (is_owner or is_member):
+            logger.warning(f"🔴 Access denied: user_id={current_user.id}, org_id={org_id}")
+            print(f"🔴 Access denied: user_id={current_user.id}, org_id={org_id}", file=sys.stderr)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this organization"
+            )
 
-    if not include_stats:
+        if not include_stats:
         return OrganizationDetail(
             id=org.id,
             name=org.name,
@@ -276,19 +285,19 @@ def get_organization(
             stats=None,  # Explicitly set to None
         )
 
-    # Get all projects for this org
-    projects = db.query(Project).filter(Project.organization_id == org_id).all()
-    project_ids = [p.id for p in projects]
+            # Get all projects for this org
+        projects = db.query(Project).filter(Project.organization_id == org_id).all()
+        project_ids = [p.id for p in projects]
 
-    now = datetime.utcnow()
-    seven_days_ago = now - timedelta(days=7)
+        now = datetime.utcnow()
+        seven_days_ago = now - timedelta(days=7)
 
-    # Calculate usage stats
-    calls_count = 0
-    total_cost = 0.0
-    quality_scores = []
+        # Calculate usage stats
+        calls_count = 0
+        total_cost = 0.0
+        quality_scores = []
 
-    if project_ids:
+        if project_ids:
         # API calls (7d)
         try:
             calls_count = (
@@ -336,20 +345,20 @@ def get_organization(
         except (ValueError, TypeError, Exception) as e:
             logger.warning(f"Failed to query quality scores for org {org_id}: {str(e)}", exc_info=True)
             avg_quality = 0.0
-    else:
-        avg_quality = 0.0
+        else:
+            avg_quality = 0.0
 
-    # Get plan limits (based on plan_type)
-    plan_limits = {
-        "free": {"calls": 1000, "cost": 10.0},
-        "pro": {"calls": 100000, "cost": 1000.0},
-        "enterprise": {"calls": 1000000, "cost": 10000.0},
-    }
-    limits = plan_limits.get(org.plan_type, plan_limits["free"])
+        # Get plan limits (based on plan_type)
+        plan_limits = {
+            "free": {"calls": 1000, "cost": 10.0},
+            "pro": {"calls": 100000, "cost": 1000.0},
+            "enterprise": {"calls": 1000000, "cost": 10000.0},
+        }
+        limits = plan_limits.get(org.plan_type, plan_limits["free"])
 
-    # Get recent alerts
-    alerts_list = []
-    if project_ids:
+        # Get recent alerts
+        alerts_list = []
+        if project_ids:
         try:
             recent_alerts = (
                 db.query(Alert, Project.name)
@@ -370,29 +379,44 @@ def get_organization(
                         "severity": alert.severity or "medium",
                     }
                 )
-        except Exception as e:
-            logger.warning(f"Failed to query alerts for org {org_id}: {str(e)}", exc_info=True)
-            alerts_list = []
+            except Exception as e:
+                logger.warning(f"Failed to query alerts for org {org_id}: {str(e)}", exc_info=True)
+                alerts_list = []
 
-    try:
-        return {
-            "id": org.id,
-            "name": org.name,
-            "type": org.type,
-            "plan_type": org.plan_type,
-            "stats": {
-                "usage": {
-                    "calls": calls_count,
-                    "calls_limit": limits["calls"],
-                    "cost": round(total_cost, 2),
-                    "cost_limit": limits["cost"],
-                    "quality": round(avg_quality, 1),
+        try:
+            logger.info(f"✅ Building response for org_id={org_id}")
+            print(f"✅ Building response for org_id={org_id}", file=sys.stderr)
+            return {
+                "id": org.id,
+                "name": org.name,
+                "type": org.type,
+                "plan_type": org.plan_type,
+                "stats": {
+                    "usage": {
+                        "calls": calls_count,
+                        "calls_limit": limits["calls"],
+                        "cost": round(total_cost, 2),
+                        "cost_limit": limits["cost"],
+                        "quality": round(avg_quality, 1),
+                    },
+                    "alerts": alerts_list,
                 },
-                "alerts": alerts_list,
-            },
-        }
+            }
+        except Exception as e:
+            logger.error(f"🔴 Failed to build response for org {org_id}: {str(e)}", exc_info=True)
+            print(f"🔴 Failed to build response for org {org_id}: {str(e)}", file=sys.stderr)
+            print(traceback.format_exc(), file=sys.stderr)
+            raise
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Failed to build response for org {org_id}: {str(e)}", exc_info=True)
+        logger.error(f"🔴🔴🔴 GET ORGANIZATION ERROR: {type(e).__name__}: {str(e)}", exc_info=True)
+        print(f"🔴🔴🔴 GET ORGANIZATION ERROR: {type(e).__name__}: {str(e)}", file=sys.stderr)
+        print(traceback.format_exc(), file=sys.stderr)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
         # Return basic org info without stats if response building fails
         plan_limits = {
             "free": {"calls": 1000, "cost": 10.0},
@@ -419,7 +443,6 @@ def get_organization(
 
 
 @router.get("/{org_id}/projects", response_model=List[OrgProjectSummary])
-@handle_errors
 def list_org_projects(
     org_id: int,
     include_stats: bool = Query(True, description="Include project metrics"),
@@ -430,10 +453,18 @@ def list_org_projects(
     project_service = Depends(get_project_service),
 ):
     """List projects for an organization with basic metrics."""
-    # Use service to get organization
-    org = org_service.get_organization_by_id(org_id)
-    if not org:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    import sys
+    import traceback
+    logger.info(f"🔵 GET ORG PROJECTS: org_id={org_id}, include_stats={include_stats}, user_id={current_user.id}")
+    print(f"🔵 GET ORG PROJECTS: org_id={org_id}, include_stats={include_stats}, user_id={current_user.id}", file=sys.stderr)
+    
+    try:
+        # Use service to get organization
+        org = org_service.get_organization_by_id(org_id)
+        if not org:
+            logger.warning(f"🔴 Organization not found: org_id={org_id}")
+            print(f"🔴 Organization not found: org_id={org_id}", file=sys.stderr)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
     
     # Check access using service
     user_orgs = org_service.get_organizations_by_user_id(current_user.id)
@@ -444,36 +475,42 @@ def list_org_projects(
             detail="You don't have access to this organization"
         )
 
-    # Use service to get projects
-    projects = project_service.get_projects_by_organization_id(org_id)
-    
-    # Apply search filter if provided
-    if search:
-        search_term = search.strip().lower()
-        projects = [
-            p for p in projects
-            if search_term in (p.name or "").lower() or search_term in (p.description or "").lower()
-        ]
-    
-    # Sort by created_at descending
-    projects = sorted(projects, key=lambda p: p.created_at, reverse=True)
+        # Use service to get projects
+        logger.info(f"📁 Getting projects for org_id={org_id}")
+        print(f"📁 Getting projects for org_id={org_id}", file=sys.stderr)
+        projects = project_service.get_projects_by_organization_id(org_id)
+        logger.info(f"📁 Found {len(projects)} projects")
+        print(f"📁 Found {len(projects)} projects", file=sys.stderr)
+        
+        # Apply search filter if provided
+        if search:
+            search_term = search.strip().lower()
+            projects = [
+                p for p in projects
+                if search_term in (p.name or "").lower() or search_term in (p.description or "").lower()
+            ]
+        
+        # Sort by created_at descending
+        projects = sorted(projects, key=lambda p: p.created_at, reverse=True)
 
-    if not projects:
-        return []
+        if not projects:
+            logger.info(f"✅ No projects found for org_id={org_id}")
+            print(f"✅ No projects found for org_id={org_id}", file=sys.stderr)
+            return []
 
-    project_ids = [p.id for p in projects]
-    now = datetime.utcnow()
-    day_ago = now - timedelta(days=1)
-    seven_days_ago = now - timedelta(days=7)
+        project_ids = [p.id for p in projects]
+        now = datetime.utcnow()
+        day_ago = now - timedelta(days=1)
+        seven_days_ago = now - timedelta(days=7)
 
-    # Defaults when stats disabled
-    calls_map = {pid: 0 for pid in project_ids}
-    cost_map = {pid: 0.0 for pid in project_ids}
-    quality_map = {pid: None for pid in project_ids}
-    alerts_map = {pid: 0 for pid in project_ids}
-    drift_map = {pid: False for pid in project_ids}
+        # Defaults when stats disabled
+        calls_map = {pid: 0 for pid in project_ids}
+        cost_map = {pid: 0.0 for pid in project_ids}
+        quality_map = {pid: None for pid in project_ids}
+        alerts_map = {pid: 0 for pid in project_ids}
+        drift_map = {pid: False for pid in project_ids}
 
-    if include_stats:
+        if include_stats:
         # Calls 24h
         try:
             calls_rows = (
@@ -559,20 +596,33 @@ def list_org_projects(
         except Exception as e:
             logger.warning(f"Failed to query drift alerts: {str(e)}", exc_info=True)
 
-    results: List[OrgProjectSummary] = []
-    for p in projects:
-        results.append(
-            OrgProjectSummary(
-                id=p.id,
-                name=p.name,
-                description=p.description,
-                calls_24h=calls_map.get(p.id, 0),
-                cost_7d=cost_map.get(p.id, 0.0),
-                quality=quality_map.get(p.id),
-                alerts_open=alerts_map.get(p.id, 0),
-                drift=drift_map.get(p.id, False),
+        results: List[OrgProjectSummary] = []
+        for p in projects:
+            results.append(
+                OrgProjectSummary(
+                    id=p.id,
+                    name=p.name,
+                    description=p.description,
+                    calls_24h=calls_map.get(p.id, 0),
+                    cost_7d=cost_map.get(p.id, 0.0),
+                    quality=quality_map.get(p.id),
+                    alerts_open=alerts_map.get(p.id, 0),
+                    drift=drift_map.get(p.id, False),
+                )
             )
-        )
 
-    return results
+        logger.info(f"✅ Returning {len(results)} projects for org_id={org_id}")
+        print(f"✅ Returning {len(results)} projects for org_id={org_id}", file=sys.stderr)
+        return results
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"🔴🔴🔴 ORG PROJECTS ERROR: {type(e).__name__}: {str(e)}", exc_info=True)
+        print(f"🔴🔴🔴 ORG PROJECTS ERROR: {type(e).__name__}: {str(e)}", file=sys.stderr)
+        print(traceback.format_exc(), file=sys.stderr)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
