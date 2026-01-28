@@ -254,20 +254,20 @@ def get_organization(
             logger.warning(f"🔴 Organization not found: org_id={org_id}")
             print(f"🔴 Organization not found: org_id={org_id}", file=sys.stderr)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
-    
-    # Check access
-    is_owner = org.owner_id == current_user.id
-    is_member = False
-    if not is_owner:
-        is_member = (
-            db.query(OrganizationMember)
-            .filter(
-                OrganizationMember.organization_id == org_id,
-                OrganizationMember.user_id == current_user.id
+        
+        # Check access
+        is_owner = org.owner_id == current_user.id
+        is_member = False
+        if not is_owner:
+            is_member = (
+                db.query(OrganizationMember)
+                .filter(
+                    OrganizationMember.organization_id == org_id,
+                    OrganizationMember.user_id == current_user.id
+                )
+                .first() is not None
             )
-            .first() is not None
-        )
-    
+        
         if not (is_owner or is_member):
             logger.warning(f"🔴 Access denied: user_id={current_user.id}, org_id={org_id}")
             print(f"🔴 Access denied: user_id={current_user.id}, org_id={org_id}", file=sys.stderr)
