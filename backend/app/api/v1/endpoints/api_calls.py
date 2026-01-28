@@ -248,7 +248,7 @@ async def stream_live(
     )
 
 
-@router.get("/{api_call_id}", response_model=APICallDetailResponse)
+@router.get("/by-id/{api_call_id}", response_model=APICallDetailResponse)
 async def get_api_call(
     api_call_id: int,
     current_user: User = Depends(get_current_user),
@@ -256,7 +256,7 @@ async def get_api_call(
     api_call_service = Depends(get_api_call_service),
     snapshot_repo = Depends(get_snapshot_repository),
 ):
-    """Get a specific API call with decompression"""
+    """Get a specific API call with decompression by ID"""
     api_call = api_call_service.get_api_call_by_id(api_call_id)
 
     if not api_call:

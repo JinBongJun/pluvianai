@@ -179,10 +179,8 @@ async def list_drift_detections(
         extra={"user_id": current_user.id, "project_id": project_id, "count": len(detections), "total": total}
     )
 
-    # Return using standard response format with pagination
-    from app.core.responses import paginated_response
-    page = (offset // limit) + 1 if limit > 0 else 1
-    return paginated_response(data=[d.model_dump() for d in detection_responses], page=page, per_page=limit, total=total)
+    # Frontend expects a plain array of detections (no wrapper)
+    return detection_responses
 
 
 @router.get("/{drift_id}", response_model=DriftDetectionResponse)
