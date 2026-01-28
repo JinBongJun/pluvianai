@@ -77,12 +77,12 @@ async def analyze_problems(
         # Free plan: text summary only
         analysis["mapping_available"] = False
         # Remove detailed mapping data for free users
-        if "metadata" in analysis and "structure" in analysis["metadata"]:
+        if "metadata" in analysis and isinstance(analysis["metadata"], dict) and "structure" in analysis["metadata"]:
             del analysis["metadata"]["structure"]
 
     logger.info(
-        f"Problem analysis completed: {analysis['problem_count']} problems found",
-        extra={"user_id": current_user.id, "project_id": project_id, "problem_count": analysis["problem_count"]}
+        f"Problem analysis completed: {analysis.get('problem_count', 0)} problems found",
+        extra={"user_id": current_user.id, "project_id": project_id, "problem_count": analysis.get("problem_count", 0)}
     )
 
     return success_response(data=analysis)

@@ -171,7 +171,7 @@ async def filter_mapping(
     """
     logger.info(
         f"User {current_user.id} requested filtered mapping for project {project_id}",
-        extra={"user_id": current_user.id, "project_id": project_id, "filters": filters.dict()}
+        extra={"user_id": current_user.id, "project_id": project_id, "filters": filters.model_dump()}
     )
 
     # Verify project access
@@ -187,7 +187,7 @@ async def filter_mapping(
     )
 
     # Convert Pydantic model to dict, removing None values
-    filter_dict = {k: v for k, v in filters.dict().items() if v is not None}
+    filter_dict = {k: v for k, v in filters.model_dump().items() if v is not None}
 
     # Get filtered structure
     structure = mapping_service.filter_nodes(project_id, filter_dict, days)

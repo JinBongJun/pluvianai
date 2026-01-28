@@ -254,4 +254,4 @@ async def get_quality_stats(
     )
 
     # Return using standard response format
-    return success_response(data=result.dict())
+    return success_response(data=result.model_dump())

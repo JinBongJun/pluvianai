@@ -66,12 +66,12 @@ async def analyze_performance(
         # Free plan: text summary only
         analysis["mapping_available"] = False
         # Remove detailed mapping data for free users
-        if "metadata" in analysis and "structure" in analysis["metadata"]:
+        if "metadata" in analysis and isinstance(analysis["metadata"], dict) and "structure" in analysis["metadata"]:
             del analysis["metadata"]["structure"]
 
     logger.info(
-        f"Performance analysis completed: {analysis['bottleneck_count']} bottlenecks found",
-        extra={"user_id": current_user.id, "project_id": project_id, "bottleneck_count": analysis["bottleneck_count"]}
+        f"Performance analysis completed: {analysis.get('bottleneck_count', 0)} bottlenecks found",
+        extra={"user_id": current_user.id, "project_id": project_id, "bottleneck_count": analysis.get("bottleneck_count", 0)}
     )
 
     return success_response(data=analysis)
@@ -142,22 +142,29 @@ async def get_performance_analysis_mapping(
 
     # Get mapping structure
     structure = mapping_service.analyze_agent_structure(project_id)
+    if not structure:
+        structure = {"nodes": []}
 
     # Mark bottleneck nodes
-    bottleneck_node_ids = {node["id"] for node in analysis["bottleneck_nodes"]}
-    for node in structure["nodes"]:
-        if node["id"] in bottleneck_node_ids:
+    bottleneck_nodes = analysis.get("bottleneck_nodes", [])
+    bottleneck_node_ids = {node.get("id") for node in bottleneck_nodes if node.get("id")}
+    nodes = structure.get("nodes", [])
+    for node in nodes:
+        if node.get("id") in bottleneck_node_ids:
             node["is_bottleneck"] = True
             bottleneck_node = next(
-                (n for n in analysis["bottleneck_nodes"] if n["id"] == node["id"]),
+                (n for n in bottleneck_nodes if n.get("id") == node.get("id")),
                 None
             )
             if bottleneck_node:
-                node["bottleneck_severity"] = bottleneck_node["severity"]
+                node["bottleneck_severity"] = bottleneck_node.get("severity")
                 node["latency_stats"] = bottleneck_node.get("latency_stats", {})
+
+    # Update structure with enriched nodes
+    structure["nodes"] = nodes
 
     return success_response(data={
         "structure": structure,
-        "bottleneck_nodes": analysis["bottleneck_nodes"],
-        "global_stats": analysis["global_stats"],
+        "bottleneck_nodes": bottleneck_nodes,
+        "global_stats": analysis.get("global_stats", {}),
     })

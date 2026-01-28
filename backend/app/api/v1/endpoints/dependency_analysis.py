@@ -68,7 +68,7 @@ async def analyze_dependencies(
             del analysis["dependency_graph"]
 
     logger.info(
-        f"Dependency analysis completed: {analysis['metadata']['total_nodes']} nodes",
+        f"Dependency analysis completed: {analysis.get('metadata', {}).get('total_nodes', 0)} nodes",
         extra={"user_id": current_user.id, "project_id": project_id}
     )
 
@@ -140,17 +140,24 @@ async def get_dependency_analysis_mapping(
 
     # Get mapping structure
     structure = mapping_service.analyze_agent_structure(project_id)
+    if not structure:
+        structure = {"nodes": []}
 
     # Enrich nodes with dependency information
     dependency_map = analysis.get("dependency_map", {})
     dependents_map = analysis.get("dependents_map", {})
     node_depths = analysis.get("node_depths", {})
 
-    for node in structure["nodes"]:
-        node_id = node["id"]
-        node["dependencies"] = dependency_map.get(node_id, [])
-        node["dependents"] = dependents_map.get(node_id, [])
-        node["depth"] = node_depths.get(node_id, 0)
+    nodes = structure.get("nodes", [])
+    for node in nodes:
+        node_id = node.get("id")
+        if node_id:
+            node["dependencies"] = dependency_map.get(node_id, [])
+            node["dependents"] = dependents_map.get(node_id, [])
+            node["depth"] = node_depths.get(node_id, 0)
+
+    # Update structure with enriched nodes
+    structure["nodes"] = nodes
 
     return success_response(data={
         "structure": structure,

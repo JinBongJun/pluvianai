@@ -38,6 +38,14 @@ from app.api.v1.endpoints import (
     notifications,
     rule_market,
     public_benchmarks,
+    cost,
+    settings,
+    activity,
+    drift,
+    agent_chain,
+    shadow_routing,
+    reports,
+    webhooks,
 )
 
 api_router = APIRouter()
@@ -76,3 +84,11 @@ api_router.include_router(dashboard.router, prefix="", tags=["dashboard"])
 api_router.include_router(notifications.router, prefix="", tags=["notifications"])
 api_router.include_router(rule_market.router, prefix="", tags=["rule-market"])
 api_router.include_router(public_benchmarks.router, prefix="", tags=["public-benchmarks"])
+api_router.include_router(cost.router, prefix="/cost", tags=["cost"])
+api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
+api_router.include_router(activity.router, prefix="/activity", tags=["activity"])
+api_router.include_router(drift.router, prefix="/drift", tags=["drift"])
+api_router.include_router(agent_chain.router, prefix="/agent-chain", tags=["agent-chain"])
+api_router.include_router(shadow_routing.router, prefix="/shadow-routing", tags=["shadow-routing"])
+api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
+api_router.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])

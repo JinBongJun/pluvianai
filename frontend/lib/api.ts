@@ -421,10 +421,13 @@ export const qualityAPI = {
     const response = await apiClient.get('/quality/scores', {
       params: { project_id: projectId, ...params },
     });
+    // Backend returns paginated_response format: {data: [...], meta: {...}}
+    // Extract data array from response
+    const data = response.data?.data || response.data || [];
     // Validate array response - use item schema, not array schema
     return validateArrayResponse(
       QualityScoreSchema,
-      response.data,
+      data,
       '/quality/scores'
     );
   },

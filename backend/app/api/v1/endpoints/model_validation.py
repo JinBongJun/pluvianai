@@ -217,4 +217,4 @@ async def validate_model(
     )
 
     # Return using standard response format
-    return success_response(data=result.dict())
+    return success_response(data=result.model_dump())
