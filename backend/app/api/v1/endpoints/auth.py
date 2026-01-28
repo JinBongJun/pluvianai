@@ -185,164 +185,164 @@ async def login(
     # Wrap entire function in try-except to catch ALL errors
     try:
         start_time = time.time()
-    ip = request.client.host if request and request.client else None
-    user_agent = request.headers.get("user-agent") if request else None
+        ip = request.client.host if request and request.client else None
+        user_agent = request.headers.get("user-agent") if request else None
 
-    # Brute force pre-check
-    precheck = brute_force_service.check_allowed(form_data.username, ip)
-    if not precheck.allowed:
-        if precheck.require_captcha:
-            captcha_token = request.headers.get("X-Captcha-Token") if request else None
-            captcha_ok = await captcha_service.verify(captcha_token)
-            if captcha_ok:
-                brute_force_service.register_success(form_data.username, ip)
+            # Brute force pre-check
+        precheck = brute_force_service.check_allowed(form_data.username, ip)
+        if not precheck.allowed:
+            if precheck.require_captcha:
+                captcha_token = request.headers.get("X-Captcha-Token") if request else None
+                captcha_ok = await captcha_service.verify(captcha_token)
+                if captcha_ok:
+                    brute_force_service.register_success(form_data.username, ip)
+                else:
+                    brute_force_blocks_total.labels(reason=precheck.reason or "rate_limited").inc()
+                    login_attempts_total.labels(outcome="blocked", reason="captcha_required").inc()
+                    db.add(
+                        LoginAttempt(
+                            email=form_data.username,
+                            ip_address=ip,
+                            user_agent=user_agent,
+                            is_success=False,
+                            failure_reason="captcha_required",
+                        )
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="Too many attempts. Complete CAPTCHA to continue.",
+                    )
             else:
                 brute_force_blocks_total.labels(reason=precheck.reason or "rate_limited").inc()
-                login_attempts_total.labels(outcome="blocked", reason="captcha_required").inc()
+                login_attempts_total.labels(outcome="blocked", reason=precheck.reason or "rate_limited").inc()
                 db.add(
                     LoginAttempt(
                         email=form_data.username,
                         ip_address=ip,
                         user_agent=user_agent,
                         is_success=False,
-                        failure_reason="captcha_required",
+                        failure_reason=precheck.reason or "rate_limited",
                     )
                 )
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Too many attempts. Complete CAPTCHA to continue.",
+                    detail=f"Too many attempts. Try again in {precheck.wait_seconds} seconds.",
                 )
-        else:
-            brute_force_blocks_total.labels(reason=precheck.reason or "rate_limited").inc()
-            login_attempts_total.labels(outcome="blocked", reason=precheck.reason or "rate_limited").inc()
+
+        # Find user by email using service (OAuth2PasswordRequestForm uses username field for email)
+        from app.core.dependencies import get_user_service
+        user_service = get_user_service(db)
+        user = user_service.get_user_by_email(form_data.username)
+
+        if not user or not verify_password(form_data.password, user.hashed_password):
+            result = brute_force_service.register_failure(form_data.username, ip)
+            login_attempts_total.labels(outcome="failure", reason="invalid_credentials").inc()
             db.add(
                 LoginAttempt(
                     email=form_data.username,
                     ip_address=ip,
                     user_agent=user_agent,
                     is_success=False,
-                    failure_reason=precheck.reason or "rate_limited",
+                    failure_reason="invalid_credentials",
                 )
             )
+            if not result.allowed:
+                brute_force_blocks_total.labels(reason=result.reason or "rate_limited").inc()
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Too many attempts. Try again in {result.wait_seconds} seconds.",
+                )
             raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Too many attempts. Try again in {precheck.wait_seconds} seconds.",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
-    # Find user by email using service (OAuth2PasswordRequestForm uses username field for email)
-    from app.core.dependencies import get_user_service
-    user_service = get_user_service(db)
-    user = user_service.get_user_by_email(form_data.username)
-
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        result = brute_force_service.register_failure(form_data.username, ip)
-        login_attempts_total.labels(outcome="failure", reason="invalid_credentials").inc()
-        db.add(
-            LoginAttempt(
-                email=form_data.username,
-                ip_address=ip,
-                user_agent=user_agent,
-                is_success=False,
-                failure_reason="invalid_credentials",
+        if not user.is_active:
+            login_attempts_total.labels(outcome="failure", reason="inactive").inc()
+            db.add(
+                LoginAttempt(
+                    user_id=user.id,
+                    email=user.email,
+                    ip_address=ip,
+                    user_agent=user_agent,
+                    is_success=False,
+                    failure_reason="inactive",
+                )
             )
-        )
-        if not result.allowed:
-            brute_force_blocks_total.labels(reason=result.reason or "rate_limited").inc()
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Too many attempts. Try again in {result.wait_seconds} seconds.",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive")
 
-    if not user.is_active:
-        login_attempts_total.labels(outcome="failure", reason="inactive").inc()
+        # Success path
+        brute_force_service.register_success(user.email, ip)
         db.add(
             LoginAttempt(
                 user_id=user.id,
                 email=user.email,
                 ip_address=ip,
                 user_agent=user_agent,
-                is_success=False,
-                failure_reason="inactive",
+                is_success=True,
             )
         )
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive")
+        login_attempts_total.labels(outcome="success", reason="none").inc()
 
-    # Success path
-    brute_force_service.register_success(user.email, ip)
-    db.add(
-        LoginAttempt(
-            user_id=user.id,
-            email=user.email,
-            ip_address=ip,
-            user_agent=user_agent,
-            is_success=True,
-        )
-    )
-    login_attempts_total.labels(outcome="success", reason="none").inc()
+        # Risk-based assessment (informational)
+        risk = risk_based_auth_service.assess(user.id, ip, user_agent, db=db)
+        if risk.require_step_up:
+            for reason in risk.reasons or ["high_risk"]:
+                risk_based_auth_challenges_total.labels(reason=reason).inc()
+            logger.warning(
+                "High risk login detected",
+                extra={"user_id": user.id, "ip": ip, "reasons": risk.reasons},
+            )
 
-    # Risk-based assessment (informational)
-    risk = risk_based_auth_service.assess(user.id, ip, user_agent, db=db)
-    if risk.require_step_up:
-        for reason in risk.reasons or ["high_risk"]:
-            risk_based_auth_challenges_total.labels(reason=reason).inc()
-        logger.warning(
-            "High risk login detected",
-            extra={"user_id": user.id, "ip": ip, "reasons": risk.reasons},
-        )
+        # Create tokens
+        access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
+        refresh_token = create_refresh_token(data={"sub": str(user.id), "email": user.email})
 
-    # Create tokens
-    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
-    refresh_token = create_refresh_token(data={"sub": str(user.id), "email": user.email})
+        # Save refresh token to database (optional - if table doesn't exist, skip)
+        try:
+            import hashlib
+            from app.models.refresh_token import RefreshToken
+            from datetime import datetime
+            
+            token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+            payload = decode_token(refresh_token)
+            expires_at = datetime.utcfromtimestamp(payload.get("exp", 0))
+            
+            refresh_token_record = RefreshToken(
+                user_id=user.id,
+                token_hash=token_hash,
+                expires_at=expires_at,
+                is_revoked=False
+            )
+            db.add(refresh_token_record)
+            # Commit handled automatically by get_db() dependency
+        except Exception as refresh_token_error:
+            # If refresh token table doesn't exist or other error, log but don't fail login
+            logger.warning(f"Failed to save refresh token (non-critical): {refresh_token_error}", exc_info=True)
 
-    # Save refresh token to database (optional - if table doesn't exist, skip)
-    try:
-        import hashlib
-        from app.models.refresh_token import RefreshToken
-        from datetime import datetime
-        
-        token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-        payload = decode_token(refresh_token)
-        expires_at = datetime.utcfromtimestamp(payload.get("exp", 0))
-        
-        refresh_token_record = RefreshToken(
-            user_id=user.id,
-            token_hash=token_hash,
-            expires_at=expires_at,
-            is_revoked=False
-        )
-        db.add(refresh_token_record)
-        # Commit handled automatically by get_db() dependency
-    except Exception as refresh_token_error:
-        # If refresh token table doesn't exist or other error, log but don't fail login
-        logger.warning(f"Failed to save refresh token (non-critical): {refresh_token_error}", exc_info=True)
+        # Log audit event for successful login (non-critical)
+        try:
+            audit_service.log_action(
+                user_id=user.id,
+                action="user_login",
+                resource_type="user",
+                resource_id=user.id,
+                new_value={"email": user.email, "ip_address": ip, "user_agent": user_agent},
+                ip_address=ip,
+                user_agent=user_agent
+            )
+        except Exception as audit_error:
+            logger.warning(f"Failed to log audit event (non-critical): {audit_error}", exc_info=True)
 
-    # Log audit event for successful login (non-critical)
-    try:
-        audit_service.log_action(
-            user_id=user.id,
-            action="user_login",
-            resource_type="user",
-            resource_id=user.id,
-            new_value={"email": user.email, "ip_address": ip, "user_agent": user_agent},
-            ip_address=ip,
-            user_agent=user_agent
-        )
-    except Exception as audit_error:
-        logger.warning(f"Failed to log audit event (non-critical): {audit_error}", exc_info=True)
+        duration = time.time() - start_time
+        login_latency_seconds.observe(duration)
 
-    duration = time.time() - start_time
-    login_latency_seconds.observe(duration)
-
-    # Track analytics event (non-critical)
-    try:
-        analytics_service.track_user_login(user_id=user.id, method="password")
-    except Exception as analytics_error:
-        logger.warning(f"Failed to track analytics event (non-critical): {analytics_error}", exc_info=True)
+        # Track analytics event (non-critical)
+        try:
+            analytics_service.track_user_login(user_id=user.id, method="password")
+        except Exception as analytics_error:
+            logger.warning(f"Failed to track analytics event (non-critical): {analytics_error}", exc_info=True)
 
         # Always return tokens even if auxiliary operations fail
         logger.info(f"✅ LOGIN SUCCESS: user_id={user.id}, email={user.email}")
