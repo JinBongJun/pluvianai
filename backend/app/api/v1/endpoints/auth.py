@@ -184,8 +184,7 @@ async def login(
     
     # Wrap entire function in try-except to catch ALL errors
     try:
-    
-    start_time = time.time()
+        start_time = time.time()
     ip = request.client.host if request and request.client else None
     user_agent = request.headers.get("user-agent") if request else None
 
@@ -345,9 +344,9 @@ async def login(
     except Exception as analytics_error:
         logger.warning(f"Failed to track analytics event (non-critical): {analytics_error}", exc_info=True)
 
-    # Always return tokens even if auxiliary operations fail
-    logger.info(f"✅ LOGIN SUCCESS: user_id={user.id}, email={user.email}")
-    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+        # Always return tokens even if auxiliary operations fail
+        logger.info(f"✅ LOGIN SUCCESS: user_id={user.id}, email={user.email}")
+        return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
     
     except HTTPException:
         # Re-raise HTTPException - FastAPI handlers will catch it
