@@ -158,6 +158,22 @@ app.include_router(api_router, prefix="/api/v1")
 # v2 is currently in development - v1 remains stable
 app.include_router(api_router_v2, prefix="/api/v2")
 
+# Debug: log registered API v1 routes at startup-time
+for route in app.routes:
+    path = getattr(route, "path", "")
+    if path.startswith("/api/v1"):
+        logger.info(f"🔍 REGISTERED ROUTE: {path}")
+
+# Simple debug endpoint to inspect routes from the outside
+@app.get("/api/v1/debug/routes")
+async def list_registered_routes():
+    """Return a list of all registered API v1 routes (no auth)."""
+    return {
+        "routes": sorted(
+            {getattr(route, "path", "") for route in app.routes if getattr(route, "path", "").startswith("/api/v1")}
+        )
+    }
+
 # NOTE: Catch-all handler removed - it was interfering with API routing
 # If needed, add specific route handlers for non-API paths instead
 
