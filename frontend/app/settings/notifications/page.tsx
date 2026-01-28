@@ -7,7 +7,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { settingsAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
-import { Bell, Mail, MessageSquare, Save } from 'lucide-react';
+import { Bell, Mail, MessageSquare, Save, Loader2 } from 'lucide-react';
 
 export default function NotificationsPage() {
   const router = useRouter();

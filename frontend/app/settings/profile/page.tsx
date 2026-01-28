@@ -9,7 +9,7 @@ import Modal from '@/components/ui/Modal';
 import { settingsAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
 import Avatar from '@/components/ui/Avatar';
-import { User, Trash2, Save } from 'lucide-react';
+import { User, Trash2, Save, Loader2 } from 'lucide-react';
 
 export default function ProfilePage() {
   const router = useRouter();
