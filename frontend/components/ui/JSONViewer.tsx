@@ -34,27 +34,27 @@ export default function JSONViewer({ data, title, searchable = true, className }
 
   const renderValue = (value: any, path: string, depth: number = 0): JSX.Element => {
     if (value === null) {
-      return <span className="text-gray-500">null</span>;
+      return <span className="text-ag-muted">null</span>;
     }
 
     if (value === undefined) {
-      return <span className="text-gray-500">undefined</span>;
+      return <span className="text-ag-muted">undefined</span>;
     }
 
     if (typeof value === 'string') {
       const displayValue = value.length > 100 ? value.substring(0, 100) + '...' : value;
       return (
-        <span className="text-green-700">
+        <span className="text-emerald-300">
           &quot;{displayValue}&quot;
           {value.length > 100 && (
-            <span className="text-gray-500 text-xs ml-2">({value.length} chars)</span>
+            <span className="text-ag-muted text-xs ml-2">({value.length} chars)</span>
           )}
         </span>
       );
     }
 
     if (typeof value === 'number') {
-      return <span className="text-blue-600">{value}</span>;
+      return <span className="text-sky-300">{value}</span>;
     }
 
     if (typeof value === 'boolean') {
@@ -67,23 +67,23 @@ export default function JSONViewer({ data, title, searchable = true, className }
         <div>
           <button
             onClick={() => toggleExpand(path)}
-            className="text-gray-600 hover:text-gray-900 mr-1"
+            className="text-ag-muted hover:text-ag-text mr-1"
           >
             {isExpanded ? '▼' : '▶'}
           </button>
-          <span className="text-gray-600">[</span>
-          <span className="text-gray-500 text-xs ml-1">{value.length} items</span>
+          <span className="text-ag-muted">[</span>
+          <span className="text-ag-muted text-xs ml-1">{value.length} items</span>
           {isExpanded && (
-            <div className="ml-4 mt-1 border-l-2 border-gray-200 pl-2">
+            <div className="ml-4 mt-1 border-l-2 border-white/10 pl-2">
               {value.map((item, index) => (
                 <div key={index} className="mb-1">
-                  <span className="text-gray-500">{index}:</span>{' '}
+                  <span className="text-ag-muted">{index}:</span>{' '}
                   {renderValue(item, `${path}[${index}]`, depth + 1)}
                 </div>
               ))}
             </div>
           )}
-          <span className="text-gray-600">]</span>
+          <span className="text-ag-muted">]</span>
         </div>
       );
     }
@@ -95,14 +95,14 @@ export default function JSONViewer({ data, title, searchable = true, className }
         <div>
           <button
             onClick={() => toggleExpand(path)}
-            className="text-gray-600 hover:text-gray-900 mr-1"
+            className="text-ag-muted hover:text-ag-text mr-1"
           >
             {isExpanded ? '▼' : '▶'}
           </button>
-          <span className="text-gray-600">{'{'}</span>
-          <span className="text-gray-500 text-xs ml-1">{keys.length} keys</span>
+          <span className="text-ag-muted">{'{'}</span>
+          <span className="text-ag-muted text-xs ml-1">{keys.length} keys</span>
           {isExpanded && (
-            <div className="ml-4 mt-1 border-l-2 border-gray-200 pl-2">
+            <div className="ml-4 mt-1 border-l-2 border-white/10 pl-2">
               {keys.map((key) => {
                 const keyPath = path ? `${path}.${key}` : key;
                 const matches = searchable && searchTerm
@@ -114,15 +114,15 @@ export default function JSONViewer({ data, title, searchable = true, className }
 
                 return (
                   <div key={key} className="mb-1">
-                    <span className="text-blue-800 font-medium">&quot;{key}&quot;</span>
-                    <span className="text-gray-600">: </span>
+                    <span className="text-sky-300 font-medium">&quot;{key}&quot;</span>
+                    <span className="text-ag-muted">: </span>
                     {renderValue(value[key], keyPath, depth + 1)}
                   </div>
                 );
               })}
             </div>
           )}
-          <span className="text-gray-600">{'}'}</span>
+          <span className="text-ag-muted">{'}'}</span>
         </div>
       );
     }
@@ -146,30 +146,30 @@ export default function JSONViewer({ data, title, searchable = true, className }
     : data;
 
   return (
-    <div className={clsx('bg-gray-50 rounded-lg border border-gray-200', className)}>
+    <div className={clsx('bg-ag-surface rounded-lg border border-white/10', className)}>
       {(title || searchable) && (
-        <div className="flex items-center justify-between p-3 border-b border-gray-200">
-          {title && <h3 className="text-sm font-medium text-gray-900">{title}</h3>}
+        <div className="flex items-center justify-between p-3 border-b border-white/10">
+          {title && <h3 className="text-sm font-medium text-ag-text">{title}</h3>}
           <div className="flex items-center gap-2">
             {searchable && (
               <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-ag-muted" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search..."
-                  className="pl-8 pr-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                  className="pl-8 pr-3 py-1 text-sm border border-white/20 bg-ag-surface text-ag-text rounded-md focus:outline-none focus:ring-1 focus:ring-ag-accent focus:border-ag-accent"
                 />
               </div>
             )}
             <button
               onClick={copyToClipboard}
-              className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded"
+              className="p-1.5 text-ag-muted hover:text-ag-text hover:bg-white/5 rounded"
               title="Copy JSON"
             >
               {copied ? (
-                <Check className="h-4 w-4 text-green-600" />
+                <Check className="h-4 w-4 text-emerald-400" />
               ) : (
                 <Copy className="h-4 w-4" />
               )}
@@ -183,7 +183,7 @@ export default function JSONViewer({ data, title, searchable = true, className }
             {renderValue(filteredData, '')}
           </div>
         ) : (
-          <div className="text-gray-500">No results found</div>
+          <div className="text-ag-muted">No results found</div>
         )}
       </div>
     </div>

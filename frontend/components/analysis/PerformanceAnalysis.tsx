@@ -65,9 +65,9 @@ export default function PerformanceAnalysis({ projectId, onClose }: PerformanceA
   }, [projectId]);
 
   const getSeverityColor = (severity: number) => {
-    if (severity >= 0.7) return 'text-red-600 bg-red-50 border-red-200';
-    if (severity >= 0.4) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-    return 'text-orange-600 bg-orange-50 border-orange-200';
+    if (severity >= 0.7) return 'text-red-300 bg-red-500/10 border-red-500/30';
+    if (severity >= 0.4) return 'text-amber-300 bg-amber-500/10 border-amber-500/30';
+    return 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30';
   };
 
   const formatLatency = (ms: number) => {
@@ -212,61 +212,61 @@ export default function PerformanceAnalysis({ projectId, onClose }: PerformanceA
                 )}
               >
                 <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                     <Clock className="w-5 h-5 text-current" />
-                    <h4 className="font-semibold text-gray-900">{node.name}</h4>
+                    <h4 className="font-semibold text-ag-text">{node.name}</h4>
                   </div>
-                  <span className="text-xs text-gray-600">
+                  <span className="text-xs text-ag-muted">
                     Severity: {(node.severity * 100).toFixed(0)}%
                   </span>
                 </div>
                 
                 <div className="mb-3">
-                  <p className="text-sm text-gray-700 font-medium">{node.bottleneck_reason}</p>
+                  <p className="text-sm text-ag-text font-medium">{node.bottleneck_reason}</p>
                 </div>
 
-                <div className="mt-3 pt-3 border-t border-gray-200">
-                  <div className="text-xs text-gray-500 mb-2">Latency Statistics</div>
+                <div className="mt-3 pt-3 border-t border-white/10">
+                  <div className="text-xs text-ag-muted mb-2">Latency Statistics</div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                     <div>
-                      <span className="text-gray-500">Average:</span>
-                      <span className="ml-2 font-medium text-gray-900">
+                      <span className="text-ag-muted">Average:</span>
+                      <span className="ml-2 font-medium text-ag-text">
                         {formatLatency(node.latency_stats.avg)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-500">Median:</span>
-                      <span className="ml-2 font-medium text-gray-900">
+                      <span className="text-ag-muted">Median:</span>
+                      <span className="ml-2 font-medium text-ag-text">
                         {formatLatency(node.latency_stats.median)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-500">P95:</span>
+                      <span className="text-ag-muted">P95:</span>
                       <span className="ml-2 font-medium text-red-600">
                         {formatLatency(node.latency_stats.p95)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-500">P99:</span>
+                      <span className="text-ag-muted">P99:</span>
                       <span className="ml-2 font-medium text-red-700">
                         {formatLatency(node.latency_stats.p99)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-500">Min:</span>
-                      <span className="ml-2 font-medium text-gray-900">
+                      <span className="text-ag-muted">Min:</span>
+                      <span className="ml-2 font-medium text-ag-text">
                         {formatLatency(node.latency_stats.min)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-500">Max:</span>
+                      <span className="text-ag-muted">Max:</span>
                       <span className="ml-2 font-medium text-red-800">
                         {formatLatency(node.latency_stats.max)}
                       </span>
                     </div>
                     <div className="col-span-2">
-                      <span className="text-gray-500">Call Count:</span>
-                      <span className="ml-2 font-medium text-gray-900">
+                      <span className="text-ag-muted">Call Count:</span>
+                      <span className="ml-2 font-medium text-ag-text">
                         {node.latency_stats.count.toLocaleString()}
                       </span>
                     </div>

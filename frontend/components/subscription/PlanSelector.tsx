@@ -112,7 +112,7 @@ export default function PlanSelector({ currentPlan, onSelectPlan }: PlanSelector
             key={plan.plan_type}
             className={clsx(
               'relative bg-white rounded-lg border-2 p-6 flex flex-col',
-              isPopular ? 'border-black' : 'border-gray-200',
+              isPopular ? 'border-ag-accent' : 'border-white/10',
               isCurrent && 'ring-2 ring-black'
             )}
           >
@@ -123,24 +123,24 @@ export default function PlanSelector({ currentPlan, onSelectPlan }: PlanSelector
             )}
             
             <div className="mb-4">
-              <h3 className="text-xl font-bold text-gray-900 capitalize mb-1">
+              <h3 className="text-xl font-bold text-ag-text capitalize mb-1">
                 {plan.plan_type}
               </h3>
               <div className="flex items-baseline">
-                <span className="text-3xl font-bold text-gray-900">${plan.price}</span>
-                <span className="text-gray-600 ml-1">/month</span>
+                <span className="text-3xl font-bold text-ag-text">${plan.price}</span>
+                <span className="text-ag-muted ml-1">/month</span>
               </div>
             </div>
 
             <div className="flex-1 space-y-3 mb-6">
               <div className="text-sm">
-                <div className="text-gray-600">Projects: {formatLimit(plan.limits.projects)}</div>
-                <div className="text-gray-600">API Calls: {formatLimit(plan.limits.api_calls_per_month)}/mo</div>
-                <div className="text-gray-600">Team Members: {formatLimit(plan.limits.team_members_per_project)}</div>
-                <div className="text-gray-600">Retention: {plan.limits.data_retention_days} days</div>
+                <div className="text-ag-muted">Projects: {formatLimit(plan.limits.projects)}</div>
+                <div className="text-ag-muted">API Calls: {formatLimit(plan.limits.api_calls_per_month)}/mo</div>
+                <div className="text-ag-muted">Team Members: {formatLimit(plan.limits.team_members_per_project)}</div>
+                <div className="text-ag-muted">Retention: {plan.limits.data_retention_days} days</div>
               </div>
 
-              <div className="border-t border-gray-200 pt-3 space-y-2">
+              <div className="border-t border-white/10 pt-3 space-y-2">
                 <div className="flex items-center gap-2 text-sm">
                   {getFeatureValue(plan.features, 'multi_model_comparison') ? (
                     <Check className="h-4 w-4 text-green-600" />

@@ -86,14 +86,14 @@ function AgentNodeComponent({ data }: { data: AgentNode }) {
   // Determine node color based on score or bottleneck status
   const getNodeColor = () => {
     if (isBottleneck) return 'bg-red-500';
-    if (score >= 4.0) return 'bg-green-500';
-    if (score >= 3.0) return 'bg-yellow-500';
+    if (score >= 4.0) return 'bg-emerald-500';
+    if (score >= 3.0) return 'bg-amber-500';
     return 'bg-red-500';
   };
 
   const getBorderColor = () => {
-    if (isBottleneck) return 'border-red-600 border-4';
-    return 'border-gray-300 border-2';
+    if (isBottleneck) return 'border-red-500 border-4';
+    return 'border-white/20 border-2';
   };
 
   const getStatusIcon = () => {
@@ -108,12 +108,11 @@ function AgentNodeComponent({ data }: { data: AgentNode }) {
       className={clsx(
         'px-4 py-3 rounded-lg shadow-lg min-w-[200px]',
         getNodeColor(),
-        getBorderColor(),
-        'bg-white'
+        getBorderColor()
       )}
     >
       <div className="flex items-center justify-between mb-2">
-        <h3 className="font-semibold text-sm text-gray-900">{data.name}</h3>
+        <h3 className="font-semibold text-sm text-white">{data.name}</h3>
         {getStatusIcon()}
       </div>
       
@@ -123,7 +122,7 @@ function AgentNodeComponent({ data }: { data: AgentNode }) {
         </div>
       )}
       
-      <div className="space-y-1 text-xs text-gray-600">
+      <div className="space-y-1 text-xs text-white/90">
         <div className="flex items-center gap-1">
           <span>Score:</span>
           <span className="font-medium">{score.toFixed(1)}/5.0</span>
@@ -134,25 +133,25 @@ function AgentNodeComponent({ data }: { data: AgentNode }) {
             {latencyStats?.p95 ? `${latencyStats.p95.toFixed(0)}ms (P95)` : `${latency.toFixed(0)}ms`}
           </span>
         </div>
-        <div className="text-gray-500">
+        <div className="text-white/80">
           {metrics.call_count} calls • {(successRate * 100).toFixed(0)}% success
         </div>
         
         {/* Dependency info */}
         {(dependencies.length > 0 || dependents.length > 0) && (
-          <div className="mt-2 pt-2 border-t border-gray-200">
+              <div className="mt-2 pt-2 border-t border-white/20">
             {dependencies.length > 0 && (
-              <div className="text-gray-500 mb-1">
+              <div className="text-white/80 mb-1">
                 Depends on: {dependencies.length}
               </div>
             )}
             {dependents.length > 0 && (
-              <div className="text-gray-500">
+              <div className="text-white/80">
                 Dependents: {dependents.length}
               </div>
             )}
             {depth !== null && (
-              <div className="text-gray-500 mt-1">
+              <div className="text-white/80 mt-1">
                 Depth: {depth}
               </div>
             )}

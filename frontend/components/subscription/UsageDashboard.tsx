@@ -116,24 +116,24 @@ export default function UsageDashboard({ userId }: UsageDashboardProps) {
     <>
       <div className="space-y-6">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Usage Overview</h3>
-          <p className="text-sm text-gray-600">
+          <h3 className="text-lg font-semibold text-ag-text mb-2">Usage Overview</h3>
+          <p className="text-sm text-ag-muted">
             Current plan: <span className="font-medium capitalize">{planType}</span>
           </p>
         </div>
 
         {hasExceededLimit && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <div className="bg-red-950/40 border border-red-500/40 rounded-lg p-4 mb-4">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="text-sm font-semibold text-red-900 mb-1">Quota Exceeded</h4>
-                <p className="text-sm text-red-700">
+                <h4 className="text-sm font-semibold text-red-300 mb-1">Quota Exceeded</h4>
+                <p className="text-sm text-red-300">
                   You&apos;ve reached your plan limit. Upgrade to continue using AgentGuard.
                 </p>
               </div>
               <button
                 onClick={() => setShowUpgradeModal(true)}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm font-medium"
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-500 transition-colors text-sm font-medium"
               >
                 Upgrade Now
               </button>
@@ -142,17 +142,17 @@ export default function UsageDashboard({ userId }: UsageDashboardProps) {
         )}
 
         {isNearLimit && !hasExceededLimit && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+          <div className="bg-amber-950/40 border border-amber-500/40 rounded-lg p-4 mb-4">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="text-sm font-semibold text-yellow-900 mb-1">Approaching Limit</h4>
-                <p className="text-sm text-yellow-700">
+                <h4 className="text-sm font-semibold text-amber-300 mb-1">Approaching Limit</h4>
+                <p className="text-sm text-amber-200">
                   You&apos;re using over 80% of your plan limit. Consider upgrading.
                 </p>
               </div>
               <button
                 onClick={() => setShowUpgradeModal(true)}
-                className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors text-sm font-medium"
+                className="px-4 py-2 bg-amber-500 text-black rounded-md hover:bg-amber-400 transition-colors text-sm font-medium"
               >
                 Upgrade
               </button>
@@ -167,17 +167,17 @@ export default function UsageDashboard({ userId }: UsageDashboardProps) {
             const isNear = !metric.unlimited && metric.current >= metric.limit * 0.8;
             
             return (
-              <div key={metric.key} className="bg-white rounded-lg border border-gray-200 p-4">
+              <div key={metric.key} className="bg-ag-surface rounded-lg border border-white/10 p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-900">
+                  <span className="text-sm font-medium text-ag-text">
                     {metric.label}
                   </span>
                   <span className={clsx(
                     'text-sm font-medium',
-                    isExceeded ? 'text-red-600' : isNear ? 'text-yellow-600' : 'text-gray-600'
+                    isExceeded ? 'text-red-400' : isNear ? 'text-amber-300' : 'text-ag-muted'
                   )}>
                     {metric.unlimited ? (
-                      <span className="text-green-600 font-medium">Unlimited</span>
+                      <span className="text-emerald-400 font-medium">Unlimited</span>
                     ) : (
                       <>
                         {formatNumber(metric.current)} / {formatNumber(metric.limit)}
