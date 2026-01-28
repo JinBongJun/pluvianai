@@ -307,6 +307,25 @@ async def startup_event():
                         else:
                             logger.info("✅ stripe_customer_id column already exists")
                             print("✅ stripe_customer_id column already exists", file=sys.stderr)
+                        
+                        # Check if is_panic_mode column exists in projects table
+                        result = conn.execute(text("""
+                            SELECT column_name 
+                            FROM information_schema.columns 
+                            WHERE table_name='projects' AND column_name='is_panic_mode'
+                        """))
+                        if result.fetchone() is None:
+                            logger.info("🔧 Adding is_panic_mode column to projects table manually...")
+                            print("🔧 Adding is_panic_mode column to projects table manually...", file=sys.stderr)
+                            conn.execute(text("""
+                                ALTER TABLE projects 
+                                ADD COLUMN IF NOT EXISTS is_panic_mode BOOLEAN DEFAULT FALSE
+                            """))
+                            logger.info("✅ is_panic_mode column added to projects table manually")
+                            print("✅ is_panic_mode column added to projects table manually", file=sys.stderr)
+                        else:
+                            logger.info("✅ is_panic_mode column already exists in projects table")
+                            print("✅ is_panic_mode column already exists in projects table", file=sys.stderr)
                 except Exception as manual_fix_error:
                     logger.error(f"🔴 Failed to manually add columns: {manual_fix_error}", exc_info=True)
                     print(f"🔴 Failed to manually add columns: {manual_fix_error}", file=sys.stderr)
