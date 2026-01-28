@@ -44,7 +44,7 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
   if (loading) {
     return (
       <div className="h-64 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-ag-accent border-t-transparent"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-purple-500 border-t-transparent"></div>
       </div>
     );
   }
@@ -88,7 +88,7 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
           onClick={() => setChartType('daily')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
             chartType === 'daily'
-              ? 'bg-ag-primary text-ag-accent-light shadow-lg shadow-ag-primary/40'
+              ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50'
               : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
           }`}
         >
@@ -98,7 +98,7 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
           onClick={() => setChartType('model')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
             chartType === 'model'
-              ? 'bg-ag-primary text-ag-accent-light shadow-lg shadow-ag-primary/40'
+              ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50'
               : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
           }`}
         >
@@ -108,7 +108,7 @@ export default function CostChart({ projectId, days = 7 }: { projectId: number; 
           onClick={() => setChartType('provider')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
             chartType === 'provider'
-              ? 'bg-ag-primary text-ag-accent-light shadow-lg shadow-ag-primary/40'
+              ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50'
               : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
           }`}
         >

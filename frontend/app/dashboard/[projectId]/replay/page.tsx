@@ -128,12 +128,12 @@ export default function ReplayPage() {
 
     return (
         <DashboardLayout>
-            <div className="bg-ag-bg min-h-screen text-ag-text">
+            <div className="bg-[#000314] min-h-screen text-white">
                 {/* Header */}
                 <div className="mb-8 flex items-center justify-between">
                     <div>
                         <h1 className="text-4xl font-bold flex items-center gap-3">
-                            <History className="h-10 w-10 text-ag-accent" />
+                            <History className="h-10 w-10 text-purple-500" />
                             Time Machine <span className="text-slate-500 text-lg font-normal">(Replay Engine)</span>
                         </h1>
                         <p className="text-slate-400 mt-2">Re-run production traffic with new prompts & models to detect regressions.</p>
@@ -167,7 +167,7 @@ export default function ReplayPage() {
                                     <input
                                         type="text"
                                         placeholder="e.g. gpt-4o-mini, claude-3-5-sonnet"
-                                        className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-ag-accent transition-colors"
+                                        className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-purple-500 transition-colors"
                                         value={targetModel}
                                         onChange={e => setTargetModel(e.target.value)}
                                     />
@@ -177,7 +177,7 @@ export default function ReplayPage() {
                                     <label className="block text-xs font-medium text-slate-400 uppercase mb-2">Automated Judge (Rubric)</label>
                                     <div className="flex gap-2">
                                         <select
-                                            className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-ag-accent transition-colors text-white"
+                                            className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-purple-500 transition-colors text-white"
                                             value={selectedRubricId || ''}
                                             onChange={e => setSelectedRubricId(Number(e.target.value) || null)}
                                         >
@@ -201,7 +201,7 @@ export default function ReplayPage() {
                                     <div className="animate-in fade-in slide-in-from-top-2">
                                         <label className="block text-xs font-medium text-slate-400 uppercase mb-2">Evaluator Model (The Judge)</label>
                                         <select
-                                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-ag-accent transition-colors text-white"
+                                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-purple-500 transition-colors text-white"
                                             value={judgeModel}
                                             onChange={e => setJudgeModel(e.target.value)}
                                         >
@@ -228,7 +228,7 @@ export default function ReplayPage() {
                                         onClick={() => toggleSelect(s.id)}
                                         className={clsx(
                                             "p-4 border-b border-white/5 cursor-pointer transition-colors hover:bg-white/5",
-                                            selectedIds.includes(s.id) && "bg-ag-accent/10 border-l-4 border-l-ag-accent"
+                                            selectedIds.includes(s.id) && "bg-purple-500/10 border-l-4 border-l-purple-500"
                                         )}
                                     >
                                         <div className="flex justify-between items-start mb-1">
@@ -267,7 +267,7 @@ export default function ReplayPage() {
                                                 <div className="text-xs text-slate-400 flex items-center gap-2">
                                                     <span className="text-slate-500">{original?.model}</span>
                                                     <ArrowRight className="h-3 w-3" />
-                                                    <span className="text-ag-accent font-bold">{res.replay_model}</span>
+                                                    <span className="text-purple-400 font-bold">{res.replay_model}</span>
                                                 </div>
                                             </div>
 
@@ -284,12 +284,12 @@ export default function ReplayPage() {
                                                 </div>
 
                                                 {/* Replay Output */}
-                                                <div className="p-5 bg-ag-accent/5">
-                                                    <p className="text-[10px] text-ag-accent uppercase font-black mb-3 flex items-center gap-2">
-                                                        <span className="w-2 h-2 rounded-full bg-ag-accent animate-pulse"></span>
+                                                <div className="p-5 bg-purple-500/5">
+                                                    <p className="text-[10px] text-purple-400 uppercase font-black mb-3 flex items-center gap-2">
+                                                        <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
                                                         Time Machine Response (New)
                                                     </p>
-                                                    <div className="bg-black/40 rounded-lg p-4 text-sm text-white min-h-[150px] font-sans leading-relaxed border border-ag-accent/20 whitespace-pre-wrap shadow-inner">
+                                                    <div className="bg-black/40 rounded-lg p-4 text-sm text-white min-h-[150px] font-sans leading-relaxed border border-purple-500/20 whitespace-pre-wrap shadow-inner">
                                                         {res.response_data?.choices?.[0]?.message?.content ||
                                                             res.response_data?.candidates?.[0]?.content?.parts?.[0]?.text ||
                                                             JSON.stringify(res.response_data, null, 2)}
@@ -306,13 +306,13 @@ export default function ReplayPage() {
 
                                             {/* AI Judge Evaluation (Phase 3) */}
                                             {res.evaluation && (
-                                                <div className="p-4 bg-ag-primary/20 border-t border-ag-accent/20 hover:bg-ag-primary/30 transition-colors">
+                                                <div className="p-4 bg-purple-900/20 border-t border-purple-500/20 hover:bg-purple-900/30 transition-colors">
                                                     <div className="flex items-start justify-between mb-2">
                                                         <div className="flex items-center gap-2">
-                                                            <div className="bg-ag-accent rounded p-1">
+                                                            <div className="bg-purple-500 rounded p-1">
                                                                 <History className="h-3 w-3 text-white" />
                                                             </div>
-                                                            <span className="text-xs font-bold text-ag-accentLight">AI JUDGE RESULT</span>
+                                                            <span className="text-xs font-bold text-purple-300">AI JUDGE RESULT</span>
                                                         </div>
                                                         <div className="flex gap-4">
                                                             <div className="text-center">
@@ -320,7 +320,7 @@ export default function ReplayPage() {
                                                                 <p className="text-lg font-black text-slate-400">{res.evaluation.original_score}/5</p>
                                                             </div>
                                                             <div className="text-center">
-                                                                <p className="text-[9px] text-ag-accent uppercase">Replay</p>
+                                                                <p className="text-[9px] text-purple-400 uppercase">Replay</p>
                                                                 <p className={clsx(
                                                                     "text-lg font-black",
                                                                     res.evaluation.regression_detected ? "text-red-500" : "text-green-400"
@@ -330,7 +330,7 @@ export default function ReplayPage() {
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <p className="text-xs text-slate-300 leading-relaxed italic border-l-2 border-ag-accent/50 pl-3 py-1">
+                                                    <p className="text-xs text-slate-300 leading-relaxed italic border-l-2 border-purple-500/50 pl-3 py-1">
                                                         &quot;{res.evaluation.reasoning}&quot;
                                                     </p>
                                                     {res.evaluation.regression_detected && (
@@ -363,9 +363,9 @@ export default function ReplayPage() {
             {/* Rubric Creation Modal */}
             {showRubricModal && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-ag-surface border border-white/10 rounded-3xl p-8 max-w-md w-full shadow-2xl">
+                    <div className="bg-[#0D0F17] border border-white/10 rounded-3xl p-8 max-w-md w-full shadow-2xl">
                         <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                            <Settings2 className="h-5 w-5 text-ag-accent" />
+                            <Settings2 className="h-5 w-5 text-purple-500" />
                             Create New Evaluation Rubric
                         </h2>
                         <p className="text-slate-400 text-sm mb-6">Define the criteria your AI Judge will use to score responses.</p>
@@ -376,7 +376,7 @@ export default function ReplayPage() {
                                 <input
                                     type="text"
                                     placeholder="e.g. Technical Accuracy, Politeness"
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:border-ag-accent"
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:border-purple-500"
                                     value={newRubricName}
                                     onChange={e => setNewRubricName(e.target.value)}
                                 />

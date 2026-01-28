@@ -102,7 +102,7 @@ export default function LoginPage() {
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="flex justify-center mb-4">
-            <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center shadow-lg shadow-ag-primary/30">
+            <div className="h-12 w-12 bg-gradient-to-br from-purple-500 to-purple-700 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30">
               <span className="text-white font-bold text-lg">AG</span>
             </div>
           </div>
@@ -130,7 +130,7 @@ export default function LoginPage() {
                   name="fullName"
                   type="text"
                   required={!isLogin}
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 bg-white/5 border border-white/10 placeholder-slate-500 text-white rounded-t-md focus:outline-none focus:ring-ag-accent focus:border-ag-accent focus:z-10 sm:text-sm"
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 bg-white/5 border border-white/10 placeholder-slate-500 text-white rounded-t-md focus:outline-none focus:ring-purple-500 focus:border-purple-500 focus:z-10 sm:text-sm"
                   placeholder="Full Name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
@@ -148,7 +148,7 @@ export default function LoginPage() {
                 autoComplete="email"
                 required
                 aria-required="true"
-                className={`appearance-none rounded-none relative block w-full px-3 py-2 bg-white/5 border border-white/10 placeholder-slate-500 text-white ${!isLogin ? '' : 'rounded-t-md'} focus:outline-none focus:ring-ag-accent focus:border-ag-accent focus:z-10 sm:text-sm`}
+                className={`appearance-none rounded-none relative block w-full px-3 py-2 bg-white/5 border border-white/10 placeholder-slate-500 text-white ${!isLogin ? '' : 'rounded-t-md'} focus:outline-none focus:ring-purple-500 focus:border-purple-500 focus:z-10 sm:text-sm`}
                 placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -165,7 +165,7 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 required
                 aria-required="true"
-                className="appearance-none rounded-none relative block w-full px-3 py-2 bg-white/5 border border-white/10 placeholder-slate-500 text-white rounded-b-md focus:outline-none focus:ring-ag-accent focus:border-ag-accent focus:z-10 sm:text-sm pr-10"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 bg-white/5 border border-white/10 placeholder-slate-500 text-white rounded-b-md focus:outline-none focus:ring-purple-500 focus:border-purple-500 focus:z-10 sm:text-sm pr-10"
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -200,7 +200,7 @@ export default function LoginPage() {
                     checked={liabilityAgreementAccepted}
                     onChange={(e) => setLiabilityAgreementAccepted(e.target.checked)}
                     required
-                    className="mt-1 h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-300 rounded"
+                    className="mt-1 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                     aria-required="true"
                   />
                   <label htmlFor="liability-agreement" className="text-sm text-gray-700 cursor-pointer">
@@ -221,7 +221,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading || submitting || (!isLogin && !liabilityAgreementAccepted)}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-ag-primary hover:bg-ag-primaryHover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ag-accent disabled:opacity-50 transition-colors"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 transition-colors"
             >
               {isLoading || submitting ? 'Loading...' : isLogin ? 'Sign in' : 'Sign up'}
             </button>
@@ -234,7 +234,7 @@ export default function LoginPage() {
                 setIsLogin(!isLogin);
                 setError('');
               }}
-              className="text-sm text-ag-accent hover:text-ag-accentLight transition-colors"
+              className="text-sm text-purple-400 hover:text-purple-300 transition-colors"
             >
               {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
             </button>

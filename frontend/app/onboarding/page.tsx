@@ -186,7 +186,7 @@ export AGENTGUARD_PROJECT_ID="${projectId}"`;
                 className={clsx(
                   'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors',
                   index <= currentStepIndex
-                    ? 'bg-ag-primary text-ag-accent-light'
+                    ? 'bg-purple-600 text-white'
                     : 'bg-gray-200 text-gray-600'
                 )}
               >
@@ -200,7 +200,7 @@ export AGENTGUARD_PROJECT_ID="${projectId}"`;
                 <div
                   className={clsx(
                     'flex-1 h-1 mx-2 transition-colors',
-                    index < currentStepIndex ? 'bg-ag-primary' : 'bg-gray-200'
+                    index < currentStepIndex ? 'bg-purple-600' : 'bg-gray-200'
                   )}
                 />
               )}

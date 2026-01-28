@@ -77,7 +77,7 @@ export default function DeltaViewer({
             className={clsx(
               'px-3 py-1.5 rounded text-sm transition-colors',
               selectedView === 'side-by-side'
-                ? 'bg-ag-primary text-ag-accent-light'
+                ? 'bg-purple-600 text-white'
                 : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
             )}
           >
@@ -88,7 +88,7 @@ export default function DeltaViewer({
             className={clsx(
               'px-3 py-1.5 rounded text-sm transition-colors',
               selectedView === 'diff'
-                ? 'bg-ag-primary text-ag-accent-light'
+                ? 'bg-purple-600 text-white'
                 : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
             )}
           >

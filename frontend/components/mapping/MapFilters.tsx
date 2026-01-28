@@ -55,7 +55,7 @@ export default function MapFilters({
         className={clsx(
           'px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
           hasActiveFilters
-            ? 'bg-ag-primary text-ag-accent-light hover:bg-ag-primaryHover'
+            ? 'bg-purple-600 text-white hover:bg-purple-700'
             : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
         )}
       >
@@ -94,7 +94,7 @@ export default function MapFilters({
                   value={localFilters.agent_name || ''}
                   onChange={(e) => handleFilterChange('agent_name', e.target.value || undefined)}
                   placeholder="Search agent name..."
-                  className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-ag-accent"
+                  className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
               {availableAgents && availableAgents.length > 0 && (
@@ -130,7 +130,7 @@ export default function MapFilters({
                 step="0.1"
                 value={localFilters.min_score || 0}
                 onChange={(e) => handleFilterChange('min_score', parseFloat(e.target.value) || undefined)}
-                className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-green-600"
+                className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-600"
               />
               <div className="flex justify-between text-xs text-slate-400 mt-1">
                 <span>0.0</span>
@@ -150,7 +150,7 @@ export default function MapFilters({
                 step="100"
                 value={localFilters.max_latency || 5000}
                 onChange={(e) => handleFilterChange('max_latency', parseInt(e.target.value) || undefined)}
-                className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-green-600"
+                className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-600"
               />
               <div className="flex justify-between text-xs text-slate-400 mt-1">
                 <span>0ms</span>
@@ -165,7 +165,7 @@ export default function MapFilters({
                   type="checkbox"
                   checked={localFilters.has_problems || false}
                   onChange={(e) => handleFilterChange('has_problems', e.target.checked || undefined)}
-                  className="w-4 h-4 rounded border-slate-600 bg-slate-900 text-ag-accent focus:ring-ag-accent"
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-900 text-purple-600 focus:ring-purple-500"
                 />
                 <span className="text-sm text-slate-300">Show only problem nodes</span>
               </label>

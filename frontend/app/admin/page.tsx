@@ -63,7 +63,7 @@ export default function AdminPage() {
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-2">
-              <Shield className="h-8 w-8 text-ag-accent" />
+              <Shield className="h-8 w-8 text-purple-400" />
               <h1 className="text-4xl font-bold text-white">Admin Dashboard</h1>
             </div>
             <p className="text-slate-400 mt-2">Manage users, monitor system, and handle support requests</p>
@@ -78,7 +78,7 @@ export default function AdminPage() {
                     <p className="text-sm text-slate-400 mb-1">Total Users</p>
                     <p className="text-2xl font-bold text-white">{stats.total_users || 0}</p>
                   </div>
-                  <Users className="h-8 w-8 text-ag-accent" />
+                  <Users className="h-8 w-8 text-purple-400" />
                 </div>
               </div>
 

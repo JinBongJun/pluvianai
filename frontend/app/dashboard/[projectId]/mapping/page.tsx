@@ -192,7 +192,7 @@ export default function MappingPage() {
             className={clsx(
               'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
               showFilters
-                ? 'bg-ag-primary text-ag-accent-light'
+                ? 'bg-purple-600 text-white'
                 : 'bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700'
             )}
           >
@@ -240,13 +240,13 @@ export default function MappingPage() {
                 type="checkbox"
                 checked={filters.has_problems || false}
                 onChange={(e) => setFilters({ ...filters, has_problems: e.target.checked || undefined })}
-                className="w-4 h-4 text-ag-accent bg-slate-900 border-slate-700 rounded"
+                className="w-4 h-4 text-purple-600 bg-slate-900 border-slate-700 rounded"
               />
             </div>
           </div>
           <button
             onClick={applyFilters}
-            className="mt-4 px-4 py-2 bg-ag-primary text-ag-accent-light rounded-lg text-sm font-medium hover:bg-ag-primaryHover transition-colors"
+            className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors"
           >
             Apply Filters
           </button>
