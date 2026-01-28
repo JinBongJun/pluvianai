@@ -158,6 +158,17 @@ app.include_router(api_router, prefix="/api/v1")
 # v2 is currently in development - v1 remains stable
 app.include_router(api_router_v2, prefix="/api/v2")
 
+# Add catch-all route handler for debugging unmatched routes
+@app.get("/{full_path:path}")
+async def catch_all_handler(request: Request, full_path: str):
+    """Catch-all handler to log unmatched routes for debugging"""
+    logger.warning(f"⚠️ UNMATCHED ROUTE: {request.method} {request.url.path} (full_path: {full_path})")
+    from fastapi import HTTPException, status
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"Route not found: {request.method} {request.url.path}"
+    )
+
 # Add deprecation notice middleware for v1 (when v2 alternatives exist)
 # This will be enabled when specific v1 endpoints are deprecated
 @app.middleware("http")
