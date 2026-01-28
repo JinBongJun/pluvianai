@@ -234,6 +234,18 @@ async def login(
         user_service = get_user_service(db)
         user = user_service.get_user_by_email(form_data.username)
 
+        # Log user lookup result for debugging
+        if not user:
+            logger.warning(f"🔴 LOGIN FAILED: User not found for email: {form_data.username}")
+            print(f"🔴 LOGIN FAILED: User not found for email: {form_data.username}", file=sys.stderr)
+        else:
+            logger.info(f"✅ User found: id={user.id}, email={user.email}, is_active={user.is_active}")
+            print(f"✅ User found: id={user.id}, email={user.email}, is_active={user.is_active}", file=sys.stderr)
+            # Check password
+            password_valid = verify_password(form_data.password, user.hashed_password)
+            logger.info(f"🔐 Password verification result: {password_valid}")
+            print(f"🔐 Password verification result: {password_valid}", file=sys.stderr)
+
         if not user or not verify_password(form_data.password, user.hashed_password):
             result = brute_force_service.register_failure(form_data.username, ip)
             login_attempts_total.labels(outcome="failure", reason="invalid_credentials").inc()
@@ -248,10 +260,14 @@ async def login(
             )
             if not result.allowed:
                 brute_force_blocks_total.labels(reason=result.reason or "rate_limited").inc()
+                logger.warning(f"🔴 LOGIN BLOCKED: Too many attempts for {form_data.username}")
+                print(f"🔴 LOGIN BLOCKED: Too many attempts for {form_data.username}", file=sys.stderr)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=f"Too many attempts. Try again in {result.wait_seconds} seconds.",
                 )
+            logger.warning(f"🔴 LOGIN FAILED: Invalid credentials for {form_data.username}")
+            print(f"🔴 LOGIN FAILED: Invalid credentials for {form_data.username}", file=sys.stderr)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
@@ -259,6 +275,8 @@ async def login(
             )
 
         if not user.is_active:
+            logger.warning(f"🔴 LOGIN FAILED: User account is inactive for {user.email}")
+            print(f"🔴 LOGIN FAILED: User account is inactive for {user.email}", file=sys.stderr)
             login_attempts_total.labels(outcome="failure", reason="inactive").inc()
             db.add(
                 LoginAttempt(
