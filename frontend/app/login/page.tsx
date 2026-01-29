@@ -25,10 +25,13 @@ export default function LoginPage() {
   const pwdStrength = passwordStrength(password);
 
   useEffect(() => {
-    // Check for mode query parameter
     const mode = searchParams?.get('mode');
+    const sessionExpired = searchParams?.get('session_expired');
     if (mode === 'signup') {
       setIsLogin(false);
+    }
+    if (sessionExpired === '1') {
+      setError('Session expired. Please log in again.');
     }
   }, [searchParams]);
 

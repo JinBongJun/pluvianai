@@ -63,14 +63,40 @@ const apiClient = axios.create({
   },
 });
 
-// Add auth token to requests
-apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+// Paths that do not require authentication (endpoint path without /api/v1)
+const PUBLIC_PATHS = [/^\/auth\/login/, /^\/auth\/register/, /^\/auth\/forgot/, /^\/health/, /^\/trust-center\/policies/, /^\/trust-center\/compliance/];
+function isPublicPath(url: string): boolean {
+  if (!url) return false;
+  let path = url.split('?')[0] || '';
+  if (path.startsWith('http')) {
+    try {
+      path = new URL(url).pathname;
+    } catch {
+      path = url.split('?')[0] || '';
+    }
   }
-  return config;
-});
+  if (path.startsWith('/api/v1/')) path = path.slice(7);
+  else if (path.startsWith('/api/v1')) path = '/';
+  if (!path.startsWith('/')) path = '/' + path;
+  return PUBLIC_PATHS.some((re) => re.test(path));
+}
+
+// Add auth token to requests; redirect to login if no token on protected paths (avoids 401)
+apiClient.interceptors.request.use(
+  (config) => {
+    if (typeof window === 'undefined') return config;
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+      return config;
+    }
+    if (isPublicPath(config.url || '')) return config;
+    // No token and protected path: redirect to login and abort request
+    window.location.href = '/login?session_expired=1';
+    return Promise.reject(new Error('Not authenticated'));
+  },
+  (err) => Promise.reject(err)
+);
 
 // Handle token refresh on 401 and upgrade required errors
 apiClient.interceptors.response.use(
@@ -104,12 +130,18 @@ apiClient.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${access_token}`;
           return apiClient(originalRequest);
         } catch (refreshError) {
-          // Refresh failed, redirect to login
+          // Refresh failed, redirect to login with session_expired so login page can show message
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
-          window.location.href = '/login';
+          window.location.href = '/login?session_expired=1';
           return Promise.reject(refreshError);
         }
+      }
+      // No refresh token: redirect to login
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        window.location.href = '/login?session_expired=1';
       }
     }
 
@@ -119,6 +151,17 @@ apiClient.interceptors.response.use(
       const errorData = error.response?.data;
       if (errorData?.error?.details) {
         error.upgradeInfo = errorData.error.details;
+      }
+    }
+
+    // 404 "Not Found" (route missing): log URL to help debug wrong API path or base URL
+    if (error.response?.status === 404) {
+      const msg = error.response?.data?.error?.message;
+      if (msg === 'Not Found' && process.env.NODE_ENV === 'development') {
+        logWarn('[API] 404 Not Found – check route and NEXT_PUBLIC_API_URL', {
+          url: originalRequest?.url,
+          baseURL: originalRequest?.baseURL,
+        });
       }
     }
 

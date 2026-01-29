@@ -170,9 +170,13 @@ export default function APICallsListPage() {
           Sentry.captureException(error as Error, { extra: { projectId } });
         });
       }
-      toast.showToast(error.response?.data?.detail || 'Failed to load API calls', 'error');
+      const errMsg = error.response?.data?.error?.message ?? error.response?.data?.detail ?? 'Failed to load API calls';
+      toast.showToast(typeof errMsg === 'string' ? errMsg : 'Failed to load API calls', 'error');
       if (error.response?.status === 401) {
         router.push('/login');
+      } else if (error.response?.status === 404 && (errMsg === 'Project not found' || errMsg === 'Not Found')) {
+        if (orgId) router.push(`/organizations/${orgId}/projects`);
+        else router.push('/organizations');
       }
       // Set empty arrays on error
       setApiCalls([]);
