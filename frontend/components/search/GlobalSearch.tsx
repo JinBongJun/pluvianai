@@ -1,10 +1,22 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { Search, X, Command, Folder, Activity, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import { Search, X, Command, Folder, Activity, AlertTriangle, BarChart3, DollarSign, Gauge, Bell, Settings, LayoutDashboard } from 'lucide-react';
 import { projectsAPI, apiCallsAPI, driftAPI, alertsAPI } from '@/lib/api';
 import { clsx } from 'clsx';
+
+/** Quick navigation items shown when search query is empty or short */
+const QUICK_NAV_LABELS: { id: string; label: string; pathSuffix: string; icon: React.ElementType }[] = [
+  { id: 'projects', label: 'Projects', pathSuffix: '', icon: Folder },
+  { id: 'dashboard', label: 'Dashboard', pathSuffix: '', icon: LayoutDashboard },
+  { id: 'api-calls', label: 'API Calls', pathSuffix: '/api-calls', icon: Activity },
+  { id: 'drift', label: 'Drift', pathSuffix: '/drift', icon: BarChart3 },
+  { id: 'quality', label: 'Quality', pathSuffix: '/quality', icon: Gauge },
+  { id: 'cost', label: 'Cost', pathSuffix: '/cost', icon: DollarSign },
+  { id: 'alerts', label: 'Alerts', pathSuffix: '/alerts', icon: Bell },
+  { id: 'settings', label: 'Settings', pathSuffix: '/settings', icon: Settings },
+];
 
 interface SearchResult {
   type: 'project' | 'api_call' | 'drift' | 'alert';
@@ -22,6 +34,7 @@ interface GlobalSearchProps {
 
 export default function GlobalSearch({ isOpen: propIsOpen, onClose }: GlobalSearchProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -35,6 +48,32 @@ export default function GlobalSearch({ isOpen: propIsOpen, onClose }: GlobalSear
     if (onClose && !val) onClose();
     setInternalIsOpen(val);
   };
+
+  const { basePath, projectsHref } = useMemo(() => {
+    const orgMatch = pathname?.match(/^\/organizations\/(\d+)\/projects(?:\/(\d+))?/);
+    const dashMatch = pathname?.match(/^\/dashboard\/(\d+)/);
+    if (orgMatch) {
+      const [, orgId, projectId] = orgMatch;
+      const projectsHref = `/organizations/${orgId}/projects`;
+      const basePath = projectId ? `/organizations/${orgId}/projects/${projectId}` : null;
+      return { basePath, projectsHref };
+    }
+    if (dashMatch) {
+      const [, projectId] = dashMatch;
+      return { basePath: `/dashboard/${projectId}`, projectsHref: '/organizations' };
+    }
+    return { basePath: null, projectsHref: '/organizations' };
+  }, [pathname]);
+
+  const quickNavItems = useMemo(() => {
+    return QUICK_NAV_LABELS.map((item) => {
+      let href = projectsHref;
+      if (item.id === 'projects') href = projectsHref;
+      else if (item.id === 'dashboard') href = basePath || projectsHref;
+      else href = basePath ? `${basePath}${item.pathSuffix}` : projectsHref;
+      return { ...item, href };
+    });
+  }, [basePath, projectsHref]);
 
   useEffect(() => {
     const handleOpenSearch = () => {
@@ -150,6 +189,13 @@ export default function GlobalSearch({ isOpen: propIsOpen, onClose }: GlobalSear
     return () => clearTimeout(timeout);
   }, [query]);
 
+  const showQuickNav = query.length < 2;
+  const quickNavOrResultsLength = showQuickNav ? quickNavItems.length : results.length;
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [showQuickNav, query]);
+
   useEffect(() => {
     if (isOpen) {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -158,20 +204,27 @@ export default function GlobalSearch({ isOpen: propIsOpen, onClose }: GlobalSear
           setQuery('');
         } else if (e.key === 'ArrowDown') {
           e.preventDefault();
-          setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
+          setSelectedIndex((prev) => Math.min(prev + 1, Math.max(0, quickNavOrResultsLength - 1)));
         } else if (e.key === 'ArrowUp') {
           e.preventDefault();
           setSelectedIndex((prev) => Math.max(prev - 1, 0));
-        } else if (e.key === 'Enter' && results[selectedIndex]) {
-          e.preventDefault();
-          handleResultClick(results[selectedIndex]);
+        } else if (e.key === 'Enter') {
+          if (showQuickNav && quickNavItems[selectedIndex]) {
+            e.preventDefault();
+            router.push(quickNavItems[selectedIndex].href);
+            setIsOpen(false);
+            setQuery('');
+          } else if (!showQuickNav && results[selectedIndex]) {
+            e.preventDefault();
+            handleResultClick(results[selectedIndex]);
+          }
         }
       };
 
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
     }
-  }, [isOpen, results, selectedIndex]);
+  }, [isOpen, results, selectedIndex, showQuickNav, quickNavItems, quickNavOrResultsLength]);
 
   const handleResultClick = async (result: SearchResult) => {
     try {
@@ -259,7 +312,7 @@ export default function GlobalSearch({ isOpen: propIsOpen, onClose }: GlobalSear
               setQuery(e.target.value);
               setSelectedIndex(0);
             }}
-            placeholder="Search projects, API calls, drift detections..."
+            placeholder="Find..."
             className="flex-1 bg-transparent outline-none text-ag-text placeholder-ag-muted"
           />
           <div className="flex items-center gap-2 text-xs text-ag-muted">
@@ -268,18 +321,43 @@ export default function GlobalSearch({ isOpen: propIsOpen, onClose }: GlobalSear
           </div>
         </div>
 
-        {/* Results */}
+        {/* Quick nav (when query empty/short) or search results */}
         <div className="max-h-96 overflow-y-auto">
-          {loading ? (
-            <div className="p-8 text-center text-ag-muted">Searching...</div>
-          ) : query.length < 2 ? (
-            <div className="p-8 text-center text-ag-muted">
-              <Search className="h-12 w-12 text-white/10 mx-auto mb-2" />
-              <p>Type at least 2 characters to search</p>
-              <div className="mt-4 text-xs text-ag-muted/60 space-y-1">
-                <div>Search across projects, API calls, and drift detections</div>
+          {showQuickNav ? (
+            <div className="py-2">
+              <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-ag-muted">
+                Quick navigation
+              </div>
+              <div className="divide-y divide-white/5">
+                {quickNavItems.map((item, index) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        router.push(item.href);
+                        setIsOpen(false);
+                        setQuery('');
+                      }}
+                      className={clsx(
+                        'w-full flex items-center gap-3 p-3 px-4 text-left transition-colors',
+                        index === selectedIndex ? 'bg-white/10' : 'hover:bg-white/5'
+                      )}
+                    >
+                      <div className="text-ag-muted">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <span className="font-medium text-ag-text">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="px-4 py-3 mt-2 border-t border-white/5 text-xs text-ag-muted">
+                Type to search projects, API calls, and drift detections
               </div>
             </div>
+          ) : loading ? (
+            <div className="p-8 text-center text-ag-muted">Searching...</div>
           ) : results.length === 0 ? (
             <div className="p-8 text-center text-ag-muted">
               <p>No results found</p>
@@ -308,7 +386,7 @@ export default function GlobalSearch({ isOpen: propIsOpen, onClose }: GlobalSear
         </div>
 
         {/* Footer */}
-        {results.length > 0 && (
+        {(showQuickNav || results.length > 0) && (
           <div className="p-3 border-t border-white/10 text-xs text-ag-muted text-center">
             Use arrow keys to navigate, Enter to select
           </div>

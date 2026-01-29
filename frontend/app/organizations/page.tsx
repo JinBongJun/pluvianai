@@ -1,9 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import TopHeader from '@/components/layout/TopHeader';
+import GlobalSearch from '@/components/search/GlobalSearch';
+import NotificationCenter from '@/components/notifications/NotificationCenter';
 import { organizationsAPI, OrganizationSummary } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/useDebounce';
 
@@ -17,6 +19,38 @@ export default function OrganizationsPage() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, 300);
+  const [showSearch, setShowSearch] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+  const [userName, setUserName] = useState('');
+  const [userPlan, setUserPlan] = useState('free');
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const { authAPI, subscriptionAPI } = await import('@/lib/api');
+        const [user, subscription] = await Promise.all([
+          authAPI.getCurrentUser(),
+          subscriptionAPI.getCurrent().catch(() => null)
+        ]);
+        setUserEmail(user.email || '');
+        setUserName(user.full_name || '');
+        if (subscription) {
+          setUserPlan(subscription.plan_type || 'free');
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to load user info:', error);
+        }
+      }
+    };
+    loadUser();
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    router.push('/login');
+  };
 
   const {
     data: orgs,
@@ -48,8 +82,19 @@ export default function OrganizationsPage() {
     <div className="min-h-screen bg-ag-bg text-ag-text">
       <TopHeader
         breadcrumb={[{ label: 'Organizations' }]}
-        showSearch={false}
+        showSearch
+        onSearchClick={() => setShowSearch(true)}
+        userEmail={userEmail}
+        userName={userName}
+        userPlan={userPlan}
+        onLogout={handleLogout}
+        rightContent={
+          <div className="flex items-center gap-2">
+            <NotificationCenter />
+          </div>
+        }
       />
+      <GlobalSearch isOpen={showSearch} onClose={() => setShowSearch(false)} />
 
       <main className="px-8 py-10 max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-8">
