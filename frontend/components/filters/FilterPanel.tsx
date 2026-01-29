@@ -1,28 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Filter } from 'lucide-react';
+import { X, Filter, Search } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import DateRangePicker from '@/components/ui/DateRangePicker';
 import { clsx } from 'clsx';
-
-// Custom debounce hook
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
 
 export interface FilterState {
   dateFrom?: string;
@@ -54,24 +37,9 @@ export default function FilterPanel({
 }: FilterPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   
-  // Local search input state for debouncing
+  // Local search input state - only apply on Enter key or button click
   const [searchInput, setSearchInput] = useState(filters.search || '');
-  const debouncedSearch = useDebounce(searchInput, 500); // 500ms debounce
-  const isInitialMount = useRef(true);
-
-  // Sync local search with debounced value
-  useEffect(() => {
-    // Skip initial mount to prevent unnecessary API call
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-    
-    // Only update if value actually changed
-    if (debouncedSearch !== filters.search) {
-      onFiltersChange({ ...filters, search: debouncedSearch || undefined });
-    }
-  }, [debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Sync searchInput when filters.search changes externally (e.g., reset)
   useEffect(() => {
@@ -81,6 +49,22 @@ export default function FilterPanel({
       setSearchInput('');
     }
   }, [filters.search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply search - called on Enter key or button click
+  const applySearch = useCallback(() => {
+    const trimmedSearch = searchInput.trim();
+    if (trimmedSearch !== (filters.search || '')) {
+      onFiltersChange({ ...filters, search: trimmedSearch || undefined });
+    }
+  }, [searchInput, filters, onFiltersChange]);
+
+  // Handle Enter key press
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applySearch();
+    }
+  };
 
   const updateFilter = (key: keyof FilterState, value: any) => {
     onFiltersChange({ ...filters, [key]: value });
@@ -220,16 +204,28 @@ export default function FilterPanel({
               <label className="block text-sm font-medium text-white mb-1">
                 Search
               </label>
-              <Input
-                type="text"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search in prompts and responses..."
-                className="bg-white/5 border-white/10 text-white placeholder:text-slate-500"
-              />
-              {searchInput && searchInput !== debouncedSearch && (
-                <p className="text-xs text-slate-400 mt-1">Searching...</p>
-              )}
+              <div className="flex gap-2">
+                <Input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Search in prompts and responses..."
+                  className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-slate-500"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={applySearch}
+                  className="px-3 shrink-0"
+                  title="Search (Enter)"
+                >
+                  <Search className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">Press Enter to search</p>
             </div>
           </div>
         )}

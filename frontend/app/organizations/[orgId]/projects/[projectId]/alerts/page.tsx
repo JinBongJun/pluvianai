@@ -313,26 +313,15 @@ export default function AlertsPage() {
         {/* Tabs */}
         <ProjectTabs projectId={projectId} orgId={orgId} />
 
-        {/* Actions */}
-        <div className="flex items-center justify-end mb-6">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadAlerts}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
-        </div>
-
-        {/* Date Range Selector */}
-        <div className="mb-6">
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
-        </div>
-
         {/* Filters */}
-        <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mb-6">
+          {/* Date Range */}
+          <div className="mb-4">
+            <DateRangePicker value={dateRange} onChange={setDateRange} />
+          </div>
+          
+          {/* Filter dropdowns */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-white mb-2">Alert Type</label>
             <Select
@@ -387,6 +376,7 @@ export default function AlertsPage() {
               ]}
               className="w-full"
             />
+          </div>
           </div>
         </div>
 
