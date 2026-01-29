@@ -167,7 +167,7 @@ export default function NotificationCenter() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 bg-ag-surface rounded-lg shadow-2xl border border-white/10 z-50 max-h-[600px] flex flex-col overflow-hidden animate-fade-in">
+        <div className="absolute right-0 mt-2 w-96 rounded-lg shadow-2xl border border-white/10 z-50 max-h-[600px] flex flex-col overflow-hidden animate-fade-in" style={{ backgroundColor: 'rgb(var(--ag-surface))' }}>
           <div className="p-4 border-b border-white/10 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-ag-text">Notifications</h3>
             <button

@@ -48,7 +48,7 @@ export default function ProfileMenu({ userEmail, userName, userPlan = 'free', on
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-56 rounded-lg border border-white/10 bg-ag-surface shadow-2xl z-50 overflow-hidden animate-fade-in">
+        <div className="absolute right-0 mt-2 w-56 rounded-lg border border-white/10 shadow-2xl z-50 overflow-hidden animate-fade-in" style={{ backgroundColor: 'rgb(var(--ag-surface))' }}>
           <div className="p-4 border-b border-white/10">
             <p className="text-sm font-semibold text-ag-text truncate">{userName || 'User'}</p>
             <p className="text-xs text-ag-muted truncate">{userEmail}</p>
