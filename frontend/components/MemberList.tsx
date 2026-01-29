@@ -230,9 +230,9 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
                           className="text-xs bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white focus:ring-ag-accent focus:border-ag-accent transition-colors"
                           title="Change role"
                         >
-                          <option value="admin" className="bg-ag-surface">Admin</option>
-                          <option value="member" className="bg-ag-surface">Member</option>
-                          <option value="viewer" className="bg-ag-surface">Viewer</option>
+                          <option value="admin" className="bg-[#1e293b] text-white">Admin</option>
+                          <option value="member" className="bg-[#1e293b] text-white">Member</option>
+                          <option value="viewer" className="bg-[#1e293b] text-white">Viewer</option>
                         </select>
                         <Button
                           variant="ghost"

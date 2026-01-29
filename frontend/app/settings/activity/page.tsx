@@ -169,11 +169,11 @@ export default function ActivityLogPage() {
                       <select
                         value={filters.project_id || ''}
                         onChange={(e) => setFilters({ ...filters, project_id: e.target.value || undefined })}
-                        className="w-full bg-white/5 border border-white/10 rounded-md text-white focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
+                        className="w-full bg-[#1e293b] border border-white/10 rounded-md text-white focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
                       >
-                        <option value="" className="bg-ag-surface">All projects</option>
+                        <option value="" className="bg-[#1e293b] text-white">All projects</option>
                         {projects.map((project) => (
-                          <option key={project.id} value={project.id} className="bg-ag-surface">
+                          <option key={project.id} value={project.id} className="bg-[#1e293b] text-white">
                             {project.name}
                           </option>
                         ))}
@@ -189,15 +189,15 @@ export default function ActivityLogPage() {
                     <select
                       value={filters.activity_type || ''}
                       onChange={(e) => setFilters({ ...filters, activity_type: e.target.value || undefined })}
-                      className="w-full bg-white/5 border border-white/10 rounded-md text-white focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
+                      className="w-full bg-[#1e293b] border border-white/10 rounded-md text-white focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
                     >
-                      <option value="" className="bg-ag-surface">All types</option>
-                      <option value="project_create" className="bg-ag-surface">Project Created</option>
-                      <option value="project_update" className="bg-ag-surface">Project Updated</option>
-                      <option value="project_delete" className="bg-ag-surface">Project Deleted</option>
-                      <option value="member_add" className="bg-ag-surface">Member Added</option>
-                      <option value="member_remove" className="bg-ag-surface">Member Removed</option>
-                      <option value="settings_update" className="bg-ag-surface">Settings Updated</option>
+                      <option value="" className="bg-[#1e293b] text-white">All types</option>
+                      <option value="project_create" className="bg-[#1e293b] text-white">Project Created</option>
+                      <option value="project_update" className="bg-[#1e293b] text-white">Project Updated</option>
+                      <option value="project_delete" className="bg-[#1e293b] text-white">Project Deleted</option>
+                      <option value="member_add" className="bg-[#1e293b] text-white">Member Added</option>
+                      <option value="member_remove" className="bg-[#1e293b] text-white">Member Removed</option>
+                      <option value="settings_update" className="bg-[#1e293b] text-white">Settings Updated</option>
                     </select>
                   </div>
                 </div>

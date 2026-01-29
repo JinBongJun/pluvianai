@@ -208,7 +208,7 @@ export default function ShadowRoutingPage() {
             >
               <option value="">Select model...</option>
               {availableModels.map((model) => (
-                <option key={model} value={model} className="bg-ag-surface">
+                <option key={model} value={model} className="bg-[#1e293b] text-white">
                   {model}
                 </option>
               ))}

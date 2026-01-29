@@ -100,11 +100,11 @@ export default function FilterPanel({
                 <select
                   value={filters.provider || ''}
                   onChange={(e) => updateFilter('provider', e.target.value || undefined)}
-                  className="w-full bg-ag-surface border border-white/10 rounded-md text-ag-text focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
+                  className="w-full bg-[#1e293b] border border-white/10 rounded-md text-white focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
                 >
-                  <option value="" className="bg-ag-surface">All providers</option>
+                  <option value="" className="bg-[#1e293b] text-white">All providers</option>
                   {availableProviders.map((provider) => (
-                    <option key={provider} value={provider} className="bg-ag-surface">
+                    <option key={provider} value={provider} className="bg-[#1e293b] text-white">
                       {provider}
                     </option>
                   ))}
@@ -121,11 +121,11 @@ export default function FilterPanel({
                 <select
                   value={filters.model || ''}
                   onChange={(e) => updateFilter('model', e.target.value || undefined)}
-                  className="w-full bg-ag-surface border border-white/10 rounded-md text-ag-text focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
+                  className="w-full bg-[#1e293b] border border-white/10 rounded-md text-white focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
                 >
-                  <option value="" className="bg-ag-surface">All models</option>
+                  <option value="" className="bg-[#1e293b] text-white">All models</option>
                   {availableModels.map((model) => (
-                    <option key={model} value={model} className="bg-ag-surface">
+                    <option key={model} value={model} className="bg-[#1e293b] text-white">
                       {model}
                     </option>
                   ))}
@@ -141,11 +141,11 @@ export default function FilterPanel({
               <select
                 value={filters.status || 'all'}
                 onChange={(e) => updateFilter('status', e.target.value as any)}
-                className="w-full bg-ag-surface border border-white/10 rounded-md text-ag-text focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
+                className="w-full bg-[#1e293b] border border-white/10 rounded-md text-white focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
               >
-                <option value="all" className="bg-ag-surface">All statuses</option>
-                <option value="success" className="bg-ag-surface">Success</option>
-                <option value="error" className="bg-ag-surface">Error</option>
+                <option value="all" className="bg-[#1e293b] text-white">All statuses</option>
+                <option value="success" className="bg-[#1e293b] text-white">Success</option>
+                <option value="error" className="bg-[#1e293b] text-white">Error</option>
               </select>
             </div>
 
@@ -158,11 +158,11 @@ export default function FilterPanel({
                 <select
                   value={filters.agentName || ''}
                   onChange={(e) => updateFilter('agentName', e.target.value || undefined)}
-                  className="w-full bg-ag-surface border border-white/10 rounded-md text-ag-text focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
+                  className="w-full bg-[#1e293b] border border-white/10 rounded-md text-white focus:ring-ag-accent focus:border-ag-accent px-3 py-2"
                 >
-                  <option value="" className="bg-ag-surface">All agents</option>
+                  <option value="" className="bg-[#1e293b] text-white">All agents</option>
                   {availableAgents.map((agent) => (
-                    <option key={agent} value={agent} className="bg-ag-surface">
+                    <option key={agent} value={agent} className="bg-[#1e293b] text-white">
                       {agent}
                     </option>
                   ))}
