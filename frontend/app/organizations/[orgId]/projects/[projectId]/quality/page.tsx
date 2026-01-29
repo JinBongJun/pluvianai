@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import OrgLayout from '@/components/layout/OrgLayout';
 import ProjectTabs from '@/components/ProjectTabs';
 import QualityChart from '@/components/QualityChart';
 import Button from '@/components/ui/Button';
 import { qualityAPI } from '@/lib/api';
+import { useAsyncData } from '@/hooks/useAsyncData';
 import { ArrowLeft, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 interface QualityData {
@@ -22,29 +23,29 @@ export default function QualityPage() {
   const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
   const projectId = Number(Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId);
   
-  const [data, setData] = useState<QualityData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [days, setDays] = useState<7 | 30 | 90>(30);
 
+  // Auth check
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     if (!token) {
       router.push('/login');
-      return;
     }
-    loadData();
-  }, [router, projectId, days]);
+  }, [router]);
 
-  const loadData = async () => {
-    try {
-      const result = await qualityAPI.getStats(projectId, days);
-      setData(result);
-    } catch (error) {
-      console.error('Failed to load quality data:', error);
-    } finally {
-      setLoading(false);
+  // Use custom hook for data fetching - replaces manual useState + useEffect pattern
+  const fetcher = useCallback(
+    () => qualityAPI.getStats(projectId, days),
+    [projectId, days]
+  );
+  
+  const { data, loading, error, refetch } = useAsyncData<QualityData>(
+    fetcher,
+    { 
+      deps: [projectId, days],
+      keepPreviousData: true,
     }
-  };
+  );
 
   if (!projectId || isNaN(projectId)) {
     return null;

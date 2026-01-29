@@ -38,6 +38,30 @@ const logWarn = (message: string, context?: Record<string, unknown>) => {
     console.warn(message, context);
   }
 };
+
+/**
+ * Unwrap API response data - handles both {data: T} wrapper and direct T response
+ * This standardizes the pattern: response.data?.data || response.data
+ */
+const unwrapResponse = <T>(response: { data: T | { data: T } }): T => {
+  const data = response.data;
+  if (data && typeof data === 'object' && 'data' in data) {
+    return (data as { data: T }).data;
+  }
+  return data as T;
+};
+
+/**
+ * Unwrap API response and ensure array - returns empty array if not an array
+ */
+const unwrapArrayResponse = <T>(response: { data: T[] | { data: T[] } | any }): T[] => {
+  const data = unwrapResponse(response);
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === 'object' && 'items' in data) {
+    return (data as { items: T[] }).items || [];
+  }
+  return [];
+};
 import {
   ModelComparisonSchema,
   CostAnalysisSchema,
@@ -794,12 +818,12 @@ export const shadowRoutingAPI = {
 export const billingAPI = {
   getUsage: async () => {
     const response = await apiClient.get('/billing/usage');
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getLimits: async () => {
     const response = await apiClient.get('/billing/limits');
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   createCheckoutSession: async (planType: string, successUrl: string, cancelUrl: string) => {
@@ -808,7 +832,7 @@ export const billingAPI = {
       success_url: successUrl,
       cancel_url: cancelUrl,
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1208,7 +1232,7 @@ export const onboardingAPI = {
     privacy_policy_accepted: boolean;
   }) => {
     const response = await apiClient.post('/onboarding/accept-agreement', agreementData);
-    return response.data.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1219,21 +1243,21 @@ export const mappingAPI = {
     const response = await apiClient.get(`/projects/${projectId}/mapping`, {
       params: { days },
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getDependencyGraph: async (projectId: number, days: number = 7) => {
     const response = await apiClient.get(`/projects/${projectId}/mapping/graph`, {
       params: { days },
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getNodeDetails: async (projectId: number, nodeId: string, days: number = 7) => {
     const response = await apiClient.get(`/projects/${projectId}/mapping/nodes/${nodeId}`, {
       params: { days },
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   filterMapping: async (projectId: number, filters: {
@@ -1245,14 +1269,14 @@ export const mappingAPI = {
     const response = await apiClient.post(`/projects/${projectId}/mapping/filter`, filters, {
       params: { days },
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getSubgraph: async (projectId: number, focusNodeId: string, depth: number = 2, days: number = 7) => {
     const response = await apiClient.get(`/projects/${projectId}/mapping/subgraph`, {
       params: { focus_node_id: focusNodeId, depth, days },
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1262,17 +1286,17 @@ export const problemAnalysisAPI = {
     const response = await apiClient.post(`/projects/${projectId}/problem-analysis`, null, {
       params: { days, threshold_score: thresholdScore },
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getAnalysis: async (projectId: number, analysisId: string) => {
     const response = await apiClient.get(`/projects/${projectId}/problem-analysis/${analysisId}`);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getAnalysisMapping: async (projectId: number, analysisId: string) => {
     const response = await apiClient.get(`/projects/${projectId}/problem-analysis/${analysisId}/mapping`);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1281,17 +1305,17 @@ export const dependencyAnalysisAPI = {
     const response = await apiClient.post(`/projects/${projectId}/dependency-analysis`, null, {
       params: { days },
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getAnalysis: async (projectId: number, analysisId: string) => {
     const response = await apiClient.get(`/projects/${projectId}/dependency-analysis/${analysisId}`);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getAnalysisMapping: async (projectId: number, analysisId: string) => {
     const response = await apiClient.get(`/projects/${projectId}/dependency-analysis/${analysisId}/mapping`);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1300,25 +1324,24 @@ export const performanceAnalysisAPI = {
     const response = await apiClient.post(`/projects/${projectId}/performance-analysis`, null, {
       params: { days, percentile_threshold: percentileThreshold },
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getAnalysis: async (projectId: number, analysisId: string) => {
     const response = await apiClient.get(`/projects/${projectId}/performance-analysis/${analysisId}`);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getAnalysisMapping: async (projectId: number, analysisId: string) => {
     const response = await apiClient.get(`/projects/${projectId}/performance-analysis/${analysisId}/mapping`);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
 export const modelValidationAPI = {
   validateModel: async (projectId: number, data: { new_model: string; provider: string; rubric_id?: number }) => {
     const response = await apiClient.post(`/projects/${projectId}/validate-model`, data);
-    // Handle standard response format {data: {...}, meta: {...}}
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1330,7 +1353,7 @@ export const sharedResultsAPI = {
     expires_in_days?: number;
   }) => {
     const response = await apiClient.post(`/projects/${projectId}/results/${resultId}/share`, data);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   share: async (projectId: number, data: {
@@ -1346,7 +1369,7 @@ export const sharedResultsAPI = {
         result_data: data.result_data,
         expires_in_days: data.expires_in_days,
       });
-      return response.data?.data || response.data;
+      return unwrapResponse(response);
     }
     
     // Otherwise, create a temporary result ID (0) or use a different endpoint
@@ -1356,12 +1379,12 @@ export const sharedResultsAPI = {
       result_data: data.result_data,
       expires_in_days: data.expires_in_days,
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getShared: async (token: string) => {
     const response = await apiClient.get(`/shared/${token}`);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1369,7 +1392,7 @@ export const sharedResultsAPI = {
 export const firewallAPI = {
   getRules: async (projectId: number) => {
     const response = await apiClient.get(`/projects/${projectId}/firewall/rules`);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   createRule: async (projectId: number, data: {
@@ -1384,7 +1407,7 @@ export const firewallAPI = {
     config?: any;
   }) => {
     const response = await apiClient.post(`/projects/${projectId}/firewall/rules`, data);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   updateRule: async (projectId: number, ruleId: number, data: {
@@ -1398,7 +1421,7 @@ export const firewallAPI = {
     config?: any;
   }) => {
     const response = await apiClient.put(`/projects/${projectId}/firewall/rules/${ruleId}`, data);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   deleteRule: async (projectId: number, ruleId: number) => {
@@ -1408,13 +1431,13 @@ export const firewallAPI = {
   /** Project-level panic (owner/admin). Use this for project settings. */
   togglePanicMode: async (projectId: number, enabled: boolean) => {
     const response = await apiClient.post(`/projects/${projectId}/panic`, { enabled });
-    return response.data?.data ?? response.data;
+    return unwrapResponse(response);
   },
 
   /** Project-level panic status (any project member can read; owner/admin can toggle). */
   getPanicModeStatus: async (projectId: number) => {
     const response = await apiClient.get(`/projects/${projectId}/panic`);
-    return response.data?.data ?? response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1429,14 +1452,14 @@ export const judgeFeedbackAPI = {
     metadata?: any;
   }) => {
     const response = await apiClient.post(`/projects/${projectId}/judge/feedback`, data);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getFeedback: async (projectId: number, evaluationId?: number) => {
     const params: any = {};
     if (evaluationId) params.evaluation_id = evaluationId;
     const response = await apiClient.get(`/projects/${projectId}/judge/feedback`, { params });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   updateFeedback: async (projectId: number, feedbackId: number, data: {
@@ -1446,14 +1469,14 @@ export const judgeFeedbackAPI = {
     metadata?: any;
   }) => {
     const response = await apiClient.put(`/projects/${projectId}/judge/feedback/${feedbackId}`, data);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getReliabilityMetrics: async (projectId: number, days: number = 30) => {
     const response = await apiClient.get(`/projects/${projectId}/judge/reliability`, {
       params: { days },
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   runMetaValidation: async (projectId: number, evaluationId: number, primaryJudge: string, secondaryJudge: string) => {
@@ -1463,7 +1486,7 @@ export const judgeFeedbackAPI = {
         secondary_judge_model: secondaryJudge,
       },
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1471,12 +1494,12 @@ export const judgeFeedbackAPI = {
 export const selfHostedAPI = {
   getStatus: async () => {
     const response = await apiClient.get('/self-hosted/status');
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   verifyLicense: async (licenseKey: string) => {
     const response = await apiClient.post('/self-hosted/license', { license_key: licenseKey });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1486,14 +1509,14 @@ export const dashboardAPI = {
     const response = await apiClient.get(`/projects/${projectId}/dashboard/metrics`, {
       params: { period },
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getTrends: async (projectId: number, period: '1d' | '7d' | '30d' | '90d' = '7d', groupBy: 'hour' | 'day' | 'week' = 'hour') => {
     const response = await apiClient.get(`/projects/${projectId}/dashboard/trends`, {
       params: { period, group_by: groupBy },
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1501,17 +1524,17 @@ export const dashboardAPI = {
 export const notificationSettingsAPI = {
   getSettings: async (projectId: number) => {
     const response = await apiClient.get(`/projects/${projectId}/notifications/settings`);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   updateSettings: async (projectId: number, settings: any) => {
     const response = await apiClient.put(`/projects/${projectId}/notifications/settings`, settings);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   sendTest: async (projectId: number, channel: 'email' | 'slack') => {
     const response = await apiClient.post(`/projects/${projectId}/notifications/test`, { channel });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1527,17 +1550,17 @@ export const ruleMarketAPI = {
     offset?: number;
   }) => {
     const response = await apiClient.get('/rule-market', { params });
-    return Array.isArray(response.data) ? response.data : (response.data?.data || []);
+    return unwrapArrayResponse(response);
   },
 
   getFeatured: async (limit: number = 10) => {
     const response = await apiClient.get('/rule-market/featured', { params: { limit } });
-    return Array.isArray(response.data) ? response.data : (response.data?.data || []);
+    return unwrapArrayResponse(response);
   },
 
   get: async (ruleId: number) => {
     const response = await apiClient.get(`/rule-market/${ruleId}`);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   create: async (rule: {
@@ -1550,17 +1573,17 @@ export const ruleMarketAPI = {
     tags?: string[];
   }) => {
     const response = await apiClient.post('/rule-market', rule);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   download: async (ruleId: number, projectId: number) => {
     const response = await apiClient.post(`/rule-market/${ruleId}/download`, { project_id: projectId });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   rate: async (ruleId: number, rating: number) => {
     const response = await apiClient.post(`/rule-market/${ruleId}/rate`, { rating });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1569,7 +1592,7 @@ export const insightsAPI = {
   getDaily: async (projectId: number, date?: string) => {
     const params = date ? { project_id: projectId, date } : { project_id: projectId };
     const response = await apiClient.get('/insights/daily', { params });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1579,32 +1602,32 @@ export const adminAPI = {
     const response = await apiClient.post('/admin/generate-sample-data', null, {
       params: { project_id: projectId },
     });
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   getCurrentUser: async () => {
     const response = await apiClient.get('/auth/me');
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
   
   getStats: async () => {
     const response = await apiClient.get('/admin/stats');
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
   
   listUsers: async (params?: { limit?: number; offset?: number; search?: string }) => {
     const response = await apiClient.get('/admin/users', { params });
-    return response.data?.data || response.data || response;
+    return unwrapResponse(response);
   },
   
   startImpersonation: async (userId: number, data: { reason?: string; duration_minutes?: number }) => {
     const response = await apiClient.post(`/admin/users/${userId}/impersonate`, data);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
   
   endImpersonation: async (sessionId: string) => {
     const response = await apiClient.delete(`/admin/impersonate/${sessionId}`);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1612,7 +1635,7 @@ export const adminAPI = {
 export const healthAPI = {
   getHealth: async () => {
     const response = await apiClient.get('/health');
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
@@ -1628,17 +1651,17 @@ export const publicBenchmarksAPI = {
     offset?: number;
   }) => {
     const response = await apiClient.get('/public/benchmarks', { params });
-    return Array.isArray(response.data) ? response.data : (response.data?.data || []);
+    return unwrapArrayResponse(response);
   },
 
   getFeatured: async (limit: number = 10) => {
     const response = await apiClient.get('/public/benchmarks/featured', { params: { limit } });
-    return Array.isArray(response.data) ? response.data : (response.data?.data || []);
+    return unwrapArrayResponse(response);
   },
 
   get: async (benchmarkId: number) => {
     const response = await apiClient.get(`/public/benchmarks/${benchmarkId}`);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 
   publish: async (benchmark: {
@@ -1651,7 +1674,7 @@ export const publicBenchmarksAPI = {
     tags?: string[];
   }) => {
     const response = await apiClient.post('/benchmarks/publish', benchmark);
-    return response.data?.data || response.data;
+    return unwrapResponse(response);
   },
 };
 
