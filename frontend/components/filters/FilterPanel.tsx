@@ -1,11 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Filter } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import DateRangePicker from '@/components/ui/DateRangePicker';
 import { clsx } from 'clsx';
+
+// Custom debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 export interface FilterState {
   dateFrom?: string;
@@ -36,6 +53,34 @@ export default function FilterPanel({
   availableAgents = [],
 }: FilterPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Local search input state for debouncing
+  const [searchInput, setSearchInput] = useState(filters.search || '');
+  const debouncedSearch = useDebounce(searchInput, 500); // 500ms debounce
+  const isInitialMount = useRef(true);
+
+  // Sync local search with debounced value
+  useEffect(() => {
+    // Skip initial mount to prevent unnecessary API call
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    
+    // Only update if value actually changed
+    if (debouncedSearch !== filters.search) {
+      onFiltersChange({ ...filters, search: debouncedSearch || undefined });
+    }
+  }, [debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync searchInput when filters.search changes externally (e.g., reset)
+  useEffect(() => {
+    if (filters.search !== searchInput && filters.search !== undefined) {
+      setSearchInput(filters.search);
+    } else if (filters.search === undefined && searchInput !== '') {
+      setSearchInput('');
+    }
+  }, [filters.search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateFilter = (key: keyof FilterState, value: any) => {
     onFiltersChange({ ...filters, [key]: value });
@@ -177,11 +222,14 @@ export default function FilterPanel({
               </label>
               <Input
                 type="text"
-                value={filters.search || ''}
-                onChange={(e) => updateFilter('search', e.target.value || undefined)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search in prompts and responses..."
                 className="bg-white/5 border-white/10 text-white placeholder:text-slate-500"
               />
+              {searchInput && searchInput !== debouncedSearch && (
+                <p className="text-xs text-slate-400 mt-1">Searching...</p>
+              )}
             </div>
           </div>
         )}

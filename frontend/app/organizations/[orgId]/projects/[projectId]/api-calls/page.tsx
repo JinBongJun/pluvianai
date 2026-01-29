@@ -321,7 +321,19 @@ export default function APICallsListPage() {
 
         {/* Table */}
         <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm shadow-2xl">
-          <div className="overflow-x-auto">
+          {/* Loading indicator - shows on top of table without hiding content */}
+          {loading && apiCalls.length > 0 && (
+            <div className="absolute top-0 left-0 right-0 z-10">
+              <div className="h-1 bg-ag-accent/20 overflow-hidden">
+                <div className="h-full w-1/3 bg-ag-accent animate-[slide_1s_ease-in-out_infinite]" 
+                  style={{ animation: 'slide 1s ease-in-out infinite' }} />
+              </div>
+            </div>
+          )}
+          <div className={clsx(
+            "overflow-x-auto transition-opacity duration-200",
+            loading && apiCalls.length > 0 && "opacity-60"
+          )}>
             <table className="min-w-full divide-y divide-white/10">
               <thead className="bg-white/5">
                 <tr>
@@ -408,14 +420,24 @@ export default function APICallsListPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
-                {apiCalls.length === 0 ? (
+                {/* Initial loading state - show skeleton rows */}
+                {loading && apiCalls.length === 0 ? (
+                  [...Array(5)].map((_, i) => (
+                    <tr key={`skeleton-${i}`} className="animate-pulse">
+                      <td className="px-6 py-4"><div className="h-4 bg-white/10 rounded w-24"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-white/10 rounded w-16"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-white/10 rounded w-20"></div></td>
+                      <td className="px-6 py-4"><div className="h-6 bg-white/10 rounded w-12"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-white/10 rounded w-16"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-white/10 rounded w-14"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-white/10 rounded w-20"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-white/10 rounded w-8 ml-auto"></div></td>
+                    </tr>
+                  ))
+                ) : apiCalls.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
-                      {loading ? (
-                        <div className="flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-ag-accent border-t-transparent"></div>
-                        </div>
-                      ) : filters.search || filters.dateFrom || filters.dateTo || filters.status || filters.provider || filters.model || filters.agentName ? (
+                      {filters.search || filters.dateFrom || filters.dateTo || filters.status || filters.provider || filters.model || filters.agentName ? (
                         <div>
                           <p>No API calls found matching the current filters.</p>
                           <p className="text-sm mt-2 text-slate-500">
