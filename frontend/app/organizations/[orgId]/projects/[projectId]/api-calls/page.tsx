@@ -10,7 +10,7 @@ import Button from '@/components/ui/Button';
 import { apiCallsAPI, organizationsAPI } from '@/lib/api';
 import { toFixedSafe } from '@/lib/format';
 import { useToast } from '@/components/ToastContainer';
-import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, RefreshCw } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, RefreshCw, Search, X } from 'lucide-react';
 import ExportButton from '@/components/export/ExportButton';
 import PulseIndicator from '@/components/streaming/PulseIndicator';
 import LiveStreamView from '@/components/streaming/LiveStreamView';
@@ -35,6 +35,7 @@ export default function APICallsListPage() {
   const [apiCalls, setApiCalls] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<FilterState>({});
+  const [searchInput, setSearchInput] = useState(''); // Local search input state
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
@@ -202,6 +203,30 @@ export default function APICallsListPage() {
     setCurrentPage(1); // Reset to first page when filters change
   };
 
+  // Apply search - called on Enter key or button click
+  const applySearch = () => {
+    const trimmedSearch = searchInput.trim();
+    if (trimmedSearch !== (filters.search || '')) {
+      setFilters({ ...filters, search: trimmedSearch || undefined });
+      setCurrentPage(1);
+    }
+  };
+
+  // Clear search
+  const clearSearch = () => {
+    setSearchInput('');
+    setFilters({ ...filters, search: undefined });
+    setCurrentPage(1);
+  };
+
+  // Handle Enter key press in search
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applySearch();
+    }
+  };
+
   const getStatusBadge = (statusCode: number | null) => {
     if (!statusCode) {
       return <Badge variant="default">Unknown</Badge>;
@@ -304,6 +329,45 @@ export default function APICallsListPage() {
           <LiveStreamView projectId={projectId} limit={20} linkToCalls={false} />
         </div>
 
+        {/* Search Bar - Always visible */}
+        <div className="mb-4">
+          <div className="flex gap-2">
+            <div className="relative flex-1 max-w-xl">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Search in prompts and responses... (Press Enter)"
+                className="w-full pl-10 pr-10 py-2.5 bg-[#1e293b] border border-white/10 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-ag-accent focus:border-ag-accent transition-colors"
+              />
+              {searchInput && (
+                <button
+                  onClick={clearSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                  title="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={applySearch}
+              className="px-4 shrink-0"
+            >
+              Search
+            </Button>
+          </div>
+          {filters.search && (
+            <p className="text-xs text-ag-accent mt-2">
+              Showing results for: "{filters.search}"
+            </p>
+          )}
+        </div>
+
         {/* Filters */}
         <div className="mb-6">
           <FilterPanel
@@ -311,6 +375,7 @@ export default function APICallsListPage() {
             onFiltersChange={handleFiltersChange}
             onReset={() => {
               setFilters({});
+              setSearchInput(''); // Also clear search input
               setCurrentPage(1);
             }}
             availableProviders={availableProviders}

@@ -1,11 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Filter, Search } from 'lucide-react';
-import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
+import { useState } from 'react';
+import { X, Filter } from 'lucide-react';
 import DateRangePicker from '@/components/ui/DateRangePicker';
-import { clsx } from 'clsx';
 
 export interface FilterState {
   dateFrom?: string;
@@ -36,42 +33,14 @@ export default function FilterPanel({
   availableAgents = [],
 }: FilterPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
-  
-  // Local search input state - only apply on Enter key or button click
-  const [searchInput, setSearchInput] = useState(filters.search || '');
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // Sync searchInput when filters.search changes externally (e.g., reset)
-  useEffect(() => {
-    if (filters.search !== searchInput && filters.search !== undefined) {
-      setSearchInput(filters.search);
-    } else if (filters.search === undefined && searchInput !== '') {
-      setSearchInput('');
-    }
-  }, [filters.search]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Apply search - called on Enter key or button click
-  const applySearch = useCallback(() => {
-    const trimmedSearch = searchInput.trim();
-    if (trimmedSearch !== (filters.search || '')) {
-      onFiltersChange({ ...filters, search: trimmedSearch || undefined });
-    }
-  }, [searchInput, filters, onFiltersChange]);
-
-  // Handle Enter key press
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      applySearch();
-    }
-  };
 
   const updateFilter = (key: keyof FilterState, value: any) => {
     onFiltersChange({ ...filters, [key]: value });
   };
 
-  const activeFiltersCount = Object.values(filters).filter(
-    (v) => v !== undefined && v !== '' && v !== 'all'
+  // Count active filters (excluding search - it's handled separately)
+  const activeFiltersCount = Object.entries(filters).filter(
+    ([key, v]) => key !== 'search' && v !== undefined && v !== '' && v !== 'all'
   ).length;
 
   return (
@@ -198,42 +167,15 @@ export default function FilterPanel({
                 </select>
               </div>
             )}
-
-            {/* Search */}
-            <div>
-              <label className="block text-sm font-medium text-white mb-1">
-                Search
-              </label>
-              <div className="flex gap-2">
-                <Input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Search in prompts and responses..."
-                  className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-slate-500"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={applySearch}
-                  className="px-3 shrink-0"
-                  title="Search (Enter)"
-                >
-                  <Search className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-slate-500 mt-1">Press Enter to search</p>
-            </div>
           </div>
         )}
 
-        {/* Active Filters */}
+        {/* Active Filters (excluding search) */}
         {activeFiltersCount > 0 && (
           <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-white/10">
             {Object.entries(filters).map(([key, value]) => {
+              // Skip search - it's displayed separately
+              if (key === 'search') return null;
               if (!value || value === '' || value === 'all') return null;
 
               return (
