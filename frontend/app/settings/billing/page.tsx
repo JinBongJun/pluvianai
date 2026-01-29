@@ -53,7 +53,7 @@ export default function BillingPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ag-accent"></div>
         </div>
       </DashboardLayout>
     );
@@ -63,17 +63,17 @@ export default function BillingPage() {
     <DashboardLayout>
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Billing & Subscription</h1>
-          <p className="text-gray-600 mt-1">Manage your subscription and usage</p>
+          <h1 className="text-3xl font-bold text-white">Billing & Subscription</h1>
+          <p className="text-ag-muted mt-1">Manage your subscription and usage</p>
         </div>
 
         {/* Current Plan */}
         {subscription && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Current Plan</h2>
-                <p className="text-gray-600 mt-1">
+                <h2 className="text-xl font-semibold text-white">Current Plan</h2>
+                <p className="text-ag-muted mt-1">
                   {subscription.plan_type.charAt(0).toUpperCase() + subscription.plan_type.slice(1)} - ${subscription.price_per_month}/month
                 </p>
               </div>
@@ -84,7 +84,7 @@ export default function BillingPage() {
               )}
             </div>
             {subscription.current_period_end && (
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-ag-muted">
                 Next billing date: {new Date(subscription.current_period_end).toLocaleDateString()}
               </p>
             )}
@@ -92,13 +92,13 @@ export default function BillingPage() {
         )}
 
         {/* Usage Dashboard */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
           <UsageDashboard />
         </div>
 
         {/* Plan Selector */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Available Plans</h2>
+        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
+          <h2 className="text-xl font-semibold text-white mb-6">Available Plans</h2>
           <PlanSelector 
             currentPlan={subscription?.plan_type}
             onSelectPlan={async (planType) => {

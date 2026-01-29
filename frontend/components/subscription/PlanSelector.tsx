@@ -143,27 +143,27 @@ export default function PlanSelector({ currentPlan, onSelectPlan }: PlanSelector
               <div className="border-t border-white/10 pt-3 space-y-2">
                 <div className="flex items-center gap-2 text-sm">
                   {getFeatureValue(plan.features, 'multi_model_comparison') ? (
-                    <Check className="h-4 w-4 text-green-600" />
+                    <Check className="h-4 w-4 text-green-400" />
                   ) : (
-                    <X className="h-4 w-4 text-gray-400" />
+                    <X className="h-4 w-4 text-slate-500" />
                   )}
-                  <span className="text-gray-700">Multi-model Comparison</span>
+                  <span className="text-ag-muted">Multi-model Comparison</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   {getFeatureValue(plan.features, 'agent_chain_profiler') ? (
-                    <Check className="h-4 w-4 text-green-600" />
+                    <Check className="h-4 w-4 text-green-400" />
                   ) : (
-                    <X className="h-4 w-4 text-gray-400" />
+                    <X className="h-4 w-4 text-slate-500" />
                   )}
-                  <span className="text-gray-700">Agent Chain Profiler</span>
+                  <span className="text-ag-muted">Agent Chain Profiler</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   {plan.features.alerts ? (
-                    <Check className="h-4 w-4 text-green-600" />
+                    <Check className="h-4 w-4 text-green-400" />
                   ) : (
-                    <X className="h-4 w-4 text-gray-400" />
+                    <X className="h-4 w-4 text-slate-500" />
                   )}
-                  <span className="text-gray-700">Alerts</span>
+                  <span className="text-ag-muted">Alerts</span>
                 </div>
               </div>
             </div>

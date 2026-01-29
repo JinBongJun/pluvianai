@@ -252,7 +252,7 @@ export default function WebhooksPage() {
         >
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-white mb-1">
                 Name
               </label>
               <Input
@@ -264,7 +264,7 @@ export default function WebhooksPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-white mb-1">
                 URL
               </label>
               <Input
@@ -276,7 +276,7 @@ export default function WebhooksPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-white mb-1">
                 Project (Optional)
               </label>
               <select
@@ -287,11 +287,11 @@ export default function WebhooksPage() {
                     project_id: e.target.value ? Number(e.target.value) : null,
                   })
                 }
-                className="w-full border-gray-600 bg-[#0A0F1C] text-white rounded-md focus:ring-ag-accent focus:border-ag-accent"
+                className="w-full px-3 py-2 bg-[#1e293b] border border-white/20 text-white rounded-md focus:ring-ag-accent focus:border-ag-accent"
               >
-                <option value="">All Projects</option>
+                <option value="" className="bg-[#1e293b] text-white">All Projects</option>
                 {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
+                  <option key={project.id} value={project.id} className="bg-[#1e293b] text-white">
                     {project.name}
                   </option>
                 ))}
@@ -299,22 +299,22 @@ export default function WebhooksPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-white mb-2">
                 Events
               </label>
               <div className="grid grid-cols-2 gap-2">
                 {availableEvents.map((event) => (
                   <label
                     key={event}
-                    className="flex items-center gap-2 p-2 border border-gray-700 rounded hover:bg-gray-800 cursor-pointer"
+                    className="flex items-center gap-2 p-2 border border-white/10 rounded hover:bg-white/5 cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={newWebhook.events.includes(event)}
                       onChange={() => toggleEvent(event)}
-                      className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-gray-600 rounded"
+                      className="h-4 w-4 text-ag-accent focus:ring-ag-accent border-white/20 rounded bg-[#1e293b]"
                     />
-                    <span className="text-sm text-gray-300 capitalize">
+                    <span className="text-sm text-white capitalize">
                       {event.replace('_', ' ')}
                     </span>
                   </label>
@@ -323,7 +323,7 @@ export default function WebhooksPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-white mb-1">
                 Secret (Optional)
               </label>
               <Input
@@ -332,7 +332,7 @@ export default function WebhooksPage() {
                 onChange={(e) => setNewWebhook({ ...newWebhook, secret: e.target.value })}
                 placeholder="Leave empty to auto-generate"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-ag-muted mt-1">
                 Used for webhook signature verification
               </p>
             </div>

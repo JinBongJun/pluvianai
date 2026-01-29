@@ -169,29 +169,28 @@ export default function APIKeysPage() {
             title="API Key Created"
           >
             <div className="space-y-4">
-              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-                <p className="text-sm text-yellow-800 font-medium mb-2">
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-4">
+                <p className="text-sm text-yellow-400 font-medium mb-2">
                   ⚠️ Important: Save this API key now
                 </p>
-                <p className="text-xs text-yellow-700">
+                <p className="text-xs text-yellow-300/80">
                   You won&apos;t be able to see this key again. Make sure to copy it and store it securely.
                 </p>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-white mb-1">
                   API Key Name
                 </label>
                 <Input
                   type="text"
                   value={newKey.name}
                   disabled
-                  className="bg-gray-50"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-white mb-1">
                   API Key
                 </label>
                 <div className="flex gap-2">
@@ -199,7 +198,7 @@ export default function APIKeysPage() {
                     type="text"
                     value={newKey.key}
                     readOnly
-                    className="bg-gray-50 font-mono text-sm"
+                    className="font-mono text-sm"
                   />
                   <Button
                     onClick={() => handleCopyKey(newKey.key, -1)}
@@ -354,11 +353,11 @@ export default function APIKeysPage() {
           title="Create API Key"
         >
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-ag-muted">
               Give your API key a descriptive name to help you identify it later.
             </p>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-white mb-1">
                 Key Name
               </label>
               <Input
