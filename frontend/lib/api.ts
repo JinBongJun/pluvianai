@@ -948,7 +948,9 @@ export const activityAPI = {
 export const notificationsAPI = {
   list: async (params?: any) => {
     const response = await apiClient.get('/notifications', { params });
-    return response.data;
+    // Ensure response is an array
+    const data = response.data;
+    return Array.isArray(data) ? data : (data?.data || []);
   },
 
   markRead: async (alertId: number) => {
@@ -961,7 +963,9 @@ export const notificationsAPI = {
 
   getUnreadCount: async () => {
     const response = await apiClient.get('/notifications/unread-count');
-    return response.data;
+    // Ensure response has count field
+    const data = response.data;
+    return { count: data?.count ?? 0 };
   },
 };
 

@@ -41,7 +41,9 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
   const loadMembers = async () => {
     try {
       const data = await projectMembersAPI.list(projectId);
-      setMembers(data);
+      // Ensure data is an array (handle wrapped responses like { data: [...] })
+      const membersList = Array.isArray(data) ? data : (data?.data || []);
+      setMembers(membersList);
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Failed to load members:', error);
@@ -50,6 +52,7 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
           Sentry.captureException(error as Error, { extra: { projectId } });
         });
       }
+      setMembers([]); // Set empty array on error to prevent map errors
     } finally {
       setLoading(false);
     }

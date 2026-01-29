@@ -76,7 +76,8 @@ export default function NotificationCenter() {
     setLoading(true);
     try {
       const data = await notificationsAPI.list({ limit: 20 });
-      setNotifications(data);
+      // Ensure data is an array
+      setNotifications(Array.isArray(data) ? data : []);
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Failed to load notifications:', error);
@@ -85,6 +86,7 @@ export default function NotificationCenter() {
           Sentry.captureException(error as Error);
         });
       }
+      setNotifications([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
