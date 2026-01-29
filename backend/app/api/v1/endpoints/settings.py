@@ -2,7 +2,10 @@
 User settings endpoints
 """
 
-from typing import Optional
+import secrets
+import hashlib
+from typing import Optional, List
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
@@ -13,6 +16,7 @@ from app.core.logging_config import logger
 from app.core.responses import success_response
 from app.models.user import User
 from app.models.notification_settings import NotificationSettings
+from app.models.api_key import APIKey
 
 router = APIRouter()
 
@@ -74,6 +78,34 @@ class UpdateNotificationSettingsRequest(BaseModel):
     slack_webhook_url: Optional[str] = None
     discord_enabled: Optional[bool] = None
     discord_webhook_url: Optional[str] = None
+
+
+# API Key Models
+class CreateAPIKeyRequest(BaseModel):
+    """Create API key request"""
+    name: str
+
+
+class APIKeyResponse(BaseModel):
+    """API key response (without actual key value)"""
+    id: int
+    name: Optional[str]
+    is_active: bool
+    created_at: str
+    last_used_at: Optional[str]
+    # key_prefix shows first 12 chars for identification (ag_live_xxxx...)
+    key_prefix: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class APIKeyCreatedResponse(BaseModel):
+    """Response when API key is created (includes full key, shown only once)"""
+    id: int
+    name: Optional[str]
+    api_key: str  # Full key, shown only once
+    message: str
 
 
 @router.get("/profile", response_model=ProfileResponse)
@@ -181,13 +213,166 @@ async def get_api_keys(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get user API keys"""
+    """
+    Get user's API keys for SDK authentication.
+    
+    Returns list of API keys with metadata (not the actual key values).
+    Key values are only shown once at creation time.
+    """
     logger.info(f"User {current_user.id} requested API keys")
     
-    # Get user API keys (from user_api_keys endpoint, but at user level)
-    # For now, return empty list as user_api_keys are project-specific
-    # This endpoint might need to be implemented differently based on requirements
-    return success_response(data=[])
+    # Get user's API keys
+    api_keys = db.query(APIKey).filter(
+        APIKey.user_id == current_user.id,
+        APIKey.is_active == True
+    ).order_by(APIKey.created_at.desc()).all()
+    
+    result = []
+    for key in api_keys:
+        result.append({
+            "id": key.id,
+            "name": key.name,
+            "is_active": key.is_active,
+            "created_at": key.created_at.isoformat() if key.created_at else "",
+            "last_used_at": key.last_used_at.isoformat() if key.last_used_at else None,
+            # Show first 12 chars of the hash as identifier (not the actual key)
+            "key_prefix": f"ag_live_****{key.key_hash[:8]}..." if key.key_hash else None,
+        })
+    
+    return success_response(data=result)
+
+
+@router.post("/api-keys", response_model=APIKeyCreatedResponse, status_code=status.HTTP_201_CREATED)
+@handle_errors
+async def create_api_key(
+    request: CreateAPIKeyRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Create a new API key for SDK authentication.
+    
+    IMPORTANT: The full API key is only shown once in this response.
+    Store it securely - it cannot be retrieved later.
+    
+    Format: ag_live_<random_string>
+    """
+    logger.info(f"User {current_user.id} creating new API key: {request.name}")
+    
+    # Validate name
+    if not request.name or len(request.name.strip()) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="API key name is required"
+        )
+    
+    if len(request.name) > 255:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="API key name must be 255 characters or less"
+        )
+    
+    # Generate secure API key
+    key_prefix = "ag_live_"
+    random_part = secrets.token_urlsafe(32)
+    api_key_value = f"{key_prefix}{random_part}"
+    
+    # Hash the key for storage (SHA256)
+    key_hash = hashlib.sha256(api_key_value.encode()).hexdigest()
+    
+    # Create API key record
+    api_key = APIKey(
+        user_id=current_user.id,
+        key_hash=key_hash,
+        name=request.name.strip(),
+        is_active=True,
+    )
+    db.add(api_key)
+    db.flush()
+    db.refresh(api_key)
+    
+    logger.info(f"API key created for user {current_user.id}, key_id: {api_key.id}")
+    
+    return APIKeyCreatedResponse(
+        id=api_key.id,
+        name=api_key.name,
+        api_key=api_key_value,
+        message="API key created successfully. Save this key now - it won't be shown again!"
+    )
+
+
+@router.delete("/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+@handle_errors
+async def delete_api_key(
+    key_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Delete (deactivate) an API key.
+    
+    This action cannot be undone. Any applications using this key
+    will no longer be able to authenticate.
+    """
+    logger.info(f"User {current_user.id} deleting API key: {key_id}")
+    
+    # Find the API key
+    api_key = db.query(APIKey).filter(
+        APIKey.id == key_id,
+        APIKey.user_id == current_user.id
+    ).first()
+    
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="API key not found"
+        )
+    
+    # Soft delete (deactivate)
+    api_key.is_active = False
+    db.flush()
+    
+    logger.info(f"API key {key_id} deleted for user {current_user.id}")
+    return None
+
+
+@router.patch("/api-keys/{key_id}")
+@handle_errors
+async def update_api_key(
+    key_id: int,
+    request: CreateAPIKeyRequest,  # Reuse for name update
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update API key name"""
+    logger.info(f"User {current_user.id} updating API key: {key_id}")
+    
+    # Find the API key
+    api_key = db.query(APIKey).filter(
+        APIKey.id == key_id,
+        APIKey.user_id == current_user.id,
+        APIKey.is_active == True
+    ).first()
+    
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="API key not found"
+        )
+    
+    # Update name
+    if request.name:
+        api_key.name = request.name.strip()
+    
+    db.flush()
+    db.refresh(api_key)
+    
+    return success_response(data={
+        "id": api_key.id,
+        "name": api_key.name,
+        "is_active": api_key.is_active,
+        "created_at": api_key.created_at.isoformat() if api_key.created_at else "",
+    })
 
 
 @router.get("/notifications", response_model=NotificationSettingsResponse)

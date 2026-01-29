@@ -82,7 +82,8 @@ export default function APIKeysPage() {
     try {
       const data = await settingsAPI.createAPIKey(newKeyName);
       posthog.capture('api_key_created');
-      setNewKey({ key: data.key, name: data.name });
+      // Backend returns api_key (not key)
+      setNewKey({ key: data.api_key || data.key, name: data.name });
       setNewKeyName('');
       setShowCreateModal(false);
       await loadAPIKeys();
