@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiCallsAPI } from '@/lib/api';
 import { toFixedSafe } from '@/lib/format';
@@ -30,29 +30,18 @@ export default function LiveStreamView({
   const [last5m, setLast5m] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<boolean>(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
 
-    // Use Server-Sent Events for real-time streaming
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    const token = localStorage.getItem('access_token');
-    
-    const eventSource = new EventSource(
-      `${API_URL}/api/v1/api-calls/stream/live?project_id=${projectId}`,
-      {
-        withCredentials: false,
-        // Note: EventSource doesn't support custom headers, so we'll use query param or cookie
-      }
-    );
-
-    eventSourceRef.current = eventSource;
     let pollingInterval: NodeJS.Timeout | null = null;
+    let cancelled = false;
 
-    eventSource.onmessage = (event) => {
+    const fetchStream = async () => {
       try {
-        const data = JSON.parse(event.data);
+        const data = await apiCallsAPI.streamRecent(projectId, limit);
+        if (cancelled) return;
+
         const list = Array.isArray(data?.items) ? data.items : [];
         setLast1m(data?.last_1m_count ?? 0);
         setLast5m(data?.last_5m_count ?? 0);
@@ -61,50 +50,26 @@ export default function LiveStreamView({
         setLoading(false);
       } catch (err) {
         if (process.env.NODE_ENV === 'development') {
-          console.error('Failed to parse SSE data:', err);
+          console.error('Failed to load live stream:', err);
         } else {
           import('@sentry/nextjs').then((Sentry) => {
             Sentry.captureException(err as Error, { extra: { projectId } });
           });
         }
-        setError(true);
-        setLoading(false);
+        if (!cancelled) {
+          setError(true);
+          setLoading(false);
+        }
       }
     };
 
-    eventSource.onerror = (err) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('SSE connection error:', err);
-      } else {
-        import('@sentry/nextjs').then((Sentry) => {
-          Sentry.captureException(err as unknown as Error, { extra: { projectId } });
-        });
-      }
-      setError(true);
-      setLoading(false);
-      // Fallback to polling if SSE fails
-      eventSource.close();
-      
-      // Fallback polling
-      const fetchStream = async () => {
-        try {
-          const data = await apiCallsAPI.streamRecent(projectId, limit);
-          const list = Array.isArray(data?.items) ? data.items : [];
-          setLast1m(data?.last_1m_count ?? 0);
-          setLast5m(data?.last_5m_count ?? 0);
-          setItems(list);
-          setError(false);
-        } catch {
-          setError(true);
-        }
-      };
-      
-      fetchStream();
-      pollingInterval = setInterval(fetchStream, 2500);
-    };
+    // Initial fetch
+    fetchStream();
+    // Poll every 2.5 seconds for a “live” feel
+    pollingInterval = setInterval(fetchStream, 2500);
 
     return () => {
-      eventSource.close();
+      cancelled = true;
       if (pollingInterval) {
         clearInterval(pollingInterval);
       }

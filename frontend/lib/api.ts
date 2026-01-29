@@ -1395,14 +1395,16 @@ export const firewallAPI = {
     await apiClient.delete(`/projects/${projectId}/firewall/rules/${ruleId}`);
   },
 
-  togglePanicMode: async (enabled: boolean) => {
-    const response = await apiClient.post('/admin/firewall/panic-mode', { enabled });
-    return response.data?.data || response.data;
+  /** Project-level panic (owner/admin). Use this for project settings. */
+  togglePanicMode: async (projectId: number, enabled: boolean) => {
+    const response = await apiClient.post(`/projects/${projectId}/panic`, { enabled });
+    return response.data?.data ?? response.data;
   },
 
-  getPanicModeStatus: async () => {
-    const response = await apiClient.get('/admin/firewall/panic-mode');
-    return response.data?.data || response.data;
+  /** Project-level panic status (any project member can read; owner/admin can toggle). */
+  getPanicModeStatus: async (projectId: number) => {
+    const response = await apiClient.get(`/projects/${projectId}/panic`);
+    return response.data?.data ?? response.data;
   },
 };
 

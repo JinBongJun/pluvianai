@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import OrgLayout from '@/components/layout/OrgLayout';
 import ProjectTabs from '@/components/ProjectTabs';
 import FirewallRules from '@/components/firewall/FirewallRules';
-import { firewallAPI, adminAPI } from '@/lib/api';
+import { firewallAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
 import Button from '@/components/ui/Button';
 import { Shield, AlertTriangle } from 'lucide-react';
@@ -17,7 +17,6 @@ export default function FirewallPage() {
   const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
   const projectId = Number(Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId);
   
-  const [isAdmin, setIsAdmin] = useState(false);
   const [panicMode, setPanicMode] = useState(false);
   const [loadingPanic, setLoadingPanic] = useState(true);
 
@@ -33,22 +32,17 @@ export default function FirewallPage() {
       return;
     }
 
-    checkAdminAndPanicMode();
+    loadPanicStatus();
   }, [projectId, orgId, router]);
 
-  const checkAdminAndPanicMode = async () => {
+  const loadPanicStatus = async () => {
     try {
-      // Check if user is admin (try to get panic mode status)
-      try {
-        const status = await firewallAPI.getPanicModeStatus();
-        setIsAdmin(true);
-        setPanicMode(status.enabled);
-      } catch (error: any) {
-        // Not admin or error
-        setIsAdmin(false);
+      const status = await firewallAPI.getPanicModeStatus(projectId);
+      setPanicMode(status.enabled);
+    } catch (error: any) {
+      if (error.response?.status !== 403) {
+        toast.showToast(error.response?.data?.error?.message || 'Failed to load panic status', 'error');
       }
-    } catch (error) {
-      // Ignore
     } finally {
       setLoadingPanic(false);
     }
@@ -57,14 +51,12 @@ export default function FirewallPage() {
   const handleTogglePanicMode = async () => {
     try {
       const newStatus = !panicMode;
-      await firewallAPI.togglePanicMode(newStatus);
+      await firewallAPI.togglePanicMode(projectId, newStatus);
       setPanicMode(newStatus);
       toast.showToast(`Panic mode ${newStatus ? 'enabled' : 'disabled'}`, 'success');
     } catch (error: any) {
-      toast.showToast(
-        error.response?.data?.detail || error.message || 'Failed to toggle panic mode',
-        'error'
-      );
+      const msg = error.response?.data?.error?.message ?? error.response?.data?.detail ?? error.message ?? 'Failed to toggle panic mode';
+      toast.showToast(msg, 'error');
     }
   };
 
@@ -74,17 +66,17 @@ export default function FirewallPage() {
         <ProjectTabs projectId={projectId} orgId={orgId} canManage={true} />
 
         <div className="space-y-6">
-          {isAdmin && (
+          {!loadingPanic && (
             <div className="bg-dark-card rounded-lg border border-dark-border p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <AlertTriangle className="w-6 h-6 text-orange-500" />
                   <div>
-                    <h3 className="text-lg font-semibold text-white">Global Panic Mode</h3>
+                    <h3 className="text-lg font-semibold text-white">Project Panic Mode</h3>
                     <p className="text-sm text-slate-400">
                       {panicMode
-                        ? 'All traffic is currently blocked across all projects'
-                        : 'Enable to block all traffic across all projects'}
+                        ? 'All AI traffic for this project is blocked'
+                        : 'Enable to block all AI traffic for this project (owner/admin only)'}
                     </p>
                   </div>
                 </div>
