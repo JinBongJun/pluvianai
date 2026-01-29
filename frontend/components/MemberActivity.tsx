@@ -45,20 +45,23 @@ export default function MemberActivity({ projectId, userId, userEmail, userName 
         limit: 20,
         days: 30,
       });
-      setActivities(data);
+      
+      // Ensure data is an array
+      const activityList = Array.isArray(data) ? data : [];
+      setActivities(activityList);
       
       // Calculate stats
       const now = new Date();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const recentActivities = data.filter((a: ActivityItem) => {
+      const recentActivities = activityList.filter((a: ActivityItem) => {
         const activityDate = new Date(a.created_at);
         return activityDate >= sevenDaysAgo;
       }).length;
       
       setStats({
-        totalActivities: data.length,
+        totalActivities: activityList.length,
         recentActivities,
-        lastActivity: data.length > 0 ? data[0].created_at : null,
+        lastActivity: activityList.length > 0 ? activityList[0].created_at : null,
       });
     } catch (error: any) {
       if (process.env.NODE_ENV === 'development') {
@@ -68,7 +71,13 @@ export default function MemberActivity({ projectId, userId, userEmail, userName 
           Sentry.captureException(error as Error, { extra: { projectId, userId } });
         });
       }
-      toast.showToast(error.response?.data?.detail || 'Failed to load activities', 'error');
+      // Set empty array on error to prevent map errors
+      setActivities([]);
+      setStats({
+        totalActivities: 0,
+        recentActivities: 0,
+        lastActivity: null,
+      });
     } finally {
       setLoading(false);
     }

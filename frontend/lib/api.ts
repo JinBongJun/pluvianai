@@ -935,8 +935,12 @@ export const activityAPI = {
   list: async (params?: any) => {
     const response = await apiClient.get('/activity', { params });
     // Backend returns {items: [], total: number, limit: number, offset: number}
-    // Return items for backward compatibility, but also return total if available
-    return response.data.items || response.data;
+    // Ensure we always return an array
+    const data = response.data;
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.items)) return data.items;
+    if (Array.isArray(data?.data)) return data.data;
+    return [];
   },
   listWithTotal: async (params?: any) => {
     const response = await apiClient.get('/activity', { params });
