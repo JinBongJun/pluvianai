@@ -43,22 +43,22 @@ const logWarn = (message: string, context?: Record<string, unknown>) => {
  * Unwrap API response data - handles both {data: T} wrapper and direct T response
  * This standardizes the pattern: response.data?.data || response.data
  */
-const unwrapResponse = <T>(response: { data: T | { data: T } }): T => {
+const unwrapResponse = (response: { data: any }): any => {
   const data = response.data;
   if (data && typeof data === 'object' && 'data' in data) {
-    return (data as { data: T }).data;
+    return data.data;
   }
-  return data as T;
+  return data;
 };
 
 /**
  * Unwrap API response and ensure array - returns empty array if not an array
  */
-const unwrapArrayResponse = <T>(response: { data: T[] | { data: T[] } | any }): T[] => {
+const unwrapArrayResponse = (response: { data: any }): any[] => {
   const data = unwrapResponse(response);
   if (Array.isArray(data)) return data;
   if (data && typeof data === 'object' && 'items' in data) {
-    return (data as { items: T[] }).items || [];
+    return data.items || [];
   }
   return [];
 };
