@@ -515,7 +515,7 @@ export default function DateRangePicker({
       {typeof window !== 'undefined' && isOpen && dropdownPosition && createPortal(
         <div 
           data-datepicker-dropdown
-          className="fixed bg-ag-surface rounded-lg shadow-2xl border border-white/10 overflow-hidden animate-fade-in" 
+          className="fixed rounded-lg shadow-2xl border border-white/20 overflow-hidden animate-fade-in" 
           onClick={(e) => {
             e.stopPropagation();
             e.preventDefault();
@@ -531,11 +531,12 @@ export default function DateRangePicker({
             width: '700px',
             zIndex: 999999,
             pointerEvents: 'auto',
+            backgroundColor: '#1e293b', // Solid opaque background
           }}
         >
           <div className="flex">
             {/* Left Panel - Presets */}
-            <div className="w-48 border-r border-white/10 bg-white/5 p-4">
+            <div className="w-48 border-r border-white/10 p-4" style={{ backgroundColor: '#253346' }}>
               <div className="text-xs font-medium text-ag-muted mb-2">Quick Select</div>
               <div className="space-y-1">
                 {(presets || defaultPresets).map((preset, index) => {
@@ -559,7 +560,7 @@ export default function DateRangePicker({
             </div>
 
             {/* Right Panel - Calendar */}
-            <div className="flex-1 p-6 bg-ag-surface">
+            <div className="flex-1 p-6" style={{ backgroundColor: '#1e293b' }}>
               <div className="flex items-center justify-between mb-6">
                 <button
                   onClick={() => {

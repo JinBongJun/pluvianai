@@ -159,7 +159,7 @@ export default function Select({
       {typeof window !== 'undefined' && isOpen && dropdownPosition && createPortal(
         <div
           data-select-dropdown
-          className="fixed bg-ag-surface rounded-lg shadow-2xl border border-white/20 overflow-hidden z-[999999] animate-fade-in"
+          className="fixed rounded-lg shadow-2xl border border-white/20 overflow-hidden z-[999999] animate-fade-in"
           onClick={(e) => {
             e.stopPropagation();
             e.preventDefault();
@@ -175,6 +175,7 @@ export default function Select({
             minWidth: buttonRef.current?.offsetWidth || 200,
             maxHeight: '300px',
             pointerEvents: 'auto',
+            backgroundColor: '#1e293b', // Solid opaque background
           }}
         >
           <div className="overflow-y-auto max-h-[300px] py-1">
@@ -189,9 +190,10 @@ export default function Select({
                   className={clsx(
                     'w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2',
                     isSelected
-                      ? 'bg-ag-primary/20 text-ag-text font-medium'
-                      : 'text-ag-muted hover:bg-white/10 hover:text-ag-text'
+                      ? 'bg-white/20 text-white font-medium'
+                      : 'text-slate-300 hover:bg-white/10 hover:text-white'
                   )}
+                  style={{ backgroundColor: isSelected ? 'rgba(255,255,255,0.15)' : 'transparent' }}
                 >
                   <span className="flex-1 truncate">{option.label}</span>
                   {isSelected && (

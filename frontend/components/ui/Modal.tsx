@@ -51,9 +51,10 @@ export default function Modal({
         />
         <div
           className={clsx(
-            'relative bg-ag-surface border border-white/10 rounded-lg shadow-2xl w-full',
+            'relative border border-white/10 rounded-lg shadow-2xl w-full',
             sizeClasses[size]
           )}
+          style={{ backgroundColor: '#1e293b' }}
           onClick={(e) => e.stopPropagation()}
         >
           {title && (
