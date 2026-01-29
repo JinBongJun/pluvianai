@@ -42,9 +42,10 @@ export default function ActivityLogPage() {
   const loadProjects = async () => {
     try {
       const data = await projectsAPI.list();
-      setProjects(data);
+      setProjects(Array.isArray(data) ? data : []);
     } catch (error: any) {
       console.error('Failed to load projects:', error);
+      setProjects([]);
     }
   };
 
@@ -61,11 +62,17 @@ export default function ActivityLogPage() {
       if (filters.activity_type) params.activity_type = filters.activity_type;
 
       const response = await activityAPI.listWithTotal(params);
-      setActivities(response.items || response);
-      setTotalItems(response.total || (response.items ? response.items.length : response.length));
+      // Ensure we always get an array
+      const items = Array.isArray(response) ? response : 
+                    Array.isArray(response?.items) ? response.items :
+                    Array.isArray(response?.data) ? response.data : [];
+      setActivities(items);
+      setTotalItems(response?.total || items.length);
     } catch (error: any) {
       console.error('Failed to load activities:', error);
       toast.showToast(error.response?.data?.detail || 'Failed to load activities', 'error');
+      setActivities([]); // Set empty array on error
+      setTotalItems(0);
       if (error.response?.status === 401) {
         router.push('/login');
       }
