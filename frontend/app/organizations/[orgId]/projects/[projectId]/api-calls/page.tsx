@@ -363,7 +363,7 @@ export default function APICallsListPage() {
           </div>
           {filters.search && (
             <p className="text-xs text-ag-accent mt-2">
-              Showing results for: "{filters.search}"
+              Showing results for: &quot;{filters.search}&quot;
             </p>
           )}
         </div>
