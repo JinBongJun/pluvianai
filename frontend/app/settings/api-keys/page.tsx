@@ -48,19 +48,22 @@ export default function APIKeysPage() {
   const loadProjects = async () => {
     try {
       const data = await projectsAPI.list();
-      setProjects(data);
+      setProjects(Array.isArray(data) ? data : []);
     } catch (error: any) {
       console.error('Failed to load projects:', error);
+      setProjects([]);
     }
   };
 
   const loadAPIKeys = async () => {
     try {
       const data = await settingsAPI.getAPIKeys();
-      setApiKeys(data);
+      // Ensure data is an array
+      setApiKeys(Array.isArray(data) ? data : []);
     } catch (error: any) {
       console.error('Failed to load API keys:', error);
       toast.showToast(error.response?.data?.detail || 'Failed to load API keys', 'error');
+      setApiKeys([]); // Set empty array on error
       if (error.response?.status === 401) {
         router.push('/login');
       }

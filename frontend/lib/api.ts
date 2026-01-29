@@ -864,7 +864,9 @@ export const settingsAPI = {
 
   getAPIKeys: async () => {
     const response = await apiClient.get('/settings/api-keys');
-    return response.data;
+    // Ensure we always return an array
+    const data = response.data;
+    return Array.isArray(data) ? data : (data?.data || []);
   },
 
   createAPIKey: async (name: string) => {

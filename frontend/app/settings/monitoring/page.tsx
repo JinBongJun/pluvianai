@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Button from '@/components/ui/Button';
-import { ExternalLink, Activity, TrendingUp, AlertCircle, Database } from 'lucide-react';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import { ExternalLink, Activity, TrendingUp, AlertCircle, Database, Server } from 'lucide-react';
 
 interface MonitoringStatus {
   metrics_enabled: boolean;
@@ -20,58 +21,107 @@ interface MonitoringStatus {
 export default function MonitoringPage() {
   const [status, setStatus] = useState<MonitoringStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSelfHosted, setIsSelfHosted] = useState(false);
 
   useEffect(() => {
-    fetch('/api/v1/monitoring/status')
-      .then(res => res.json())
-      .then(data => {
-        setStatus(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Failed to fetch monitoring status:', err);
+    // Check if this is a self-hosted environment
+    const checkMonitoring = async () => {
+      try {
+        const res = await fetch('/api/v1/monitoring/status');
+        if (res.ok) {
+          const data = await res.json();
+          setStatus(data);
+          setIsSelfHosted(true);
         } else {
-          import('@sentry/nextjs').then((Sentry) => {
-            Sentry.captureException(err as Error);
-          });
+          // Not available in cloud version
+          setIsSelfHosted(false);
         }
+      } catch (err) {
+        // Not available in cloud version
+        setIsSelfHosted(false);
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+    
+    checkMonitoring();
   }, []);
 
   if (loading) {
     return (
-      <div className="container mx-auto p-6">
+      <DashboardLayout>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading monitoring status...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ag-accent mx-auto"></div>
+            <p className="mt-4 text-ag-muted">Loading monitoring status...</p>
           </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
-  if (!status) {
+  // Cloud version - show self-hosted only message
+  if (!isSelfHosted || !status) {
     return (
-      <div className="container mx-auto p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Monitoring Status</CardTitle>
-            <CardDescription>Unable to fetch monitoring status</CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
+      <DashboardLayout>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Monitoring</h1>
+            <p className="text-ag-muted mt-1">System metrics and observability</p>
+          </div>
+          
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-12 text-center shadow-2xl">
+            <Server className="h-16 w-16 text-ag-accent/50 mx-auto mb-6" />
+            <h2 className="text-2xl font-bold text-white mb-4">Self-Hosted Feature</h2>
+            <p className="text-ag-muted max-w-md mx-auto mb-6">
+              Advanced monitoring with Grafana and Prometheus is available for self-hosted deployments. 
+              The cloud version includes basic health monitoring automatically.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button
+                variant="outline"
+                onClick={() => window.open('https://docs.agentguard.dev/self-hosted/monitoring', '_blank')}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Learn About Self-Hosting
+              </Button>
+            </div>
+          </div>
+          
+          {/* Cloud monitoring info */}
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/0 backdrop-blur-sm p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-white mb-4">Cloud Monitoring Included</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                <Activity className="h-6 w-6 text-green-400 mb-2" />
+                <p className="font-medium text-white">Health Checks</p>
+                <p className="text-sm text-ag-muted">Automatic system health monitoring</p>
+              </div>
+              <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                <TrendingUp className="h-6 w-6 text-blue-400 mb-2" />
+                <p className="font-medium text-white">Usage Analytics</p>
+                <p className="text-sm text-ag-muted">Track API calls and costs</p>
+              </div>
+              <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                <AlertCircle className="h-6 w-6 text-yellow-400 mb-2" />
+                <p className="font-medium text-white">Alerts</p>
+                <p className="text-sm text-ag-muted">Get notified of issues</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
     );
   }
 
+  // Self-hosted version with monitoring available
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">모니터링</h1>
-        <p className="text-gray-600">시스템 상태 및 메트릭을 실시간으로 확인하세요</p>
-      </div>
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">Monitoring</h1>
+          <p className="text-ag-muted">View system metrics and status in real-time</p>
+        </div>
 
       {/* Status Overview */}
       <Card>
@@ -256,6 +306,7 @@ export default function MonitoringPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }
