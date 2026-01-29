@@ -25,7 +25,7 @@ router = APIRouter()
 @handle_errors
 async def analyze_performance(
     project_id: int = Query(..., description="Project ID"),
-    days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
+    days: int = Query(7, ge=1, le=90, description="Number of days to analyze"),
     percentile_threshold: float = Query(0.95, ge=0.0, le=1.0, description="Percentile threshold for bottlenecks"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

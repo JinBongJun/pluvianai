@@ -48,7 +48,7 @@ class RecommendationResponse(BaseModel):
 @handle_errors
 async def compare_models(
     project_id: int = Query(..., description="Project ID"),
-    days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
+    days: int = Query(7, ge=1, le=90, description="Number of days to analyze"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -94,7 +94,7 @@ async def compare_models(
 @handle_errors
 async def get_recommendations(
     project_id: int = Query(..., description="Project ID"),
-    days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
+    days: int = Query(7, ge=1, le=90, description="Number of days to analyze"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

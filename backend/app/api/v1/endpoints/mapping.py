@@ -33,7 +33,7 @@ class FilterRequest(BaseModel):
 @handle_errors
 async def get_mapping(
     project_id: int = Query(..., description="Project ID"),
-    days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
+    days: int = Query(7, ge=1, le=90, description="Number of days to analyze"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     mapping_service: MappingService = Depends(get_mapping_service),
@@ -76,7 +76,7 @@ async def get_mapping(
 @handle_errors
 async def get_dependency_graph(
     project_id: int = Query(..., description="Project ID"),
-    days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
+    days: int = Query(7, ge=1, le=90, description="Number of days to analyze"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     mapping_service: MappingService = Depends(get_mapping_service),
@@ -115,7 +115,7 @@ async def get_dependency_graph(
 async def get_node_details(
     project_id: int = Query(..., description="Project ID"),
     node_id: str = Path(..., description="Node ID (agent name)"),
-    days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
+    days: int = Query(7, ge=1, le=90, description="Number of days to analyze"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     mapping_service: MappingService = Depends(get_mapping_service),
@@ -158,7 +158,7 @@ async def get_node_details(
 @handle_errors
 async def filter_mapping(
     project_id: int = Query(..., description="Project ID"),
-    days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
+    days: int = Query(7, ge=1, le=90, description="Number of days to analyze"),
     filters: FilterRequest = FilterRequest(),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -201,7 +201,7 @@ async def get_subgraph(
     project_id: int = Query(..., description="Project ID"),
     focus_node_id: str = Query(..., description="Node ID to focus on"),
     depth: int = Query(2, ge=1, le=5, description="Depth of neighbors to include"),
-    days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
+    days: int = Query(7, ge=1, le=90, description="Number of days to analyze"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     mapping_service: MappingService = Depends(get_mapping_service),
