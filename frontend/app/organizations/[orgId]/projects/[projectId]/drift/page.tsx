@@ -48,13 +48,16 @@ export default function DriftPage() {
   const loadData = async () => {
     try {
       // Fetch drift events from API
-      const events = await driftAPI.list(projectId, { days });
-      const eventList = Array.isArray(events) ? events : (events?.data || []);
+      const response = await driftAPI.list(projectId, { days });
+      // Handle both array response and object with data property
+      const eventList: any[] = Array.isArray(response) 
+        ? response 
+        : (response as any)?.data || [];
       
       setData({
         total_detections: eventList.length,
         active_drifts: eventList.filter((e: any) => e.status === 'active').length,
-        last_detection: eventList.length > 0 ? eventList[0].detected_at : null,
+        last_detection: eventList.length > 0 ? eventList[0]?.detected_at : null,
         events: eventList.slice(0, 10), // Show last 10 events
       });
     } catch (error) {
