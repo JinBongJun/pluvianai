@@ -82,7 +82,7 @@ export default function DriftPage() {
       case 'medium':
         return <Badge variant="warning">Medium</Badge>;
       default:
-        return <Badge variant="secondary">Low</Badge>;
+        return <Badge variant="default">Low</Badge>;
     }
   };
 
