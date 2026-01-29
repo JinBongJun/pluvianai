@@ -3,8 +3,9 @@ Notification settings endpoints
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 from pydantic import BaseModel, Field
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -13,11 +14,182 @@ from app.core.decorators import handle_errors
 from app.core.logging_config import logger
 from app.core.responses import success_response
 from app.models.user import User
+from app.models.alert import Alert
+from app.models.project import Project
+from app.models.project_member import ProjectMember
 from app.models.project_notification_settings import ProjectNotificationSettings
 from app.services.alert_service import AlertService
 from app.infrastructure.repositories.alert_repository import AlertRepository
 
 router = APIRouter()
+
+
+# =============================================
+# User Notification Endpoints (Global)
+# =============================================
+
+class NotificationItem(BaseModel):
+    """Notification item for list response"""
+    id: int
+    project_id: int
+    alert_type: str
+    severity: str
+    title: str
+    message: str
+    is_read: bool
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class UnreadCountResponse(BaseModel):
+    """Unread count response"""
+    count: int
+
+
+def _get_user_project_ids(user: User, db: Session) -> List[int]:
+    """Get all project IDs the user has access to"""
+    # Projects owned by user
+    owned_projects = db.query(Project.id).filter(Project.owner_id == user.id).all()
+    owned_ids = [p.id for p in owned_projects]
+    
+    # Projects user is a member of
+    member_projects = db.query(ProjectMember.project_id).filter(
+        ProjectMember.user_id == user.id
+    ).all()
+    member_ids = [p.project_id for p in member_projects]
+    
+    return list(set(owned_ids + member_ids))
+
+
+@router.get("/notifications", response_model=List[NotificationItem])
+@handle_errors
+async def list_notifications(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    List notifications for the current user across all their projects
+    """
+    project_ids = _get_user_project_ids(current_user, db)
+    
+    if not project_ids:
+        return []
+    
+    alerts = (
+        db.query(Alert)
+        .filter(Alert.project_id.in_(project_ids))
+        .order_by(desc(Alert.created_at))
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    
+    return [
+        NotificationItem(
+            id=alert.id,
+            project_id=alert.project_id,
+            alert_type=alert.alert_type,
+            severity=alert.severity,
+            title=alert.title,
+            message=alert.message,
+            is_read=bool(alert.is_resolved),  # Use is_resolved as is_read
+            created_at=alert.created_at.isoformat() if alert.created_at else "",
+        )
+        for alert in alerts
+    ]
+
+
+@router.get("/notifications/unread-count", response_model=UnreadCountResponse)
+@handle_errors
+async def get_unread_count(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get count of unread notifications for the current user
+    """
+    project_ids = _get_user_project_ids(current_user, db)
+    
+    if not project_ids:
+        return UnreadCountResponse(count=0)
+    
+    count = (
+        db.query(Alert)
+        .filter(
+            Alert.project_id.in_(project_ids),
+            Alert.is_resolved == False  # Unread = not resolved
+        )
+        .count()
+    )
+    
+    return UnreadCountResponse(count=count)
+
+
+@router.patch("/notifications/{alert_id}/read")
+@handle_errors
+async def mark_notification_read(
+    alert_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Mark a notification as read
+    """
+    project_ids = _get_user_project_ids(current_user, db)
+    
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    
+    if not alert:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification not found"
+        )
+    
+    if alert.project_id not in project_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this notification"
+        )
+    
+    alert.is_resolved = True
+    db.refresh(alert)
+    
+    return success_response(data={"message": "Notification marked as read"})
+
+
+@router.delete("/notifications/{alert_id}")
+@handle_errors
+async def delete_notification(
+    alert_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Delete a notification
+    """
+    project_ids = _get_user_project_ids(current_user, db)
+    
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    
+    if not alert:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification not found"
+        )
+    
+    if alert.project_id not in project_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this notification"
+        )
+    
+    db.delete(alert)
+    
+    return success_response(data={"message": "Notification deleted"})
 
 
 class NotificationSettingsRequest(BaseModel):

@@ -83,7 +83,13 @@ async def get_profile(
 ):
     """Get current user profile"""
     logger.info(f"User {current_user.id} requested profile")
-    return current_user
+    return ProfileResponse(
+        id=current_user.id,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        is_active=bool(current_user.is_active),
+        created_at=current_user.created_at.isoformat() if current_user.created_at else "",
+    )
 
 
 @router.patch("/profile", response_model=ProfileResponse)
@@ -103,7 +109,13 @@ async def update_profile(
     db.refresh(current_user)
     
     logger.info(f"Profile updated for user {current_user.id}")
-    return current_user
+    return ProfileResponse(
+        id=current_user.id,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        is_active=bool(current_user.is_active),
+        created_at=current_user.created_at.isoformat() if current_user.created_at else "",
+    )
 
 
 @router.delete("/profile", status_code=status.HTTP_204_NO_CONTENT)
