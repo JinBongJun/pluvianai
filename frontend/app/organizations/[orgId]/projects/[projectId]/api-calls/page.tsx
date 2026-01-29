@@ -329,8 +329,24 @@ export default function APICallsListPage() {
           <LiveStreamView projectId={projectId} limit={20} linkToCalls={false} />
         </div>
 
-        {/* Search Bar - Always visible */}
+        {/* Filters */}
         <div className="mb-4">
+          <FilterPanel
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            onReset={() => {
+              setFilters({});
+              setSearchInput(''); // Also clear search input
+              setCurrentPage(1);
+            }}
+            availableProviders={availableProviders}
+            availableModels={availableModels}
+            availableAgents={availableAgents}
+          />
+        </div>
+
+        {/* Search Bar */}
+        <div className="mb-6">
           <div className="flex gap-2">
             <div className="relative flex-1 max-w-xl">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -366,22 +382,6 @@ export default function APICallsListPage() {
               Showing results for: &quot;{filters.search}&quot;
             </p>
           )}
-        </div>
-
-        {/* Filters */}
-        <div className="mb-6">
-          <FilterPanel
-            filters={filters}
-            onFiltersChange={handleFiltersChange}
-            onReset={() => {
-              setFilters({});
-              setSearchInput(''); // Also clear search input
-              setCurrentPage(1);
-            }}
-            availableProviders={availableProviders}
-            availableModels={availableModels}
-            availableAgents={availableAgents}
-          />
         </div>
 
         {/* Table */}
