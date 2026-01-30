@@ -174,7 +174,6 @@ export default function CostPage() {
             </div>
           </div>
         </div>
-      </div>
     </ProjectLayout>
   );
 }

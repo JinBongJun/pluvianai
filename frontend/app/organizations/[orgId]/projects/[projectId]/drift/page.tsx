@@ -217,7 +217,6 @@ export default function DriftPage() {
             </div>
           </div>
         </div>
-      </div>
     </ProjectLayout>
   );
 }

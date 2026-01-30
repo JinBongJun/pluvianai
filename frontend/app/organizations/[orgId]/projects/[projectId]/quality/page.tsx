@@ -162,7 +162,6 @@ export default function QualityPage() {
             </div>
           </div>
         </div>
-      </div>
     </ProjectLayout>
   );
 }

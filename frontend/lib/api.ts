@@ -338,6 +338,29 @@ export const organizationsAPI = {
     );
     return validated.map(normalizeOrganizationProject);
   },
+
+  update: async (id: number | string, data: { name?: string }) => {
+    const response = await apiClient.patch(`/organizations/${id}`, data);
+    return response.data;
+  },
+
+  delete: async (id: number | string) => {
+    await apiClient.delete(`/organizations/${id}`);
+  },
+
+  listMembers: async (id: number | string) => {
+    const response = await apiClient.get(`/organizations/${id}/members`);
+    return response.data;
+  },
+
+  inviteMember: async (id: number | string, data: { email: string; role: string }) => {
+    const response = await apiClient.post(`/organizations/${id}/members`, data);
+    return response.data;
+  },
+
+  removeMember: async (orgId: number | string, memberId: number) => {
+    await apiClient.delete(`/organizations/${orgId}/members/${memberId}`);
+  },
 };
 
 // Projects API
