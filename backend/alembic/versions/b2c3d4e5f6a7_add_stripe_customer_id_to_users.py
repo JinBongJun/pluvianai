@@ -20,7 +20,7 @@ def upgrade() -> None:
     # Add stripe_customer_id field to users table
     with op.batch_alter_table('users', schema=None) as batch_op:
         batch_op.add_column(sa.Column('stripe_customer_id', sa.String(length=255), nullable=True))
-        batch_op.create_index(op.f('ix_users_stripe_customer_id'), 'users', ['stripe_customer_id'], unique=False)
+        batch_op.create_index('ix_users_stripe_customer_id', ['stripe_customer_id'], unique=False)
 
 
 def downgrade() -> None:

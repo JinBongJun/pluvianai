@@ -49,19 +49,19 @@ def print_header(title: str):
 
 
 def print_success(msg: str):
-    print(f"{Colors.GREEN}✅ {msg}{Colors.RESET}")
+    print(f"{Colors.GREEN}[OK] {msg}{Colors.RESET}")
 
 
 def print_error(msg: str):
-    print(f"{Colors.RED}❌ {msg}{Colors.RESET}")
+    print(f"{Colors.RED}[FAIL] {msg}{Colors.RESET}")
 
 
 def print_warning(msg: str):
-    print(f"{Colors.YELLOW}⚠️  {msg}{Colors.RESET}")
+    print(f"{Colors.YELLOW}[WARN] {msg}{Colors.RESET}")
 
 
 def print_info(msg: str):
-    print(f"{Colors.BLUE}ℹ️  {msg}{Colors.RESET}")
+    print(f"{Colors.BLUE}[INFO] {msg}{Colors.RESET}")
 
 
 class TestRunner:
@@ -79,7 +79,7 @@ class TestRunner:
         self.user_id: Optional[int] = None
         
         # 테스트 계정
-        self.test_email = f"test_{secrets.token_hex(6)}@agentguard.test"
+        self.test_email = f"test_{secrets.token_hex(6)}@gmail.com"
         self.test_password = "TestPassword123!"
         
         # 결과 추적
@@ -131,11 +131,12 @@ class TestRunner:
     def test_signup(self) -> bool:
         """회원가입"""
         response = self.client.post(
-            f"{API_PREFIX}/auth/signup",
+            f"{API_PREFIX}/auth/register",
             json={
                 "email": self.test_email,
                 "password": self.test_password,
-                "full_name": "E2E Test User"
+                "full_name": "E2E Test User",
+                "liability_agreement_accepted": True
             }
         )
         
@@ -421,7 +422,7 @@ class TestRunner:
         
         print()
         if self.failed == 0:
-            print_success("All tests passed! 🎉")
+            print_success("All tests passed!")
             return True
         else:
             print_error(f"{self.failed} test(s) failed")

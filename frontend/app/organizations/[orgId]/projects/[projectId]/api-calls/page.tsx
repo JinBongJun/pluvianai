@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import OrgLayout from '@/components/layout/OrgLayout';
+import ProjectLayout from '@/components/layout/ProjectLayout';
 import FilterPanel, { FilterState } from '@/components/filters/FilterPanel';
 import Pagination from '@/components/ui/Pagination';
 import Badge from '@/components/ui/Badge';
@@ -273,10 +273,10 @@ export default function APICallsListPage() {
 
   if (loading && apiCalls.length === 0) {
     return (
-      <OrgLayout
+      <ProjectLayout
         orgId={orgId}
+        projectId={projectId}
         breadcrumb={[
-          { label: 'Organizations', href: '/organizations' },
           { label: org?.name || 'Organization', href: `/organizations/${orgId}/projects` },
           { label: 'API Calls' },
         ]}
@@ -284,15 +284,15 @@ export default function APICallsListPage() {
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent"></div>
         </div>
-      </OrgLayout>
+      </ProjectLayout>
     );
   }
 
   return (
-    <OrgLayout
+    <ProjectLayout
       orgId={orgId}
+      projectId={projectId}
       breadcrumb={[
-        { label: 'Organizations', href: '/organizations' },
         { label: org?.name || 'Organization', href: `/organizations/${orgId}/projects` },
         { label: 'API Calls' },
       ]}
@@ -607,6 +607,6 @@ export default function APICallsListPage() {
           </div>
         )}
       </div>
-    </OrgLayout>
+    </ProjectLayout>
   );
 }

@@ -438,7 +438,7 @@ export const apiCallsAPI = {
   },
 
   get: async (id: number) => {
-    const response = await apiClient.get(`/api-calls/${id}`);
+    const response = await apiClient.get(`/api-calls/by-id/${id}`);
     // Validate single item response
     try {
       return APICallSchema.parse(response.data);

@@ -19,10 +19,10 @@ depends_on = None
 def upgrade() -> None:
     # Add referral fields to users table
     with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('referral_code', sa.String(length=50), nullable=True, unique=True))
+        batch_op.add_column(sa.Column('referral_code', sa.String(length=50), nullable=True))
         batch_op.add_column(sa.Column('referral_credits', sa.Integer(), nullable=True, server_default='0'))
-        batch_op.add_column(sa.Column('referred_by', sa.Integer(), sa.ForeignKey('users.id'), nullable=True))
-        batch_op.create_index(op.f('ix_users_referral_code'), 'users', ['referral_code'], unique=True)
+        batch_op.add_column(sa.Column('referred_by', sa.Integer(), nullable=True))
+        batch_op.create_index('ix_users_referral_code', ['referral_code'], unique=True)
 
 
 def downgrade() -> None:

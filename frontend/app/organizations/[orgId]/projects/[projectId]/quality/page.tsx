@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import OrgLayout from '@/components/layout/OrgLayout';
+import ProjectLayout from '@/components/layout/ProjectLayout';
 import ProjectTabs from '@/components/ProjectTabs';
 import QualityChart from '@/components/QualityChart';
 import Button from '@/components/ui/Button';
@@ -65,10 +65,15 @@ export default function QualityPage() {
   };
 
   return (
-    <OrgLayout orgId={orgId}>
-      <div className="min-h-screen bg-ag-bg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ProjectTabs basePath={basePath} />
+    <ProjectLayout
+      orgId={orgId}
+      projectId={projectId}
+      breadcrumb={[
+        { label: 'Quality' },
+      ]}
+    >
+      <div className="max-w-7xl mx-auto">
+        <ProjectTabs projectId={projectId} orgId={orgId} />
           
           <div className="mt-8 space-y-6">
             {/* Header */}
@@ -158,6 +163,6 @@ export default function QualityPage() {
           </div>
         </div>
       </div>
-    </OrgLayout>
+    </ProjectLayout>
   );
 }

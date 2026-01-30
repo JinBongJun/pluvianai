@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import OrgLayout from '@/components/layout/OrgLayout';
+import ProjectLayout from '@/components/layout/ProjectLayout';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { replayAPI, apiCallsAPI, organizationsAPI } from '@/lib/api';
@@ -152,10 +152,10 @@ export default function ReplayPage() {
     }
 
     return (
-        <OrgLayout
+        <ProjectLayout
             orgId={orgId}
+            projectId={projectId}
             breadcrumb={[
-                { label: 'Organizations', href: '/organizations' },
                 { label: org?.name || 'Organization', href: `/organizations/${orgId}/projects` },
                 { label: 'Time Machine' },
             ]}
@@ -443,6 +443,6 @@ export default function ReplayPage() {
                     </div>
                 </div>
             )}
-        </OrgLayout>
+        </ProjectLayout>
     );
 }

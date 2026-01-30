@@ -23,29 +23,23 @@ export default function ProjectTabs({ projectId, orgId, canManage = false, baseP
 
   const tabs = [
     { id: 'overview', label: 'Overview', path: basePath },
-    // Keep only a minimal, production-focused surface:
     { id: 'api-calls', label: 'API Calls', path: `${basePath}/api-calls` },
+    { id: 'quality', label: 'Quality', path: `${basePath}/quality` },
     { id: 'firewall', label: 'Firewall', path: `${basePath}/firewall` },
     { id: 'replay', label: 'Time Machine', path: `${basePath}/replay` },
     { id: 'alerts', label: 'Alerts', path: `${basePath}/alerts` },
-    { id: 'members', label: 'Team Members', path: `${basePath}?tab=members` },
-    ...(canManage ? [{ id: 'settings', label: 'Settings', path: `${basePath}?tab=settings` }] : []),
+    ...(canManage ? [{ id: 'settings', label: 'Settings', path: `${basePath}/settings` }] : []),
   ];
 
   const getActiveTab = () => {
     if (pathname?.includes('/api-calls')) return 'api-calls';
+    if (pathname?.includes('/quality')) return 'quality';
     if (pathname?.includes('/firewall')) return 'firewall';
     if (pathname?.includes('/replay')) return 'replay';
     if (pathname?.includes('/alerts')) return 'alerts';
-    if (pathname?.includes('/quality')) return 'overview'; // Quality is part of overview
+    if (pathname?.includes('/settings')) return 'settings';
     if (pathname?.includes('/drift')) return 'overview'; // Drift is part of overview
     if (pathname?.includes('/cost')) return 'overview'; // Cost is part of overview
-    // Check URL params for members/settings tabs
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('tab') === 'members') return 'members';
-      if (params.get('tab') === 'settings') return 'settings';
-    }
     return 'overview';
   };
 

@@ -113,44 +113,90 @@ class AgentGuard:
             print("AgentGuard: OpenAI SDK not found. Install with: pip install openai")
             return
         
-        # Patch ChatCompletion.create
+        ag_instance = self  # Capture self for closures
+        
+        # Patch ChatCompletion.create (OpenAI v0.x)
         if hasattr(openai, "ChatCompletion") and hasattr(openai.ChatCompletion, "create"):
             original_create = openai.ChatCompletion.create
             
-            @wraps(original_create)
             def patched_create(*args, **kwargs):
-                return self._capture_call(original_create, *args, **kwargs)
+                return ag_instance._capture_call(original_create, *args, **kwargs)
             
+            # Copy attributes manually to avoid __name__ issues
+            patched_create.__doc__ = getattr(original_create, '__doc__', None)
             openai.ChatCompletion.create = patched_create
             self._original_functions["ChatCompletion.create"] = original_create
         
         # Patch OpenAI client (v1.0+)
         if hasattr(openai, "OpenAI"):
+            # Store original class methods
             original_init = openai.OpenAI.__init__
             
+            # Patch at class level for chat.completions.create
             def patched_init(self_instance, *args, **kwargs):
                 original_init(self_instance, *args, **kwargs)
-                # Patch the chat.completions.create method
+                # Patch the chat.completions.create method on this instance
                 if hasattr(self_instance, "chat") and hasattr(self_instance.chat, "completions"):
                     original_chat_create = self_instance.chat.completions.create
                     
-                    @wraps(original_chat_create)
-                    def patched_chat_create(*args, **kwargs):
-                        return self._capture_call(original_chat_create, *args, **kwargs)
+                    def patched_chat_create(*call_args, **call_kwargs):
+                        return ag_instance._capture_call(original_chat_create, *call_args, **call_kwargs)
                     
+                    # Copy attributes manually
+                    patched_chat_create.__doc__ = getattr(original_chat_create, '__doc__', None)
                     self_instance.chat.completions.create = patched_chat_create
-                    self._original_functions[f"{id(self_instance)}.chat.completions.create"] = original_chat_create
+                    ag_instance._original_functions[f"{id(self_instance)}.chat.completions.create"] = original_chat_create
             
             openai.OpenAI.__init__ = patched_init
             self._original_functions["OpenAI.__init__"] = original_init
+        
+        # Also try to patch completions directly for already-created clients
+        try:
+            from openai.resources.chat import completions
+            if hasattr(completions, 'Completions'):
+                original_completions_create = completions.Completions.create
+                
+                def patched_completions_create(self_instance, *args, **kwargs):
+                    return ag_instance._capture_call(
+                        lambda *a, **kw: original_completions_create(self_instance, *a, **kw),
+                        *args, **kwargs
+                    )
+                
+                completions.Completions.create = patched_completions_create
+                self._original_functions["completions.Completions.create"] = original_completions_create
+        except (ImportError, AttributeError):
+            pass  # OpenAI v0.x or structure changed
     
     def _capture_call(self, original_func: Callable, *args, **kwargs):
         """Capture and log an API call"""
         start_time = time.time()
-        request_data = {
-            "args": str(args),
-            "kwargs": kwargs,
-        }
+        
+        # Build request_data from kwargs (OpenAI API parameters)
+        request_data = {}
+        try:
+            # Extract common OpenAI parameters
+            if 'model' in kwargs:
+                request_data['model'] = kwargs['model']
+            if 'messages' in kwargs:
+                request_data['messages'] = kwargs['messages']
+            if 'max_tokens' in kwargs:
+                request_data['max_tokens'] = kwargs['max_tokens']
+            if 'temperature' in kwargs:
+                request_data['temperature'] = kwargs['temperature']
+            if 'stream' in kwargs:
+                request_data['stream'] = kwargs['stream']
+            
+            # If no specific params found, try to serialize kwargs
+            if not request_data:
+                # Filter out non-serializable items
+                for k, v in kwargs.items():
+                    try:
+                        json.dumps(v)
+                        request_data[k] = v
+                    except (TypeError, ValueError):
+                        request_data[k] = str(v)
+        except Exception:
+            request_data = {"raw_kwargs": str(kwargs)}
         
         try:
             # Call original function

@@ -52,7 +52,7 @@ class AuditService:
             user_agent=user_agent,
         )
         self.db.add(log)
-        self.db.commit()
+        # Note: commit handled by get_db() dependency - no need to commit here
         
         logger.info(
             f"Audit log created: {action}",

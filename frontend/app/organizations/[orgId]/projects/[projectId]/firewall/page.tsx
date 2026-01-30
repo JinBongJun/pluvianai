@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import OrgLayout from '@/components/layout/OrgLayout';
+import ProjectLayout from '@/components/layout/ProjectLayout';
 import ProjectTabs from '@/components/ProjectTabs';
 import FirewallRules from '@/components/firewall/FirewallRules';
 import { firewallAPI } from '@/lib/api';
@@ -61,8 +61,14 @@ export default function FirewallPage() {
   };
 
   return (
-    <OrgLayout orgId={orgId}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <ProjectLayout
+      orgId={orgId}
+      projectId={projectId}
+      breadcrumb={[
+        { label: 'Firewall' },
+      ]}
+    >
+      <div className="max-w-7xl mx-auto">
         <ProjectTabs projectId={projectId} orgId={orgId} canManage={true} />
 
         <div className="space-y-6">
@@ -98,6 +104,6 @@ export default function FirewallPage() {
           <FirewallRules projectId={projectId} />
         </div>
       </div>
-    </OrgLayout>
+    </ProjectLayout>
   );
 }

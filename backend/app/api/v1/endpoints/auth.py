@@ -123,27 +123,35 @@ async def register(
         )
         db.add(agreement)
         
-        # Track analytics event
-        analytics_service.track_user_registration(
-            user_id=user.id,
-            email=user.email,
-            plan="free",  # Default plan
-        )
+        # Commit user and agreement before analytics/audit
+        db.commit()
         
-        # Log audit event
-        ip_address = request.client.host if request and request.client else None
-        user_agent = request.headers.get("user-agent") if request else None
-        audit_service.log_action(
-            user_id=user.id,
-            action="user_registered",
-            resource_type="user",
-            resource_id=user.id,
-            new_value={"email": user.email, "full_name": user.full_name},
-            ip_address=ip_address,
-            user_agent=user_agent
-        )
+        # Track analytics event (non-critical)
+        try:
+            analytics_service.track_user_registration(
+                user_id=user.id,
+                email=user.email,
+                plan="free",  # Default plan
+            )
+        except Exception as e:
+            logger.warning(f"Failed to track registration analytics: {e}")
         
-        # Transaction is committed by get_db() dependency
+        # Log audit event (non-critical)
+        try:
+            ip_address = request.client.host if request and request.client else None
+            user_agent = request.headers.get("user-agent") if request else None
+            audit_service.log_action(
+                user_id=user.id,
+                action="user_registered",
+                resource_type="user",
+                resource_id=user.id,
+                new_value={"email": user.email, "full_name": user.full_name},
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
+        except Exception as e:
+            logger.warning(f"Failed to log audit event: {e}")
+        
         return user
     except EntityAlreadyExistsError as e:
         logger.warning(f"Registration failed: Email already exists - {user_data.email}")

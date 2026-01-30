@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
-import { Folder, BarChart3, CreditCard, Settings } from 'lucide-react';
+import { Folder, Users, BarChart3, CreditCard, Settings, Plug } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface OrgSidebarProps {
@@ -15,7 +15,8 @@ export default function OrgSidebar({ orgId }: OrgSidebarProps) {
 
   const isActive = (path: string) => {
     if (path === `/organizations/${orgIdStr}/projects`) {
-      return pathname === path || pathname?.startsWith(`${path}/`);
+      // Projects is active only when on projects list, not when inside a project
+      return pathname === path || pathname === `/organizations/${orgIdStr}/projects/new`;
     }
     return pathname?.startsWith(path);
   };
@@ -28,25 +29,34 @@ export default function OrgSidebar({ orgId }: OrgSidebarProps) {
       active: isActive(`/organizations/${orgIdStr}/projects`),
     },
     {
-      label: 'Analytics',
+      label: 'Team',
+      icon: Users,
+      href: `/organizations/${orgIdStr}/team`,
+      active: isActive(`/organizations/${orgIdStr}/team`),
+    },
+    {
+      label: 'Integrations',
+      icon: Plug,
+      href: `/organizations/${orgIdStr}/integrations`,
+      active: isActive(`/organizations/${orgIdStr}/integrations`),
+    },
+    {
+      label: 'Usage',
       icon: BarChart3,
-      href: `/organizations/${orgIdStr}/analytics`,
-      active: isActive(`/organizations/${orgIdStr}/analytics`),
-      disabled: true,
+      href: `/organizations/${orgIdStr}/usage`,
+      active: isActive(`/organizations/${orgIdStr}/usage`),
     },
     {
       label: 'Billing',
       icon: CreditCard,
       href: `/organizations/${orgIdStr}/billing`,
       active: isActive(`/organizations/${orgIdStr}/billing`),
-      disabled: true,
     },
     {
-      label: 'Settings',
+      label: 'Organization settings',
       icon: Settings,
       href: `/organizations/${orgIdStr}/settings`,
       active: isActive(`/organizations/${orgIdStr}/settings`),
-      disabled: true,
     },
   ];
 
@@ -59,14 +69,11 @@ export default function OrgSidebar({ orgId }: OrgSidebarProps) {
             return (
               <button
                 key={item.href}
-                onClick={() => !item.disabled && router.push(item.href)}
-                disabled={item.disabled}
+                onClick={() => router.push(item.href)}
                 className={clsx(
                   'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-                  item.active && !item.disabled
+                  item.active
                     ? 'bg-ag-primary/20 text-ag-text border-l-2 border-ag-accent'
-                    : item.disabled
-                    ? 'text-ag-muted/70 cursor-not-allowed'
                     : 'text-ag-muted hover:bg-white/5 hover:text-ag-text'
                 )}
               >

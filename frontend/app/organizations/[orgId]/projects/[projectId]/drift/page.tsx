@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import OrgLayout from '@/components/layout/OrgLayout';
+import ProjectLayout from '@/components/layout/ProjectLayout';
 import ProjectTabs from '@/components/ProjectTabs';
 import DriftChart from '@/components/DriftChart';
 import Button from '@/components/ui/Button';
@@ -87,10 +87,15 @@ export default function DriftPage() {
   };
 
   return (
-    <OrgLayout orgId={orgId}>
-      <div className="min-h-screen bg-ag-bg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ProjectTabs basePath={basePath} />
+    <ProjectLayout
+      orgId={orgId}
+      projectId={projectId}
+      breadcrumb={[
+        { label: 'Drift' },
+      ]}
+    >
+      <div className="max-w-7xl mx-auto">
+        <ProjectTabs projectId={projectId} orgId={orgId} />
           
           <div className="mt-8 space-y-6">
             {/* Header */}
@@ -213,6 +218,6 @@ export default function DriftPage() {
           </div>
         </div>
       </div>
-    </OrgLayout>
+    </ProjectLayout>
   );
 }

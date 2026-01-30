@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ToastContainer';
 import { projectsAPI, qualityAPI, costAPI, apiCallsAPI, adminAPI, organizationsAPI } from '@/lib/api';
@@ -10,11 +10,7 @@ import QualityChart from '@/components/QualityChart';
 import DriftChart from '@/components/DriftChart';
 import CostChart from '@/components/CostChart';
 import StatsCard from '@/components/StatsCard';
-import MemberList from '@/components/MemberList';
-import ProjectSettings from '@/components/ProjectSettings';
-import OrgLayout from '@/components/layout/OrgLayout';
-import EmptyState from '@/components/EmptyState';
-import { clsx } from 'clsx';
+import ProjectLayout from '@/components/layout/ProjectLayout';
 import ProjectTabs from '@/components/ProjectTabs';
 import { HelpCircle } from 'lucide-react';
 import useSWR from 'swr';
@@ -23,7 +19,6 @@ import ModelValidation from '@/components/model/ModelValidation';
 export default function ProjectDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const searchParams = useSearchParams();
   const toast = useToast();
   const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
   const projectId = Number(Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId);
@@ -34,9 +29,6 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [userRole, setUserRole] = useState<'owner' | 'admin' | 'member' | 'viewer'>('viewer');
-  
-  // Get active tab from URL params
-  const activeTab = (searchParams?.get('tab') || 'overview') as 'overview' | 'members' | 'settings';
 
   const { data: org } = useSWR(orgId ? ['organization', orgId] : null, () =>
     organizationsAPI.get(orgId, { includeStats: false }),
@@ -63,7 +55,7 @@ export default function ProjectDetailPage() {
     }
 
     loadProjectData();
-  }, [projectId, orgId, router, searchParams]);
+  }, [projectId, orgId, router]);
 
   const loadProjectData = async () => {
     try {
@@ -143,10 +135,10 @@ export default function ProjectDetailPage() {
 
   if (loading) {
     return (
-      <OrgLayout
+      <ProjectLayout
         orgId={orgId}
+        projectId={projectId}
         breadcrumb={[
-          { label: 'Organizations', href: '/organizations' },
           { label: org?.name || 'Organization', href: `/organizations/${orgId}/projects` },
           { label: 'Loading...' },
         ]}
@@ -154,7 +146,7 @@ export default function ProjectDetailPage() {
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent"></div>
         </div>
-      </OrgLayout>
+      </ProjectLayout>
     );
   }
 
@@ -184,10 +176,10 @@ export default function ProjectDetailPage() {
   const hasNoData = (stats?.total_calls || 0) === 0;
 
   return (
-    <OrgLayout
+    <ProjectLayout
       orgId={orgId}
+      projectId={projectId}
       breadcrumb={[
-        { label: 'Organizations', href: '/organizations' },
         { label: org?.name || 'Organization', href: `/organizations/${orgId}/projects` },
         { label: project?.name || 'Project' },
       ]}
@@ -217,10 +209,8 @@ export default function ProjectDetailPage() {
         {/* Tabs */}
         <ProjectTabs projectId={projectId} orgId={orgId} canManage={canManage} />
 
-        {/* Tab Content */}
-
-        {activeTab === 'overview' && (
-          <div className="space-y-6">
+        {/* Overview Content */}
+        <div className="space-y-6">
             {/* Stats Cards */}
             <div>
               <div className="flex items-center gap-2 mb-3">
@@ -341,21 +331,8 @@ export default function ProjectDetailPage() {
               </div>
             </div>
           </div>
-        )}
-
-
-        {activeTab === 'members' && (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <MemberList projectId={projectId} canManage={canManage} />
-          </div>
-        )}
-
-        {activeTab === 'settings' && canManage && (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <ProjectSettings projectId={projectId} project={project} onUpdate={loadProjectData} />
-          </div>
-        )}
+        </div>
       </div>
-    </OrgLayout>
+    </ProjectLayout>
   );
 }

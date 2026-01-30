@@ -98,61 +98,64 @@ async def get_firewall_rules(
     return all_rules
 
 
-@router.post("/projects/{project_id}/firewall/rules", response_model=FirewallRuleResponse, status_code=status.HTTP_201_CREATED)
-@handle_errors
+@router.post("/projects/{project_id}/firewall/rules", status_code=status.HTTP_201_CREATED)
 async def create_firewall_rule(
     project_id: int,
     rule_data: FirewallRuleCreate,
     request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    audit_service = Depends(get_audit_service),
 ):
     """Create a new firewall rule"""
-    # Verify project access
-    check_project_access(project_id, current_user, db)
+    try:
+        # Verify project access
+        check_project_access(project_id, current_user, db)
 
-    # Create new rule
-    rule = FirewallRule(
-        project_id=project_id,
-        rule_type=rule_data.rule_type,
-        name=rule_data.name,
-        description=rule_data.description,
-        pattern=rule_data.pattern,
-        pattern_type=rule_data.pattern_type,
-        action=rule_data.action,
-        severity=rule_data.severity,
-        enabled=rule_data.enabled,
-        config=rule_data.config
-    )
+        # Create new rule
+        rule = FirewallRule(
+            project_id=project_id,
+            rule_type=rule_data.rule_type,
+            name=rule_data.name,
+            description=rule_data.description,
+            pattern=rule_data.pattern,
+            pattern_type=rule_data.pattern_type,
+            action=rule_data.action,
+            severity=rule_data.severity,
+            enabled=rule_data.enabled,
+            config=rule_data.config
+        )
 
-    db.add(rule)
-    # Commit handled automatically by get_db() dependency
-    db.refresh(rule)
+        db.add(rule)
+        db.commit()
+        db.refresh(rule)
+        
+        logger.info(f"Firewall rule created: {rule.id} for project {project_id} by user {current_user.id}")
 
-    logger.info(f"Firewall rule created: {rule.id} for project {project_id} by user {current_user.id}")
-
-    # Log audit event
-    ip_address = request.client.host if request and request.client else None
-    user_agent = request.headers.get("user-agent") if request else None
-    audit_service.log_action(
-        user_id=current_user.id,
-        action="firewall_rule_created",
-        resource_type="firewall_rule",
-        resource_id=rule.id,
-        new_value={
-            "project_id": project_id,
-            "rule_type": rule_data.rule_type.value,
-            "name": rule_data.name,
-            "action": rule_data.action.value,
-            "severity": rule_data.severity.value,
-            "enabled": rule_data.enabled
-        },
-        ip_address=ip_address,
-        user_agent=user_agent
-    )
-
-    return rule
+        # Return as dict to avoid serialization issues
+        return {
+            "id": rule.id,
+            "project_id": rule.project_id,
+            "rule_type": rule.rule_type.value if rule.rule_type else None,
+            "name": rule.name,
+            "description": rule.description,
+            "pattern": rule.pattern,
+            "pattern_type": rule.pattern_type,
+            "action": rule.action.value if rule.action else None,
+            "severity": rule.severity.value if rule.severity else None,
+            "enabled": rule.enabled,
+            "config": rule.config,
+            "created_at": str(rule.created_at) if rule.created_at else None,
+            "updated_at": str(rule.updated_at) if rule.updated_at else None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating firewall rule: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create firewall rule: {str(e)}"
+        )
 
 
 @router.put("/projects/{project_id}/firewall/rules/{rule_id}", response_model=FirewallRuleResponse)
