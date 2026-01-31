@@ -24,6 +24,9 @@ export default function ProjectTabs({ projectId, orgId, canManage = false, baseP
   const tabs = [
     { id: 'overview', label: 'Overview', path: basePath },
     { id: 'api-calls', label: 'API Calls', path: `${basePath}/api-calls` },
+    { id: 'signals', label: 'Signals', path: `${basePath}/signals` },
+    { id: 'worst-prompts', label: 'Worst Prompts', path: `${basePath}/worst-prompts` },
+    { id: 'reviews', label: 'Reviews', path: `${basePath}/reviews` },
     { id: 'quality', label: 'Quality', path: `${basePath}/quality` },
     { id: 'firewall', label: 'Firewall', path: `${basePath}/firewall` },
     { id: 'replay', label: 'Time Machine', path: `${basePath}/replay` },
@@ -33,6 +36,9 @@ export default function ProjectTabs({ projectId, orgId, canManage = false, baseP
 
   const getActiveTab = () => {
     if (pathname?.includes('/api-calls')) return 'api-calls';
+    if (pathname?.includes('/signals')) return 'signals';
+    if (pathname?.includes('/worst-prompts')) return 'worst-prompts';
+    if (pathname?.includes('/reviews')) return 'reviews';
     if (pathname?.includes('/quality')) return 'quality';
     if (pathname?.includes('/firewall')) return 'firewall';
     if (pathname?.includes('/replay')) return 'replay';

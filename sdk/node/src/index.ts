@@ -436,6 +436,110 @@ class AgentGuard {
     }, this.healthCheckInterval);
   }
   
+  // ============================================
+  // Signal Detection / Regression Status Methods
+  // ============================================
+  
+  /**
+   * Check regression status for a response using signal-based detection.
+   * 
+   * Returns status: 'safe', 'regressed', or 'critical'
+   * 
+   * @param responseText - The LLM response text to check
+   * @param requestData - Original request data (optional)
+   * @param responseData - Full response data including latency (optional)
+   * @param baselineResponse - Previous response for comparison (optional)
+   * @returns Promise with status, signals, signal_count, etc.
+   * 
+   * @example
+   * ```typescript
+   * const result = await agentguard.checkStatus(
+   *   "I cannot help with that.",
+   *   { messages: [...] }
+   * );
+   * if (result.status === 'critical') {
+   *   console.log("Critical issue detected!");
+   * }
+   * ```
+   */
+  async checkStatus(
+    responseText: string,
+    requestData?: any,
+    responseData?: any,
+    baselineResponse?: string,
+  ): Promise<{ status: string; signals: any[]; signal_count: number; error?: string }> {
+    if (!this.enabled) {
+      return { status: 'safe', signals: [], signal_count: 0 };
+    }
+    
+    try {
+      const payload = {
+        project_id: Number(this.projectId),
+        response_text: responseText,
+        request_data: requestData,
+        response_data: responseData,
+        baseline_response: baselineResponse,
+      };
+      
+      const response = await this.axiosInstance.post(
+        `${this.apiUrl}/api/v1/projects/${this.projectId}/regression/check`,
+        payload
+      );
+      
+      return response.data;
+    } catch (error: any) {
+      // Fail-open: return safe status on error
+      return { status: 'safe', signals: [], signal_count: 0, error: error.message };
+    }
+  }
+  
+  /**
+   * Get the current regression status for the project.
+   * 
+   * @returns Promise with current_status, review_stats, worst_prompt_stats, etc.
+   * 
+   * @example
+   * ```typescript
+   * const status = await agentguard.getProjectStatus();
+   * console.log(`Project status: ${status.current_status}`);
+   * ```
+   */
+  async getProjectStatus(): Promise<{ current_status: string; error?: string; [key: string]: any }> {
+    if (!this.enabled) {
+      return { current_status: 'safe', error: 'AgentGuard not enabled' };
+    }
+    
+    try {
+      const response = await this.axiosInstance.get(
+        `${this.apiUrl}/api/v1/projects/${this.projectId}/regression/status`
+      );
+      
+      return response.data;
+    } catch (error: any) {
+      return { current_status: 'safe', error: error.message };
+    }
+  }
+  
+  /**
+   * Quick check if a response is safe (no regression detected).
+   * 
+   * @param responseText - The LLM response text to check
+   * @param requestData - Original request data (optional)
+   * @returns Promise<boolean> - True if status is 'safe', False otherwise
+   * 
+   * @example
+   * ```typescript
+   * if (await agentguard.isSafe(response.content)) {
+   *   console.log("Response is safe!");
+   * } else {
+   *   console.log("Potential regression detected!");
+   * }
+   * ```
+   */
+  async isSafe(responseText: string, requestData?: any): Promise<boolean> {
+    const result = await this.checkStatus(responseText, requestData);
+    return result.status === 'safe';
+  }
 }
 
 // Global instance
@@ -519,6 +623,87 @@ export async function trackCall(
   }
 }
 
+/**
+ * Check regression status for a response using signal-based detection.
+ * 
+ * Returns status: 'safe', 'regressed', or 'critical'
+ * 
+ * @param responseText - The LLM response text to check
+ * @param requestData - Original request data (optional)
+ * @param responseData - Full response data including latency (optional)
+ * @param baselineResponse - Previous response for comparison (optional)
+ * @returns Promise with status, signals, signal_count, etc.
+ * 
+ * @example
+ * ```typescript
+ * const result = await agentguard.checkStatus(
+ *   "I cannot help with that.",
+ *   { messages: [...] }
+ * );
+ * if (result.status === 'critical') {
+ *   console.log("Critical issue detected!");
+ * }
+ * ```
+ */
+export async function checkStatus(
+  responseText: string,
+  requestData?: any,
+  responseData?: any,
+  baselineResponse?: string,
+): Promise<{ status: string; signals: any[]; signal_count: number; error?: string }> {
+  if (globalInstance) {
+    return globalInstance.checkStatus(responseText, requestData, responseData, baselineResponse);
+  } else {
+    const instance = new AgentGuard();
+    return instance.checkStatus(responseText, requestData, responseData, baselineResponse);
+  }
+}
+
+/**
+ * Get the current regression status for the project.
+ * 
+ * @returns Promise with current_status, review_stats, worst_prompt_stats, etc.
+ * 
+ * @example
+ * ```typescript
+ * const status = await agentguard.getProjectStatus();
+ * console.log(`Project status: ${status.current_status}`);
+ * ```
+ */
+export async function getProjectStatus(): Promise<{ current_status: string; error?: string; [key: string]: any }> {
+  if (globalInstance) {
+    return globalInstance.getProjectStatus();
+  } else {
+    const instance = new AgentGuard();
+    return instance.getProjectStatus();
+  }
+}
+
+/**
+ * Quick check if a response is safe (no regression detected).
+ * 
+ * @param responseText - The LLM response text to check
+ * @param requestData - Original request data (optional)
+ * @returns Promise<boolean> - True if status is 'safe', False otherwise
+ * 
+ * @example
+ * ```typescript
+ * if (await agentguard.isSafe(response.content)) {
+ *   console.log("Response is safe!");
+ * } else {
+ *   console.log("Potential regression detected!");
+ * }
+ * ```
+ */
+export async function isSafe(responseText: string, requestData?: any): Promise<boolean> {
+  if (globalInstance) {
+    return globalInstance.isSafe(responseText, requestData);
+  } else {
+    const instance = new AgentGuard();
+    return instance.isSafe(responseText, requestData);
+  }
+}
+
 // Export class for advanced usage
 export { AgentGuard };
 
@@ -527,5 +712,8 @@ export default {
   init,
   chain,
   trackCall,
+  checkStatus,
+  getProjectStatus,
+  isSafe,
   AgentGuard,
 };

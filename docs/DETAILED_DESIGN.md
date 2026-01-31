@@ -1,6 +1,80 @@
 # 🏗️ AgentGuard 상세 설계 문서
 
-> **목표**: 처음부터 제대로 설계하여 YC 지원, 페르소나/ICP 고려, 안티패턴 방지, 보안/운영 체크리스트 완료
+> **Updated: 2026-01-27** (Reddit 시장 조사 기반 방향 재정립)
+> 
+> **핵심 포지셔닝**: "운영 중인 LLM/Agent가 망가지지 않았는지 자동으로 잡아주는 회귀/퇴화 감지 서비스"
+
+---
+
+## 🎯 핵심 방향 요약 (2026.01 업데이트)
+
+### 포지셔닝
+- ❌ "LLM 평가 도구" / "에이전트 테스트 프레임워크"
+- ✅ **"LLM 배포 안전성 감지 서비스"**
+
+### 핵심 기능
+1. **Shadow Replay** - 프로덕션 트래픽을 새 모델로 재실행
+2. **"최악 프롬프트 세트" 자동 수집** - 실패/의심 케이스 자동 관리
+3. **Signal 기반 감지** - LLM-as-Judge ❌, Rule + Signal ✅
+4. **상태 판정** - 점수(0-100) ❌, 상태(SAFE/REGRESSED/CRITICAL) ✅
+5. **Human-in-the-loop** - 자동 감지 + 사람 최종 결정
+6. **커스텀 Signal** - 도메인 특화 체크 추가
+
+### 기술적 방향
+- LLM-as-Judge ❌ (자기 만족 문제, entropy multiplying)
+- Signal 기반 ✅ (hallucination, length, refusal, JSON break, latency)
+
+> 상세 내용: [BLUEPRINT.md](./BLUEPRINT.md) 참조
+
+---
+
+## 🔄 구현 현황 (2026.01 방향 재정립)
+
+### ✅ 유지 (새 방향과 맞음)
+
+| 구분 | 항목 | 활용 방법 |
+|------|------|-----------|
+| Service | `replay_service.py` | **Shadow Replay 핵심** |
+| Service | `snapshot_service.py` | 트래픽 캡처/저장 |
+| Service | `alert_service.py` | 상태 변경 알림 |
+| Service | `drift_engine.py` | Drift 모니터링 |
+| Service | `firewall_service.py` | Signal 감지 일부 |
+| Service | `pii_sanitizer.py` | 보안 유지 |
+| Service | `slack_service.py`, `discord_service.py` | 알림 채널 |
+| Endpoint | `replay.py`, `alerts.py`, `drift.py` | 핵심 기능 |
+| Endpoint | `proxy.py` | 트래픽 캡처 |
+| Frontend | `/replay`, `/alerts`, `/drift`, `/api-calls` | 핵심 UI |
+
+### ⚠️ 수정 필요
+
+| 현재 | 변경 방향 |
+|------|-----------|
+| `judge_service.py` | → `signal_detection_service.py` (Signal 기반) |
+| `quality_evaluator.py` | → 상태 기반 (점수 ❌) |
+| `golden_case_service.py` | → "최악 프롬프트 세트" 자동 수집 |
+| `quality.py` endpoint | → 상태 판정 API |
+| `/quality` 페이지 | → 상태 기반 UI |
+
+### ❌ 삭제/단순화 (MVP 제외)
+
+| 항목 | 이유 |
+|------|------|
+| `benchmark_service.py`, `public_benchmark_service.py` | MVP 제외 (리서치용) |
+| `cost_analyzer.py`, `cost_optimizer.py` | MVP 제외 (나중에) |
+| `judge_reliability_service.py` | LLM Judge 제거됨 |
+| `rule_market_service.py` | Phase 3로 미룸 |
+| `/benchmarks/*`, `/cost`, `/rule-market/*` | MVP 제외 |
+
+### 🆕 추가 필요
+
+| 항목 | 용도 |
+|------|------|
+| `signal_detection_service.py` | Signal 기반 감지 (hallucination, length, refusal, JSON, latency) |
+| `worst_prompt_service.py` | 최악 프롬프트 자동 수집/관리 |
+| `review_service.py` | Human-in-the-loop 리뷰 |
+| `regression_service.py` | 회귀 상태 판정 (SAFE/REGRESSED/CRITICAL) |
+| `/signals`, `/worst-prompts`, `/reviews`, `/regression` | 신규 엔드포인트 |
+| 신규 프론트엔드 페이지 | Signal 관리, 최악 세트, 리뷰 대기열, 회귀 대시보드 |
 
 ---
 
@@ -9,31 +83,21 @@
 1. [비전 & 페르소나](#1-비전--페르소나)
    - [1.1 타겟 페르소나](#11-타겟-페르소나)
    - [1.2 ICP (Ideal Customer Profile)](#12-icp-ideal-customer-profile)
-     - [1.2.1 ICP 점수 모델](#121-icp-점수-모델)
-     - [1.2.2 ICP 검증 전략](#122-icp-검증-전략)
-     - [1.2.3 ICP 진화 전략](#123-icp-진화-전략)
-     - [1.2.4 ICP 집중 전략](#124-icp-집중-전략)
-   - [1.2.5 제1원칙 사고법](#125-제1원칙-사고법-근본적인-문제-정의)
-   - [1.2.6 ICP 활용 방법](#126-icp-활용-방법)
-   - [1.3 핵심 가치 제안](#13-핵심-가치-제안-결과-중심-접근)
-   - [1.3.1 기술적 Moat (참구)](#131-기술적-moat-참구---왜-너희인가)
+   - [1.3 핵심 가치 제안](#13-핵심-가치-제안)
 2. [아키텍처 원칙](#2-아키텍처-원칙)
 3. [계층 구조 설계](#3-계층-구조-설계)
-4. [핵심 기능 정의 (결과 중심 접근)](#4-핵심-기능-정의-결과-중심-접근)
-   - [4.2.1 Production Guard (핵심 비즈니스)](#421--production-guard-핵심-비즈니스---보안을-뿌리로-박기)
-   - [4.2.2 Retention 전략](#422-retention-전략)
-   - [4.3.1 성능 목표 및 증명](#431-성능-목표-및-증명)
-   - [4.4.1 커뮤니티 전략](#441-커뮤니티-전략-바이럴-장치)
+4. [핵심 기능 정의](#4-핵심-기능-정의)
+   - [4.1 Shadow Replay](#41-shadow-replay)
+   - [4.2 최악 프롬프트 세트](#42-최악-프롬프트-세트)
+   - [4.3 Signal 기반 감지](#43-signal-기반-감지)
+   - [4.4 Human-in-the-loop](#44-human-in-the-loop)
 5. [보안 체크리스트](#5-보안-체크리스트)
 6. [운영 필수 요소](#6-운영-필수-요소)
 7. [데이터베이스 설계](#7-데이터베이스-설계)
 8. [API 설계](#8-api-설계)
 9. [프론트엔드 설계](#9-프론트엔드-설계)
-10. [마이그레이션 전략](#10-마이그레이션-전략)
+10. [구현 현황](#10-구현-현황)
 11. [수익 모델 및 구독 플랜](#11-수익-모델-및-구독-플랜)
-12. [미국 시장 진출 전략](#12-미국-시장-진출-전략-어사이드-사례-기반)
-13. [마케팅 전략](#13-마케팅-전략-지도를-미끼로-던지기)
-14. [YC 피칭 전략](#14-yc-피칭-전략)
 
 ---
 
@@ -41,12 +105,20 @@
 
 ### 1.1 타겟 페르소나
 
-**"AI Product Engineer"**
+**"운영 중인 LLM 제품을 가진 팀"**
 
-- **역할**: AI 에이전트를 제품에 통합하는 엔지니어
-- **페인 포인트**: "Silent Regressions" - 모델/프롬프트 변경 시 성능 저하를 감지하기 어려움
-- **행동 패턴**: "Vibe-testing" → "Scientific reliability"로 전환 필요
-- **도구 경험**: CI/CD, 모니터링 도구 사용 경험
+- **역할**: 프로덕트/플랫폼 팀, AI Product Engineer
+- **페인 포인트**: 
+  - "모델 바꿀 때마다 불안함"
+  - "기존 도구(LangSmith 등) 복잡해서 안 씀"
+  - "직접 테스트 스크립트 만들거나 그냥 배포"
+- **행동 패턴**: "Vibe-testing" / "Rolling the dice" → "빠른 안전성 검증"
+- **운영 환경**: SaaS, 사내 Agent, 고객 대응 챗봇, 자동 리포트
+
+**❌ 타겟 아님:**
+- 연구용
+- 벤치마크 집착
+- 모델 비교 놀이
 
 ### 1.2 ICP (Ideal Customer Profile)
 

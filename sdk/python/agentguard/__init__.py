@@ -429,6 +429,125 @@ class AgentGuard:
         # Start health check in background thread
         thread = threading.Thread(target=health_check_loop, daemon=True)
         thread.start()
+    
+    # ============================================
+    # Signal Detection / Regression Status Methods
+    # ============================================
+    
+    def check_status(
+        self,
+        response_text: str,
+        request_data: Optional[Dict[str, Any]] = None,
+        response_data: Optional[Dict[str, Any]] = None,
+        baseline_response: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Check regression status for a response using signal-based detection.
+        
+        Returns status: 'safe', 'regressed', or 'critical'
+        
+        Args:
+            response_text: The LLM response text to check
+            request_data: Original request data (optional)
+            response_data: Full response data including latency (optional)
+            baseline_response: Previous response for comparison (optional)
+            
+        Returns:
+            Dict with 'status', 'signals', 'signal_count', etc.
+            
+        Example:
+            result = agentguard.check_status(
+                response_text="I cannot help with that.",
+                request_data={"messages": [...]},
+            )
+            if result['status'] == 'critical':
+                print("Critical issue detected!")
+        """
+        if not self.enabled:
+            return {"status": "safe", "signals": [], "signal_count": 0}
+        
+        try:
+            payload = {
+                "project_id": int(self.project_id),
+                "response_text": response_text,
+                "request_data": request_data,
+                "response_data": response_data,
+                "baseline_response": baseline_response,
+            }
+            
+            with httpx.Client(timeout=self.proxy_timeout) as client:
+                response = client.post(
+                    f"{self.api_url}/api/v1/projects/{self.project_id}/regression/check",
+                    json=payload,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                )
+                
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"status": "safe", "signals": [], "signal_count": 0, "error": f"HTTP {response.status_code}"}
+                    
+        except Exception as e:
+            # Fail-open: return safe status on error
+            return {"status": "safe", "signals": [], "signal_count": 0, "error": str(e)}
+    
+    def get_project_status(self) -> Dict[str, Any]:
+        """
+        Get the current regression status for the project.
+        
+        Returns:
+            Dict with 'current_status', 'review_stats', 'worst_prompt_stats', etc.
+            
+        Example:
+            status = agentguard.get_project_status()
+            print(f"Project status: {status['current_status']}")
+        """
+        if not self.enabled:
+            return {"current_status": "safe", "error": "AgentGuard not enabled"}
+        
+        try:
+            with httpx.Client(timeout=self.proxy_timeout) as client:
+                response = client.get(
+                    f"{self.api_url}/api/v1/projects/{self.project_id}/regression/status",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                    },
+                )
+                
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"current_status": "safe", "error": f"HTTP {response.status_code}"}
+                    
+        except Exception as e:
+            return {"current_status": "safe", "error": str(e)}
+    
+    def is_safe(
+        self,
+        response_text: str,
+        request_data: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """
+        Quick check if a response is safe (no regression detected).
+        
+        Args:
+            response_text: The LLM response text to check
+            request_data: Original request data (optional)
+            
+        Returns:
+            True if status is 'safe', False otherwise
+            
+        Example:
+            if agentguard.is_safe(response.content):
+                print("Response is safe!")
+            else:
+                print("Potential regression detected!")
+        """
+        result = self.check_status(response_text, request_data)
+        return result.get("status") == "safe"
 
 
 # Global instance
@@ -544,6 +663,93 @@ def track_call(
         )
 
 
+def check_status(
+    response_text: str,
+    request_data: Optional[Dict[str, Any]] = None,
+    response_data: Optional[Dict[str, Any]] = None,
+    baseline_response: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Check regression status for a response using signal-based detection.
+    
+    Returns status: 'safe', 'regressed', or 'critical'
+    
+    Args:
+        response_text: The LLM response text to check
+        request_data: Original request data (optional)
+        response_data: Full response data including latency (optional)
+        baseline_response: Previous response for comparison (optional)
+        
+    Returns:
+        Dict with 'status', 'signals', 'signal_count', etc.
+        
+    Example:
+        result = agentguard.check_status(
+            response_text="I cannot help with that.",
+            request_data={"messages": [...]},
+        )
+        if result['status'] == 'critical':
+            print("Critical issue detected!")
+    """
+    global _global_instance
+    if _global_instance:
+        return _global_instance.check_status(
+            response_text, request_data, response_data, baseline_response
+        )
+    else:
+        instance = AgentGuard()
+        return instance.check_status(
+            response_text, request_data, response_data, baseline_response
+        )
+
+
+def get_project_status() -> Dict[str, Any]:
+    """
+    Get the current regression status for the project.
+    
+    Returns:
+        Dict with 'current_status', 'review_stats', 'worst_prompt_stats', etc.
+        
+    Example:
+        status = agentguard.get_project_status()
+        print(f"Project status: {status['current_status']}")
+    """
+    global _global_instance
+    if _global_instance:
+        return _global_instance.get_project_status()
+    else:
+        instance = AgentGuard()
+        return instance.get_project_status()
+
+
+def is_safe(
+    response_text: str,
+    request_data: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """
+    Quick check if a response is safe (no regression detected).
+    
+    Args:
+        response_text: The LLM response text to check
+        request_data: Original request data (optional)
+        
+    Returns:
+        True if status is 'safe', False otherwise
+        
+    Example:
+        if agentguard.is_safe(response.content):
+            print("Response is safe!")
+        else:
+            print("Potential regression detected!")
+    """
+    global _global_instance
+    if _global_instance:
+        return _global_instance.is_safe(response_text, request_data)
+    else:
+        instance = AgentGuard()
+        return instance.is_safe(response_text, request_data)
+
+
 # CI Integration
 from .ci import CIClient
 
@@ -552,5 +758,8 @@ __all__ = [
     "init",
     "chain",
     "track_call",
+    "check_status",
+    "get_project_status",
+    "is_safe",
     "CIClient",
 ]

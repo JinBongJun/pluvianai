@@ -10,7 +10,6 @@ from app.models.api_call import APICall
 from app.models.quality_score import QualityScore
 from app.models.drift_detection import DriftDetection
 from app.models.alert import Alert
-from app.services.cost_analyzer import CostAnalyzer
 from app.services.cache_service import cache_service
 from app.core.logging_config import logger
 
@@ -19,7 +18,8 @@ class DashboardService:
     """Service for dashboard metrics and trend analysis"""
 
     def __init__(self):
-        self.cost_analyzer = CostAnalyzer()
+        # Note: CostAnalyzer removed - cost analysis moved to later phase
+        pass
 
     def get_realtime_metrics(
         self,
@@ -145,16 +145,8 @@ class DashboardService:
         drift_count = len(drift_detections)
         critical_drift_count = sum(1 for d in drift_detections if d.severity == "critical")
 
-        # Calculate cost
+        # Calculate cost - placeholder, cost analysis moved to later phase
         total_cost = 0.0
-        for call in api_calls:
-            cost = self.cost_analyzer.calculate_cost(
-                call.provider,
-                call.model,
-                call.request_tokens or 0,
-                call.response_tokens or 0
-            )
-            total_cost += cost
 
         # Get recent alerts
         recent_alerts = (
