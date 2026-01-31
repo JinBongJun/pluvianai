@@ -1,13 +1,18 @@
 """
 Quality evaluation endpoints
+
+Updated: 2026-01-27
+- Added status-based evaluation (SAFE / REGRESSED / CRITICAL)
+- Signal-based detection instead of LLM-as-Judge
+- Kept legacy score-based endpoints for backward compatibility
 """
 
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access
@@ -21,10 +26,150 @@ from app.models.quality_score import QualityScore
 from app.models.api_call import APICall
 from app.services.quality_evaluator import QualityEvaluator
 from app.services.subscription_service import SubscriptionService
+from app.services.signal_detection_service import SignalDetectionService
+from app.services.regression_service import RegressionService
 
 router = APIRouter()
 
 evaluator = QualityEvaluator()
+
+
+# ============================================
+# NEW: Status-based evaluation (Signal-based)
+# ============================================
+
+class StatusCheckRequest(BaseModel):
+    """Request for status-based evaluation"""
+    response_text: str = Field(..., description="Response text to check")
+    request_data: Optional[dict] = None
+    response_data: Optional[dict] = None
+    baseline_response: Optional[str] = None
+
+
+class StatusCheckResponse(BaseModel):
+    """Response for status-based evaluation"""
+    status: str  # safe / regressed / critical
+    signals: List[dict]
+    signal_count: int
+    critical_count: int
+    high_count: int
+    message: str
+
+
+class ProjectStatusSummary(BaseModel):
+    """Project status summary"""
+    status: str
+    pending_reviews: int
+    recent_failures: int
+    worst_prompts_count: int
+    message: str
+
+
+@router.post("/status-check")
+@handle_errors
+async def check_status(
+    project_id: int = Query(..., description="Project ID"),
+    request: StatusCheckRequest = ...,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Check response status using signal-based detection
+    
+    Returns status: SAFE / REGRESSED / CRITICAL
+    Based on detected signals, not LLM scores.
+    """
+    logger.info(
+        f"User {current_user.id} requested status check for project {project_id}",
+        extra={"user_id": current_user.id, "project_id": project_id}
+    )
+    
+    # Verify project access
+    project = check_project_access(project_id, current_user, db)
+    
+    # Use regression service for status check
+    regression_service = RegressionService(db)
+    result = regression_service.check_single_response(
+        project_id=project_id,
+        response_text=request.response_text,
+        request_data=request.request_data,
+        response_data=request.response_data,
+        baseline_response=request.baseline_response,
+    )
+    
+    db.commit()
+    
+    # Build response with message
+    status_messages = {
+        "safe": "All systems operational. No issues detected.",
+        "regressed": "Some issues detected. Review recommended.",
+        "critical": "Critical issues detected. Do not deploy without review.",
+    }
+    
+    response = StatusCheckResponse(
+        status=result["status"],
+        signals=result["signals"],
+        signal_count=result["signal_count"],
+        critical_count=result["critical_count"],
+        high_count=result["high_count"],
+        message=status_messages.get(result["status"], "Unknown status"),
+    )
+    
+    return success_response(data=response.model_dump())
+
+
+@router.get("/project-status")
+@handle_errors
+async def get_project_status(
+    project_id: int = Query(..., description="Project ID"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get current project status summary
+    
+    Returns overall health status based on:
+    - Recent reviews
+    - Detected signals
+    - Worst prompts count
+    """
+    logger.info(
+        f"User {current_user.id} requested project status for project {project_id}",
+        extra={"user_id": current_user.id, "project_id": project_id}
+    )
+    
+    # Verify project access
+    project = check_project_access(project_id, current_user, db)
+    
+    # Use regression service for status
+    regression_service = RegressionService(db)
+    full_status = regression_service.get_project_regression_status(project_id)
+    
+    # Simplified summary
+    review_stats = full_status.get("review_stats", {})
+    worst_stats = full_status.get("worst_prompt_stats", {})
+    current_status = full_status.get("current_status", "safe")
+    
+    status_messages = {
+        "safe": "All systems operational. No regressions detected.",
+        "regressed": "Some issues detected. Review recommended before deployment.",
+        "critical": "Critical issues detected. Do not deploy without review.",
+    }
+    
+    summary = ProjectStatusSummary(
+        status=current_status,
+        pending_reviews=review_stats.get("pending", 0),
+        recent_failures=review_stats.get("by_regression_status", {}).get("critical", 0),
+        worst_prompts_count=worst_stats.get("active", 0),
+        message=status_messages.get(current_status, "Unknown status"),
+    )
+    
+    return success_response(data=summary.model_dump())
+
+
+# ============================================
+# LEGACY: Score-based evaluation (kept for backward compatibility)
+# ============================================
 
 
 class QualityScoreResponse(BaseModel):

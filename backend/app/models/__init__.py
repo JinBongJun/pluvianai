@@ -32,6 +32,12 @@ from app.models.rule_market import RuleMarket
 from app.models.public_benchmark import PublicBenchmark
 from app.models.refresh_token import RefreshToken
 
+# Note: SignalDetection, WorstPrompt, Review models are imported directly in services
+# to avoid circular imports. Import them directly from their files when needed:
+# from app.models.signal_detection import SignalDetection, SignalConfig
+# from app.models.worst_prompt import WorstPrompt, WorstPromptSet, WorstPromptSetMember
+# from app.models.review import Review, ReviewComment, ReviewCase
+
 __all__ = [
     "User",
     "Project",

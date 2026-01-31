@@ -11,7 +11,6 @@ from app.api.v1.endpoints import (
     quality,
     alerts,
     proxy,
-    benchmark,
     admin,
     subscription,
     export,
@@ -20,7 +19,6 @@ from app.api.v1.endpoints import (
     replay,
     onboarding,
     billing,
-    model_validation,
     trust_center,
     mapping,
     problem_analysis,
@@ -32,20 +30,18 @@ from app.api.v1.endpoints import (
     shared_results,
     firewall,
     ci,
-    judge_feedback,
     self_hosted,
     dashboard,
     notifications,
-    rule_market,
-    public_benchmarks,
-    cost,
     settings,
     activity,
     drift,
     agent_chain,
-    shadow_routing,
-    reports,
     webhooks,
+    signals,
+    worst_prompts,
+    reviews,
+    regression,
 )
 
 api_router = APIRouter()
@@ -58,7 +54,6 @@ api_router.include_router(api_calls.router, prefix="/api-calls", tags=["api-call
 api_router.include_router(quality.router, prefix="/quality", tags=["quality"])
 api_router.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
 api_router.include_router(proxy.router, prefix="/proxy", tags=["proxy"])
-api_router.include_router(benchmark.router, prefix="/benchmark", tags=["benchmark"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(subscription.router, prefix="/subscription", tags=["subscription"])
 api_router.include_router(export.router, prefix="/export", tags=["export"])
@@ -66,7 +61,6 @@ api_router.include_router(health.router, prefix="/health", tags=["health"])
 api_router.include_router(organizations.router, prefix="/organizations", tags=["organizations"])
 api_router.include_router(onboarding.router, prefix="/onboarding", tags=["onboarding"])
 api_router.include_router(billing.router, prefix="/billing", tags=["billing"])
-api_router.include_router(model_validation.router, prefix="", tags=["model-validation"])
 api_router.include_router(trust_center.router, prefix="/trust-center", tags=["trust-center"])
 api_router.include_router(mapping.router, prefix="/projects", tags=["mapping"])
 api_router.include_router(problem_analysis.router, prefix="/projects", tags=["problem-analysis"])
@@ -78,17 +72,15 @@ api_router.include_router(user_api_keys.router, prefix="/projects", tags=["user-
 api_router.include_router(shared_results.router, prefix="", tags=["shared-results"])
 api_router.include_router(firewall.router, prefix="", tags=["firewall"])
 api_router.include_router(ci.router, prefix="", tags=["ci"])
-api_router.include_router(judge_feedback.router, prefix="", tags=["judge-feedback"])
 api_router.include_router(self_hosted.router, prefix="", tags=["self-hosted"])
 api_router.include_router(dashboard.router, prefix="", tags=["dashboard"])
 api_router.include_router(notifications.router, prefix="", tags=["notifications"])
-api_router.include_router(rule_market.router, prefix="", tags=["rule-market"])
-api_router.include_router(public_benchmarks.router, prefix="", tags=["public-benchmarks"])
-api_router.include_router(cost.router, prefix="/cost", tags=["cost"])
 api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
 api_router.include_router(activity.router, prefix="/activity", tags=["activity"])
 api_router.include_router(drift.router, prefix="/drift", tags=["drift"])
 api_router.include_router(agent_chain.router, prefix="/agent-chain", tags=["agent-chain"])
-api_router.include_router(shadow_routing.router, prefix="/shadow-routing", tags=["shadow-routing"])
-api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
+api_router.include_router(signals.router, prefix="", tags=["signals"])
+api_router.include_router(worst_prompts.router, prefix="", tags=["worst-prompts"])
+api_router.include_router(reviews.router, prefix="", tags=["reviews"])
+api_router.include_router(regression.router, prefix="", tags=["regression"])
