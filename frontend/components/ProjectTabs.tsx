@@ -87,12 +87,12 @@ export default function ProjectTabs({
               <span>{tab.label}</span>
               {tab.id === 'live-view' && (worstAlertCounts?.liveView || 0) > 0 && (
                 <span className="ml-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500/20 text-[10px] font-semibold text-red-300">
-                  {worstAlertCounts.liveView! > 9 ? '9+' : worstAlertCounts.liveView}
+                  {(worstAlertCounts?.liveView ?? 0) > 9 ? '9+' : worstAlertCounts?.liveView ?? 0}
                 </span>
               )}
               {tab.id === 'test-lab' && (worstAlertCounts?.testLab || 0) > 0 && (
                 <span className="ml-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500/20 text-[10px] font-semibold text-red-300">
-                  {worstAlertCounts.testLab! > 9 ? '9+' : worstAlertCounts.testLab}
+                  {(worstAlertCounts?.testLab ?? 0) > 9 ? '9+' : worstAlertCounts?.testLab ?? 0}
                 </span>
               )}
             </span>
