@@ -1600,7 +1600,13 @@ export const testLabAPI = {
 
   runTest: async (
     projectId: number,
-    data: { name?: string; test_type?: string; canvas_id: string; input_prompts?: string[] },
+    data: {
+      name?: string;
+      test_type?: string;
+      canvas_id: string;
+      input_prompts?: string[];
+      box_ids?: string[];
+    },
   ) => {
     const response = await apiClient.post(`/projects/${projectId}/test-lab/run`, data);
     return unwrapResponse(response);
