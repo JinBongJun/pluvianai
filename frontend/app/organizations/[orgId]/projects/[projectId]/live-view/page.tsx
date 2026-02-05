@@ -275,7 +275,7 @@ export default function LiveViewPage() {
                     <div className="text-xs text-ag-muted mt-1">{agent.agent_id}</div>
                   )}
                 </div>
-                <Button size="xs" variant="ghost" onClick={() => handleCopyOne(agent.agent_id || 'unknown')}>
+                <Button size="sm" variant="ghost" onClick={() => handleCopyOne(agent.agent_id || 'unknown')}>
                   <Copy className="w-4 h-4" />
                 </Button>
               </div>
@@ -327,7 +327,7 @@ export default function LiveViewPage() {
             {(connectionsData?.connections || []).map((conn: any) => (
               <div key={conn.id} className="flex items-center justify-between border border-white/10 rounded-md px-3 py-2">
                 <div className="text-sm">{conn.source_agent_name} → {conn.target_agent_name}</div>
-                <Button size="xs" variant="ghost" onClick={() => handleRemoveConnection(conn.id)}>
+                <Button size="sm" variant="ghost" onClick={() => handleRemoveConnection(conn.id)}>
                   Remove
                 </Button>
               </div>
