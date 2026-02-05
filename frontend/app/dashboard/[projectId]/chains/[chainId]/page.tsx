@@ -49,6 +49,8 @@ interface ChainProfile {
   total_latency_ms: number;
   bottleneck_agent: string | null;
   bottleneck_latency_ms: number;
+  // Optional severity classification for bottleneck (low/medium/high/critical)
+  bottleneck_severity?: 'low' | 'medium' | 'high' | 'critical';
   agents: AgentStats[];
   first_call_at?: string;
   last_call_at?: string;

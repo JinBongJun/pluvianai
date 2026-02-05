@@ -228,6 +228,8 @@ export const ChainProfileSchema = z.object({
   total_latency_ms: NumberSchema.optional(),
   bottleneck_agent: z.string().nullable().optional(),
   bottleneck_latency_ms: NumberSchema.optional(),
+   // Optional severity classification for bottleneck (low/medium/high/critical)
+  bottleneck_severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
   agents: z.array(AgentStatsSchema).optional().default([]),
   first_call_at: z.string().nullable().optional(),
   last_call_at: z.string().nullable().optional(),

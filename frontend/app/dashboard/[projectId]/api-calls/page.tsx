@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import FilterPanel, { FilterState } from '@/components/filters/FilterPanel';
@@ -35,18 +35,8 @@ export default function APICallsListPage() {
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [totalItems, setTotalItems] = useState(0);
   const [allData, setAllData] = useState<any[]>([]); // Store all fetched data for client-side filtering
-
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
-    loadAPICalls();
-  }, [projectId, filters, sortField, sortDirection, currentPage, itemsPerPage, router]);
-
-  const loadAPICalls = async () => {
+  
+  const loadAPICalls = useCallback(async () => {
     setLoading(true);
     try {
       // Fetch more data if client-side filters are active (date range, status, search)
@@ -166,7 +156,17 @@ export default function APICallsListPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPage, filters, itemsPerPage, projectId, sortDirection, sortField, toast, router]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+
+    loadAPICalls();
+  }, [router, loadAPICalls]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {

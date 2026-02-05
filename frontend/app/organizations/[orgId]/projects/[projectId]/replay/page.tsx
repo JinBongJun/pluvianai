@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import ProjectLayout from '@/components/layout/ProjectLayout';
 import Button from '@/components/ui/Button';
@@ -44,31 +44,11 @@ export default function ReplayPage() {
     const [judgeModel, setJudgeModel] = useState('gpt-4o-mini');
     const [showRubricModal, setShowRubricModal] = useState(false);
 
-    // New Rubric Form
-    const [newRubricName, setNewRubricName] = useState('');
-    const [newRubricPrompt, setNewRubricPrompt] = useState('');
+  // New Rubric Form
+  const [newRubricName, setNewRubricName] = useState('');
+  const [newRubricPrompt, setNewRubricPrompt] = useState('');
 
-    useEffect(() => {
-        const token = localStorage.getItem('access_token');
-        if (!token) {
-            router.push('/login');
-            return;
-        }
-
-        if (!projectId || isNaN(projectId) || projectId <= 0) {
-            if (orgId) {
-                router.push(`/organizations/${orgId}/projects`);
-            } else {
-                router.push('/organizations');
-            }
-            return;
-        }
-
-        loadSnapshots();
-        loadRubrics();
-    }, [projectId, orgId, router]);
-
-    const loadRubrics = async () => {
+  const loadRubrics = useCallback(async () => {
         try {
             const data = await replayAPI.listRubrics(projectId);
             setRubrics(data);
@@ -77,9 +57,9 @@ export default function ReplayPage() {
               console.error('Failed to load rubrics');
             }
         }
-    };
+  }, [projectId]);
 
-    const loadSnapshots = async () => {
+  const loadSnapshots = useCallback(async () => {
         setLoading(true);
         try {
             // In a real app, we'd have a specific /snapshots endpoint, 
@@ -91,7 +71,27 @@ export default function ReplayPage() {
         } finally {
             setLoading(false);
         }
-    };
+  }, [projectId, toast]);
+
+  useEffect(() => {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+          router.push('/login');
+          return;
+      }
+
+      if (!projectId || isNaN(projectId) || projectId <= 0) {
+          if (orgId) {
+              router.push(`/organizations/${orgId}/projects`);
+          } else {
+              router.push('/organizations');
+          }
+          return;
+      }
+
+      loadSnapshots();
+      loadRubrics();
+  }, [projectId, orgId, router, loadSnapshots, loadRubrics]);
 
     const handleRunReplay = async () => {
         if (selectedIds.length === 0) {

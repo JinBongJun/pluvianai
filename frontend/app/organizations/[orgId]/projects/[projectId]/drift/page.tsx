@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import ProjectLayout from '@/components/layout/ProjectLayout';
 import ProjectTabs from '@/components/ProjectTabs';
@@ -35,17 +35,8 @@ export default function DriftPage() {
   const [data, setData] = useState<DriftData | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState<7 | 30 | 90>(30);
-
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    loadData();
-  }, [router, projectId, days]);
-
-  const loadData = async () => {
+  
+  const loadData = useCallback(async () => {
     try {
       // Fetch drift events from API
       const response = await driftAPI.list(projectId, { days });
@@ -67,7 +58,16 @@ export default function DriftPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, days]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    loadData();
+  }, [router, loadData]);
 
   if (!projectId || isNaN(projectId)) {
     return null;

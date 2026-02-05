@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import ProjectLayout from '@/components/layout/ProjectLayout';
 import Pagination from '@/components/ui/Pagination';
@@ -70,26 +70,7 @@ export default function AlertsPage() {
   const [recentWorstLiveCount, setRecentWorstLiveCount] = useState(0);
   const [recentWorstTestLabCount, setRecentWorstTestLabCount] = useState(0);
 
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
-    if (!projectId || isNaN(projectId) || projectId <= 0) {
-      if (orgId) {
-        router.push(`/organizations/${orgId}/projects`);
-      } else {
-        router.push('/organizations');
-      }
-      return;
-    }
-
-    loadAlerts();
-  }, [projectId, orgId, filters, sortField, sortDirection, currentPage, itemsPerPage, router]);
-
-  const loadAlerts = async () => {
+  const loadAlerts = useCallback(async () => {
     setLoading(true);
     try {
       const params: any = {
@@ -205,7 +186,40 @@ export default function AlertsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    alertsAPI,
+    projectId,
+    filters.alert_type,
+    filters.severity,
+    filters.is_resolved,
+    dateRange.from,
+    dateRange.to,
+    sortField,
+    sortDirection,
+    currentPage,
+    itemsPerPage,
+    toast,
+    router,
+  ]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      if (orgId) {
+        router.push(`/organizations/${orgId}/projects`);
+      } else {
+        router.push('/organizations');
+      }
+      return;
+    }
+
+    void loadAlerts();
+  }, [projectId, orgId, router, loadAlerts]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {

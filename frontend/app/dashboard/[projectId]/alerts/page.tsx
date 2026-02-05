@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import Pagination from '@/components/ui/Pagination';
@@ -64,17 +64,7 @@ export default function AlertsPage() {
   const [recentWorstLiveCount, setRecentWorstLiveCount] = useState(0);
   const [recentWorstTestLabCount, setRecentWorstTestLabCount] = useState(0);
 
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
-    loadAlerts();
-  }, [projectId, filters, sortField, sortDirection, currentPage, itemsPerPage, router]);
-
-  const loadAlerts = async () => {
+  const loadAlerts = useCallback(async () => {
     setLoading(true);
     try {
       const params: any = {
@@ -190,7 +180,31 @@ export default function AlertsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    alertsAPI,
+    projectId,
+    filters.alert_type,
+    filters.severity,
+    filters.is_resolved,
+    dateRange.from,
+    dateRange.to,
+    sortField,
+    sortDirection,
+    currentPage,
+    itemsPerPage,
+    toast,
+    router,
+  ]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+
+    void loadAlerts();
+  }, [projectId, router, loadAlerts]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {

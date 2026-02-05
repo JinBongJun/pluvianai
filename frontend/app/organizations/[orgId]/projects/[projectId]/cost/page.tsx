@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import ProjectLayout from '@/components/layout/ProjectLayout';
 import ProjectTabs from '@/components/ProjectTabs';
@@ -25,17 +25,8 @@ export default function CostPage() {
   const [data, setData] = useState<CostData | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState<7 | 30 | 90>(30);
-
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    loadData();
-  }, [router, projectId, days]);
-
-  const loadData = async () => {
+  
+  const loadData = useCallback(async () => {
     try {
       // Use stats API to get cost data
       const stats = await apiCallsAPI.getStats(projectId, Math.min(days, 30));
@@ -53,7 +44,16 @@ export default function CostPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, days]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    loadData();
+  }, [router, loadData]);
 
   if (!projectId || isNaN(projectId)) {
     return null;

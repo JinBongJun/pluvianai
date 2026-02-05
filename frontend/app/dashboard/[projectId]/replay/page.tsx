@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import Button from '@/components/ui/Button';
@@ -41,13 +41,8 @@ export default function ReplayPage() {
     // New Rubric Form
     const [newRubricName, setNewRubricName] = useState('');
     const [newRubricPrompt, setNewRubricPrompt] = useState('');
-
-    useEffect(() => {
-        loadSnapshots();
-        loadRubrics();
-    }, [projectId]);
-
-    const loadRubrics = async () => {
+  
+  const loadRubrics = useCallback(async () => {
         try {
             const data = await replayAPI.listRubrics(projectId);
             setRubrics(data);
@@ -56,9 +51,9 @@ export default function ReplayPage() {
               console.error('Failed to load rubrics');
             }
         }
-    };
+  }, [projectId]);
 
-    const loadSnapshots = async () => {
+  const loadSnapshots = useCallback(async () => {
         setLoading(true);
         try {
             // In a real app, we'd have a specific /snapshots endpoint, 
@@ -70,7 +65,12 @@ export default function ReplayPage() {
         } finally {
             setLoading(false);
         }
-    };
+  }, [projectId, toast]);
+
+  useEffect(() => {
+      loadSnapshots();
+      loadRubrics();
+  }, [loadSnapshots, loadRubrics]);
 
     const handleRunReplay = async () => {
         if (selectedIds.length === 0) {

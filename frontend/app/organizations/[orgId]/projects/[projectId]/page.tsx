@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ToastContainer';
@@ -41,30 +41,7 @@ export default function ProjectDetailPage() {
     organizationsAPI.get(orgId, { includeStats: false }),
   );
 
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
-    // Validate projectId
-    if (!projectId || isNaN(projectId) || projectId <= 0) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Invalid project ID:', params.projectId);
-      }
-      if (orgId) {
-        router.push(`/organizations/${orgId}/projects`);
-      } else {
-        router.push('/organizations');
-      }
-      return;
-    }
-
-    loadProjectData();
-  }, [projectId, orgId, router]);
-
-  const loadProjectData = async () => {
+  const loadProjectData = useCallback(async () => {
     try {
       // Load data sequentially to better handle errors
       const projectData = await projectsAPI.get(projectId);
@@ -140,7 +117,30 @@ export default function ProjectDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [orgId, projectId, router]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+
+    // Validate projectId
+    if (!projectId || isNaN(projectId) || projectId <= 0) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Invalid project ID:', params.projectId);
+      }
+      if (orgId) {
+        router.push(`/organizations/${orgId}/projects`);
+      } else {
+        router.push('/organizations');
+      }
+      return;
+    }
+
+    loadProjectData();
+  }, [projectId, orgId, router, loadProjectData]);
 
   if (!orgId) {
     return null;
