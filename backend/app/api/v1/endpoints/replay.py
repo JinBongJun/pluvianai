@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole
+from app.core.test_limits import check_test_run_limits
 from app.models.user import User
 from app.models.snapshot import Snapshot
 from app.models.trace import Trace
@@ -40,6 +41,14 @@ async def trigger_replay(
     """Run a batch replay test for specified snapshots"""
     # Verify access
     check_project_access(project_id, current_user, db, required_roles=[ProjectRole.ADMIN, ProjectRole.OWNER, ProjectRole.MEMBER])
+
+    # Plan limit check: input count and estimated calls (1 call per snapshot)
+    check_test_run_limits(
+        db,
+        current_user.id,
+        input_count=len(data.snapshot_ids),
+        estimated_calls=len(data.snapshot_ids),
+    )
 
     # Fetch snapshots using repository
     from app.infrastructure.repositories.snapshot_repository import SnapshotRepository

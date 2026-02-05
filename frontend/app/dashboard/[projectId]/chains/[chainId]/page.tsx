@@ -24,32 +24,34 @@ import {
   Legend,
 } from 'recharts';
 
+// SCHEMA_SPEC.md compliant - 2026-01-31
 interface AgentStats {
   agent_name: string;
-  call_count: number;
-  total_latency_ms: number;
+  total_calls: number;
+  successful_calls: number;
+  failed_calls: number;
+  success_rate: number;  // 0.0 ~ 1.0
   avg_latency_ms: number;
-  failure_count: number;
-  failure_rate: number;
-  // Normalized to always be a number when we build state
-  avg_quality_score: number;
 }
 
+// SCHEMA_SPEC.md compliant - 2026-01-31
 interface ChainProfile {
   chain_id: string;
-  total_steps: number;
+  total_calls: number;
+  successful_calls: number;
+  failed_calls: number;
+  success_rate: number;  // 0.0 ~ 1.0
+  avg_latency_ms: number;
+  total_cost: number;
+  avg_cost_per_call: number;
+  // Extended fields
   unique_agents: number;
-  total_latency: number;
-  avg_latency_per_step: number;
-  success: boolean;
-  success_rate: number;
-  failure_count: number;
+  total_latency_ms: number;
   bottleneck_agent: string | null;
   bottleneck_latency_ms: number;
-  bottleneck_severity?: string; // Optional - severity level: "none" | "low" | "medium" | "high" | "critical"
   agents: AgentStats[];
-  first_call_at?: string; // Optional - may not be in API response
-  last_call_at?: string; // Optional - may not be in API response
+  first_call_at?: string;
+  last_call_at?: string;
 }
 
 export default function ChainDetailPage() {
@@ -258,10 +260,12 @@ export default function ChainDetailPage() {
                 </p>
               </div>
             </div>
-            {chain.success ? (
-              <Badge variant="success" className="text-xs">Success</Badge>
+            {chain.success_rate >= 0.9 ? (
+              <Badge variant="success" className="text-xs">Healthy</Badge>
+            ) : chain.success_rate >= 0.5 ? (
+              <Badge variant="warning" className="text-xs">Degraded</Badge>
             ) : (
-              <Badge variant="error" className="text-xs">Failed</Badge>
+              <Badge variant="error" className="text-xs">Failing</Badge>
             )}
           </div>
         </div>
@@ -276,7 +280,7 @@ export default function ChainDetailPage() {
             <div className="group relative">
               <HelpCircle className="h-4 w-4 text-slate-400 cursor-help" />
               <div className="absolute left-0 top-6 w-64 p-3 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                <p><strong>Steps:</strong> Total number of steps in the chain<br/>
+                <p><strong>Calls:</strong> Total API calls in this chain<br/>
                 <strong>Agents:</strong> Number of unique agents used<br/>
                 <strong>Latency:</strong> Total chain execution time<br/>
                 <strong>Success:</strong> Successfully completed ratio</p>
@@ -285,9 +289,9 @@ export default function ChainDetailPage() {
           </div>
           <div className="grid grid-cols-4 gap-4">
             <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <p className="text-xs text-slate-400 mb-1">Steps</p>
-              <p className="text-lg font-bold text-white">{chain.total_steps}</p>
-              <p className="text-xs text-slate-500 mt-0.5">Total steps</p>
+              <p className="text-xs text-slate-400 mb-1">Calls</p>
+              <p className="text-lg font-bold text-white">{chain.total_calls}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Total API calls</p>
             </div>
             <div className="rounded-lg border border-white/10 bg-white/5 p-3">
               <p className="text-xs text-slate-400 mb-1">Agents</p>
@@ -296,17 +300,17 @@ export default function ChainDetailPage() {
             </div>
             <div className="rounded-lg border border-white/10 bg-white/5 p-3">
               <p className="text-xs text-slate-400 mb-1">Latency</p>
-              <p className="text-lg font-bold text-white">{toFixedSafe(chain.total_latency / 1000, 2)}s</p>
+              <p className="text-lg font-bold text-white">{toFixedSafe(chain.total_latency_ms / 1000, 2)}s</p>
               <p className="text-xs text-slate-500 mt-0.5">Total execution time</p>
             </div>
             <div className="rounded-lg border border-white/10 bg-white/5 p-3">
               <p className="text-xs text-slate-400 mb-1">Success</p>
               <p className={clsx(
                 'text-lg font-bold',
-                chain.success_rate >= 90 ? 'text-green-400' :
-                chain.success_rate >= 70 ? 'text-yellow-400' : 'text-red-400'
+                chain.success_rate >= 0.9 ? 'text-green-400' :
+                chain.success_rate >= 0.7 ? 'text-yellow-400' : 'text-red-400'
               )}>
-                {toFixedSafe(chain.success_rate, 1)}%
+                {toFixedSafe(chain.success_rate * 100, 1)}%
               </p>
               <p className="text-xs text-slate-500 mt-0.5">Success rate</p>
             </div>
@@ -422,8 +426,8 @@ export default function ChainDetailPage() {
             <h3 className="text-sm font-medium text-slate-400 mb-3">Agent Flow</h3>
             <ChainFlowDiagram
               agents={chain.agents}
-              totalLatency={chain.total_latency}
-              successRate={chain.success_rate}
+              totalLatency={chain.total_latency_ms}
+              successRate={chain.success_rate * 100}
             />
           </div>
         )}
@@ -433,7 +437,10 @@ export default function ChainDetailPage() {
           <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-4">
             <h3 className="text-sm font-medium text-slate-400 mb-3">Performance</h3>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={chain.agents}>
+              <BarChart data={chain.agents.map(a => ({
+                ...a,
+                success_rate_percent: a.success_rate * 100,
+              }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                 <XAxis
                   dataKey="agent_name"
@@ -451,7 +458,7 @@ export default function ChainDetailPage() {
                 />
                 <Legend wrapperStyle={{ color: '#9ca3af' }} />
                 <Bar dataKey="avg_latency_ms" fill="#a855f7" name="Avg Latency (ms)" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="avg_quality_score" fill="#10b981" name="Avg Quality Score" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="success_rate_percent" fill="#10b981" name="Success Rate (%)" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -468,8 +475,9 @@ export default function ChainDetailPage() {
                 <thead className="bg-white/5">
                   <tr>
                     <th className="px-3 py-2 text-left text-xs font-medium text-slate-400">Agent</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-slate-400">Calls</th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-slate-400">Latency</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-slate-400">Quality</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-slate-400">Success</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
@@ -484,10 +492,13 @@ export default function ChainDetailPage() {
                         </div>
                       </td>
                       <td className="px-3 py-2 text-right text-sm text-white">
+                        {agent.total_calls}
+                      </td>
+                      <td className="px-3 py-2 text-right text-sm text-white">
                         {toFixedSafe(agent.avg_latency_ms / 1000, 2)}s
                       </td>
                       <td className="px-3 py-2 text-right text-sm text-white">
-                        {toFixedSafe(agent.avg_quality_score, 1)}%
+                        {toFixedSafe(agent.success_rate * 100, 1)}%
                       </td>
                     </tr>
                   ))}

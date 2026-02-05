@@ -52,7 +52,7 @@ export const OrganizationSchema = z.object({
   id: z.number().int().positive(),
   name: z.string().min(1),
   type: z.string().nullable().optional(),
-  plan_type: z.enum(['free', 'pro', 'enterprise']).or(z.string()).default('free'),
+  plan_type: z.enum(['free', 'indie', 'startup', 'pro', 'enterprise']).or(z.string()).default('free'),
   stats: OrganizationStatsSchema.nullable().optional(),
 });
 
@@ -83,28 +83,42 @@ export const APICallSchema = z.object({
   project_id: z.number().int().positive(),
   provider: z.string(),
   model: z.string(),
-  status_code: z.number().int().nullable(),
-  request_tokens: z.number().int().nonnegative().nullable(),
-  response_tokens: z.number().int().nonnegative().nullable(),
-  latency_ms: z.number().nonnegative().nullable(),
-  cost: z.number().nonnegative().nullable(),
+  status_code: z.number().int().nullable().optional(),
+  request_tokens: z.number().int().nonnegative().nullable().optional(),
+  response_tokens: z.number().int().nonnegative().nullable().optional(),
+  latency_ms: z.number().nonnegative().nullable().optional(),
+  cost: z.number().nonnegative().nullable().optional(), // Optional - not always returned by backend
   created_at: DateSchema,
-  request_body: z.unknown().nullable(),
-  response_body: z.unknown().nullable(),
+  // Backend returns request_data/response_data, frontend may use request_body/response_body
+  request_data: z.unknown().nullable().optional(),
+  response_data: z.unknown().nullable().optional(),
+  request_body: z.unknown().nullable().optional(),
+  response_body: z.unknown().nullable().optional(),
+  // Additional fields from backend
+  agent_name: z.string().nullable().optional(),
+  chain_id: z.string().nullable().optional(),
+  response_text: z.string().nullable().optional(),
+  error_message: z.string().nullable().optional(),
 });
 
-// Quality Score schemas
+// Quality Score schemas - SCHEMA_SPEC.md 기준
 export const QualityScoreSchema = z.object({
   id: z.number().int().positive(),
   api_call_id: z.number().int().positive(),
   project_id: z.number().int().positive(),
   overall_score: NumberSchema,
+  // LLM 기반 점수
   semantic_consistency_score: NumberSchema.nullable(),
   tone_score: NumberSchema.nullable(),
   coherence_score: NumberSchema.nullable(),
+  // 규칙 기반 검증
   json_valid: z.boolean().nullable(),
   required_fields_present: z.boolean().nullable(),
+  length_acceptable: z.boolean().nullable().optional(),  // 백엔드 전용 필드
+  format_valid: z.boolean().nullable().optional(),       // 백엔드 전용 필드
+  // 상세 정보
   evaluation_details: z.unknown().nullable(),
+  violations: z.unknown().nullable().optional(),         // 백엔드 전용 필드
   created_at: DateSchema,
 });
 
@@ -188,31 +202,38 @@ export const StatsSchema = z.object({
 });
 
 // Agent Chain schemas
+// SCHEMA_SPEC.md 기준 - 2026-01-31 통일됨
 export const AgentStatsSchema = z.object({
   agent_name: z.string(),
-  call_count: NumberSchema,
-  total_latency_ms: NumberSchema,
+  total_calls: NumberSchema,
+  successful_calls: NumberSchema,
+  failed_calls: NumberSchema,
+  success_rate: NumberSchema,  // 0.0 ~ 1.0 (백분율 아님)
   avg_latency_ms: NumberSchema,
-  failure_count: NumberSchema,
-  failure_rate: NumberSchema,
-  avg_quality_score: NumberSchema.optional(),
 });
 
+// ChainProfile - SCHEMA_SPEC.md 기준
 export const ChainProfileSchema = z.object({
+  // 핵심 필드
   chain_id: z.string(),
-  total_steps: NumberSchema,
-  unique_agents: NumberSchema,
-  total_latency: NumberSchema,
-  avg_latency_per_step: NumberSchema,
-  success: z.boolean().default(false),
-  success_rate: NumberSchema,
-  failure_count: NumberSchema,
-  bottleneck_agent: z.string().nullable().default(null),
-  bottleneck_latency_ms: NumberSchema,
-  agents: z.array(AgentStatsSchema).default([]),
+  total_calls: NumberSchema,
+  successful_calls: NumberSchema,
+  failed_calls: NumberSchema,
+  success_rate: NumberSchema,  // 0.0 ~ 1.0 (백분율 아님)
+  avg_latency_ms: NumberSchema,
+  total_cost: NumberSchema,
+  avg_cost_per_call: NumberSchema,
+  // 확장 필드 (UI용)
+  unique_agents: NumberSchema.optional(),
+  total_latency_ms: NumberSchema.optional(),
+  bottleneck_agent: z.string().nullable().optional(),
+  bottleneck_latency_ms: NumberSchema.optional(),
+  agents: z.array(AgentStatsSchema).optional().default([]),
+  first_call_at: z.string().nullable().optional(),
+  last_call_at: z.string().nullable().optional(),
 });
 
-// Chain Profile Response (wraps chains array)
+// Chain Profile Response - SCHEMA_SPEC.md 기준
 export const ChainProfileResponseSchema = z.object({
   total_chains: NumberSchema.optional(),
   successful_chains: NumberSchema.optional(),

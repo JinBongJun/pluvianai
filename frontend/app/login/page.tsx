@@ -105,15 +105,15 @@ export default function LoginPage() {
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="flex justify-center mb-4">
-            <div className="h-12 w-12 bg-gradient-to-br from-purple-500 to-purple-700 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30">
-              <span className="text-white font-bold text-lg">AG</span>
+            <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center shadow-glow-neon">
+              <span className="text-ag-bg font-bold text-lg">S</span>
             </div>
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-white">
-            {isLogin ? 'Sign in to AgentGuard' : 'Create your account'}
+            {isLogin ? 'Sign in to Synpira' : 'Create your account'}
           </h2>
           <p className="mt-2 text-center text-sm text-slate-400">
-            Monitor your LLM agents with confidence
+            The test lab for agents.
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={onSubmit}>
@@ -210,8 +210,8 @@ export default function LoginPage() {
                     <span className="font-semibold text-yellow-900">AI Judge Liability Agreement</span>
                     <p className="mt-1 text-xs text-yellow-800">
                       I understand that AI Judge results are non-deterministic and may contain errors. 
-                      I acknowledge that AgentGuard is a tool to assist decision-making, and the final 
-                      responsibility for deployment decisions lies with me. I will not hold AgentGuard 
+                      I acknowledge that Synpira is a tool to assist decision-making, and the final 
+                      responsibility for deployment decisions lies with me. I will not hold Synpira 
                       liable for any consequences resulting from decisions made based on AI Judge evaluations.
                     </p>
                   </label>

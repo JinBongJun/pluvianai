@@ -97,7 +97,7 @@ export default function OrgProjectsPage() {
                   onClick={() => setView('grid')}
                   className={clsx(
                     'p-2 transition-colors',
-                    view === 'grid' ? 'bg-ag-primary text-ag-accent-light' : 'text-ag-muted hover:bg-white/5 hover:text-ag-text'
+                    view === 'grid' ? 'bg-ag-primary text-ag-bg' : 'text-ag-muted hover:bg-white/5 hover:text-ag-text'
                   )}
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -108,7 +108,7 @@ export default function OrgProjectsPage() {
                   onClick={() => setView('list')}
                   className={clsx(
                     'p-2 transition-colors border-l border-white/10',
-                    view === 'list' ? 'bg-ag-primary text-ag-accent-light' : 'text-ag-muted hover:bg-white/5 hover:text-ag-text'
+                    view === 'list' ? 'bg-ag-primary text-ag-bg' : 'text-ag-muted hover:bg-white/5 hover:text-ag-text'
                   )}
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -202,31 +202,22 @@ export default function OrgProjectsPage() {
               <button
                 key={p.id}
                 onClick={() => router.push(`/organizations/${orgId}/projects/${p.id}`)}
-                className="w-full text-left rounded-xl border border-white/10 bg-ag-surface px-5 py-4 hover:border-ag-accent/50 hover:bg-white/5 transition-all duration-200 shadow-lg hover:shadow-ag-accent/5"
+                className="w-full text-left rounded-xl border border-white/10 bg-ag-surface px-5 py-4 hover:border-ag-accent/50 hover:bg-white/5 transition-all duration-200 shadow-lg hover:shadow-glow-neon"
               >
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between">
                   <div>
                     <div className="text-lg font-bold text-ag-text">{p.name}</div>
-                    {p.description && <div className="text-ag-muted text-sm line-clamp-1">{p.description}</div>}
+                    {p.description && <div className="text-ag-muted text-sm line-clamp-1 mt-0.5">{p.description}</div>}
                   </div>
                   <span className="text-[10px] font-mono text-ag-muted/50 bg-white/5 px-1.5 py-0.5 rounded">#{p.id}</span>
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-ag-bg border border-white/5 px-2.5 py-1 text-ag-text">
-                    <span className="text-ag-accent">📊</span> {p.calls24h?.toLocaleString() ?? 0} <span className="text-[10px] text-ag-muted">24h</span>
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-ag-bg border border-white/5 px-2.5 py-1 text-ag-text">
-                    <span className="text-ag-accent">💰</span> ${p.cost7d?.toFixed(2) ?? '0.00'} <span className="text-[10px] text-ag-muted">7d</span>
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-ag-bg border border-white/5 px-2.5 py-1 text-ag-text">
-                    <span className="text-ag-accent">⭐</span> {p.quality?.toFixed(1) ?? '–'}%
-                  </span>
-                  {(p.alerts ?? 0) > 0 && (
+                {(p.alerts ?? 0) > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 border border-red-500/20 px-2.5 py-1 text-red-300">
                       <span className="text-xs">⚠️</span> {p.alerts ?? 0} alerts
                     </span>
-                  )}
-                </div>
+                  </div>
+                )}
               </button>
             ))}
           </div>
@@ -236,9 +227,6 @@ export default function OrgProjectsPage() {
               <thead className="bg-white/5 text-slate-400">
                 <tr>
                   <th className="px-4 py-3 text-left">Project</th>
-                  <th className="px-4 py-3 text-left">Calls (24h)</th>
-                  <th className="px-4 py-3 text-left">Cost (7d)</th>
-                  <th className="px-4 py-3 text-left">Quality</th>
                   <th className="px-4 py-3 text-left">Alerts</th>
                   <th className="px-4 py-3 text-left">Drift</th>
                 </tr>
@@ -251,9 +239,6 @@ export default function OrgProjectsPage() {
                     onClick={() => router.push(`/organizations/${orgId}/projects/${p.id}`)}
                   >
                     <td className="px-4 py-3">{p.name}</td>
-                    <td className="px-4 py-3">{p.calls24h?.toLocaleString() ?? 0}</td>
-                    <td className="px-4 py-3">${p.cost7d?.toFixed(2) ?? '0.00'}</td>
-                    <td className="px-4 py-3">{p.quality?.toFixed(1) ?? '–'}%</td>
                     <td className="px-4 py-3">{p.alerts ?? 0}</td>
                     <td className="px-4 py-3">{p.drift ? 'Drift' : 'No drift'}</td>
                   </tr>

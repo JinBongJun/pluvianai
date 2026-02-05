@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import Dict, Any
 from app.core.database import get_db
 from app.core.decorators import handle_errors
+from app.core.subscription_limits import PLAN_LIMITS
 
 router = APIRouter()
 
@@ -45,9 +46,11 @@ async def get_security_policies(
             "api_keys": "Hashed and encrypted",
         },
         data_retention={
-            "free": "7 days",
-            "pro": "30 days",
-            "enterprise": "90 days",
+            "free": f"{PLAN_LIMITS['free']['data_retention_days']} days",
+            "indie": f"{PLAN_LIMITS['indie']['data_retention_days']} days",
+            "startup": f"{PLAN_LIMITS['startup']['data_retention_days']} days",
+            "pro": f"{PLAN_LIMITS['pro']['data_retention_days']} days",
+            "enterprise": f"{PLAN_LIMITS['enterprise']['data_retention_days']} days",
             "auto_archiving": "S3 Glacier (Enterprise)",
         },
         compliance={

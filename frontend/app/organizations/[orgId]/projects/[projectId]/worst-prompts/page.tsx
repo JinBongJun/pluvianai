@@ -217,7 +217,7 @@ export default function WorstPromptsPage() {
               <div className="p-8 text-center text-slate-400">
                 <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No worst prompts collected yet.</p>
-                <p className="text-sm mt-2">Run Shadow Replay to detect problematic prompts.</p>
+                <p className="text-sm mt-2">Run tests in Test Lab to detect problematic prompts.</p>
               </div>
             ) : (
               <div className="divide-y divide-white/10">

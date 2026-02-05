@@ -1,4 +1,4 @@
-# 🎨 AgentGuard UX/UI 가이드
+# 🎨 Synpira UX/UI 가이드
 
 > **목표**: 업계 표준을 준수하는 일관된 사용자 경험 제공 및 접근성 보장  
 > **원칙**: 모든 사용자가 쉽고 빠르게 사용할 수 있는 개발자 도구
@@ -675,37 +675,45 @@ const { register, handleSubmit, formState: { errors } } = useForm();
 
 ## 8. 색상 및 타이포그래피
 
-### 8.1 색상 시스템 (Guardian Prestige 톤)
+### 8.1 색상 시스템 — Toxic Lab 팔레트
 
-> **컨셉**: 조용한 고급스러움, 신뢰, 관제실 무드  
-> **원칙**: 딥 그린 베이스 + 은은한 골드 포인트, 순수 흰색 배경은 사용하지 않음
+> **컨셉**: 네온 실험실, 테스트 랩, “여기서 만들어진 에이전트는 강하다”  
+> **원칙**: 딥 차콜 베이스 + 네온 그린 포인트 + 일렉트릭 블루(데이터/연결), 네온 글로우 활용
+
+**브랜드**: **Synpira — the test lab for agents.**
 
 **Base / Surface**
-- Base (앱 배경): `#0A0D0B`
-- Surface (카드/섹션): `#121712`
+- **Test Lab 배경**: `#121212` (Deep Charcoal) — `--ag-bg`, `ag-bg`
+- **Live View 배경**: `#1a1a1a` — `--ag-bg-live`, `ag-bgLive` (구역 구분용)
+- Surface (카드/섹션): `#1a1a1a` — `ag-surface`
 
-**Primary (Deep Emerald)**
-- Primary: `#0E4A2F`
-- Primary Hover: `#14653D`
+**Primary / Accent (Neon Green)**
+- Primary · Accent: `#39FF14` (Neon Green) — `ag-primary`, `ag-accent`
+- Primary Hover: 약간 밝은 그린 — `ag-primaryHover`
+- Accent Light (텍스트 on dark): `ag-accentLight`
 
-**Accent (Muted Gold)**
-- Accent: `#B79A3E`
-- Accent Light: `#D1B45F`
+**Sub (Electric Blue)**
+- Electric Blue: `#00D4FF` — `ag-electricBlue` (데이터 흐름, 링크, 보조 강조)
 
 **Text**
-- Main Text: `#E7E7E2`
-- Sub Text: `#A7ADA3`
+- Main Text: `#E7E7E2` — `ag-text`
+- Sub Text: `#A7ADA3` — `ag-muted`
+
+**네온 글로우**
+- `shadow-glow-neon`, `shadow-glow-neon-strong`: 네온 그린 발광
+- `shadow-glow-electric-blue`: 일렉트릭 블루 발광
+- 본문에는 네온 색 남용 금지; CTA·아이콘·강조선·호버에만 사용
+
+**사용 원칙**
+- 네온 그린은 전체 UI의 10~15% 이내 (버튼, 활성 탭, 배지, 강조)
+- Live View 영역은 `bg-ag-live`로 Test Lab과 배경 구분
+- 카드/섹션은 Surface 톤 유지, `#FFFFFF` 배경 금지
 
 **Semantic Colors**
 - Success: `#22C55E`
 - Error: `#EF4444`
 - Warning: `#F59E0B`
-- Info: `#38BDF8`
-
-**사용 원칙**
-- 골드 포인트는 전체 UI의 10~15% 이내로 제한
-- 버튼, 활성 탭, 배지, 핵심 그래프 라인 정도에만 적용
-- 카드/섹션은 항상 Surface 톤을 사용하고 `#FFFFFF` 배경 금지
+- Info: `#00D4FF` (Electric Blue 활용 가능)
 
 **구현 예시 (Tailwind 변수 형태)**:
 ```css

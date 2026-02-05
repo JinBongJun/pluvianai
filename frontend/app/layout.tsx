@@ -8,8 +8,8 @@ import PostHogProviderWrapper from '@/components/analytics/PostHogProvider'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'AgentGuard - LLM Agent Monitoring',
-  description: 'Monitor quality, cost, and drift of your LLM agents',
+  title: 'Synpira — The test lab for agents',
+  description: 'The test lab for agents. Run experiments, watch live, monitor quality and cost.',
 }
 
 export default function RootLayout({

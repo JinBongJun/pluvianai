@@ -47,10 +47,10 @@ init({
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2">
-              <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center shadow-lg shadow-ag-primary/40">
-                <span className="text-ag-accent-light font-bold text-sm">AG</span>
+              <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center shadow-glow-neon">
+                <span className="text-ag-bg font-bold text-sm">S</span>
               </div>
-              <span className="font-semibold text-lg">AgentGuard</span>
+              <span className="font-semibold text-lg">Synpira</span>
             </Link>
 
             {/* Desktop Navigation */}
@@ -129,13 +129,12 @@ init({
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-4xl mx-auto animate-fade-in">
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-6 bg-gradient-to-r from-ag-text via-ag-accentLight to-ag-text bg-clip-text text-transparent animate-scale-in">
-              Monitor Your LLM Agents
-              <br />
-              <span className="bg-gradient-to-r from-ag-accent to-ag-accentLight bg-clip-text text-transparent">
-                With Confidence
-              </span>
+              Synpira
             </h1>
-            <p className="text-xl sm:text-2xl text-ag-muted mb-8 max-w-2xl mx-auto">
+            <p className="text-xl sm:text-2xl text-ag-muted mb-4 max-w-2xl mx-auto">
+              The test lab for agents.
+            </p>
+            <p className="text-lg text-ag-muted mb-8 max-w-2xl mx-auto">
               Track quality, detect drift, analyze costs, and benchmark models—all in one place.
               Zero-config SDK integration.
             </p>
@@ -155,7 +154,7 @@ init({
 
             {/* Code Snippet */}
             <div className="mt-16 max-w-3xl mx-auto animate-slide-in">
-              <div className="bg-ag-surface rounded-2xl border border-white/10 overflow-hidden shadow-2xl transition-all duration-300 hover:shadow-glow-gold hover:border-white/20">
+              <div className="bg-ag-surface rounded-2xl border border-white/10 overflow-hidden shadow-2xl transition-all duration-300 hover:shadow-glow-neon hover:border-ag-accent/30">
                 {/* Code Tabs */}
                 <div className="flex border-b border-white/10 bg-ag-surface">
                   <button
@@ -204,11 +203,11 @@ init({
           {/* Bento Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Feature 1: Quality Assurance */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-gold">
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-ag-accent/30 hover:shadow-glow-neon">
               <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-ag-accent/20 blur-[60px]" />
               <div className="relative z-10">
-                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-ag-primary/40">
-                  <Check className="h-6 w-6 text-white" />
+                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-glow-neon">
+                  <Check className="h-6 w-6 text-ag-bg" />
                 </div>
                 <h3 className="text-2xl font-bold mb-2">Quality Assurance</h3>
                 <p className="text-slate-400 leading-relaxed">
@@ -219,11 +218,11 @@ init({
             </div>
 
             {/* Feature 2: Drift Detection */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-emerald">
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-ag-accent/30 hover:shadow-glow-neon">
               <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-ag-accent/20 blur-[60px]" />
               <div className="relative z-10">
-                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-ag-primary/40">
-                  <Zap className="h-6 w-6 text-white" />
+                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-glow-neon">
+                  <Zap className="h-6 w-6 text-ag-bg" />
                 </div>
                 <h3 className="text-2xl font-bold mb-2">Drift Detection</h3>
                 <p className="text-ag-muted leading-relaxed">
@@ -234,11 +233,11 @@ init({
             </div>
 
             {/* Feature 3: Cost Analysis */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-gold">
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-ag-accent/30 hover:shadow-glow-neon">
               <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-ag-accent/20 blur-[60px]" />
               <div className="relative z-10">
-                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-ag-primary/40">
-                  <BarChart3 className="h-6 w-6 text-white" />
+                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-glow-neon">
+                  <BarChart3 className="h-6 w-6 text-ag-bg" />
                 </div>
                 <h3 className="text-2xl font-bold mb-2">Cost Analysis</h3>
                 <p className="text-ag-muted leading-relaxed">
@@ -249,11 +248,11 @@ init({
             </div>
 
             {/* Feature 4: Model Benchmarking */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-emerald">
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-ag-accent/30 hover:shadow-glow-neon">
               <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-ag-accent/20 blur-[60px]" />
               <div className="relative z-10">
-                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-ag-primary/40">
-                  <Code2 className="h-6 w-6 text-white" />
+                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-glow-neon">
+                  <Code2 className="h-6 w-6 text-ag-bg" />
                 </div>
                 <h3 className="text-2xl font-bold mb-2">Model Benchmarking</h3>
                 <p className="text-ag-muted leading-relaxed">
@@ -335,13 +334,13 @@ init({
             {/* Brand */}
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center shadow-lg shadow-ag-primary/40">
-                  <span className="text-ag-accent-light font-bold text-sm">AG</span>
+                <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center shadow-glow-neon">
+                  <span className="text-ag-bg font-bold text-sm">S</span>
                 </div>
-                <span className="font-semibold">AgentGuard</span>
+                <span className="font-semibold">Synpira</span>
               </div>
               <p className="text-sm text-ag-muted">
-                Monitor your LLM agents with confidence.
+                The test lab for agents.
               </p>
             </div>
 
@@ -415,7 +414,7 @@ init({
           {/* Bottom Bar */}
             <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-sm text-ag-muted">
-              © {new Date().getFullYear()} AgentGuard. All rights reserved.
+              © {new Date().getFullYear()} Synpira. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
               <Link href="/trust-center" className="text-ag-muted hover:text-ag-text transition-colors text-sm">

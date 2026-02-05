@@ -237,8 +237,8 @@ export const authAPI = {
 // Organizations API
 const normalizePlan = (plan?: string): PlanType => {
   const normalized = (plan || 'free').toLowerCase();
-  if (normalized === 'free' || normalized === 'pro' || normalized === 'enterprise') {
-    return normalized;
+  if (['free', 'indie', 'startup', 'pro', 'enterprise'].includes(normalized)) {
+    return normalized as PlanType;
   }
   return (plan as PlanType) || 'free';
 };
@@ -385,6 +385,17 @@ export const projectsAPI = {
       logWarn(`[API Validation] Project ${id} schema mismatch`, { error });
       return response.data; // Return raw data on validation failure
     }
+  },
+
+  getDataRetentionSummary: async (projectId: number): Promise<{
+    plan_type: string;
+    retention_days: number;
+    total_snapshots: number;
+    expiring_soon: number;
+    cutoff_date: string;
+  }> => {
+    const response = await apiClient.get(`/projects/${projectId}/data-retention-summary`);
+    return response.data;
   },
 
   create: async (data: { name: string; description?: string; generate_sample_data?: boolean; organization_id?: number }) => {
@@ -1152,7 +1163,7 @@ export const webhooksAPI = {
 };
 
 // Types
-export type PlanType = 'free' | 'pro' | 'enterprise' | string;
+export type PlanType = 'free' | 'indie' | 'startup' | 'pro' | 'enterprise' | string;
 
 export interface OrganizationSummary {
   id: number;
@@ -1558,6 +1569,26 @@ export const notificationSettingsAPI = {
   sendTest: async (projectId: number, channel: 'email' | 'slack') => {
     const response = await apiClient.post(`/projects/${projectId}/notifications/test`, { channel });
     return unwrapResponse(response);
+  },
+};
+
+// Project LLM / User API Keys (OpenAI, Anthropic, Google, Custom)
+export const projectUserApiKeysAPI = {
+  list: async (projectId: number) => {
+    const response = await apiClient.get(`/projects/${projectId}/user-api-keys`);
+    return Array.isArray(response.data) ? response.data : (response.data?.data ?? []);
+  },
+
+  create: async (
+    projectId: number,
+    data: { provider: string; api_key: string; name?: string }
+  ) => {
+    const response = await apiClient.post(`/projects/${projectId}/user-api-keys`, data);
+    return response.data?.data ?? response.data;
+  },
+
+  delete: async (projectId: number, keyId: number) => {
+    await apiClient.delete(`/projects/${projectId}/user-api-keys/${keyId}`);
   },
 };
 

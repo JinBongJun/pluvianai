@@ -27,32 +27,34 @@ import {
 } from 'recharts';
 import ChainFlowDiagram from '@/components/ChainFlowDiagram';
 
+// SCHEMA_SPEC.md compliant - 2026-01-31
 interface ChainProfile {
   chain_id: string;
-  total_steps: number;
+  total_calls: number;
+  successful_calls: number;
+  failed_calls: number;
+  success_rate: number;  // 0.0 ~ 1.0
+  avg_latency_ms: number;
+  total_cost: number;
+  avg_cost_per_call: number;
+  // Extended fields
   unique_agents: number;
-  total_latency: number;
-  avg_latency_per_step: number;
-  success: boolean;
-  success_rate: number;
-  failure_count: number;
+  total_latency_ms: number;
   bottleneck_agent: string | null;
   bottleneck_latency_ms: number;
-  bottleneck_severity?: string; // Optional - severity level: "none" | "low" | "medium" | "high" | "critical"
   agents: AgentStats[];
-  first_call_at: string;
-  last_call_at: string;
+  first_call_at?: string;
+  last_call_at?: string;
 }
 
+// SCHEMA_SPEC.md compliant - 2026-01-31
 interface AgentStats {
   agent_name: string;
-  call_count: number;
-  total_latency_ms: number;
+  total_calls: number;
+  successful_calls: number;
+  failed_calls: number;
+  success_rate: number;  // 0.0 ~ 1.0
   avg_latency_ms: number;
-  failure_count: number;
-  failure_rate: number;
-  success_rate?: number; // Optional, can be calculated from failure_rate
-  avg_quality_score?: number; // Optional - may not be available for all agents
 }
 
 export default function AgentChainsPage() {
@@ -76,7 +78,7 @@ export default function AgentChainsPage() {
     to: new Date(),
   });
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState<'first_call_at' | 'success_rate' | 'total_latency' | 'total_steps'>('first_call_at');
+  const [sortField, setSortField] = useState<'first_call_at' | 'success_rate' | 'total_latency_ms' | 'total_calls'>('first_call_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -258,13 +260,13 @@ export default function AgentChainsPage() {
             aVal = (typeof a.success_rate === 'number') ? a.success_rate : 0;
             bVal = (typeof b.success_rate === 'number') ? b.success_rate : 0;
             break;
-          case 'total_latency':
-            aVal = (typeof a.total_latency === 'number') ? a.total_latency : 0;
-            bVal = (typeof b.total_latency === 'number') ? b.total_latency : 0;
+          case 'total_latency_ms':
+            aVal = (typeof a.total_latency_ms === 'number') ? a.total_latency_ms : 0;
+            bVal = (typeof b.total_latency_ms === 'number') ? b.total_latency_ms : 0;
             break;
-          case 'total_steps':
-            aVal = (typeof a.total_steps === 'number') ? a.total_steps : 0;
-            bVal = (typeof b.total_steps === 'number') ? b.total_steps : 0;
+          case 'total_calls':
+            aVal = (typeof a.total_calls === 'number') ? a.total_calls : 0;
+            bVal = (typeof b.total_calls === 'number') ? b.total_calls : 0;
             break;
           default:
             aVal = 0;
@@ -471,7 +473,7 @@ export default function AgentChainsPage() {
                   .filter((chain: ChainProfile) => chain && chain.chain_id)
                   .map((chain: ChainProfile) => ({
                     value: chain.chain_id || '',
-                    label: `${(chain.chain_id || '').substring(0, 16)}... (${chain.total_steps || 0} steps, ${chain.unique_agents || 0} agents)`,
+                    label: `${(chain.chain_id || '').substring(0, 16)}... (${chain.total_calls || 0} calls, ${chain.unique_agents || 0} agents)`,
                   })),
               ] : []}
               className="min-w-[280px]"
@@ -524,8 +526,8 @@ export default function AgentChainsPage() {
                   options={[
                     { value: 'first_call_at', label: 'Time' },
                     { value: 'success_rate', label: 'Success Rate' },
-                    { value: 'total_latency', label: 'Total Latency' },
-                    { value: 'total_steps', label: 'Total Steps' },
+                    { value: 'total_latency_ms', label: 'Total Latency' },
+                    { value: 'total_calls', label: 'Total Calls' },
                   ]}
                   className="min-w-[150px]"
                 />
@@ -559,8 +561,9 @@ export default function AgentChainsPage() {
           const totalChains = ('total_chains' in chainProfile && typeof chainProfile.total_chains === 'number') 
             ? chainProfile.total_chains 
             : allChains.length;
+          // success_rate is 0.0 ~ 1.0, convert to percentage
           const successRate = ('success_rate' in chainProfile && typeof chainProfile.success_rate === 'number') 
-            ? Number(chainProfile.success_rate) 
+            ? Number(chainProfile.success_rate) * 100
             : 0;
           const avgLatency = ('avg_chain_latency_ms' in chainProfile && typeof chainProfile.avg_chain_latency_ms === 'number' && chainProfile.avg_chain_latency_ms > 0) 
             ? Number(chainProfile.avg_chain_latency_ms)
@@ -620,16 +623,15 @@ export default function AgentChainsPage() {
           const chartData = agents.slice(0, 10)
             .filter((agent: AgentStats) => agent && typeof agent === 'object')
             .map((agent: AgentStats) => {
-              const successRate = typeof agent?.success_rate === 'number' 
-                ? agent.success_rate 
-                : (typeof agent?.failure_rate === 'number' 
-                  ? Math.max(0, 100 - agent.failure_rate) 
-                  : 0);
+              // success_rate is 0.0 ~ 1.0, convert to percentage for display
+              const successRatePercent = typeof agent?.success_rate === 'number' 
+                ? agent.success_rate * 100
+                : 0;
               return {
                 agent_name: (agent?.agent_name && typeof agent.agent_name === 'string') ? agent.agent_name : 'Unknown',
                 avg_latency_ms: typeof agent?.avg_latency_ms === 'number' ? agent.avg_latency_ms : 0,
-                success_rate: successRate,
-                call_count: typeof agent?.call_count === 'number' ? agent.call_count : 0,
+                success_rate: successRatePercent,
+                total_calls: typeof agent?.total_calls === 'number' ? agent.total_calls : 0,
               };
             });
           
@@ -748,15 +750,20 @@ export default function AgentChainsPage() {
                             >
                               Chain: {(chain.chain_id || 'unknown').substring(0, 20)}...
                             </h3>
-                            {chain.success ? (
+                            {chain.success_rate >= 0.9 ? (
                               <Badge variant="success">
                                 <CheckCircle className="h-3 w-3 mr-1" />
-                                Success
+                                Healthy
+                              </Badge>
+                            ) : chain.success_rate >= 0.5 ? (
+                              <Badge variant="warning">
+                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                Degraded
                               </Badge>
                             ) : (
                               <Badge variant="error">
                                 <XCircle className="h-3 w-3 mr-1" />
-                                Failed
+                                Failing
                               </Badge>
                             )}
                           </div>
@@ -782,8 +789,8 @@ export default function AgentChainsPage() {
                       {/* Chain Stats Grid */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                         <div>
-                          <p className="text-xs text-slate-400 mb-1">Total Steps</p>
-                          <p className="text-lg font-semibold text-white">{chain.total_steps ?? 0}</p>
+                          <p className="text-xs text-slate-400 mb-1">Total Calls</p>
+                          <p className="text-lg font-semibold text-white">{chain.total_calls ?? 0}</p>
                         </div>
                         <div>
                           <p className="text-xs text-slate-400 mb-1">Unique Agents</p>
@@ -792,8 +799,8 @@ export default function AgentChainsPage() {
                         <div>
                           <p className="text-xs text-slate-400 mb-1">Total Latency</p>
                           <p className="text-lg font-semibold text-white">
-                            {typeof chain.total_latency === 'number' && !isNaN(chain.total_latency)
-                              ? `${toFixedSafe(chain.total_latency / 1000, 2)}s` 
+                            {typeof chain.total_latency_ms === 'number' && !isNaN(chain.total_latency_ms)
+                              ? `${toFixedSafe(chain.total_latency_ms / 1000, 2)}s` 
                               : 'N/A'}
                           </p>
                         </div>
@@ -801,7 +808,7 @@ export default function AgentChainsPage() {
                           <p className="text-xs text-slate-400 mb-1">Success Rate</p>
                           <p className="text-lg font-semibold text-white">
                             {typeof chain.success_rate === 'number' && !isNaN(chain.success_rate)
-                              ? `${toFixedSafe(chain.success_rate, 1)}%` 
+                              ? `${toFixedSafe(chain.success_rate * 100, 1)}%` 
                               : 'N/A'}
                           </p>
                         </div>
@@ -833,8 +840,9 @@ export default function AgentChainsPage() {
                         
                         if (safeAgents.length === 0) return null;
                         
-                        const safeTotalLatency = typeof chain.total_latency === 'number' ? chain.total_latency : 0;
-                        const safeSuccessRate = typeof chain.success_rate === 'number' ? chain.success_rate : 0;
+                        const safeTotalLatency = typeof chain.total_latency_ms === 'number' ? chain.total_latency_ms : 0;
+                        // success_rate is 0.0 ~ 1.0, convert to percentage
+                        const safeSuccessRate = typeof chain.success_rate === 'number' ? chain.success_rate * 100 : 0;
                         
                         return (
                           <div className="mt-4 pt-4 border-t border-white/10">

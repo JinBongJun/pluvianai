@@ -330,7 +330,7 @@ export default function MemberList({ projectId, canManage }: MemberListProps) {
               </button>
             </div>
             <p className="text-sm text-slate-400 mb-4">
-              The user must already have an AgentGuard account with this email address.
+              The user must already have a Synpira account with this email address.
             </p>
             <div className="space-y-4">
               <div>

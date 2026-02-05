@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole
+from app.core.test_limits import check_test_run_limits
 from app.models.user import User
 from app.services.regression_service import RegressionService
 
@@ -89,7 +90,15 @@ async def run_regression_test(
     Optionally creates a review for human decision.
     """
     project = check_project_access(project_id, current_user, db)
-    
+
+    # Plan limit check: input count and estimated calls (conservative: 1 per test case if judge used)
+    check_test_run_limits(
+        db,
+        current_user.id,
+        input_count=len(request.test_cases),
+        estimated_calls=len(request.test_cases),
+    )
+
     service = RegressionService(db)
     
     # Convert test cases to dict format

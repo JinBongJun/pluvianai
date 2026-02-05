@@ -19,6 +19,8 @@ interface SecurityPolicies {
   };
   data_retention: {
     free: string;
+    indie?: string;
+    startup?: string;
     pro: string;
     enterprise: string;
     auto_archiving: string;
@@ -110,10 +112,10 @@ export default function TrustCenterPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
-              <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center">
-                <span className="text-ag-accent-light font-bold text-sm">AG</span>
+              <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center shadow-glow-neon">
+                <span className="text-ag-bg font-bold text-sm">S</span>
               </div>
-              <span className="text-ag-text font-semibold">AgentGuard</span>
+              <span className="text-ag-text font-semibold">Synpira</span>
             </Link>
             <Link href="/login">
               <Button variant="outline" size="sm">Sign In</Button>
@@ -125,8 +127,8 @@ export default function TrustCenterPage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="mb-12 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-ag-primary to-ag-primaryHover mb-4">
-            <Shield className="h-8 w-8 text-white" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-ag-primary to-ag-primaryHover mb-4 shadow-glow-neon">
+            <Shield className="h-8 w-8 text-ag-bg" />
           </div>
           <h1 className="text-4xl font-bold text-ag-text mb-4">Trust Center</h1>
           <p className="text-xl text-ag-muted max-w-2xl mx-auto">
@@ -185,6 +187,18 @@ export default function TrustCenterPage() {
                     <dt className="text-sm text-ag-muted">Free Plan</dt>
                     <dd className="text-ag-text font-medium">{policies.data_retention.free}</dd>
                   </div>
+                  {policies.data_retention.indie != null && (
+                    <div>
+                      <dt className="text-sm text-ag-muted">Indie Plan</dt>
+                      <dd className="text-ag-text font-medium">{policies.data_retention.indie}</dd>
+                    </div>
+                  )}
+                  {policies.data_retention.startup != null && (
+                    <div>
+                      <dt className="text-sm text-ag-muted">Startup Plan</dt>
+                      <dd className="text-ag-text font-medium">{policies.data_retention.startup}</dd>
+                    </div>
+                  )}
                   <div>
                     <dt className="text-sm text-ag-muted">Pro Plan</dt>
                     <dd className="text-ag-text font-medium">{policies.data_retention.pro}</dd>
@@ -291,10 +305,10 @@ export default function TrustCenterPage() {
             Questions about security or compliance?
           </p>
           <a
-            href="mailto:security@agentguard.ai"
+            href="mailto:security@synpira.io"
             className="text-ag-accent hover:text-ag-accentLight transition-colors"
           >
-            security@agentguard.ai
+            security@synpira.io
           </a>
         </div>
       </main>
@@ -304,7 +318,7 @@ export default function TrustCenterPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-sm text-slate-400">
-              © {new Date().getFullYear()} AgentGuard. All rights reserved.
+              © {new Date().getFullYear()} Synpira. All rights reserved.
             </p>
             <div className="flex items-center gap-6 text-sm">
               <Link href="/" className="text-slate-400 hover:text-white transition-colors">

@@ -16,7 +16,7 @@ class Organization(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False, index=True)
     type = Column(String(50), nullable=True)  # personal, startup, company, agency, educational, na
-    plan_type = Column(String(20), nullable=False, default="free")  # free, pro, enterprise
+    plan_type = Column(String(20), nullable=False, default="free")  # free, indie, startup, pro, enterprise
     paddle_customer_id = Column(String(255), nullable=True, index=True)
     paddle_subscription_id = Column(String(255), nullable=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)

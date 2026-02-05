@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
-import { Folder, Users, BarChart3, CreditCard, Settings, Plug } from 'lucide-react';
+import { Folder, CreditCard, Settings, Plug } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface OrgSidebarProps {
@@ -29,22 +29,10 @@ export default function OrgSidebar({ orgId }: OrgSidebarProps) {
       active: isActive(`/organizations/${orgIdStr}/projects`),
     },
     {
-      label: 'Team',
-      icon: Users,
-      href: `/organizations/${orgIdStr}/team`,
-      active: isActive(`/organizations/${orgIdStr}/team`),
-    },
-    {
       label: 'Integrations',
       icon: Plug,
       href: `/organizations/${orgIdStr}/integrations`,
       active: isActive(`/organizations/${orgIdStr}/integrations`),
-    },
-    {
-      label: 'Usage',
-      icon: BarChart3,
-      href: `/organizations/${orgIdStr}/usage`,
-      active: isActive(`/organizations/${orgIdStr}/usage`),
     },
     {
       label: 'Billing',

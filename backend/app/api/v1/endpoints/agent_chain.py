@@ -22,23 +22,41 @@ router = APIRouter()
 cost_analyzer = CostAnalyzer()
 
 
+class AgentStats(BaseModel):
+    """Agent statistics - SCHEMA_SPEC.md compliant"""
+    agent_name: str
+    total_calls: int
+    successful_calls: int
+    failed_calls: int
+    success_rate: float  # 0.0 ~ 1.0
+    avg_latency_ms: float
+
+
 class ChainProfile(BaseModel):
-    """Chain profile item"""
+    """Chain profile item - SCHEMA_SPEC.md compliant"""
     chain_id: str
     total_calls: int
     successful_calls: int
     failed_calls: int
-    success_rate: float
+    success_rate: float  # 0.0 ~ 1.0
     avg_latency_ms: float
     total_cost: float
     avg_cost_per_call: float
+    # Extended fields for UI
+    unique_agents: int = 0
+    total_latency_ms: float = 0.0
+    bottleneck_agent: Optional[str] = None
+    bottleneck_latency_ms: float = 0.0
+    agents: List[AgentStats] = []
+    first_call_at: Optional[str] = None
+    last_call_at: Optional[str] = None
 
 
 class ChainProfileResponse(BaseModel):
-    """Chain profile response"""
+    """Chain profile response - SCHEMA_SPEC.md compliant"""
     total_chains: int
     successful_chains: int
-    success_rate: float
+    success_rate: float  # 0.0 ~ 1.0
     avg_chain_latency_ms: float
     chains: List[ChainProfile]
     message: Optional[str] = None
@@ -125,20 +143,50 @@ async def get_chain_profile(
                 "failed_calls": 0,
                 "total_latency": 0.0,
                 "total_cost": 0.0,
+                "agents": {},  # agent_name -> stats
+                "first_call_at": None,
+                "last_call_at": None,
             }
 
         stats = chain_stats[cid]
         stats["total_calls"] += 1
 
         # Check if successful
-        if call.status_code and 200 <= call.status_code < 300:
+        is_successful = call.status_code and 200 <= call.status_code < 300
+        if is_successful:
             stats["successful_calls"] += 1
         else:
             stats["failed_calls"] += 1
 
         # Accumulate latency
-        if call.latency_ms:
-            stats["total_latency"] += call.latency_ms
+        latency = call.latency_ms or 0.0
+        stats["total_latency"] += latency
+
+        # Track timestamps
+        call_time = call.created_at.isoformat() if call.created_at else None
+        if call_time:
+            if stats["first_call_at"] is None or call_time < stats["first_call_at"]:
+                stats["first_call_at"] = call_time
+            if stats["last_call_at"] is None or call_time > stats["last_call_at"]:
+                stats["last_call_at"] = call_time
+
+        # Track agent stats
+        agent_name = call.agent_name or "unknown"
+        if agent_name not in stats["agents"]:
+            stats["agents"][agent_name] = {
+                "agent_name": agent_name,
+                "total_calls": 0,
+                "successful_calls": 0,
+                "failed_calls": 0,
+                "total_latency": 0.0,
+            }
+        agent_stats = stats["agents"][agent_name]
+        agent_stats["total_calls"] += 1
+        if is_successful:
+            agent_stats["successful_calls"] += 1
+        else:
+            agent_stats["failed_calls"] += 1
+        agent_stats["total_latency"] += latency
 
         # Calculate cost
         input_tokens = call.request_tokens or 0
@@ -163,6 +211,30 @@ async def get_chain_profile(
 
         total_chain_latency += avg_latency
 
+        # Build agent stats list and find bottleneck
+        agent_list: List[AgentStats] = []
+        bottleneck_agent = None
+        bottleneck_latency = 0.0
+        
+        for agent_name, agent_data in stats["agents"].items():
+            agent_total = agent_data["total_calls"]
+            agent_success_rate = (agent_data["successful_calls"] / agent_total) if agent_total > 0 else 0.0
+            agent_avg_latency = (agent_data["total_latency"] / agent_total) if agent_total > 0 else 0.0
+            
+            agent_list.append(AgentStats(
+                agent_name=agent_name,
+                total_calls=agent_total,
+                successful_calls=agent_data["successful_calls"],
+                failed_calls=agent_data["failed_calls"],
+                success_rate=agent_success_rate,
+                avg_latency_ms=agent_avg_latency,
+            ))
+            
+            # Track bottleneck (highest average latency)
+            if agent_avg_latency > bottleneck_latency:
+                bottleneck_latency = agent_avg_latency
+                bottleneck_agent = agent_name
+
         chains.append(ChainProfile(
             chain_id=cid,
             total_calls=stats["total_calls"],
@@ -172,6 +244,14 @@ async def get_chain_profile(
             avg_latency_ms=avg_latency,
             total_cost=stats["total_cost"],
             avg_cost_per_call=avg_cost,
+            # Extended fields
+            unique_agents=len(stats["agents"]),
+            total_latency_ms=stats["total_latency"],
+            bottleneck_agent=bottleneck_agent if bottleneck_latency > 0 else None,
+            bottleneck_latency_ms=bottleneck_latency,
+            agents=agent_list,
+            first_call_at=stats["first_call_at"],
+            last_call_at=stats["last_call_at"],
         ))
 
     total_chains = len(chains)

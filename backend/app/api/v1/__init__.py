@@ -42,6 +42,8 @@ from app.api.v1.endpoints import (
     worst_prompts,
     reviews,
     regression,
+    cost,
+    benchmark,
 )
 
 api_router = APIRouter()
@@ -68,7 +70,7 @@ api_router.include_router(dependency_analysis.router, prefix="/projects", tags=[
 api_router.include_router(performance_analysis.router, prefix="/projects", tags=["performance-analysis"])
 api_router.include_router(insights.router, prefix="/projects", tags=["insights"])
 api_router.include_router(referral.router, prefix="/referral", tags=["referral"])
-api_router.include_router(user_api_keys.router, prefix="/projects", tags=["user-api-keys"])
+api_router.include_router(user_api_keys.router, prefix="/projects/{project_id}/user-api-keys", tags=["user-api-keys"])
 api_router.include_router(shared_results.router, prefix="", tags=["shared-results"])
 api_router.include_router(firewall.router, prefix="", tags=["firewall"])
 api_router.include_router(ci.router, prefix="", tags=["ci"])
@@ -84,3 +86,5 @@ api_router.include_router(signals.router, prefix="", tags=["signals"])
 api_router.include_router(worst_prompts.router, prefix="", tags=["worst-prompts"])
 api_router.include_router(reviews.router, prefix="", tags=["reviews"])
 api_router.include_router(regression.router, prefix="", tags=["regression"])
+api_router.include_router(cost.router, prefix="", tags=["cost"])
+api_router.include_router(benchmark.router, prefix="", tags=["benchmark"])

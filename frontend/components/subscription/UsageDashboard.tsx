@@ -128,7 +128,7 @@ export default function UsageDashboard({ userId }: UsageDashboardProps) {
               <div>
                 <h4 className="text-sm font-semibold text-red-300 mb-1">Quota Exceeded</h4>
                 <p className="text-sm text-red-300">
-                  You&apos;ve reached your plan limit. Upgrade to continue using AgentGuard.
+                  You&apos;ve reached your plan limit. Upgrade to continue using Synpira.
                 </p>
               </div>
               <button

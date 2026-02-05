@@ -105,7 +105,7 @@ export default function OnboardingPage() {
     try {
       const project = await projectsAPI.create({
         name: projectName,
-        description: 'My first AgentGuard project',
+        description: 'My first Synpira project',
         generate_sample_data: false, // We'll use Magic Setup Playground instead
       });
       setProjectId(project.id);
@@ -242,7 +242,7 @@ export AGENTGUARD_PROJECT_ID="${projectId}"`;
           <ProgressBar />
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold text-ag-text mb-4">
-              Welcome to AgentGuard!
+              Welcome to Synpira!
             </h1>
             <p className="text-xl text-ag-muted mb-8">
               Get started in 60 seconds. Monitor your LLM APIs with zero configuration.
@@ -341,7 +341,7 @@ export AGENTGUARD_PROJECT_ID="${projectId}"`;
                     <ul className="text-sm text-amber-200/80 list-disc list-inside space-y-1">
                       <li>AI Judge scores are estimates and may vary between evaluations</li>
                       <li>You are responsible for reviewing and validating AI responses</li>
-                      <li>AgentGuard does not guarantee the accuracy of AI Judge evaluations</li>
+                      <li>Synpira does not guarantee the accuracy of AI Judge evaluations</li>
                       <li>You accept full responsibility for decisions made based on AI Judge results</li>
                     </ul>
                   </div>
@@ -364,7 +364,7 @@ export AGENTGUARD_PROJECT_ID="${projectId}"`;
                     Terms of Service (Required)
                   </label>
                   <p className="text-sm text-ag-muted mt-2">
-                    By using AgentGuard, you agree to our Terms of Service. You understand that AgentGuard is a monitoring tool and does not guarantee the accuracy of AI responses.
+                    By using Synpira, you agree to our Terms of Service. You understand that Synpira is a monitoring tool and does not guarantee the accuracy of AI responses.
                   </p>
                 </div>
               </div>
@@ -525,7 +525,7 @@ export AGENTGUARD_PROJECT_ID="${projectId}"`;
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold text-ag-text mb-2">Magic Setup Playground</h1>
             <p className="text-ag-muted">
-              Generate virtual agent traffic to see AgentGuard in action
+              Generate virtual agent traffic to see Synpira in action
             </p>
           </div>
 
@@ -543,7 +543,7 @@ export AGENTGUARD_PROJECT_ID="${projectId}"`;
             <div className="bg-ag-primary/10 border border-ag-primary/30 rounded-lg p-4 mb-6 text-center">
               <p className="text-sm text-ag-text/90">
                 <strong>What happens:</strong> We&apos;ll generate realistic API call snapshots
-                that demonstrate AgentGuard&apos;s monitoring capabilities.
+                that demonstrate Synpira&apos;s monitoring capabilities.
               </p>
             </div>
 

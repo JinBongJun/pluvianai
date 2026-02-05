@@ -26,6 +26,13 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
   const [costData, setCostData] = useState<any>(null);
+  const [retentionSummary, setRetentionSummary] = useState<{
+    plan_type: string;
+    retention_days: number;
+    total_snapshots: number;
+    expiring_soon: number;
+    cutoff_date: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [userRole, setUserRole] = useState<'owner' | 'admin' | 'member' | 'viewer'>('viewer');
@@ -68,14 +75,20 @@ export default function ProjectDetailPage() {
         return;
       }
       
-      // Load stats in parallel (with error handling for each)
-      const [qualityStats, costAnalysis, apiCallStats] = await Promise.allSettled([
+      // Load stats and retention summary in parallel (with error handling for each)
+      const [qualityStats, costAnalysis, apiCallStats, retentionResult] = await Promise.allSettled([
         qualityAPI.getStats(projectId, 7),
         costAPI.getAnalysis(projectId, 7),
         apiCallsAPI.getStats(projectId, 7),
+        projectsAPI.getDataRetentionSummary(projectId),
       ]);
 
       setProject(projectData);
+      if (retentionResult.status === 'fulfilled') {
+        setRetentionSummary(retentionResult.value);
+      } else {
+        setRetentionSummary(null);
+      }
       
       // Handle stats results (use defaults if failed)
       const qualityStatsData = qualityStats.status === 'fulfilled' ? qualityStats.value : null;
@@ -193,6 +206,11 @@ export default function ProjectDetailPage() {
               <p className="text-slate-400 mt-2 text-sm">
                 Monitor API calls, quality, cost, and drift at a glance
               </p>
+              {retentionSummary && (
+                <p className="text-ag-muted text-sm mt-1">
+                  이 프로젝트 데이터 보관: {retentionSummary.retention_days}일
+                </p>
+              )}
             </div>
             {hasNoData && canManage && (
               <Button

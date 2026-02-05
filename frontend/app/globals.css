@@ -7,18 +7,18 @@
 
 :root {
   --foreground-rgb: 231, 231, 226; /* #E7E7E2 */
-  --background-rgb: 10, 13, 11; /* #0A0D0B */
-  --primary-color: 183, 154, 62; /* Accent #B79A3E */
-  --primary-dark: 14, 74, 47; /* Deep Emerald #0E4A2F */
+  --background-rgb: 18, 18, 18; /* #121212 Deep Charcoal */
   --border-color: 255, 255, 255; /* Used with alpha */
 
-  /* Guardian Prestige palette */
-  --ag-bg: 10, 13, 11; /* #0A0D0B */
-  --ag-surface: 18, 23, 18; /* #121712 */
-  --ag-primary: 14, 74, 47; /* #0E4A2F */
-  --ag-primary-hover: 20, 101, 61; /* #14653D */
-  --ag-accent: 183, 154, 62; /* #B79A3E */
-  --ag-accent-light: 209, 180, 95; /* #D1B45F */
+  /* Toxic Lab palette — neon lab / test lab for agents */
+  --ag-bg: 18, 18, 18; /* #121212 Deep Charcoal — Test Lab main background */
+  --ag-bg-live: 26, 26, 26; /* #1a1a1a — Live View area background (slightly lighter) */
+  --ag-surface: 26, 26, 26; /* #1a1a1a cards/surfaces */
+  --ag-primary: 57, 255, 20; /* #39FF14 Neon Green — main CTA / accent */
+  --ag-primary-hover: 78, 255, 50; /* slightly lighter green */
+  --ag-accent: 57, 255, 20; /* #39FF14 Neon Green */
+  --ag-accent-light: 180, 255, 150; /* lighter green for text on dark */
+  --ag-electric-blue: 0, 212, 255; /* #00D4FF — data flow / links / secondary */
   --ag-text: 231, 231, 226; /* #E7E7E2 */
   --ag-text-muted: 167, 173, 163; /* #A7ADA3 */
 }
@@ -63,21 +63,20 @@ body {
   background: rgba(255, 255, 255, 0.28);
 }
 
-/* Glow effects utility classes */
-.glow-emerald {
-  filter: blur(173px);
-  background: radial-gradient(circle, rgba(14, 74, 47, 0.35) 0%, transparent 70%);
+/* Toxic Lab — neon glow utility classes */
+.glow-neon-green {
+  box-shadow: 0 0 20px rgba(57, 255, 20, 0.4);
 }
-
-.glow-gold {
-  filter: blur(173px);
-  background: radial-gradient(circle, rgba(183, 154, 62, 0.35) 0%, transparent 70%);
+.glow-neon-green-strong {
+  box-shadow: 0 0 24px rgba(57, 255, 20, 0.5), 0 0 48px rgba(57, 255, 20, 0.2);
 }
-
-.glow-red {
-  filter: blur(173px);
-  background: radial-gradient(circle, rgba(239, 68, 68, 0.3) 0%, transparent 70%);
+.glow-electric-blue {
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.35);
 }
+.text-shadow-neon {
+  text-shadow: 0 0 10px rgba(57, 255, 20, 0.5);
+}
+/* Live View area — use class .bg-ag-live when you need the alternate background */
 
 /* Loading bar animation */
 @keyframes slide {

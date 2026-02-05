@@ -12,6 +12,11 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
         "judge_calls_per_month": 100,  # Free plan Judge call limit
         "team_members_per_project": 1,
         "data_retention_days": 7,
+        "input_prompts_per_test": 50,
+        "repeat_count_per_test": 10,
+        "csv_import_row_limit": 200,
+        "total_calls_per_single_test": 1000,
+        "concurrent_tests_per_project": 1,
         "features": {
             "drift_detection": "basic",  # 길이/포맷만 (Length/Format only)
             "quality_checks": "basic",  # JSON/Structure only
@@ -30,6 +35,11 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
         "api_calls_per_month": 30000,
         "team_members_per_project": 1,
         "data_retention_days": 30,
+        "input_prompts_per_test": 200,
+        "repeat_count_per_test": 50,
+        "csv_import_row_limit": 500,
+        "total_calls_per_single_test": 5000,
+        "concurrent_tests_per_project": 1,  # 한 번에 하나만 실행 (과부하 방지)
         "features": {
             "drift_detection": "basic",  # Full Basic Drift
             "quality_checks": "basic",  # JSON/Structure
@@ -46,6 +56,11 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
         "api_calls_per_month": 200000,
         "team_members_per_project": 3,  # Team accounts: 3 members
         "data_retention_days": 90,
+        "input_prompts_per_test": 500,
+        "repeat_count_per_test": 100,
+        "csv_import_row_limit": 1000,
+        "total_calls_per_single_test": 50000,
+        "concurrent_tests_per_project": 1,  # 한 번에 하나만 실행 (과부하 방지)
         "features": {
             "drift_detection": "enhanced",  # Semantic/Tone drift
             "quality_checks": "advanced",  # LLM-based evaluator
@@ -68,6 +83,11 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
         "api_calls_per_month": -1,  # unlimited (soft limit)
         "team_members_per_project": 5,  # Team accounts: 5 members
         "data_retention_days": 180,
+        "input_prompts_per_test": 1000,
+        "repeat_count_per_test": 300,
+        "csv_import_row_limit": 2000,
+        "total_calls_per_single_test": 200000,
+        "concurrent_tests_per_project": 1,  # 한 번에 하나만 실행 (과부하 방지)
         "features": {
             "drift_detection": "enhanced",  # Semantic/Tone + Agent-level drift
             "quality_checks": "advanced",
@@ -97,6 +117,11 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
         "api_calls_per_month": -1,  # unlimited
         "team_members_per_project": -1,  # Custom team size
         "data_retention_days": 365,  # 1 year+
+        "input_prompts_per_test": 5000,  # or custom per contract
+        "repeat_count_per_test": 1000,  # or custom per contract
+        "csv_import_row_limit": 10000,  # or custom per contract
+        "total_calls_per_single_test": 1000000,  # or custom per contract
+        "concurrent_tests_per_project": 1,  # 한 번에 하나만 실행 (과부하 방지, 협의 시 확장 가능)
         "features": {
             "drift_detection": "enhanced",
             "quality_checks": "advanced",

@@ -34,7 +34,7 @@ class OrganizationCreate(BaseModel):
     type: Optional[str] = Field(
         None, description="personal, startup, company, agency, educational, na"
     )
-    plan_type: str = Field("free", pattern="^(free|pro|enterprise)$")
+    plan_type: str = Field("free", pattern="^(free|indie|startup|pro|enterprise)$")
 
 
 class OrganizationSummary(BaseModel):
@@ -364,9 +364,11 @@ def get_organization(
             else:
                 avg_quality = 0.0
 
-            # Get plan limits (based on plan_type)
+            # Get plan limits (based on plan_type) — 5 tiers aligned with Subscription
             plan_limits = {
                 "free": {"calls": 1000, "cost": 10.0},
+                "indie": {"calls": 30000, "cost": 100.0},
+                "startup": {"calls": 200000, "cost": 500.0},
                 "pro": {"calls": 100000, "cost": 1000.0},
                 "enterprise": {"calls": 1000000, "cost": 10000.0},
             }
@@ -430,6 +432,8 @@ def get_organization(
         # Return basic org info without stats if response building fails
         plan_limits = {
             "free": {"calls": 1000, "cost": 10.0},
+            "indie": {"calls": 30000, "cost": 100.0},
+            "startup": {"calls": 200000, "cost": 500.0},
             "pro": {"calls": 100000, "cost": 1000.0},
             "enterprise": {"calls": 1000000, "cost": 10000.0},
         }

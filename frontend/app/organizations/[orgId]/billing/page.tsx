@@ -12,7 +12,7 @@ export default function BillingPage() {
   const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
 
   const { data: org } = useSWR(orgId ? ['organization', orgId] : null, () =>
-    organizationsAPI.get(orgId, { includeStats: false }),
+    organizationsAPI.get(orgId, { includeStats: true }),
   );
 
   const plans = [
@@ -59,6 +59,22 @@ export default function BillingPage() {
             Billing
           </h1>
           <p className="text-slate-400 mt-2">Manage your subscription and billing</p>
+        </div>
+
+        {/* Usage summary */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="text-xs text-slate-400 mb-1">API calls (7d)</div>
+            <div className="text-xl font-bold text-white">{org?.calls7d?.toLocaleString() ?? '0'}</div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="text-xs text-slate-400 mb-1">Projects</div>
+            <div className="text-xl font-bold text-white">{org?.projects ?? 0}</div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="text-xs text-slate-400 mb-1">Cost (7d)</div>
+            <div className="text-xl font-bold text-white">${org?.cost7d?.toFixed(2) ?? '0.00'}</div>
+          </div>
         </div>
 
         {/* Current Plan */}

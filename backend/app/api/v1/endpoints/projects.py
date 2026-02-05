@@ -101,58 +101,6 @@ async def create_project(
         # Organization access errors
         logger.warning(f"Organization access error: {str(e)}")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-
-        # Invalidate user's project list cache
-        cache_service.invalidate_user_projects_cache(current_user.id)
-
-        # Track analytics event
-        analytics_service.track_project_created(
-            user_id=current_user.id,
-            project_id=project.id,
-            project_name=project.name,
-        )
-        
-        # Log activity
-        activity_logger.log_activity(
-            db=db,
-            user_id=current_user.id,
-            activity_type="project_create",
-            action=f"Created project: {project.name}",
-            description=f"Created new project '{project.name}'",
-            project_id=project.id,
-            activity_data={"project_name": project.name, "project_id": project.id},
-        )
-        
-        # Log audit event
-        ip_address = request.client.host if request and request.client else None
-        user_agent = request.headers.get("user-agent") if request else None
-        audit_service.log_action(
-            user_id=current_user.id,
-            action="project_created",
-            resource_type="project",
-            resource_id=project.id,
-            new_value={"name": project.name, "description": project.description, "organization_id": project.organization_id},
-            ip_address=ip_address,
-            user_agent=user_agent
-        )
-
-        # Generate sample data if requested (for onboarding)
-        if project_data.generate_sample_data:
-            try:
-                from app.api.v1.endpoints.admin import generate_sample_data
-
-                # Generate sample data in background (non-blocking)
-                # Note: This is a simplified approach. In production, use a background task queue
-                import asyncio
-
-                asyncio.create_task(generate_sample_data(project.id, current_user, db))
-                logger.info(f"Sample data generation queued for project {project.id}")
-            except Exception as e:
-                # Don't fail project creation if sample data generation fails
-                logger.warning(f"Failed to generate sample data for project {project.id}: {str(e)}")
-
-        logger.info(f"Project created successfully: {project.id}")
-        return project
     except IntegrityError as e:
         db.rollback()
         logger.error(f"Database error creating project: {str(e)}")
@@ -161,6 +109,58 @@ async def create_project(
         db.rollback()
         logger.error(f"Unexpected error creating project: {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create project")
+
+    # Invalidate user's project list cache
+    cache_service.invalidate_user_projects_cache(current_user.id)
+
+    # Track analytics event
+    analytics_service.track_project_created(
+        user_id=current_user.id,
+        project_id=project.id,
+        project_name=project.name,
+    )
+    
+    # Log activity
+    activity_logger.log_activity(
+        db=db,
+        user_id=current_user.id,
+        activity_type="project_create",
+        action=f"Created project: {project.name}",
+        description=f"Created new project '{project.name}'",
+        project_id=project.id,
+        activity_data={"project_name": project.name, "project_id": project.id},
+    )
+    
+    # Log audit event
+    ip_address = request.client.host if request and request.client else None
+    user_agent = request.headers.get("user-agent") if request else None
+    audit_service.log_action(
+        user_id=current_user.id,
+        action="project_created",
+        resource_type="project",
+        resource_id=project.id,
+        new_value={"name": project.name, "description": project.description, "organization_id": project.organization_id},
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+
+    # Generate sample data if requested (for onboarding)
+    if project_data.generate_sample_data:
+        try:
+            from app.api.v1.endpoints.admin import generate_sample_data
+
+            # Generate sample data in background (non-blocking)
+            # Note: This is a simplified approach. In production, use a background task queue
+            import asyncio
+
+            asyncio.create_task(generate_sample_data(project.id, current_user, db))
+            logger.info(f"Sample data generation queued for project {project.id}")
+        except Exception as e:
+            # Don't fail project creation if sample data generation fails
+            logger.warning(f"Failed to generate sample data for project {project.id}: {str(e)}")
+
+    logger.info(f"Project created successfully: {project.id}")
+    return project
 
 
 @router.get("", response_model=List[ProjectResponse])
@@ -217,6 +217,23 @@ async def get_project(project_id: int, current_user: User = Depends(get_current_
         role=role,
         organization_id=project.organization_id,
     )
+
+
+@router.get("/{project_id}/data-retention-summary")
+@handle_errors
+async def get_project_data_retention_summary(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get data retention summary for this project (plan-based retention days)."""
+    check_project_access(project_id, current_user, db)
+    from app.services.data_lifecycle_service import DataLifecycleService
+    service = DataLifecycleService(db)
+    summary = service.get_data_retention_summary(project_id)
+    if "error" in summary:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=summary["error"])
+    return summary
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)

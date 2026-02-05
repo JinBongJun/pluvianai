@@ -45,8 +45,8 @@ export default function TopHeader({
           onClick={() => router.push('/organizations')}
           className="flex items-center gap-2 hover:opacity-80 transition-opacity"
         >
-          <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center shadow-lg shadow-ag-primary/40">
-            <span className="text-ag-accent-light font-bold text-sm">AG</span>
+          <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center shadow-glow-neon">
+            <span className="text-ag-bg font-bold text-sm">S</span>
           </div>
         </button>
         {leftContent}

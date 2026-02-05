@@ -87,7 +87,7 @@ export default function SelfHostedSettingsPage() {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white mb-2">Self-hosted Settings</h1>
-        <p className="text-slate-400">Configure AgentGuard for on-premise deployment (Enterprise only)</p>
+        <p className="text-slate-400">Configure Synpira for on-premise deployment (Enterprise only)</p>
       </div>
 
       {/* Status Card */}
@@ -170,7 +170,7 @@ export default function SelfHostedSettingsPage() {
           <div>
             <h2 className="text-xl font-semibold text-white mb-2">Setup Guide</h2>
             <p className="text-slate-400 text-sm mb-4">
-              Follow the self-hosted setup guide to deploy AgentGuard on your infrastructure.
+              Follow the self-hosted setup guide to deploy Synpira on your infrastructure.
             </p>
           </div>
         </div>
@@ -186,7 +186,7 @@ export default function SelfHostedSettingsPage() {
             <span>View Setup Guide</span>
           </a>
           <a
-            href="mailto:enterprise@agentguard.ai"
+            href="mailto:enterprise@synpira.io"
             className="flex items-center gap-2 text-ag-accent hover:text-ag-accentLight transition-colors"
           >
             <ExternalLink className="w-4 h-4" />
@@ -197,7 +197,7 @@ export default function SelfHostedSettingsPage() {
         <div className="mt-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
           <p className="text-sm text-yellow-400">
             <strong>Note:</strong> Self-hosted deployment requires an Enterprise license. 
-            Contact sales@agentguard.ai for licensing information.
+            Contact sales@synpira.io for licensing information.
           </p>
         </div>
       </div>

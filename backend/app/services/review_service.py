@@ -388,7 +388,7 @@ class ReviewService:
             project_id=project_id,
             title=f"Model Change: {model_before} → {model_after}",
             replay_id=replay_id,
-            description=f"Shadow replay comparing {model_before} to {model_after}",
+            description=f"Replay comparing {model_before} to {model_after}",
             signals_detected=signals,
             model_before=model_before,
             model_after=model_after,

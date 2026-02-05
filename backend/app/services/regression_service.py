@@ -2,7 +2,7 @@
 Regression Service - Orchestrates regression detection workflow
 
 Flow:
-1. Run Shadow Replay
+1. Run replay in Test Lab (model change or prompt change)
 2. Detect signals on each response
 3. Collect worst prompts
 4. Calculate final status (SAFE / REGRESSED / CRITICAL)

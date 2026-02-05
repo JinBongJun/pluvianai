@@ -310,7 +310,7 @@ export default function ReviewsPage() {
             <div className="text-sm text-slate-400 space-y-2">
               <p>The review queue enables human oversight for deployment decisions:</p>
               <ol className="list-decimal list-inside space-y-1 ml-2">
-                <li>Run Shadow Replay to compare model versions</li>
+                <li>Run tests in Test Lab to compare model versions</li>
                 <li>Signals auto-detect potential issues</li>
                 <li>Reviews are created for human decision</li>
                 <li>Approve or reject based on results</li>

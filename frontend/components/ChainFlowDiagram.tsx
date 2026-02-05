@@ -6,14 +6,14 @@ import Badge from './ui/Badge';
 import { clsx } from 'clsx';
 import { toFixedSafe } from '@/lib/format';
 
+// SCHEMA_SPEC.md compliant - 2026-01-31
 interface AgentStats {
   agent_name: string;
-  call_count: number;
-  total_latency_ms: number;
+  total_calls: number;
+  successful_calls: number;
+  failed_calls: number;
+  success_rate: number;  // 0.0 ~ 1.0
   avg_latency_ms: number;
-  failure_count: number;
-  failure_rate: number;
-  avg_quality_score?: number; // Optional - may not be available for all agents
 }
 
 interface ChainFlowDiagramProps {
@@ -32,9 +32,9 @@ export default function ChainFlowDiagram({
   // Sort agents by call order (first agent typically has lower latency due to sequential processing)
   const sortedAgents = useMemo(() => {
     return [...agents].sort((a, b) => {
-      // Sort by call count first (more calls = earlier in chain usually)
-      if (a.call_count !== b.call_count) {
-        return b.call_count - a.call_count;
+      // Sort by total_calls first (more calls = earlier in chain usually)
+      if (a.total_calls !== b.total_calls) {
+        return b.total_calls - a.total_calls;
       }
       // Then by latency (lower latency = earlier in chain)
       return a.avg_latency_ms - b.avg_latency_ms;
@@ -80,7 +80,9 @@ export default function ChainFlowDiagram({
         <div className="flex items-center gap-2 flex-wrap">
           {sortedAgents.map((agent, index) => {
             const isBottleneck = agent.avg_latency_ms === Math.max(...sortedAgents.map(a => a.avg_latency_ms));
-            const hasFailures = agent.failure_count > 0;
+            const hasFailures = agent.failed_calls > 0;
+            // success_rate is 0.0 ~ 1.0, convert to percentage
+            const successRatePercent = agent.success_rate * 100;
             
             return (
               <div key={agent.agent_name} className="flex items-center gap-2">
@@ -118,7 +120,7 @@ export default function ChainFlowDiagram({
                   <div className="space-y-1">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-400">Calls</span>
-                      <span className="text-white font-medium">{agent.call_count}</span>
+                      <span className="text-white font-medium">{agent.total_calls}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-400">Avg Latency</span>
@@ -127,21 +129,21 @@ export default function ChainFlowDiagram({
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Quality</span>
+                      <span className="text-slate-400">Success Rate</span>
                       <Badge
                         variant={
-                          (agent.avg_quality_score ?? 0) >= 80 ? 'success' :
-                          (agent.avg_quality_score ?? 0) >= 60 ? 'warning' : 'error'
+                          successRatePercent >= 90 ? 'success' :
+                          successRatePercent >= 70 ? 'warning' : 'error'
                         }
                         className="text-xs"
                       >
-                        {toFixedSafe(agent.avg_quality_score ?? 0, 0)}%
+                        {toFixedSafe(successRatePercent, 0)}%
                       </Badge>
                     </div>
                     {hasFailures && (
                       <div className="flex items-center justify-between text-xs pt-1 border-t border-white/10">
                         <span className="text-red-400">Failures</span>
-                        <span className="text-red-400 font-medium">{agent.failure_count}</span>
+                        <span className="text-red-400 font-medium">{agent.failed_calls}</span>
                       </div>
                     )}
                   </div>
@@ -183,7 +185,7 @@ export default function ChainFlowDiagram({
                 key={agent.agent_name}
                 className={clsx(
                   'absolute h-full transition-all duration-300 flex items-center justify-center',
-                  agent.failure_count > 0
+                  agent.failed_calls > 0
                     ? 'bg-red-500/30 border-r border-red-500/50'
                     : 'bg-ag-accent/30 border-r border-ag-accent/50'
                 )}

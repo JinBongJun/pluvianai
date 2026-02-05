@@ -217,7 +217,7 @@ export default function SignalsPage() {
                 Pending Reviews
               </Button>
               <Button variant="secondary" onClick={() => router.push(`${basePath}/replay`)}>
-                Run Shadow Replay
+                Run Test (Test Lab)
               </Button>
             </div>
           </div>

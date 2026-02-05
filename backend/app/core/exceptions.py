@@ -100,24 +100,33 @@ async def agentguard_exception_handler(request: Request, exc: AgentGuardExceptio
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    """Handle HTTP exceptions following API_REFERENCE.md format"""
+    """Handle HTTP exceptions following API_REFERENCE.md format.
+    When detail is a dict with 'message', use it as user-visible explanation so UI can show why the error occurred.
+    """
     logger.warning(
         f"HTTPException: {exc.detail}",
         extra={"path": request.url.path, "method": request.method, "status_code": exc.status_code},
     )
-    
-    # Extract error code from detail if possible, otherwise generate from status code
+    detail = exc.detail
+    # User-visible message: prefer detail["message"] when detail is a dict (e.g. limit errors)
+    if isinstance(detail, dict) and "message" in detail:
+        user_message = detail["message"]
+        details = detail  # Keep code, limit, requested etc. for UI
+    else:
+        user_message = str(detail) if detail else "An error occurred"
+        details = None
+    # Error code: prefer detail["code"] (e.g. LIMIT_INPUTS_PER_TEST) when present
     error_code = f"HTTP_{exc.status_code}"
-    if hasattr(exc, "error_code"):
+    if isinstance(detail, dict) and "code" in detail:
+        error_code = detail["code"]
+    elif hasattr(exc, "error_code"):
         error_code = exc.error_code
-    
-    # Extract origin from headers if available (for proxy errors)
     origin = request.headers.get("X-AgentGuard-Origin")
-    
     from app.core.responses import error_response
     return error_response(
         code=error_code,
-        message=exc.detail,
+        message=user_message,
+        details=details,
         origin=origin,
         status_code=exc.status_code,
     )
