@@ -216,7 +216,7 @@ export default function SignalsPage() {
               <Button variant="secondary" onClick={() => router.push(`${basePath}/reviews`)}>
                 Pending Reviews
               </Button>
-              <Button variant="secondary" onClick={() => router.push(`${basePath}/replay`)}>
+              <Button variant="secondary" onClick={() => router.push(`${basePath}/test-lab`)}>
                 Run Test (Test Lab)
               </Button>
             </div>

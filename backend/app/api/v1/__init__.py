@@ -44,6 +44,8 @@ from app.api.v1.endpoints import (
     regression,
     cost,
     benchmark,
+    live_view,
+    test_lab,
 )
 
 api_router = APIRouter()
@@ -88,3 +90,5 @@ api_router.include_router(reviews.router, prefix="", tags=["reviews"])
 api_router.include_router(regression.router, prefix="", tags=["regression"])
 api_router.include_router(cost.router, prefix="", tags=["cost"])
 api_router.include_router(benchmark.router, prefix="", tags=["benchmark"])
+api_router.include_router(live_view.router, prefix="", tags=["live-view"])
+api_router.include_router(test_lab.router, prefix="", tags=["test-lab"])

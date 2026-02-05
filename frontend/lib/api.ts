@@ -1524,6 +1524,131 @@ export const judgeFeedbackAPI = {
   },
 };
 
+// Live View API
+export const liveViewAPI = {
+  getAgents: async (projectId: number, limit: number = 30) => {
+    const response = await apiClient.get(`/projects/${projectId}/live-view/agents`, {
+      params: { limit },
+    });
+    return unwrapResponse(response);
+  },
+
+  getAgentSettings: async (projectId: number, agentId: string) => {
+    const response = await apiClient.get(`/projects/${projectId}/live-view/agents/${agentId}/settings`);
+    return unwrapResponse(response);
+  },
+
+  updateAgentSettings: async (projectId: number, agentId: string, data: { display_name?: string; is_deleted?: boolean }) => {
+    const response = await apiClient.patch(`/projects/${projectId}/live-view/agents/${agentId}/settings`, null, {
+      params: data,
+    });
+    return unwrapResponse(response);
+  },
+
+  deleteAgent: async (projectId: number, agentId: string) => {
+    await apiClient.delete(`/projects/${projectId}/live-view/agents/${agentId}`);
+  },
+
+  listConnections: async (projectId: number) => {
+    const response = await apiClient.get(`/projects/${projectId}/live-view/connections`);
+    return unwrapResponse(response);
+  },
+
+  createConnection: async (projectId: number, data: { source_agent_name: string; target_agent_name: string }) => {
+    const response = await apiClient.post(`/projects/${projectId}/live-view/connections`, null, {
+      params: data,
+    });
+    return unwrapResponse(response);
+  },
+
+  deleteConnection: async (projectId: number, connectionId: string) => {
+    await apiClient.delete(`/projects/${projectId}/live-view/connections/${connectionId}`);
+  },
+
+  listSnapshots: async (projectId: number, params: { agent_id?: string; is_worst?: boolean; limit?: number; offset?: number } = {}) => {
+    const response = await apiClient.get(`/projects/${projectId}/snapshots`, { params });
+    return unwrapResponse(response);
+  },
+};
+
+// Test Lab API
+export const testLabAPI = {
+  listCanvases: async (projectId: number) => {
+    const response = await apiClient.get(`/projects/${projectId}/test-lab/canvases`);
+    return unwrapResponse(response);
+  },
+
+  createCanvas: async (
+    projectId: number,
+    data: { name: string; boxes?: any[]; connections?: any[] },
+  ) => {
+    const response = await apiClient.post(`/projects/${projectId}/test-lab/canvases`, data);
+    return unwrapResponse(response);
+  },
+
+  updateCanvas: async (
+    projectId: number,
+    canvasId: string,
+    data: { name?: string; boxes?: any[]; connections?: any[] },
+  ) => {
+    const response = await apiClient.put(
+      `/projects/${projectId}/test-lab/canvases/${canvasId}`,
+      data,
+    );
+    return unwrapResponse(response);
+  },
+
+  runTest: async (
+    projectId: number,
+    data: { name?: string; test_type?: string; canvas_id: string; input_prompts?: string[] },
+  ) => {
+    const response = await apiClient.post(`/projects/${projectId}/test-lab/run`, data);
+    return unwrapResponse(response);
+  },
+
+  getRun: async (projectId: number, runId: string) => {
+    const response = await apiClient.get(`/projects/${projectId}/test-lab/runs/${runId}`);
+    return unwrapResponse(response);
+  },
+
+  listResults: async (
+    projectId: number,
+    params: { agent_id?: string; run_id?: string; is_worst?: boolean; limit?: number; offset?: number } = {},
+  ) => {
+    const response = await apiClient.get(`/projects/${projectId}/test-lab/results`, {
+      params,
+    });
+    return unwrapResponse(response);
+  },
+
+  markWorst: async (
+    projectId: number,
+    data: { result_id: string; worst_status?: string },
+  ) => {
+    const response = await apiClient.post(
+      `/projects/${projectId}/test-lab/results/mark-worst`,
+      data,
+    );
+    return unwrapResponse(response);
+  },
+
+  importCsv: async (projectId: number, file: File, inputColumn: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('input_column', inputColumn);
+    const response = await apiClient.post(
+      `/projects/${projectId}/test-lab/import-csv`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      },
+    );
+    return unwrapResponse(response);
+  },
+};
+
 // Self-hosted API
 export const selfHostedAPI = {
   getStatus: async () => {

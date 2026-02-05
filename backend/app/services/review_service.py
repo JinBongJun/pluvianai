@@ -38,6 +38,8 @@ class ReviewService:
         test_count: int = 0,
         passed_count: int = 0,
         failed_count: int = 0,
+        origin: Optional[str] = None,
+        test_run_id: Optional[str] = None,
     ):
         """Create a new review"""
         Review, _, _ = self._get_models()
@@ -48,6 +50,8 @@ class ReviewService:
         review = Review(
             project_id=project_id,
             replay_id=replay_id,
+            test_run_id=test_run_id,
+            origin=origin,
             title=title,
             description=description,
             status="pending",
@@ -252,6 +256,7 @@ class ReviewService:
         review_id: int,
         prompt: str,
         snapshot_id: Optional[int] = None,
+        test_result_id: Optional[str] = None,
         response_before: Optional[str] = None,
         response_after: Optional[str] = None,
         signals: Optional[Dict] = None,
@@ -263,6 +268,7 @@ class ReviewService:
         case = ReviewCase(
             review_id=review_id,
             snapshot_id=snapshot_id,
+            test_result_id=test_result_id,
             prompt=prompt,
             response_before=response_before,
             response_after=response_after,
@@ -367,6 +373,103 @@ class ReviewService:
                 "critical": critical,
             }
         }
+
+    def create_review_from_signal(
+        self,
+        *,
+        project_id: int,
+        origin: str,
+        title: str,
+        description: Optional[str],
+        items: List[Dict[str, Any]],
+        replay_id: Optional[int] = None,
+        test_run_id: Optional[str] = None,
+    ):
+        """
+        Create a Review (and ReviewCases) from individual signal results.
+
+        Each item in ``items`` should include:
+        - ``signal_result``: SignalEngine result dict.
+        - ``prompt``: Prompt text for the case.
+        - ``response`` or ``response_after``: Output text under review.
+        - Optional ``response_before``: Baseline/original output.
+        - Optional ``snapshot_id``: When originating from Live View / Replay.
+        - Optional ``test_result_id``: When originating from Test Lab.
+        """
+        if not items:
+            return None
+
+        # Aggregate signal summary across all items
+        status_priority = {"safe": 0, "needs_review": 1, "critical": 2}
+        aggregate_status = "safe"
+        total_signal_count = 0
+        total_critical = 0
+        total_high = 0
+
+        for item in items:
+            signals = item.get("signal_result") or {}
+            status = signals.get("status") or "safe"
+            if status_priority.get(status, 0) > status_priority.get(aggregate_status, 0):
+                aggregate_status = status
+            total_signal_count += signals.get("signal_count", 0)
+            total_critical += signals.get("critical_count", 0)
+            total_high += signals.get("high_count", 0)
+
+        signals_detected = {
+            "status": aggregate_status,
+            "signal_count": total_signal_count,
+            "critical_count": total_critical,
+            "high_count": total_high,
+        }
+
+        test_count = len(items)
+        failed_count = len(
+            [it for it in items if (it.get("signal_result") or {}).get("status") != "safe"]
+        )
+        passed_count = test_count - failed_count
+
+        review = self.create_review(
+            project_id=project_id,
+            title=title,
+            replay_id=replay_id,
+            description=description,
+            signals_detected=signals_detected,
+            model_before=None,
+            model_after=None,
+            test_count=test_count,
+            passed_count=passed_count,
+            failed_count=failed_count,
+            origin=origin,
+            test_run_id=test_run_id,
+        )
+
+        # Create individual cases
+        for item in items:
+            signals = item.get("signal_result") or {}
+            prompt = item.get("prompt") or ""
+            response_before = item.get("response_before")
+            response_after = item.get("response_after") or item.get("response")
+            snapshot_id = item.get("snapshot_id")
+            test_result_id = item.get("test_result_id")
+
+            self.add_review_case(
+                review_id=review.id,
+                prompt=prompt,
+                snapshot_id=snapshot_id,
+                test_result_id=test_result_id,
+                response_before=response_before,
+                response_after=response_after,
+                signals=signals,
+                status=signals.get("status", "pending"),
+            )
+
+        logger.info(
+            "Created review %s from %d signal-bearing items (origin=%s)",
+            review.id,
+            len(items),
+            origin,
+        )
+        return review
     
     def create_review_from_replay(
         self,

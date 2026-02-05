@@ -47,6 +47,14 @@ from app.models import (
     RuleMarket,
     PublicBenchmark,
     RefreshToken,
+    TestRun,
+    TestResult,
+    TestLabCanvas,
+    LiveViewConnection,
+    SignalDetection,
+    SignalConfig,
+    ReplayRun,
+    AgentDisplaySetting,
 )
 
 # this is the Alembic Config object, which provides

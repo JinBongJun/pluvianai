@@ -117,11 +117,12 @@ class SnapshotService:
         logger.warning("Redis not available, saving snapshot directly to DB (synchronous)")
         snapshot = Snapshot(
             trace_id=trace_id,
+            project_id=project_id,
             provider=provider,
             model=model,
             payload=sanitized_payload,
             is_sanitized=is_sanitized,
-            status_code=status_code
+            status_code=status_code,
         )
         saved_snapshot = self.snapshot_repo.save(snapshot)
         

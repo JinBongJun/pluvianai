@@ -21,6 +21,12 @@ export default function ReplayPage() {
     const [snapshots, setSnapshots] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [replaying, setReplaying] = useState(false);
+    const [isConcurrencyBlocked, setIsConcurrencyBlocked] = useState(false);
+    const [concurrencyError, setConcurrencyError] = useState<{
+        message?: string;
+        limit?: number;
+        current?: number;
+    } | null>(null);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [results, setResults] = useState<any[]>([]);
 
@@ -71,6 +77,7 @@ export default function ReplayPage() {
             toast.showToast('Select at least one log to replay', 'warning');
             return;
         }
+        if (isConcurrencyBlocked) return;
 
         setReplaying(true);
         try {
@@ -94,7 +101,25 @@ export default function ReplayPage() {
             setResults(replayResults);
             toast.showToast(`Batch replay of ${selectedIds.length} items completed`, 'success');
         } catch (err: any) {
-            toast.showToast(err.response?.data?.detail || 'Replay failed', 'error');
+            const detail = err?.response?.data?.detail;
+            const errorCode = typeof detail === 'object' ? detail?.code : undefined;
+            if (err?.response?.status === 403 && errorCode === 'CONCURRENT_TEST_NOT_ALLOWED') {
+                setIsConcurrencyBlocked(true);
+                setConcurrencyError({
+                    message:
+                        detail?.message ||
+                        '동시에 실행할 수 있는 테스트를 초과했습니다. 다른 테스트가 완료된 후 다시 시도해주세요.',
+                    limit: detail?.limit,
+                    current: detail?.current,
+                });
+                toast.showToast(
+                    detail?.message ||
+                        '다른 테스트가 이미 실행 중입니다. 먼저 실행 중인 테스트가 끝난 후 다시 시도해주세요.',
+                    'warning',
+                );
+            } else {
+                toast.showToast(detail || 'Replay failed', 'error');
+            }
         } finally {
             setReplaying(false);
         }
@@ -129,6 +154,30 @@ export default function ReplayPage() {
     return (
         <DashboardLayout>
             <div className="bg-ag-bg min-h-screen text-white">
+                {concurrencyError && (
+                    <div className="mb-4 rounded-md border border-yellow-500/60 bg-yellow-500/10 px-3 py-2 text-xs flex items-start justify-between gap-3">
+                        <div>
+                            <div className="font-semibold text-yellow-200">다른 테스트가 실행 중입니다.</div>
+                            <div className="text-yellow-100/80">
+                                {concurrencyError.message ||
+                                    '동시에 실행할 수 있는 테스트 개수를 초과했습니다. 다른 테스트가 끝난 후 다시 시도해주세요.'}
+                            </div>
+                            {typeof concurrencyError.limit === 'number' && (
+                                <div className="mt-1 text-[11px] text-yellow-100/80">
+                                    최대 동시 테스트: {concurrencyError.limit}개 (현재 실행 중:{' '}
+                                    {concurrencyError.current ?? '알 수 없음'}개)
+                                </div>
+                            )}
+                        </div>
+                        <button
+                            type="button"
+                            className="ml-2 text-yellow-200/80 hover:text-yellow-50 text-xs"
+                            onClick={() => setConcurrencyError(null)}
+                        >
+                            닫기
+                        </button>
+                    </div>
+                )}
                 {/* Header */}
                 <div className="mb-8 flex items-center justify-between">
                     <div>
@@ -141,7 +190,7 @@ export default function ReplayPage() {
 
                     <Button
                         onClick={handleRunReplay}
-                        disabled={replaying || selectedIds.length === 0}
+                        disabled={replaying || selectedIds.length === 0 || isConcurrencyBlocked}
                         isLoading={replaying}
                         className="px-8 py-6 text-lg font-bold"
                     >

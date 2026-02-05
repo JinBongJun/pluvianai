@@ -61,6 +61,8 @@ export default function AlertsPage() {
     to: new Date(),
   });
   const [allAlerts, setAllAlerts] = useState<Alert[]>([]); // For client-side filtering
+  const [recentWorstLiveCount, setRecentWorstLiveCount] = useState(0);
+  const [recentWorstTestLabCount, setRecentWorstTestLabCount] = useState(0);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -95,6 +97,22 @@ export default function AlertsPage() {
       
       // Store all alerts for client-side filtering
       setAllAlerts(data);
+
+      // Compute recent worst-case alert counts (last 24h, unresolved)
+      const now = new Date();
+      const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const recentWorst = (data || []).filter((alert: Alert) => {
+        if (alert.alert_type !== 'worst_case') return false;
+        if (alert.is_resolved) return false;
+        const createdAt = new Date(alert.created_at);
+        return createdAt >= cutoff;
+      });
+      setRecentWorstLiveCount(
+        recentWorst.filter((a: any) => a.alert_data?.target === 'live_view').length,
+      );
+      setRecentWorstTestLabCount(
+        recentWorst.filter((a: any) => a.alert_data?.target === 'test_lab').length,
+      );
       
       // Apply client-side date range filtering
       let filtered = data;
@@ -258,6 +276,30 @@ export default function AlertsPage() {
 
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
+  const handleAlertNavigate = (alert: Alert) => {
+    const data = alert.alert_data || {};
+    if (alert.alert_type === 'worst_case' && data?.target) {
+      if (data.target === 'live_view') {
+        const params = new URLSearchParams();
+        if (data.agent_id) params.set('agent', String(data.agent_id));
+        params.set('view', 'worst');
+        const qs = params.toString();
+        router.push(`/dashboard/${projectId}/live-view${qs ? `?${qs}` : ''}`);
+        return;
+      }
+      if (data.target === 'test_lab') {
+        const params = new URLSearchParams();
+        if (data.test_run_id) params.set('run_id', String(data.test_run_id));
+        params.set('view', 'worst');
+        const qs = params.toString();
+        router.push(`/dashboard/${projectId}/test-lab${qs ? `?${qs}` : ''}`);
+        return;
+      }
+    }
+    // Fallback: go to alert detail
+    router.push(`/dashboard/${projectId}/alerts/${alert.id}`);
+  };
+
   if (loading && alerts.length === 0) {
     return (
       <DashboardLayout>
@@ -283,7 +325,13 @@ export default function AlertsPage() {
         </div>
 
         {/* Tabs */}
-        <ProjectTabs projectId={projectId} />
+        <ProjectTabs
+          projectId={projectId}
+          worstAlertCounts={{
+            liveView: recentWorstLiveCount,
+            testLab: recentWorstTestLabCount,
+          }}
+        />
 
         {/* Actions */}
         <div className="flex items-center justify-end mb-6">
@@ -545,9 +593,9 @@ export default function AlertsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => router.push(`/dashboard/${projectId}/alerts/${alert.id}`)}
+                            onClick={() => handleAlertNavigate(alert)}
                             className="flex items-center gap-1.5 text-ag-accent hover:text-ag-accentLight"
-                            title="View details"
+                            title="View details or jump to source"
                           >
                             <Eye className="h-4 w-4" />
                             View

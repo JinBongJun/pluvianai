@@ -14,6 +14,7 @@ Detects:
 import json
 import re
 from typing import Dict, Any, List, Optional
+from types import SimpleNamespace
 from sqlalchemy.orm import Session
 from app.core.logging_config import logger
 
@@ -21,14 +22,30 @@ from app.core.logging_config import logger
 class SignalDetectionService:
     """Service for detecting signals in LLM responses"""
     
-    # Default thresholds
+    # Default thresholds / params for zero-config
+    DEFAULT_PARAMS = {
+        "length_change": {"threshold_ratio": 0.3},  # 30% change
+        "latency_limit": {"limit_ms": 2000},
+        "token_limit": {"limit_tokens": 4000},
+        "cost_limit": {"limit_cost": 0.5},
+        "json_schema": {"required": []},
+    }
+
+    DEFAULT_SIGNAL_CONFIGS = [
+        {"signal_type": "length_change", "name": "Length Change", "params": DEFAULT_PARAMS["length_change"], "severity": "medium", "enabled": True},
+        {"signal_type": "latency_limit", "name": "Latency Limit", "params": DEFAULT_PARAMS["latency_limit"], "severity": "medium", "enabled": True},
+        {"signal_type": "token_limit", "name": "Token Limit", "params": DEFAULT_PARAMS["token_limit"], "severity": "medium", "enabled": True},
+        {"signal_type": "cost_limit", "name": "Cost Limit", "params": DEFAULT_PARAMS["cost_limit"], "severity": "medium", "enabled": True},
+        {"signal_type": "json_schema", "name": "JSON Schema", "params": DEFAULT_PARAMS["json_schema"], "severity": "high", "enabled": True},
+    ]
+
     DEFAULT_THRESHOLDS = {
         "hallucination": 0.7,
-        "length_change": 0.3,  # 30% change
-        "refusal_increase": 0.2,  # 20% increase
-        "json_schema_break": 1.0,  # Any break
-        "latency_spike": 2.0,  # 2x baseline
-        "tool_misuse": 0.5,
+        "refusal_increase": 0.2,
+        "length_change": 0.3,
+        "latency_limit": 2.0,
+        "token_limit": 1.0,
+        "cost_limit": 1.0,
     }
     
     # Refusal patterns
@@ -81,70 +98,80 @@ class SignalDetectionService:
         """
         signals = []
         
-        # Get project-specific configs
         configs = self._get_signal_configs(project_id)
+
+        # Apply default zero-config when no configs exist
+        if not configs:
+            configs = self._get_default_configs()
         
-        # 1. Hallucination detection
-        if self._is_signal_enabled("hallucination", configs):
-            result = self.detect_hallucination(response_text, request_data)
-            if result["detected"]:
-                signals.append(result)
-                self._save_detection(project_id, snapshot_id, result)
-        
-        # 2. Length change detection
-        if self._is_signal_enabled("length_change", configs) and baseline_data:
-            result = self.detect_length_change(
-                response_text, 
-                baseline_data.get("avg_length", 0),
-                self._get_threshold("length_change", configs)
-            )
-            if result["detected"]:
-                signals.append(result)
-                self._save_detection(project_id, snapshot_id, result)
-        
-        # 3. Refusal detection
-        if self._is_signal_enabled("refusal_increase", configs):
-            result = self.detect_refusal(response_text)
-            if result["detected"]:
-                signals.append(result)
-                self._save_detection(project_id, snapshot_id, result)
-        
-        # 4. JSON schema break detection
-        if self._is_signal_enabled("json_schema_break", configs):
-            result = self.detect_json_schema_break(response_text, request_data)
-            if result["detected"]:
-                signals.append(result)
-                self._save_detection(project_id, snapshot_id, result)
-        
-        # 5. Latency spike detection
-        if self._is_signal_enabled("latency_spike", configs) and response_data:
-            latency = response_data.get("latency_ms", 0)
-            baseline_latency = baseline_data.get("avg_latency", 0) if baseline_data else 0
-            if latency and baseline_latency:
-                result = self.detect_latency_spike(
-                    latency,
-                    baseline_latency,
-                    self._get_threshold("latency_spike", configs)
-                )
+        # Evaluate configured signals
+        for config in configs:
+            if not getattr(config, "enabled", True):
+                continue
+            stype = config.signal_type
+            params = getattr(config, "params", None) or {}
+
+            if stype == "length_change":
+                baseline_text = baseline_data.get("baseline_response") if baseline_data else None
+                if baseline_text:
+                    result = self.detect_length_change(
+                        response_text,
+                        baseline_text,
+                        params.get("threshold_ratio", self.DEFAULT_PARAMS["length_change"]["threshold_ratio"]),
+                    )
+                    if result["detected"]:
+                        result["severity"] = params.get("severity") or config.severity or "medium"
+                        signals.append(result)
+                        self._save_detection(project_id, snapshot_id, result)
+
+            elif stype == "latency_limit" and response_data:
+                latency = response_data.get("latency_ms")
+                if latency is not None:
+                    result = self.detect_latency_limit(
+                        latency,
+                        params.get("limit_ms", self.DEFAULT_PARAMS["latency_limit"]["limit_ms"]),
+                    )
+                    if result["detected"]:
+                        result["severity"] = params.get("severity") or config.severity or "medium"
+                        signals.append(result)
+                        self._save_detection(project_id, snapshot_id, result)
+
+            elif stype == "token_limit" and response_data:
+                tokens = response_data.get("tokens_used") or response_data.get("response_tokens")
+                if tokens is not None:
+                    result = self.detect_token_limit(
+                        tokens,
+                        params.get("limit_tokens", self.DEFAULT_PARAMS["token_limit"]["limit_tokens"]),
+                    )
+                    if result["detected"]:
+                        result["severity"] = params.get("severity") or config.severity or "medium"
+                        signals.append(result)
+                        self._save_detection(project_id, snapshot_id, result)
+
+            elif stype == "cost_limit" and response_data:
+                cost = response_data.get("cost")
+                if cost is not None:
+                    result = self.detect_cost_limit(
+                        cost,
+                        params.get("limit_cost", self.DEFAULT_PARAMS["cost_limit"]["limit_cost"]),
+                    )
+                    if result["detected"]:
+                        result["severity"] = params.get("severity") or config.severity or "medium"
+                        signals.append(result)
+                        self._save_detection(project_id, snapshot_id, result)
+
+            elif stype == "json_schema":
+                result = self.detect_json_schema(response_text, params)
+                if result["detected"]:
+                    result["severity"] = params.get("severity") or config.severity or "high"
+                    signals.append(result)
+                    self._save_detection(project_id, snapshot_id, result)
+
+            elif stype == "custom":
+                result = self.detect_custom_signal(response_text, config)
                 if result["detected"]:
                     signals.append(result)
                     self._save_detection(project_id, snapshot_id, result)
-        
-        # 6. Tool misuse detection
-        if self._is_signal_enabled("tool_misuse", configs) and response_data:
-            result = self.detect_tool_misuse(response_data)
-            if result["detected"]:
-                signals.append(result)
-                self._save_detection(project_id, snapshot_id, result)
-        
-        # 7. Custom signals
-        _, SignalConfig = self._get_models()
-        custom_configs = [c for c in configs if c.signal_type == "custom"]
-        for config in custom_configs:
-            result = self.detect_custom_signal(response_text, config)
-            if result["detected"]:
-                signals.append(result)
-                self._save_detection(project_id, snapshot_id, result)
         
         # Calculate overall status
         status = self._calculate_status(signals)
@@ -155,6 +182,8 @@ class SignalDetectionService:
             "signal_count": len(signals),
             "critical_count": len([s for s in signals if s.get("severity") == "critical"]),
             "high_count": len([s for s in signals if s.get("severity") == "high"]),
+            "is_worst": status == "critical",
+            "worst_status": "unreviewed" if status == "critical" else None,
         }
     
     def detect_hallucination(
@@ -211,46 +240,45 @@ class SignalDetectionService:
         }
     
     def detect_length_change(
-        self, 
-        response_text: str, 
-        baseline_length: float,
-        threshold: float = 0.3
+        self,
+        response_text: str,
+        baseline_text: str,
+        threshold_ratio: float = 0.3,
     ) -> Dict[str, Any]:
-        """Detect significant change in response length"""
-        current_length = len(response_text)
-        
+        """Detect significant change in response length compared to baseline text."""
+        current_length = len(response_text or "")
+        baseline_length = len(baseline_text or "")
+
         if baseline_length == 0:
             return {
                 "signal_type": "length_change",
                 "detected": False,
-                "confidence": 0.0,
                 "severity": "low",
-                "details": {"message": "No baseline data"}
+                "details": {
+                    "current_length": current_length,
+                    "baseline_length": baseline_length,
+                    "change_ratio": None,
+                    "note": "Baseline length is zero, cannot compute change ratio",
+                },
             }
-        
+
         change_ratio = abs(current_length - baseline_length) / baseline_length
-        detected = change_ratio >= threshold
-        
-        if change_ratio >= 0.7:
-            severity = "critical"
-        elif change_ratio >= 0.5:
+        detected = change_ratio >= threshold_ratio
+
+        severity = "medium" if change_ratio >= threshold_ratio else "low"
+        if change_ratio >= threshold_ratio * 2:
             severity = "high"
-        elif change_ratio >= 0.3:
-            severity = "medium"
-        else:
-            severity = "low"
-        
+
         return {
             "signal_type": "length_change",
             "detected": detected,
-            "confidence": min(change_ratio, 1.0),
-            "severity": severity if detected else "low",
+            "severity": severity,
             "details": {
                 "current_length": current_length,
                 "baseline_length": baseline_length,
                 "change_ratio": round(change_ratio, 3),
-                "direction": "increased" if current_length > baseline_length else "decreased"
-            }
+                "direction": "increased" if current_length > baseline_length else "decreased",
+            },
         }
     
     def detect_refusal(self, response_text: str) -> Dict[str, Any]:
@@ -276,92 +304,79 @@ class SignalDetectionService:
             }
         }
     
-    def detect_json_schema_break(
-        self, 
-        response_text: str, 
-        request_data: Optional[Dict] = None
-    ) -> Dict[str, Any]:
-        """Detect if response should be JSON but isn't valid"""
-        expects_json = False
-        if request_data:
-            if request_data.get("response_format", {}).get("type") == "json_object":
-                expects_json = True
-            messages = request_data.get("messages", [])
-            for msg in messages:
-                content = msg.get("content", "").lower()
-                if "json" in content and ("format" in content or "return" in content):
-                    expects_json = True
-                    break
-        
-        if not expects_json:
-            return {
-                "signal_type": "json_schema_break",
-                "detected": False,
-                "confidence": 0.0,
-                "severity": "low",
-                "details": {"message": "JSON not expected"}
-            }
-        
+    def detect_json_schema(self, response_text: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Detect JSON validity and required fields."""
+        detected = False
+        details: Dict[str, Any] = {}
+        required_fields = params.get("required") or []
+
         try:
-            json.loads(response_text)
-            return {
-                "signal_type": "json_schema_break",
-                "detected": False,
-                "confidence": 0.0,
-                "severity": "low",
-                "details": {"message": "Valid JSON"}
-            }
+            parsed = json.loads(response_text)
+            missing = [field for field in required_fields if field not in parsed]
+            if missing:
+                detected = True
+                details["missing_fields"] = missing
         except json.JSONDecodeError as e:
-            return {
-                "signal_type": "json_schema_break",
-                "detected": True,
-                "confidence": 1.0,
-                "severity": "critical",
-                "details": {
-                    "error": str(e),
-                    "expected_json": True,
-                    "response_preview": response_text[:200]
-                }
-            }
-    
-    def detect_latency_spike(
-        self, 
-        current_latency: float, 
-        baseline_latency: float,
-        threshold: float = 2.0
-    ) -> Dict[str, Any]:
-        """Detect latency spike compared to baseline"""
-        if baseline_latency == 0:
-            return {
-                "signal_type": "latency_spike",
-                "detected": False,
-                "confidence": 0.0,
-                "severity": "low",
-                "details": {"message": "No baseline data"}
-            }
-        
-        ratio = current_latency / baseline_latency
-        detected = ratio >= threshold
-        
-        if ratio >= 5.0:
-            severity = "critical"
-        elif ratio >= 3.0:
-            severity = "high"
-        elif ratio >= 2.0:
-            severity = "medium"
-        else:
-            severity = "low"
-        
+            detected = True
+            details["error"] = str(e)
+            details["response_preview"] = response_text[:200]
+
         return {
-            "signal_type": "latency_spike",
+            "signal_type": "json_schema",
             "detected": detected,
-            "confidence": min(ratio / 5.0, 1.0),
-            "severity": severity if detected else "low",
+            "severity": "high" if detected else "low",
+            "details": details,
+        }
+    
+    def detect_latency_limit(self, latency_ms: float, limit_ms: float) -> Dict[str, Any]:
+        """Detect if latency exceeds configured limit."""
+        detected = latency_ms >= limit_ms
+        severity = "medium" if detected else "low"
+        if latency_ms >= limit_ms * 1.5:
+            severity = "high"
+
+        return {
+            "signal_type": "latency_limit",
+            "detected": detected,
+            "severity": severity,
             "details": {
-                "current_latency_ms": current_latency,
-                "baseline_latency_ms": baseline_latency,
-                "ratio": round(ratio, 2)
+                "latency_ms": latency_ms,
+                "limit_ms": limit_ms,
             }
+        }
+
+    def detect_token_limit(self, tokens_used: float, limit_tokens: float) -> Dict[str, Any]:
+        """Detect if token usage exceeds configured limit."""
+        detected = tokens_used >= limit_tokens
+        severity = "medium" if detected else "low"
+        if tokens_used >= limit_tokens * 1.5:
+            severity = "high"
+
+        return {
+            "signal_type": "token_limit",
+            "detected": detected,
+            "severity": severity,
+            "details": {
+                "tokens_used": tokens_used,
+                "limit_tokens": limit_tokens,
+            },
+        }
+
+    def detect_cost_limit(self, cost: float, limit_cost: float) -> Dict[str, Any]:
+        """Detect if cost exceeds configured limit."""
+        detected = cost >= limit_cost
+        severity = "medium" if detected else "low"
+        if cost >= limit_cost * 1.5:
+            severity = "high"
+
+        return {
+            "signal_type": "cost_limit",
+            "detected": detected,
+            "severity": severity,
+            "details": {
+                "cost": cost,
+                "limit_cost": limit_cost,
+            },
         }
     
     def detect_tool_misuse(self, response_data: Dict) -> Dict[str, Any]:
@@ -413,7 +428,7 @@ class SignalDetectionService:
     
     def detect_custom_signal(self, response_text: str, config) -> Dict[str, Any]:
         """Detect custom signal based on configuration"""
-        custom_rule = config.custom_rule or {}
+        custom_rule = (getattr(config, "params", None) or {})
         
         patterns = custom_rule.get("patterns", [])
         matches = []
@@ -460,6 +475,157 @@ class SignalDetectionService:
             SignalConfig.project_id == project_id,
             SignalConfig.enabled == True
         ).all()
+
+    def _get_default_configs(self) -> List:
+        """Return zero-config defaults as SimpleNamespace objects (not persisted)."""
+        return [
+            SimpleNamespace(**cfg)
+            for cfg in self.DEFAULT_SIGNAL_CONFIGS
+        ]
+
+    # ------------------------------------------------------------------
+    # Config helpers for API layer
+    # ------------------------------------------------------------------
+
+    def get_project_default_configs(self, project_id: int) -> List[Dict[str, Any]]:
+        """
+        Return effective default configs for a project.
+        Currently just DB configs for the project, or built-in defaults when empty.
+        """
+        configs = self.get_signal_configs_for_project(project_id)
+        if not configs:
+            # fall back to built-in defaults
+            return self.DEFAULT_SIGNAL_CONFIGS
+        # Normalize ORM objects to dicts
+        out: List[Dict[str, Any]] = []
+        for c in configs:
+            out.append(
+                {
+                    "id": getattr(c, "id", None),
+                    "project_id": c.project_id,
+                    "signal_type": c.signal_type,
+                    "name": c.name,
+                    "params": c.params or {},
+                    "severity": c.severity,
+                    "enabled": c.enabled,
+                    "created_at": getattr(c, "created_at", None),
+                }
+            )
+        return out
+
+    def get_agent_configs(self, project_id: int, agent_id: str) -> List[Dict[str, Any]]:
+        """
+        Return effective configs for a given agent:
+        - Start from project defaults
+        - Apply any configs whose params.agent_id == agent_id as overrides
+        """
+        _, SignalConfig = self._get_models()
+        all_configs = (
+            self.db.query(SignalConfig)
+            .filter(SignalConfig.project_id == project_id)
+            .all()
+        )
+
+        global_cfgs: Dict[str, Dict[str, Any]] = {}
+        agent_overrides: Dict[str, Dict[str, Any]] = {}
+
+        for c in all_configs:
+            params = c.params or {}
+            cfg = {
+                "id": c.id,
+                "project_id": c.project_id,
+                "signal_type": c.signal_type,
+                "name": c.name,
+                "params": params,
+                "severity": c.severity,
+                "enabled": c.enabled,
+                "created_at": getattr(c, "created_at", None),
+            }
+            aid = params.get("agent_id")
+            if aid and str(aid) == str(agent_id):
+                agent_overrides[c.signal_type] = cfg
+            else:
+                global_cfgs[c.signal_type] = cfg
+
+        # Start from built-in defaults, apply global, then agent override
+        effective: Dict[str, Dict[str, Any]] = {}
+        for base in self.DEFAULT_SIGNAL_CONFIGS:
+            stype = base["signal_type"]
+            effective[stype] = {
+                "id": None,
+                "project_id": project_id,
+                "signal_type": stype,
+                "name": base["name"],
+                "params": dict(base.get("params") or {}),
+                "severity": base.get("severity"),
+                "enabled": base.get("enabled", True),
+                "created_at": None,
+            }
+
+        for stype, cfg in global_cfgs.items():
+            effective[stype] = cfg
+
+        for stype, cfg in agent_overrides.items():
+            effective[stype] = cfg
+
+        return list(effective.values())
+
+    def upsert_agent_signal_config(
+        self,
+        project_id: int,
+        agent_id: str,
+        signal_type: str,
+        name: Optional[str] = None,
+        params: Optional[Dict[str, Any]] = None,
+        severity: Optional[str] = None,
+        enabled: Optional[bool] = None,
+    ):
+        """
+        Create or update a SignalConfig row scoped to an agent.
+        Agent scoping is stored inside params['agent_id'] to avoid schema changes.
+        """
+        _, SignalConfig = self._get_models()
+
+        # Find existing config for this (project, agent, signal_type)
+        existing = (
+            self.db.query(SignalConfig)
+            .filter(SignalConfig.project_id == project_id, SignalConfig.signal_type == signal_type)
+            .all()
+        )
+        target = None
+        for cfg in existing:
+            aid = (cfg.params or {}).get("agent_id")
+            if aid is not None and str(aid) == str(agent_id):
+                target = cfg
+                break
+
+        if target is None:
+            merged_params = dict(params or {})
+            merged_params["agent_id"] = agent_id
+            target = SignalConfig(
+                project_id=project_id,
+                signal_type=signal_type,
+                name=name or signal_type,
+                params=merged_params,
+                severity=severity,
+                enabled=True if enabled is None else enabled,
+            )
+            self.db.add(target)
+        else:
+            if params is not None:
+                merged = dict(params)
+                merged["agent_id"] = agent_id
+                target.params = merged
+            if name is not None:
+                target.name = name
+            if severity is not None:
+                target.severity = severity
+            if enabled is not None:
+                target.enabled = enabled
+
+        self.db.commit()
+        self.db.refresh(target)
+        return target
     
     def _is_signal_enabled(self, signal_type: str, configs: List) -> bool:
         """Check if a signal type is enabled (default True if no config)"""
@@ -471,8 +637,14 @@ class SignalDetectionService:
     def _get_threshold(self, signal_type: str, configs: List) -> float:
         """Get threshold for a signal type"""
         for config in configs:
-            if config.signal_type == signal_type and config.threshold:
-                return config.threshold
+            if config.signal_type != signal_type:
+                continue
+            params = getattr(config, "params", None) or {}
+            if "threshold" in params and params["threshold"] is not None:
+                return float(params["threshold"])
+        # Fallback to default params if available
+        if signal_type == "length_change":
+            return self.DEFAULT_PARAMS["length_change"]["threshold_ratio"]
         return self.DEFAULT_THRESHOLDS.get(signal_type, 0.5)
     
     def _save_detection(self, project_id: int, snapshot_id: Optional[int], result: Dict):
@@ -501,14 +673,12 @@ class SignalDetectionService:
             return "critical"
         
         high_signals = [s for s in signals if s.get("severity") == "high"]
-        if len(high_signals) >= 2:
-            return "critical"
         if high_signals:
-            return "regressed"
+            return "needs_review"
         
         medium_signals = [s for s in signals if s.get("severity") == "medium"]
-        if len(medium_signals) >= 3:
-            return "regressed"
+        if medium_signals:
+            return "needs_review"
         
         return "safe"
     
@@ -519,10 +689,9 @@ class SignalDetectionService:
         project_id: int,
         signal_type: str,
         name: str,
-        description: Optional[str] = None,
-        threshold: float = 0.5,
-        config: Optional[Dict] = None,
-        custom_rule: Optional[Dict] = None,
+        params: Optional[Dict] = None,
+        severity: Optional[str] = None,
+        enabled: bool = True,
     ):
         """Create a signal configuration"""
         _, SignalConfig = self._get_models()
@@ -530,10 +699,9 @@ class SignalDetectionService:
             project_id=project_id,
             signal_type=signal_type,
             name=name,
-            description=description,
-            threshold=threshold,
-            config=config,
-            custom_rule=custom_rule,
+            params=params,
+            severity=severity,
+            enabled=enabled,
         )
         self.db.add(signal_config)
         self.db.commit()
@@ -547,7 +715,7 @@ class SignalDetectionService:
             SignalConfig.project_id == project_id
         ).all()
     
-    def update_signal_config(self, config_id: int, **kwargs):
+    def update_signal_config(self, config_id: str, **kwargs):
         """Update a signal configuration"""
         _, SignalConfig = self._get_models()
         config = self.db.query(SignalConfig).filter(
@@ -565,7 +733,7 @@ class SignalDetectionService:
         self.db.refresh(config)
         return config
     
-    def delete_signal_config(self, config_id: int) -> bool:
+    def delete_signal_config(self, config_id: str) -> bool:
         """Delete a signal configuration"""
         _, SignalConfig = self._get_models()
         config = self.db.query(SignalConfig).filter(

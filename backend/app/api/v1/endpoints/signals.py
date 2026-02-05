@@ -20,33 +20,29 @@ router = APIRouter()
 # Request/Response Models
 
 class SignalConfigCreate(BaseModel):
-    signal_type: str = Field(..., description="Signal type (hallucination, length_change, etc.)")
+    signal_type: str = Field(..., description="Signal type (length_change, latency_limit, etc.)")
     name: str = Field(..., description="Configuration name")
-    description: Optional[str] = None
-    threshold: float = Field(0.5, ge=0.0, le=1.0)
-    config: Optional[dict] = None
-    custom_rule: Optional[dict] = None
+    params: Optional[dict] = None
+    severity: Optional[str] = Field(None, description="low/medium/high/critical")
+    enabled: bool = True
 
 
 class SignalConfigUpdate(BaseModel):
     name: Optional[str] = None
-    description: Optional[str] = None
+    params: Optional[dict] = None
+    severity: Optional[str] = Field(None, description="low/medium/high/critical")
     enabled: Optional[bool] = None
-    threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
-    config: Optional[dict] = None
-    custom_rule: Optional[dict] = None
 
 
 class SignalConfigResponse(BaseModel):
-    id: int
+    id: str
     project_id: int
     signal_type: str
     name: str
-    description: Optional[str]
+    params: Optional[dict]
+    severity: Optional[str]
     enabled: bool
-    threshold: float
-    config: Optional[dict]
-    custom_rule: Optional[dict]
+    created_at: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -67,6 +63,13 @@ class SignalDetectionResponse(BaseModel):
     high_count: int
 
 
+class AgentSignalConfigPayload(BaseModel):
+    signal_type: str
+    params: Optional[dict] = None
+    severity: Optional[str] = Field(None, description="low/medium/high/critical")
+    enabled: Optional[bool] = True
+
+
 # Endpoints
 
 @router.get("/projects/{project_id}/signals/configs", response_model=List[SignalConfigResponse])
@@ -84,6 +87,23 @@ async def list_signal_configs(
     return configs
 
 
+@router.get("/projects/{project_id}/signal-config/default", response_model=List[SignalConfigResponse])
+async def get_default_signal_configs(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get effective default signal configs for a project.
+    Returns DB configs when present, otherwise built-in defaults.
+    """
+    project = check_project_access(project_id, current_user, db)
+    
+    service = SignalDetectionService(db)
+    defaults = service.get_project_default_configs(project_id)
+    return defaults
+
+
 @router.post("/projects/{project_id}/signals/configs", response_model=SignalConfigResponse, status_code=status.HTTP_201_CREATED)
 async def create_signal_config(
     project_id: int,
@@ -99,10 +119,9 @@ async def create_signal_config(
         project_id=project_id,
         signal_type=config_data.signal_type,
         name=config_data.name,
-        description=config_data.description,
-        threshold=config_data.threshold,
-        config=config_data.config,
-        custom_rule=config_data.custom_rule,
+        params=config_data.params,
+        severity=config_data.severity,
+        enabled=config_data.enabled,
     )
     
     return config
@@ -110,17 +129,14 @@ async def create_signal_config(
 
 @router.put("/signals/configs/{config_id}", response_model=SignalConfigResponse)
 async def update_signal_config(
-    config_id: int,
+    config_id: str,
     config_data: SignalConfigUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Update a signal configuration"""
     service = SignalDetectionService(db)
-    
-    # Get existing config to verify access
-    configs = db.query(service.db.query.__self__).all()  # This won't work, need to fix
-    
+
     update_data = config_data.model_dump(exclude_unset=True)
     config = service.update_signal_config(config_id, **update_data)
     
@@ -135,7 +151,7 @@ async def update_signal_config(
 
 @router.delete("/signals/configs/{config_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_signal_config(
-    config_id: int,
+    config_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -149,6 +165,60 @@ async def delete_signal_config(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Signal configuration not found"
         )
+
+
+@router.get(
+    "/projects/{project_id}/live-view/agents/{agent_id}/signal-config",
+    response_model=List[SignalConfigResponse],
+)
+async def get_agent_signal_config(
+    project_id: int,
+    agent_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get effective signal configs for a specific Live View agent.
+    Merges built-in defaults, project configs, and agent-specific overrides.
+    """
+    project = check_project_access(project_id, current_user, db)
+    
+    service = SignalDetectionService(db)
+    configs = service.get_agent_configs(project_id, agent_id)
+    return configs
+
+
+@router.put(
+    "/projects/{project_id}/live-view/agents/{agent_id}/signal-config",
+    response_model=List[SignalConfigResponse],
+)
+async def upsert_agent_signal_config(
+    project_id: int,
+    agent_id: str,
+    payload: List[AgentSignalConfigPayload],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Upsert signal configs for a specific Live View agent.
+    Each payload entry updates or creates a SignalConfig row scoped to that agent.
+    """
+    project = check_project_access(project_id, current_user, db, required_roles=[ProjectRole.ADMIN, ProjectRole.OWNER])
+    
+    service = SignalDetectionService(db)
+    updated = []
+    for item in payload:
+        cfg = service.upsert_agent_signal_config(
+            project_id=project_id,
+            agent_id=agent_id,
+            signal_type=item.signal_type,
+            name=None,
+            params=item.params,
+            severity=item.severity,
+            enabled=item.enabled,
+        )
+        updated.append(cfg)
+    return updated
 
 
 @router.post("/projects/{project_id}/signals/detect", response_model=SignalDetectionResponse)

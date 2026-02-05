@@ -31,14 +31,18 @@ class Review(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
-    
+
     # Review target
     replay_id = Column(Integer, nullable=True, index=True)  # Which replay this reviews
-    
+    # Optional link to a Test Lab run (or other test run) and origin
+    test_run_id = Column(String(255), ForeignKey("test_runs.id", ondelete="SET NULL"), nullable=True, index=True)
+    # Origin of this review, e.g. "replay", "test_lab", "regression"
+    origin = Column(String(50), nullable=True, index=True)
+
     # Review information
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    
+
     # Status
     status = Column(String(20), default="pending", index=True)  # pending/approved/rejected/needs_discussion
     regression_status = Column(String(20), default="pending", index=True)  # safe/regressed/critical/pending
@@ -99,7 +103,9 @@ class ReviewCase(Base):
     id = Column(Integer, primary_key=True, index=True)
     review_id = Column(Integer, ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False, index=True)
     snapshot_id = Column(Integer, ForeignKey("snapshots.id", ondelete="SET NULL"), nullable=True, index=True)
-    
+    # Optional link back to a TestResult (for Test Lab / chain tests)
+    test_result_id = Column(String(255), ForeignKey("test_results.id", ondelete="SET NULL"), nullable=True, index=True)
+
     # Case information
     prompt = Column(Text, nullable=False)
     response_before = Column(Text, nullable=True)

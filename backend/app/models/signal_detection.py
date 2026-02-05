@@ -7,6 +7,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
 import enum
+import uuid
 
 
 class SignalType(str, enum.Enum):
@@ -62,24 +63,14 @@ class SignalConfig(Base):
     """Signal Configuration - stores custom signal configurations per project"""
     __tablename__ = "signal_configs"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String(255), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
-    
-    # Signal configuration
+    name = Column(String(100), nullable=False)
     signal_type = Column(String(50), nullable=False)
-    name = Column(String(255), nullable=False)
-    description = Column(String(1000), nullable=True)
-    
-    # Configuration details
-    enabled = Column(Boolean, default=True)
-    threshold = Column(Float, default=0.5)  # Detection threshold
-    config = Column(JSON, nullable=True)  # Signal-specific config
-    
-    # For custom signals
-    custom_rule = Column(JSON, nullable=True)  # Custom detection rule
-    
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    params = Column(JSON, nullable=True)
+    severity = Column(String(20), nullable=True)
+    enabled = Column(Boolean, default=True, server_default="true")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     
     # Relationships
     project = relationship("Project", backref="signal_configs")

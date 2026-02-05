@@ -11,6 +11,9 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole
 from app.models.user import User
+from app.models.snapshot import Snapshot
+from app.models.test_result import TestResult
+from app.models.alert import Alert
 from app.services.worst_prompt_service import WorstPromptService
 
 router = APIRouter()
@@ -50,6 +53,12 @@ class WorstPromptUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_reviewed: Optional[bool] = None
     severity_score: Optional[float] = Field(None, ge=0.0, le=1.0)
+
+
+class MarkWorstRequest(BaseModel):
+    target_type: str = Field(..., description="snapshot | test_result")
+    target_id: str = Field(..., description="ID of snapshot or test_result")
+    worst_status: Optional[str] = Field("unreviewed", description="unreviewed/fixed/golden")
 
 
 class PromptSetCreate(BaseModel):
@@ -282,6 +291,84 @@ async def delete_worst_prompt(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Worst prompt not found"
         )
+
+
+@router.post("/projects/{project_id}/worst/mark", status_code=status.HTTP_200_OK)
+async def mark_worst(
+    project_id: int,
+    payload: MarkWorstRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark snapshot or test_result as worst and set worst_status."""
+    check_project_access(project_id, current_user, db, required_roles=[ProjectRole.ADMIN, ProjectRole.OWNER])
+
+    if payload.target_type not in ("snapshot", "test_result"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid target_type")
+
+    if payload.target_type == "snapshot":
+        target = db.query(Snapshot).filter(Snapshot.id == payload.target_id, Snapshot.project_id == project_id).first()
+    else:
+        target = db.query(TestResult).filter(TestResult.id == payload.target_id, TestResult.project_id == project_id).first()
+
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target not found")
+
+    was_worst_before = bool(getattr(target, "is_worst", False))
+
+    target.is_worst = True
+    target.worst_status = payload.worst_status or "unreviewed"
+    db.commit()
+    db.refresh(target)
+
+    # Enqueue an alert only when transitioning from non-worst to worst
+    if not was_worst_before:
+        try:
+            # Determine origin/target surface for deep links
+            if isinstance(target, Snapshot):
+                alert_target = "live_view"
+                source = "replay_manual"
+                agent_id = getattr(target, "agent_id", None)
+                extra_ids = {"snapshot_id": target.id}
+            else:
+                alert_target = "test_lab"
+                source = "test_lab_manual"
+                agent_id = getattr(target, "agent_id", None)
+                extra_ids = {
+                    "test_result_id": target.id,
+                    "test_run_id": getattr(target, "test_run_id", None),
+                }
+
+            alert = Alert(
+                project_id=project_id,
+                alert_type="worst_case",
+                severity="high",
+                title="New worst case marked",
+                message=(
+                    f"Target {payload.target_type} '{payload.target_id}' was marked as worst "
+                    f"(status={target.worst_status or 'unreviewed'})."
+                ),
+                alert_data={
+                    "source": source,
+                    "target": alert_target,
+                    "project_id": project_id,
+                    "agent_id": agent_id,
+                    "worst_status": target.worst_status,
+                    **extra_ids,
+                },
+            )
+            db.add(alert)
+            db.commit()
+        except Exception:
+            # Manual worst marking via API should not fail because of alerts
+            pass
+
+    return {
+        "id": payload.target_id,
+        "target_type": payload.target_type,
+        "is_worst": target.is_worst,
+        "worst_status": target.worst_status,
+    }
 
 
 @router.get("/projects/{project_id}/worst-prompts/stats", response_model=WorstPromptStatsResponse)

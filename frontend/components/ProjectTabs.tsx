@@ -8,9 +8,19 @@ interface ProjectTabsProps {
   orgId?: number | string;
   canManage?: boolean;
   basePath?: string; // Optional basePath override
+  worstAlertCounts?: {
+    liveView?: number;
+    testLab?: number;
+  };
 }
 
-export default function ProjectTabs({ projectId, orgId, canManage = false, basePath: basePathProp }: ProjectTabsProps) {
+export default function ProjectTabs({
+  projectId,
+  orgId,
+  canManage = false,
+  basePath: basePathProp,
+  worstAlertCounts,
+}: ProjectTabsProps) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -23,6 +33,8 @@ export default function ProjectTabs({ projectId, orgId, canManage = false, baseP
 
   const tabs = [
     { id: 'overview', label: 'Overview', path: basePath },
+    { id: 'live-view', label: 'Live View', path: `${basePath}/live-view` },
+    { id: 'test-lab', label: 'Test Lab', path: `${basePath}/test-lab` },
     { id: 'api-calls', label: 'API Calls', path: `${basePath}/api-calls` },
     { id: 'signals', label: 'Signals', path: `${basePath}/signals` },
     { id: 'worst-prompts', label: 'Worst Prompts', path: `${basePath}/worst-prompts` },
@@ -35,6 +47,8 @@ export default function ProjectTabs({ projectId, orgId, canManage = false, baseP
   ];
 
   const getActiveTab = () => {
+    if (pathname?.includes('/live-view')) return 'live-view';
+    if (pathname?.includes('/test-lab')) return 'test-lab';
     if (pathname?.includes('/api-calls')) return 'api-calls';
     if (pathname?.includes('/signals')) return 'signals';
     if (pathname?.includes('/worst-prompts')) return 'worst-prompts';
@@ -68,8 +82,20 @@ export default function ProjectTabs({ projectId, orgId, canManage = false, baseP
                 ? 'border-ag-accent text-ag-text'
                 : 'border-transparent text-ag-muted hover:text-ag-text hover:border-white/20'
             )}
-          >
-            {tab.label}
+            >
+            <span className="inline-flex items-center gap-1">
+              <span>{tab.label}</span>
+              {tab.id === 'live-view' && (worstAlertCounts?.liveView || 0) > 0 && (
+                <span className="ml-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500/20 text-[10px] font-semibold text-red-300">
+                  {worstAlertCounts.liveView! > 9 ? '9+' : worstAlertCounts.liveView}
+                </span>
+              )}
+              {tab.id === 'test-lab' && (worstAlertCounts?.testLab || 0) > 0 && (
+                <span className="ml-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500/20 text-[10px] font-semibold text-red-300">
+                  {worstAlertCounts.testLab! > 9 ? '9+' : worstAlertCounts.testLab}
+                </span>
+              )}
+            </span>
           </button>
         ))}
       </nav>

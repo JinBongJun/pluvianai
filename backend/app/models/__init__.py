@@ -31,6 +31,13 @@ from app.models.project_notification_settings import ProjectNotificationSettings
 from app.models.rule_market import RuleMarket
 from app.models.public_benchmark import PublicBenchmark
 from app.models.refresh_token import RefreshToken
+from app.models.test_run import TestRun
+from app.models.test_result import TestResult
+from app.models.test_lab_canvas import TestLabCanvas
+from app.models.live_view_connection import LiveViewConnection
+from app.models.replay_run import ReplayRun
+from app.models.agent_display_setting import AgentDisplaySetting
+from app.models.signal_detection import SignalDetection, SignalConfig
 
 # Note: SignalDetection, WorstPrompt, Review models are imported directly in services
 # to avoid circular imports. Import them directly from their files when needed:
@@ -69,4 +76,12 @@ __all__ = [
     "RuleMarket",
     "PublicBenchmark",
     "RefreshToken",
+    "TestRun",
+    "TestResult",
+    "TestLabCanvas",
+    "LiveViewConnection",
+    "ReplayRun",
+    "AgentDisplaySetting",
+    "SignalDetection",
+    "SignalConfig",
 ]

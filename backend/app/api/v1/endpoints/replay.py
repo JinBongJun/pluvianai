@@ -5,11 +5,12 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole
-from app.core.test_limits import check_test_run_limits
+from app.core.test_limits import check_test_run_limits, check_concurrent_test_runs
 from app.models.user import User
 from app.models.snapshot import Snapshot
 from app.models.trace import Trace
 from app.services.replay_service import replay_service
+from app.models.replay_run import ReplayRun
 
 router = APIRouter()
 
@@ -49,6 +50,8 @@ async def trigger_replay(
         input_count=len(data.snapshot_ids),
         estimated_calls=len(data.snapshot_ids),
     )
+    # Concurrency guard: only one running test (Replay/Test Lab) per user
+    check_concurrent_test_runs(db, current_user.id)
 
     # Fetch snapshots using repository
     from app.infrastructure.repositories.snapshot_repository import SnapshotRepository
@@ -79,16 +82,37 @@ async def trigger_replay(
         if rubric and rubric.project_id != project_id:
             rubric = None
 
-    # Run Replay
-    results = await replay_service.run_batch_replay(
+    # Create a ReplayRun row for concurrency tracking & basic aggregates
+    replay_run = ReplayRun(
         project_id=project_id,
-        db=db,
-        snapshots=all_snapshots,
-        new_model=data.new_model,
-        new_system_prompt=data.new_system_prompt,
-        rubric=rubric,
-        judge_model=data.judge_model
+        run_type="model_change" if data.new_model else "prompt_change",
+        target_model=data.new_model,
+        snapshot_count=len(all_snapshots),
+        status="running",
     )
+    db.add(replay_run)
+    db.commit()
+    db.refresh(replay_run)
+
+    # Run Replay
+    try:
+        results = await replay_service.run_batch_replay(
+            project_id=project_id,
+            db=db,
+            snapshots=all_snapshots,
+            new_model=data.new_model,
+            new_system_prompt=data.new_system_prompt,
+            rubric=rubric,
+            judge_model=data.judge_model,
+            replay_run=replay_run,
+        )
+    except Exception:
+        # Ensure failure is reflected in replay_run status for concurrency/UX
+        replay_run.status = "failed"
+        db.add(replay_run)
+        db.commit()
+        db.refresh(replay_run)
+        raise
 
     # Extract regression_detected from evaluation if present
     for result in results:
