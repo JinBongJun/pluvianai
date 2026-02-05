@@ -451,7 +451,7 @@ export default function CostAnalysisPage() {
           isOpen={showOptimizationModal}
           onClose={() => setShowOptimizationModal(false)}
           title="Cost Optimization Opportunities"
-          size="xl"
+          size="lg"
         >
           <div className="space-y-4">
             {optimizations && optimizations.opportunities && optimizations.opportunities.length > 0 ? (

@@ -626,7 +626,7 @@ export default function TestLabPage() {
               <h3 className="text-sm font-semibold">Canvas ({boxes.length}/30)</h3>
               <Button
                 variant="secondary"
-                size="xs"
+                size="sm"
                 onClick={handleSaveCanvas}
                 disabled={!boxes.length}
               >
@@ -674,7 +674,7 @@ export default function TestLabPage() {
                     </span>
                     <Button
                       variant="secondary"
-                      size="xs"
+                      size="sm"
                       onClick={handleRunTest}
                       disabled={isRunning || isConcurrencyBlocked}
                     >
@@ -834,7 +834,7 @@ export default function TestLabPage() {
                 <Button
                   key={f}
                   variant={resultFilter === f ? 'primary' : 'secondary'}
-                  size="xs"
+                  size="sm"
                   onClick={() => setResultFilter(f)}
                 >
                   {f === 'all'
@@ -978,7 +978,7 @@ export default function TestLabPage() {
               <div className="space-y-1">
                 <Button
                   type="button"
-                  size="xs"
+                  size="sm"
                   variant="secondary"
                   onClick={() => {
                     // Download simple one-column template with "input" header
