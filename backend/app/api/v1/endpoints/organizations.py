@@ -31,9 +31,7 @@ cost_analyzer = CostAnalyzer()
 
 class OrganizationCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    type: Optional[str] = Field(
-        None, description="personal, startup, company, agency, educational, na"
-    )
+    description: Optional[str] = Field(None, max_length=2000)
     plan_type: str = Field("free", pattern="^(free|indie|startup|pro|enterprise)$")
 
 
@@ -68,7 +66,8 @@ class OrganizationAlert(BaseModel):
 class OrganizationDetail(BaseModel):
     id: int
     name: str
-    type: Optional[str]
+    description: Optional[str] = None
+    type: Optional[str] = None
     plan_type: str
     stats: Optional[dict] = None  # For backward compatibility
 
@@ -115,11 +114,10 @@ def create_organization(
         )
 
     try:
-        # Use service to create organization (RequestDTO → Domain Model conversion)
         org = org_service.create_organization(
             name=name,
             owner_id=current_user.id,
-            org_type=org_data.type,
+            description=org_data.description,
             plan_type=org_data.plan_type or "free"
         )
         # Transaction is committed by get_db() dependency
@@ -282,143 +280,135 @@ def get_organization(
             return OrganizationDetail(
                 id=org.id,
                 name=org.name,
+                description=getattr(org, "description", None),
                 type=org.type,
                 plan_type=org.plan_type,
-                stats=None,  # Explicitly set to None
+                stats=None,
             )
 
-            # Get all projects for this org
-            logger.info(f"📊 Calculating stats for org_id={org_id}")
-            print(f"📊 Calculating stats for org_id={org_id}", file=sys.stderr)
-            
+        # Get all projects for this org (include_stats=True)
+        logger.info(f"📊 Calculating stats for org_id={org_id}")
+        print(f"📊 Calculating stats for org_id={org_id}", file=sys.stderr)
+
+        try:
+            projects = db.query(Project).filter(Project.organization_id == org_id).all()
+            project_ids = [p.id for p in projects]
+            logger.info(f"📁 Found {len(projects)} projects for org_id={org_id}")
+            print(f"📁 Found {len(projects)} projects for org_id={org_id}", file=sys.stderr)
+        except Exception as e:
+            logger.error(f"🔴 Error querying projects: {str(e)}", exc_info=True)
+            print(f"🔴 Error querying projects: {str(e)}", file=sys.stderr)
+            raise
+
+        now = datetime.utcnow()
+        seven_days_ago = now - timedelta(days=7)
+
+        calls_count = 0
+        total_cost = 0.0
+        quality_scores = []
+
+        if project_ids:
             try:
-                projects = db.query(Project).filter(Project.organization_id == org_id).all()
-                project_ids = [p.id for p in projects]
-                logger.info(f"📁 Found {len(projects)} projects for org_id={org_id}")
-                print(f"📁 Found {len(projects)} projects for org_id={org_id}", file=sys.stderr)
+                logger.info(f"📞 Querying API calls for {len(project_ids)} projects")
+                print(f"📞 Querying API calls for {len(project_ids)} projects", file=sys.stderr)
+                calls_count = (
+                    db.query(func.count(APICall.id))
+                    .filter(
+                        APICall.project_id.in_(project_ids),
+                        APICall.created_at >= seven_days_ago,
+                        APICall.created_at <= now,
+                    )
+                    .scalar()
+                    or 0
+                )
+                logger.info(f"✅ API calls count: {calls_count}")
+                print(f"✅ API calls count: {calls_count}", file=sys.stderr)
             except Exception as e:
-                logger.error(f"🔴 Error querying projects: {str(e)}", exc_info=True)
-                print(f"🔴 Error querying projects: {str(e)}", file=sys.stderr)
-                raise
+                logger.warning(f"Failed to query API calls for org {org_id}: {str(e)}", exc_info=True)
+                calls_count = 0
 
-            now = datetime.utcnow()
-            seven_days_ago = now - timedelta(days=7)
-
-            # Calculate usage stats
-            calls_count = 0
-            total_cost = 0.0
-            quality_scores = []
-
-            if project_ids:
-                # API calls (7d)
+            for project_id in project_ids:
                 try:
-                    logger.info(f"📞 Querying API calls for {len(project_ids)} projects")
-                    print(f"📞 Querying API calls for {len(project_ids)} projects", file=sys.stderr)
-                    calls_count = (
-                        db.query(func.count(APICall.id))
-                        .filter(
-                            APICall.project_id.in_(project_ids),
-                            APICall.created_at >= seven_days_ago,
-                            APICall.created_at <= now,
-                        )
-                        .scalar()
-                        or 0
+                    cost_analysis = cost_analyzer.analyze_project_costs(
+                        project_id=project_id,
+                        start_date=seven_days_ago,
+                        end_date=now,
+                        db=db,
                     )
-                    logger.info(f"✅ API calls count: {calls_count}")
-                    print(f"✅ API calls count: {calls_count}", file=sys.stderr)
+                    total_cost += cost_analysis.get("total_cost", 0.0)
                 except Exception as e:
-                    logger.warning(f"Failed to query API calls for org {org_id}: {str(e)}", exc_info=True)
-                    calls_count = 0
+                    logger.warning(f"Failed to calculate cost for project {project_id}: {str(e)}", exc_info=True)
 
-                # Cost (7d) - calculate using CostAnalyzer
-                for project_id in project_ids:
-                    try:
-                        cost_analysis = cost_analyzer.analyze_project_costs(
-                            project_id=project_id,
-                            start_date=seven_days_ago,
-                            end_date=now,
-                            db=db,
-                        )
-                        total_cost += cost_analysis.get("total_cost", 0.0)
-                    except Exception as e:
-                        # Skip if cost calculation fails
-                        logger.warning(f"Failed to calculate cost for project {project_id}: {str(e)}", exc_info=True)
-
-                # Quality (average of recent quality scores)
-                try:
-                    quality_rows = (
-                        db.query(func.avg(QualityScore.overall_score))
-                        .filter(
-                            QualityScore.project_id.in_(project_ids),
-                            QualityScore.created_at >= seven_days_ago,
-                        )
-                        .scalar()
+            try:
+                quality_rows = (
+                    db.query(func.avg(QualityScore.overall_score))
+                    .filter(
+                        QualityScore.project_id.in_(project_ids),
+                        QualityScore.created_at >= seven_days_ago,
                     )
-                    if quality_rows is not None:
-                        avg_quality = float(quality_rows)
-                    else:
-                        avg_quality = 0.0
-                except (ValueError, TypeError, Exception) as e:
-                    logger.warning(f"Failed to query quality scores for org {org_id}: {str(e)}", exc_info=True)
-                    avg_quality = 0.0
-            else:
+                    .scalar()
+                )
+                avg_quality = float(quality_rows) if quality_rows is not None else 0.0
+            except (ValueError, TypeError, Exception) as e:
+                logger.warning(f"Failed to query quality scores for org {org_id}: {str(e)}", exc_info=True)
                 avg_quality = 0.0
+        else:
+            avg_quality = 0.0
 
-            # Get plan limits (based on plan_type) — 5 tiers aligned with Subscription
-            plan_limits = {
-                "free": {"calls": 1000, "cost": 10.0},
-                "indie": {"calls": 30000, "cost": 100.0},
-                "startup": {"calls": 200000, "cost": 500.0},
-                "pro": {"calls": 100000, "cost": 1000.0},
-                "enterprise": {"calls": 1000000, "cost": 10000.0},
-            }
-            limits = plan_limits.get(org.plan_type, plan_limits["free"])
+        plan_limits = {
+            "free": {"calls": 1000, "cost": 10.0},
+            "indie": {"calls": 30000, "cost": 100.0},
+            "startup": {"calls": 200000, "cost": 500.0},
+            "pro": {"calls": 100000, "cost": 1000.0},
+            "enterprise": {"calls": 1000000, "cost": 10000.0},
+        }
+        limits = plan_limits.get(org.plan_type, plan_limits["free"])
 
-            # Get recent alerts
-            alerts_list = []
-            if project_ids:
-                try:
-                    recent_alerts = (
-                        db.query(Alert, Project.name)
-                        .join(Project, Alert.project_id == Project.id)
-                        .filter(
-                            Alert.project_id.in_(project_ids),
-                            Alert.is_resolved.is_(False),
-                        )
-                        .order_by(Alert.created_at.desc())
-                        .limit(10)
-                        .all()
+        alerts_list = []
+        if project_ids:
+            try:
+                recent_alerts = (
+                    db.query(Alert, Project.name)
+                    .join(Project, Alert.project_id == Project.id)
+                    .filter(
+                        Alert.project_id.in_(project_ids),
+                        Alert.is_resolved.is_(False),
                     )
-                    for alert, project_name in recent_alerts:
-                        alerts_list.append(
-                            {
-                                "project": project_name,
-                                "summary": alert.message or "Alert detected",
-                                "severity": alert.severity or "medium",
-                            }
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to query alerts for org {org_id}: {str(e)}", exc_info=True)
-                    alerts_list = []
+                    .order_by(Alert.created_at.desc())
+                    .limit(10)
+                    .all()
+                )
+                for alert, project_name in recent_alerts:
+                    alerts_list.append(
+                        {
+                            "project": project_name,
+                            "summary": alert.message or "Alert detected",
+                            "severity": alert.severity or "medium",
+                        }
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to query alerts for org {org_id}: {str(e)}", exc_info=True)
+                alerts_list = []
 
-            logger.info(f"✅ Building response for org_id={org_id}")
-            print(f"✅ Building response for org_id={org_id}", file=sys.stderr)
-            return {
-                "id": org.id,
-                "name": org.name,
-                "type": org.type,
-                "plan_type": org.plan_type,
-                "stats": {
-                    "usage": {
-                        "calls": calls_count,
-                        "calls_limit": limits["calls"],
-                        "cost": round(total_cost, 2),
-                        "cost_limit": limits["cost"],
-                        "quality": round(avg_quality, 1),
-                    },
-                    "alerts": alerts_list,
+        logger.info(f"✅ Building response for org_id={org_id}")
+        print(f"✅ Building response for org_id={org_id}", file=sys.stderr)
+        return {
+            "id": org.id,
+            "name": org.name,
+            "description": getattr(org, "description", None),
+            "type": org.type,
+            "plan_type": org.plan_type,
+            "stats": {
+                "usage": {
+                    "calls": calls_count,
+                    "calls_limit": limits["calls"],
+                    "cost": round(total_cost, 2),
+                    "cost_limit": limits["cost"],
+                    "quality": round(avg_quality, 1),
                 },
-            }
+                "alerts": alerts_list,
+            },
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -506,8 +496,11 @@ def list_org_projects(
                 if search_term in (p.name or "").lower() or search_term in (p.description or "").lower()
             ]
         
-        # Sort by created_at descending
-        projects = sorted(projects, key=lambda p: p.created_at, reverse=True)
+        # Sort by created_at descending (handle None; avoid comparing naive/aware)
+        def _sort_key(p):
+            ct = getattr(p, "created_at", None)
+            return (0 if ct is None else 1, ct.isoformat() if ct is not None else "")
+        projects = sorted(projects, key=_sort_key, reverse=True)
 
         if not projects:
             logger.info(f"✅ No projects found for org_id={org_id}")
@@ -519,7 +512,6 @@ def list_org_projects(
         day_ago = now - timedelta(days=1)
         seven_days_ago = now - timedelta(days=7)
 
-        # Defaults when stats disabled
         calls_map = {pid: 0 for pid in project_ids}
         cost_map = {pid: 0.0 for pid in project_ids}
         quality_map = {pid: None for pid in project_ids}

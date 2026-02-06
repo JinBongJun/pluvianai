@@ -5,10 +5,13 @@ import { FormEvent, useState } from 'react';
 import TopHeader from '@/components/layout/TopHeader';
 import { organizationsAPI } from '@/lib/api';
 
+/**
+ * Create a new organization — Name * + Description only (§5.1.5 스타일).
+ */
 export default function NewOrganizationPage() {
   const router = useRouter();
   const [name, setName] = useState('');
-  const [type, setType] = useState('personal');
+  const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,7 +26,7 @@ export default function NewOrganizationPage() {
     try {
       const org = await organizationsAPI.create({
         name: name.trim(),
-        type: type || null,
+        description: description.trim() || null,
         plan_type: 'free',
       });
       router.push(`/organizations/${org.id}/projects`);
@@ -45,16 +48,16 @@ export default function NewOrganizationPage() {
       <main className="px-8 py-10 max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold mb-2">Create a new organization</h1>
         <p className="text-slate-400 mb-8">
-          Organizations are a way to group your projects. Each organization can be configured with different team
-          members and billing settings.
+          Organizations group your projects. Each can have its own team and billing.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium mb-2">
-              Name <span className="text-red-500">*</span>
+            <label htmlFor="org-name" className="block text-sm font-medium text-slate-300 mb-2">
+              Name <span className="text-red-400">*</span>
             </label>
             <input
+              id="org-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -63,48 +66,38 @@ export default function NewOrganizationPage() {
               required
               maxLength={255}
             />
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-xs text-slate-400">
               What&apos;s the name of your company or team? You can change this later.
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Type</label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-ag-surface px-4 py-3 text-sm text-white focus:border-ag-accent focus:outline-none"
-            >
-              <option value="personal">Personal</option>
-              <option value="startup">Startup</option>
-              <option value="company">Company</option>
-              <option value="agency">Agency</option>
-              <option value="educational">Educational</option>
-              <option value="na">N/A</option>
-            </select>
-            <p className="mt-1 text-sm text-slate-400">What best describes your organization?</p>
-          </div>
-
-          <div className="rounded-lg border border-blue-900 bg-blue-900/10 p-4">
-            <p className="text-sm text-blue-200">
-              ℹ️ Your organization will start on the Free plan. You can upgrade anytime from Settings &gt; Billing.
+            <label htmlFor="org-description" className="block text-sm font-medium text-slate-300 mb-2">
+              Description
+            </label>
+            <textarea
+              id="org-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional description of your organization"
+              rows={4}
+              className="w-full rounded-lg border border-white/10 bg-ag-surface px-4 py-3 text-sm text-white placeholder:text-ag-muted focus:border-ag-accent focus:outline-none resize-none"
+              maxLength={2000}
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              You can change this later.
             </p>
           </div>
 
-          <div className="rounded-lg border border-blue-900 bg-blue-900/10 p-4">
-            <p className="text-sm text-blue-200">
-              ℹ️ You&apos;ll be the owner of this organization. You can invite team members and transfer ownership
-              later from Settings &gt; Team.
-            </p>
-          </div>
+          <div className="border-t border-white/10 pt-6" />
 
           {error && (
-            <div className="rounded-lg border border-red-900 bg-red-900/10 p-4 text-sm text-red-200">
+            <div className="rounded-lg border border-red-500/40 bg-red-950/20 px-4 py-3 text-sm text-red-200">
               {error}
             </div>
           )}
 
-          <div className="flex justify-end gap-4">
+          <div className="flex justify-end gap-3 pt-4">
             <button
               type="button"
               onClick={() => router.push('/organizations')}
@@ -115,7 +108,7 @@ export default function NewOrganizationPage() {
             <button
               type="submit"
               disabled={!name.trim() || loading}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="rounded-lg bg-ag-accent px-4 py-2 text-sm font-semibold text-ag-bg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? 'Creating...' : 'Create organization'}
             </button>

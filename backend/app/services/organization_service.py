@@ -24,25 +24,18 @@ class OrganizationService:
         self,
         name: str,
         owner_id: int,
-        org_type: Optional[str] = None,
+        description: Optional[str] = None,
         plan_type: str = "free"
     ) -> Organization:
         """
-        Create a new organization with owner as member
-        
+        Create a new organization with owner as member.
+
         Args:
             name: Organization name
             owner_id: Owner user ID
-            org_type: Optional organization type
+            description: Optional description
             plan_type: Plan type (default: "free")
-        
-        Returns:
-            Created Organization entity
-        
-        Raises:
-            EntityAlreadyExistsError: If organization name already exists for owner
         """
-        # Check for duplicate organization name
         existing = (
             self.db.query(Organization)
             .filter(
@@ -54,10 +47,9 @@ class OrganizationService:
         if existing:
             raise EntityAlreadyExistsError("An organization with this name already exists")
 
-        # Create organization
         org = Organization(
             name=name.strip(),
-            type=org_type,
+            description=description.strip() if description else None,
             plan_type=plan_type,
             owner_id=owner_id
         )

@@ -253,6 +253,8 @@ def list_snapshots(
                 "system_prompt": s.system_prompt,
                 "user_message": s.user_message,
                 "response": s.response,
+                "request_prompt": s.user_message,
+                "response_text": s.response,
                 "latency_ms": s.latency_ms,
                 "tokens_used": s.tokens_used,
                 "cost": s.cost,

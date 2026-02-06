@@ -3,10 +3,13 @@ Background tasks for async processing
 """
 
 import asyncio
+import uuid
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.models.api_call import APICall
+from app.models.trace import Trace
+from app.models.snapshot import Snapshot
 from app.services.data_normalizer import DataNormalizer
 from app.utils.compression import optimize_api_call_data, compress_json
 from app.core.logging_config import logger
@@ -98,6 +101,39 @@ class BackgroundTaskService:
             )
             db.add(api_call)
             db.flush()  # Flush to get api_call.id if needed
+
+            # Create Snapshot so Live View boxes appear (SDK traffic -> snapshots per design)
+            trace_id = chain_id or str(uuid.uuid4())
+            agent_id = (agent_name or "unknown").strip() or "unknown"
+            system_prompt = normalized.get("system_prompt")
+            request_prompt = normalized.get("request_prompt")
+            response_text = normalized.get("response_text")
+            payload_for_snapshot = {
+                "request": request_data,
+                "response": response_data,
+            }
+            try:
+                trace = db.query(Trace).filter(Trace.id == trace_id).first()
+                if not trace:
+                    trace = Trace(id=trace_id, project_id=project_id)
+                    db.add(trace)
+                    db.flush()
+                snapshot = Snapshot(
+                    trace_id=trace_id,
+                    project_id=project_id,
+                    agent_id=agent_id,
+                    provider=normalized.get("provider", "unknown"),
+                    model=normalized.get("model", "unknown"),
+                    system_prompt=system_prompt,
+                    user_message=request_prompt,
+                    response=response_text,
+                    payload=payload_for_snapshot,
+                    latency_ms=int(latency_ms) if latency_ms is not None else None,
+                    status_code=status_code,
+                )
+                db.add(snapshot)
+            except Exception as snap_err:
+                logger.warning(f"Failed to create snapshot for Live View (non-fatal): {snap_err}")
 
             # Track usage for subscription limits
             try:

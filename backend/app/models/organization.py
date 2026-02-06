@@ -2,7 +2,7 @@
 Organization and OrganizationMember models
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -15,7 +15,8 @@ class Organization(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False, index=True)
-    type = Column(String(50), nullable=True)  # personal, startup, company, agency, educational, na
+    description = Column(Text, nullable=True)
+    type = Column(String(50), nullable=True)  # deprecated: kept for backward compatibility
     plan_type = Column(String(20), nullable=False, default="free")  # free, indie, startup, pro, enterprise
     paddle_customer_id = Column(String(255), nullable=True, index=True)
     paddle_subscription_id = Column(String(255), nullable=True, index=True)

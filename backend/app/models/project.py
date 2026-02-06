@@ -20,6 +20,7 @@ class Project(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     is_active = Column(Boolean, default=True)
     is_panic_mode = Column(Boolean, default=False)  # Panic Mode (Global Block) - stored in DB and synced to Redis
+    usage_mode = Column(String(32), default="full", nullable=False)  # "full" | "test_only" (Design 5.1.5)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

@@ -24,13 +24,43 @@ class CostAnalyzer:
     
     def __init__(self):
         self.pricing = self.DEFAULT_PRICING.copy()
-    
+
     def analyze_project_costs(
+        self,
+        api_calls: Optional[List[Any]] = None,
+        period_days: int = 30,
+        *,
+        project_id: Optional[int] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        db: Any = None,
+    ) -> Dict[str, Any]:
+        """Analyze costs for a project. Call with either (api_calls, period_days) or (project_id, start_date, end_date, db)."""
+        if project_id is not None and db is not None:
+            from app.models.api_call import APICall
+            if start_date is None or end_date is None:
+                start_date = datetime.utcnow() - timedelta(days=period_days)
+                end_date = datetime.utcnow()
+            api_calls = (
+                db.query(APICall)
+                .filter(
+                    APICall.project_id == project_id,
+                    APICall.created_at >= start_date,
+                    APICall.created_at <= end_date,
+                )
+                .all()
+            )
+            period_days = max(1, (end_date - start_date).days)
+        if api_calls is None:
+            api_calls = []
+        return self._analyze_costs(api_calls, period_days)
+
+    def _analyze_costs(
         self,
         api_calls: List[Any],
         period_days: int = 30
     ) -> Dict[str, Any]:
-        """Analyze costs for a project's API calls"""
+        """Analyze costs for a list of API calls."""
         total_cost = 0.0
         total_input_tokens = 0
         total_output_tokens = 0

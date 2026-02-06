@@ -26,20 +26,22 @@ class ProjectService:
         name: str,
         owner_id: int,
         description: Optional[str] = None,
-        organization_id: Optional[int] = None
+        organization_id: Optional[int] = None,
+        usage_mode: str = "full",
     ) -> Project:
         """
-        Create a new project
-        
+        Create a new project (Design 5.1.5: usage_mode full | test_only).
+
         Args:
             name: Project name
             owner_id: Owner user ID
             description: Optional project description
             organization_id: Optional organization ID
-        
+            usage_mode: "full" (Live View + Test Lab) or "test_only" (Test Lab only)
+
         Returns:
             Created Project entity
-        
+
         Raises:
             EntityAlreadyExistsError: If project name already exists for owner
         """
@@ -69,12 +71,14 @@ class ProjectService:
                 if not member:
                     raise ValueError("You don't have access to this organization")
 
+        mode = "full" if usage_mode not in ("full", "test_only") else usage_mode
         project = Project(
             name=name,
             description=description,
             owner_id=owner_id,
             is_active=True,
-            organization_id=organization_id
+            organization_id=organization_id,
+            usage_mode=mode,
         )
         
         # Transaction is managed by get_db() dependency
@@ -144,28 +148,32 @@ class ProjectService:
         self,
         project_id: int,
         name: Optional[str] = None,
-        description: Optional[str] = None
+        description: Optional[str] = None,
+        usage_mode: Optional[str] = None,
     ) -> Optional[Project]:
         """
-        Update project
-        
+        Update project (Design 5.1.5: usage_mode upgrade to Full Mode).
+
         Args:
             project_id: Project ID
             name: Optional new name
             description: Optional new description
-        
+            usage_mode: Optional 'full' or 'test_only'
+
         Returns:
             Updated Project entity or None if not found
         """
         project = self.project_repo.find_by_id(project_id)
         if not project:
             return None
-        
+
         if name is not None:
             project.name = name
         if description is not None:
             project.description = description
-        
+        if usage_mode is not None and usage_mode in ("full", "test_only"):
+            project.usage_mode = usage_mode
+
         # Transaction is managed by get_db() dependency
         return self.project_repo.save(project)
 

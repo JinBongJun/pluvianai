@@ -2,24 +2,22 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Search, X, Command, Folder, Activity, AlertTriangle, BarChart3, DollarSign, Gauge, Bell, Settings, LayoutDashboard } from 'lucide-react';
-import { projectsAPI, apiCallsAPI, driftAPI, alertsAPI } from '@/lib/api';
+import { Search, X, Command, Folder, Activity, AlertTriangle, Bell, Settings, LayoutDashboard } from 'lucide-react';
+import { projectsAPI, apiCallsAPI, alertsAPI } from '@/lib/api';
 import { clsx } from 'clsx';
 
-/** Quick navigation items shown when search query is empty or short */
+/** Quick navigation items (Design 5.2: live-view, test-lab, api-calls, signals, worst-prompts, reviews, alerts, settings) */
 const QUICK_NAV_LABELS: { id: string; label: string; pathSuffix: string; icon: React.ElementType }[] = [
   { id: 'projects', label: 'Projects', pathSuffix: '', icon: Folder },
-  { id: 'dashboard', label: 'Dashboard', pathSuffix: '', icon: LayoutDashboard },
+  { id: 'dashboard', label: 'Overview', pathSuffix: '', icon: LayoutDashboard },
+  { id: 'live-view', label: 'Live View', pathSuffix: '/live-view', icon: Activity },
   { id: 'api-calls', label: 'API Calls', pathSuffix: '/api-calls', icon: Activity },
-  { id: 'drift', label: 'Drift', pathSuffix: '/drift', icon: BarChart3 },
-  { id: 'quality', label: 'Quality', pathSuffix: '/quality', icon: Gauge },
-  { id: 'cost', label: 'Cost', pathSuffix: '/cost', icon: DollarSign },
   { id: 'alerts', label: 'Alerts', pathSuffix: '/alerts', icon: Bell },
   { id: 'settings', label: 'Settings', pathSuffix: '/settings', icon: Settings },
 ];
 
 interface SearchResult {
-  type: 'project' | 'api_call' | 'drift' | 'alert';
+  type: 'project' | 'api_call' | 'alert';
   id: number;
   projectId: number;
   title: string;
@@ -150,33 +148,6 @@ export default function GlobalSearch({ isOpen: propIsOpen, onClose }: GlobalSear
           // Ignore errors
         }
 
-        // Search drift detections
-        try {
-          const projects = await projectsAPI.list();
-          for (const project of projects.slice(0, 3)) {
-            try {
-              const drifts = await driftAPI.list(project.id, { limit: 10 });
-              drifts.forEach((drift: any) => {
-                if (drift.detection_type.toLowerCase().includes(searchLower) ||
-                    (drift.agent_name && drift.agent_name.toLowerCase().includes(searchLower))) {
-                  allResults.push({
-                    type: 'drift',
-                    id: drift.id,
-                    projectId: project.id,
-                    title: `${drift.detection_type} drift`,
-                    subtitle: `Severity: ${drift.severity}`,
-                    icon: <AlertTriangle className="h-4 w-4" />,
-                  });
-                }
-              });
-            } catch (error) {
-              // Ignore errors
-            }
-          }
-        } catch (error) {
-          // Ignore errors
-        }
-
         setResults(allResults.slice(0, 20)); // Limit to 20 results
       } catch (error) {
         console.error('Search error:', error);
@@ -240,9 +211,6 @@ export default function GlobalSearch({ isOpen: propIsOpen, onClose }: GlobalSear
           case 'api_call':
             router.push(`/organizations/${orgId}/projects/${result.projectId}/api-calls/${result.id}`);
             break;
-          case 'drift':
-            router.push(`/organizations/${orgId}/projects/${result.projectId}/drift/${result.id}`);
-            break;
           case 'alert':
             router.push(`/organizations/${orgId}/projects/${result.projectId}/alerts/${result.id}`);
             break;
@@ -255,9 +223,6 @@ export default function GlobalSearch({ isOpen: propIsOpen, onClose }: GlobalSear
             break;
           case 'api_call':
             router.push(`/dashboard/${result.projectId}/api-calls/${result.id}`);
-            break;
-          case 'drift':
-            router.push(`/dashboard/${result.projectId}/drift/${result.id}`);
             break;
           case 'alert':
             router.push(`/dashboard/${result.projectId}/alerts/${result.id}`);
@@ -272,9 +237,6 @@ export default function GlobalSearch({ isOpen: propIsOpen, onClose }: GlobalSear
           break;
         case 'api_call':
           router.push(`/dashboard/${result.projectId}/api-calls/${result.id}`);
-          break;
-        case 'drift':
-          router.push(`/dashboard/${result.projectId}/drift/${result.id}`);
           break;
         case 'alert':
           router.push(`/dashboard/${result.projectId}/alerts/${result.id}`);

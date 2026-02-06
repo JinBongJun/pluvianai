@@ -40,7 +40,7 @@ export default function ProjectSettings({ projectId, project, onUpdate }: Projec
     setError('');
 
     try {
-      await projectsAPI.update(projectId, name, description || undefined);
+      await projectsAPI.update(projectId, { name, description: description || undefined });
       onUpdate();
       // Dispatch event to refresh sidebar projects list
       window.dispatchEvent(new Event('projectUpdated'));

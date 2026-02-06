@@ -3,7 +3,7 @@
  */
 import axios from 'axios';
 import { toNumber } from '@/lib/format';
-import { validateArrayResponse, normalizeModelComparison } from '@/lib/validate';
+import { validateArrayResponse } from '@/lib/validate';
 
 // Helper to log errors (development: console, production: Sentry)
 // Only send critical errors to Sentry to avoid rate limits
@@ -63,12 +63,9 @@ const unwrapArrayResponse = (response: { data: any }): any[] => {
   return [];
 };
 import {
-  ModelComparisonSchema,
   CostAnalysisSchema,
   QualityScoreSchema,
   DriftDetectionSchema,
-  ChainProfileSchema,
-  ChainProfileResponseSchema,
   ProjectSchema,
   APICallSchema,
   AlertSchema,
@@ -285,10 +282,10 @@ const normalizeOrganizationProject = (project: any): OrganizationProject => ({
 });
 
 export const organizationsAPI = {
-  create: async (data: { name: string; type?: string | null; plan_type?: PlanType }) => {
+  create: async (data: { name: string; description?: string | null; plan_type?: PlanType }) => {
     const response = await apiClient.post('/organizations', {
       name: data.name,
-      type: data.type ?? null,
+      description: data.description ?? null,
       plan_type: data.plan_type ?? 'free',
     });
     try {
@@ -315,12 +312,16 @@ export const organizationsAPI = {
     const response = await apiClient.get(`/organizations/${id}`, {
       params: { include_stats: options?.includeStats },
     });
+    const data = unwrapResponse(response) ?? response.data;
+    if (data == null || (typeof data === 'object' && !('id' in data))) {
+      throw new Error('Organization data is missing');
+    }
     try {
-      const parsed = OrganizationSchema.parse(response.data);
+      const parsed = OrganizationSchema.parse(data);
       return normalizeOrganizationDetail(parsed);
     } catch (error) {
       logWarn('[API Validation] Organization schema mismatch', { error });
-      return normalizeOrganizationDetail(response.data);
+      return normalizeOrganizationDetail(data);
     }
   },
 
@@ -331,9 +332,10 @@ export const organizationsAPI = {
         search: options?.search,
       },
     });
+    const data = unwrapResponse(response) ?? response.data;
     const validated = validateArrayResponse(
       OrganizationProjectStatsSchema,
-      response.data,
+      Array.isArray(data) ? data : data?.items ?? data?.data ?? [],
       `/organizations/${id}/projects`,
     );
     return validated.map(normalizeOrganizationProject);
@@ -398,21 +400,29 @@ export const projectsAPI = {
     return response.data;
   },
 
-  create: async (data: { name: string; description?: string; generate_sample_data?: boolean; organization_id?: number }) => {
+  create: async (data: {
+    name: string;
+    description?: string;
+    generate_sample_data?: boolean;
+    organization_id?: number;
+    usage_mode?: 'full' | 'test_only';
+  }) => {
     const response = await apiClient.post('/projects', {
       name: data.name,
       description: data.description,
       generate_sample_data: data.generate_sample_data,
       organization_id: data.organization_id,
+      usage_mode: data.usage_mode ?? 'full',
     });
     return response.data;
   },
 
-  update: async (id: number, name?: string, description?: string) => {
-    const response = await apiClient.patch(`/projects/${id}`, {
-      name,
-      description,
-    });
+  update: async (id: number, data?: { name?: string; description?: string; usage_mode?: 'full' | 'test_only' }) => {
+    const body: { name?: string; description?: string; usage_mode?: string } = {};
+    if (data?.name !== undefined) body.name = data.name;
+    if (data?.description !== undefined) body.description = data.description;
+    if (data?.usage_mode !== undefined) body.usage_mode = data.usage_mode;
+    const response = await apiClient.patch(`/projects/${id}`, body);
     return response.data;
   },
 
@@ -619,37 +629,6 @@ export const alertsAPI = {
   },
 };
 
-// Benchmark API
-export const benchmarkAPI = {
-  compareModels: async (projectId: number, days: number = 7) => {
-    // Validate projectId
-    if (!projectId || isNaN(projectId) || projectId <= 0) {
-      throw new Error(`Invalid project ID: ${projectId}`);
-    }
-    // Validate days (backend limit is 30)
-    const validatedDays = Math.min(Math.max(1, days), 30);
-    const response = await apiClient.get('/benchmark/compare', {
-      params: { project_id: Number(projectId), days: validatedDays },
-    });
-    // Validate and normalize response
-    const data = Array.isArray(response.data) ? response.data : [];
-    const validated = validateArrayResponse(
-      ModelComparisonSchema,
-      data,
-      '/benchmark/compare'
-    );
-    // Normalize field name variations
-    return validated.map(normalizeModelComparison);
-  },
-
-  getRecommendations: async (projectId: number, days: number = 7) => {
-    const response = await apiClient.get('/benchmark/recommendations', {
-      params: { project_id: projectId, days },
-    });
-    return response.data;
-  },
-};
-
 // Cost API
 export const costAPI = {
   getAnalysis: async (projectId: number, days: number = 7) => {
@@ -718,129 +697,6 @@ export const costAPI = {
     const response = await apiClient.post('/cost/optimizations/apply', {
       optimization_id: optimizationId,
       user_confirmation: userConfirmation,
-    }, {
-      params: { project_id: Number(projectId) },
-    });
-    return response.data;
-  },
-};
-
-// Agent Chain API
-// Agent Chain API
-export const agentChainAPI = {
-  profile: async (projectId: number, chainId?: string, days: number = 7) => {
-    // Validate projectId
-    if (!projectId || isNaN(projectId) || projectId <= 0) {
-      throw new Error(`Invalid project ID: ${projectId}`);
-    }
-    // Validate days (backend limit is 30)
-    const validatedDays = Math.min(Math.max(1, days), 30);
-    const params: any = { project_id: Number(projectId), days: validatedDays };
-    if (chainId) {
-      params.chain_id = chainId;
-    }
-    const response = await apiClient.get('/agent-chain/profile', { params });
-
-    // Backend returns {total_chains, chains: [], ...} or {message, chains: []}
-    // Validate using ChainProfileResponseSchema
-    try {
-      const validated = ChainProfileResponseSchema.parse(response.data);
-      return validated;
-    } catch (error) {
-      logWarn('[API Validation] Chain profile response schema mismatch', { error });
-      // Return safe default structure
-      return {
-        total_chains: 0,
-        successful_chains: 0,
-        success_rate: 0,
-        avg_chain_latency_ms: 0,
-        chains: [],
-        message: response.data?.message || 'No chain data available',
-      };
-    }
-  },
-
-  getOptimizations: async (projectId: number, chainId: string) => {
-    if (!projectId || isNaN(projectId) || projectId <= 0) {
-      throw new Error(`Invalid project ID: ${projectId}`);
-    }
-    if (!chainId) {
-      throw new Error('Chain ID is required');
-    }
-    const response = await apiClient.get('/agent-chain/optimizations', {
-      params: { project_id: Number(projectId), chain_id: chainId },
-    });
-    return response.data;
-  },
-
-  applyOptimization: async (projectId: number, chainId: string, optimizationId: string, userConfirmation: boolean = true) => {
-    if (!projectId || isNaN(projectId) || projectId <= 0) {
-      throw new Error(`Invalid project ID: ${projectId}`);
-    }
-    if (!chainId) {
-      throw new Error('Chain ID is required');
-    }
-    const response = await apiClient.post('/agent-chain/optimizations/apply', {
-      optimization_id: optimizationId,
-      user_confirmation: userConfirmation,
-    }, {
-      params: { project_id: Number(projectId), chain_id: chainId },
-    });
-    return response.data;
-  },
-
-  getAgentStatistics: async (projectId: number, days: number = 7) => {
-    // Validate projectId
-    if (!projectId || isNaN(projectId) || projectId <= 0) {
-      throw new Error(`Invalid project ID: ${projectId}`);
-    }
-    // Validate days (backend limit is 30)
-    const validatedDays = Math.min(Math.max(1, days), 30);
-    const response = await apiClient.get('/agent-chain/agents', {
-      params: { project_id: Number(projectId), days: validatedDays },
-    });
-    return response.data;
-  },
-};
-
-// Shadow Routing API
-export const shadowRoutingAPI = {
-  getSuggestions: async (projectId: number, primaryModel: string) => {
-    if (!projectId || isNaN(projectId) || projectId <= 0) {
-      throw new Error(`Invalid project ID: ${projectId}`);
-    }
-    if (!primaryModel) {
-      throw new Error('Primary model is required');
-    }
-    const response = await apiClient.get('/shadow-routing/suggestions', {
-      params: { project_id: Number(projectId), primary_model: primaryModel },
-    });
-    return response.data;
-  },
-
-  apply: async (projectId: number, primaryModel: string, shadowModel: string, userConfirmation: boolean = true) => {
-    if (!projectId || isNaN(projectId) || projectId <= 0) {
-      throw new Error(`Invalid project ID: ${projectId}`);
-    }
-    if (!primaryModel || !shadowModel) {
-      throw new Error('Primary model and shadow model are required');
-    }
-    const response = await apiClient.post('/shadow-routing/apply', {
-      primary_model: primaryModel,
-      shadow_model: shadowModel,
-      user_confirmation: userConfirmation,
-    }, {
-      params: { project_id: Number(projectId) },
-    });
-    return response.data;
-  },
-
-  rollback: async (projectId: number, rollbackPointId?: string) => {
-    if (!projectId || isNaN(projectId) || projectId <= 0) {
-      throw new Error(`Invalid project ID: ${projectId}`);
-    }
-    const response = await apiClient.post('/shadow-routing/rollback', {
-      rollback_point_id: rollbackPointId || null,
     }, {
       params: { project_id: Number(projectId) },
     });
@@ -1271,107 +1127,6 @@ export const onboardingAPI = {
 };
 
 // Model Validation API
-// Mapping API
-export const mappingAPI = {
-  getMapping: async (projectId: number, days: number = 7) => {
-    const response = await apiClient.get(`/projects/${projectId}/mapping`, {
-      params: { days },
-    });
-    return unwrapResponse(response);
-  },
-
-  getDependencyGraph: async (projectId: number, days: number = 7) => {
-    const response = await apiClient.get(`/projects/${projectId}/mapping/graph`, {
-      params: { days },
-    });
-    return unwrapResponse(response);
-  },
-
-  getNodeDetails: async (projectId: number, nodeId: string, days: number = 7) => {
-    const response = await apiClient.get(`/projects/${projectId}/mapping/nodes/${nodeId}`, {
-      params: { days },
-    });
-    return unwrapResponse(response);
-  },
-
-  filterMapping: async (projectId: number, filters: {
-    agent_name?: string;
-    min_score?: number;
-    max_latency?: number;
-    has_problems?: boolean;
-  }, days: number = 7) => {
-    const response = await apiClient.post(`/projects/${projectId}/mapping/filter`, filters, {
-      params: { days },
-    });
-    return unwrapResponse(response);
-  },
-
-  getSubgraph: async (projectId: number, focusNodeId: string, depth: number = 2, days: number = 7) => {
-    const response = await apiClient.get(`/projects/${projectId}/mapping/subgraph`, {
-      params: { focus_node_id: focusNodeId, depth, days },
-    });
-    return unwrapResponse(response);
-  },
-};
-
-// Problem Analysis API
-export const problemAnalysisAPI = {
-  analyzeProblems: async (projectId: number, days: number = 7, thresholdScore: number = 3.0) => {
-    const response = await apiClient.post(`/projects/${projectId}/problem-analysis`, null, {
-      params: { days, threshold_score: thresholdScore },
-    });
-    return unwrapResponse(response);
-  },
-
-  getAnalysis: async (projectId: number, analysisId: string) => {
-    const response = await apiClient.get(`/projects/${projectId}/problem-analysis/${analysisId}`);
-    return unwrapResponse(response);
-  },
-
-  getAnalysisMapping: async (projectId: number, analysisId: string) => {
-    const response = await apiClient.get(`/projects/${projectId}/problem-analysis/${analysisId}/mapping`);
-    return unwrapResponse(response);
-  },
-};
-
-export const dependencyAnalysisAPI = {
-  analyzeDependencies: async (projectId: number, days: number = 7) => {
-    const response = await apiClient.post(`/projects/${projectId}/dependency-analysis`, null, {
-      params: { days },
-    });
-    return unwrapResponse(response);
-  },
-
-  getAnalysis: async (projectId: number, analysisId: string) => {
-    const response = await apiClient.get(`/projects/${projectId}/dependency-analysis/${analysisId}`);
-    return unwrapResponse(response);
-  },
-
-  getAnalysisMapping: async (projectId: number, analysisId: string) => {
-    const response = await apiClient.get(`/projects/${projectId}/dependency-analysis/${analysisId}/mapping`);
-    return unwrapResponse(response);
-  },
-};
-
-export const performanceAnalysisAPI = {
-  analyzePerformance: async (projectId: number, days: number = 7, percentileThreshold: number = 0.95) => {
-    const response = await apiClient.post(`/projects/${projectId}/performance-analysis`, null, {
-      params: { days, percentile_threshold: percentileThreshold },
-    });
-    return unwrapResponse(response);
-  },
-
-  getAnalysis: async (projectId: number, analysisId: string) => {
-    const response = await apiClient.get(`/projects/${projectId}/performance-analysis/${analysisId}`);
-    return unwrapResponse(response);
-  },
-
-  getAnalysisMapping: async (projectId: number, analysisId: string) => {
-    const response = await apiClient.get(`/projects/${projectId}/performance-analysis/${analysisId}/mapping`);
-    return unwrapResponse(response);
-  },
-};
-
 export const modelValidationAPI = {
   validateModel: async (projectId: number, data: { new_model: string; provider: string; rubric_id?: number }) => {
     const response = await apiClient.post(`/projects/${projectId}/validate-model`, data);
@@ -1768,15 +1523,6 @@ export const ruleMarketAPI = {
 
   rate: async (ruleId: number, rating: number) => {
     const response = await apiClient.post(`/rule-market/${ruleId}/rate`, { rating });
-    return unwrapResponse(response);
-  },
-};
-
-// Insights API
-export const insightsAPI = {
-  getDaily: async (projectId: number, date?: string) => {
-    const params = date ? { project_id: projectId, date } : { project_id: projectId };
-    const response = await apiClient.get('/insights/daily', { params });
     return unwrapResponse(response);
   },
 };

@@ -18,8 +18,10 @@ export default function ProjectGeneralSettingsPage() {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [usageMode, setUsageMode] = useState<'full' | 'test_only'>('full');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -38,6 +40,7 @@ export default function ProjectGeneralSettingsPage() {
       const p = await projectsAPI.get(projectId);
       setName(p.name ?? '');
       setDescription(p.description ?? '');
+      setUsageMode((p.usage_mode as 'full' | 'test_only') ?? 'full');
     } catch (e) {
       toast.showToast('Failed to load project', 'error');
     } finally {
@@ -50,12 +53,29 @@ export default function ProjectGeneralSettingsPage() {
     if (!projectId || isNaN(projectId)) return;
     setSaving(true);
     try {
-      await projectsAPI.update(projectId, name.trim() || undefined, description.trim() || undefined);
+      await projectsAPI.update(projectId, {
+        name: name.trim() || undefined,
+        description: description.trim() || undefined,
+      });
       toast.showToast('Project updated', 'success');
     } catch (err: any) {
       toast.showToast(err?.response?.data?.detail ?? 'Failed to update project', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleUpgradeToFullMode = async () => {
+    if (!projectId || isNaN(projectId)) return;
+    setUpgrading(true);
+    try {
+      await projectsAPI.update(projectId, { usage_mode: 'full' });
+      setUsageMode('full');
+      toast.showToast('Upgraded to Full Mode. Live View is now available.', 'success');
+    } catch (err: any) {
+      toast.showToast(err?.response?.data?.detail ?? 'Failed to upgrade', 'error');
+    } finally {
+      setUpgrading(false);
     }
   };
 
@@ -69,7 +89,7 @@ export default function ProjectGeneralSettingsPage() {
     <OrgLayout orgId={orgId}>
       <div className="min-h-screen bg-ag-bg">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ProjectTabs basePath={basePath} />
+          <ProjectTabs projectId={projectId} orgId={orgId} basePath={basePath} canManage />
 
           <div className="mt-8">
             <div className="mb-6">
@@ -103,6 +123,21 @@ export default function ProjectGeneralSettingsPage() {
                     className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-ag-accent focus:outline-none resize-none"
                   />
                 </div>
+
+                <div className="border-t border-white/10 pt-6 mt-6">
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Usage Mode</label>
+                  <p className="text-slate-400 text-sm mb-2">
+                    {usageMode === 'full'
+                      ? 'Full Mode — Live View and Test Lab are available. You can monitor real traffic and run tests.'
+                      : 'Test Only — Only Test Lab is available. No SDK required. Upgrade to Full Mode to enable Live View.'}
+                  </p>
+                  {usageMode === 'test_only' && (
+                    <Button type="button" variant="primary" onClick={handleUpgradeToFullMode} disabled={upgrading}>
+                      {upgrading ? 'Upgrading...' : 'Upgrade to Full Mode'}
+                    </Button>
+                  )}
+                </div>
+
                 <Button type="submit" disabled={saving}>
                   {saving ? 'Saving...' : 'Save'}
                 </Button>

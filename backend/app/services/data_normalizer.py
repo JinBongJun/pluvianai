@@ -84,6 +84,7 @@ class DataNormalizer:
         result = {
             "provider": provider,
             "model": model,
+            "system_prompt": self._extract_system_prompt(request_data),
             "request_prompt": self._extract_prompt(request_data),
             "request_tokens": self._extract_request_tokens(request_data, response_data),
             "response_tokens": self._extract_response_tokens(response_data),
@@ -91,6 +92,27 @@ class DataNormalizer:
         }
 
         return result
+
+    def _extract_system_prompt(self, request_data: Optional[Dict]) -> Optional[str]:
+        """Extract system prompt from request messages (for Live View / Snapshot)."""
+        if not request_data or "messages" not in request_data:
+            return None
+        messages = request_data["messages"]
+        if not isinstance(messages, list):
+            return None
+        for msg in messages:
+            if isinstance(msg, dict) and msg.get("role") == "system":
+                content = msg.get("content", "")
+                if isinstance(content, str):
+                    return content if content.strip() else None
+                if isinstance(content, list):
+                    text_parts = [
+                        c.get("text", "") for c in content
+                        if isinstance(c, dict) and c.get("type") == "text"
+                    ]
+                    joined = " ".join(text_parts).strip() if text_parts else ""
+                    return joined or None
+        return None
 
     def _detect_provider(self, url: str) -> str:
         """Detect LLM provider from URL"""

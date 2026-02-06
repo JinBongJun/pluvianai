@@ -33,20 +33,22 @@ router = APIRouter()
 
 
 class ProjectCreate(BaseModel):
-    """Project creation schema"""
+    """Project creation schema (Design 5.1.5)"""
 
     name: str = Field(..., min_length=1, max_length=255, description="Project name")
     description: str | None = Field(None, max_length=1000, description="Project description")
     generate_sample_data: bool = Field(False, description="Generate sample data for onboarding")
     organization_id: int | None = Field(None, description="Organization ID this project belongs to")
+    usage_mode: str = Field("full", description="Usage mode: 'full' (Live View + Test Lab) or 'test_only' (Test Lab only)")
 
 
 class ProjectUpdate(BaseModel):
-    """Project update schema"""
+    """Project update schema (Design 5.1.5: usage_mode upgrade)"""
 
     name: str | None = Field(None, min_length=1, max_length=255, description="Project name")
     description: str | None = Field(None, max_length=1000, description="Project description")
     global_block: bool | None = Field(None, description="Enable global block (panic mode) for this project")
+    usage_mode: str | None = Field(None, description="Usage mode: 'full' or 'test_only' (upgrade to Full Mode)")
 
 
 class ProjectResponse(BaseModel):
@@ -59,6 +61,7 @@ class ProjectResponse(BaseModel):
     is_active: bool
     role: str | None = None  # user's role in this project
     organization_id: int | None = None  # organization this project belongs to
+    usage_mode: str = "full"  # "full" | "test_only" (Design 5.1.5)
 
     class Config:
         from_attributes = True
@@ -85,13 +88,18 @@ async def create_project(
             detail=error_msg or "Project limit reached. Please upgrade your plan.",
         )
 
+    usage_mode = (project_data.usage_mode or "full").strip().lower()
+    if usage_mode not in ("full", "test_only"):
+        usage_mode = "full"
+
     try:
         # Use service to create project (RequestDTO → Domain Model conversion happens here)
         project = project_service.create_project(
             name=project_data.name,
             description=project_data.description,
             owner_id=current_user.id,
-            organization_id=project_data.organization_id
+            organization_id=project_data.organization_id,
+            usage_mode=usage_mode,
         )
         # Transaction is committed by get_db() dependency
     except EntityAlreadyExistsError as e:
@@ -193,6 +201,7 @@ async def list_projects(
             is_active=p.is_active,
             role=get_user_project_role(p.id, current_user.id, db),
             organization_id=p.organization_id,
+            usage_mode=getattr(p, "usage_mode", "full") or "full",
         )
         for p in all_projects
     ]
@@ -216,6 +225,7 @@ async def get_project(project_id: int, current_user: User = Depends(get_current_
         is_active=project.is_active,
         role=role,
         organization_id=project.organization_id,
+        usage_mode=getattr(project, "usage_mode", "full") or "full",
     )
 
 
@@ -259,11 +269,18 @@ async def update_project(
             logger.warning(f"Duplicate project name: {project_data.name}")
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A project with this name already exists")
 
+    usage_mode = None
+    if project_data.usage_mode is not None:
+        usage_mode = (project_data.usage_mode or "").strip().lower()
+        if usage_mode not in ("full", "test_only"):
+            usage_mode = None
+
     # Use service to update project
     updated_project = project_service.update_project(
         project_id=project_id,
         name=project_data.name,
-        description=project_data.description
+        description=project_data.description,
+        usage_mode=usage_mode if usage_mode else None,
     )
     
     if not updated_project:

@@ -1,13 +1,16 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
+import useSWR from 'swr';
 import { clsx } from 'clsx';
+import { projectsAPI } from '@/lib/api';
 
 interface ProjectTabsProps {
   projectId?: number;
   orgId?: number | string;
   canManage?: boolean;
   basePath?: string; // Optional basePath override
+  usageMode?: 'full' | 'test_only'; // If not provided and projectId is set, fetched from API
   worstAlertCounts?: {
     liveView?: number;
     testLab?: number;
@@ -19,10 +22,17 @@ export default function ProjectTabs({
   orgId,
   canManage = false,
   basePath: basePathProp,
+  usageMode: usageModeProp,
   worstAlertCounts,
 }: ProjectTabsProps) {
   const router = useRouter();
   const pathname = usePathname();
+
+  const { data: project } = useSWR(
+    projectId && usageModeProp === undefined ? ['project', projectId] : null,
+    () => projectsAPI.get(projectId!),
+  );
+  const usageMode = usageModeProp ?? (project?.usage_mode as 'full' | 'test_only' | undefined) ?? 'full';
 
   // Determine base path - use provided basePath, or use org path if orgId is provided, otherwise fallback to dashboard
   const basePath = basePathProp || (orgId && projectId
@@ -31,7 +41,8 @@ export default function ProjectTabs({
     ? `/dashboard/${projectId}`
     : '');
 
-  const tabs = [
+  // Design 5.2: live-view (hidden when test_only), test-lab, api-calls, signals, worst-prompts, reviews, alerts, settings
+  const allTabs = [
     { id: 'overview', label: 'Overview', path: basePath },
     { id: 'live-view', label: 'Live View', path: `${basePath}/live-view` },
     { id: 'test-lab', label: 'Test Lab', path: `${basePath}/test-lab` },
@@ -39,12 +50,12 @@ export default function ProjectTabs({
     { id: 'signals', label: 'Signals', path: `${basePath}/signals` },
     { id: 'worst-prompts', label: 'Worst Prompts', path: `${basePath}/worst-prompts` },
     { id: 'reviews', label: 'Reviews', path: `${basePath}/reviews` },
-    { id: 'quality', label: 'Quality', path: `${basePath}/quality` },
-    { id: 'firewall', label: 'Firewall', path: `${basePath}/firewall` },
-    { id: 'replay', label: 'Time Machine', path: `${basePath}/replay` },
     { id: 'alerts', label: 'Alerts', path: `${basePath}/alerts` },
     ...(canManage ? [{ id: 'settings', label: 'Settings', path: `${basePath}/settings` }] : []),
   ];
+  const tabs = usageMode === 'test_only'
+    ? allTabs.filter((t) => t.id !== 'live-view')
+    : allTabs;
 
   const getActiveTab = () => {
     if (pathname?.includes('/live-view')) return 'live-view';
@@ -53,13 +64,8 @@ export default function ProjectTabs({
     if (pathname?.includes('/signals')) return 'signals';
     if (pathname?.includes('/worst-prompts')) return 'worst-prompts';
     if (pathname?.includes('/reviews')) return 'reviews';
-    if (pathname?.includes('/quality')) return 'quality';
-    if (pathname?.includes('/firewall')) return 'firewall';
-    if (pathname?.includes('/replay')) return 'replay';
     if (pathname?.includes('/alerts')) return 'alerts';
     if (pathname?.includes('/settings')) return 'settings';
-    if (pathname?.includes('/drift')) return 'overview'; // Drift is part of overview
-    if (pathname?.includes('/cost')) return 'overview'; // Cost is part of overview
     return 'overview';
   };
 

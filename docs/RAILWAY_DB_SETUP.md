@@ -51,6 +51,21 @@ cd backend
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
+## 4. DB 마이그레이션 (필수)
+
+코드에 `organizations.description` 컬럼이 추가된 경우, **반드시** 마이그레이션을 적용해야 합니다.  
+적용하지 않으면 조직/프로젝트 API가 500을 반환하고, Projects 페이지가 계속 로딩되거나 "Organization data is missing" 에러가 납니다.
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1   # 가상환경 활성화
+python -m alembic upgrade head
+```
+
+- `column organizations.description does not exist` 에러가 나면 → 위 명령으로 마이그레이션 적용 후 백엔드 재시작.
+
+---
+
 ## ⚠️ 주의사항
 
 - **실제 프로덕션 DB**이므로 실수로 데이터를 삭제하지 않도록 주의하세요

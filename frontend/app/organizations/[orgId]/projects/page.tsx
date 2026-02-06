@@ -228,7 +228,6 @@ export default function OrgProjectsPage() {
                 <tr>
                   <th className="px-4 py-3 text-left">Project</th>
                   <th className="px-4 py-3 text-left">Alerts</th>
-                  <th className="px-4 py-3 text-left">Drift</th>
                 </tr>
               </thead>
               <tbody>
@@ -240,7 +239,6 @@ export default function OrgProjectsPage() {
                   >
                     <td className="px-4 py-3">{p.name}</td>
                     <td className="px-4 py-3">{p.alerts ?? 0}</td>
-                    <td className="px-4 py-3">{p.drift ? 'Drift' : 'No drift'}</td>
                   </tr>
                 ))}
               </tbody>

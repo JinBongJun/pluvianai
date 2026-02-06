@@ -128,11 +128,6 @@ def get_onboarding_service(db: Session = Depends(get_db)):
     from app.services.onboarding_service import OnboardingService
     return OnboardingService(db)
 
-def get_mapping_service(db: Session = Depends(get_db)):
-    """Get mapping service"""
-    from app.services.mapping_service import MappingService
-    return MappingService(db)
-
 def get_audit_service(db: Session = Depends(get_db)):
     """Get audit service"""
     from app.services.audit_service import AuditService

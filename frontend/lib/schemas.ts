@@ -51,6 +51,7 @@ export const OrganizationStatsSchema = z.object({
 export const OrganizationSchema = z.object({
   id: z.number().int().positive(),
   name: z.string().min(1),
+  description: z.string().nullable().optional(),
   type: z.string().nullable().optional(),
   plan_type: z.enum(['free', 'indie', 'startup', 'pro', 'enterprise']).or(z.string()).default('free'),
   stats: OrganizationStatsSchema.nullable().optional(),
@@ -67,7 +68,7 @@ export const OrganizationProjectStatsSchema = z.object({
   drift_detected: z.boolean().optional(),
 });
 
-// Project schemas
+// Project schemas (Design 5.1.5: usage_mode full | test_only)
 export const ProjectSchema = z.object({
   id: z.number().int().positive(),
   name: z.string().min(1),
@@ -75,6 +76,8 @@ export const ProjectSchema = z.object({
   owner_id: z.number().int().positive(),
   is_active: z.boolean(),
   role: z.enum(['owner', 'admin', 'member', 'viewer']).optional(),
+  organization_id: z.number().int().positive().nullable().optional(),
+  usage_mode: z.enum(['full', 'test_only']).optional().default('full'),
 });
 
 // API Call schemas

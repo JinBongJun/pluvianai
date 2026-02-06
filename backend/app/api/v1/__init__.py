@@ -20,11 +20,6 @@ from app.api.v1.endpoints import (
     onboarding,
     billing,
     trust_center,
-    mapping,
-    problem_analysis,
-    dependency_analysis,
-    performance_analysis,
-    insights,
     referral,
     user_api_keys,
     shared_results,
@@ -36,14 +31,12 @@ from app.api.v1.endpoints import (
     settings,
     activity,
     drift,
-    agent_chain,
     webhooks,
     signals,
     worst_prompts,
     reviews,
     regression,
     cost,
-    benchmark,
     live_view,
     test_lab,
 )
@@ -66,11 +59,6 @@ api_router.include_router(organizations.router, prefix="/organizations", tags=["
 api_router.include_router(onboarding.router, prefix="/onboarding", tags=["onboarding"])
 api_router.include_router(billing.router, prefix="/billing", tags=["billing"])
 api_router.include_router(trust_center.router, prefix="/trust-center", tags=["trust-center"])
-api_router.include_router(mapping.router, prefix="/projects", tags=["mapping"])
-api_router.include_router(problem_analysis.router, prefix="/projects", tags=["problem-analysis"])
-api_router.include_router(dependency_analysis.router, prefix="/projects", tags=["dependency-analysis"])
-api_router.include_router(performance_analysis.router, prefix="/projects", tags=["performance-analysis"])
-api_router.include_router(insights.router, prefix="/projects", tags=["insights"])
 api_router.include_router(referral.router, prefix="/referral", tags=["referral"])
 api_router.include_router(user_api_keys.router, prefix="/projects/{project_id}/user-api-keys", tags=["user-api-keys"])
 api_router.include_router(shared_results.router, prefix="", tags=["shared-results"])
@@ -82,13 +70,11 @@ api_router.include_router(notifications.router, prefix="", tags=["notifications"
 api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
 api_router.include_router(activity.router, prefix="/activity", tags=["activity"])
 api_router.include_router(drift.router, prefix="/drift", tags=["drift"])
-api_router.include_router(agent_chain.router, prefix="/agent-chain", tags=["agent-chain"])
 api_router.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
 api_router.include_router(signals.router, prefix="", tags=["signals"])
 api_router.include_router(worst_prompts.router, prefix="", tags=["worst-prompts"])
 api_router.include_router(reviews.router, prefix="", tags=["reviews"])
 api_router.include_router(regression.router, prefix="", tags=["regression"])
 api_router.include_router(cost.router, prefix="", tags=["cost"])
-api_router.include_router(benchmark.router, prefix="", tags=["benchmark"])
 api_router.include_router(live_view.router, prefix="", tags=["live-view"])
 api_router.include_router(test_lab.router, prefix="", tags=["test-lab"])

@@ -20,6 +20,7 @@
 - [DEPLOYMENT_WORKFLOW.md](./DEPLOYMENT_WORKFLOW.md) - 배포 워크플로우
 - [RAILWAY_DB_SETUP.md](./RAILWAY_DB_SETUP.md) - Railway DB 설정
 - [RAILWAY_LOCAL_SETUP.md](./RAILWAY_LOCAL_SETUP.md) - Railway 로컬 연결
+- [RAILWAY_FRONTEND_E2E.md](./RAILWAY_FRONTEND_E2E.md) - 로컬 프론트 → Railway 백엔드 연결 및 한데까지(E2E) 테스트
 
 ### 운영 가이드
 - [PRODUCTION_MONITORING.md](./PRODUCTION_MONITORING.md) - 모니터링 설정
