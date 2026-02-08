@@ -42,7 +42,7 @@ export default function APICallsListPage() {
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [totalItems, setTotalItems] = useState(0);
   const [allData, setAllData] = useState<any[]>([]); // Store all fetched data for client-side filtering
-  
+
   const loadAPICalls = useCallback(async () => {
     setLoading(true);
     try {
@@ -52,7 +52,7 @@ export default function APICallsListPage() {
       const needsClientSideFiltering = !!(filters.dateFrom || filters.dateTo || filters.status || filters.search);
       const fetchLimit = needsClientSideFiltering ? 1000 : itemsPerPage; // Max 1000 per backend validation
       const fetchOffset = needsClientSideFiltering ? 0 : (currentPage - 1) * itemsPerPage;
-      
+
       const params: any = {
         limit: fetchLimit,
         offset: fetchOffset,
@@ -63,17 +63,17 @@ export default function APICallsListPage() {
       if (filters.agentName) params.agent_name = filters.agentName;
 
       const data = await apiCallsAPI.list(projectId, params);
-      
+
       // Store all data for client-side filtering
       if (needsClientSideFiltering) {
         setAllData(data);
       } else {
         setAllData([]); // Clear when using server-side pagination
       }
-      
+
       // Apply client-side filtering for date range, status, and search
       let filtered = needsClientSideFiltering ? data : [...data];
-      
+
       if (filters.dateFrom || filters.dateTo) {
         filtered = filtered.filter((call: any) => {
           const callDate = new Date(call.created_at);
@@ -390,7 +390,7 @@ export default function APICallsListPage() {
           {loading && apiCalls.length > 0 && (
             <div className="absolute top-0 left-0 right-0 z-10">
               <div className="h-1 bg-ag-accent/20 overflow-hidden">
-                <div className="h-full w-1/3 bg-ag-accent animate-[slide_1s_ease-in-out_infinite]" 
+                <div className="h-full w-1/3 bg-ag-accent animate-[slide_1s_ease-in-out_infinite]"
                   style={{ animation: 'slide 1s ease-in-out infinite' }} />
               </div>
             </div>
@@ -597,7 +597,7 @@ export default function APICallsListPage() {
             />
           </div>
         )}
-        
+
         {/* Show info when client-side filtering is applied */}
         {(filters.dateFrom || filters.dateTo || filters.status || filters.search) && totalItems > 0 && (
           <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">

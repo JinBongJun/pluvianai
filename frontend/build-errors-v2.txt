@@ -1,0 +1,134 @@
+﻿
+> agentguard-frontend@0.1.0 build
+> next build
+
+   ??Next.js 14.0.3
+   - Environments: .env.local
+   - Experiments (use at your own risk):
+     쨌 instrumentationHook
+
+   Creating an optimized production build ...
+node.exe : [@sentry/nextjs] DEPRECATION W
+ARNING: It is recommended renaming your `
+sentry.client.config.ts` file, or moving 
+its content to `instrumentation-client.ts
+`. When using Turbopack `sentry.client.co
+nfig.ts` will no longer work. Read more a
+bout the `instrumentation-client.ts` file
+: https://nextjs.org/docs/app/api-referen
+ce/file-conventions/instrumentation-clien
+t
+위치 줄:1 문자:1
++ & "C:\Program Files\nodejs/node.exe" "C
+:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecifi 
+   ed: ([@sentry/nextjs...entation-clie  
+  nt:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeComm 
+   andError
+ 
+ ??Compiled successfully
+   Linting and checking validity of types ...
+
+Failed to compile.
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/alerts/page.tsx
+190:6  Warning: React Hook useCallback ha
+s an unnecessary dependency: 'alertsAPI'.
+ Either exclude it or remove the dependen
+cy array. Outer scope values like 'alerts
+API' aren't valid dependencies because mu
+tating them doesn't re-render the compone
+nt.  react-hooks/exhaustive-deps
+305:6  Warning: React Hook useMemo has a 
+missing dependency: 'defaultAlertTypes'. 
+Either include it or remove the dependenc
+y array.  react-hooks/exhaustive-deps
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/api-calls/[callId]/page.tsx
+39:6  Warning: React Hook useEffect has a
+ missing dependency: 'loadAPICall'. Eithe
+r include it or remove the dependency arr
+ay.  react-hooks/exhaustive-deps
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/firewall/page.tsx
+36:6  Warning: React Hook useEffect has a
+ missing dependency: 'loadPanicStatus'. E
+ither include it or remove the dependency
+ array.  react-hooks/exhaustive-deps
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/reviews/page.tsx
+61:6  Warning: React Hook useEffect has a
+ missing dependency: 'fetchData'. Either 
+include it or remove the dependency array
+.  react-hooks/exhaustive-deps
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/settings/api-keys/page.tsx
+51:6  Warning: React Hook useEffect has a
+ missing dependency: 'loadKeys'. Either i
+nclude it or remove the dependency array.
+  react-hooks/exhaustive-deps
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/settings/general/page.tsx
+35:6  Warning: React Hook useEffect has a
+ missing dependency: 'loadProject'. Eithe
+r include it or remove the dependency arr
+ay.  react-hooks/exhaustive-deps
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/signals/page.tsx
+54:6  Warning: React Hook useEffect has a
+ missing dependency: 'fetchProjectStatus'
+. Either include it or remove the depende
+ncy array.  react-hooks/exhaustive-deps
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/test-lab/page.tsx
+337:9  Warning: The 'handleAddBox' functi
+on makes the dependencies of useCallback 
+Hook (at line 661) change on every render
+. Move it inside the useCallback callback
+. Alternatively, wrap the definition of '
+handleAddBox' in its own useCallback() Ho
+ok.  react-hooks/exhaustive-deps
+454:5  Warning: React Hook useCallback ha
+s an unnecessary dependency: 'handleEditB
+ox'. Either exclude it or remove the depe
+ndency array.  react-hooks/exhaustive-dep
+s
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/worst-prompts/page.tsx
+65:6  Warning: React Hook useEffect has a
+ missing dependency: 'fetchData'. Either 
+include it or remove the dependency array
+.  react-hooks/exhaustive-deps
+
+./components/test-lab/AgentLogicInspector
+.tsx
+223:95  Error: `'` can be escaped with `&
+apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  r
+eact/no-unescaped-entities
+
+./components/test-lab/input-renderer/Inpu
+tRenderer.tsx
+64:17  Warning: Using `<img>` could resul
+t in slower LCP and higher bandwidth. Con
+sider using `<Image />` from `next/image`
+ to automatically optimize images. This m
+ay incur additional usage or cost from yo
+ur provider. See: https://nextjs.org/docs
+/messages/no-img-element  @next/next/no-i
+mg-element
+
+info  - Need to disable some ESLint rules
+? Learn more here: https://nextjs.org/doc
+s/basic-features/eslint#disabling-rules

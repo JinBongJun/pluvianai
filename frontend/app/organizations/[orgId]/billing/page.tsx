@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation';
 import useSWR from 'swr';
 import OrgLayout from '@/components/layout/OrgLayout';
-import Button from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { organizationsAPI } from '@/lib/api';
 import { CreditCard, Check, Zap } from 'lucide-react';
 

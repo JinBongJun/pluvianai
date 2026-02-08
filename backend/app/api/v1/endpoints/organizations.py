@@ -35,6 +35,11 @@ class OrganizationCreate(BaseModel):
     plan_type: str = Field("free", pattern="^(free|indie|startup|pro|enterprise)$")
 
 
+class OrganizationUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=2000)
+
+
 class OrganizationSummary(BaseModel):
     id: int
     name: str
@@ -240,17 +245,13 @@ def get_organization(
     org_service = Depends(get_organization_service),
 ):
     """Get organization details with optional stats."""
-    import sys
-    import traceback
     logger.info(f"🔵 GET ORGANIZATION: org_id={org_id}, include_stats={include_stats}, user_id={current_user.id}")
-    print(f"🔵 GET ORGANIZATION: org_id={org_id}, include_stats={include_stats}, user_id={current_user.id}", file=sys.stderr)
     
     try:
         # Use service to get organization
         org = org_service.get_organization_by_id(org_id)
         if not org:
             logger.warning(f"🔴 Organization not found: org_id={org_id}")
-            print(f"🔴 Organization not found: org_id={org_id}", file=sys.stderr)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
         
         # Check access
@@ -268,7 +269,6 @@ def get_organization(
         
         if not (is_owner or is_member):
             logger.warning(f"🔴 Access denied: user_id={current_user.id}, org_id={org_id}")
-            print(f"🔴 Access denied: user_id={current_user.id}, org_id={org_id}", file=sys.stderr)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have access to this organization"
@@ -276,7 +276,6 @@ def get_organization(
 
         if not include_stats:
             logger.info(f"✅ Returning organization without stats: org_id={org_id}")
-            print(f"✅ Returning organization without stats: org_id={org_id}", file=sys.stderr)
             return OrganizationDetail(
                 id=org.id,
                 name=org.name,
@@ -288,16 +287,13 @@ def get_organization(
 
         # Get all projects for this org (include_stats=True)
         logger.info(f"📊 Calculating stats for org_id={org_id}")
-        print(f"📊 Calculating stats for org_id={org_id}", file=sys.stderr)
 
         try:
             projects = db.query(Project).filter(Project.organization_id == org_id).all()
             project_ids = [p.id for p in projects]
             logger.info(f"📁 Found {len(projects)} projects for org_id={org_id}")
-            print(f"📁 Found {len(projects)} projects for org_id={org_id}", file=sys.stderr)
         except Exception as e:
             logger.error(f"🔴 Error querying projects: {str(e)}", exc_info=True)
-            print(f"🔴 Error querying projects: {str(e)}", file=sys.stderr)
             raise
 
         now = datetime.utcnow()
@@ -310,7 +306,6 @@ def get_organization(
         if project_ids:
             try:
                 logger.info(f"📞 Querying API calls for {len(project_ids)} projects")
-                print(f"📞 Querying API calls for {len(project_ids)} projects", file=sys.stderr)
                 calls_count = (
                     db.query(func.count(APICall.id))
                     .filter(
@@ -322,7 +317,6 @@ def get_organization(
                     or 0
                 )
                 logger.info(f"✅ API calls count: {calls_count}")
-                print(f"✅ API calls count: {calls_count}", file=sys.stderr)
             except Exception as e:
                 logger.warning(f"Failed to query API calls for org {org_id}: {str(e)}", exc_info=True)
                 calls_count = 0
@@ -391,7 +385,6 @@ def get_organization(
                 alerts_list = []
 
         logger.info(f"✅ Building response for org_id={org_id}")
-        print(f"✅ Building response for org_id={org_id}", file=sys.stderr)
         return {
             "id": org.id,
             "name": org.name,
@@ -413,8 +406,6 @@ def get_organization(
         raise
     except Exception as e:
         logger.error(f"🔴🔴🔴 GET ORGANIZATION ERROR: {type(e).__name__}: {str(e)}", exc_info=True)
-        print(f"🔴🔴🔴 GET ORGANIZATION ERROR: {type(e).__name__}: {str(e)}", file=sys.stderr)
-        print(traceback.format_exc(), file=sys.stderr)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred: {str(e)}"
@@ -457,17 +448,13 @@ def list_org_projects(
     project_service = Depends(get_project_service),
 ):
     """List projects for an organization with basic metrics."""
-    import sys
-    import traceback
     logger.info(f"🔵 GET ORG PROJECTS: org_id={org_id}, include_stats={include_stats}, user_id={current_user.id}")
-    print(f"🔵 GET ORG PROJECTS: org_id={org_id}, include_stats={include_stats}, user_id={current_user.id}", file=sys.stderr)
     
     try:
         # Use service to get organization
         org = org_service.get_organization_by_id(org_id)
         if not org:
             logger.warning(f"🔴 Organization not found: org_id={org_id}")
-            print(f"🔴 Organization not found: org_id={org_id}", file=sys.stderr)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
         
         # Check access using service
@@ -475,7 +462,6 @@ def list_org_projects(
         user_org_ids = [o.id for o in user_orgs]
         if org_id not in user_org_ids:
             logger.warning(f"🔴 Access denied: user_id={current_user.id}, org_id={org_id}")
-            print(f"🔴 Access denied: user_id={current_user.id}, org_id={org_id}", file=sys.stderr)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have access to this organization"
@@ -483,10 +469,8 @@ def list_org_projects(
 
         # Use service to get projects
         logger.info(f"📁 Getting projects for org_id={org_id}")
-        print(f"📁 Getting projects for org_id={org_id}", file=sys.stderr)
         projects = project_service.get_projects_by_organization_id(org_id)
         logger.info(f"📁 Found {len(projects)} projects")
-        print(f"📁 Found {len(projects)} projects", file=sys.stderr)
         
         # Apply search filter if provided
         if search:
@@ -504,7 +488,6 @@ def list_org_projects(
 
         if not projects:
             logger.info(f"✅ No projects found for org_id={org_id}")
-            print(f"✅ No projects found for org_id={org_id}", file=sys.stderr)
             return []
 
         project_ids = [p.id for p in projects]
@@ -620,17 +603,79 @@ def list_org_projects(
             )
 
         logger.info(f"✅ Returning {len(results)} projects for org_id={org_id}")
-        print(f"✅ Returning {len(results)} projects for org_id={org_id}", file=sys.stderr)
         return results
     
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"🔴🔴🔴 ORG PROJECTS ERROR: {type(e).__name__}: {str(e)}", exc_info=True)
-        print(f"🔴🔴🔴 ORG PROJECTS ERROR: {type(e).__name__}: {str(e)}", file=sys.stderr)
-        print(traceback.format_exc(), file=sys.stderr)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred: {str(e)}"
         )
+
+
+@router.patch("/{org_id}", response_model=OrganizationDetail)
+@handle_errors
+def update_organization(
+    org_id: int,
+    org_data: OrganizationUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_service = Depends(get_organization_service),
+):
+    """Update organization details."""
+    logger.info(f"🔵 PATCH ORGANIZATION: org_id={org_id}, user_id={current_user.id}")
+    
+    # Check if organization exists
+    org = org_service.get_organization_by_id(org_id)
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    
+    # Check access (only owner can update)
+    if org.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the organization owner can update settings"
+        )
+    
+    updated_org = org_service.update_organization(
+        org_id=org_id,
+        name=org_data.name,
+        description=org_data.description
+    )
+    return updated_org
+
+
+@router.delete("/{org_id}", status_code=status.HTTP_204_NO_CONTENT)
+@handle_errors
+def delete_organization(
+    org_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_service = Depends(get_organization_service),
+):
+    """Delete an organization and all its projects."""
+    logger.info(f"🔵 DELETE ORGANIZATION: org_id={org_id}, user_id={current_user.id}")
+    
+    # Check if organization exists
+    org = org_service.get_organization_by_id(org_id)
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    
+    # Check access (only owner can delete)
+    if org.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the organization owner can delete the organization"
+        )
+    
+    success = org_service.delete_organization(org_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete organization"
+        )
+    
+    return None
 

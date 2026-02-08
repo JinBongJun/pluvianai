@@ -19,7 +19,7 @@ export default function APICallDetailPage() {
   const orgId = params.orgId as string;
   const projectId = Number(params.projectId);
   const callId = Number(params.callId);
-  
+
   const [apiCall, setApiCall] = useState<any>(null);
   const [qualityScore, setQualityScore] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -98,7 +98,7 @@ export default function APICallDetailPage() {
     if (!apiCall?.status_code) {
       return <Badge variant="default">Unknown</Badge>;
     }
-    
+
     if (apiCall.status_code >= 200 && apiCall.status_code < 300) {
       return <Badge variant="success">Success</Badge>;
     } else if (apiCall.status_code >= 400 && apiCall.status_code < 500) {
@@ -112,10 +112,10 @@ export default function APICallDetailPage() {
 
   const calculateCost = () => {
     if (!apiCall?.request_tokens || !apiCall?.response_tokens) return null;
-    
+
     const inputPrice = 0.00003;
     const outputPrice = 0.00006;
-    
+
     const cost = (apiCall.request_tokens / 1000) * inputPrice + (apiCall.response_tokens / 1000) * outputPrice;
     return toFixedSafe(cost, 6);
   };

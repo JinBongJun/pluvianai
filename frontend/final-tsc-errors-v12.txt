@@ -1,0 +1,3 @@
+﻿components/test-lab/BoxEditModal.tsx(271,11): error TS2322: Type '(newBlocks: ContentBlock[]) => void' is not assignable to type '(input: string) => void'.
+  Types of parameters 'newBlocks' and 'input' are incompatible.
+    Type 'string' is not assignable to type '({ type: "text"; id: string; text: string; } | { type: "image_url"; id: string; image_url: { url: string; detail?: "auto" | "high" | "low" | undefined; }; } | { type: "tool_result"; id: string; tool_call_id: string; tool_name: string; content: string; })[]'.

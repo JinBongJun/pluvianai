@@ -29,8 +29,8 @@ export default function NotificationSettingsPage() {
     <OrgLayout orgId={orgId}>
       <div className="min-h-screen bg-ag-bg">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ProjectTabs basePath={basePath} />
-          
+          <ProjectTabs projectId={projectId} orgId={orgId} basePath={basePath} />
+
           <div className="mt-8">
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-white mb-2">Notification Settings</h1>

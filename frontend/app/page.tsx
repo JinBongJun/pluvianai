@@ -1,440 +1,254 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React from 'react';
 import Link from 'next/link';
-import { Menu, X, ChevronRight, Check, Code2, Zap, Shield, BarChart3, Globe2, Github, Twitter, Linkedin } from 'lucide-react';
-import Button from '@/components/ui/Button';
+import Image from 'next/image';
+import {
+    Bot,
+    Zap,
+    Shield,
+    BarChart3,
+    ChevronRight,
+    Beaker,
+    CheckCircle2,
+    AlertTriangle,
+    Layers,
+    Cpu,
+    ArrowRight,
+    Terminal,
+    Search,
+    History,
+    Activity
+} from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import SymbioticGuardianVisual from '@/components/landing/SymbioticGuardianVisual';
+import PathologySection from '@/components/landing/PathologySection';
+import TreatmentSection from '@/components/landing/TreatmentSection';
+import AtomicSignalsSection from '@/components/landing/AtomicSignalsSection';
+import PricingSection from '@/components/landing/PricingSection';
+import InteractiveHoverText from '@/components/ui/InteractiveHoverText';
 
-export default function LandingPage() {
-  const router = useRouter();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [codeTab, setCodeTab] = useState<'python' | 'node'>('python');
+export default function Home() {
+    return (
+        <div className="min-h-screen text-slate-200 selection:bg-emerald-500/30 font-sans">
+            {/* 1. Navbar */}
+            <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-[#0a0a0c]/80 backdrop-blur-xl">
+                <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16 h-[90px] flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        {/* Logo: Croc & Bird Silhouette (SVG for now, replace with logo.png later) */}
+                        <div className="relative w-16 h-16 pointer-events-none select-none hover:scale-105 transition-transform duration-300 flex items-center justify-center">
+                            {/* Temporary Placeholder SVG: Stylized 'P' that looks like a crocodile eye/mouth */}
+                            <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]">
+                                <path
+                                    d="M20 50 C 20 20, 80 20, 80 50 L 80 80 L 20 80 Z"
+                                    fill="none"
+                                    stroke="#06b6d4"
+                                    strokeWidth="4"
+                                    className="animate-pulse"
+                                />
+                                <circle cx="40" cy="45" r="5" fill="#10b981" />
+                                <path d="M60 60 L 90 40" stroke="#10b981" strokeWidth="2" />
+                            </svg>
+                        </div>
+                        <span className="text-3xl font-bold tracking-tight text-white">PluvianAI</span>
+                    </div>
 
-  useEffect(() => {
-    // Check if user is logged in
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      router.push('/organizations');
-    }
-  }, [router]);
 
-  const pythonCode = `pip install agentguard
+                    {/* Right Side Navigation & Actions */}
+                    <div className="flex items-center gap-8 lg:gap-10">
+                        {/* Desktop Navigation Links */}
+                        <div className="hidden lg:flex items-center gap-8 md:gap-10">
+                            {/* Platform Dropdown */}
+                            <div className="relative group/nav">
+                                <button className="flex items-center gap-1.5 text-lg font-medium text-slate-400 hover:text-emerald-400 transition-colors py-8">
+                                    Platform
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="group-hover/nav:rotate-180 transition-transform duration-300">
+                                        <path d="m6 9 6 6 6-6" />
+                                    </svg>
+                                </button>
 
-import agentguard
-agentguard.init(
-  api_key="your-api-key",
-  project_id=1
-)
+                                {/* Dropdown Menu - Aligned to Right */}
+                                <div className="absolute top-[80px] right-0 w-64 opacity-0 invisible group-hover/nav:opacity-100 group-hover/nav:visible transition-all duration-300 translate-y-2 group-hover/nav:translate-y-0 z-[60]">
+                                    <div className="p-2 rounded-lg bg-[#0a0a0c]/90 backdrop-blur-2xl border border-white/10 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] overflow-hidden">
+                                        <div className="grid gap-1">
+                                            <a href="#features" className="flex flex-col gap-0.5 p-3 rounded-md hover:bg-white/5 transition-colors group/item">
+                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Features</span>
+                                                <span className="text-xs text-slate-500">Signal Detection & Replay</span>
+                                            </a>
+                                            <a href="#problem" className="flex flex-col gap-0.5 p-3 rounded-md hover:bg-white/5 transition-colors group/item">
+                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Logic Guard</span>
+                                                <span className="text-xs text-slate-500">Hallucination Prevention</span>
+                                            </a>
+                                            <a href="#workflow" className="flex flex-col gap-0.5 p-3 rounded-md hover:bg-white/5 transition-colors group/item">
+                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Atomic Signals</span>
+                                                <span className="text-xs text-slate-500">Agent Periodic Table</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-# That's it! Your OpenAI calls are now monitored.`;
+                            <a href="#workflow" className="text-lg font-bold text-slate-400 hover:text-emerald-400 transition-colors whitespace-nowrap">Methodology</a>
+                            <a href="#pricing" className="text-lg font-bold text-slate-400 hover:text-emerald-400 transition-colors">Pricing</a>
+                            <a href="/docs" className="text-lg font-bold text-slate-400 hover:text-emerald-400 transition-colors">Docs</a>
+                        </div>
 
-  const nodeCode = `npm install agentguard
+                        <div className="h-8 w-[1px] bg-white/10 hidden lg:block" />
 
-import { init } from 'agentguard';
-init({
-  apiKey: 'your-api-key',
-  projectId: 1
-});
+                        <div className="hidden md:flex items-center gap-6 text-lg font-bold">
+                            <Link href="/login" className="text-slate-400 hover:text-white transition-colors">Log In</Link>
+                            <Link href="/login?mode=signup" className="text-slate-400 hover:text-white transition-colors">Sign Up</Link>
+                        </div>
+                        <Link href="/organizations">
+                            <Button className="bg-emerald-500 text-black font-black px-8 h-12 text-lg rounded-md shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:scale-105 whitespace-nowrap">
+                                Start Validation
+                            </Button>
+                        </Link>
+                    </div>
+                </div>
+            </nav>
 
-// That's it! Your OpenAI calls are now monitored.`;
+            {/* 2. Hero Section */}
+            <section className="relative min-h-screen flex flex-col items-center justify-center pt-40 pb-20 overflow-hidden bg-[#0a0a0c] z-10 transition-all duration-700">
+                {/* Background Video - Absolute to Hero Section */}
+                <div className="absolute inset-0 w-full h-full z-0 pointer-events-none">
+                    <video
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        className="w-full h-full object-cover opacity-60 scale-105"
+                    >
+                        <source src="/new-hero.mp4" type="video/mp4" />
+                    </video>
+                    {/* Dark Overlay for Text Readability - Optimized for text pop */}
+                    <div className="absolute inset-0 bg-black/40" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0c] via-transparent to-[#0a0a0c]/60" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0c]/80 via-transparent to-transparent" />
+                </div>
 
-  return (
-    <div className="min-h-screen bg-ag-bg text-ag-text">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-ag-bg/80 backdrop-blur-md border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <Link href="/" className="flex items-center gap-2">
-              <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center shadow-glow-neon">
-                <span className="text-ag-bg font-bold text-sm">S</span>
-              </div>
-              <span className="font-semibold text-lg">Synpira</span>
-            </Link>
+                {/* Ambient Glow */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[800px] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-emerald-500/10 via-transparent to-transparent pointer-events-none -z-10 blur-3xl" />
 
-            {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-8">
-              <Link href="#features" className="text-ag-muted hover:text-ag-text transition-colors text-sm font-medium">
-                Features
-              </Link>
-              <Link href="#integrations" className="text-ag-muted hover:text-ag-text transition-colors text-sm font-medium">
-                Integrations
-              </Link>
-              <Link href="#pricing" className="text-ag-muted hover:text-ag-text transition-colors text-sm font-medium">
-                Pricing
-              </Link>
-              <Link href="/login">
-                <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/5">
-                  Sign in
-                </Button>
-              </Link>
-              <Link href="/login?mode=signup">
-                <Button size="sm">Get Started</Button>
-              </Link>
+                <div className="w-full max-w-[1400px] mx-auto px-6 relative z-10 text-center flex flex-col items-center">
+
+                    {/* Validation Badge - Premium Glassmorphism */}
+                    <div className="inline-flex items-center gap-3 px-5 py-2 rounded-full bg-emerald-950/30 border border-emerald-500/20 text-emerald-400 text-sm font-bold tracking-widest uppercase mb-16 shadow-[0_0_30px_-5px_rgba(16,185,129,0.2)] backdrop-blur-md hover:border-emerald-500/40 transition-colors cursor-default">
+                        <div className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </div>
+                        Clinical Grade Validation
+                    </div>
+
+                    <div className="max-w-6xl mx-auto space-y-10">
+                        {/* Headline - Brand Promise First */}
+                        <div className="space-y-4">
+                            <h1 className="text-6xl md:text-8xl font-[900] tracking-tight text-white leading-[1.1] drop-shadow-2xl">
+                                The Symbiotic Guardian <br />
+                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-emerald-400 animate-gradient-x pb-2">
+                                    for AI Agents.
+                                </span>
+                            </h1>
+                            <p className="text-xl md:text-2xl text-white max-w-3xl mx-auto font-semibold leading-relaxed pt-6">
+                                Cut hallucination rates & logic errors in half. Instantly.<br />
+                                <span className="text-slate-300">We don't build the Agent. We <span className="text-emerald-400 font-bold">cure</span> it.</span>
+                            </p>
+                        </div>
+
+                        {/* CTA Buttons */}
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-8">
+                            <Link href="/organizations">
+                                <Button className="h-14 px-10 text-xl font-black rounded-lg shadow-[0_0_40px_-5px_rgba(16,185,129,0.4)] hover:shadow-[0_0_60px_-5px_rgba(16,185,129,0.6)]">
+                                    Start Clinical Trial
+                                </Button>
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* 3. Social Proof */}
+            <section className="py-16 border-y border-white/5 bg-[#08080a]/80 backdrop-blur-sm relative z-10">
+                <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16">
+                    <p className="text-center text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600 mb-10">
+                        Compatible with all major clinical models
+                    </p>
+                    <div className="flex flex-wrap justify-center items-center gap-12 md:gap-24 opacity-30 grayscale hover:grayscale-0 transition-all duration-700 brightness-200">
+                        <span className="text-xl font-bold tracking-tighter">ANTHROPIC</span>
+                        <span className="text-xl font-bold tracking-tighter">OPENAI</span>
+                        <span className="text-xl font-bold tracking-tighter">MISTRAL</span>
+                        <span className="text-xl font-bold tracking-tighter">LANGCHAIN</span>
+                        <span className="text-xl font-bold tracking-tighter">COHERE</span>
+                    </div>
+                </div>
+            </section>
+
+            {/* 4. The Pathology (Problem) */}
+            <div className="relative z-10">
+                <PathologySection />
             </div>
 
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden p-2 text-ag-muted hover:text-ag-text"
-            >
-              {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
-          </div>
+            {/* 4.5. Atomic Signals (Periodic Table) */}
+            <div className="relative z-10">
+                <AtomicSignalsSection />
+            </div>
+
+            {/* 5. The Treatment (Solution/Workflow) */}
+            <div className="relative z-10">
+                <TreatmentSection />
+            </div>
+
+            {/* 6. Pricing Section */}
+            <div className="relative z-10">
+                <PricingSection />
+            </div>
+
+            {/* 7. CTA Footer */}
+            <footer className="py-48 border-t border-white/5 relative overflow-hidden text-center bg-[#08080a]/90 backdrop-blur-md z-10">
+                <div className="absolute -bottom-60 left-1/2 -translate-x-1/2 w-full max-w-5xl h-96 bg-emerald-500/10 blur-[150px] rounded-full opacity-50 pointer-events-none" />
+
+                <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16 space-y-12 relative z-10">
+                    <h2 className="text-6xl md:text-[80px] font-bold tracking-tight text-white leading-[0.9]">
+                        Stop praying, <br /> start testing.
+                    </h2>
+                    <p className="text-xl text-slate-400 max-w-xl mx-auto leading-relaxed">
+                        Join the elite engineering teams using PluvianAI to build safe, scalable, and predictable AI agents.
+                    </p>
+                    <div className="pt-8 flex flex-col sm:flex-row gap-6 justify-center">
+                        <Link href="/organizations">
+                            <Button className="h-16 px-12 bg-emerald-500 text-black hover:bg-emerald-400 rounded-xl text-xl font-bold transition-all shadow-[0_0_40px_-10px_rgba(16,185,129,0.6)]">
+                                Enter the Lab for Free
+                            </Button>
+                        </Link>
+                    </div>
+                    <div className="flex items-center justify-center gap-6 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-600 pt-16">
+                        <span>No credit card</span>
+                        <div className="w-1 h-1 bg-slate-800 rounded-full" />
+                        <span>Instant SDK integration</span>
+                        <div className="w-1 h-1 bg-slate-800 rounded-full" />
+                        <span>Interactive Lab</span>
+                    </div>
+                </div>
+            </footer>
+
+            {/* 8. Final Credits */}
+            <div className="py-12 border-t border-white/5 bg-[#0a0a0c]">
+                <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16 flex flex-col md:flex-row items-center justify-between gap-8">
+                    <div className="flex items-center gap-2.5">
+                        <Beaker className="w-5 h-5 text-emerald-500" />
+                        <span className="text-sm font-bold tracking-tighter text-white uppercase">PluvianAI Atomic Lab</span>
+                    </div>
+                    <div className="flex gap-10 text-[11px] font-bold text-slate-600 uppercase tracking-widest">
+                        <a href="#" className="hover:text-emerald-400 transition-colors">Documentation</a>
+                        <a href="#" className="hover:text-emerald-400 transition-colors">Security</a>
+                        <a href="#" className="hover:text-emerald-400 transition-colors">Twitter (X)</a>
+                    </div>
+                    <div className="text-[11px] text-slate-700 font-bold uppercase tracking-widest">
+                        © 2026 PluvianAI Inc. Verified.
+                    </div>
+                </div>
+            </div>
         </div>
-
-        {/* Mobile Menu */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-white/10 bg-ag-surface">
-            <div className="px-4 py-4 space-y-4">
-              <Link
-                href="#features"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="block text-ag-muted hover:text-ag-text transition-colors"
-              >
-                Features
-              </Link>
-              <Link
-                href="#integrations"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="block text-ag-muted hover:text-ag-text transition-colors"
-              >
-                Integrations
-              </Link>
-              <Link
-                href="#pricing"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="block text-ag-muted hover:text-ag-text transition-colors"
-              >
-                Pricing
-              </Link>
-              <div className="flex flex-col gap-2 pt-4">
-                <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
-                  <Button variant="outline" className="w-full border-white/20 text-white hover:bg-white/5">
-                    Sign in
-                  </Button>
-                </Link>
-                <Link href="/login?mode=signup" onClick={() => setIsMobileMenuOpen(false)}>
-                  <Button className="w-full">Get Started</Button>
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
-      </nav>
-
-      {/* Hero Section */}
-      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-4xl mx-auto animate-fade-in">
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-6 bg-gradient-to-r from-ag-text via-ag-accentLight to-ag-text bg-clip-text text-transparent animate-scale-in">
-              Synpira
-            </h1>
-            <p className="text-xl sm:text-2xl text-ag-muted mb-4 max-w-2xl mx-auto">
-              The test lab for agents.
-            </p>
-            <p className="text-lg text-ag-muted mb-8 max-w-2xl mx-auto">
-              Track quality, detect drift, analyze costs, and benchmark models—all in one place.
-              Zero-config SDK integration.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-              <Link href="/login?mode=signup">
-                <Button size="lg" className="text-lg px-8 py-6">
-                  Get Started Free
-                  <ChevronRight className="ml-2 h-5 w-5" />
-                </Button>
-              </Link>
-              <Link href="#features">
-                <Button variant="outline" size="lg" className="text-lg px-8 py-6 border-white/20 text-white hover:bg-white/5">
-                  Learn More
-                </Button>
-              </Link>
-            </div>
-
-            {/* Code Snippet */}
-            <div className="mt-16 max-w-3xl mx-auto animate-slide-in">
-              <div className="bg-ag-surface rounded-2xl border border-white/10 overflow-hidden shadow-2xl transition-all duration-300 hover:shadow-glow-neon hover:border-ag-accent/30">
-                {/* Code Tabs */}
-                <div className="flex border-b border-white/10 bg-ag-surface">
-                  <button
-                    onClick={() => setCodeTab('python')}
-                    className={`px-6 py-3 text-sm font-medium transition-colors ${
-                      codeTab === 'python'
-                        ? 'text-ag-text border-b-2 border-ag-accent bg-ag-accent/10'
-                        : 'text-ag-muted hover:text-ag-text hover:bg-white/5'
-                    }`}
-                  >
-                    Python
-                  </button>
-                  <button
-                    onClick={() => setCodeTab('node')}
-                    className={`px-6 py-3 text-sm font-medium transition-colors ${
-                      codeTab === 'node'
-                        ? 'text-ag-text border-b-2 border-ag-accent bg-ag-accent/10'
-                        : 'text-ag-muted hover:text-ag-text hover:bg-white/5'
-                    }`}
-                  >
-                    Node.js
-                  </button>
-                </div>
-                {/* Code Content */}
-                <div className="p-6">
-                  <pre className="text-sm font-mono text-ag-muted overflow-x-auto">
-                    <code>{codeTab === 'python' ? pythonCode : nodeCode}</code>
-                  </pre>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 bg-ag-bg/60">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16 animate-fade-in">
-            <h2 className="text-4xl sm:text-5xl font-bold mb-4">Everything You Need</h2>
-            <p className="text-xl text-ag-muted max-w-2xl mx-auto">
-              Comprehensive monitoring and analytics for your LLM applications
-            </p>
-          </div>
-
-          {/* Bento Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Feature 1: Quality Assurance */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-ag-accent/30 hover:shadow-glow-neon">
-              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-ag-accent/20 blur-[60px]" />
-              <div className="relative z-10">
-                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-glow-neon">
-                  <Check className="h-6 w-6 text-ag-bg" />
-                </div>
-                <h3 className="text-2xl font-bold mb-2">Quality Assurance</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Automatic quality scoring with transparency. Track response quality, detect anomalies,
-                  and ensure consistent performance across all your agents.
-                </p>
-              </div>
-            </div>
-
-            {/* Feature 2: Drift Detection */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-ag-accent/30 hover:shadow-glow-neon">
-              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-ag-accent/20 blur-[60px]" />
-              <div className="relative z-10">
-                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-glow-neon">
-                  <Zap className="h-6 w-6 text-ag-bg" />
-                </div>
-                <h3 className="text-2xl font-bold mb-2">Drift Detection</h3>
-                <p className="text-ag-muted leading-relaxed">
-                  Real-time detection of model drift. Get alerted when response patterns change,
-                  with detailed evidence and before/after comparisons.
-                </p>
-              </div>
-            </div>
-
-            {/* Feature 3: Cost Analysis */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-ag-accent/30 hover:shadow-glow-neon">
-              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-ag-accent/20 blur-[60px]" />
-              <div className="relative z-10">
-                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-glow-neon">
-                  <BarChart3 className="h-6 w-6 text-ag-bg" />
-                </div>
-                <h3 className="text-2xl font-bold mb-2">Cost Analysis</h3>
-                <p className="text-ag-muted leading-relaxed">
-                  Track spending across models and projects. Get cost optimization recommendations
-                  and detect unexpected cost spikes automatically.
-                </p>
-              </div>
-            </div>
-
-            {/* Feature 4: Model Benchmarking */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-8 shadow-2xl transition-all duration-300 hover:border-ag-accent/30 hover:shadow-glow-neon">
-              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-ag-accent/20 blur-[60px]" />
-              <div className="relative z-10">
-                <div className="h-12 w-12 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-xl flex items-center justify-center mb-4 shadow-glow-neon">
-                  <Code2 className="h-6 w-6 text-ag-bg" />
-                </div>
-                <h3 className="text-2xl font-bold mb-2">Model Benchmarking</h3>
-                <p className="text-ag-muted leading-relaxed">
-                  Compare models side-by-side. Get recommendations for optimal model selection
-                  based on your specific use case and requirements.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Integrations Section */}
-      <section id="integrations" className="py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16 animate-fade-in">
-            <h2 className="text-4xl sm:text-5xl font-bold mb-4">Works With Your Stack</h2>
-            <p className="text-xl text-ag-muted max-w-2xl mx-auto">
-              Seamless integration with popular LLM providers and frameworks
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-8 items-center justify-items-center">
-            {/* OpenAI */}
-            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-ag-surface hover:border-white/20 transition-all">
-              <div className="text-3xl font-bold text-ag-text">OpenAI</div>
-              <div className="text-xs text-ag-muted">Native Support</div>
-            </div>
-
-            {/* Anthropic */}
-            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-ag-surface hover:border-white/20 transition-all">
-              <div className="text-2xl font-bold text-ag-text">Anthropic</div>
-              <div className="text-xs text-ag-muted">Native Support</div>
-            </div>
-
-            {/* Google */}
-            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-ag-surface hover:border-white/20 transition-all">
-              <div className="text-2xl font-bold text-ag-text">Google</div>
-              <div className="text-xs text-ag-muted">Native Support</div>
-            </div>
-
-            {/* Python SDK */}
-            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-ag-surface hover:border-white/20 transition-all">
-              <div className="text-xl font-bold text-ag-text font-mono">Python</div>
-              <div className="text-xs text-ag-muted">SDK Available</div>
-            </div>
-
-            {/* Node.js SDK */}
-            <div className="flex flex-col items-center gap-3 p-6 rounded-xl border border-white/10 bg-ag-surface hover:border-white/20 transition-all">
-              <div className="text-xl font-bold text-ag-text font-mono">Node.js</div>
-              <div className="text-xs text-ag-muted">SDK Available</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Final CTA Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-ag-bg/60 to-ag-bg">
-        <div className="max-w-4xl mx-auto text-center animate-fade-in">
-          <h2 className="text-4xl sm:text-5xl font-bold mb-6">
-            Ready to Get Started?
-          </h2>
-          <p className="text-xl text-ag-muted mb-8">
-            Start monitoring your LLM agents in minutes. No credit card required.
-          </p>
-          <Link href="/login?mode=signup">
-            <Button size="lg" className="text-lg px-8 py-6">
-              Get Started Free
-              <ChevronRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-white/10 bg-ag-surface py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-            {/* Brand */}
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="h-8 w-8 bg-gradient-to-br from-ag-primary to-ag-primaryHover rounded-lg flex items-center justify-center shadow-glow-neon">
-                  <span className="text-ag-bg font-bold text-sm">S</span>
-                </div>
-                <span className="font-semibold">Synpira</span>
-              </div>
-              <p className="text-sm text-ag-muted">
-                The test lab for agents.
-              </p>
-            </div>
-
-            {/* Product */}
-            <div>
-              <h4 className="font-semibold text-ag-text mb-4">Product</h4>
-              <ul className="space-y-2 text-sm text-ag-muted">
-                <li>
-                  <Link href="#features" className="hover:text-ag-text transition-colors">
-                    Features
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#integrations" className="hover:text-ag-text transition-colors">
-                    Integrations
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#pricing" className="hover:text-ag-text transition-colors">
-                    Pricing
-                  </Link>
-                </li>
-              </ul>
-            </div>
-
-            {/* Resources */}
-            <div>
-              <h4 className="font-semibold text-ag-text mb-4">Resources</h4>
-              <ul className="space-y-2 text-sm text-ag-muted">
-                <li>
-                  <a href="https://docs.agentguard.ai" target="_blank" rel="noopener noreferrer" className="hover:text-ag-text transition-colors">
-                    Documentation
-                  </a>
-                </li>
-                <li>
-                  <a href="https://docs.agentguard.ai/api" target="_blank" rel="noopener noreferrer" className="hover:text-ag-text transition-colors">
-                    API Reference
-                  </a>
-                </li>
-                <li>
-                  <a href="mailto:support@agentguard.ai" className="hover:text-ag-text transition-colors">
-                    Support
-                  </a>
-                </li>
-              </ul>
-            </div>
-
-            {/* Company */}
-            <div>
-              <h4 className="font-semibold text-ag-text mb-4">Company</h4>
-              <ul className="space-y-2 text-sm text-ag-muted">
-                <li>
-                  <Link href="/about" className="hover:text-ag-text transition-colors">
-                    About
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/blog" className="hover:text-ag-text transition-colors">
-                    Blog
-                  </Link>
-                </li>
-                <li>
-                  <a href="mailto:contact@agentguard.ai" className="hover:text-ag-text transition-colors">
-                    Contact
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Bottom Bar */}
-            <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-sm text-ag-muted">
-              © {new Date().getFullYear()} Synpira. All rights reserved.
-            </p>
-            <div className="flex items-center gap-6">
-              <Link href="/trust-center" className="text-ag-muted hover:text-ag-text transition-colors text-sm">
-                Trust Center
-              </Link>
-              <div className="flex items-center gap-4">
-                <a href="https://github.com/agentguard" target="_blank" rel="noopener noreferrer" className="text-ag-muted hover:text-ag-text transition-colors" aria-label="GitHub">
-                  <Github className="h-5 w-5" />
-                </a>
-                <a href="https://twitter.com/agentguard" target="_blank" rel="noopener noreferrer" className="text-ag-muted hover:text-ag-text transition-colors" aria-label="Twitter">
-                  <Twitter className="h-5 w-5" />
-                </a>
-                <a href="https://linkedin.com/company/agentguard" target="_blank" rel="noopener noreferrer" className="text-ag-muted hover:text-ag-text transition-colors" aria-label="LinkedIn">
-                  <Linkedin className="h-5 w-5" />
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
+    );
 }

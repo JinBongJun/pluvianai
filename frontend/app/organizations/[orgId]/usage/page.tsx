@@ -66,7 +66,7 @@ export default function UsagePage() {
         {/* Plan Limits */}
         <div className="rounded-xl border border-white/10 bg-white/5 p-6">
           <h2 className="text-lg font-semibold text-white mb-6">Plan Limits</h2>
-          
+
           <div className="space-y-6">
             <div>
               <div className="flex justify-between text-sm mb-2">
@@ -76,7 +76,7 @@ export default function UsagePage() {
                 </span>
               </div>
               <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-ag-accent rounded-full transition-all"
                   style={{ width: `${Math.min(((org?.calls7d || 0) / 10000) * 100, 100)}%` }}
                 />
@@ -91,7 +91,7 @@ export default function UsagePage() {
                 </span>
               </div>
               <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-blue-500 rounded-full transition-all"
                   style={{ width: `${Math.min(((org?.projects || 0) / 5) * 100, 100)}%` }}
                 />
@@ -104,8 +104,8 @@ export default function UsagePage() {
                 <span className="text-white">1 / 3</span>
               </div>
               <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-purple-500 rounded-full transition-all"
+                <div
+                  className="h-full bg-emerald-500 rounded-full transition-all"
                   style={{ width: '33%' }}
                 />
               </div>

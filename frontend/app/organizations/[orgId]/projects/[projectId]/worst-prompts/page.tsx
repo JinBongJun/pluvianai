@@ -48,7 +48,7 @@ export default function WorstPromptsPage() {
   const params = useParams();
   const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
   const projectId = Number(Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId);
-  
+
   const [prompts, setPrompts] = useState<WorstPrompt[]>([]);
   const [stats, setStats] = useState<WorstPromptStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,7 +60,7 @@ export default function WorstPromptsPage() {
       router.push('/login');
       return;
     }
-    
+
     fetchData();
   }, [router, projectId, filter]);
 
@@ -68,12 +68,12 @@ export default function WorstPromptsPage() {
     try {
       const token = localStorage.getItem('access_token');
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      
+
       // Fetch prompts
-      const promptsUrl = filter === 'all' 
+      const promptsUrl = filter === 'all'
         ? `${baseUrl}/api/v1/projects/${projectId}/worst-prompts`
         : `${baseUrl}/api/v1/projects/${projectId}/worst-prompts?reason=${filter}`;
-      
+
       const [promptsRes, statsRes] = await Promise.all([
         fetch(promptsUrl, {
           headers: { 'Authorization': `Bearer ${token}` },
@@ -82,12 +82,12 @@ export default function WorstPromptsPage() {
           headers: { 'Authorization': `Bearer ${token}` },
         }),
       ]);
-      
+
       if (promptsRes.ok) {
         const data = await promptsRes.json();
         setPrompts(data);
       }
-      
+
       if (statsRes.ok) {
         const data = await statsRes.json();
         setStats(data);
@@ -103,7 +103,7 @@ export default function WorstPromptsPage() {
     try {
       const token = localStorage.getItem('access_token');
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      
+
       await fetch(
         `${baseUrl}/api/v1/projects/${projectId}/worst-prompts/${promptId}/review?keep_active=${keepActive}`,
         {
@@ -111,7 +111,7 @@ export default function WorstPromptsPage() {
           headers: { 'Authorization': `Bearer ${token}` },
         }
       );
-      
+
       fetchData();
     } catch (error) {
       console.error('Failed to mark as reviewed:', error);
@@ -140,7 +140,7 @@ export default function WorstPromptsPage() {
     >
       <div className="max-w-7xl mx-auto">
         <ProjectTabs projectId={projectId} orgId={orgId} />
-          
+
         <div className="mt-8 space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">

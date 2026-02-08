@@ -5,8 +5,8 @@ import { useRouter, useParams } from 'next/navigation';
 import ProjectLayout from '@/components/layout/ProjectLayout';
 import ProjectTabs from '@/components/ProjectTabs';
 import DriftChart from '@/components/DriftChart';
-import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { driftAPI } from '@/lib/api';
 import { ArrowLeft, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 

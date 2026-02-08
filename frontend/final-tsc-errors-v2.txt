@@ -1,0 +1,106 @@
+﻿app/organizations/[orgId]/projects/[projectId]/alerts/page.tsx(95,20): error TS2345: Argument of type '{ [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }[]' is not assignable to parameter of type 'SetStateAction<Alert[]>'.
+  Type '{ [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }[]' is not assignable to type 'Alert[]'.
+    Type '{ [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }' is missing the following properties from type 'Alert': alert_type, title, alert_data, is_sent, and 4 more.
+app/organizations/[orgId]/projects/[projectId]/alerts/page.tsx(100,47): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: { [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }, index: number, array: { [x: string]: unknown; ... 6 more ...; resolved_at: string | null; }[]) => value is { ...; }, thisArg?: any): { ...; }[]', gave the following error.
+    Argument of type '(alert: Alert) => boolean' is not assignable to parameter of type '(value: { [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }, index: number, array: { [x: string]: unknown; id: number; ... 5 more ...; resolved_at: string | null; }[]) => value is { ...; }'.
+      Types of parameters 'alert' and 'value' are incompatible.
+        Type '{ [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }' is missing the following properties from type 'Alert': alert_type, title, alert_data, is_sent, and 4 more.
+  Overload 2 of 2, '(predicate: (value: { [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }, index: number, array: { [x: string]: unknown; ... 6 more ...; resolved_at: string | null; }[]) => unknown, thisArg?: any): { ...; }[]', gave the following error.
+    Argument of type '(alert: Alert) => boolean' is not assignable to parameter of type '(value: { [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }, index: number, array: { [x: string]: unknown; id: number; ... 5 more ...; resolved_at: string | null; }[]) => unknown'.
+      Types of parameters 'alert' and 'value' are incompatible.
+        Type '{ [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }' is missing the following properties from type 'Alert': alert_type, title, alert_data, is_sent, and 4 more.
+app/organizations/[orgId]/projects/[projectId]/alerts/page.tsx(116,36): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: { [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }, index: number, array: { [x: string]: unknown; ... 6 more ...; resolved_at: string | null; }[]) => value is { ...; }, thisArg?: any): { ...; }[]', gave the following error.
+    Argument of type '(alert: Alert) => boolean' is not assignable to parameter of type '(value: { [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }, index: number, array: { [x: string]: unknown; id: number; ... 5 more ...; resolved_at: string | null; }[]) => value is { ...; }'.
+      Types of parameters 'alert' and 'value' are incompatible.
+        Type '{ [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }' is missing the following properties from type 'Alert': alert_type, title, alert_data, is_sent, and 4 more.
+  Overload 2 of 2, '(predicate: (value: { [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }, index: number, array: { [x: string]: unknown; ... 6 more ...; resolved_at: string | null; }[]) => unknown, thisArg?: any): { ...; }[]', gave the following error.
+    Argument of type '(alert: Alert) => boolean' is not assignable to parameter of type '(value: { [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }, index: number, array: { [x: string]: unknown; id: number; ... 5 more ...; resolved_at: string | null; }[]) => unknown'.
+      Types of parameters 'alert' and 'value' are incompatible.
+        Type '{ [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }' is missing the following properties from type 'Alert': alert_type, title, alert_data, is_sent, and 4 more.
+app/organizations/[orgId]/projects/[projectId]/alerts/page.tsx(129,21): error TS2345: Argument of type '(a: Alert, b: Alert) => 1 | -1' is not assignable to parameter of type '(a: { [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }, b: { [x: string]: unknown; id: number; project_id: number; ... 4 more ...; resolved_at: string | null; }) => number'.
+  Types of parameters 'a' and 'a' are incompatible.
+    Type '{ [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }' is missing the following properties from type 'Alert': alert_type, title, alert_data, is_sent, and 4 more.
+app/organizations/[orgId]/projects/[projectId]/alerts/page.tsx(158,17): error TS2345: Argument of type '{ [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }[]' is not assignable to parameter of type 'SetStateAction<Alert[]>'.
+  Type '{ [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }[]' is not assignable to type 'Alert[]'.
+    Type '{ [x: string]: unknown; id: number; project_id: number; type: string; severity: string; message: string; created_at: string; resolved_at: string | null; }' is missing the following properties from type 'Alert': alert_type, title, alert_data, is_sent, and 4 more.
+app/organizations/[orgId]/projects/[projectId]/alerts/page.tsx(377,11): error TS2322: Type '{ projectId: number; orgId: string; worstAlertCounts: { liveView: number; testLab: number; }; }' is not assignable to type 'IntrinsicAttributes & ProjectTabsProps'.
+  Property 'worstAlertCounts' does not exist on type 'IntrinsicAttributes & ProjectTabsProps'.
+app/organizations/[orgId]/projects/[projectId]/alerts/page.tsx(387,30): error TS2322: Type '{ value: { from: Date | null; to: Date | null; }; onChange: Dispatch<SetStateAction<{ from: Date | null; to: Date | null; }>>; }' is not assignable to type 'IntrinsicAttributes & DateRangePickerProps'.
+  Property 'value' does not exist on type 'IntrinsicAttributes & DateRangePickerProps'.
+app/organizations/[orgId]/projects/[projectId]/alerts/page.tsx(397,44): error TS2322: Type 'ChangeEvent<HTMLSelectElement>' is not assignable to type 'string'.
+app/organizations/[orgId]/projects/[projectId]/alerts/page.tsx(400,17): error TS2322: Type '{ value: string; onChange: (value: ChangeEvent<HTMLSelectElement>) => void; placeholder: string; options: { value: string; label: string; }[]; className: string; }' is not assignable to type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'.
+  Property 'placeholder' does not exist on type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'.
+app/organizations/[orgId]/projects/[projectId]/alerts/page.tsx(416,44): error TS2322: Type 'ChangeEvent<HTMLSelectElement>' is not assignable to type 'string'.
+app/organizations/[orgId]/projects/[projectId]/alerts/page.tsx(419,17): error TS2322: Type '{ value: string; onChange: (value: ChangeEvent<HTMLSelectElement>) => void; placeholder: string; options: { value: string; label: string; }[]; className: string; }' is not assignable to type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'.
+  Property 'placeholder' does not exist on type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'.
+app/organizations/[orgId]/projects/[projectId]/alerts/page.tsx(435,44): error TS2322: Type 'ChangeEvent<HTMLSelectElement>' is not assignable to type 'string'.
+app/organizations/[orgId]/projects/[projectId]/alerts/page.tsx(438,17): error TS2322: Type '{ value: string; onChange: (value: ChangeEvent<HTMLSelectElement>) => void; placeholder: string; options: { value: string; label: string; }[]; className: string; }' is not assignable to type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'.
+  Property 'placeholder' does not exist on type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'.
+app/organizations/[orgId]/projects/[projectId]/alerts/page.tsx(540,31): error TS2322: Type '"outline"' is not assignable to type '"primary" | "secondary" | "ghost" | "danger" | undefined'.
+app/organizations/[orgId]/projects/[projectId]/cost/page.tsx(144,28): error TS2322: Type '{ projectId: number; days: 30 | 7 | 90; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'projectId' does not exist on type 'IntrinsicAttributes'.
+app/organizations/[orgId]/projects/[projectId]/dashboard/page.tsx(34,24): error TS2322: Type '{ basePath: string; }' is not assignable to type 'IntrinsicAttributes & ProjectTabsProps'.
+  Property 'basePath' does not exist on type 'IntrinsicAttributes & ProjectTabsProps'.
+app/organizations/[orgId]/projects/[projectId]/dashboard/page.tsx(43,30): error TS2322: Type '{ projectId: number; period: string; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'projectId' does not exist on type 'IntrinsicAttributes'.
+app/organizations/[orgId]/projects/[projectId]/dashboard/page.tsx(46,25): error TS2322: Type '{ projectId: number; period: string; groupBy: string; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'projectId' does not exist on type 'IntrinsicAttributes'.
+app/organizations/[orgId]/projects/[projectId]/dashboard/page.tsx(51,29): error TS2322: Type '{ projectId: number; period: string; groupBy: string; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'projectId' does not exist on type 'IntrinsicAttributes'.
+app/organizations/[orgId]/projects/[projectId]/dashboard/page.tsx(54,31): error TS2322: Type '{ projectId: number; period: string; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'projectId' does not exist on type 'IntrinsicAttributes'.
+app/organizations/[orgId]/projects/[projectId]/drift/page.tsx(168,29): error TS2322: Type '{ projectId: number; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'projectId' does not exist on type 'IntrinsicAttributes'.
+app/organizations/[orgId]/projects/[projectId]/firewall/page.tsx(72,58): error TS2322: Type '{ projectId: number; orgId: string; canManage: boolean; }' is not assignable to type 'IntrinsicAttributes & ProjectTabsProps'.
+  Property 'canManage' does not exist on type 'IntrinsicAttributes & ProjectTabsProps'.
+app/organizations/[orgId]/projects/[projectId]/firewall/page.tsx(104,26): error TS2322: Type '{ projectId: number; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'projectId' does not exist on type 'IntrinsicAttributes'.
+app/organizations/[orgId]/projects/[projectId]/live-view/page.tsx(435,7): error TS2322: Type '{ children: (false | Element)[]; orgId: string; projectId: number; projectName: any; orgName: string | undefined; activeTab: string; onCopyAllToTestLab: () => Promise<void>; copyAllDisabled: boolean; showCopyButton: true; rightPanel: Element; }' is not assignable to type 'IntrinsicAttributes & CanvasPageLayoutProps'.
+  Property 'orgId' does not exist on type 'IntrinsicAttributes & CanvasPageLayoutProps'.
+app/organizations/[orgId]/projects/[projectId]/live-view/page.tsx(457,11): error TS2322: Type '{ children: Element | null; title: string; isOpen: boolean; onClose: () => void; tabs: { id: string; label: string; }[]; activeTab: "prompt" | "metrics" | "snapshots" | "worst" | "settings"; onTabChange: (tabId: string) => void; headerActions: Element | undefined; }' is not assignable to type 'IntrinsicAttributes & RailwaySidePanelProps'.
+  Property 'headerActions' does not exist on type 'IntrinsicAttributes & RailwaySidePanelProps'.
+app/organizations/[orgId]/projects/[projectId]/quality/page.tsx(143,31): error TS2322: Type '{ projectId: number; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'projectId' does not exist on type 'IntrinsicAttributes'.
+app/organizations/[orgId]/projects/[projectId]/replay/page.tsx(226,25): error TS2322: Type '{ children: (string | number | Element)[]; onClick: () => Promise<void>; disabled: boolean; isLoading: boolean; className: string; }' is not assignable to type 'IntrinsicAttributes & ButtonProps & RefAttributes<HTMLButtonElement>'.
+  Property 'isLoading' does not exist on type 'IntrinsicAttributes & ButtonProps & RefAttributes<HTMLButtonElement>'.
+app/organizations/[orgId]/projects/[projectId]/settings/api-keys/page.tsx(110,24): error TS2322: Type '{ basePath: string; }' is not assignable to type 'IntrinsicAttributes & ProjectTabsProps'.
+  Property 'basePath' does not exist on type 'IntrinsicAttributes & ProjectTabsProps'.
+app/organizations/[orgId]/projects/[projectId]/settings/general/page.tsx(92,60): error TS2322: Type '{ projectId: number; orgId: string; basePath: string; canManage: true; }' is not assignable to type 'IntrinsicAttributes & ProjectTabsProps'.
+  Property 'basePath' does not exist on type 'IntrinsicAttributes & ProjectTabsProps'.
+app/organizations/[orgId]/projects/[projectId]/settings/notifications/page.tsx(32,24): error TS2322: Type '{ basePath: string; }' is not assignable to type 'IntrinsicAttributes & ProjectTabsProps'.
+  Property 'basePath' does not exist on type 'IntrinsicAttributes & ProjectTabsProps'.
+app/organizations/[orgId]/projects/[projectId]/settings/notifications/page.tsx(40,35): error TS2322: Type '{ projectId: number; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'projectId' does not exist on type 'IntrinsicAttributes'.
+app/organizations/[orgId]/projects/[projectId]/settings/page.tsx(57,24): error TS2322: Type '{ basePath: string; }' is not assignable to type 'IntrinsicAttributes & ProjectTabsProps'.
+  Property 'basePath' does not exist on type 'IntrinsicAttributes & ProjectTabsProps'.
+app/organizations/[orgId]/projects/[projectId]/snapshots/page.tsx(85,7): error TS2322: Type '{ children: Element; orgId: string; projectId: number; projectName: any; orgName: string | undefined; activeTab: string; showCopyButton: boolean; }' is not assignable to type 'IntrinsicAttributes & CanvasPageLayoutProps'.
+  Property 'orgId' does not exist on type 'IntrinsicAttributes & CanvasPageLayoutProps'.
+app/organizations/[orgId]/projects/[projectId]/test-lab/page.tsx(347,11): error TS2322: Type 'Node<TestLabBoxNodeData> | { id: string; type: string; data: { label: string; model: string; inputCount: number; onEdit: () => void; onDelete: () => void; status: "idle"; }; position: { ...; }; }' is not assignable to type 'Node<TestLabBoxNodeData>'.
+  Type '{ id: string; type: string; data: { label: string; model: string; inputCount: number; onEdit: () => void; onDelete: () => void; status: "idle"; }; position: { x: number; y: number; }; }' is not assignable to type 'Node<TestLabBoxNodeData>'.
+    Types of property 'data' are incompatible.
+      Object literal may only specify known properties, and 'inputCount' does not exist in type 'TestLabBoxNodeData'.
+app/organizations/[orgId]/projects/[projectId]/test-lab/page.tsx(347,11): error TS2353: Object literal may only specify known properties, and 'inputCount' does not exist in type 'TestLabBoxNodeData'.
+app/organizations/[orgId]/projects/[projectId]/test-lab/page.tsx(672,9): error TS2322: Type '{ children: ("" | Element | null)[]; orgId: string; projectId: number; projectName: any; orgName: string | undefined; activeTab: string; showCopyButton: boolean; onZoomIn: () => void; ... 5 more ...; onResetCanvas: () => void; }' is not assignable to type 'IntrinsicAttributes & CanvasPageLayoutProps'.
+  Property 'orgId' does not exist on type 'IntrinsicAttributes & CanvasPageLayoutProps'.
+app/organizations/[orgId]/projects/[projectId]/test-lab/page.tsx(898,11): error TS2322: Type '{ isOpen: boolean; onClose: () => void; initialValue: string; onSave: (newName: any) => void; }' is not assignable to type 'IntrinsicAttributes & RenameModalProps'.
+  Property 'initialValue' does not exist on type 'IntrinsicAttributes & RenameModalProps'.
+app/organizations/[orgId]/projects/[projectId]/test-lab/page.tsx(899,20): error TS7006: Parameter 'newName' implicitly has an 'any' type.
+app/organizations/new/page.tsx(46,18): error TS2322: Type '{ breadcrumb: ({ label: string; href: string; } | { label: string; })[]; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'breadcrumb' does not exist on type 'IntrinsicAttributes'.
+app/organizations/page.tsx(84,9): error TS2322: Type '{ breadcrumb: { label: string; }[]; showSearch: true; onSearchClick: () => void; userEmail: string; userName: string; userPlan: string; onLogout: () => void; rightContent: Element; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'breadcrumb' does not exist on type 'IntrinsicAttributes'.
+app/organizations/page.tsx(97,21): error TS2322: Type '{ isOpen: boolean; onClose: () => void; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'isOpen' does not exist on type 'IntrinsicAttributes'.
+components/EmptyState.tsx(141,15): error TS2322: Type '"primary" | "outline"' is not assignable to type '"primary" | "secondary" | "ghost" | "danger" | undefined'.
+  Type '"outline"' is not assignable to type '"primary" | "secondary" | "ghost" | "danger" | undefined'.
+components/test-lab/AgentLogicInspector.tsx(247,89): error TS2322: Type 'Signal[]' is not assignable to type 'import("C:/Users/user/Desktop/AgentGuard/frontend/components/test-lab/OutputNode").Signal[]'.
+  Type 'Signal' is missing the following properties from type 'Signal': name, config
+components/test-lab/AgentLogicInspector.tsx(256,93): error TS2322: Type 'Signal[]' is not assignable to type 'import("C:/Users/user/Desktop/AgentGuard/frontend/components/test-lab/OutputNode").Signal[]'.
+  Type 'Signal' is missing the following properties from type 'Signal': name, config
+components/test-lab/AgentLogicInspector.tsx(280,85): error TS2322: Type 'Signal[]' is not assignable to type 'import("C:/Users/user/Desktop/AgentGuard/frontend/components/test-lab/OutputNode").Signal[]'.
+  Type 'Signal' is missing the following properties from type 'Signal': name, config
+components/test-lab/BoxEditModal.tsx(6,10): error TS2614: Module '"@/components/test-lab/ManualInputModal"' has no exported member 'ManualInputModal'. Did you mean to use 'import ManualInputModal from "@/components/test-lab/ManualInputModal"' instead?
+components/test-lab/LangChainImportModal.tsx(64,39): error TS2339: Property 'importLangChain' does not exist on type '{ listCanvases: (projectId: number) => Promise<any>; createCanvas: (projectId: number, data: { name: string; boxes?: any[] | undefined; connections?: any[] | undefined; }) => Promise<any>; ... 5 more ...; importCsv: (projectId: number, file: File, inputColumn: string) => Promise<...>; }'.
+hooks/useKeyboardShortcuts.ts(57,17): error TS2339: Property 'getLastSelectedOrgId' does not exist on type 'typeof import("C:/Users/user/Desktop/AgentGuard/frontend/components/layout/OrgSelector")'.

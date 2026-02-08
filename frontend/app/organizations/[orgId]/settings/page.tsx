@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import OrgLayout from '@/components/layout/OrgLayout';
-import Button from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { organizationsAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
 import { Settings, Trash2, AlertTriangle } from 'lucide-react';

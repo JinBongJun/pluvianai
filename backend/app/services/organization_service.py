@@ -168,3 +168,29 @@ class OrganizationService:
         
         member.role = new_role
         return self.member_repo.save(member)
+
+    def update_organization(
+        self,
+        org_id: int,
+        name: Optional[str] = None,
+        description: Optional[str] = None
+    ) -> Optional[Organization]:
+        """
+        Update organization details.
+        """
+        org = self.org_repo.find_by_id(org_id)
+        if not org:
+            return None
+        
+        if name is not None:
+            org.name = name.strip()
+        if description is not None:
+            org.description = description.strip()
+        
+        return self.org_repo.save(org)
+
+    def delete_organization(self, org_id: int) -> bool:
+        """
+        Delete organization. Cascade deletion of members and projects is handled by SQLAlchemy.
+        """
+        return self.org_repo.delete(org_id)

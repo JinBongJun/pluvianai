@@ -6,7 +6,7 @@ import OrgLayout from '@/components/layout/OrgLayout';
 import ProjectTabs from '@/components/ProjectTabs';
 import { projectsAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
-import Button from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { FileText } from 'lucide-react';
 
 export default function ProjectGeneralSettingsPage() {

@@ -12,12 +12,12 @@ interface EmptyStateProps {
   description?: string;
 }
 
-export default function EmptyState({ 
-  type, 
-  projectId, 
+export default function EmptyState({
+  type,
+  projectId,
   onGenerateSample,
   title,
-  description 
+  description
 }: EmptyStateProps) {
   const router = useRouter();
 
@@ -101,7 +101,7 @@ export default function EmptyState({
           actions: [
             {
               label: 'Generate Report',
-              onClick: () => {},
+              onClick: () => { },
               variant: 'primary' as const,
             },
           ],
@@ -114,7 +114,7 @@ export default function EmptyState({
           actions: [
             {
               label: 'Get Started',
-              onClick: () => {},
+              onClick: () => { },
               variant: 'primary' as const,
             },
           ],

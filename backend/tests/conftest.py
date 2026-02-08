@@ -80,15 +80,22 @@ def client(db):
     def override_get_db():
         try:
             yield db
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
         finally:
             pass
     
     # Override database dependency
     app.dependency_overrides[get_db] = override_get_db
     
-    # Use TestClient as context manager - it handles async properly
-    with TestClient(app, raise_server_exceptions=False) as test_client:
-        yield test_client
+    from unittest.mock import patch
+    with patch("app.services.scheduler_service.scheduler_service.start"), \
+         patch("app.services.scheduler_service.scheduler_service.shutdown"):
+        # Use TestClient as context manager - it handles async properly
+        with TestClient(app, raise_server_exceptions=False) as test_client:
+            yield test_client
     
     # Clear all overrides after test
     app.dependency_overrides.clear()
@@ -106,6 +113,10 @@ async def async_client(db, event_loop) -> AsyncGenerator[AsyncClient, None]:
     async def override_get_db():
         try:
             yield db
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
         finally:
             pass
     

@@ -1,113 +1,32 @@
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { ChevronDown, Check } from 'lucide-react';
-import { clsx } from 'clsx';
-import { organizationsAPI, OrganizationSummary } from '@/lib/api';
-import useSWR from 'swr';
+// Layout - OrgSelector
+import React from 'react';
 
 interface OrgSelectorProps {
-  currentOrgId: number | string;
-  onOrgChange?: (orgId: number) => void;
+    value?: string;
+    onChange?: (value: string) => void;
+    organizations?: { id: string | number; name: string }[];
 }
 
-const LAST_SELECTED_ORG_KEY = 'lastSelectedOrgId';
-
-export default function OrgSelector({ currentOrgId, onOrgChange }: OrgSelectorProps) {
-  const router = useRouter();
-  const [isOpen, setIsOpen] = useState(false);
-
-  const { data: orgs, error } = useSWR<OrganizationSummary[]>(
-    'organizations-list',
-    () => organizationsAPI.list({ includeStats: false }),
-  );
-
-  const currentOrg = orgs?.find((org) => org.id === Number(currentOrgId));
-
-  const handleOrgSelect = (orgId: number) => {
-    localStorage.setItem(LAST_SELECTED_ORG_KEY, String(orgId));
-    setIsOpen(false);
-    if (onOrgChange) {
-      onOrgChange(orgId);
-    } else {
-      router.push(`/organizations/${orgId}/projects`);
-    }
-  };
-
-  if (error || !orgs || orgs.length === 0) {
+const OrgSelector: React.FC<OrgSelectorProps> = ({ value, onChange, organizations = [] }) => {
     return (
-      <button
-        onClick={() => router.push('/organizations')}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-white/5 transition-colors"
-      >
-        <span>Organizations</span>
-      </button>
+        <select
+            value={value}
+            onChange={(e) => onChange?.(e.target.value)}
+            className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+        >
+            <option value="">Select Organization</option>
+            {organizations.map((org) => (
+                <option key={org.id} value={org.id.toString()}>
+                    {org.name}
+                </option>
+            ))}
+        </select>
     );
-  }
+};
 
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-ag-text hover:bg-white/5 transition-colors"
-      >
-        <span className="font-semibold">{currentOrg?.name || 'Select organization'}</span>
-        <span className="text-xs text-ag-muted px-1.5 py-0.5 rounded bg-white/5">
-          {currentOrg?.plan === 'free' ? 'Free' : currentOrg?.plan === 'pro' ? 'Pro' : currentOrg?.plan === 'enterprise' ? 'Enterprise' : 'Free'}
-        </span>
-        <ChevronDown className={clsx('h-4 w-4 text-ag-muted transition-transform', isOpen && 'rotate-180')} />
-      </button>
+export const getLastSelectedOrgId = (): string | null => {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('last_org_id');
+};
 
-      {isOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setIsOpen(false)}
-          />
-          <div className="absolute top-full left-0 mt-2 w-64 rounded-lg border border-white/10 bg-ag-surface shadow-xl z-20 overflow-hidden">
-            <div className="p-2">
-              {orgs.map((org) => (
-                <button
-                  key={org.id}
-                  onClick={() => handleOrgSelect(org.id)}
-                  className={clsx(
-                    'w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors text-left',
-                    org.id === Number(currentOrgId)
-                      ? 'bg-ag-primary/20 text-ag-text'
-                      : 'text-ag-muted hover:bg-white/5'
-                  )}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{org.name}</div>
-                    <div className="text-xs text-ag-muted">{org.projects ?? 0} projects</div>
-                  </div>
-                  {org.id === Number(currentOrgId) && (
-                    <Check className="h-4 w-4 text-ag-accent flex-shrink-0 ml-2" />
-                  )}
-                </button>
-              ))}
-            </div>
-            <div className="border-t border-white/10 p-2">
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  router.push('/organizations');
-                }}
-                className="w-full px-3 py-2 rounded-lg text-sm text-ag-muted hover:bg-white/5 transition-colors text-left"
-              >
-                Manage organizations →
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-export function getLastSelectedOrgId(): number | null {
-  if (typeof window === 'undefined') return null;
-  const stored = localStorage.getItem(LAST_SELECTED_ORG_KEY);
-  return stored ? Number(stored) : null;
-}
+export default OrgSelector;

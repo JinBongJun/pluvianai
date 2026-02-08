@@ -2,40 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
+/* React Flow Cursor Overrides */
+.react-flow__pane {
+  cursor: grab !important;
+}
+
+.react-flow__pane.grabbing {
+  cursor: grabbing !important;
+}
+
+.react-flow__node,
+.react-flow__handle {
+  cursor: default !important;
+}
+
+.react-flow__edgeinteraction,
+.react-flow__edge,
+.react-flow__connection-line,
+.react-flow__connection {
+  cursor: default !important;
+}
+
+/* Override the crosshair cursor during edge creation */
+.react-flow__container.rf-crosshair {
+  cursor: default !important;
+}
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-  --foreground-rgb: 231, 231, 226; /* #E7E7E2 */
-  --background-rgb: 18, 18, 18; /* #121212 Deep Charcoal */
-  --border-color: 255, 255, 255; /* Used with alpha */
+  --foreground-rgb: 231, 231, 226;
+  --background-rgb: 10, 10, 12;
+  --border-color: 255, 255, 255;
 
-  /* Toxic Lab palette — neon lab / test lab for agents */
-  --ag-bg: 18, 18, 18; /* #121212 Deep Charcoal — Test Lab main background */
-  --ag-bg-live: 26, 26, 26; /* #1a1a1a — Live View area background (slightly lighter) */
-  --ag-surface: 26, 26, 26; /* #1a1a1a cards/surfaces */
-  --ag-primary: 57, 255, 20; /* #39FF14 Neon Green — main CTA / accent */
-  --ag-primary-hover: 78, 255, 50; /* slightly lighter green */
-  --ag-accent: 57, 255, 20; /* #39FF14 Neon Green */
-  --ag-accent-light: 180, 255, 150; /* lighter green for text on dark */
-  --ag-electric-blue: 0, 212, 255; /* #00D4FF — data flow / links / secondary */
-  --ag-text: 231, 231, 226; /* #E7E7E2 */
-  --ag-text-muted: 167, 173, 163; /* #A7ADA3 */
+  /* Atomic Lab Palette - High-Precision Aesthetic */
+  --ag-bg: 10, 10, 12;
+  /* #0A0A0C Night Slate */
+  --ag-bg-live: 13, 13, 17;
+  /* Slightly lighter slate for contrast */
+  --ag-surface: 17, 17, 21;
+  /* #111115 Surface/Card color */
+  --ag-primary: 16, 185, 129;
+  /* #10B981 Emerald Green (Precision) */
+  --ag-primary-hover: 52, 211, 153;
+  /* Emerald 400 */
+  --ag-accent: 6, 182, 212;
+  /* #06B6D4 Clinical Cyan (Intelligence) */
+  --ag-accent-light: 34, 211, 238;
+  /* Cyan 400 */
+  --ag-electric-blue: 14, 165, 233;
+  /* Sky 500 */
+  --ag-text: 226, 232, 240;
+  /* Slate 200 */
+  --ag-text-muted: 100, 116, 139;
+  /* Slate 500 */
 }
 
 body {
   color: rgb(var(--ag-text));
   background: rgb(var(--ag-bg));
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-plus-jakarta), 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* Smooth transitions */
+/* Smooth transitions - removed transform to prevent dragging lag */
 * {
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, transform;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
+}
+
+/* React Flow Performance - Disable transitions during dragging/position updates */
+.react-flow__node,
+.react-flow__edge-path,
+.react-flow__connection-path {
+  transition: none !important;
 }
 
 /* Focus styles */
@@ -67,15 +111,19 @@ body {
 .glow-neon-green {
   box-shadow: 0 0 20px rgba(57, 255, 20, 0.4);
 }
+
 .glow-neon-green-strong {
   box-shadow: 0 0 24px rgba(57, 255, 20, 0.5), 0 0 48px rgba(57, 255, 20, 0.2);
 }
+
 .glow-electric-blue {
   box-shadow: 0 0 20px rgba(0, 212, 255, 0.35);
 }
+
 .text-shadow-neon {
   text-shadow: 0 0 10px rgba(57, 255, 20, 0.5);
 }
+
 /* Live View area — use class .bg-ag-live when you need the alternate background */
 
 /* Loading bar animation */
@@ -83,6 +131,7 @@ body {
   0% {
     transform: translateX(-100%);
   }
+
   100% {
     transform: translateX(400%);
   }
@@ -93,6 +142,7 @@ body {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -102,4 +152,81 @@ body {
   animation: fadeIn 0.2s ease-out;
 }
 
+/* Nav Tab Pop-out Animation */
+@keyframes popOut {
+  0% {
+    transform: scale(1);
+  }
 
+  50% {
+    transform: scale(1.08);
+  }
+
+  100% {
+    transform: scale(1.05);
+  }
+}
+
+.nav-tab-pop {
+  animation: popOut 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Bubbling Test Tube Animation */
+@keyframes bubble {
+  0% {
+    transform: translateY(100%) scale(0.5);
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(-20%) scale(1.2);
+    opacity: 0;
+  }
+}
+
+.animate-bubble {
+  animation: bubble 4s infinite linear;
+}
+
+@keyframes liquid-pulse {
+
+  0%,
+  100% {
+    height: 90%;
+    transform: scaleY(1);
+    filter: brightness(1);
+  }
+
+  50% {
+    height: 92%;
+    transform: scaleY(1.02);
+    filter: brightness(1.2);
+  }
+}
+
+.liquid-core {
+  animation: liquid-pulse 3s infinite ease-in-out;
+}
+
+/* Text Gradient Animation */
+@keyframes gradient-x {
+
+  0%,
+  100% {
+    background-size: 200% 200%;
+    background-position: left center;
+  }
+
+  50% {
+    background-size: 200% 200%;
+    background-position: right center;
+  }
+}
+
+.animate-gradient-x {
+  animation: gradient-x 3s ease infinite;
+}

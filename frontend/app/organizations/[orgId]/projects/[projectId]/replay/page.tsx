@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import ProjectLayout from '@/components/layout/ProjectLayout';
-import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { replayAPI, apiCallsAPI, organizationsAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
 import { Play, History, Split, ArrowRight, Settings2, Trash2 } from 'lucide-react';

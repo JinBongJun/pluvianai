@@ -1,15 +1,22 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Plus_Jakarta_Sans } from 'next/font/google'
 import { ToastProvider } from '@/components/ToastContainer'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import PostHogProviderWrapper from '@/components/analytics/PostHogProvider'
 
-const inter = Inter({ subsets: ['latin'] })
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  variable: '--font-plus-jakarta',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
-  title: 'Synpira — The test lab for agents',
-  description: 'The test lab for agents. Run experiments, watch live, monitor quality and cost.',
+  title: 'PluvianAI — The Symbiotic Guardian for AI Agents',
+  description: 'Clinical grade validation for AI Agents. Cut hallucination rates & logic errors in half. Instantly.',
+  icons: {
+    icon: '/icon.svg',
+  },
 }
 
 export default function RootLayout({
@@ -19,7 +26,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={plusJakartaSans.className}>
         <ErrorBoundary>
           <PostHogProviderWrapper>
             <ToastProvider>
@@ -31,6 +38,3 @@ export default function RootLayout({
     </html>
   )
 }
-
-
-

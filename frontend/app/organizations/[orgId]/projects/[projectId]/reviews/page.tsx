@@ -44,7 +44,7 @@ export default function ReviewsPage() {
   const params = useParams();
   const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
   const projectId = Number(Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId);
-  
+
   const [reviews, setReviews] = useState<Review[]>([]);
   const [stats, setStats] = useState<ReviewStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,7 +56,7 @@ export default function ReviewsPage() {
       router.push('/login');
       return;
     }
-    
+
     fetchData();
   }, [router, projectId, filter]);
 
@@ -64,11 +64,11 @@ export default function ReviewsPage() {
     try {
       const token = localStorage.getItem('access_token');
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      
-      const reviewsUrl = filter === 'all' 
+
+      const reviewsUrl = filter === 'all'
         ? `${baseUrl}/api/v1/projects/${projectId}/reviews`
         : `${baseUrl}/api/v1/projects/${projectId}/reviews?status=${filter}`;
-      
+
       const [reviewsRes, statsRes] = await Promise.all([
         fetch(reviewsUrl, {
           headers: { 'Authorization': `Bearer ${token}` },
@@ -77,12 +77,12 @@ export default function ReviewsPage() {
           headers: { 'Authorization': `Bearer ${token}` },
         }),
       ]);
-      
+
       if (reviewsRes.ok) {
         const data = await reviewsRes.json();
         setReviews(data);
       }
-      
+
       if (statsRes.ok) {
         const data = await statsRes.json();
         setStats(data);
@@ -98,7 +98,7 @@ export default function ReviewsPage() {
     try {
       const token = localStorage.getItem('access_token');
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      
+
       await fetch(
         `${baseUrl}/api/v1/projects/${projectId}/reviews/${reviewId}/${action}`,
         {
@@ -110,7 +110,7 @@ export default function ReviewsPage() {
           body: JSON.stringify({}),
         }
       );
-      
+
       fetchData();
     } catch (error) {
       console.error('Failed to make decision:', error);
@@ -159,7 +159,7 @@ export default function ReviewsPage() {
     >
       <div className="max-w-7xl mx-auto">
         <ProjectTabs projectId={projectId} orgId={orgId} />
-          
+
         <div className="mt-8 space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
@@ -268,7 +268,7 @@ export default function ReviewsPage() {
                           )}
                         </div>
                       </div>
-                      
+
                       {review.status === 'pending' && (
                         <div className="flex items-center gap-2">
                           <Button
@@ -291,7 +291,7 @@ export default function ReviewsPage() {
                           </Button>
                         </div>
                       )}
-                      
+
                       {review.decision && (
                         <div className="text-sm text-slate-400">
                           Decision: <span className="text-white">{review.decision}</span>

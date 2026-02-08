@@ -13,12 +13,12 @@ const logError = (message: string, error?: unknown, context?: Record<string, unk
   } else {
     // Only send to Sentry if it's a real error (not just a failed API call)
     // This reduces Sentry load and prevents rate limiting
-    const shouldReportToSentry = 
-      error instanceof Error && 
+    const shouldReportToSentry =
+      error instanceof Error &&
       !error.message.includes('Network Error') &&
       !error.message.includes('timeout') &&
       !message.includes('Failed to fetch');
-    
+
     if (shouldReportToSentry) {
       import('@sentry/nextjs').then((Sentry) => {
         if (error instanceof Error) {
@@ -1160,7 +1160,7 @@ export const sharedResultsAPI = {
       });
       return unwrapResponse(response);
     }
-    
+
     // Otherwise, create a temporary result ID (0) or use a different endpoint
     // For now, we'll use 0 as a placeholder - backend should handle this
     const response = await apiClient.post(`/projects/${projectId}/results/0/share`, {
@@ -1408,6 +1408,10 @@ export const testLabAPI = {
     );
     return unwrapResponse(response);
   },
+  importLangChain: async (projectId: number, data: { name: string; yaml_content: string }) => {
+    const response = await apiClient.post(`/projects/${projectId}/test-lab/import-langchain`, data);
+    return unwrapResponse(response);
+  },
 };
 
 // Self-hosted API
@@ -1540,22 +1544,22 @@ export const adminAPI = {
     const response = await apiClient.get('/auth/me');
     return unwrapResponse(response);
   },
-  
+
   getStats: async () => {
     const response = await apiClient.get('/admin/stats');
     return unwrapResponse(response);
   },
-  
+
   listUsers: async (params?: { limit?: number; offset?: number; search?: string }) => {
     const response = await apiClient.get('/admin/users', { params });
     return unwrapResponse(response);
   },
-  
+
   startImpersonation: async (userId: number, data: { reason?: string; duration_minutes?: number }) => {
     const response = await apiClient.post(`/admin/users/${userId}/impersonate`, data);
     return unwrapResponse(response);
   },
-  
+
   endImpersonation: async (sessionId: string) => {
     const response = await apiClient.delete(`/admin/impersonate/${sessionId}`);
     return unwrapResponse(response);

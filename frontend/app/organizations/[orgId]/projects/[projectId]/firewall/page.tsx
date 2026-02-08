@@ -7,7 +7,7 @@ import ProjectTabs from '@/components/ProjectTabs';
 import FirewallRules from '@/components/firewall/FirewallRules';
 import { firewallAPI } from '@/lib/api';
 import { useToast } from '@/components/ToastContainer';
-import Button from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { Shield, AlertTriangle } from 'lucide-react';
 
 export default function FirewallPage() {

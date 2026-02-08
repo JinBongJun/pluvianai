@@ -1,0 +1,23 @@
+﻿python : INFO:     Started server process [13744]
+위치 C:\Users\user\AppData\Local\Temp\ps-script-b15b4ed4-8d22-4038-9d42-aa135c4e381a.ps1:7 문자:46
++ ... rd\backend; python -m uvicorn app.main:app --host 127.0.0.1 --port 80 ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (INFO:     Started server process [13744]:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+INFO:     Waiting for application startup.
+2026-01-12 01:42:31 - agentguard - INFO - Starting AgentGuard API...
+2026-01-12 01:42:31 - agentguard - INFO - Environment: PRODUCTION
+2026-01-12 01:42:34 - agentguard - INFO - Database tables initialized
+2026-01-12 01:42:34 - agentguard - INFO - Background scheduler started
+2026-01-12 01:42:34 - agentguard - INFO - Scheduled tasks:
+2026-01-12 01:42:34 - agentguard - INFO -   - Drift Detection: Daily at 2:00 AM UTC
+2026-01-12 01:42:34 - agentguard - INFO -   - Cost Anomaly Detection: Daily at 3:00 AM UTC
+2026-01-12 01:42:34 - agentguard - INFO - Background scheduler started
+INFO:     Application startup complete.
+ERROR:    [Errno 10048] error while attempting to bind on address ('127.0.0.1', 8000): [winerror 10048] 각 소켓 주소(프로토콜/네트
+워크 주소/포트)는 하나만 사용할 수 있습니다
+INFO:     Waiting for application shutdown.
+2026-01-12 01:42:34 - agentguard - INFO - Shutting down AgentGuard API...
+2026-01-12 01:42:34 - agentguard - INFO - Background scheduler stopped
+INFO:     Application shutdown complete.

@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import ProjectLayout from '@/components/layout/ProjectLayout';
 import ProjectTabs from '@/components/ProjectTabs';
 import CostChart from '@/components/CostChart';
-import Button from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { apiCallsAPI } from '@/lib/api';
 import { ArrowLeft, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
 

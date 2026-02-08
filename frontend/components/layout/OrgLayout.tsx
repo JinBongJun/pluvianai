@@ -1,105 +1,61 @@
-'use client';
+// Layout - OrgLayout
+import React from 'react';
 
-import { ReactNode, createContext, useContext, useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { Search, HelpCircle, MessageSquare, Lightbulb, User } from 'lucide-react';
-import { clsx } from 'clsx';
-import OrgSelector, { getLastSelectedOrgId } from './OrgSelector';
-import OrgSidebar from './OrgSidebar';
-import { authAPI } from '@/lib/api';
-
-import TopHeader from './TopHeader';
-import NotificationCenter from '@/components/notifications/NotificationCenter';
-import GlobalSearch from '@/components/search/GlobalSearch';
-
-interface OrgLayoutContextType {
-  orgId: number | string;
+interface Breadcrumb {
+    label: string;
+    href?: string;
 }
 
-const OrgLayoutContext = createContext<OrgLayoutContextType | undefined>(undefined);
-
-export function useOrgLayout() {
-  const context = useContext(OrgLayoutContext);
-  if (!context) {
-    throw new Error('useOrgLayout must be used within OrgLayout');
-  }
-  return context;
+interface Tab {
+    id: string;
+    label: string;
+    href: string;
 }
 
 interface OrgLayoutProps {
-  children: ReactNode;
-  orgId: number | string;
-  breadcrumb?: { label: string; href?: string }[];
+    orgId?: string | number;
+    breadcrumb?: Breadcrumb[];
+    tabs?: Tab[];
+    children: React.ReactNode;
 }
 
-export default function OrgLayout({ children, orgId, breadcrumb = [] }: OrgLayoutProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [userEmail, setUserEmail] = useState<string>('');
-  const [userName, setUserName] = useState<string>('');
-  const [userPlan, setUserPlan] = useState<string>('free');
-  const [showSearch, setShowSearch] = useState(false);
-
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const { authAPI, subscriptionAPI } = await import('@/lib/api');
-        const [user, subscription] = await Promise.all([
-          authAPI.getCurrentUser(),
-          subscriptionAPI.getCurrent().catch(() => null)
-        ]);
-        setUserEmail(user.email || '');
-        setUserName(user.full_name || '');
-        if (subscription) {
-          setUserPlan(subscription.plan_type || 'free');
-        }
-      } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Failed to load user info:', error);
-        }
-      }
-    };
-    loadUser();
-  }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    router.push('/login');
-  };
-
-  const handleOrgChange = (newOrgId: number) => {
-    router.push(`/organizations/${newOrgId}/projects`);
-  };
-
-  return (
-    <OrgLayoutContext.Provider value={{ orgId }}>
-      <div className="min-h-screen bg-ag-bg text-ag-text">
-        <TopHeader 
-          breadcrumb={breadcrumb}
-          leftContent={<OrgSelector currentOrgId={orgId} onOrgChange={handleOrgChange} />}
-          onSearchClick={() => setShowSearch(true)}
-          userEmail={userEmail}
-          userName={userName}
-          userPlan={userPlan}
-          onLogout={handleLogout}
-          rightContent={
-            <div className="flex items-center gap-2">
-              <NotificationCenter />
+const OrgLayout: React.FC<OrgLayoutProps> = ({ breadcrumb, tabs, children }) => {
+    return (
+        <div className="min-h-screen bg-[#0d0d12]">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {breadcrumb && (
+                    <nav className="mb-4 text-sm text-slate-400">
+                        {breadcrumb.map((item, index) => (
+                            <span key={index}>
+                                {index > 0 && <span className="mx-2">/</span>}
+                                {item.href ? (
+                                    <a href={item.href} className="hover:text-white">{item.label}</a>
+                                ) : (
+                                    <span className="text-white">{item.label}</span>
+                                )}
+                            </span>
+                        ))}
+                    </nav>
+                )}
+                {tabs && tabs.length > 0 && (
+                    <div className="border-b border-white/10 mb-6">
+                        <nav className="flex gap-1">
+                            {tabs.map((tab) => (
+                                <a
+                                    key={tab.id}
+                                    href={tab.href}
+                                    className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white border-b-2 border-transparent hover:border-slate-600"
+                                >
+                                    {tab.label}
+                                </a>
+                            ))}
+                        </nav>
+                    </div>
+                )}
+                {children}
             </div>
-          }
-        />
-
-        <div className="flex">
-          <OrgSidebar orgId={orgId} />
-          <main className="flex-1 ml-64 overflow-auto">
-            <div className="p-8 max-w-7xl mx-auto">
-              <GlobalSearch isOpen={showSearch} onClose={() => setShowSearch(false)} />
-              {children}
-            </div>
-          </main>
         </div>
-      </div>
-    </OrgLayoutContext.Provider>
-  );
-}
+    );
+};
+
+export default OrgLayout;

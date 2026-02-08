@@ -345,12 +345,49 @@ async def startup_event():
                         else:
                             logger.info("✅ is_panic_mode column already exists in projects table")
                             print("✅ is_panic_mode column already exists in projects table", file=sys.stderr)
+
+                        # Check if usage_mode column exists in projects table
+                        result = conn.execute(text("""
+                            SELECT column_name 
+                            FROM information_schema.columns 
+                            WHERE table_name='projects' AND column_name='usage_mode'
+                        """))
+                        if result.fetchone() is None:
+                            logger.info("🔧 Adding usage_mode column to projects table manually...")
+                            print("🔧 Adding usage_mode column to projects table manually...", file=sys.stderr)
+                            conn.execute(text("""
+                                ALTER TABLE projects 
+                                ADD COLUMN IF NOT EXISTS usage_mode VARCHAR(32) DEFAULT 'full' NOT NULL
+                            """))
+                            logger.info("✅ usage_mode column added to projects table")
+                            print("✅ usage_mode column added to projects table", file=sys.stderr)
+                        else:
+                            logger.info("✅ usage_mode column already exists in projects table")
+                            print("✅ usage_mode column already exists in projects table", file=sys.stderr)
+                        # Check if description column exists in organizations table
+                        result = conn.execute(text("""
+                            SELECT column_name 
+                            FROM information_schema.columns 
+                            WHERE table_name='organizations' AND column_name='description'
+                        """))
+                        if result.fetchone() is None:
+                            logger.info("🔧 Adding description column to organizations table manually...")
+                            print("🔧 Adding description column to organizations table manually...", file=sys.stderr)
+                            conn.execute(text("""
+                                ALTER TABLE organizations 
+                                ADD COLUMN IF NOT EXISTS description TEXT
+                            """))
+                            logger.info("✅ description column added to organizations table")
+                            print("✅ description column added to organizations table", file=sys.stderr)
+                        else:
+                            logger.info("✅ description column already exists in organizations table")
+                            print("✅ description column already exists in organizations table", file=sys.stderr)
                 except Exception as manual_fix_error:
                     logger.error(f"🔴 Failed to manually add columns: {manual_fix_error}", exc_info=True)
                     print(f"🔴 Failed to manually add columns: {manual_fix_error}", file=sys.stderr)
         
         # Start migration task but don't wait for it - server starts immediately
-        asyncio.create_task(run_migrations_async())
+        # asyncio.create_task(run_migrations_async())
         logger.info("🔄 Migration task started (non-blocking) - server starting immediately")
         
         # Test DB connection to determine if DB is available

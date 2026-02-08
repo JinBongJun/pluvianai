@@ -1,44 +1,26 @@
-"use client";
+// Analytics - PostHogProvider
+'use client';
 
-import { useEffect } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
-import posthog from "posthog-js";
-import { PostHogProvider } from "posthog-js/react";
+import React, { useEffect } from 'react';
+import posthog from 'posthog-js';
 
-const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://app.posthog.com";
-
-function initPostHog() {
-  if (!POSTHOG_KEY) return;
-  if ((posthog as any).__loaded) return;
-  posthog.init(POSTHOG_KEY, {
-    api_host: POSTHOG_HOST,
-    capture_pageview: false,
-  });
+interface PostHogProviderProps {
+    children: React.ReactNode;
 }
 
-export default function PostHogProviderWrapper({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+export const PostHogProvider: React.FC<PostHogProviderProps> = ({ children }) => {
+    useEffect(() => {
+        if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_POSTHOG_KEY) {
+            posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
+                api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://app.posthog.com',
+                loaded: (posthog) => {
+                    if (process.env.NODE_ENV === 'development') posthog.debug();
+                },
+            });
+        }
+    }, []);
 
-  useEffect(() => {
-    initPostHog();
-  }, []);
-
-  useEffect(() => {
-    if (!POSTHOG_KEY) return;
-    const query = searchParams?.toString();
-    const url = query ? `${pathname}?${query}` : pathname;
-    posthog.capture("$pageview", { $current_url: url });
-  }, [pathname, searchParams]);
-
-  if (!POSTHOG_KEY) {
     return <>{children}</>;
-  }
+};
 
-  return <PostHogProvider client={posthog}>{children}</PostHogProvider>;
-}
+export default PostHogProvider;

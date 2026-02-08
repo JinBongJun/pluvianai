@@ -1,124 +1,72 @@
-/**
- * API Response Validation Utilities
- * Validates API responses at runtime to catch schema mismatches early
- */
-import { safeParse } from './schemas';
-import type { z } from 'zod';
+// lib/validate.ts
+import { z } from 'zod';
+
+export const validateEmail = (email: string): string | null => {
+    if (!email) return 'Email is required';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return 'Invalid email format';
+    return null;
+};
+
+export const validatePassword = (password: string): string | null => {
+    if (!password) return 'Password is required';
+    if (password.length < 8) return 'Password must be at least 8 characters';
+    return null;
+};
+
+export const passwordStrength = (password: string): number => {
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (password.length >= 12) strength++;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
+    if (/\d/.test(password)) strength++;
+    if (/[^a-zA-Z\d]/.test(password)) strength++;
+    return strength;
+};
 
 /**
- * Validates and normalizes API response data
- * Returns validated data or throws a descriptive error
+ * Validate array response using Zod schema
+ * Returns validated array or empty array on validation failure
  */
-export function validateResponse<T>(
-  schema: z.ZodSchema<T>,
-  data: unknown,
-  endpoint: string
-): T {
-  const result = safeParse(schema, data);
-  
-  if (!result.success) {
-    console.error(`[API Validation Error] ${endpoint}:`, result.error);
-    console.error('Raw response data:', data);
-    
-    // In production, log to error tracking (e.g., Sentry)
-    if (typeof window !== 'undefined' && (window as any).Sentry) {
-      (window as any).Sentry.captureException(new Error(result.error), {
-        extra: { endpoint, data },
-      });
-    }
-    
-    // Try to return a safe default or throw if critical
-    throw new Error(`Invalid API response from ${endpoint}: ${result.error}`);
-  }
-  
-  return result.data;
-}
+export const validateArrayResponse = <T>(
+    schema: z.ZodType<T>,
+    data: any,
+    endpoint: string
+): T[] => {
+    try {
+        // Handle different response formats
+        let arrayData: any[] = [];
 
-/**
- * Validates array response - returns empty array on validation failure
- * Useful for non-critical endpoints where we can degrade gracefully
- */
-export function validateArrayResponse<T>(
-  schema: z.ZodSchema<T>,
-  data: unknown,
-  endpoint: string
-): T[] {
-  if (!Array.isArray(data)) {
-    console.warn(`[API Validation Warning] ${endpoint}: Expected array, got ${typeof data}`);
-    return [] as T[];
-  }
-  
-  const results: T[] = [];
-  const errors: string[] = [];
-  
-  for (let index = 0; index < data.length; index++) {
-    const item = data[index];
-    const result = safeParse(schema, item);
-    if (result.success) {
-      results.push(result.data);
-    } else {
-      errors.push(`Item ${index}: ${result.error}`);
-      // Try to include the item anyway if validation fails (graceful degradation)
-      // This prevents breaking the UI while still logging the issue
-      results.push(item as T);
-    }
-  }
-  
-  if (errors.length > 0) {
-    console.warn(`[API Validation Warning] ${endpoint}: ${errors.length} invalid items:`, errors);
-    
-    if (typeof window !== 'undefined' && (window as any).Sentry) {
-      (window as any).Sentry.captureMessage(`Partial validation failure in ${endpoint}`, {
-        level: 'warning',
-        extra: { endpoint, errors, validCount: results.length - errors.length, totalCount: data.length },
-      });
-    }
-  }
-  
-  return results as T[];
-}
+        if (Array.isArray(data)) {
+            arrayData = data;
+        } else if (data && typeof data === 'object') {
+            // Try common array wrapper patterns
+            if ('data' in data && Array.isArray(data.data)) {
+                arrayData = data.data;
+            } else if ('items' in data && Array.isArray(data.items)) {
+                arrayData = data.items;
+            }
+        }
 
-/**
- * Normalizes model comparison data (handles field name variations)
- */
-export function normalizeModelComparison(data: unknown): any {
-  if (!data || typeof data !== 'object') {
-    return {
-      recommendation_score: 0,
-      success_rate: 0,
-      total_calls: 0,
-      cost_per_call: 0,
-      avg_cost_per_call: 0,
-      avg_latency_ms: 0,
-      avg_latency: 0,
-    };
-  }
-  
-  const obj = data as any;
-  return {
-    ...obj,
-    recommendation_score: typeof obj.recommendation_score === 'number' ? obj.recommendation_score : 0,
-    success_rate: typeof obj.success_rate === 'number' ? obj.success_rate : 0,
-    total_calls: typeof obj.total_calls === 'number' ? obj.total_calls : 0,
-    cost_per_call: typeof obj.cost_per_call === 'number' ? obj.cost_per_call : (typeof obj.avg_cost_per_call === 'number' ? obj.avg_cost_per_call : 0),
-    avg_cost_per_call: typeof obj.avg_cost_per_call === 'number' ? obj.avg_cost_per_call : (typeof obj.cost_per_call === 'number' ? obj.cost_per_call : 0),
-    avg_latency_ms: typeof obj.avg_latency_ms === 'number' ? obj.avg_latency_ms : (typeof obj.avg_latency === 'number' ? obj.avg_latency * 1000 : 0),
-    avg_latency: typeof obj.avg_latency === 'number' ? obj.avg_latency : (typeof obj.avg_latency_ms === 'number' ? obj.avg_latency_ms / 1000 : 0),
-  };
-}
+        // Validate each item
+        const validated: T[] = [];
+        for (const item of arrayData) {
+            try {
+                validated.push(schema.parse(item));
+            } catch (error) {
+                // Skip invalid items but log in development
+                if (process.env.NODE_ENV === 'development') {
+                    console.warn(`[Validation] Skipping invalid item from ${endpoint}:`, error);
+                }
+            }
+        }
 
-/**
- * Safely extracts number from unknown value
- */
-export function safeNumber(value: unknown, fallback: number = 0): number {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === 'string') {
-    const parsed = parseFloat(value);
-    if (Number.isFinite(parsed)) {
-      return parsed;
+        return validated;
+    } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+            console.error(`[Validation] Failed to validate array response from ${endpoint}:`, error);
+        }
+        return [];
     }
-  }
-  return fallback;
-}
+};
+

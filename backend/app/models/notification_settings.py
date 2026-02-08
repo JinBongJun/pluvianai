@@ -1,41 +1,22 @@
-"""
-Notification Settings model for user notification preferences
-"""
-
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
 
-
 class NotificationSettings(Base):
-    """Notification Settings model"""
-
+    """Global user notification preferences"""
     __tablename__ = "notification_settings"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
-
-    # Email notifications
-    email_drift = Column(Boolean, default=True, nullable=False)
-    email_cost_anomaly = Column(Boolean, default=True, nullable=False)
-    email_quality_drop = Column(Boolean, default=True, nullable=False)
-
-    # In-app notifications
-    in_app_drift = Column(Boolean, default=True, nullable=False)
-    in_app_cost_anomaly = Column(Boolean, default=True, nullable=False)
-    in_app_quality_drop = Column(Boolean, default=True, nullable=False)
-
-    # Slack integration
-    slack_enabled = Column(Boolean, default=False, nullable=False)
-    slack_webhook_url = Column(Text, nullable=True)
-
-    # Discord integration
-    discord_enabled = Column(Boolean, default=False, nullable=False)
-    discord_webhook_url = Column(Text, nullable=True)
-
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    
+    email_alerts = Column(Boolean, default=True, server_default="true")
+    slack_alerts = Column(Boolean, default=False, server_default="false")
+    discord_alerts = Column(Boolean, default=False, server_default="false")
+    
+    slack_webhook_url = Column(String(1000), nullable=True)
+    discord_webhook_url = Column(String(1000), nullable=True)
+    
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships

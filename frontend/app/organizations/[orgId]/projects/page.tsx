@@ -23,7 +23,8 @@ export default function OrgProjectsPage() {
     isValidating: orgLoading,
     mutate: refetchOrg,
   } = useSWR<OrganizationDetail>(orgId ? ['organization', orgId] : null, ([, id]) =>
-    organizationsAPI.get(id as string, { includeStats: true }),
+    // Org header에서는 통계까지 필요 없으므로, DB 에러를 줄이기 위해 stats 없이 로드
+    organizationsAPI.get(id as string, { includeStats: false }),
   );
 
   const {
@@ -32,7 +33,8 @@ export default function OrgProjectsPage() {
     isValidating: projectsLoading,
     mutate: refetchProjects,
   } = useSWR<OrganizationProject[]>(orgId ? ['organization-projects', orgId, debouncedProjectQuery] : null, ([, id, search]) =>
-    organizationsAPI.listProjects(id as string, { includeStats: true, search: search as string }),
+    // 프로젝트 카드에는 기본 정보만 필요하므로 stats는 나중에 필요해질 때만 켜기
+    organizationsAPI.listProjects(id as string, { includeStats: false, search: search as string }),
   );
 
   const filteredProjects = useMemo(() => {
@@ -64,7 +66,7 @@ export default function OrgProjectsPage() {
       <div className="max-w-6xl mx-auto">
         <div className="mb-6">
           <h1 className="text-3xl font-bold mb-6 text-ag-text">Projects</h1>
-          
+
           {/* Search and Actions Bar */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3 flex-1">

@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import ProjectLayout from '@/components/layout/ProjectLayout';
 import ProjectTabs from '@/components/ProjectTabs';
 import QualityChart from '@/components/QualityChart';
-import Button from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { qualityAPI } from '@/lib/api';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { ArrowLeft, TrendingUp, TrendingDown, Minus } from 'lucide-react';

@@ -1,1051 +1,941 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React, { useCallback, useState, useMemo } from 'react';
+import { useParams } from 'next/navigation';
 import useSWR from 'swr';
 import ReactFlow, {
   Background,
-  Controls,
-  MiniMap,
+  BackgroundVariant,
+  ReactFlowProvider,
+  useReactFlow,
   type Connection,
   type Edge,
   type Node,
   addEdge,
   useEdgesState,
   useNodesState,
+  MarkerType,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
-import ProjectLayout from '@/components/layout/ProjectLayout';
-import ProjectTabs from '@/components/ProjectTabs';
+import CanvasPageLayout from '@/components/layout/CanvasPageLayout';
 import Button from '@/components/ui/Button';
-import Modal from '@/components/ui/Modal';
-import { testLabAPI } from '@/lib/api';
-import { useToast } from '@/components/ToastContainer';
-import { Plus, Play, Beaker, ArrowRight, Link2, UploadCloud } from 'lucide-react';
-import clsx from 'clsx';
+import { projectsAPI, organizationsAPI } from '@/lib/api';
+import { Bot, Play, Beaker, BarChart2 } from 'lucide-react'; // Added icons
+import { TestLabBoxNode, type TestLabBoxNodeData } from '@/components/test-lab/TestLabBoxNode';
+import InputNode, { type InputNodeData } from '@/components/test-lab/InputNode'; // Import InputNode
+import OutputNode, { type OutputNodeData } from '@/components/test-lab/OutputNode'; // Import OutputNode
+import BoxEditModal, { type BoxData } from '@/components/test-lab/BoxEditModal';
+import DatasetEditorModal from '@/components/test-lab/DatasetEditorModal';
+import { VariableDefinition, TestCase } from '@/components/test-lab/InputNode';
+import { ContentBlock } from '@/types/test-lab/content-blocks'; // Import ContentBlock types
+import RenameModal from '@/components/shared/RenameModal';
+import LangChainImportModal from '@/components/test-lab/LangChainImportModal';
+import DrawIOEdge from '@/components/shared/DrawIOEdge';
+import DrawIOStepEdge from '@/components/shared/DrawIOStepEdge';
+import RailwaySidePanel from '@/components/shared/RailwaySidePanel';
+import AgentLogicInspector from '@/components/test-lab/AgentLogicInspector';
+import RunConfigModal, { type RunConfig } from '@/components/test-lab/RunConfigModal';
+import { ChainExecutor } from '@/lib/services/chain-executor'; // Import ChainExecutor
 
-type Canvas = {
-  id: string;
-  project_id: number;
-  name: string;
-  boxes: any[];
-  connections: any[];
+
+
+const TEST_LAB_BACKEND_ENABLED = true;
+
+const nodeTypes = {
+  testLabBox: TestLabBoxNode,
+  inputNode: InputNode,
+  outputNode: OutputNode,
 };
 
-type TestResultItem = {
-  id: string;
-  agent_id?: string | null;
-  input?: string | null;
-  response?: string | null;
-  step_order?: number | null;
-  signal_result?: {
-    status?: string;
-    is_worst?: boolean;
-    [key: string]: unknown;
-  } | null;
-  is_worst?: boolean | null;
-  worst_status?: string | null;
-};
-
-type ResultFilter = 'all' | 'needs_review' | 'critical' | 'worst';
-
-const PROVIDER_OPTIONS = [
-  { id: 'openai', label: 'OpenAI' },
-  { id: 'anthropic', label: 'Anthropic' },
-  { id: 'google', label: 'Google' },
-  { id: 'custom', label: 'Custom' },
-] as const;
-
-const MODEL_OPTIONS: Record<string, { id: string; label: string }[]> = {
-  openai: [
-    { id: 'gpt-4o', label: 'GPT-4o' },
-    { id: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-    { id: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-    { id: 'gpt-4', label: 'GPT-4' },
-    { id: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-    { id: 'o1-preview', label: 'o1 (Preview)' },
-    { id: 'o1-mini', label: 'o1 Mini' },
-  ],
-  anthropic: [
-    { id: 'claude-3-5-sonnet', label: 'Claude 3.5 Sonnet' },
-    { id: 'claude-3-5-haiku', label: 'Claude 3.5 Haiku' },
-    { id: 'claude-3-opus', label: 'Claude 3 Opus' },
-    { id: 'claude-3-sonnet', label: 'Claude 3 Sonnet' },
-    { id: 'claude-3-haiku', label: 'Claude 3 Haiku' },
-  ],
-  google: [
-    { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
-    { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
-    { id: 'gemini-1.0-pro', label: 'Gemini 1.0 Pro' },
-    { id: 'gemini-pro', label: 'Gemini Pro' },
-  ],
-  custom: [],
+const edgeTypes = {
+  bezier: DrawIOEdge,
+  step: DrawIOStepEdge,
 };
 
 export default function TestLabPage() {
   const params = useParams();
-  const router = useRouter();
-  const toast = useToast();
-
   const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Number(
-    Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId,
-  );
+  const projectId = Number(Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId);
 
-  const [activeCanvasId, setActiveCanvasId] = useState<string | null>(null);
-  const [boxes, setBoxes] = useState<any[]>([]);
-  const [connections, setConnections] = useState<any[]>([]);
-  const [runInputs, setRunInputs] = useState<string>('');
-  const [results, setResults] = useState<TestResultItem[]>([]);
-  const [isRunning, setIsRunning] = useState(false);
-  const [isConcurrencyBlocked, setIsConcurrencyBlocked] = useState(false);
-  const [concurrencyError, setConcurrencyError] = useState<{
-    message?: string;
-    limit?: number;
-    current?: number;
-  } | null>(null);
-  const [limitError, setLimitError] = useState<{
-    code?: string;
-    message?: string;
-    limit?: number;
-    requested?: number;
-  } | null>(null);
-  const [resultFilter, setResultFilter] = useState<ResultFilter>('all');
+  const { data: project } = useSWR(
+    projectId ? ['project', projectId] : null,
+    () => projectsAPI.get(projectId),
+  );
+  const { data: org } = useSWR(
+    orgId ? ['organization', orgId] : null,
+    () => organizationsAPI.get(orgId, { includeStats: false }),
+  );
 
   // React Flow canvas state
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  // Use a union type for potential node data if needed, or stick to generic base
+  const [nodes, setNodes, onNodesChange] = useNodesState<TestLabBoxNodeData | InputNodeData | OutputNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [arrowMode, setArrowMode] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [editingBox, setEditingBox] = useState<BoxData | null>(null);
+  // State for Editing Input Node
+  const [editingInputNodeId, setEditingInputNodeId] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState<'details' | 'inputs' | 'results' | 'settings'>('details');
+  const [edgeStyle, setEdgeStyle] = useState<'bezier' | 'step'>('step'); // Default to step/smoothstep for Railway style
+  const [isLangChainModalOpen, setIsLangChainModalOpen] = useState(false);
 
-  // CSV import modal state
-  const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvInputColumn, setCsvInputColumn] = useState<string>('');
-  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
-  const [csvPreviewRows, setCsvPreviewRows] = useState<Record<string, string | null>[]>([]);
-  const [csvImportedCount, setCsvImportedCount] = useState<number | null>(null);
-  const [csvSkippedCount, setCsvSkippedCount] = useState<number | null>(null);
-  const [csvLoading, setCsvLoading] = useState(false);
+  // --- Undo/Redo Logic ---
+  const [past, setPast] = useState<{ nodes: Node[]; edges: Edge[] }[]>([]);
+  const [future, setFuture] = useState<{ nodes: Node[]; edges: Edge[] }[]>([]);
 
-  const { data: canvasesData, mutate: refreshCanvases } = useSWR(
-    projectId ? ['test-lab-canvases', projectId] : null,
-    () => testLabAPI.listCanvases(projectId),
-  );
+  const takeSnapshot = useCallback(() => {
+    setPast((prev) => [...prev, { nodes: JSON.parse(JSON.stringify(nodes)), edges: JSON.parse(JSON.stringify(edges)) }].slice(-50));
+    setFuture([]);
+  }, [nodes, edges]);
 
-  const canvases: Canvas[] = useMemo(() => canvasesData?.items || [], [canvasesData]);
+  const onUndo = useCallback(() => {
+    if (past.length === 0) return;
+    const previous = past[past.length - 1];
+    const newPastArr = past.slice(0, past.length - 1);
 
-  // Derive React Flow nodes/edges from boxes/connections
-  useEffect(() => {
-    const nextNodes: Node[] = (boxes || []).map((box, idx) => ({
-      id: String(box.id ?? `box-${idx + 1}`),
-      data: {
-        label:
-          (box.label || `Box ${idx + 1}`) +
-          (Array.isArray(box.inputs) && box.inputs.length
-            ? ` (📊 ${box.inputs.length})`
-            : ''),
-      },
-      position: box.position || { x: 120 * (idx % 4), y: 80 * Math.floor(idx / 4) },
-    }));
+    setFuture((prev) => [{ nodes: JSON.parse(JSON.stringify(nodes)), edges: JSON.parse(JSON.stringify(edges)) }, ...prev].slice(0, 50));
+    setNodes(previous.nodes);
+    setEdges(previous.edges);
+    setPast(newPastArr);
+  }, [past, nodes, edges, setNodes, setEdges]);
 
-    const nextEdges: Edge[] = (connections || []).map((conn, idx) => ({
-      id: conn.id || `e-${conn.source}-${conn.target}-${idx}`,
-      source: String(conn.source ?? conn.from ?? ''),
-      target: String(conn.target ?? conn.to ?? ''),
-    }));
+  const onRedo = useCallback(() => {
+    if (future.length === 0) return;
+    const next = future[0];
+    const newFuture = future.slice(1);
 
-    setNodes(nextNodes);
-    setEdges(nextEdges);
-  }, [boxes, connections, setNodes, setEdges]);
+    setPast((prev) => [...prev, { nodes: JSON.parse(JSON.stringify(nodes)), edges: JSON.parse(JSON.stringify(edges)) }].slice(-50));
+    setNodes(next.nodes);
+    setEdges(next.edges);
+    setFuture(newFuture);
+  }, [future, nodes, edges, setNodes, setEdges]);
 
-  const handleNodesChange = useCallback(
-    (changes: Parameters<typeof onNodesChange>[0]) => {
-      onNodesChange(changes);
-      // Persist positions back into boxes so we can save via canvas PUT
-      setBoxes((prev) => {
-        const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-        const next = prev.map((box) => {
-          const id = String(box.id);
-          const node = nodeMap.get(id);
-          if (!node) return box;
-          return {
-            ...box,
-            position: node.position,
-          };
-        });
-        return next;
+  const [editingEdge, setEditingEdge] = useState<{ id: string; x: number; y: number; order: number } | null>(null);
+
+  // Cycle Detection Logic (DFS)
+  React.useEffect(() => {
+    // 1. Build adjacency list
+    const adj: Record<string, string[]> = {};
+    nodes.forEach(n => adj[n.id] = []);
+    edges.forEach(e => adj[e.source]?.push(e.target));
+
+    // 2. DFS to find back-edges
+    const visited = new Set<string>();
+    const recStack = new Set<string>();
+    const cyclicEdges = new Set<string>();
+
+    const dfs = (u: string) => {
+      visited.add(u);
+      recStack.add(u);
+
+      adj[u]?.forEach(v => {
+        if (!visited.has(v)) {
+          dfs(v);
+        } else if (recStack.has(v)) {
+          // Found a cycle: u -> v is a back-edge
+          const edgeId = edges.find(e => e.source === u && e.target === v)?.id;
+          if (edgeId) cyclicEdges.add(edgeId);
+        }
       });
-    },
-    [nodes, onNodesChange],
-  );
 
-  const handleEdgesChange = useCallback(
-    (changes: Parameters<typeof onEdgesChange>[0]) => {
-      onEdgesChange(changes);
-    },
-    [onEdgesChange],
-  );
+      recStack.delete(u);
+    };
+
+    nodes.forEach(n => {
+      if (visited.has(n.id)) return;
+      dfs(n.id);
+    });
+
+    // 3. Update edges if cycle status changed
+    setEdges(eds => {
+      let changed = false;
+      const newEdges = eds.map(e => {
+        const isCyclic = cyclicEdges.has(e.id);
+        if (e.data?.isCyclic !== isCyclic) {
+          changed = true;
+          return { ...e, data: { ...e.data, isCyclic } };
+        }
+        return e;
+      });
+      return changed ? newEdges : eds;
+    });
+  }, [nodes.length, edges.length, edges, nodes, setEdges]); // Dep check optimized
+
+  const [renamingBox, setRenamingBox] = useState<{ id: string; label: string } | null>(null);
+  const [isRunConfigOpen, setIsRunConfigOpen] = useState(false);
+  const [runScope, setRunScope] = useState<'global' | 'chain' | 'node'>('global');
+  const [runTargetId, setRunTargetId] = useState<string | undefined>(undefined);
+
+  const handleRunExperiment = async (config: RunConfig) => {
+    setIsRunConfigOpen(false);
+    console.log('Starting Experiment with Config:', config);
+    setDetailTab('results'); // Switch to results tab to show progress
+
+    // Reset all nodes to idle
+    setNodes((prev) => prev.map(n => ({ ...n, data: { ...n.data, status: 'idle' } })));
+
+    // Execute Chain
+    try {
+      const executor = new ChainExecutor(nodes, edges, (nodeId, status) => {
+        setNodes((prev) =>
+          prev.map((n) => {
+            if (n.id === nodeId) {
+              return { ...n, data: { ...n.data, status } };
+            }
+            return n;
+          })
+        );
+      });
+
+      const sortedNodes = executor.getExecutionOrder();
+      console.log('Execution Order:', sortedNodes.map(n => n.data.label));
+
+      let currentInputs: any[] = [];
+
+      for (const node of sortedNodes) {
+        currentInputs = await executor.executeStep(node.id, currentInputs);
+      }
+      console.log('Chain Execution Complete', executor.getLogs());
+
+    } catch (e) {
+      console.error('Execution Failed:', e);
+      // Mark current running nodes as error
+      setNodes((prev) => prev.map(n => {
+        if (n.data.status === 'running') {
+          return { ...n, data: { ...n.data, status: 'error' } };
+        }
+        return n;
+      }));
+      alert('Chain execution failed: ' + e);
+    }
+  };
+
+  const onRunAgent = (id: string) => {
+    setRunScope('node');
+    setRunTargetId(id);
+    setIsRunConfigOpen(true);
+  };
+
+  const onRunChain = (id: string) => {
+    setRunScope('chain');
+    setRunTargetId(id);
+    setIsRunConfigOpen(true);
+  };
+
+
+
 
   const handleConnect = useCallback(
     (connection: Connection) => {
-      if (!arrowMode) return;
-      setEdges((eds) => addEdge(connection, eds));
-      const { source, target } = connection;
-      if (!source || !target) return;
+      setEdges((eds) => {
+        // Ghost numbering: Find max order from source and default to next
+        const outgoingEdges = eds.filter(e => e.source === connection.source);
+        const maxOrder = outgoingEdges.reduce((max, e) => Math.max(max, e.data?.order || 0), 0);
+        const nextOrder = maxOrder === 0 ? 1 : maxOrder + 1;
 
-      setConnections((prev) => {
-        const exists = prev.some(
-          (e) =>
-            String(e.source ?? e.from) === String(source) &&
-            String(e.target ?? e.to) === String(target),
-        );
-        if (exists) return prev;
-        return [
-          ...prev,
+        return addEdge(
           {
-            id: `conn-${source}-${target}-${prev.length + 1}`,
-            source,
-            target,
+            ...connection,
+            type: edgeStyle,
+            data: { order: nextOrder },
+            style: {
+              strokeWidth: 2,
+              stroke: '#8b5cf6',
+            },
           },
-        ];
+          eds,
+        );
       });
     },
-    [arrowMode, setEdges],
+    [setEdges, edgeStyle],
   );
 
-  useEffect(() => {
-    if (!projectId || !orgId) return;
 
-    const init = async () => {
-      if (!canvases.length) {
-        // Lazily create a default canvas
-        try {
-          const created = await testLabAPI.createCanvas(projectId, {
-            name: 'Default Canvas',
-            boxes: [],
-            connections: [],
-          });
-          setActiveCanvasId(created.id);
-          setBoxes(created.boxes || []);
-          setConnections(created.connections || []);
-          await refreshCanvases();
-        } catch (err) {
-          toast.showToast('Failed to create Test Lab canvas', 'error');
-        }
-      } else if (!activeCanvasId) {
-        const first = canvases[0];
-        setActiveCanvasId(first.id);
-        setBoxes(first.boxes || []);
-        setConnections(first.connections || []);
+  const onNodeClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      setSelectedNodeId(node.id);
+      setDetailTab('details');
+    },
+    [],
+  );
+
+  const handleEditBox = useCallback((id: string) => {
+    setNodes((nds) => {
+      const node = nds.find((n) => n.id === id);
+      if (node && node.type === 'testLabBox') {
+        const boxData = node.data as TestLabBoxNodeData;
+        setEditingBox({
+          id: node.id,
+          label: boxData.label,
+          model: boxData.model,
+          systemPrompt: boxData.systemPrompt,
+          inputs: [],
+        });
       }
-    };
+      return nds;
+    });
+  }, [setNodes]);
 
-    void init();
-  }, [projectId, orgId, canvases, activeCanvasId, refreshCanvases, toast]);
+  const handleRenameBox = useCallback((id: string, newLabel: string) => {
+    takeSnapshot();
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === id) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              label: newLabel,
+            },
+          };
+        }
+        return node;
+      })
+    );
+  }, [setNodes, takeSnapshot]);
 
-  const handleSelectCanvas = (canvas: Canvas) => {
-    setActiveCanvasId(canvas.id);
-    setBoxes(canvas.boxes || []);
-    setConnections(canvas.connections || []);
-    setResults([]);
-    setSelectedNodeId(null);
-  };
+  const handleUpdateEdge = useCallback((id: string, data: any) => {
+    takeSnapshot();
+    setEdges((eds) =>
+      eds.map((e) => {
+        if (e.id === id) {
+          return { ...e, data };
+        }
+        return e;
+      })
+    );
+  }, [setEdges, takeSnapshot]);
 
-  const handleAddBox = async () => {
-    if (!activeCanvasId) return;
-    if (boxes.length >= 30) {
-      toast.showToast('Test Lab 캔버스는 최대 30개 박스까지만 허용됩니다.', 'warning');
-      return;
+  const handleDeleteEdge = useCallback((id: string) => {
+    takeSnapshot();
+    setEdges((eds) => eds.filter((e) => e.id !== id));
+  }, [setEdges, takeSnapshot]);
+
+  const selectedBoxNode = useMemo(() => {
+    if (!selectedNodeId) return null;
+    return nodes.find((n) => n.id === selectedNodeId) || null;
+  }, [nodes, selectedNodeId]);
+
+  const selectedBox = useMemo(() => {
+    if (!selectedBoxNode) return null;
+    // Allow testLabBox, outputNode, and inputNode to open the panel
+    if (['testLabBox', 'outputNode', 'inputNode'].includes(selectedBoxNode.type || '')) {
+      return selectedBoxNode.data as any;
     }
-    const newBoxId = `box-${boxes.length + 1}`;
-    const newBoxes = [
-      ...boxes,
+    return null;
+  }, [selectedBoxNode]);
+
+  const handleDeleteBox = useCallback((id: string) => {
+
+    takeSnapshot();
+    setNodes((nds) => nds.filter((n) => n.id !== id));
+    setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
+    if (selectedNodeId === id) setSelectedNodeId(null);
+  }, [setNodes, setEdges, selectedNodeId, takeSnapshot]);
+
+  const handleAddBox = () => {
+    const newId = `box-${Date.now()}`;
+    const newNodes: Node<TestLabBoxNodeData>[] = [
+      ...nodes as Node<TestLabBoxNodeData>[],
       {
-        id: newBoxId,
-        label: `Box ${boxes.length + 1}`,
-        model: '',
-        system_prompt: '',
-        inputs: [],
+        id: newId,
+        type: 'testLabBox',
+        data: {
+          label: `Agent ${nodes.filter(n => n.type === 'testLabBox').length + 1}`,
+          model: 'gpt-4o',
+          inputCount: 0,
+          onEdit: () => setRenamingBox({ id: newId, label: `Agent ${nodes.filter(n => n.type === 'testLabBox').length + 1}` }),
+          onDelete: () => handleDeleteBox(newId),
+          status: 'idle',
+        },
+        position: { x: Math.random() * 200 + 100, y: Math.random() * 200 + 100 },
       },
     ];
-    setBoxes(newBoxes);
-    try {
-      await testLabAPI.updateCanvas(projectId, activeCanvasId, {
-        boxes: newBoxes,
-        connections,
-      });
-      await refreshCanvases();
-    } catch {
-      toast.showToast('Failed to save canvas', 'error');
-    }
+    setNodes(newNodes);
   };
 
-  const handleBoxFieldChange = (boxId: string, field: string, value: string) => {
-    const updated = boxes.map((b) => (String(b.id) === String(boxId) ? { ...b, [field]: value } : b));
-    setBoxes(updated);
+  const handleAddInputBox = () => {
+    const newId = `inputs-${Date.now()}`;
+    const newNode: Node<InputNodeData> = {
+      id: newId,
+      type: 'inputNode',
+      data: {
+        label: 'User Inputs',
+        inputs: [],
+        onEdit: () => setEditingInputNodeId(newId),
+        onDelete: () => handleDeleteBox(newId),
+        status: 'idle',
+      },
+      position: { x: 100, y: 300 },
+    };
+    setNodes((nds) => [...nds, newNode]);
   };
 
-  const handleBoxInputsChange = (boxId: string, value: string) => {
-    const lines = value
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean);
-    const updated = boxes.map((b) =>
-      String(b.id) === String(boxId) ? { ...b, inputs: lines } : b,
+  const handleUpdateInputNode = (variables: VariableDefinition[], testCases: TestCase[]) => {
+    if (!editingInputNodeId) return;
+
+    takeSnapshot();
+    setNodes((prev) =>
+      prev.map((node) => {
+        if (node.id === editingInputNodeId) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              variables,
+              testCases,
+              label: testCases.length > 0 ? `${testCases.length} Test Cases` : 'Empty Dataset',
+              // Clear legacy inputs to avoid confusion? Or keep them?
+              // inputs: [], 
+            }
+          };
+        }
+        return node;
+      })
     );
-    setBoxes(updated);
+    setEditingInputNodeId(null);
   };
 
-  const handleSaveCanvas = async () => {
-    if (!activeCanvasId) return;
-    try {
-      await testLabAPI.updateCanvas(projectId, activeCanvasId, {
-        boxes,
-        connections,
-      });
-      await refreshCanvases();
-      toast.showToast('Canvas saved', 'success');
-    } catch {
-      toast.showToast('Failed to save canvas', 'error');
+  // Helper to get current inputs for the editing node
+  const currentEditingData = useMemo(() => {
+    if (!editingInputNodeId) return { variables: [], testCases: [] };
+    const node = nodes.find(n => n.id === editingInputNodeId);
+    if (node && node.type === 'inputNode') {
+      const data = node.data as InputNodeData;
+      return {
+        variables: data.variables || [],
+        testCases: data.testCases || [],
+      };
     }
-  };
+    return { variables: [], testCases: [] };
+  }, [nodes, editingInputNodeId]);
 
-  const handleRunTest = async () => {
-    if (!activeCanvasId || isConcurrencyBlocked) return;
-    const selectedBoxForRun = selectedNodeId
-      ? boxes.find((b) => String(b.id) === String(selectedNodeId))
-      : null;
-
-    const boxInputs: string[] =
-      selectedBoxForRun && Array.isArray(selectedBoxForRun.inputs)
-        ? (selectedBoxForRun.inputs as string[])
-        : [];
-
-    const inputs =
-      boxInputs.length > 0
-        ? boxInputs
-        : runInputs
-            .split('\n')
-            .map((line) => line.trim())
-            .filter(Boolean);
-
-    setIsRunning(true);
-    setResults([]);
-    setLimitError(null);
-
-    try {
-      const run = await testLabAPI.runTest(projectId, {
-        name: 'Test Lab Run',
-        test_type: 'chain',
-        canvas_id: activeCanvasId,
-        input_prompts: inputs,
-        // If a box is selected, run only that box; otherwise run full chain
-        box_ids: selectedNodeId ? [String(selectedNodeId)] : undefined,
-      });
-
-      // Fetch results for this run
-      const resultPayload = await testLabAPI.listResults(projectId, {
-        run_id: run.id,
-        limit: 500,
-        offset: 0,
-      });
-      setResults((resultPayload.items || []) as TestResultItem[]);
-      toast.showToast('Test Lab run completed with live LLM calls', 'success');
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail;
-      const errorCode = typeof detail === 'object' ? detail?.code : undefined;
-      if (err?.response?.status === 403 && errorCode === 'CONCURRENT_TEST_NOT_ALLOWED') {
-        setIsConcurrencyBlocked(true);
-        setConcurrencyError({
-          message:
-            detail?.message ||
-            '동시에 실행할 수 있는 테스트 개수를 초과했습니다. 다른 테스트가 완료된 후 다시 시도해주세요.',
-          limit: detail?.limit,
-          current: detail?.current,
-        });
-        toast.showToast(
-          detail?.message ||
-            '다른 테스트가 이미 실행 중입니다. 먼저 실행 중인 테스트가 끝난 후 다시 시도해주세요.',
-          'warning',
-        );
-      } else if (
-        err?.response?.status === 403 &&
-        (errorCode === 'LIMIT_INPUTS_PER_TEST' || errorCode === 'LIMIT_TOTAL_CALLS_PER_TEST')
-      ) {
-        setLimitError({
-          code: errorCode,
-          message:
-            (typeof detail === 'object' ? detail?.message : detail) ||
-            '현재 플랜에서 허용된 테스트 한도를 초과했습니다. 입력 수를 줄이거나 플랜을 업그레이드해주세요.',
-          limit: detail?.limit,
-          requested: detail?.requested,
-        });
-        toast.showToast(
-          (typeof detail === 'object' ? detail?.message : detail) ||
-            '현재 플랜에서 허용된 테스트 한도를 초과했습니다.',
-          'warning',
-        );
-      } else {
-        const message =
-          (typeof detail === 'object' ? detail?.message : detail) ||
-          'Failed to run Test Lab test';
-        toast.showToast(message, 'error');
+  const handleAddOutputBox = () => {
+    const newId = `eval-${Date.now()}`;
+    setNodes((nds) => [
+      ...nds,
+      {
+        id: newId,
+        type: 'outputNode',
+        data: {
+          label: 'Evaluator',
+          onDelete: () => handleDeleteBox(newId),
+          status: 'idle',
+        },
+        position: { x: 800, y: 300 },
       }
-    } finally {
-      setIsRunning(false);
-    }
+    ]);
   };
 
-  const filteredResults = useMemo(() => {
-    if (!results.length) return [];
-    return results.filter((res) => {
-      const status = res.signal_result?.status;
-      const isWorst = res.is_worst || res.signal_result?.is_worst;
-      if (resultFilter === 'all') return true;
-      if (resultFilter === 'needs_review') return status === 'needs_review';
-      if (resultFilter === 'critical') return status === 'critical';
-      if (resultFilter === 'worst') return !!isWorst;
-      return true;
-    });
-  }, [results, resultFilter]);
-
-  const groupedResults = useMemo(() => {
-    const groups: Record<string, TestResultItem[]> = {};
-    filteredResults.forEach((res) => {
-      const key = `${res.agent_id || 'unknown'}::${res.input || ''}`;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(res);
-    });
-    return groups;
-  }, [filteredResults]);
-
-  const selectedBox = useMemo(
-    () => boxes.find((b) => String(b.id) === String(selectedNodeId)),
-    [boxes, selectedNodeId],
+  const handleSaveBox = useCallback(
+    (box: BoxData) => {
+      takeSnapshot();
+      setNodes((prev) =>
+        prev.map((node) => {
+          if (node.id === box.id && node.type === 'testLabBox') {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                label: box.label,
+                model: box.model,
+                systemPrompt: box.systemPrompt,
+                inputCount: box.inputs?.length || 0,
+                onEdit: () => setRenamingBox({ id: box.id, label: box.label }),
+                onDelete: () => handleDeleteBox(box.id),
+              },
+            };
+          }
+          return node;
+        }),
+      );
+    },
+    [setNodes, handleEditBox, handleDeleteBox, takeSnapshot],
   );
 
-  const estimatedCalls = useMemo(() => {
-    const boxCount = selectedNodeId ? 1 : boxes.length || 0;
-    const globalInputCount =
-      runInputs
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean).length || 1;
-    const selectedBoxInputCount =
-      selectedBox && Array.isArray(selectedBox.inputs)
-        ? (selectedBox.inputs as string[]).filter((v) => String(v).trim()).length
-        : 0;
-    const effectiveInputCount = selectedBox ? selectedBoxInputCount || globalInputCount : globalInputCount;
-    if (!boxCount || !effectiveInputCount) return 0;
-    return boxCount * effectiveInputCount;
-  }, [boxes.length, runInputs, selectedBox, selectedNodeId]);
-
-  const handleCsvImport = async () => {
-    if (!csvFile) {
-      toast.showToast('CSV 파일을 선택해주세요.', 'warning');
-      return;
-    }
-    if (!csvInputColumn) {
-      toast.showToast('Input으로 사용할 컬럼을 선택해주세요.', 'warning');
-      return;
-    }
-    try {
-      setCsvLoading(true);
-      const res = await testLabAPI.importCsv(projectId, csvFile, csvInputColumn);
-      setCsvHeaders(res.headers || []);
-      setCsvPreviewRows(res.preview_rows || []);
-      setCsvImportedCount(res.imported_count ?? null);
-      setCsvSkippedCount(res.skipped_count ?? null);
-
-      const inputs: string[] = res.inputs || [];
-      if (inputs.length) {
-        setRunInputs(inputs.join('\n'));
-        toast.showToast(`CSV에서 ${inputs.length}개의 테스트 입력을 불러왔습니다.`, 'success');
-      } else {
-        toast.showToast('유효한 입력 행을 찾지 못했습니다.', 'warning');
-      }
-    } catch (err: any) {
-      const message =
-        err?.response?.data?.detail?.message ||
-        err?.response?.data?.detail ||
-        'CSV를 가져오지 못했습니다.';
-      toast.showToast(message, 'error');
-    } finally {
-      setCsvLoading(false);
-    }
+  const handleRunTest = () => {
+    // TODO: 백엔드 연동 후 테스트 실행
+    console.log('Test run not yet implemented', { nodes, edges });
   };
 
-  if (!orgId || !projectId) return null;
+  const handleLangChainImport = (importedBoxes: any[], importedConnections: any[]) => {
+    // Convert imported boxes to React Flow nodes
+    const newNodes: Node<TestLabBoxNodeData>[] = importedBoxes.map((box, index) => {
+      const nodeId = box.id || `box-${Date.now()}-${index}`;
+      return {
+        id: nodeId,
+        type: 'testLabBox',
+        data: {
+          label: box.label || `Box ${index + 1}`,
+          model: box.model || 'gpt-4o',
+          systemPrompt: box.systemPrompt || '',
+          inputCount: box.inputs?.length || 0,
+          onEdit: () => setRenamingBox({ id: nodeId, label: box.label || `Box ${index + 1}` }),
+          onDelete: () => {
+            setNodes((prev) => prev.filter((n) => n.id !== nodeId));
+            if (selectedNodeId === nodeId) setSelectedNodeId(null);
+          },
+        },
+        position: { x: Math.random() * 400 + index * 300, y: Math.random() * 300 },
+      };
+    });
+
+    // Convert imported connections to React Flow edges
+    const newEdges: Edge[] = importedConnections.map((conn) => ({
+      id: `edge-${conn.source}-${conn.target}`,
+      source: conn.source,
+      target: conn.target,
+      type: edgeStyle,
+      style: {
+        strokeWidth: 2,
+        stroke: '#8b5cf6',
+      },
+    }));
+
+    // Add new nodes and edges to existing ones
+    setNodes((prev) => [...prev, ...newNodes]);
+    setEdges((prev) => [...prev, ...newEdges]);
+  };
+
+  const isValidConnection = (connection: Connection) => {
+    const sourceNode = nodes.find((n) => n.id === connection.source);
+    const targetNode = nodes.find((n) => n.id === connection.target);
+
+    if (!sourceNode || !targetNode) return false;
+
+    // 1. Prevent self-loops
+    if (connection.source === connection.target) return false;
+
+    // 2. Prevent duplicate connections
+    const isDuplicate = edges.some(
+      (e) => e.source === connection.source && e.target === connection.target
+    );
+    if (isDuplicate) return false;
+
+    // 3. Type-based Rules
+    // Input Node can ONLY connect to TestLabBox or Output
+    if (sourceNode.type === 'inputNode') {
+      return targetNode.type === 'testLabBox' || targetNode.type === 'outputNode';
+    }
+
+    // Output Node cannot have outgoing connections
+    if (sourceNode.type === 'outputNode') {
+      return false;
+    }
+
+    // TestLabBox can connect to TestLabBox or Output
+    if (sourceNode.type === 'testLabBox') {
+      return targetNode.type === 'testLabBox' || targetNode.type === 'outputNode';
+    }
+
+    // Additional: Target cannot be InputNode (Input has no incoming handles usually, but good to enforce)
+    if (targetNode.type === 'inputNode') {
+      return false;
+    }
+
+    return true;
+  };
+
+
+
+  // Zoom handlers ref - will be set by ZoomControls component
+  const zoomHandlersRef = React.useRef<{
+    zoomIn: () => void;
+    zoomOut: () => void;
+    fitView: (options?: any) => void;
+  } | null>(null);
+
+  // ReactFlow zoom controls component - sets handlers once
+  const ZoomControls = () => {
+    const { zoomIn, zoomOut, fitView } = useReactFlow();
+    React.useEffect(() => {
+      // Store handlers in ref - useReactFlow functions are stable, so we only set once
+      zoomHandlersRef.current = { zoomIn, zoomOut, fitView };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Empty deps: useReactFlow functions are stable references
+    return null;
+  };
+
+  const onZoomIn = useCallback(() => {
+    zoomHandlersRef.current?.zoomIn();
+  }, []);
+  const onZoomOut = useCallback(() => {
+    zoomHandlersRef.current?.zoomOut();
+  }, []);
+  const onFitView = useCallback(() => {
+    zoomHandlersRef.current?.fitView({ padding: 0.4 });
+  }, []);
+
+
+  const handleAutoLayout = useCallback(() => {
+    takeSnapshot();
+
+    // Custom Hierarchical Layout Algorithm (Left-to-Right)
+    // 1. Build an adjacency list and calculate in-degrees
+    const adj: Record<string, string[]> = {};
+    const inDegree: Record<string, number> = {};
+    nodes.forEach(n => {
+      adj[n.id] = [];
+      inDegree[n.id] = 0;
+    });
+
+    edges.forEach(e => {
+      if (adj[e.source]) adj[e.source].push(e.target);
+      inDegree[e.target] = (inDegree[e.target] || 0) + 1;
+    });
+
+    // 2. Assign ranks based on dependency depth using BFS
+    const ranks: Record<string, number> = {};
+    const queue: string[] = [];
+
+    // Initial nodes (no incoming edges)
+    nodes.forEach(n => {
+      if ((inDegree[n.id] || 0) === 0) {
+        ranks[n.id] = 0;
+        queue.push(n.id);
+      }
+    });
+
+    // Handle disconnected components/cycles by putting remaining nodes into queue slowly
+    if (queue.length === 0 && nodes.length > 0) {
+      ranks[nodes[0].id] = 0;
+      queue.push(nodes[0].id);
+    }
+
+    let head = 0;
+    while (head < queue.length) {
+      const u = queue[head++];
+      const currentRank = ranks[u] ?? 0;
+
+      adj[u]?.forEach(v => {
+        const nextRank = currentRank + 1;
+        if (ranks[v] === undefined || nextRank > ranks[v]) {
+          ranks[v] = nextRank;
+          if (!queue.includes(v)) queue.push(v);
+        }
+      });
+    }
+
+    // Nodes not reached by BFS (cycles or missed islands)
+    nodes.forEach(n => {
+      if (ranks[n.id] === undefined) ranks[n.id] = 0;
+    });
+
+    // 3. Position nodes based on ranks
+    const rankCounts: Record<number, number> = {};
+    const HORIZONTAL_GAP = 500; // Increased from 350 for better spacing
+    const VERTICAL_GAP = 220;
+
+    setNodes((nds) =>
+      nds.map((node) => {
+        const rank = ranks[node.id] || 0;
+        const indexInRank = rankCounts[rank] || 0;
+        rankCounts[rank] = indexInRank + 1;
+
+        return {
+          ...node,
+          position: {
+            x: rank * HORIZONTAL_GAP + 50,
+            y: indexInRank * VERTICAL_GAP + 50
+          },
+        };
+      })
+    );
+
+    // Wait for state update then fit view
+    setTimeout(() => onFitView(), 50);
+  }, [nodes, edges, setNodes, onFitView, takeSnapshot]);
+
+  const handleResetCanvas = useCallback(() => {
+    takeSnapshot();
+    setNodes([]);
+    setEdges([]);
+    setSelectedNodeId(null);
+  }, [setNodes, setEdges, takeSnapshot]);
+
+  // Wrap node addition to take snapshot
+  const handleAddBoxWithSnapshot = useCallback(() => {
+    takeSnapshot();
+    handleAddBox();
+  }, [handleAddBox, takeSnapshot]);
+
+  const handleConnectWithSnapshot = useCallback((params: Connection) => {
+    takeSnapshot();
+    handleConnect(params);
+  }, [handleConnect, takeSnapshot]);
 
   return (
-    <ProjectLayout
-      orgId={orgId}
-      projectId={projectId}
-      breadcrumb={[
-        { label: 'Organizations', href: '/organizations' },
-        { label: `Project ${projectId}`, href: `/organizations/${orgId}/projects/${projectId}` },
-        { label: 'Test Lab' },
-      ]}
-    >
-      <div className="max-w-7xl mx-auto">
-        {concurrencyError && (
-          <div className="mb-4 rounded-md border border-yellow-500/60 bg-yellow-500/10 px-3 py-2 text-xs flex items-start justify-between gap-3">
-            <div>
-              <div className="font-semibold text-yellow-200">다른 테스트가 실행 중입니다.</div>
-              <div className="text-yellow-100/80">
-                {concurrencyError.message ||
-                  '동시에 실행할 수 있는 테스트 개수를 초과했습니다. 다른 테스트가 끝난 후 다시 시도해주세요.'}
+    <ReactFlowProvider>
+      <ZoomControls />
+      <CanvasPageLayout
+        orgId={orgId}
+        projectId={projectId}
+        projectName={project?.name}
+        orgName={org?.name}
+        activeTab="test-lab"
+        showCopyButton={false}
+        onZoomIn={onZoomIn}
+        onZoomOut={onZoomOut}
+        onFitView={onFitView}
+        onUndo={onUndo}
+        onRedo={onRedo}
+        onAutoLayout={handleAutoLayout}
+        onResetCanvas={handleResetCanvas}
+      >
+
+
+        <div className="flex-1 flex items-stretch min-h-0 relative">
+          {/* Main canvas area - restored to 100% of the rounded shell */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1 min-h-0 rounded-t-[32px] overflow-hidden relative">
+
+              {/* Floating Toolbar for Adding Nodes - Centered and Horizontal */}
+              <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-[#1a1a1e]/80 backdrop-blur-md p-2 rounded-full border border-white/10 shadow-lg px-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAddInputBox}
+                  className="justify-start gap-2 hover:bg-emerald-500/10 hover:text-emerald-400 group"
+                  title="Add Start Node"
+                >
+                  <div className="p-1 rounded bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                    <Play className="w-3 h-3 fill-current" />
+                  </div>
+                  <span className="text-xs font-medium">Add Input</span>
+                </Button>
+
+                <div className="w-px h-6 bg-white/10" />
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAddBoxWithSnapshot}
+                  className="justify-start gap-2 hover:bg-violet-500/10 hover:text-violet-400 group"
+                  title="Add Agent Node"
+                >
+                  <div className="p-1 rounded bg-violet-500/20 text-violet-400 group-hover:bg-violet-500 group-hover:text-white transition-colors">
+                    <Bot className="w-3 h-3" />
+                  </div>
+                  <span className="text-xs font-medium">Add Agent</span>
+                </Button>
+
+                <div className="w-px h-6 bg-white/10" />
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAddOutputBox}
+                  className="justify-start gap-2 hover:bg-blue-500/10 hover:text-blue-400 group"
+                  title="Add Evaluation Node"
+                >
+                  <div className="p-1 rounded bg-blue-500/20 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                    <BarChart2 className="w-3 h-3" />
+                  </div>
+                  <span className="text-xs font-medium">Add Eval</span>
+                </Button>
               </div>
-              {typeof concurrencyError.limit === 'number' && (
-                <div className="mt-1 text-[11px] text-yellow-100/80">
-                  최대 동시 테스트: {concurrencyError.limit}개 (현재 실행 중:{' '}
-                  {concurrencyError.current ?? '알 수 없음'}개)
+
+              {nodes.length === 0 ? (
+                <div className="w-full h-full flex items-center justify-center text-sm text-slate-400 bg-[#0d0d12]">
+                  <div className="text-center animate-in fade-in zoom-in duration-500">
+                    <p className="text-xl font-bold text-slate-300 tracking-tight">Ready for Building</p>
+                    <p className="mt-2 text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+                      Use the Sidebar or the floating toolbar to verify your Agent flow.
+                    </p>
+                  </div>
                 </div>
-              )}
-            </div>
-            <button
-              type="button"
-              className="ml-2 text-yellow-200/80 hover:text-yellow-50 text-xs"
-              onClick={() => setConcurrencyError(null)}
-            >
-              닫기
-            </button>
-          </div>
-        )}
-
-        {limitError && (
-          <div className="mb-4 rounded-md border border-sky-500/60 bg-sky-500/10 px-3 py-2 text-xs flex items-start justify-between gap-3">
-            <div>
-              <div className="font-semibold text-sky-200">테스트 한도에 도달했습니다.</div>
-              <div className="text-sky-100/80">
-                {limitError.message ||
-                  '현재 플랜에서 허용된 입력/호출 한도를 초과했습니다. 입력 수를 줄이거나 플랜을 업그레이드해주세요.'}
-              </div>
-              {typeof limitError.limit === 'number' && typeof limitError.requested === 'number' && (
-                <div className="mt-1 text-[11px] text-sky-100/80">
-                  허용 한도: {limitError.limit} / 요청: {limitError.requested}
-                </div>
-              )}
-            </div>
-            <button
-              type="button"
-              className="ml-2 text-sky-200/80 hover:text-sky-50 text-xs underline"
-              onClick={() => {
-                window.location.href = '/settings/billing';
-              }}
-            >
-              Upgrade plan
-            </button>
-          </div>
-        )}
-
-        <ProjectTabs projectId={projectId} orgId={orgId} />
-
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Beaker className="w-5 h-5 text-ag-accent" />
-            <h2 className="text-lg font-semibold">Test Lab</h2>
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            {estimatedCalls > 0 && (
-              <div className="text-[11px] text-ag-muted">
-                Estimated calls for next run:{' '}
-                <span className="font-semibold text-ag-text">{estimatedCalls}</span>
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" size="sm" onClick={handleAddBox}>
-                <Plus className="w-4 h-4 mr-1" /> Add Box
-              </Button>
-              <Button
-                variant={arrowMode ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => setArrowMode((prev) => !prev)}
-              >
-                <Link2 className="w-4 h-4 mr-1" /> {arrowMode ? 'Arrow Mode On' : 'Arrow Mode'}
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => setIsCsvModalOpen(true)}>
-                <UploadCloud className="w-4 h-4 mr-1" /> Import CSV
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleRunTest}
-                disabled={isRunning || !boxes.length || isConcurrencyBlocked}
-              >
-                <Play className="w-4 h-4 mr-1" /> {isRunning ? 'Running...' : 'Test'}
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Canvas list + inputs */}
-          <div className="space-y-4">
-            <div className="border border-white/10 rounded-lg p-4 bg-white/5">
-              <h3 className="text-sm font-semibold mb-2">Canvases</h3>
-              <div className="space-y-1">
-                {canvases.map((canvas) => (
-                  <button
-                    key={canvas.id}
-                    onClick={() => handleSelectCanvas(canvas)}
-                    className={clsx(
-                      'w-full text-left text-sm px-3 py-2 rounded-md border',
-                      activeCanvasId === canvas.id
-                        ? 'border-ag-accent bg-ag-accent/10'
-                        : 'border-white/10 bg-black/40 hover:bg-white/10',
-                    )}
-                  >
-                    {canvas.name}
-                  </button>
-                ))}
-                {!canvases.length && (
-                  <div className="text-xs text-ag-muted">Initializing default Test Lab canvas...</div>
-                )}
-              </div>
-            </div>
-
-            <div className="border border-white/10 rounded-lg p-4 bg-white/5">
-              <h3 className="text-sm font-semibold mb-2">Test Inputs</h3>
-              <p className="text-xs text-ag-muted mb-2">
-                한 줄당 하나의 input으로 처리됩니다. 여러 줄을 입력하면 체인 테스트에 여러 input이 사용됩니다.
-              </p>
-              <textarea
-                className="w-full h-40 bg-black/40 border border-white/10 rounded-md px-3 py-2 text-sm"
-                placeholder="Enter test inputs, one per line..."
-                value={runInputs}
-                onChange={(e) => setRunInputs(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Canvas + box settings */}
-          <div className="lg:col-span-1 border border-white/10 rounded-lg p-4 bg-white/5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Canvas ({boxes.length}/30)</h3>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleSaveCanvas}
-                disabled={!boxes.length}
-              >
-                Save Canvas
-              </Button>
-            </div>
-            {boxes.length === 0 ? (
-              <div className="text-xs text-ag-muted">
-                아직 박스가 없습니다. 상단의 &quot;Add Box&quot; 버튼을 눌러 첫 박스를 추가하세요.
-              </div>
-            ) : (
-              <div className="h-64 border border-white/10 rounded-md bg-black/40 overflow-hidden">
+              ) : (
                 <ReactFlow
                   nodes={nodes}
                   edges={edges}
-                  onNodesChange={handleNodesChange}
-                  onEdgesChange={handleEdgesChange}
-                  onConnect={handleConnect}
+                  onNodesChange={onNodesChange}
+                  onEdgesChange={onEdgesChange}
+                  onConnect={handleConnectWithSnapshot}
+                  isValidConnection={isValidConnection}
+                  onNodeClick={onNodeClick}
+                  onEdgeDoubleClick={(event, edge) => {
+                    setEditingEdge({
+                      id: edge.id,
+                      x: event.clientX,
+                      y: event.clientY,
+                      order: edge.data?.order || 1,
+                    });
+                  }}
+                  onNodeDragStart={takeSnapshot}
+                  nodeTypes={nodeTypes}
+                  edgeTypes={edgeTypes}
+                  snapToGrid={true}
+                  snapGrid={[30, 30]}
                   fitView
-                  onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+                  fitViewOptions={{ padding: 0.3, maxZoom: 0.9 }}
+                  proOptions={{ hideAttribution: true }}
+                  className="bg-[#0d0d12]"
+                  defaultEdgeOptions={{
+                    type: edgeStyle,
+                    markerEnd: {
+                      type: MarkerType.ArrowClosed,
+                      color: '#8b5cf6',
+                    },
+                    style: {
+                      strokeWidth: 2,
+                      stroke: '#8b5cf6',
+                    },
+                  }}
                 >
-                  <Background />
-                  <MiniMap />
-                  <Controls />
+                  <Background
+                    variant={BackgroundVariant.Dots}
+                    gap={36}
+                    size={1.8}
+                    color="rgba(148, 163, 184, 0.35)"
+                  />
                 </ReactFlow>
-              </div>
-            )}
-
-            {/* Box settings panel */}
-            <div className="mt-3 border-t border-white/10 pt-3">
-              <h4 className="text-xs font-semibold mb-2">Box Settings</h4>
-              {!selectedBox ? (
-                <div className="text-xs text-ag-muted">
-                  캔버스에서 박스를 선택하면 상세 설정을 편집할 수 있습니다.
-                </div>
-              ) : (
-                <div className="space-y-2 text-xs">
-                  <div className="text-ag-muted">ID: {selectedBox.id}</div>
-                  <div className="flex items-center justify-between text-[11px] text-ag-muted">
-                    <span>
-                      Inputs:{' '}
-                      <span className="font-semibold">
-                        {Array.isArray(selectedBox.inputs) ? selectedBox.inputs.length : 0}
-                      </span>
-                    </span>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleRunTest}
-                      disabled={isRunning || isConcurrencyBlocked}
-                    >
-                      <Play className="w-3 h-3 mr-1" /> Test this box
-                    </Button>
-                  </div>
-                  <input
-                    className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-                    placeholder="Label"
-                    value={selectedBox.label || ''}
-                    onChange={(e) =>
-                      handleBoxFieldChange(String(selectedBox.id), 'label', e.target.value)
-                    }
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[10px] text-ag-muted mb-1">Provider</label>
-                      <select
-                        className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-                        value={selectedBox.provider || 'openai'}
-                        onChange={(e) => {
-                          const provider = e.target.value;
-                          handleBoxFieldChange(String(selectedBox.id), 'provider', provider);
-                          const firstModel = MODEL_OPTIONS[provider]?.[0]?.id;
-                          if (firstModel) {
-                            handleBoxFieldChange(String(selectedBox.id), 'model', firstModel);
-                          }
-                        }}
-                      >
-                        {PROVIDER_OPTIONS.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-ag-muted mb-1">Model</label>
-                      {selectedBox.provider && selectedBox.provider !== 'custom' ? (
-                        <select
-                          className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-                          value={selectedBox.model || ''}
-                          onChange={(e) =>
-                            handleBoxFieldChange(
-                              String(selectedBox.id),
-                              'model',
-                              e.target.value,
-                            )
-                          }
-                        >
-                          <option value="">Select model</option>
-                          {(MODEL_OPTIONS[selectedBox.provider] || []).map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-                          placeholder="Custom model id (e.g. mistral-large)"
-                          value={selectedBox.model || ''}
-                          onChange={(e) =>
-                            handleBoxFieldChange(
-                              String(selectedBox.id),
-                              'model',
-                              e.target.value,
-                            )
-                          }
-                        />
-                      )}
-                    </div>
-                  </div>
-                  {selectedBox.provider === 'custom' && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[10px] text-ag-muted mb-1">API Key</label>
-                        <input
-                          className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-                          placeholder="Custom provider API key"
-                          value={selectedBox.custom_api_key || ''}
-                          onChange={(e) =>
-                            handleBoxFieldChange(
-                              String(selectedBox.id),
-                              'custom_api_key',
-                              e.target.value,
-                            )
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-ag-muted mb-1">Base URL (optional)</label>
-                        <input
-                          className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-                          placeholder="https://api.your-llm.com/v1"
-                          value={selectedBox.base_url || ''}
-                          onChange={(e) =>
-                            handleBoxFieldChange(
-                              String(selectedBox.id),
-                              'base_url',
-                              e.target.value,
-                            )
-                          }
-                        />
-                      </div>
-                    </div>
-                  )}
-                  <textarea
-                    className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-                    rows={3}
-                    placeholder="System prompt"
-                    value={selectedBox.system_prompt || ''}
-                    onChange={(e) =>
-                      handleBoxFieldChange(
-                        String(selectedBox.id),
-                        'system_prompt',
-                        e.target.value,
-                      )
-                    }
-                  />
-                  <div>
-                    <label className="block text-[10px] text-ag-muted mb-1">
-                      Box Inputs (one per line)
-                    </label>
-                    <textarea
-                      className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-                      rows={4}
-                      placeholder="이 박스에서만 사용할 input들을 한 줄에 하나씩 입력하세요."
-                      value={
-                        Array.isArray(selectedBox.inputs)
-                          ? (selectedBox.inputs as string[]).join('\n')
-                          : ''
-                      }
-                      onChange={(e) =>
-                        handleBoxInputsChange(String(selectedBox.id), e.target.value)
-                      }
-                    />
-                  </div>
-                  <p className="text-[10px] text-ag-muted">
-                    CSV로 불러온 입력은 기본적으로 상단 &quot;Test Inputs&quot; 영역에서 관리됩니다.
-                    박스별 Input을 지정하면, 선택된 박스를 테스트할 때 우선적으로 사용됩니다.
-                  </p>
-                </div>
               )}
             </div>
           </div>
 
-          {/* Results with filters */}
-          <div className="lg:col-span-1 border border-white/10 rounded-lg p-4 bg-white/5">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold">Results</h3>
-              <span className="text-xs text-ag-muted">{results.length} steps</span>
-            </div>
-
-            <div className="flex items-center gap-2 mb-3">
-              {(['all', 'needs_review', 'critical', 'worst'] as ResultFilter[]).map((f) => (
+          {/* Edge Order Popover */}
+          {editingEdge && (
+            <div
+              className="fixed z-[100] bg-[#1a1a1e] border border-violet-500/50 rounded-xl shadow-2xl p-3 animate-in fade-in zoom-in duration-200"
+              style={{
+                left: Math.min(window.innerWidth - 180, editingEdge.x - 90),
+                top: Math.min(window.innerHeight - 80, editingEdge.y - 60)
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Step Order</span>
+                <input
+                  autoFocus
+                  type="number"
+                  className="w-12 h-8 bg-violet-600/20 border border-violet-500/40 rounded-lg text-center text-sm text-white font-bold focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-400 transition-all"
+                  value={editingEdge.order}
+                  onChange={(e) => setEditingEdge({ ...editingEdge, order: parseInt(e.target.value) || 1 })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleUpdateEdge(editingEdge.id, { order: editingEdge.order });
+                      setEditingEdge(null);
+                    }
+                    if (e.key === 'Escape') setEditingEdge(null);
+                  }}
+                />
                 <Button
-                  key={f}
-                  variant={resultFilter === f ? 'primary' : 'secondary'}
                   size="sm"
-                  onClick={() => setResultFilter(f)}
+                  onClick={() => {
+                    handleUpdateEdge(editingEdge.id, { order: editingEdge.order });
+                    setEditingEdge(null);
+                  }}
+                  className="h-8 py-0 px-3"
                 >
-                  {f === 'all'
-                    ? 'All'
-                    : f === 'needs_review'
-                      ? 'Needs review'
-                      : f === 'critical'
-                        ? 'Critical'
-                        : 'Worst only'}
+                  Save
                 </Button>
-              ))}
+              </div>
+              <div className="mt-2 text-[9px] text-slate-600 text-center flex items-center justify-center gap-2">
+                <span>Enter to Save</span>
+                <span className="w-1 h-1 bg-slate-700 rounded-full" />
+                <span>Esc to Cancel</span>
+              </div>
             </div>
+          )}
 
-            {results.length === 0 ? (
-              <div className="h-full min-h-[200px] flex items-center justify-center text-xs text-ag-muted">
-                아직 실행 결과가 없습니다. 상단의 &quot;Test&quot; 버튼을 눌러 체인을 실행하세요.
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-[420px] overflow-y-auto text-xs">
-                {Object.entries(groupedResults).map(([key, group]) => {
-                  const [agentId, input] = key.split('::');
-                  return (
-                    <div
-                      key={key}
-                      className="border border-white/10 rounded-md p-3 bg-black/40 space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex flex-col">
-                          <span className="font-semibold">
-                            {agentId !== 'unknown' ? agentId : 'Unknown agent'}
-                          </span>
-                          {input && (
-                            <span className="text-ag-muted max-w-md truncate">
-                              <span className="font-semibold">Input:</span> {input}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        {group
-                          .slice()
-                          .sort((a, b) => (a.step_order ?? 0) - (b.step_order ?? 0))
-                          .map((res) => {
-                            const status = res.signal_result?.status;
-                            const isWorst = res.is_worst || res.signal_result?.is_worst;
-                            return (
-                              <div
-                                key={res.id}
-                                className={clsx(
-                                  'border border-white/10 rounded-md p-2 space-y-1',
-                                  status === 'critical'
-                                    ? 'border-red-500/60 bg-red-500/10'
-                                    : status === 'needs_review'
-                                      ? 'border-yellow-500/60 bg-yellow-500/10'
-                                      : 'bg-black/40',
-                                )}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="font-semibold">
-                                    Step {res.step_order ?? '-'}
-                                  </span>
-                                  <div className="flex items-center gap-1">
-                                    {status && (
-                                      <span className="px-1.5 py-0.5 rounded-full text-[10px] uppercase tracking-wide bg-white/10">
-                                        {status}
-                                      </span>
-                                    )}
-                                    {isWorst && (
-                                      <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-red-500/80 text-black font-semibold">
-                                        WORST
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                {res.response && (
-                                  <div className="text-ag-muted line-clamp-3">
-                                    <span className="font-semibold">Response:</span>{' '}
-                                    {res.response}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                      </div>
-                    </div>
-                  );
-                })}
+
+          {/* Railway-style right panel */}
+          <RailwaySidePanel
+            title={selectedBox?.label || 'No box selected'}
+            isOpen={!!selectedBox}
+            onClose={() => setSelectedNodeId(null)}
+            tabs={[
+              { id: 'details', label: 'Details' },
+              { id: 'results', label: 'Results' },
+            ]}
+            activeTab={detailTab}
+            onTabChange={(tabId) => setDetailTab(tabId as typeof detailTab)}
+          >
+            {selectedBoxNode && (
+              <AgentLogicInspector
+                selectedNode={selectedBoxNode}
+                nodes={nodes}
+                edges={edges}
+                onUpdateNode={(id, data) => {
+                  takeSnapshot();
+                  setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, ...data } } : n));
+                }}
+                onUpdateEdge={handleUpdateEdge}
+                onDeleteEdge={handleDeleteEdge}
+                activeTab={detailTab}
+                onRunAgent={onRunAgent}
+                onRunChain={onRunChain}
+              />
+            )}
+
+            {/* Settings Tab Override (optional extra actions) */}
+            {selectedBoxNode && detailTab === 'settings' && (
+              <div className="px-5 py-4 space-y-4 text-sm">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setEditingBox(selectedBox)}
+                  className="w-full"
+                >
+                  Edit Box Properties
+                </Button>
+                <div className="pt-4 border-t border-white/10">
+                  <div className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wide">Box ID</div>
+                  <div className="text-xs text-slate-400 font-mono bg-black/40 p-2 rounded border border-white/10">
+                    {selectedBoxNode.id}
+                  </div>
+                </div>
               </div>
             )}
-            {!!results.length && (
-              <div className="mt-3 text-[10px] text-ag-muted flex items-center gap-1">
-                <ArrowRight className="w-3 h-3" />
-                이 실행에서 문제가 감지된 케이스는 자동으로 Review 큐에 추가됩니다. 상세 검토는 상단
-                탭의 Reviews 페이지에서 진행할 수 있습니다.
-              </div>
-            )}
-            <div className="mt-1 text-[10px] text-ag-muted flex items-center gap-1">
-              <ArrowRight className="w-3 h-3" />
-              이 Test Lab 실행은 실제 LLM 호출과 Signal 평가 결과를 기반으로 합니다.
-            </div>
-          </div>
+          </RailwaySidePanel>
+
         </div>
 
-        {/* CSV import modal */}
-        <Modal
-          isOpen={isCsvModalOpen}
-          onClose={() => setIsCsvModalOpen(false)}
-          title="Load Test Data from CSV"
-        >
-          <div className="space-y-4 text-sm">
-            <p className="text-ag-muted">
-              CSV 파일을 업로드하고 테스트 입력으로 사용할 컬럼을 선택하세요.
-            </p>
-            <div className="space-y-2">
-              <label className="block text-xs font-medium text-ag-muted">CSV 파일</label>
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                onChange={(e) => {
-                  const file = e.target.files?.[0] || null;
-                  setCsvFile(file);
-                  setCsvHeaders([]);
-                  setCsvPreviewRows([]);
-                  setCsvImportedCount(null);
-                  setCsvSkippedCount(null);
-                }}
-                className="w-full text-xs text-ag-muted"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="block text-xs font-medium text-ag-muted">Input 컬럼 이름</label>
-              <input
-                className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-                placeholder="예: prompt"
-                value={csvInputColumn}
-                onChange={(e) => setCsvInputColumn(e.target.value)}
-              />
-            </div>
+        {/* Rename Modal */}
+        <RenameModal
+          isOpen={!!renamingBox}
+          onClose={() => setRenamingBox(null)}
+          initialValue={renamingBox?.label || ''}
+          onSave={(newName) => {
+            if (renamingBox) handleRenameBox(renamingBox.id, newName);
+          }}
+        />
 
-            <div className="flex items-center justify-between text-xs text-ag-muted">
-              <div className="space-y-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    // Download simple one-column template with "input" header
-                    const content = 'input\n';
-                    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-                    const url = window.URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.setAttribute('download', 'test_lab_template.csv');
-                    document.body.appendChild(link);
-                    link.click();
-                    link.remove();
-                    window.URL.revokeObjectURL(url);
-                  }}
-                >
-                  템플릿 다운로드
-                </Button>
-                {csvImportedCount !== null && (
-                  <div>
-                    Import된 행: <span className="font-semibold">{csvImportedCount}</span>
-                  </div>
-                )}
-                {csvSkippedCount !== null && (
-                  <div>
-                    비어있는 행(스킵): <span className="font-semibold">{csvSkippedCount}</span>
-                  </div>
-                )}
-              </div>
-              <Button
-                size="sm"
-                onClick={handleCsvImport}
-                disabled={!csvFile || !csvInputColumn || csvLoading}
-              >
-                {csvLoading ? '불러오는 중...' : '미리보기 & 적용'}
-              </Button>
-            </div>
+        {/* Run Config Modal */}
+        <RunConfigModal
+          isOpen={isRunConfigOpen}
+          onClose={() => setIsRunConfigOpen(false)}
+          onRun={handleRunExperiment}
+          initialScope={runScope}
+          targetId={runTargetId}
+        />
 
-            {csvHeaders.length > 0 && csvPreviewRows.length > 0 && (
-              <div className="border border-white/10 rounded-md max-h-48 overflow-auto">
-                <table className="w-full text-[11px]">
-                  <thead className="bg-white/5">
-                    <tr>
-                      {csvHeaders.map((h) => (
-                        <th key={h} className="px-2 py-1 text-left font-medium">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {csvPreviewRows.map((row, idx) => (
-                      <tr key={idx} className="border-t border-white/5">
-                        {csvHeaders.map((h) => (
-                          <td key={h} className="px-2 py-1 text-ag-muted">
-                            {row[h] ?? ''}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </Modal>
-      </div>
-    </ProjectLayout>
+        {/* Box Edit Modal */}
+        <BoxEditModal
+          isOpen={!!editingBox}
+          onClose={() => setEditingBox(null)}
+          box={editingBox}
+          onSave={handleSaveBox}
+        />
+
+        {/* Dataset Editor Modal (Replaces ManualInputModal) */}
+        {editingInputNodeId && (
+          <DatasetEditorModal
+            isOpen={true}
+            onClose={() => setEditingInputNodeId(null)}
+            onSave={handleUpdateInputNode}
+            initialVariables={currentEditingData.variables}
+            initialTestCases={currentEditingData.testCases}
+          />
+        )}
+
+        {/* LangChain Import Modal */}
+        <LangChainImportModal
+          isOpen={isLangChainModalOpen}
+          onClose={() => setIsLangChainModalOpen(false)}
+          onImport={handleLangChainImport}
+          projectId={projectId}
+        />
+      </CanvasPageLayout>
+    </ReactFlowProvider >
   );
 }
-

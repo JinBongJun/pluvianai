@@ -26,6 +26,7 @@ class Project(Base):
 
     # Relationships
     owner = relationship("User", back_populates="projects")
+    organization = relationship("Organization", back_populates="projects")
     members = relationship("ProjectMember", back_populates="project", cascade="all, delete-orphan")
     api_calls = relationship("APICall", back_populates="project", cascade="all, delete-orphan")
     quality_scores = relationship("QualityScore", back_populates="project", cascade="all, delete-orphan")

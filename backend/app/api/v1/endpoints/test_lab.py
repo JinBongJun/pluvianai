@@ -475,3 +475,69 @@ async def import_test_data_csv(
         "inputs": inputs,
     }
 
+
+@router.post("/projects/{project_id}/test-lab/import-langchain")
+async def import_langchain_agent(
+    project_id: int,
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Import a LangChain agent/chain into Test Lab.
+
+    Accepts either:
+    1. LangChain agent code as a string (will be parsed to extract structure)
+    2. Pre-structured JSON representation of LangChain agent
+
+    Expected JSON body:
+    {
+      "code": "...",  # Optional: LangChain Python code
+      "agent_config": {...},  # Optional: Pre-structured agent config
+      "format": "code" | "json"  # Format of input
+    }
+
+    Returns boxes and connections that can be added to a Test Lab canvas.
+    """
+    check_project_access(project_id, current_user, db)
+    service = TestLabService(db)
+
+    format_type = payload.get("format", "code")
+    code = payload.get("code", "")
+    agent_config = payload.get("agent_config")
+
+    if format_type == "code" and not code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="LangChain code is required when format is 'code'",
+        )
+    if format_type == "json" and not agent_config:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Agent config is required when format is 'json'",
+        )
+
+    try:
+        if format_type == "code":
+            # Parse LangChain code to extract agent structure
+            boxes, connections = service.parse_langchain_code(code)
+        else:
+            # Convert pre-structured JSON to Test Lab format
+            boxes, connections = service.convert_langchain_config(agent_config)
+
+        return {
+            "boxes": boxes,
+            "connections": connections,
+            "box_count": len(boxes),
+            "connection_count": len(connections),
+        }
+    except Exception as e:
+        logger.error(
+            "Failed to import LangChain agent",
+            extra={"project_id": project_id, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to parse LangChain agent: {str(e)}",
+        )
+

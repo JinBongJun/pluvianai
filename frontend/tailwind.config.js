@@ -8,35 +8,36 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        purple: {
-          50: '#edf8f2',
-          100: '#d5f0e1',
-          200: '#b1e2c7',
-          300: '#82d0a7',
-          400: '#4fb984',
-          500: '#2f9d66',
-          600: '#1f7f50',
-          700: '#165e3b',
-          800: '#10472d',
-          900: '#0b3422',
+        // PluvianAI Semantic Palette
+        pluvian: {
+          void: '#020203',       // Deep Void (Background)
+          surface: '#09090b',    // Lab Surface (Cards)
+          bio: '#10b981',        // Bio-Emerald (Success/Life/Primary)
+          clinical: '#06b6d4',   // Clinical Cyan (Tech/Analysis/Secondary)
+          predator: '#f59e0b',   // Predator Amber (Warning/Caution)
+          triage: '#ef4444',     // Triage Red (Danger/Failure)
+          text: '#e2e8f0',       // Slate-200 (Primary Text)
+          muted: '#94a3b8',      // Slate-400 (Secondary Text)
+          border: 'rgba(255, 255, 255, 0.08)', // High-tech border
         },
-        ag: {
-          bg: 'rgb(var(--ag-bg) / <alpha-value>)',
-          bgLive: 'rgb(var(--ag-bg-live) / <alpha-value>)',
-          surface: 'rgb(var(--ag-surface) / <alpha-value>)',
-          primary: 'rgb(var(--ag-primary) / <alpha-value>)',
-          primaryHover: 'rgb(var(--ag-primary-hover) / <alpha-value>)',
-          accent: 'rgb(var(--ag-accent) / <alpha-value>)',
-          accentLight: 'rgb(var(--ag-accent-light) / <alpha-value>)',
-          electricBlue: 'rgb(var(--ag-electric-blue) / <alpha-value>)',
-          text: 'rgb(var(--ag-text) / <alpha-value>)',
-          muted: 'rgb(var(--ag-text-muted) / <alpha-value>)',
-          border: 'rgb(var(--border-color) / <alpha-value>)',
+        // Legacy/Utility mapping (keeping generic colors available)
+        emerald: {
+          400: '#34d399',
+          500: '#10b981',
+          900: '#064e3b',
         },
-        dark: {
-          bg: '#0A0D0B',
-          card: '#121712',
-          border: 'rgba(255, 255, 255, 0.12)',
+        cyan: {
+          400: '#22d3ee',
+          500: '#06b6d4',
+          900: '#164e63',
+        },
+        slate: {
+          200: '#e2e8f0',
+          400: '#94a3b8',
+          500: '#64748b',
+          800: '#1e293b',
+          900: '#0f172a',
+          950: '#020617',
         },
       },
       fontFamily: {

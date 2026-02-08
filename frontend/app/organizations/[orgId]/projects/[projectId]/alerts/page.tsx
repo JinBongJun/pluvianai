@@ -21,17 +21,18 @@ type SortDirection = 'asc' | 'desc';
 interface Alert {
   id: number;
   project_id: number;
-  alert_type: string;
+  type: string;
+  alert_type?: string;
   severity: string;
-  title: string;
+  title?: string;
   message: string;
-  alert_data: any;
-  is_sent: boolean;
-  sent_at: string | null;
-  notification_channels: string[] | null;
-  is_resolved: boolean;
+  alert_data?: any;
+  is_sent?: boolean;
+  sent_at?: string | null;
+  notification_channels?: string[] | null;
+  is_resolved?: boolean;
   resolved_at: string | null;
-  resolved_by: number | null;
+  resolved_by?: number | null;
   created_at: string;
 }
 
@@ -90,14 +91,14 @@ export default function AlertsPage() {
       }
 
       const data = await alertsAPI.list(projectId, params);
-      
+
       // Store all alerts for client-side filtering
       setAllAlerts(data);
 
       // Compute recent worst-case alert counts (last 24h, unresolved)
       const now = new Date();
       const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const recentWorst = (data || []).filter((alert: Alert) => {
+      const recentWorst = (data || []).filter((alert: any) => {
         if (alert.alert_type !== 'worst_case') return false;
         if (alert.is_resolved) return false;
         const createdAt = new Date(alert.created_at);
@@ -109,7 +110,7 @@ export default function AlertsPage() {
       setRecentWorstTestLabCount(
         recentWorst.filter((a: any) => a.alert_data?.target === 'test_lab').length,
       );
-      
+
       // Apply client-side date range filtering
       let filtered = data;
       if (dateRange.from || dateRange.to) {
@@ -165,20 +166,20 @@ export default function AlertsPage() {
           Sentry.captureException(error as Error, { extra: { projectId } });
         });
       }
-      
+
       // Only show error toast for actual API failures, not empty results
       const status = error.response?.status;
       const errorMessage = error.response?.data?.detail || error.message || 'Failed to load alerts';
-      
+
       // 404 or empty results should not show error toast
       if (status !== 404 && status !== 200) {
         toast.showToast(errorMessage, 'error');
       }
-      
+
       if (status === 401) {
         router.push('/login');
       }
-      
+
       // Set empty arrays on error (graceful degradation)
       setAlerts([]);
       setAllAlerts([]);
@@ -294,7 +295,7 @@ export default function AlertsPage() {
 
   // Default alert types from backend model (even if no data exists yet)
   const defaultAlertTypes = ['drift', 'cost_spike', 'error', 'timeout', 'model_update', 'shadow_routing'];
-  
+
   const availableTypes = useMemo(() => {
     const types = new Set<string>(defaultAlertTypes); // Start with defaults
     allAlerts.forEach((alert) => {
@@ -386,64 +387,64 @@ export default function AlertsPage() {
           <div className="mb-4">
             <DateRangePicker value={dateRange} onChange={setDateRange} />
           </div>
-          
+
           {/* Filter dropdowns */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-white mb-2">Alert Type</label>
-            <Select
-              value={filters.alert_type}
-              onChange={(value) => {
-                setFilters({ ...filters, alert_type: value || 'all' });
-                setCurrentPage(1);
-              }}
-              placeholder="All types..."
-              options={[
-                { value: 'all', label: 'All Types' },
-                ...availableTypes.map((type) => ({
-                  value: type,
-                  label: getAlertTypeLabel(type),
-                })),
-              ]}
-              className="w-full"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-white mb-2">Severity</label>
-            <Select
-              value={filters.severity}
-              onChange={(value) => {
-                setFilters({ ...filters, severity: value || 'all' });
-                setCurrentPage(1);
-              }}
-              placeholder="All severities..."
-              options={[
-                { value: 'all', label: 'All Severities' },
-                { value: 'critical', label: 'Critical' },
-                { value: 'high', label: 'High' },
-                { value: 'medium', label: 'Medium' },
-                { value: 'low', label: 'Low' },
-              ]}
-              className="w-full"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-white mb-2">Status</label>
-            <Select
-              value={filters.is_resolved}
-              onChange={(value) => {
-                setFilters({ ...filters, is_resolved: value || 'all' });
-                setCurrentPage(1);
-              }}
-              placeholder="All statuses..."
-              options={[
-                { value: 'all', label: 'All Statuses' },
-                { value: 'unresolved', label: 'Unresolved' },
-                { value: 'resolved', label: 'Resolved' },
-              ]}
-              className="w-full"
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-white mb-2">Alert Type</label>
+              <Select
+                value={filters.alert_type}
+                onChange={(value) => {
+                  setFilters({ ...filters, alert_type: value || 'all' });
+                  setCurrentPage(1);
+                }}
+                placeholder="All types..."
+                options={[
+                  { value: 'all', label: 'All Types' },
+                  ...availableTypes.map((type) => ({
+                    value: type,
+                    label: getAlertTypeLabel(type),
+                  })),
+                ]}
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-white mb-2">Severity</label>
+              <Select
+                value={filters.severity}
+                onChange={(value) => {
+                  setFilters({ ...filters, severity: value || 'all' });
+                  setCurrentPage(1);
+                }}
+                placeholder="All severities..."
+                options={[
+                  { value: 'all', label: 'All Severities' },
+                  { value: 'critical', label: 'Critical' },
+                  { value: 'high', label: 'High' },
+                  { value: 'medium', label: 'Medium' },
+                  { value: 'low', label: 'Low' },
+                ]}
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-white mb-2">Status</label>
+              <Select
+                value={filters.is_resolved}
+                onChange={(value) => {
+                  setFilters({ ...filters, is_resolved: value || 'all' });
+                  setCurrentPage(1);
+                }}
+                placeholder="All statuses..."
+                options={[
+                  { value: 'all', label: 'All Statuses' },
+                  { value: 'unresolved', label: 'Unresolved' },
+                  { value: 'resolved', label: 'Resolved' },
+                ]}
+                className="w-full"
+              />
+            </div>
           </div>
         </div>
 
@@ -561,7 +562,7 @@ export default function AlertsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-medium text-white">
-                          {getAlertTypeLabel(alert.alert_type)}
+                          {getAlertTypeLabel(alert.alert_type || '')}
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -656,7 +657,7 @@ export default function AlertsPage() {
               totalItems={totalItems}
               itemsPerPage={itemsPerPage}
               onPageChange={setCurrentPage}
-              onItemsPerPageChange={(newItemsPerPage) => {
+              onItemsPerPageChange={(newItemsPerPage: number) => {
                 setItemsPerPage(newItemsPerPage);
                 setCurrentPage(1);
               }}

@@ -98,11 +98,12 @@ class TestPhase2Authentication:
         """회원가입 테스트"""
         with httpx.Client(base_url=BASE_URL, timeout=10.0) as client:
             response = client.post(
-                f"{API_PREFIX}/auth/signup",
+                f"{API_PREFIX}/auth/register",
                 json={
                     "email": ctx.test_email,
                     "password": ctx.test_password,
-                    "full_name": "Test User"
+                    "full_name": "Test User",
+                    "liability_agreement_accepted": True
                 }
             )
             

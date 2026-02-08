@@ -38,7 +38,7 @@ export default function SignalsPage() {
   const params = useParams();
   const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
   const projectId = Number(Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId);
-  
+
   const [status, setStatus] = useState<ProjectStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -48,7 +48,7 @@ export default function SignalsPage() {
       router.push('/login');
       return;
     }
-    
+
     // Fetch project status
     fetchProjectStatus();
   }, [router, projectId]);
@@ -117,7 +117,7 @@ export default function SignalsPage() {
     >
       <div className="max-w-7xl mx-auto">
         <ProjectTabs projectId={projectId} orgId={orgId} />
-          
+
         <div className="mt-8 space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">

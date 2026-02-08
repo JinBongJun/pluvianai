@@ -5,14 +5,15 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import ReactFlow, {
   Background,
-  Controls,
-  MiniMap,
+  BackgroundVariant,
   type Connection,
   type Edge,
   type Node,
   addEdge,
   useEdgesState,
   useNodesState,
+  MarkerType,
+  ConnectionMode,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -24,6 +25,17 @@ import { ArrowUpRight, Copy, Link2, Zap } from 'lucide-react';
 import clsx from 'clsx';
 import { AgentCardNode } from '@/components/live-view/AgentCardNode';
 import type { AgentCardNodeData } from '@/components/live-view/AgentCardNode';
+import DrawIOEdge from '@/components/shared/DrawIOEdge';
+import RailwaySidePanel from '@/components/shared/RailwaySidePanel';
+
+// Define nodeTypes and edgeTypes outside component to prevent unnecessary re-renders
+const nodeTypes = {
+  agentCard: AgentCardNode,
+};
+
+const edgeTypes = {
+  default: DrawIOEdge,
+};
 
 type AgentItem = {
   agent_id: string;
@@ -122,6 +134,8 @@ export default function LiveViewPage() {
     () => organizationsAPI.get(orgId, { includeStats: false }),
   );
 
+  const LIVE_VIEW_BACKEND_ENABLED = true;
+
   useEffect(() => {
     if (project?.usage_mode === 'test_only' && orgId && projectId) {
       router.replace(`/organizations/${orgId}/projects/${projectId}/test-lab`);
@@ -129,12 +143,12 @@ export default function LiveViewPage() {
   }, [project?.usage_mode, orgId, projectId, router]);
 
   const { data: agentsData, error: agentsError, mutate: refreshAgents } = useSWR(
-    projectId ? ['live-view-agents', projectId] : null,
+    LIVE_VIEW_BACKEND_ENABLED && projectId ? ['live-view-agents', projectId] : null,
     () => liveViewAPI.getAgents(projectId),
   );
 
   const { data: connectionsData, mutate: refreshConnections } = useSWR(
-    projectId ? ['live-view-connections', projectId] : null,
+    LIVE_VIEW_BACKEND_ENABLED && projectId ? ['live-view-connections', projectId] : null,
     () => liveViewAPI.listConnections(projectId),
   );
 
@@ -144,8 +158,6 @@ export default function LiveViewPage() {
   // React Flow canvas state
   const [nodes, setNodes, onNodesChange] = useNodesState<Node[]>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge[]>([]);
-  const [arrowMode, setArrowMode] = useState(false);
-  const [connectionSourceId, setConnectionSourceId] = useState<string | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<'prompt' | 'metrics' | 'snapshots' | 'worst' | 'settings'>('prompt');
 
@@ -162,7 +174,7 @@ export default function LiveViewPage() {
 
   const { data: snapshotsData } = useSWR(
     selectedAgentId ? ['live-view-snapshots', projectId, selectedAgentId] : null,
-    () => liveViewAPI.listSnapshots(projectId, { agent_id: selectedAgentId, limit: 20 }),
+    () => liveViewAPI.listSnapshots(projectId, { agent_id: selectedAgentId || undefined, limit: 20 }),
   );
 
   const snapshots: SnapshotItem[] = useMemo(() => {
@@ -240,8 +252,6 @@ export default function LiveViewPage() {
     toast.showToast('Connection removed', 'success');
   };
 
-  const nodeTypes = useMemo(() => ({ agentCard: AgentCardNode }), []);
-
   // Derive React Flow nodes/edges from agents + connections (Design + image: card with icon, title, Online)
   useEffect(() => {
     const nextNodes: Node<AgentCardNodeData>[] = (agents || []).map((agent, idx) => ({
@@ -265,6 +275,16 @@ export default function LiveViewPage() {
       id: conn.id || `e-${conn.source_agent_name}-${conn.target_agent_name}-${idx}`,
       source: String(conn.source_agent_name),
       target: String(conn.target_agent_name),
+      type: 'default',
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        width: 20,
+        height: 20,
+      },
+      style: {
+        strokeWidth: 2.5,
+        stroke: '#8b5cf6',
+      },
     }));
 
     setNodes(nextNodes as Node[]);
@@ -273,7 +293,24 @@ export default function LiveViewPage() {
 
   const handleConnect = useCallback(
     (connection: Connection) => {
-      setEdges((eds) => addEdge(connection, eds));
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...connection,
+            type: 'default',
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              width: 20,
+              height: 20,
+            },
+            style: {
+              strokeWidth: 2.5,
+              stroke: '#8b5cf6',
+            },
+          },
+          eds,
+        ),
+      );
       const { source, target } = connection;
       if (source && target) {
         void handleAddConnection(source, target);
@@ -284,24 +321,11 @@ export default function LiveViewPage() {
 
   const handleNodeClick = useCallback(
     (_: any, node: Node) => {
-      if (arrowMode) {
-        if (!connectionSourceId) {
-          setConnectionSourceId(node.id);
-          toast.showToast(`Source selected: ${node.id}. Click another node to create a connection.`, 'info');
-          return;
-        }
-        if (connectionSourceId && connectionSourceId !== node.id) {
-          void handleAddConnection(connectionSourceId, node.id);
-          setConnectionSourceId(null);
-        }
-        return;
-      }
-
-      // Default: select node to show in right-hand detail panel
+      // Always allow node selection for detail panel
       setSelectedAgentId(String(node.id));
       setDetailTab('prompt');
     },
-    [arrowMode, connectionSourceId, handleAddConnection],
+    [],
   );
 
   if (!orgId || !projectId) return null;
@@ -314,131 +338,93 @@ export default function LiveViewPage() {
     );
   }
 
-  const rightPanel = selectedAgent ? (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between p-3 border-b border-white/10">
+  const rightPanelContent = selectedAgent ? (
+    <div className="px-5 py-4 space-y-5 text-sm">
+      {detailTab === 'prompt' && (
         <div>
-          <div className="text-[10px] text-slate-500 uppercase tracking-wider">Selected Agent</div>
-          <div className="font-semibold text-white truncate">
-            {selectedAgent.display_name || selectedAgent.agent_id || 'Agent'}
+          <div className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wide">System Prompt</div>
+          <div className="rounded-lg border border-white/10 bg-black/40 p-4 whitespace-pre-wrap min-h-[120px] text-sm text-slate-300 leading-relaxed">
+            {selectedAgent.system_prompt || 'System prompt not captured.'}
           </div>
         </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() =>
-            router.push(
-              `/organizations/${orgId}/projects/${projectId}/api-calls?agent=${encodeURIComponent(
-                selectedAgent.agent_id,
-              )}`,
-            )
-          }
-        >
-          <ArrowUpRight className="w-3 h-3 mr-1" />
-          API Calls
-        </Button>
-      </div>
-      <div className="flex border-b border-white/10 gap-0 text-xs">
-        {(['prompt', 'metrics', 'snapshots', 'worst', 'settings'] as const).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setDetailTab(tab)}
-            className={clsx(
-              'flex-1 py-2 px-2 border-b-2 transition-colors',
-              detailTab === tab
-                ? 'border-violet-500 text-violet-200'
-                : 'border-transparent text-slate-500 hover:text-slate-300',
-            )}
-          >
-            {tab === 'prompt' ? 'Prompt' : tab === 'metrics' ? 'Metrics' : tab === 'snapshots' ? 'Snapshots' : tab === 'worst' ? 'Worst' : 'Settings'}
-          </button>
-        ))}
-      </div>
-      <div className="flex-1 overflow-y-auto p-3 text-xs space-y-2">
-        {detailTab === 'prompt' && (
-          <div>
-            <div className="text-[11px] text-slate-500 mb-1">System Prompt</div>
-            <div className="rounded-lg border border-white/10 bg-black/40 p-3 whitespace-pre-wrap min-h-[120px]">
-              {selectedAgent.system_prompt || 'System prompt not captured.'}
+      )}
+      {detailTab === 'metrics' && (
+        <div className="space-y-4">
+          <div className="flex gap-6">
+            <div>
+              <div className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wide">Total calls</div>
+              <div className="font-semibold text-white text-lg">{selectedAgent.total}</div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wide">Worst cases</div>
+              <div className="font-semibold text-red-300 text-lg">{selectedAgent.worst_count}</div>
             </div>
           </div>
-        )}
-        {detailTab === 'metrics' && (
-          <div className="space-y-1">
-            <div className="flex gap-4">
-              <div>
-                <div className="text-[11px] text-slate-500">Total calls</div>
-                <div className="font-semibold text-white">{selectedAgent.total}</div>
-              </div>
-              <div>
-                <div className="text-[11px] text-slate-500">Worst cases</div>
-                <div className="font-semibold text-red-300">{selectedAgent.worst_count}</div>
-              </div>
-            </div>
-            <div className="text-[11px] text-slate-500 mt-2">
-              Last seen: {selectedAgent.last_seen ? new Date(selectedAgent.last_seen).toLocaleString() : '—'}
+          <div className="pt-4 border-t border-white/10">
+            <div className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wide">Last seen</div>
+            <div className="text-sm text-slate-300">
+              {selectedAgent.last_seen ? new Date(selectedAgent.last_seen).toLocaleString() : '—'}
             </div>
           </div>
-        )}
-        {(detailTab === 'snapshots' || detailTab === 'worst') && (
-          <div className="space-y-2">
-            {(() => {
-              const items = detailTab === 'worst' ? worstSnapshots : snapshots;
-              if (!items.length) {
-                return (
-                  <div className="text-[11px] text-slate-500 py-4 text-center">
-                    No snapshots yet.
-                  </div>
-                );
-              }
+        </div>
+      )}
+      {(detailTab === 'snapshots' || detailTab === 'worst') && (
+        <div className="space-y-3">
+          {(() => {
+            const items = detailTab === 'worst' ? worstSnapshots : snapshots;
+            if (!items.length) {
               return (
-                <div className="space-y-2">
-                  {items.slice(0, 10).map((snap) => (
-                    <div
-                      key={snap.id}
-                      className={clsx(
-                        'rounded-lg border p-2',
-                        snap.is_worst ? 'border-red-500/60 bg-red-500/10' : 'border-white/10 bg-black/40',
-                      )}
-                    >
-                      <div className="flex justify-between mb-1">
-                        <span className="text-[11px] text-slate-500">
-                          {snap.created_at ? new Date(snap.created_at).toLocaleString() : ''}
-                        </span>
-                        {snap.is_worst && (
-                          <span className="px-1.5 py-0.5 rounded-full bg-red-500/80 text-[10px] font-semibold text-black">
-                            WORST
-                          </span>
-                        )}
-                      </div>
-                      {snap.request_prompt && (
-                        <div className="text-[11px] text-slate-400 line-clamp-2">
-                          <span className="font-semibold">Input: </span>
-                          {snap.request_prompt}
-                        </div>
-                      )}
-                      {snap.response_text && (
-                        <div className="text-[11px] text-slate-400 line-clamp-2 mt-1">
-                          <span className="font-semibold">Response: </span>
-                          {snap.response_text}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                <div className="text-sm text-slate-500 py-8 text-center">
+                  No snapshots yet.
                 </div>
               );
-            })()}
-          </div>
-        )}
-        {detailTab === 'settings' && selectedAgent && (
-          <LiveViewSettingsSection
-            projectId={projectId}
-            agent={selectedAgent}
-            onSaved={() => refreshAgents()}
-          />
-        )}
-      </div>
+            }
+            return (
+              <div className="space-y-3">
+                {items.slice(0, 10).map((snap) => (
+                  <div
+                    key={snap.id}
+                    className={clsx(
+                      'rounded-lg border p-3',
+                      snap.is_worst ? 'border-red-500/60 bg-red-500/10' : 'border-white/10 bg-black/40',
+                    )}
+                  >
+                    <div className="flex justify-between mb-2">
+                      <span className="text-xs text-slate-500">
+                        {snap.created_at ? new Date(snap.created_at).toLocaleString() : ''}
+                      </span>
+                      {snap.is_worst && (
+                        <span className="px-2 py-0.5 rounded-full bg-red-500/80 text-xs font-semibold text-black">
+                          WORST
+                        </span>
+                      )}
+                    </div>
+                    {snap.request_prompt && (
+                      <div className="text-xs text-slate-400 line-clamp-2 mb-1">
+                        <span className="font-semibold text-slate-300">Input: </span>
+                        {snap.request_prompt}
+                      </div>
+                    )}
+                    {snap.response_text && (
+                      <div className="text-xs text-slate-400 line-clamp-2">
+                        <span className="font-semibold text-slate-300">Response: </span>
+                        {snap.response_text}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+      {detailTab === 'settings' && selectedAgent && (
+        <LiveViewSettingsSection
+          projectId={projectId}
+          agent={selectedAgent}
+          onSaved={() => refreshAgents()}
+        />
+      )}
     </div>
   ) : null;
 
@@ -452,7 +438,42 @@ export default function LiveViewPage() {
       onCopyAllToTestLab={handleCopyAll}
       copyAllDisabled={!agents.length}
       showCopyButton
-      rightPanel={rightPanel}
+      rightPanel={
+        <RailwaySidePanel
+          title={selectedAgent?.display_name || selectedAgent?.agent_id || 'No agent selected'}
+          isOpen={!!selectedAgent}
+          onClose={() => setSelectedAgentId(null)}
+          tabs={[
+            { id: 'prompt', label: 'Prompt' },
+            { id: 'metrics', label: 'Metrics' },
+            { id: 'snapshots', label: 'Snapshots' },
+            { id: 'worst', label: 'Worst' },
+            { id: 'settings', label: 'Settings' },
+          ]}
+          activeTab={detailTab}
+          onTabChange={(tabId) => setDetailTab(tabId as typeof detailTab)}
+          headerActions={
+            selectedAgent ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  router.push(
+                    `/organizations/${orgId}/projects/${projectId}/api-calls?agent=${encodeURIComponent(
+                      selectedAgent.agent_id,
+                    )}`,
+                  )
+                }
+              >
+                <ArrowUpRight className="w-3 h-3 mr-1" />
+                API Calls
+              </Button>
+            ) : undefined
+          }
+        >
+          {rightPanelContent}
+        </RailwaySidePanel>
+      }
     >
       {overLimit && (
         <div className="flex-shrink-0 mx-4 mt-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-2 text-yellow-100 text-sm">
@@ -462,31 +483,12 @@ export default function LiveViewPage() {
       {edges.length > 0 && (
         <div className="flex-shrink-0 mx-4 mt-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-amber-100 text-sm flex items-center justify-between">
           <span>Arrows are user-drawn. May differ from actual agent flow. Verify in Test Lab.</span>
-          <button type="button" onClick={() => {}} className="text-amber-300 hover:text-white" aria-label="Dismiss">✕</button>
+          <button type="button" onClick={() => { }} className="text-amber-300 hover:text-white" aria-label="Dismiss">✕</button>
         </div>
       )}
       <div className="flex-1 flex items-stretch gap-2 p-3 min-h-0">
         <div className="flex-1 flex flex-col gap-2 min-w-0">
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              variant={arrowMode ? 'primary' : 'secondary'}
-              size="sm"
-              onClick={() => {
-                setArrowMode((prev) => !prev);
-                setConnectionSourceId(null);
-              }}
-            >
-              <Link2 className="w-3.5 h-3.5 mr-1" />
-              {arrowMode ? 'Connection Mode On' : 'Connection Mode'}
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => refreshAgents()}>
-              Refresh
-            </Button>
-          </div>
-          {agentsError && (
-            <div className="text-sm text-red-400">에이전트 목록을 불러오지 못했습니다.</div>
-          )}
-          {agents.length === 0 && !agentsError ? (
+          {(agentsError || agents.length === 0) ? (
             <div className="flex-1 flex items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#16161a] text-slate-400 text-sm">
               <div className="text-center">
                 <p className="font-medium text-slate-300">No data yet</p>
@@ -509,12 +511,30 @@ export default function LiveViewPage() {
                 onConnect={handleConnect}
                 onNodeClick={handleNodeClick}
                 nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
                 fitView
                 className="bg-[#16161a]"
+                proOptions={{ hideAttribution: true }}
+                connectionMode={ConnectionMode.Loose}
+                defaultEdgeOptions={{
+                  type: 'default',
+                  markerEnd: {
+                    type: MarkerType.ArrowClosed,
+                    width: 20,
+                    height: 20,
+                  },
+                  style: {
+                    strokeWidth: 2,
+                    stroke: '#8b5cf6',
+                  },
+                }}
               >
-                <Background gap={16} size={1} color="rgba(255,255,255,0.06)" />
-                <MiniMap className="!bg-[#1e1e24] !border-white/10" />
-                <Controls className="!bg-[#1e1e24] !border-white/10 !text-white [&>button]:!bg-[#1e1e24] [&>button]:!fill-white [&>button]:!stroke-white" />
+                <Background
+                  variant={BackgroundVariant.Dots}
+                  gap={28}
+                  size={1.6}
+                  color="rgba(148, 163, 184, 0.4)"
+                />
               </ReactFlow>
             </div>
           )}

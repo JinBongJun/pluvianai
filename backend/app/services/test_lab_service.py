@@ -746,3 +746,179 @@ class TestLabService:
 
         return result
 
+    # ------------------------------------------------------------------
+    # LangChain Import (Phase 5.5)
+    # ------------------------------------------------------------------
+
+    def parse_langchain_code(self, code: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """
+        Parse LangChain Python code to extract agent/chain structure.        This is a best-effort parser that looks for common LangChain patterns:
+        - Chain initialization (LLMChain, SequentialChain, etc.)
+        - Agent creation (initialize_agent, AgentExecutor, etc.)
+        - Tool definitions
+        - Prompt templates
+
+        Returns:
+            (boxes, connections) - Test Lab compatible format
+        """
+        import re
+        import uuid
+
+        boxes: List[Dict[str, Any]] = []
+        connections: List[Dict[str, Any]] = []
+        box_map: Dict[str, str] = {}  # Maps LangChain component names to box IDs        # Pattern 1: LLM initialization
+        # llm = OpenAI(model_name="gpt-4", temperature=0)
+        llm_pattern = r'(\w+)\s*=\s*(?:OpenAI|ChatOpenAI|Anthropic|ChatAnthropic)\([^)]*model[^)]*["\']([^"\']+)["\']'
+        llm_matches = re.finditer(llm_pattern, code, re.IGNORECASE)
+        for match in llm_matches:
+            var_name = match.group(1)
+            model_name = match.group(2)
+            box_id = f"box-{uuid.uuid4().hex[:8]}"
+            box_map[var_name] = box_id
+            boxes.append({
+                "id": box_id,
+                "label": f"LLM ({var_name})",
+                "provider": self._infer_provider_from_model(model_name),
+                "model": model_name,
+                "systemPrompt": "",
+                "inputs": [],
+            })
+
+        # Pattern 2: Prompt templates
+        # prompt = PromptTemplate(input_variables=["input"], template="...")
+        prompt_pattern = r'(\w+)\s*=\s*PromptTemplate\([^)]*template\s*=\s*["\']([^"\']+)["\']'
+        prompt_matches = re.finditer(prompt_pattern, code, re.IGNORECASE | re.DOTALL)
+        prompt_map: Dict[str, str] = {}
+        for match in prompt_matches:
+            var_name = match.group(1)
+            template = match.group(2)
+            prompt_map[var_name] = template        # Pattern 3: Chains
+        # chain = LLMChain(llm=llm, prompt=prompt)
+        chain_pattern = r'(\w+)\s*=\s*(?:LLMChain|SimpleSequentialChain|SequentialChain)\([^)]*llm\s*=\s*(\w+)[^)]*prompt\s*=\s*(\w+)[^)]*\)'
+        chain_matches = re.finditer(chain_pattern, code, re.IGNORECASE)
+        for match in chain_matches:
+            chain_name = match.group(1)
+            llm_var = match.group(2)
+            prompt_var = match.group(3)
+
+            if llm_var in box_map:
+                box_id = box_map[llm_var]
+                # Update box with prompt template
+                for box in boxes:
+                    if box["id"] == box_id:
+                        box["systemPrompt"] = prompt_map.get(prompt_var, "")
+                        box["label"] = f"Chain ({chain_name})"
+                        break
+
+        # Pattern 4: Sequential chains (connections)
+        # chain = SimpleSequentialChain(chains=[chain1, chain2])
+        seq_pattern = r'(\w+)\s*=\s*(?:SimpleSequentialChain|SequentialChain)\([^)]*chains\s*=\s*\[([^\]]+)\]'
+        seq_matches = re.finditer(seq_pattern, code, re.IGNORECASE)
+        for match in seq_matches:
+            chain_list = [c.strip() for c in match.group(2).split(',')]
+            for i in range(len(chain_list) - 1):
+                source_var = chain_list[i]
+                target_var = chain_list[i + 1]
+                if source_var in box_map and target_var in box_map:
+                    connections.append({
+                        "source": box_map[source_var],
+                        "target": box_map[target_var],
+                    })
+
+        # Pattern 5: Agent initialization
+        # agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION)
+        agent_pattern = r'(\w+)\s*=\s*initialize_agent\([^)]*agent\s*=\s*AgentType\.(\w+)'
+        agent_matches = re.finditer(agent_pattern, code, re.IGNORECASE)
+        for match in agent_matches:
+            agent_var = match.group(1)
+            agent_type = match.group(2)
+            # Create a box for the agent if not already created
+            if agent_var not in box_map:
+                box_id = f"box-{uuid.uuid4().hex[:8]}"
+                box_map[agent_var] = box_id
+                boxes.append({
+                    "id": box_id,
+                    "label": f"Agent ({agent_type})",
+                    "provider": "openai",  # Default
+                    "model": "gpt-4o",
+                    "systemPrompt": f"You are a {agent_type} agent.",
+                    "inputs": [],
+                })
+
+        # If no boxes were found, create a default box
+        if not boxes:
+            box_id = f"box-{uuid.uuid4().hex[:8]}"
+            boxes.append({
+                "id": box_id,
+                "label": "LangChain Agent",
+                "provider": "openai",
+                "model": "gpt-4o",
+                "systemPrompt": "",
+                "inputs": [],
+            })
+
+        return boxes, connections
+
+    def convert_langchain_config(self, config: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """
+        Convert a pre-structured LangChain agent config to Test Lab format.
+
+        Expected config format:
+        {
+          "agents": [
+            {
+              "name": "agent1",
+              "model": "gpt-4o",
+              "provider": "openai",
+              "system_prompt": "...",
+              "tools": [...]
+            }
+          ],
+          "chains": [
+            {"source": "agent1", "target": "agent2"}
+          ]
+        }
+        """
+        import uuid
+
+        boxes: List[Dict[str, Any]] = []
+        connections: List[Dict[str, Any]] = []
+        agent_id_map: Dict[str, str] = {}
+
+        agents = config.get("agents", [])
+        for agent in agents:
+            box_id = f"box-{uuid.uuid4().hex[:8]}"
+            agent_name = agent.get("name", f"Agent {len(boxes) + 1}")
+            agent_id_map[agent_name] = box_id
+
+            boxes.append({
+                "id": box_id,
+                "label": agent_name,
+                "provider": agent.get("provider", "openai"),
+                "model": agent.get("model", "gpt-4o"),
+                "systemPrompt": agent.get("system_prompt", ""),
+                "inputs": agent.get("inputs", []),
+            })
+
+        # Convert chain connections
+        chains = config.get("chains", [])
+        for chain in chains:
+            source = chain.get("source")
+            target = chain.get("target")
+            if source in agent_id_map and target in agent_id_map:
+                connections.append({
+                    "source": agent_id_map[source],
+                    "target": agent_id_map[target],
+                })
+
+        return boxes, connections
+
+    def _infer_provider_from_model(self, model_name: str) -> str:
+        """Infer provider from model name."""
+        model_lower = model_name.lower()
+        if "claude" in model_lower or "anthropic" in model_lower:
+            return "anthropic"
+        elif "gemini" in model_lower or "google" in model_lower:
+            return "google"
+        else:
+            return "openai"
