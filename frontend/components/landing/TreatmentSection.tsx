@@ -40,8 +40,8 @@ export default function TreatmentSection() {
                                 The Treatment
                             </div>
                             <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-                                Precision Surgery <br />
-                                for your Language Models.
+                                The Pluvian Methodology: <br />
+                                <span className="text-emerald-400">Precision Surgery.</span>
                             </h2>
                             <p className="text-xl text-slate-400 leading-relaxed">
                                 Don't just log errors. Fix them. Pluvian acts as an active immune system for your AI architecture.

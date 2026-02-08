@@ -71,24 +71,23 @@ export default function Home() {
                                 <div className="absolute top-[80px] right-0 w-64 opacity-0 invisible group-hover/nav:opacity-100 group-hover/nav:visible transition-all duration-300 translate-y-2 group-hover/nav:translate-y-0 z-[60]">
                                     <div className="p-2 rounded-lg bg-[#0a0a0c]/90 backdrop-blur-2xl border border-white/10 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] overflow-hidden">
                                         <div className="grid gap-1">
-                                            <a href="#features" className="flex flex-col gap-0.5 p-3 rounded-md hover:bg-white/5 transition-colors group/item">
-                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Features</span>
-                                                <span className="text-xs text-slate-500">Signal Detection & Replay</span>
-                                            </a>
                                             <a href="#problem" className="flex flex-col gap-0.5 p-3 rounded-md hover:bg-white/5 transition-colors group/item">
                                                 <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Logic Guard</span>
                                                 <span className="text-xs text-slate-500">Hallucination Prevention</span>
                                             </a>
+                                            <a href="#features" className="flex flex-col gap-0.5 p-3 rounded-md hover:bg-white/5 transition-colors group/item">
+                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Atomic Lab</span>
+                                                <span className="text-xs text-slate-500">The Periodic Table of AI Risk</span>
+                                            </a>
                                             <a href="#workflow" className="flex flex-col gap-0.5 p-3 rounded-md hover:bg-white/5 transition-colors group/item">
-                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Atomic Signals</span>
-                                                <span className="text-xs text-slate-500">Agent Periodic Table</span>
+                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Surgical Workflow</span>
+                                                <span className="text-xs text-slate-500">Clinical Integration & Treatment</span>
                                             </a>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <a href="#workflow" className="text-lg font-bold text-slate-400 hover:text-emerald-400 transition-colors whitespace-nowrap">Methodology</a>
                             <a href="#pricing" className="text-lg font-bold text-slate-400 hover:text-emerald-400 transition-colors">Pricing</a>
                             <a href="/docs" className="text-lg font-bold text-slate-400 hover:text-emerald-400 transition-colors">Docs</a>
                         </div>
