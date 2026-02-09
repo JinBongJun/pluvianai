@@ -4,6 +4,7 @@ import { Plus_Jakarta_Sans } from 'next/font/google'
 import { ToastProvider } from '@/components/ToastContainer'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import PostHogProviderWrapper from '@/components/analytics/PostHogProvider'
+import { MouseSpotlight } from '@/components/ui/MouseSpotlight'
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -27,10 +28,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={plusJakartaSans.className}>
+        <div className="bg-flowing-lines pointer-events-none fixed inset-0 z-0 opacity-100" />
+        <MouseSpotlight />
         <ErrorBoundary>
           <PostHogProviderWrapper>
             <ToastProvider>
-              {children}
+              <div className="relative z-10">
+                {children}
+              </div>
             </ToastProvider>
           </PostHogProviderWrapper>
         </ErrorBoundary>

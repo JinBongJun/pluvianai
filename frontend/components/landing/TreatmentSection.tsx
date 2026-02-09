@@ -65,10 +65,7 @@ export default function TreatmentSection() {
                             ))}
                         </div>
 
-                        <Button className="h-14 px-8 bg-white/5 border border-white/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 text-white rounded-lg group transition-all">
-                            View Surgical Procedures (Docs)
-                            <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                        </Button>
+
                     </div>
 
                     {/* Right: Visual (Code/Terminal) */}

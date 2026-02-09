@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     # Modern SaaS: Long-lived sessions (Vercel, Linear, Stripe pattern)
     # Short sessions frustrate users without meaningful security benefit
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30  # 30 days
     REFRESH_TOKEN_EXPIRE_DAYS: int = 90  # 90 days
     PASSWORD_POLICY_MIN_LENGTH: int = 12
     ENABLE_HIBP_CHECK: bool = False  # Optional: set True to enable Have I Been Pwned checks

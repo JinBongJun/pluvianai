@@ -137,6 +137,16 @@ body {
   }
 }
 
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 /* Fade in animation */
 @keyframes fadeIn {
   from {
@@ -145,6 +155,43 @@ body {
 
   to {
     opacity: 1;
+  }
+}
+
+@keyframes ecg-trace {
+  0% {
+    stroke-dashoffset: 1000;
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes medical-pulse {
+  0% {
+    opacity: 0.3;
+    filter: brightness(1);
+  }
+
+  50% {
+    opacity: 1;
+    filter: brightness(1.5) drop-shadow(0 0 5px rgba(16, 185, 129, 0.8));
+  }
+
+  100% {
+    opacity: 0.3;
+    filter: brightness(1);
   }
 }
 
@@ -229,4 +276,80 @@ body {
 
 .animate-gradient-x {
   animation: gradient-x 3s ease infinite;
+}
+
+/* Flowing Background Pattern */
+@keyframes flowLines {
+  from {
+    background-position: 0 0, 0 0;
+  }
+
+  to {
+    background-position: 20px 0, 0 20px;
+  }
+}
+
+@keyframes heartbeat-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.6);
+  }
+
+  10% {
+    transform: scale(1.01);
+    box-shadow: 0 35px 70px -15px rgba(16, 185, 129, 0.1);
+  }
+
+  20% {
+    transform: scale(1);
+    box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.6);
+  }
+
+  30% {
+    transform: scale(1.005);
+    box-shadow: 0 32px 65px -15px rgba(16, 185, 129, 0.05);
+  }
+
+  40% {
+    transform: scale(1);
+    box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.6);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.6);
+  }
+}
+
+.animate-heartbeat {
+  animation: heartbeat-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.bg-flowing-lines {
+  background-image:
+    /* Flowing Vertical Grid - Soft Emerald */
+    linear-gradient(90deg, rgba(16, 185, 129, 0.04) 1px, transparent 1px),
+    /* Flowing Horizontal Scanlines - Subtle White */
+    repeating-linear-gradient(0deg,
+      transparent,
+      transparent 24px,
+      rgba(255, 255, 255, 0.06) 24px,
+      rgba(255, 255, 255, 0.06) 25px);
+  background-size: 25px 100%, 100% 25px;
+  animation: flowLines 5s linear infinite;
+  mask-image: radial-gradient(circle at center, black 20%, transparent 90%);
+}
+
+.bg-flowing-lines-sharp {
+  background-image:
+    /* Flowing Vertical Grid - Vibrantly Emerald */
+    linear-gradient(90deg, rgba(16, 185, 129, 0.3) 1px, transparent 1px),
+    /* Flowing Horizontal Scanlines - Sharpened White */
+    repeating-linear-gradient(0deg,
+      transparent,
+      transparent 24px,
+      rgba(255, 255, 255, 0.4) 24px,
+      rgba(255, 255, 255, 0.4) 25px);
+  background-size: 25px 100%, 100% 25px;
+  animation: flowLines 5s linear infinite;
 }

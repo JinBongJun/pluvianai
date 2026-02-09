@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
     Bot,
@@ -29,6 +30,16 @@ import PricingSection from '@/components/landing/PricingSection';
 import InteractiveHoverText from '@/components/ui/InteractiveHoverText';
 
 export default function Home() {
+    const router = useRouter();
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+    useEffect(() => {
+        const token = localStorage.getItem('access_token');
+        if (token) {
+            setIsLoggedIn(true);
+        }
+    }, []);
+
     return (
         <div className="min-h-screen text-slate-200 selection:bg-emerald-500/30 font-sans">
             {/* 1. Navbar */}
@@ -36,8 +47,8 @@ export default function Home() {
                 <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16 h-[90px] flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         {/* Logo: Croc & Bird Silhouette (SVG for now, replace with logo.png later) */}
-                        <div className="relative w-16 h-16 pointer-events-none select-none hover:scale-105 transition-transform duration-300 flex items-center justify-center">
-                            {/* Temporary Placeholder SVG: Stylized 'P' that looks like a crocodile eye/mouth */}
+                        <div className="relative w-14 h-14 pointer-events-none select-none hover:scale-105 transition-transform duration-300 flex items-center justify-center">
+                            {/* Logo: Croc & Bird Silhouette (SVG for now, replace with logo.png later) */}
                             <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]">
                                 <path
                                     d="M20 50 C 20 20, 80 20, 80 50 L 80 80 L 20 80 Z"
@@ -47,10 +58,10 @@ export default function Home() {
                                     className="animate-pulse"
                                 />
                                 <circle cx="40" cy="45" r="5" fill="#10b981" />
-                                <path d="M60 60 L 90 40" stroke="#10b981" strokeWidth="2" />
+                                <path d="M60 60 L 90 40" stroke="#10b981" strokeWidth="2.5" />
                             </svg>
                         </div>
-                        <span className="text-3xl font-bold tracking-tight text-white">PluvianAI</span>
+                        <span className="text-3xl font-black tracking-tighter text-white uppercase transition-colors group-hover:text-emerald-400">PLUVIANAI</span>
                     </div>
 
 
@@ -94,15 +105,25 @@ export default function Home() {
 
                         <div className="h-8 w-[1px] bg-white/10 hidden lg:block" />
 
-                        <div className="hidden md:flex items-center gap-6 text-lg font-bold">
-                            <Link href="/login" className="text-slate-400 hover:text-white transition-colors">Log In</Link>
-                            <Link href="/login?mode=signup" className="text-slate-400 hover:text-white transition-colors">Sign Up</Link>
-                        </div>
-                        <Link href="/organizations">
-                            <Button className="bg-emerald-500 text-black font-black px-8 h-12 text-lg rounded-md shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:scale-105 whitespace-nowrap">
-                                Start Validation
-                            </Button>
-                        </Link>
+                        {isLoggedIn ? (
+                            <Link href="/organizations">
+                                <Button className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-10 h-12 text-lg rounded-md shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:scale-105 whitespace-nowrap uppercase tracking-widest">
+                                    Enter Laboratory
+                                </Button>
+                            </Link>
+                        ) : (
+                            <>
+                                <div className="hidden md:flex items-center gap-6 text-lg font-bold">
+                                    <Link href="/login" className="text-slate-400 hover:text-white transition-colors">Log In</Link>
+                                    <Link href="/login?mode=signup" className="text-slate-400 hover:text-white transition-colors">Sign Up</Link>
+                                </div>
+                                <Link href="/login?intent=validation">
+                                    <Button className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-8 h-12 text-lg rounded-md shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:scale-105 whitespace-nowrap uppercase tracking-widest">
+                                        Start Validation
+                                    </Button>
+                                </Link>
+                            </>
+                        )}
                     </div>
                 </div>
             </nav>
@@ -157,11 +178,19 @@ export default function Home() {
 
                         {/* CTA Buttons */}
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-8">
-                            <Link href="/organizations">
-                                <Button className="h-14 px-10 text-xl font-black rounded-lg shadow-[0_0_40px_-5px_rgba(16,185,129,0.4)] hover:shadow-[0_0_60px_-5px_rgba(16,185,129,0.6)]">
-                                    Start Clinical Trial
-                                </Button>
-                            </Link>
+                            {isLoggedIn ? (
+                                <Link href="/organizations">
+                                    <Button className="h-16 px-12 text-2xl font-black rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_50px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_70px_-10px_rgba(16,185,129,0.7)] transition-all hover:scale-[1.02] uppercase tracking-tighter">
+                                        Return to Laboratory
+                                    </Button>
+                                </Link>
+                            ) : (
+                                <Link href="/login?mode=signup&intent=trial">
+                                    <Button className="h-16 px-12 text-2xl font-black rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_50px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_70px_-10px_rgba(16,185,129,0.7)] transition-all hover:scale-[1.02] uppercase tracking-tighter">
+                                        Start Clinical Trial
+                                    </Button>
+                                </Link>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -215,11 +244,19 @@ export default function Home() {
                         Join the elite engineering teams using PluvianAI to build safe, scalable, and predictable AI agents.
                     </p>
                     <div className="pt-8 flex flex-col sm:flex-row gap-6 justify-center">
-                        <Link href="/organizations">
-                            <Button className="h-16 px-12 bg-emerald-500 text-black hover:bg-emerald-400 rounded-xl text-xl font-bold transition-all shadow-[0_0_40px_-10px_rgba(16,185,129,0.6)]">
-                                Enter the Lab for Free
-                            </Button>
-                        </Link>
+                        {isLoggedIn ? (
+                            <Link href="/organizations">
+                                <Button className="h-16 px-12 bg-emerald-500 text-black hover:bg-emerald-400 rounded-xl text-xl font-black transition-all shadow-[0_0_40px_-10px_rgba(16,185,129,0.6)] uppercase tracking-tight">
+                                    Launch Clinical Lab
+                                </Button>
+                            </Link>
+                        ) : (
+                            <Link href="/login?mode=signup&intent=free">
+                                <Button className="h-16 px-12 bg-emerald-500 text-black hover:bg-emerald-400 rounded-xl text-xl font-black transition-all shadow-[0_0_40px_-10px_rgba(16,185,129,0.6)] uppercase tracking-tight">
+                                    Enter the Lab for Free
+                                </Button>
+                            </Link>
+                        )}
                     </div>
                     <div className="flex items-center justify-center gap-6 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-600 pt-16">
                         <span>No credit card</span>
