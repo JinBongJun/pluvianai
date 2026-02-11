@@ -26,7 +26,9 @@ import DrawIOEdge from '@/components/shared/DrawIOEdge';
 import RailwaySidePanel from '@/components/shared/RailwaySidePanel';
 import { TestLabInspector } from '@/components/test-lab/TestLabInspector';
 import { TestLabToolbar } from '@/components/test-lab/TestLabToolbar';
-import { Beaker, Copy, Plus } from 'lucide-react';
+import { TestLabSidebar } from '@/components/test-lab/TestLabSidebar';
+import { TestLabEdge } from '@/components/test-lab/TestLabEdge';
+import { Beaker, Copy, Plus, Bot } from 'lucide-react';
 
 // Node Types Registration
 const nodeTypes = {
@@ -36,7 +38,7 @@ const nodeTypes = {
 };
 
 const edgeTypes = {
-  default: DrawIOEdge,
+  default: TestLabEdge,
 };
 
 export default function TestLabPage() {
@@ -65,7 +67,12 @@ export default function TestLabPage() {
   }, [setNodes]);
 
   // Interactive Handlers
-  const onConnect = useCallback((params: Connection) => setEdges((eds) => addEdge({ ...params, type: 'default' }, eds)), [setEdges]);
+  const onConnect = useCallback((params: Connection) => setEdges((eds) => addEdge({
+    ...params,
+    type: 'default',
+    markerEnd: { type: 'arrowclosed' as any, color: '#8b5cf6' },
+    data: { order: eds.length + 1 }
+  }, eds)), [setEdges]);
 
   const onEdgesDelete = useCallback((edgesToDelete: Edge[]) => {
     setEdges((eds) => eds.filter((e) => !edgesToDelete.find((etd) => etd.id === e.id)));
@@ -117,6 +124,7 @@ export default function TestLabPage() {
         source: conn.source_agent_name,
         target: conn.target_agent_name,
         type: 'default',
+        markerEnd: { type: 'arrowclosed' as any, color: '#8b5cf6' },
       }));
 
       setNodes(nextNodes);
@@ -182,7 +190,7 @@ export default function TestLabPage() {
       rightPanel={
         <RailwaySidePanel
           title={selectedNode?.data?.label || selectedNodeId || 'Inspector'}
-          isOpen={!!selectedNodeId}
+          isOpen={!!selectedNodeId && selectedNode?.type !== 'inputNode'}
           onClose={() => setSelectedNodeId(null)}
         >
           {selectedNode && (
@@ -195,6 +203,9 @@ export default function TestLabPage() {
       }
     >
       <div className="flex-1 min-h-0 relative bg-[#0a0a0c]">
+
+        {/* New Utility Sidebar */}
+        <TestLabSidebar />
 
         {/* New Floating Toolbar */}
         <TestLabToolbar
