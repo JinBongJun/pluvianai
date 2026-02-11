@@ -39,6 +39,7 @@ from app.api.v1.endpoints import (
     cost,
     live_view,
     test_lab,
+    test_runs,
 )
 
 api_router = APIRouter()
@@ -78,3 +79,4 @@ api_router.include_router(signals.router, prefix="", tags=["signals"])
 api_router.include_router(cost.router, prefix="/cost", tags=["cost"])
 api_router.include_router(live_view.router, prefix="", tags=["live-view"])
 api_router.include_router(test_lab.router, prefix="", tags=["test-lab"])
+api_router.include_router(test_runs.router, prefix="/test-runs", tags=["test-runs"])

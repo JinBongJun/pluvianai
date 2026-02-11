@@ -30,49 +30,58 @@ def list_agents(
     """
     Return detected agents (boxes) for Live View by grouping snapshots.
     """
-    _ensure_project(project_id, current_user, db)
+    try:
+        _ensure_project(project_id, current_user, db)
 
-    # Aggregate snapshots by agent_id (fallback to 'unknown' if missing)
-    rows = (
-        db.query(
-            Snapshot.agent_id,
-            Snapshot.model,
-            Snapshot.system_prompt,
-            db.func.count(Snapshot.id).label("total"),
-            db.func.sum(db.case((Snapshot.is_worst == True, 1), else_=0)).label("worst_count"),
-            db.func.max(Snapshot.created_at).label("last_seen"),
+        # Aggregate snapshots by agent_id (fallback to 'unknown' if missing)
+        rows = (
+            db.query(
+                Snapshot.agent_id,
+                Snapshot.model,
+                Snapshot.system_prompt,
+                db.func.count(Snapshot.id).label("total"),
+                db.func.sum(db.case((Snapshot.is_worst == True, 1), else_=0)).label("worst_count"),
+                db.func.max(Snapshot.created_at).label("last_seen"),
+            )
+            .filter(Snapshot.project_id == project_id)
+            .group_by(Snapshot.agent_id, Snapshot.model, Snapshot.system_prompt)
+            .order_by(db.func.max(Snapshot.created_at).desc())
+            .limit(limit)
+            .all()
         )
-        .filter(Snapshot.project_id == project_id)
-        .group_by(Snapshot.agent_id, Snapshot.model, Snapshot.system_prompt)
-        .order_by(db.func.max(Snapshot.created_at).desc())
-        .limit(limit)
-        .all()
-    )
 
-    # Fetch display settings
-    agent_ids = [r.agent_id or "unknown" for r in rows]
-    settings = (
-        db.query(AgentDisplaySetting)
-        .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash.in_(agent_ids))
-        .all()
-    )
-    settings_map = {s.system_prompt_hash: s for s in settings}
+        # Fetch display settings
+        agent_ids = [r.agent_id or "unknown" for r in rows]
+        settings = (
+            db.query(AgentDisplaySetting)
+            .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash.in_(agent_ids))
+            .all()
+        )
+        settings_map = {s.system_prompt_hash: s for s in settings}
 
-    def serialize(row):
-        agent_id = row.agent_id or "unknown"
-        setting = settings_map.get(agent_id)
-        return {
-            "agent_id": agent_id,
-            "display_name": setting.display_name if setting and setting.display_name else (agent_id or "Agent"),
-            "model": row.model,
-            "system_prompt": row.system_prompt,
-            "total": row.total,
-            "worst_count": int(row.worst_count or 0),
-            "last_seen": row.last_seen,
-            "is_deleted": setting.is_deleted if setting else False,
-        }
+        def serialize(row):
+            agent_id = row.agent_id or "unknown"
+            setting = settings_map.get(agent_id)
+            return {
+                "agent_id": agent_id,
+                "display_name": setting.display_name if setting and setting.display_name else (agent_id or "Agent"),
+                "model": row.model,
+                "system_prompt": row.system_prompt,
+                "total": row.total,
+                "worst_count": int(row.worst_count or 0),
+                "last_seen": row.last_seen,
+                "is_deleted": setting.is_deleted if setting else False,
+            }
 
-    return {"agents": [serialize(r) for r in rows]}
+        return {"agents": [serialize(r) for r in rows]}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"ERROR in list_agents: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list agents: {str(e)}",
+        )
 
 
 @router.get("/projects/{project_id}/live-view/agents/{agent_id}/settings")
@@ -152,23 +161,32 @@ def list_connections(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _ensure_project(project_id, current_user, db)
-    conns = (
-        db.query(LiveViewConnection)
-        .filter(LiveViewConnection.project_id == project_id)
-        .order_by(LiveViewConnection.created_at.desc())
-        .all()
-    )
-    return {"connections": [
-        {
-            "id": c.id,
-            "source_agent_name": c.source_agent_name,
-            "target_agent_name": c.target_agent_name,
-            "created_by": c.created_by,
-            "created_at": c.created_at,
-        }
-        for c in conns
-    ]}
+    try:
+        _ensure_project(project_id, current_user, db)
+        conns = (
+            db.query(LiveViewConnection)
+            .filter(LiveViewConnection.project_id == project_id)
+            .order_by(LiveViewConnection.created_at.desc())
+            .all()
+        )
+        return {"connections": [
+            {
+                "id": c.id,
+                "source_agent_name": c.source_agent_name,
+                "target_agent_name": c.target_agent_name,
+                "created_by": c.created_by,
+                "created_at": c.created_at,
+            }
+            for c in conns
+        ]}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"ERROR in list_connections: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list connections: {str(e)}",
+        )
 
 
 @router.post("/projects/{project_id}/live-view/connections", status_code=status.HTTP_201_CREATED)
