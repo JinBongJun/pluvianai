@@ -110,6 +110,35 @@ export const TestLabInspector: React.FC<TestLabInspectorProps> = ({ node, onUpda
                 </button>
             </div>
 
+            {/* Iteration Stepper (Visible in Results Tab) */}
+            <AnimatePresence>
+                {activeTab === 'results' && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="bg-violet-500/5 border-b border-white/5 px-6 py-3 flex items-center justify-between overflow-hidden"
+                    >
+                        <div className="flex items-center gap-4 overflow-x-auto custom-scrollbar no-scrollbar">
+                            {[1, 2, 3].map((round) => (
+                                <button
+                                    key={round}
+                                    className={clsx(
+                                        "flex-shrink-0 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
+                                        round === 1
+                                            ? "bg-violet-500 text-white shadow-lg shadow-violet-500/20"
+                                            : "bg-white/5 text-slate-500 hover:text-slate-300 hover:bg-white/10"
+                                    )}
+                                >
+                                    Round {round}
+                                </button>
+                            ))}
+                            <span className="text-[10px] font-bold text-slate-600 ml-2 whitespace-nowrap">FINAL VERDICT</span>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {/* Agent Identity Section */}
                 <div className="p-6 pb-4">

@@ -20,22 +20,26 @@ import 'reactflow/dist/style.css';
 import CanvasPageLayout from '@/components/layout/CanvasPageLayout';
 import { TestLabInputNode } from '@/components/test-lab/TestLabInputNode';
 import { TestLabEvalNode } from '@/components/test-lab/TestLabEvalNode';
-import { projectsAPI, organizationsAPI, liveViewAPI, testRunsAPI } from '@/lib/api';
 import { TestLabBoxNode } from '@/components/test-lab/TestLabBoxNode';
 import DrawIOEdge from '@/components/shared/DrawIOEdge';
 import RailwaySidePanel from '@/components/shared/RailwaySidePanel';
 import { TestLabInspector } from '@/components/test-lab/TestLabInspector';
 import { TestLabToolbar } from '@/components/test-lab/TestLabToolbar';
-import { TestLabSidebar } from '@/components/test-lab/TestLabSidebar';
+import TestLabRouterNode from '@/components/test-lab/TestLabRouterNode';
+import TestLabApprovalNode from '@/components/test-lab/TestLabApprovalNode';
 import { TestLabEdge } from '@/components/test-lab/TestLabEdge';
+import { TestLabSidebar } from '@/components/test-lab/TestLabSidebar';
 import { TestLabComparisonOverlay } from '@/components/test-lab/TestLabComparisonOverlay';
 import { Beaker, Copy, Plus, Bot } from 'lucide-react';
+import { projectsAPI, organizationsAPI, liveViewAPI, testRunsAPI } from '@/lib/api';
 
 // Node Types Registration
 const nodeTypes = {
-  agentCard: TestLabBoxNode,
   inputNode: TestLabInputNode,
+  agentCard: TestLabBoxNode,
   evalNode: TestLabEvalNode,
+  routerNode: TestLabRouterNode,
+  approvalNode: TestLabApprovalNode,
 };
 
 const edgeTypes = {
@@ -178,9 +182,11 @@ export default function TestLabPage() {
     setSelectedNodeId(id);
   };
 
-  const handleAddInput = () => createNode('inputNode', 'User Input', { textInput: '', inputType: 'text' });
-  const handleAddAgent = () => createNode('agentCard', 'New Agent', { model: 'gpt-4o', status: 'idle' });
-  const handleAddEval = () => createNode('evalNode', 'Evaluator', { status: 'pending' });
+  const handleAddInput = () => createNode('inputNode', 'Start');
+  const handleAddAgent = () => createNode('agentCard', 'New Agent');
+  const handleAddEval = () => createNode('evalNode', 'Evaluate');
+  const handleAddRouter = () => createNode('routerNode', 'Decision');
+  const handleAddApproval = () => createNode('approvalNode', 'Human Review');
 
   // Render Empty Sandbox State
   const renderEmptySandbox = () => (
@@ -239,8 +245,9 @@ export default function TestLabPage() {
           onAddInput={handleAddInput}
           onAddAgent={handleAddAgent}
           onAddEval={handleAddEval}
+          onAddRouter={handleAddRouter}
+          onAddApproval={handleAddApproval}
           onCloneLive={handleCloneFromLive}
-          onBattle={() => setShowBattleMode(true)}
         />
 
         {!nodes.length && renderEmptySandbox()}

@@ -41,13 +41,24 @@ export const TestLabBoxNode: React.FC<NodeProps<TestLabBoxNodeData>> = ({ data, 
                 backdrop-blur-xl
             `}
         >
-            {/* Input Handle (Left) - Emerald Logic */}
+            {/* Main Input Handle (Left) - Emerald Logic */}
             <div className="absolute -left-3 top-1/2 -translate-y-1/2 flex items-center">
                 <span className="absolute right-4 text-[7px] font-black text-emerald-500 tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">IN</span>
                 <Handle
                     type="target"
                     position={Position.Left}
                     className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-[#0a0a0c] shadow-[0_0_10px_rgba(16,185,129,0.5)] transition-transform hover:scale-125"
+                />
+            </div>
+
+            {/* Helper Response Handle (Bottom-Left) - Cyan Logic */}
+            <div className="absolute left-8 -bottom-1.5 flex items-center">
+                <span className="absolute -top-4 text-[7px] font-black text-cyan-400 tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">HELPER_RES</span>
+                <Handle
+                    type="target"
+                    id="helper-response"
+                    position={Position.Bottom}
+                    className="!w-2.5 !h-2.5 !bg-cyan-400 !border-2 !border-[#0a0a0c] shadow-[0_0_8px_rgba(34,211,238,0.5)] transition-transform hover:scale-125"
                 />
             </div>
 
@@ -79,7 +90,18 @@ export const TestLabBoxNode: React.FC<NodeProps<TestLabBoxNodeData>> = ({ data, 
                 </div>
             </div>
 
-            {/* Output Handle (Right) - Violet Logic */}
+            {/* Helper Request Handle (Bottom-Right) - Purple Logic */}
+            <div className="absolute right-8 -bottom-1.5 flex items-center">
+                <span className="absolute -top-4 text-[7px] font-black text-violet-400 tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">HELPER_REQ</span>
+                <Handle
+                    type="source"
+                    id="helper-request"
+                    position={Position.Bottom}
+                    className="!w-2.5 !h-2.5 !bg-violet-400 !border-2 !border-[#0a0a0c] shadow-[0_0_8px_rgba(167,139,250,0.5)] transition-transform hover:scale-125"
+                />
+            </div>
+
+            {/* Main Output Handle (Right) - Violet Logic */}
             <div className="absolute -right-3 top-1/2 -translate-y-1/2 flex items-center justify-end">
                 <span className="absolute left-4 text-[7px] font-black text-violet-500 tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">OUT</span>
                 <Handle
