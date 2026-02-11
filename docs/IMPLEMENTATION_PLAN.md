@@ -16,9 +16,11 @@
 7. [Phase 6: Test Lab (프론트)](#phase-6-test-lab-프론트)
 8. [Phase 7: Replay·Regression 연동](#phase-7-replayregression-연동)
 9. [Phase 8: Human-in-the-loop](#phase-8-human-in-the-loop)
-10. [Phase 9: 테스트 실행 제한·운영](#phase-9-테스트-실행-제한운영)
-11. [Phase 10: 확장 (추후)](#phase-10-확장-추후)
-12. [의존관계·순서 요약](#의존관계순서-요약)
+10. [Phase 9: 테스트 실행 제한·운양](#phase-9-테스트-실행-제한운양)
+11. [Phase 11: Advanced Agent Governance & Cycles](#phase-11-advanced-agent-governance--cycles)
+12. [Phase 12: Granular Data Governance & Evaluation](#phase-12-granular-data-governance--evaluation)
+13. [Phase 13: 확장 (추후)](#phase-13-확장-추후)
+14. [의존관계·순서 요약](#의존관계순서-요약)
 
 ---
 
@@ -343,7 +345,36 @@
 
 ---
 
-## Phase 10: 확장 (추후)
+---
+
+## Phase 11: Advanced Agent Governance & Cycles
+
+**목표**: 복잡한 에이전트 아키텍처(루프, 중첩 호출) 시각화 및 제어.
+
+| # | 태스크 | 설계 참조 | 비고 |
+|---|--------|-----------|------|
+| 11.1 | 에이전트 노드 포트 분리 (Request/Response) | §2.2 | 완료 (바이올렛/시안) |
+| 11.2 | 루프백(Back-Edge) 시각화 및 MAX 설정 | §2.7 | 완료 (빨간 점선) |
+| 11.3 | 라우터(Router) 다이아몬드 노드 구현 | §2.5 | 완료 |
+| 11.4 | 승인(Approval) HITL 노드 구현 | §2.8 | 완료 |
+| 11.5 | 라운드 스태퍼(Round Stepper) UI 구현 | §2.5 | 완료 |
+
+---
+
+## Phase 12: Granular Data Governance & Evaluation
+
+**목표**: 노드별/라운드별 정밀 데이터 관리 및 평가.
+
+| # | 태스크 | 설계 참조 | 비고 |
+|---|--------|-----------|------|
+| 12.1 | 노드별 Golden/Worst 데이터 저장소 구축 | §2.7 | 계획 중 |
+| 12.2 | 실행 컨텍스트 격리 및 라운드 태깅 (`{round_id: N}`) | §2.9 | 계획 중 |
+| 12.3 | 인스펙터 내 Diff View (라운드 비교) 구현 | §5 | 계획 중 |
+| 12.4 | 컨텍스트 익스플로러 (로컬 변수 조회) 구현 | §5 | 계획 중 |
+
+---
+
+## Phase 13: 확장 (추후)
 
 **목표**: 우선순위 낮은 기능·확장.
 
