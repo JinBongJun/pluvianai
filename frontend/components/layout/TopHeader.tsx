@@ -16,13 +16,15 @@ interface TopHeaderProps {
     userName?: string;
     userEmail?: string;
     onLogout?: () => void;
+    nav?: React.ReactNode;
 }
 
 const TopHeader: React.FC<TopHeaderProps> = ({
     breadcrumb,
     userName,
     userEmail,
-    onLogout
+    onLogout,
+    nav
 }) => {
     const params = useParams();
     const pathname = usePathname();
@@ -112,6 +114,10 @@ const TopHeader: React.FC<TopHeaderProps> = ({
                                                 items={projectSwitcherItems}
                                                 activeId={currentProjectId as string}
                                                 icon={LayoutGrid}
+                                                footerItems={[
+                                                    { label: 'All Projects', href: `/organizations/${currentOrgId}/projects`, icon: LayoutGrid },
+                                                    { label: 'New Project', href: `/organizations/${currentOrgId}/projects/new`, icon: Plus }
+                                                ]}
                                             />
                                         </>
                                     )}
@@ -122,6 +128,8 @@ const TopHeader: React.FC<TopHeaderProps> = ({
 
                     {/* Right: Actions */}
                     <div className="flex items-center gap-10">
+                        {nav}
+
                         <button
                             onClick={() => setIsFeedbackOpen(true)}
                             className="text-sm font-black text-slate-400 hover:text-white transition-colors uppercase tracking-[0.2em]"

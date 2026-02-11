@@ -57,12 +57,6 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
 
     const navItems = [
         {
-            label: 'Laboratory Hub',
-            desc: 'Project clinical trials',
-            href: `/organizations/${resolvedOrgId}/projects`,
-            icon: LayoutDashboard
-        },
-        {
             label: 'Clinical Settings',
             desc: 'Laboratory environment',
             href: `/organizations/${resolvedOrgId}/settings`,
@@ -73,12 +67,6 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
             desc: 'Organization & Team permissions',
             href: `/organizations/${resolvedOrgId}/team`,
             icon: ShieldCheck
-        },
-        {
-            label: 'Access Tokens',
-            desc: 'Secure API integration keys',
-            href: `/organizations/${resolvedOrgId}/integrations`,
-            icon: Key
         },
         {
             label: 'Usage & Licensing',
