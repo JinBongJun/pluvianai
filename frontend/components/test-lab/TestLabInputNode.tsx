@@ -43,21 +43,21 @@ export const TestLabInputNode: React.FC<NodeProps<TestLabInputNodeData>> = ({ da
     return (
         <div
             className={clsx(
-                "relative min-w-[300px] rounded-lg border-2 transition-all p-0 group bg-[#0a0a0c]/90 backdrop-blur-xl",
+                "relative min-w-[360px] rounded-xl border-2 transition-all p-0 group bg-[#0a0a0c]/90 backdrop-blur-xl scale-105",
                 selected
-                    ? "border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+                    ? "border-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.5)]"
                     : "border-emerald-500/30 hover:border-emerald-500/50"
             )}
         >
             {/* Header */}
-            <div className="flex items-center justify-between p-3 border-b border-white/5 bg-emerald-500/5">
-                <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 rounded-md bg-emerald-500/20 text-emerald-400">
-                        <Database className="w-3.5 h-3.5" />
+            <div className="flex items-center justify-between p-4 border-b border-white/5 bg-emerald-500/5">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400">
+                        <Database className="w-4 h-4" />
                     </div>
                     <div className="flex flex-col">
-                        <span className="text-sm font-bold text-white tracking-tight leading-none mb-0.5">{label || 'Input Source'}</span>
-                        <span className="text-[9px] font-mono text-emerald-500/70 uppercase tracking-wider">
+                        <span className="text-base font-bold text-white tracking-tight leading-none mb-1">{label || 'Input Source'}</span>
+                        <span className="text-[10px] font-mono text-emerald-500/70 uppercase tracking-wider">
                             {inputType === 'multimodal' ? 'Multimodal Payload' : 'Text Payload'}
                         </span>
                     </div>

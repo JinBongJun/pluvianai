@@ -38,9 +38,9 @@ export const TestLabEvalNode: React.FC<NodeProps<TestLabEvalNodeData>> = ({ data
     return (
         <div
             className={clsx(
-                "relative min-w-[240px] rounded-lg border-2 transition-all p-0 group backdrop-blur-xl",
+                "relative min-w-[280px] rounded-xl border-2 transition-all p-0 group backdrop-blur-xl scale-105",
                 selected
-                    ? "border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.4)] bg-[#1a1a1e]"
+                    ? "border-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.5)] bg-[#1a1a1e]"
                     : statusColors[status]
             )}
         >
@@ -55,24 +55,24 @@ export const TestLabEvalNode: React.FC<NodeProps<TestLabEvalNodeData>> = ({ data
             </div>
 
             {/* Header */}
-            <div className="flex items-center justify-between p-3 border-b border-white/5 bg-cyan-500/5">
-                <div className="flex items-center gap-2.5">
-                    <div className={clsx("p-1.5 rounded-md", status === 'evaluating' ? "bg-cyan-500/20 text-cyan-400" : "bg-white/5 text-slate-400")}>
-                        <Scale className="w-3.5 h-3.5" />
+            <div className="flex items-center justify-between p-4 border-b border-white/5 bg-cyan-500/5">
+                <div className="flex items-center gap-3">
+                    <div className={clsx("p-2 rounded-lg", status === 'evaluating' ? "bg-cyan-500/20 text-cyan-400" : "bg-white/5 text-slate-400")}>
+                        <Scale className="w-4 h-4" />
                     </div>
                     <div className="flex flex-col">
-                        <span className="text-sm font-bold text-white tracking-tight leading-none mb-0.5">{label || 'Evaluator'}</span>
-                        <span className="text-[9px] font-mono text-cyan-500/70 uppercase tracking-wider">
+                        <span className="text-base font-bold text-white tracking-tight leading-none mb-1">{label || 'Evaluator'}</span>
+                        <span className="text-[10px] font-mono text-cyan-500/70 uppercase tracking-wider">
                             Signal Engine
                         </span>
                     </div>
                 </div>
                 {/* Status Icon */}
                 <div>
-                    {status === 'passed' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                    {status === 'failed' && <XCircle className="w-4 h-4 text-red-500" />}
-                    {status === 'warning' && <AlertCircle className="w-4 h-4 text-amber-500" />}
-                    {status === 'evaluating' && <BarChart3 className="w-4 h-4 text-cyan-500 animate-spin" />}
+                    {status === 'passed' && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
+                    {status === 'failed' && <XCircle className="w-5 h-5 text-red-500" />}
+                    {status === 'warning' && <AlertCircle className="w-5 h-5 text-amber-500" />}
+                    {status === 'evaluating' && <BarChart3 className="w-5 h-5 text-cyan-500 animate-spin" />}
                 </div>
             </div>
 

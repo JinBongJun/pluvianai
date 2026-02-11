@@ -35,10 +35,10 @@ export const TestLabBoxNode: React.FC<NodeProps<TestLabBoxNodeData>> = ({ data, 
     return (
         <div
             className={`
-                relative min-w-[220px] rounded-lg border-2 transition-all p-0 group
-                ${selected ? 'border-violet-400 shadow-[0_0_20px_rgba(139,92,246,0.5)] bg-[#1a1a1e]' : statusColors[status]}
+                relative min-w-[280px] rounded-xl border-2 transition-all p-0 group
+                ${selected ? 'border-violet-400 shadow-[0_0_25px_rgba(139,92,246,0.6)] bg-[#1a1a1e]' : statusColors[status]}
                 ${!selected && statusBgColors[status]}
-                backdrop-blur-xl
+                backdrop-blur-xl scale-105
             `}
         >
             {/* Input Handle (Left) - Emerald Logic */}
@@ -52,14 +52,14 @@ export const TestLabBoxNode: React.FC<NodeProps<TestLabBoxNodeData>> = ({ data, 
             </div>
 
             {/* Header */}
-            <div className="flex items-center justify-between p-3 border-b border-white/5 bg-white/[0.02]">
-                <div className="flex items-center gap-2.5">
-                    <div className={clsx("p-1.5 rounded-md", status === 'running' ? "bg-violet-500/20 text-violet-400" : "bg-white/5 text-slate-400")}>
-                        <Bot className="w-3.5 h-3.5" />
+            <div className="flex items-center justify-between p-4 border-b border-white/5 bg-white/[0.02]">
+                <div className="flex items-center gap-3">
+                    <div className={clsx("p-2 rounded-lg", status === 'running' ? "bg-violet-500/20 text-violet-400" : "bg-white/5 text-slate-400")}>
+                        <Bot className="w-4 h-4" />
                     </div>
                     <div className="flex flex-col">
-                        <span className="text-sm font-bold text-white tracking-tight leading-none mb-0.5">{label}</span>
-                        <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider">{model}</span>
+                        <span className="text-base font-bold text-white tracking-tight leading-none mb-1">{label}</span>
+                        <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">{model}</span>
                     </div>
                 </div>
                 <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
