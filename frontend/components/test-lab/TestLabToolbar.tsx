@@ -1,13 +1,13 @@
 
 import React from 'react';
-import { Plus, Database, Bot, Scale, Copy, Play } from 'lucide-react';
+import { Plus, Database, Bot, Scale, Copy, Play, Download, Swords } from 'lucide-react';
 
 interface TestLabToolbarProps {
     onAddInput: () => void;
     onAddAgent: () => void;
     onAddEval: () => void;
     onCloneLive: () => void;
-    onRunTest: () => void;
+    onBattle: () => void;
 }
 
 export const TestLabToolbar: React.FC<TestLabToolbarProps> = ({
@@ -15,7 +15,7 @@ export const TestLabToolbar: React.FC<TestLabToolbarProps> = ({
     onAddAgent,
     onAddEval,
     onCloneLive,
-    onRunTest
+    onBattle
 }) => {
     return (
         <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 p-2 rounded-full border border-white/10 bg-[#0a0a0c]/80 backdrop-blur-xl shadow-2xl shadow-black/50">
@@ -54,21 +54,24 @@ export const TestLabToolbar: React.FC<TestLabToolbarProps> = ({
             <div className="w-[1px] h-8 bg-white/10 mx-3" />
 
             {/* Utility Actions */}
-            <button
-                onClick={onCloneLive}
-                className="p-3 rounded-full hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
-                title="Clone from Live"
-            >
-                <Copy className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={onCloneLive}
+                    className="flex items-center gap-3 px-4 py-2 rounded-full bg-white/[0.05] hover:bg-white/10 text-slate-300 hover:text-white transition-all border border-white/5 group"
+                    title="Import Config from Live"
+                >
+                    <Download className="w-4 h-4 text-emerald-400" />
+                    <span className="text-[12px] font-bold tracking-tight">Import Live</span>
+                </button>
 
-            <button
-                onClick={onRunTest}
-                className="flex items-center gap-3 px-6 py-2 rounded-full bg-emerald-500 hover:bg-emerald-400 text-[#0a0a0c] font-black text-[11px] uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95 ml-2"
-            >
-                <Bot className="w-4 h-4" />
-                Execute
-            </button>
+                <button
+                    onClick={onBattle}
+                    className="flex items-center gap-3 px-6 py-2 rounded-full bg-violet-600 hover:bg-violet-500 text-white font-black text-[12px] uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:scale-105 active:scale-95 border border-violet-400/30"
+                >
+                    <Swords className="w-4 h-4" />
+                    Battle [Live vs Lab]
+                </button>
+            </div>
         </div>
     );
 };

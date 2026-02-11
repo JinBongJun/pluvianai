@@ -28,6 +28,7 @@ import { TestLabInspector } from '@/components/test-lab/TestLabInspector';
 import { TestLabToolbar } from '@/components/test-lab/TestLabToolbar';
 import { TestLabSidebar } from '@/components/test-lab/TestLabSidebar';
 import { TestLabEdge } from '@/components/test-lab/TestLabEdge';
+import { TestLabComparisonOverlay } from '@/components/test-lab/TestLabComparisonOverlay';
 import { Beaker, Copy, Plus, Bot } from 'lucide-react';
 
 // Node Types Registration
@@ -53,6 +54,7 @@ export default function TestLabPage() {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [showBattleMode, setShowBattleMode] = useState(false);
 
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId), [nodes, selectedNodeId]);
 
@@ -116,8 +118,21 @@ export default function TestLabPage() {
           model: agent.model,
           systemPrompt: agent.system_prompt || '',
         },
-        position: { x: 380 * (idx % 3) + 100, y: 300 * Math.floor(idx / 3) + 100 },
+        position: { x: 380 * (idx % 3) + 500, y: 300 * Math.floor(idx / 3) + 100 },
       }));
+
+      // Add a Start (Input) Node automatically if agents exist
+      if (nextNodes.length > 0) {
+        nextNodes.push({
+          id: 'imported-input',
+          type: 'inputNode',
+          data: {
+            label: 'Imported User Inputs',
+            textInput: 'Sample input from live session...',
+          },
+          position: { x: 100, y: 100 },
+        });
+      }
 
       const nextEdges: Edge[] = (connData?.connections || []).map((conn: any) => ({
         id: conn.id,
@@ -127,8 +142,20 @@ export default function TestLabPage() {
         markerEnd: { type: 'arrowclosed' as any, color: '#8b5cf6' },
       }));
 
+      // Add edge from input to first agent if applicable
+      if (nextNodes.length > 1) {
+        nextEdges.push({
+          id: 'input-to-agent-link',
+          source: 'imported-input',
+          target: nextNodes[0].id,
+          type: 'default',
+          markerEnd: { type: 'arrowclosed' as any, color: '#8b5cf6' },
+        });
+      }
+
       setNodes(nextNodes);
       setEdges(nextEdges);
+      alert('Live Configuration Injected: Structure, Prompts, and Inputs imported. 📥');
     } catch (err) {
       console.error('Failed to clone from live:', err);
       alert("Failed to communicate with the Live Environment.");
@@ -213,7 +240,7 @@ export default function TestLabPage() {
           onAddAgent={handleAddAgent}
           onAddEval={handleAddEval}
           onCloneLive={handleCloneFromLive}
-          onRunTest={handleRunTest}
+          onBattle={() => setShowBattleMode(true)}
         />
 
         {!nodes.length && renderEmptySandbox()}
@@ -232,11 +259,15 @@ export default function TestLabPage() {
           connectionMode={ConnectionMode.Loose}
           fitView
         >
-          <Background variant={BackgroundVariant.Lines} gap={60} size={1} color="rgba(255, 255, 255, 0.03)" />
-          <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(255, 255, 255, 0.015)" />
+          <Background variant={BackgroundVariant.Dots} color="#1a1a1e" gap={20} />
         </ReactFlow>
+
+        {/* Battle Mode Overlay */}
+        <TestLabComparisonOverlay
+          isOpen={showBattleMode}
+          onClose={() => setShowBattleMode(false)}
+        />
       </div>
     </CanvasPageLayout>
   );
 }
-
