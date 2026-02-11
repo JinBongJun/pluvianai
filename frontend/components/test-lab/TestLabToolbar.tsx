@@ -6,16 +6,18 @@ interface TestLabToolbarProps {
     onAddInput: () => void;
     onAddAgent: () => void;
     onAddEval: () => void;
+    onAddRouter: () => void;
+    onAddApproval: () => void;
     onCloneLive: () => void;
-    onBattle: () => void;
 }
 
 export const TestLabToolbar: React.FC<TestLabToolbarProps> = ({
     onAddInput,
     onAddAgent,
     onAddEval,
+    onAddRouter,
+    onAddApproval,
     onCloneLive,
-    onBattle
 }) => {
     return (
         <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 p-2 rounded-full border border-white/10 bg-[#0a0a0c]/80 backdrop-blur-xl shadow-2xl shadow-black/50">
@@ -49,6 +51,26 @@ export const TestLabToolbar: React.FC<TestLabToolbarProps> = ({
                     <Scale className="w-4 h-4 fill-blue-500 text-blue-500" />
                     <span className="text-[12px] font-bold tracking-tight">Add Eval</span>
                 </button>
+
+                <div className="w-[1px] h-4 bg-white/10" />
+
+                <button
+                    onClick={onAddRouter}
+                    className="flex items-center gap-3 px-4 py-2 rounded-full hover:bg-amber-500/20 text-slate-300 hover:text-amber-400 transition-all group"
+                >
+                    <Plus className="w-4 h-4 fill-amber-500 text-amber-500 rotate-45" />
+                    <span className="text-[12px] font-bold tracking-tight">Add Router</span>
+                </button>
+
+                <div className="w-[1px] h-4 bg-white/10" />
+
+                <button
+                    onClick={onAddApproval}
+                    className="flex items-center gap-3 px-4 py-2 rounded-full hover:bg-blue-400/20 text-slate-300 hover:text-blue-400 transition-all group"
+                >
+                    <Plus className="w-4 h-4 fill-blue-400 text-blue-400" />
+                    <span className="text-[12px] font-bold tracking-tight">Add Approval</span>
+                </button>
             </div>
 
             <div className="w-[1px] h-8 bg-white/10 mx-3" />
@@ -64,13 +86,6 @@ export const TestLabToolbar: React.FC<TestLabToolbarProps> = ({
                     <span className="text-[12px] font-bold tracking-tight">Import Live</span>
                 </button>
 
-                <button
-                    onClick={onBattle}
-                    className="flex items-center gap-3 px-6 py-2 rounded-full bg-violet-600 hover:bg-violet-500 text-white font-black text-[12px] uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:scale-105 active:scale-95 border border-violet-400/30"
-                >
-                    <Swords className="w-4 h-4" />
-                    Battle [Live vs Lab]
-                </button>
             </div>
         </div>
     );
