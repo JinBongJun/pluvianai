@@ -190,7 +190,7 @@ export default function TestLabPage() {
       rightPanel={
         <RailwaySidePanel
           title={selectedNode?.data?.label || selectedNodeId || 'Inspector'}
-          isOpen={!!selectedNodeId && selectedNode?.type !== 'inputNode'}
+          isOpen={!!selectedNodeId}
           onClose={() => setSelectedNodeId(null)}
         >
           {selectedNode && (

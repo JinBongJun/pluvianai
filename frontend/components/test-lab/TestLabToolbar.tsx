@@ -18,7 +18,7 @@ export const TestLabToolbar: React.FC<TestLabToolbarProps> = ({
     onRunTest
 }) => {
     return (
-        <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 p-2 rounded-full border border-white/10 bg-[#0a0a0c]/80 backdrop-blur-xl shadow-2xl shadow-black/50 scale-110">
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 p-2 rounded-full border border-white/10 bg-[#0a0a0c]/80 backdrop-blur-xl shadow-2xl shadow-black/50">
 
             {/* Unified Node Pills */}
             <div className="flex items-center bg-white/[0.03] rounded-full p-1.5 gap-2">
