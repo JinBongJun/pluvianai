@@ -10,7 +10,10 @@ import {
     GitBranch,
     User,
     Settings,
-    MessageSquare
+    MessageSquare,
+    AlertTriangle,
+    Star,
+    FileText
 } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -77,6 +80,10 @@ export const TestLabInspector: React.FC<TestLabInspectorProps> = ({ node, onUpda
         onUpdate({ systemPrompt: e.target.value });
     };
 
+    const handleInputPromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        onUpdate({ textInput: e.target.value });
+    };
+
     return (
         <div className="flex flex-col h-full bg-[#121214] text-slate-200">
             {/* Inspector Tabs */}
@@ -123,64 +130,116 @@ export const TestLabInspector: React.FC<TestLabInspectorProps> = ({ node, onUpda
                         </button>
                     </div>
 
-                    {/* High-Level Configuration Overlay Style */}
-                    <div className="space-y-6">
-                        <div className="flex items-center justify-between group">
-                            <div className="flex items-center gap-2">
-                                <Settings className="w-3.5 h-3.5 text-slate-600" />
-                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Configuration</span>
+                    {/* Dynamic Content based on Node Type */}
+                    {node.type === 'agentCard' && (
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between group">
+                                <div className="flex items-center gap-2">
+                                    <Settings className="w-3.5 h-3.5 text-slate-600" />
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Configuration</span>
+                                </div>
+                                <ChevronDown className="w-4 h-4 text-slate-800" />
                             </div>
-                            <ChevronDown className="w-4 h-4 text-slate-800" />
-                        </div>
 
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-[9px] font-black text-slate-600 uppercase tracking-[0.2em] mb-2 px-1">Model</label>
-                                <div className="relative group">
-                                    <select
-                                        value={node.data.model || 'gpt-4o (Recommended)'}
-                                        onChange={handleModelChange}
-                                        className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white appearance-none focus:outline-none focus:ring-1 focus:ring-[#8b5cf6]/50 transition-all cursor-pointer"
-                                    >
-                                        <option value="gpt-4o (Recommended)">gpt-4o (Recommended)</option>
-                                        <option value="claude-3-5-sonnet-latest">claude-3-5-sonnet-latest</option>
-                                        <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
-                                    </select>
-                                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 pointer-events-none group-hover:text-slate-400" />
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-[9px] font-black text-slate-600 uppercase tracking-[0.2em] mb-2 px-1">Model</label>
+                                    <div className="relative group">
+                                        <select
+                                            value={node.data.model || 'gpt-4o (Recommended)'}
+                                            onChange={handleModelChange}
+                                            className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white appearance-none focus:outline-none focus:ring-1 focus:ring-[#8b5cf6]/50 transition-all cursor-pointer"
+                                        >
+                                            <option value="gpt-4o (Recommended)">gpt-4o (Recommended)</option>
+                                            <option value="claude-3-5-sonnet-latest">claude-3-5-sonnet-latest</option>
+                                            <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                                        </select>
+                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 pointer-events-none group-hover:text-slate-400" />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-[9px] font-black text-slate-600 uppercase tracking-[0.2em] mb-2 px-1">System Prompt</label>
+                                    <textarea
+                                        value={node.data.systemPrompt || ''}
+                                        onChange={handlePromptChange}
+                                        placeholder="Define the agent's role and behavior..."
+                                        className="w-full h-48 bg-white/[0.03] border border-white/5 rounded-xl p-4 text-xs text-white leading-relaxed placeholder:text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#8b5cf6]/50 transition-all resize-none font-mono"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {node.type === 'inputNode' && (
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between group">
+                                <div className="flex items-center gap-2">
+                                    <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Payload Settings</span>
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-[9px] font-black text-slate-600 uppercase tracking-[0.2em] mb-2 px-1">System Prompt</label>
-                                <textarea
-                                    value={node.data.systemPrompt || ''}
-                                    onChange={handlePromptChange}
-                                    placeholder="Define the agent's role and behavior..."
-                                    className="w-full h-48 bg-white/[0.03] border border-white/5 rounded-xl p-4 text-xs text-white leading-relaxed placeholder:text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#8b5cf6]/50 transition-all resize-none font-mono"
-                                />
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-[9px] font-black text-slate-600 uppercase tracking-[0.2em] mb-2 px-1">User Input Prompt</label>
+                                    <textarea
+                                        value={node.data.textInput || ''}
+                                        onChange={handleInputPromptChange}
+                                        placeholder="Enter the message the user would send to the agent..."
+                                        className="w-full h-48 bg-white/[0.03] border border-white/5 rounded-xl p-4 text-xs text-white leading-relaxed placeholder:text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all resize-none font-mono"
+                                    />
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
+
+                    {node.type === 'evalNode' && (
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between group">
+                                <div className="flex items-center gap-2">
+                                    <Activity className="w-3.5 h-3.5 text-cyan-600" />
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Evaluation Config</span>
+                                </div>
+                            </div>
+                            <div className="p-4 rounded-xl bg-cyan-500/5 border border-cyan-500/10 text-[11px] text-slate-400 italic">
+                                Use the sections below to define signals and success criteria.
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Collapsible Sections */}
                 <div className="mt-4 border-t border-white/5">
-                    <InspectorSection icon={Database} title="Test Data" badge="0 Loaded">
-                        <div className="text-[10px] text-slate-700 italic">No datasets connected to this specimen.</div>
-                    </InspectorSection>
-                    <InspectorSection icon={Zap} title="Signals & Thresholds" badge="5 Active">
-                        <div className="space-y-2">
-                            {[1, 2, 3, 4, 5].map(i => (
-                                <div key={i} className="flex items-center justify-between text-[10px] py-1 border-b border-white/[0.02]">
-                                    <span className="text-slate-500">Signal_{i}</span>
-                                    <span className="text-emerald-500 font-bold">READY</span>
+                    {node.type === 'inputNode' ? (
+                        <>
+                            <InspectorSection icon={AlertTriangle} title="Worst Case Scenarios" badge={node.data.worstExamples?.length || 0}>
+                                <div className="text-[10px] text-slate-700 italic">No failure cases defined yet.</div>
+                            </InspectorSection>
+                            <InspectorSection icon={Star} title="Golden Path Examples" badge={node.data.goldenExamples?.length || 0}>
+                                <div className="text-[10px] text-slate-700 italic">No ideal responses defined yet.</div>
+                            </InspectorSection>
+                        </>
+                    ) : (
+                        <>
+                            <InspectorSection icon={Database} title="Test Data" badge="0 Loaded">
+                                <div className="text-[10px] text-slate-700 italic">No datasets connected to this specimen.</div>
+                            </InspectorSection>
+                            <InspectorSection icon={Zap} title="Signals & Thresholds" badge="5 Active">
+                                <div className="space-y-2">
+                                    {[1, 2, 3, 4, 5].map(i => (
+                                        <div key={i} className="flex items-center justify-between text-[10px] py-1 border-b border-white/[0.02]">
+                                            <span className="text-slate-500">Signal_{i}</span>
+                                            <span className="text-emerald-500 font-bold">READY</span>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
-                    </InspectorSection>
-                    <InspectorSection icon={GitBranch} title="Connections" badge={0}>
-                        <div className="text-[10px] text-slate-700">No active neural links detected.</div>
-                    </InspectorSection>
+                            </InspectorSection>
+                            <InspectorSection icon={GitBranch} title="Connections" badge={0}>
+                                <div className="text-[10px] text-slate-700">No active neural links detected.</div>
+                            </InspectorSection>
+                        </>
+                    )}
                 </div>
             </div>
         </div>
