@@ -12,10 +12,6 @@ import {
 export const TestLabSidebar: React.FC = () => {
     return (
         <div className="absolute top-10 left-6 z-[100] flex flex-col items-center gap-4 p-2.5 rounded-2xl border border-white/10 bg-[#0a0a0c]/80 backdrop-blur-xl shadow-2xl shadow-black/50">
-            {/* Brand Logo Area */}
-            <div className="p-2.5 rounded-xl bg-violet-500/20 text-violet-400 mb-2 shadow-[0_0_15px_rgba(139,92,246,0.3)]">
-                <Bot className="w-6 h-6" />
-            </div>
 
             <div className="w-8 h-px bg-white/5" />
 
