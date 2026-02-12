@@ -1,10 +1,10 @@
 # SDK Timeout Guide
 
-This guide documents timeout settings and Circuit Breaker configuration for AgentGuard SDKs.
+This guide documents timeout settings and Circuit Breaker configuration for PluvianAI SDKs.
 
 ## Overview
 
-AgentGuard SDKs implement timeouts and Circuit Breaker patterns to ensure reliability and prevent blocking operations.
+PluvianAI SDKs implement timeouts and Circuit Breaker patterns to ensure reliability and prevent blocking operations.
 
 ## Timeout Configuration
 
@@ -12,13 +12,13 @@ AgentGuard SDKs implement timeouts and Circuit Breaker patterns to ensure reliab
 
 **Default**: 30 seconds
 
-The proxy timeout controls how long the SDK waits for AgentGuard's proxy to respond before timing out.
+The proxy timeout controls how long the SDK waits for PluvianAI's proxy to respond before timing out.
 
 ```python
 # Python SDK
-import agentguard
+import PluvianAI
 
-agentguard.init(
+PluvianAI.init(
     api_key="ag_live_xxxxx",
     project_id=123,
     proxy_timeout=30.0  # seconds
@@ -27,9 +27,9 @@ agentguard.init(
 
 ```typescript
 // Node.js SDK
-import agentguard from '@agentguard/sdk';
+import PluvianAI from '@PluvianAI/sdk';
 
-agentguard.init({
+PluvianAI.init({
   apiKey: 'ag_live_xxxxx',
   projectId: 123,
   proxyTimeout: 30000  // milliseconds
@@ -43,13 +43,13 @@ agentguard.init({
 The firewall timeout controls how long the SDK waits for Production Guard (firewall) checks before allowing the request to proceed.
 
 ```python
-agentguard.init(
+PluvianAI.init(
     firewall_timeout=1.0  # seconds
 )
 ```
 
 ```typescript
-agentguard.init({
+PluvianAI.init({
   firewallTimeout: 1000  // milliseconds
 });
 ```
@@ -61,25 +61,25 @@ agentguard.init({
 The PII sanitization timeout controls how long the SDK waits for PII sanitization to complete before proceeding.
 
 ```python
-agentguard.init(
+PluvianAI.init(
     pii_timeout=0.1  # seconds (100ms)
 )
 ```
 
 ```typescript
-agentguard.init({
+PluvianAI.init({
   piiTimeout: 100  // milliseconds
 });
 ```
 
 ## Circuit Breaker Configuration
 
-AgentGuard SDKs implement a Circuit Breaker pattern to prevent cascading failures.
+PluvianAI SDKs implement a Circuit Breaker pattern to prevent cascading failures.
 
 ### Configuration
 
 ```python
-agentguard.init(
+PluvianAI.init(
     circuit_breaker={
         "failure_threshold": 5,  # Open circuit after 5 failures
         "recovery_time_seconds": 30,  # Try again after 30 seconds
@@ -89,7 +89,7 @@ agentguard.init(
 ```
 
 ```typescript
-agentguard.init({
+PluvianAI.init({
   circuitBreaker: {
     failureThreshold: 5,
     recoveryTimeSeconds: 30,
@@ -106,7 +106,7 @@ agentguard.init({
 
 ## Health Check Endpoint
 
-AgentGuard provides a health check endpoint that SDKs can monitor:
+PluvianAI provides a health check endpoint that SDKs can monitor:
 
 ```
 GET /api/v1/health
@@ -117,7 +117,7 @@ GET /api/v1/health
 ```json
 {
   "status": "healthy",
-  "app": "AgentGuard API",
+  "app": "PluvianAI API",
   "version": "0.1.0",
   "database": "ok",
   "redis": "ok"
@@ -130,33 +130,33 @@ SDKs should periodically check the health endpoint (every 30 seconds) and update
 
 ```python
 # Python SDK automatically monitors health
-agentguard.init(
+PluvianAI.init(
     health_check_interval=30.0  # seconds
 )
 ```
 
 ```typescript
 // Node.js SDK automatically monitors health
-agentguard.init({
+PluvianAI.init({
   healthCheckInterval: 30000  // milliseconds
 });
 ```
 
 ## Fail-Open Strategy
 
-When AgentGuard is unavailable, SDKs implement a fail-open strategy:
+When PluvianAI is unavailable, SDKs implement a fail-open strategy:
 
 1. **Circuit Breaker Open**: If health checks fail, circuit opens
-2. **Bypass Proxy**: Requests bypass AgentGuard and go directly to original LLM provider
+2. **Bypass Proxy**: Requests bypass PluvianAI and go directly to original LLM provider
 3. **Log Warning**: SDK logs a warning but doesn't block the request
 
 ### Example
 
 ```python
-# If AgentGuard is down, requests go directly to OpenAI
+# If PluvianAI is down, requests go directly to OpenAI
 try:
-    response = agentguard.openai.chat.completions.create(...)
-except AgentGuardUnavailable:
+    response = PluvianAI.openai.chat.completions.create(...)
+except PluvianAIUnavailable:
     # Fallback to direct OpenAI call
     response = openai.chat.completions.create(...)
 ```
@@ -174,12 +174,12 @@ SDKs should handle timeout errors gracefully:
 
 ```python
 try:
-    response = agentguard.openai.chat.completions.create(...)
+    response = PluvianAI.openai.chat.completions.create(...)
 except TimeoutError:
-    logger.warning("AgentGuard proxy timeout, retrying...")
+    logger.warning("PluvianAI proxy timeout, retrying...")
     # Retry with exponential backoff
 except CircuitBreakerOpen:
-    logger.warning("AgentGuard circuit open, bypassing proxy")
+    logger.warning("PluvianAI circuit open, bypassing proxy")
     # Bypass and go directly to LLM provider
 ```
 

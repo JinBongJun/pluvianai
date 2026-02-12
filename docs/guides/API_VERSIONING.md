@@ -2,8 +2,8 @@
 
 ## Overview
 
-- **v1**: `/api/v1` — current stable API. No breaking changes.
-- **v2**: `/api/v2` — future iterations. New features and breaking changes go here first.
+- **v1**: `/api/v1` ??current stable API. No breaking changes.
+- **v2**: `/api/v2` ??future iterations. New features and breaking changes go here first.
 
 ## Policy
 
@@ -24,10 +24,10 @@ When an endpoint is deprecated, responses will include:
 ```
 X-API-Deprecation: v1 endpoint will be deprecated on YYYY-MM-DD. Migrate to v2: /api/v2/...
 X-API-Deprecation-Date: YYYY-MM-DD
-X-API-Migration-Guide: https://docs.agentguard.dev/api/migration/v1-to-v2
+X-API-Migration-Guide: https://docs.PluvianAI.dev/api/migration/v1-to-v2
 ```
 
-## Migration Guide (v1 → v2)
+## Migration Guide (v1 ??v2)
 
 When v2 introduces breaking changes:
 
