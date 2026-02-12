@@ -1,22 +1,22 @@
-# AgentGuard Self-hosted Setup Guide
+# PluvianAI Self-hosted Setup Guide
 
-This guide explains how to deploy AgentGuard on your own infrastructure for Enterprise customers.
+This guide explains how to deploy PluvianAI on your own infrastructure for Enterprise customers.
 
 ## Prerequisites
 
 - Docker and Docker Compose installed
 - PostgreSQL 15+ (or use provided Docker image)
 - Redis 7+ (or use provided Docker image)
-- Enterprise license key from AgentGuard
+- Enterprise license key from PluvianAI
 - Minimum 4GB RAM, 2 CPU cores
 - 20GB+ disk space
 
 ## Quick Start
 
-1. **Clone or download AgentGuard**
+1. **Clone or download PluvianAI**
    ```bash
-   git clone https://github.com/agentguard/agentguard.git
-   cd agentguard
+   git clone https://github.com/PluvianAI/PluvianAI.git
+   cd PluvianAI
    ```
 
 2. **Create environment file**
@@ -28,9 +28,9 @@ This guide explains how to deploy AgentGuard on your own infrastructure for Ente
    Edit `.env.self-hosted` and set:
    ```env
    # Database
-   POSTGRES_USER=agentguard
+   POSTGRES_USER=PluvianAI
    POSTGRES_PASSWORD=your-strong-password-here
-   POSTGRES_DB=agentguard
+   POSTGRES_DB=PluvianAI
    POSTGRES_PORT=5432
 
    # Redis
@@ -52,7 +52,7 @@ This guide explains how to deploy AgentGuard on your own infrastructure for Ente
    NEXT_PUBLIC_API_URL=http://localhost:8000
    # Or: https://api.your-domain.com
 
-   # Optional: LLM Provider Keys (if using AgentGuard proxy)
+   # Optional: LLM Provider Keys (if using PluvianAI proxy)
    OPENAI_API_KEY=your-openai-key
    ANTHROPIC_API_KEY=your-anthropic-key
    GOOGLE_API_KEY=your-google-key
@@ -60,7 +60,7 @@ This guide explains how to deploy AgentGuard on your own infrastructure for Ente
    # Optional: Email (Resend)
    RESEND_API_KEY=your-resend-key
    EMAIL_FROM=noreply@your-domain.com
-   EMAIL_FROM_NAME=AgentGuard
+   EMAIL_FROM_NAME=PluvianAI
 
    # Optional: Slack
    SLACK_WEBHOOK_URL=your-slack-webhook
@@ -146,12 +146,12 @@ docker-compose -f docker-compose.self-hosted.yml exec backend alembic upgrade he
 
 **Backup PostgreSQL:**
 ```bash
-docker-compose -f docker-compose.self-hosted.yml exec postgres pg_dump -U agentguard agentguard > backup.sql
+docker-compose -f docker-compose.self-hosted.yml exec postgres pg_dump -U PluvianAI PluvianAI > backup.sql
 ```
 
 **Restore PostgreSQL:**
 ```bash
-docker-compose -f docker-compose.self-hosted.yml exec -T postgres psql -U agentguard agentguard < backup.sql
+docker-compose -f docker-compose.self-hosted.yml exec -T postgres psql -U PluvianAI PluvianAI < backup.sql
 ```
 
 **Backup Redis:**
@@ -199,15 +199,15 @@ Optional: Set up Prometheus/Grafana for metrics collection.
 
 1. Verify `SELF_HOSTED_LICENSE_KEY` is set correctly
 2. Check license status: `GET /api/v1/self-hosted/status`
-3. Contact AgentGuard support if license is invalid
+3. Contact PluvianAI support if license is invalid
 
 ## Support
 
 For Enterprise self-hosted support:
-- Email: enterprise@agentguard.ai
-- Documentation: https://docs.agentguard.ai/self-hosted
-- Support Portal: https://support.agentguard.ai
+- Email: enterprise@PluvianAI.ai
+- Documentation: https://docs.PluvianAI.ai/self-hosted
+- Support Portal: https://support.PluvianAI.ai
 
 ## License
 
-Self-hosted deployment requires an Enterprise license. Contact sales@agentguard.ai for licensing information.
+Self-hosted deployment requires an Enterprise license. Contact sales@PluvianAI.ai for licensing information.
