@@ -8,5 +8,5 @@ interface ProjectPageProps {
 }
 
 export default function ProjectPage({ params }: ProjectPageProps) {
-    redirect(`/organizations/${params.orgId}/projects/${params.projectId}/dashboard`)
+    redirect(`/organizations/${params.orgId}/projects/${params.projectId}/live-view`)
 }

@@ -44,7 +44,7 @@ export default function Home() {
         <div className="min-h-screen text-slate-200 selection:bg-emerald-500/30 font-sans">
             {/* 1. Navbar */}
             <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-[#0a0a0c]/80 backdrop-blur-xl">
-                <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16 h-[90px] flex items-center justify-between">
+                <div className="w-full px-6 md:px-12 lg:px-16 h-[90px] flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         {/* Logo: Croc & Bird Silhouette (SVG for now, replace with logo.png later) */}
                         <div className="relative w-14 h-14 pointer-events-none select-none hover:scale-105 transition-transform duration-300 flex items-center justify-center">

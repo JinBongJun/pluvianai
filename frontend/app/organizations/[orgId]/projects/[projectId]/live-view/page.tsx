@@ -11,6 +11,7 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   ConnectionMode,
+  ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -19,6 +20,7 @@ import { liveViewAPI, projectsAPI, organizationsAPI } from '@/lib/api';
 import { AgentCardNode } from '@/components/live-view/AgentCardNode';
 import DrawIOEdge from '@/components/shared/DrawIOEdge';
 import RailwaySidePanel from '@/components/shared/RailwaySidePanel';
+import { NodeFocusHandler } from '@/components/shared/NodeFocusHandler';
 import { Activity } from 'lucide-react';
 
 const nodeTypes = {
@@ -29,7 +31,7 @@ const edgeTypes = {
   default: DrawIOEdge,
 };
 
-export default function LiveViewPage() {
+function LiveViewContent() {
   const params = useParams();
   const orgId = params?.orgId as string;
   const projectId = Number(params?.projectId);
@@ -119,6 +121,8 @@ export default function LiveViewPage() {
       <div className="flex-1 min-h-0 relative bg-[#0a0a0c]">
         {!nodes.length && !agentsData?.agents?.length && renderEmptyState()}
 
+        <NodeFocusHandler selectedNodeId={selectedAgentId} isPanelOpen={!!selectedAgentId} />
+
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -144,3 +148,10 @@ export default function LiveViewPage() {
   );
 }
 
+export default function LiveViewPage() {
+  return (
+    <ReactFlowProvider>
+      <LiveViewContent />
+    </ReactFlowProvider>
+  );
+}

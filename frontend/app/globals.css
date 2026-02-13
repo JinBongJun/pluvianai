@@ -68,15 +68,23 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Smooth transitions - removed transform to prevent dragging lag */
+/* Smooth transitions */
 * {
   transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
 }
 
-/* React Flow Performance - Disable transitions during dragging/position updates */
-.react-flow__node,
+/* React Flow Performance - Disable transforms during dragging */
+.react-flow__node {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+/* Fix Handle Transitions to prevent layout lag during connection */
+.react-flow__handle {
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
 .react-flow__edge-path,
 .react-flow__connection-path {
   transition: none !important;
@@ -352,4 +360,64 @@ body {
       rgba(255, 255, 255, 0.4) 25px);
   background-size: 25px 100%, 100% 25px;
   animation: flowLines 5s linear infinite;
+}
+
+/* React Flow Connection Validation Visuals */
+.react-flow__handle-connecting {
+  filter: saturate(0.1) opacity(0.2) !important;
+}
+
+.react-flow__handle-valid,
+.react-flow__handle-connecting.react-flow__handle-source {
+  filter: saturate(1) opacity(1) brightness(1.2) !important;
+  box-shadow: 0 0 15px currentColor !important;
+  border-width: 2px !important;
+  scale: 1.35;
+}
+
+/* High-Contrast Connection Line */
+.react-flow__connection-path {
+  stroke: #64748b !important;
+  /* Slate 500 */
+  stroke-width: 3;
+  stroke-dasharray: 6;
+  animation: line-flow 0.5s linear infinite;
+}
+
+@keyframes line-flow {
+  from {
+    stroke-dashoffset: 12;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.react-flow__connection-path.valid {
+  stroke: #10b981 !important;
+  /* Emerald 500 */
+  stroke-dasharray: 0 !important;
+  filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.6));
+  animation: none;
+}
+
+.react-flow__connection-path.invalid {
+  stroke: #ef4444 !important;
+  /* Red 500 */
+  opacity: 0.5;
+}
+
+@keyframes clinical-handle-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+    filter: brightness(1);
+  }
+
+  50% {
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.8), 0 0 45px rgba(16, 185, 129, 0.3);
+    filter: brightness(1.5);
+  }
 }

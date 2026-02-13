@@ -20,9 +20,9 @@ export const AgentCardNode = memo(({ data, selected }: NodeProps<AgentCardNodeDa
         <Handle
           type="target"
           position={Position.Left}
-          className="!w-2.5 !h-2.5 !bg-[#10b981] !border-none !shadow-[0_0_8px_rgba(16,185,129,0.4)]"
+          className="!w-2.5 !h-2.5 !bg-[#8b5cf6] !border-none !shadow-[0_0_8px_rgba(139,92,246,0.4)]"
         />
-        <span className="text-[7px] font-black text-[#10b981]/50 uppercase tracking-tighter pointer-events-none">IN</span>
+        <span className="text-[7px] font-black text-[#8b5cf6]/50 uppercase tracking-tighter pointer-events-none">IN</span>
       </div>
 
       <div className="absolute right-[-5px] top-1/2 -translate-y-1/2 flex items-center gap-1.5 z-10">
