@@ -22,7 +22,7 @@ export const TestLabToolbar: React.FC<TestLabToolbarProps> = ({
     return (
         <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 p-2 rounded-full border border-white/10 bg-[#0a0a0c]/80 backdrop-blur-xl shadow-2xl shadow-black/50">
 
-            {/* Unified Node Pills */}
+            {/* Functional Node Pills */}
             <div className="flex items-center bg-white/[0.03] rounded-full p-1.5 gap-2">
                 <button
                     onClick={onAddInput}
@@ -38,7 +38,7 @@ export const TestLabToolbar: React.FC<TestLabToolbarProps> = ({
                     onClick={onAddAgent}
                     className="flex items-center gap-3 px-4 py-2 rounded-full hover:bg-violet-500/20 text-slate-300 hover:text-violet-400 transition-all group"
                 >
-                    <Database className="w-4 h-4 fill-violet-500 text-violet-500" />
+                    <Bot className="w-4 h-4 fill-violet-500 text-violet-500" />
                     <span className="text-[12px] font-bold tracking-tight">Add Agent</span>
                 </button>
 
@@ -46,9 +46,9 @@ export const TestLabToolbar: React.FC<TestLabToolbarProps> = ({
 
                 <button
                     onClick={onAddEval}
-                    className="flex items-center gap-3 px-4 py-2 rounded-full hover:bg-blue-500/20 text-slate-300 hover:text-blue-400 transition-all group"
+                    className="flex items-center gap-3 px-4 py-2 rounded-full hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all group"
                 >
-                    <Scale className="w-4 h-4 fill-blue-500 text-blue-500" />
+                    <Scale className="w-4 h-4 fill-cyan-500 text-cyan-500" />
                     <span className="text-[12px] font-bold tracking-tight">Add Eval</span>
                 </button>
 
@@ -66,9 +66,9 @@ export const TestLabToolbar: React.FC<TestLabToolbarProps> = ({
 
                 <button
                     onClick={onAddApproval}
-                    className="flex items-center gap-3 px-4 py-2 rounded-full hover:bg-blue-400/20 text-slate-300 hover:text-blue-400 transition-all group"
+                    className="flex items-center gap-3 px-4 py-2 rounded-full hover:bg-blue-500/20 text-slate-300 hover:text-blue-400 transition-all group"
                 >
-                    <Plus className="w-4 h-4 fill-blue-400 text-blue-400" />
+                    <Plus className="w-4 h-4 fill-blue-500 text-blue-400" />
                     <span className="text-[12px] font-bold tracking-tight">Add Approval</span>
                 </button>
             </div>

@@ -67,7 +67,7 @@ export const TestLabApprovalNode: React.FC<NodeProps<TestLabApprovalNodeData>> =
                     <Circle className="w-2 h-2 text-[#0a0a0c] fill-current pointer-events-none" />
                 </Handle>
             </div>
-
+            
             {/* Output Handle - Dispatcher */}
             <div className="absolute -right-3 top-1/2 -translate-y-1/2 flex items-center justify-end">
                 <span className="absolute left-6 text-[8px] font-black text-blue-500 tracking-wider opacity-0 group-hover:opacity-100 transition-all uppercase whitespace-nowrap bg-[#0a0a0c]/80 px-2 py-0.5 rounded-full border border-blue-500/20 pointer-events-none">Gate Egress</span>

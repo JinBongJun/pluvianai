@@ -14,6 +14,7 @@ import ReactFlow, {
   Connection,
   Edge,
   Node,
+  useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -30,8 +31,10 @@ import TestLabApprovalNode from '@/components/test-lab/TestLabApprovalNode';
 import { TestLabEdge } from '@/components/test-lab/TestLabEdge';
 import { TestLabSidebar } from '@/components/test-lab/TestLabSidebar';
 import { TestLabComparisonOverlay } from '@/components/test-lab/TestLabComparisonOverlay';
-import { Beaker, Copy, Plus, Bot } from 'lucide-react';
+import { NodeFocusHandler } from '@/components/shared/NodeFocusHandler';
 import { projectsAPI, organizationsAPI, liveViewAPI, testRunsAPI } from '@/lib/api';
+import { checkClinicalConnection } from '@/lib/clinical-validation';
+import { Beaker } from 'lucide-react';
 
 // Node Types Registration
 const nodeTypes = {
@@ -46,10 +49,11 @@ const edgeTypes = {
   default: TestLabEdge,
 };
 
-export default function TestLabPage() {
+function TestLabContent() {
   const params = useParams();
   const orgId = params?.orgId as string;
   const projectId = Number(params?.projectId);
+  const { getNode } = useReactFlow();
 
   const { data: project } = useSWR(projectId ? ['project', projectId] : null, () => projectsAPI.get(projectId));
   const { data: org } = useSWR(orgId ? ['organization', orgId] : null, () => organizationsAPI.get(orgId));
@@ -59,6 +63,12 @@ export default function TestLabPage() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [showBattleMode, setShowBattleMode] = useState(false);
+
+  // Connection Line Logic for Real-time Feedback
+  const connectionLineStyle = {
+    strokeWidth: 3,
+    stroke: '#475569',
+  };
 
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId), [nodes, selectedNodeId]);
 
@@ -76,7 +86,7 @@ export default function TestLabPage() {
   const onConnect = useCallback((params: Connection) => setEdges((eds) => addEdge({
     ...params,
     type: 'default',
-    markerEnd: { type: 'arrowclosed' as any, color: '#8b5cf6' },
+    markerEnd: { type: 'arrowclosed' as any, color: '#10b981' },
     data: { order: eds.length + 1 }
   }, eds)), [setEdges]);
 
@@ -84,95 +94,16 @@ export default function TestLabPage() {
     setEdges((eds) => eds.filter((e) => !edgesToDelete.find((etd) => etd.id === e.id)));
   }, [setEdges]);
 
-  // Run Test Logic
-  const handleRunTest = async () => {
-    if (nodes.length === 0) {
-      alert("Canvas is empty. Add nodes to run a test.");
-      return;
-    }
-    setIsRunning(true);
-    try {
-      await testRunsAPI.create(projectId, { nodes, edges });
-      alert('Test Run Initiated Successfully! 🚀');
-    } catch (error) {
-      console.error('Test run failed:', error);
-      alert('Failed to initiate test run.');
-    } finally {
-      setIsRunning(false);
-    }
-  };
-
-  // Clone from Live Logic
-  const handleCloneFromLive = async () => {
-    try {
-      const liveData = await liveViewAPI.getAgents(projectId);
-
-      if (!liveData?.agents || liveData.agents.length === 0) {
-        alert("No active agents found in the Live Environment. Please integrate the SDK first.");
-        return;
-      }
-
-      const connData = await liveViewAPI.listConnections(projectId);
-
-      const nextNodes: Node[] = (liveData.agents || []).map((agent: any, idx: number) => ({
-        id: agent.agent_id,
-        type: 'agentCard',
-        data: {
-          label: agent.display_name || agent.agent_id,
-          model: agent.model,
-          systemPrompt: agent.system_prompt || '',
-        },
-        position: { x: 380 * (idx % 3) + 500, y: 300 * Math.floor(idx / 3) + 100 },
-      }));
-
-      // Add a Start (Input) Node automatically if agents exist
-      if (nextNodes.length > 0) {
-        nextNodes.push({
-          id: 'imported-input',
-          type: 'inputNode',
-          data: {
-            label: 'Imported User Inputs',
-            textInput: 'Sample input from live session...',
-          },
-          position: { x: 100, y: 100 },
-        });
-      }
-
-      const nextEdges: Edge[] = (connData?.connections || []).map((conn: any) => ({
-        id: conn.id,
-        source: conn.source_agent_name,
-        target: conn.target_agent_name,
-        type: 'default',
-        markerEnd: { type: 'arrowclosed' as any, color: '#8b5cf6' },
-      }));
-
-      // Add edge from input to first agent if applicable
-      if (nextNodes.length > 1) {
-        nextEdges.push({
-          id: 'input-to-agent-link',
-          source: 'imported-input',
-          target: nextNodes[0].id,
-          type: 'default',
-          markerEnd: { type: 'arrowclosed' as any, color: '#8b5cf6' },
-        });
-      }
-
-      setNodes(nextNodes);
-      setEdges(nextEdges);
-      alert('Live Configuration Injected: Structure, Prompts, and Inputs imported. 📥');
-    } catch (err) {
-      console.error('Failed to clone from live:', err);
-      alert("Failed to communicate with the Live Environment.");
-    }
-  };
-
   // Node Creation Helpers
   const createNode = (type: string, label: string, data: any = {}) => {
     const id = `${type}-${Date.now()}`;
     const newNode: Node = {
       id,
       type,
-      data: { label, ...data },
+      data: {
+        label,
+        ...data
+      },
       position: {
         x: Math.random() * 400 + 100,
         y: Math.random() * 400 + 100,
@@ -187,6 +118,23 @@ export default function TestLabPage() {
   const handleAddEval = () => createNode('evalNode', 'Evaluate');
   const handleAddRouter = () => createNode('routerNode', 'Decision');
   const handleAddApproval = () => createNode('approvalNode', 'Human Review');
+
+  const handleCloneFromLive = async () => {
+    try {
+      const liveData = await liveViewAPI.getAgents(projectId);
+      if (!liveData?.agents) return;
+
+      const nextNodes: Node[] = liveData.agents.map((agent: any, idx: number) => ({
+        id: agent.agent_id,
+        type: 'agentCard',
+        data: { label: agent.display_name, model: agent.model },
+        position: { x: 380 * (idx % 3) + 500, y: 300 * Math.floor(idx / 3) + 100 },
+      }));
+      setNodes(nextNodes);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // Render Empty Sandbox State
   const renderEmptySandbox = () => (
@@ -218,7 +166,6 @@ export default function TestLabPage() {
       status="SANDBOX"
       onAction={(actionId) => {
         if (actionId === 'add-agent') handleAddAgent();
-        console.log('Lab HUD Action:', actionId)
       }}
       rightPanel={
         <RailwaySidePanel
@@ -236,11 +183,7 @@ export default function TestLabPage() {
       }
     >
       <div className="flex-1 min-h-0 relative bg-[#0a0a0c]">
-
-        {/* New Utility Sidebar */}
         <TestLabSidebar />
-
-        {/* New Floating Toolbar */}
         <TestLabToolbar
           onAddInput={handleAddInput}
           onAddAgent={handleAddAgent}
@@ -249,8 +192,8 @@ export default function TestLabPage() {
           onAddApproval={handleAddApproval}
           onCloneLive={handleCloneFromLive}
         />
-
         {!nodes.length && renderEmptySandbox()}
+        <NodeFocusHandler selectedNodeId={selectedNodeId} isPanelOpen={!!selectedNodeId} />
 
         <ReactFlow
           nodes={nodes}
@@ -264,17 +207,25 @@ export default function TestLabPage() {
           onNodeClick={(_, node) => setSelectedNodeId(String(node.id))}
           deleteKeyCode={['Backspace', 'Delete']}
           connectionMode={ConnectionMode.Loose}
+          connectionLineStyle={connectionLineStyle}
           fitView
         >
           <Background variant={BackgroundVariant.Dots} color="#1a1a1e" gap={20} />
         </ReactFlow>
 
-        {/* Battle Mode Overlay */}
         <TestLabComparisonOverlay
           isOpen={showBattleMode}
           onClose={() => setShowBattleMode(false)}
         />
       </div>
     </CanvasPageLayout>
+  );
+}
+
+export default function TestLabPage() {
+  return (
+    <ReactFlowProvider>
+      <TestLabContent />
+    </ReactFlowProvider>
   );
 }

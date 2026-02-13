@@ -2,6 +2,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { clsx } from 'clsx';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Tab {
     id: string;
@@ -33,49 +34,72 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
     headerActions,
 }) => {
     return (
-        <div
-            className={clsx(
-                'fixed top-0 right-0 h-full w-96 bg-[#1a1a1e] border-l border-white/10 shadow-2xl transform transition-transform duration-300 z-40',
-                isOpen ? 'translate-x-0' : 'translate-x-full',
-                className
-            )}
-        >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-                <h2 className="text-lg font-semibold text-white">{title}</h2>
-                <button
-                    onClick={onClose}
-                    className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+        <AnimatePresence>
+            {isOpen && (
+                <motion.div
+                    initial={{ x: '100%', opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: '110%', opacity: 0 }}
+                    transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                    className={clsx(
+                        'fixed top-6 right-6 bottom-6 w-[520px] bg-[#0d0d0f]/90 backdrop-blur-3xl border border-white/10 shadow-[0_30px_90px_rgba(0,0,0,0.9)] rounded-[48px] z-[4000] overflow-hidden flex flex-col',
+                        className
+                    )}
                 >
-                    <X className="w-5 h-5" />
-                </button>
-            </div>
-            {tabs && tabs.length > 0 && (
-                <div className="border-b border-white/10 px-6">
-                    <nav className="flex gap-1">
-                        {tabs.map((tab) => (
-                            <button
-                                key={tab.id}
-                                onClick={() => {
-                                    tab.onClick?.();
-                                    onTabChange?.(tab.id);
-                                }}
-                                className={clsx(
-                                    'px-3 py-2 text-sm font-medium border-b-2 transition-colors',
-                                    activeTab === tab.id
-                                        ? 'text-emerald-400 border-emerald-500'
-                                        : 'text-slate-400 hover:text-white border-transparent hover:border-emerald-500'
-                                )}
-                            >
-                                {tab.label}
-                            </button>
-                        ))}
-                    </nav>
-                </div>
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-10 py-8 border-b border-white/5 bg-black/40">
+                        <div className="space-y-1">
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Unit Diagnostics</span>
+                            <h2 className="text-3xl font-black text-white tracking-tighter">{title}</h2>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="p-3 rounded-full hover:bg-white/5 text-slate-400 hover:text-white transition-all active:scale-90"
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
+
+                    {/* Navigation Tabs (Optional) */}
+                    {tabs && tabs.length > 0 && (
+                        <div className="border-b border-white/5 px-10 py-2 bg-black/20">
+                            <nav className="flex gap-8">
+                                {tabs.map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => {
+                                            tab.onClick?.();
+                                            onTabChange?.(tab.id);
+                                        }}
+                                        className={clsx(
+                                            'px-1 py-4 text-xs font-black uppercase tracking-[0.2em] border-b-2 transition-all',
+                                            activeTab === tab.id
+                                                ? 'text-white border-white'
+                                                : 'text-slate-600 hover:text-slate-400 border-transparent'
+                                        )}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </nav>
+                        </div>
+                    )}
+
+                    {/* Content Area */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-0">
+                        {children}
+                    </div>
+
+                    {/* Functional Footer */}
+                    <div className="p-6 px-10 border-t border-white/5 bg-black/40 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Clinical System Active</span>
+                        </div>
+                    </div>
+                </motion.div>
             )}
-            <div className="overflow-y-auto h-[calc(100%-4rem)] p-6">
-                {children}
-            </div>
-        </div>
+        </AnimatePresence>
     );
 };
 

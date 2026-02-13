@@ -63,8 +63,8 @@ const TopHeader: React.FC<TopHeaderProps> = ({
 
     return (
         <>
-            <header className="fixed top-0 left-0 w-full h-[90px] bg-[#0a0a0c]/80 backdrop-blur-3xl border-b border-white/10 z-[999] px-8 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
-                <div className="h-full flex items-center justify-between max-w-[1800px] mx-auto">
+            <header className="fixed top-0 left-0 w-full h-[90px] bg-[#0a0a0c]/80 backdrop-blur-3xl border-b border-white/10 z-[999] px-12 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
+                <div className="h-full flex items-center justify-between w-full">
                     {/* Left: Brand & Context Switchers */}
                     <div className="flex items-center">
                         <Link href="/" className="flex items-center gap-4 group mr-8">
@@ -126,10 +126,15 @@ const TopHeader: React.FC<TopHeaderProps> = ({
                         </div>
                     </div>
 
+                    {/* Middle: Integrated Navigation */}
+                    {nav && (
+                        <div className="flex-1 flex justify-center px-8">
+                            {nav}
+                        </div>
+                    )}
+
                     {/* Right: Actions */}
                     <div className="flex items-center gap-10">
-                        {nav}
-
                         <button
                             onClick={() => setIsFeedbackOpen(true)}
                             className="text-sm font-black text-slate-400 hover:text-white transition-colors uppercase tracking-[0.2em]"
