@@ -19,7 +19,7 @@
     <circle cx="42" cy="45" r="9" fill="#10b981" />
     
     <!-- Beak Line: White part (visible outside) -->
-    <path d="M60 65 L 100 38" stroke="#ffffff" stroke-width="8" stroke-linecap="round" />
+    <path d="M60 65 L 100 38" stroke="#ffffff" stroke-width="6" stroke-linecap="round" />
     
     <!-- Beak Line: Emerald part (clipped perfectly inside the body) -->
     <path d="M60 65 L 100 38" stroke="#10b981" stroke-width="10" stroke-linecap="butt" clip-path="url(#bodyClip)" />
