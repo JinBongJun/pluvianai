@@ -1,7 +1,0 @@
-﻿components/test-lab/ManualInputModal.tsx(12,31): error TS2304: Cannot find name 'useState'.
-components/test-lab/ManualInputModal.tsx(27,10): error TS2304: Cannot find name 'Modal'.
-components/test-lab/ManualInputModal.tsx(35,18): error TS2304: Cannot find name 'Button'.
-components/test-lab/ManualInputModal.tsx(35,71): error TS2304: Cannot find name 'Button'.
-components/test-lab/ManualInputModal.tsx(36,18): error TS2304: Cannot find name 'Button'.
-components/test-lab/ManualInputModal.tsx(36,74): error TS2304: Cannot find name 'Button'.
-components/test-lab/ManualInputModal.tsx(38,11): error TS2304: Cannot find name 'Modal'.
