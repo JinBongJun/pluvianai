@@ -1,6 +1,6 @@
 import React from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
-import { BarChart2, Edit, Trash2, Zap } from 'lucide-react';
+import { BarChart2, Edit, Trash2, Zap, ChevronRight } from 'lucide-react';
 
 import { Signal } from '@/lib/schemas';
 
@@ -46,8 +46,10 @@ const OutputNode: React.FC<NodeProps<OutputNodeData>> = ({ data, selected }) => 
             <Handle
                 type="target"
                 position={Position.Left}
-                className="!w-3 !h-3 !bg-blue-500 !border-2 !border-blue-300"
-            />
+                className="!w-8 !h-8 !bg-blue-500 !border-2 !border-[#0a0a0c] !shadow-[0_0_15px_rgba(59,130,246,0.5)] !flex items-center justify-center transition-all hover:scale-125 react-flow__handle-connecting:ring-2 react-flow__handle-connecting:ring-blue-500/10 react-flow__handle-valid:ring-4 react-flow__handle-valid:ring-blue-500/40"
+            >
+                <div className="w-2.5 h-2.5 rounded-full bg-[#0a0a0c]" />
+            </Handle>
 
             {/* Header */}
             <div className="flex items-center justify-between p-3 border-b border-blue-500/20 bg-blue-500/10">

@@ -35,6 +35,7 @@ import { NodeFocusHandler } from '@/components/shared/NodeFocusHandler';
 import { projectsAPI, organizationsAPI, liveViewAPI, testRunsAPI } from '@/lib/api';
 import { checkClinicalConnection } from '@/lib/clinical-validation';
 import { Beaker } from 'lucide-react';
+import { useUndoRedo } from '@/hooks/useUndoRedo';
 
 // Node Types Registration
 const nodeTypes = {
@@ -60,9 +61,11 @@ function TestLabContent() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
   const [showBattleMode, setShowBattleMode] = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+  // Undo/Redo Hook
+  const { undo, redo, takeSnapshot, canUndo, canRedo } = useUndoRedo(setNodes, setEdges, setSelectedNodeId);
 
   // Connection Line Logic for Real-time Feedback
   const connectionLineStyle = {
@@ -83,19 +86,38 @@ function TestLabContent() {
   }, [setNodes]);
 
   // Interactive Handlers
-  const onConnect = useCallback((params: Connection) => setEdges((eds) => addEdge({
-    ...params,
-    type: 'default',
-    markerEnd: { type: 'arrowclosed' as any, color: '#10b981' },
-    data: { order: eds.length + 1 }
-  }, eds)), [setEdges]);
+  const onConnect = useCallback((params: Connection) => {
+    takeSnapshot(nodes, edges, selectedNodeId);
+    setEdges((eds) => addEdge({
+      ...params,
+      type: 'default',
+      markerEnd: { type: 'arrowclosed' as any, color: '#10b981' },
+      data: { order: eds.length + 1 }
+    }, eds));
+  }, [setEdges, nodes, edges, selectedNodeId, takeSnapshot]);
 
-  const onEdgesDelete = useCallback((edgesToDelete: Edge[]) => {
-    setEdges((eds) => eds.filter((e) => !edgesToDelete.find((etd) => etd.id === e.id)));
-  }, [setEdges]);
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    takeSnapshot(nodes, edges, selectedNodeId);
+    setNodes((nds) => nds.filter((node) => node.id !== nodeId));
+    setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+    if (selectedNodeId === nodeId) setSelectedNodeId(null);
+  }, [setNodes, setEdges, selectedNodeId, nodes, edges, takeSnapshot]);
+
+  // Inject Handlers into Node Data
+  const nodesWithHandlers = useMemo(() => {
+    return nodes.map((node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        onEdit: () => setSelectedNodeId(node.id),
+        onDelete: () => handleDeleteNode(node.id),
+      },
+    }));
+  }, [nodes, handleDeleteNode]);
 
   // Node Creation Helpers
   const createNode = (type: string, label: string, data: any = {}) => {
+    takeSnapshot(nodes, edges, selectedNodeId);
     const id = `${type}-${Date.now()}`;
     const newNode: Node = {
       id,
@@ -124,6 +146,7 @@ function TestLabContent() {
       const liveData = await liveViewAPI.getAgents(projectId);
       if (!liveData?.agents) return;
 
+      takeSnapshot(nodes, edges, selectedNodeId);
       const nextNodes: Node[] = liveData.agents.map((agent: any, idx: number) => ({
         id: agent.agent_id,
         type: 'agentCard',
@@ -183,7 +206,12 @@ function TestLabContent() {
       }
     >
       <div className="flex-1 min-h-0 relative bg-[#0a0a0c]">
-        <TestLabSidebar />
+        <TestLabSidebar
+          onUndo={() => undo(nodes, edges, selectedNodeId)}
+          onRedo={() => redo(nodes, edges, selectedNodeId)}
+          canUndo={canUndo}
+          canRedo={canRedo}
+        />
         <TestLabToolbar
           onAddInput={handleAddInput}
           onAddAgent={handleAddAgent}
@@ -196,15 +224,15 @@ function TestLabContent() {
         <NodeFocusHandler selectedNodeId={selectedNodeId} isPanelOpen={!!selectedNodeId} />
 
         <ReactFlow
-          nodes={nodes}
+          nodes={nodesWithHandlers}
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onEdgesDelete={onEdgesDelete}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onNodeClick={(_, node) => setSelectedNodeId(String(node.id))}
+          onNodeDragStart={() => takeSnapshot(nodes, edges, selectedNodeId)}
           deleteKeyCode={['Backspace', 'Delete']}
           connectionMode={ConnectionMode.Loose}
           connectionLineStyle={connectionLineStyle}

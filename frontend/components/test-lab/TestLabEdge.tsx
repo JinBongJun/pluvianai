@@ -3,7 +3,8 @@ import {
     EdgeProps,
     getSmoothStepPath,
     EdgeLabelRenderer,
-    BaseEdge
+    BaseEdge,
+    Position
 } from 'reactflow';
 import clsx from 'clsx';
 
@@ -19,12 +20,26 @@ export const TestLabEdge: React.FC<EdgeProps> = ({
     markerEnd,
     data
 }) => {
+    const TARGET_OFFSET = 8;
+
+    // Calculate adjusted points to prevent arrows from being buried in handle centers
+    let adjustedStartX = sourceX;
+    let adjustedStartY = sourceY;
+    let adjustedEndX = targetX;
+    let adjustedEndY = targetY;
+
+    // Apply back-off to the target (where the arrow resides)
+    if (targetPosition === Position.Left) adjustedEndX -= TARGET_OFFSET;
+    if (targetPosition === Position.Right) adjustedEndX += TARGET_OFFSET;
+    if (targetPosition === Position.Top) adjustedEndY -= TARGET_OFFSET;
+    if (targetPosition === Position.Bottom) adjustedEndY += TARGET_OFFSET;
+
     const [edgePath, labelX, labelY] = getSmoothStepPath({
-        sourceX,
-        sourceY,
+        sourceX: adjustedStartX,
+        sourceY: adjustedStartY,
         sourcePosition,
-        targetX,
-        targetY,
+        targetX: adjustedEndX,
+        targetY: adjustedEndY,
         targetPosition,
     });
 

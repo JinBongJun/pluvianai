@@ -364,7 +364,9 @@ body {
 
 /* React Flow Connection Validation Visuals */
 .react-flow__handle-connecting {
-  filter: saturate(0.1) opacity(0.2) !important;
+  filter: saturate(0.1) opacity(0.2) grayscale(1) !important;
+  pointer-events: none !important;
+  scale: 1 !important;
 }
 
 .react-flow__handle-valid,
@@ -372,7 +374,15 @@ body {
   filter: saturate(1) opacity(1) brightness(1.2) !important;
   box-shadow: 0 0 15px currentColor !important;
   border-width: 2px !important;
-  scale: 1.35;
+  scale: 1.35 !important;
+  pointer-events: all !important;
+}
+
+/* Show labels during connection */
+.react-flow__container.rf-connecting span,
+.react-flow__container.react-flow__handle-connecting span {
+  opacity: 1 !important;
+  transform: translateY(0) scale(1) !important;
 }
 
 /* High-Contrast Connection Line */
