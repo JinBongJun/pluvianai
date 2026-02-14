@@ -1,6 +1,6 @@
 import React from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
-import { Database, Edit, Trash2 } from 'lucide-react';
+import { Database, Edit, Trash2, ChevronRight } from 'lucide-react';
 import { ContentBlock } from '@/types/test-lab/content-blocks';
 
 export type VariableType = 'text' | 'image' | 'json';
@@ -109,8 +109,12 @@ const InputNode: React.FC<NodeProps<InputNodeData>> = ({ data, selected }) => {
             <Handle
                 type="source"
                 position={Position.Right}
-                className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-emerald-300"
-            />
+                className="!w-8 !h-8 !bg-emerald-500 !border-2 !border-[#0a0a0c] !shadow-[0_0_15px_rgba(16,185,129,0.5)] !flex items-center justify-center transition-all hover:scale-125 react-flow__handle-connecting:ring-2 react-flow__handle-connecting:ring-emerald-500/10 react-flow__handle-valid:ring-4 react-flow__handle-valid:ring-emerald-500/40"
+            >
+                <div className="w-full h-full flex items-center justify-center pointer-events-none">
+                    <ChevronRight className="w-5 h-5 text-[#0a0a0c]" strokeWidth={3} />
+                </div>
+            </Handle>
         </div>
     );
 };

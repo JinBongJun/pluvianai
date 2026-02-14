@@ -17,6 +17,7 @@ class AgentDisplaySetting(Base):
 
     system_prompt_hash = Column(String(64), nullable=False)
     display_name = Column(String(100), nullable=True)
+    node_type = Column(String(50), nullable=True, server_default="agentCard")
     is_deleted = Column(Boolean, default=False, server_default="false")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

@@ -70,6 +70,7 @@ def list_agents(
                 "total": row.total,
                 "worst_count": int(row.worst_count or 0),
                 "last_seen": row.last_seen,
+                "node_type": setting.node_type if setting else "agentCard",
                 "is_deleted": setting.is_deleted if setting else False,
             }
 
@@ -98,8 +99,8 @@ def get_agent_settings(
         .first()
     )
     if not setting:
-        return {"agent_id": agent_id, "display_name": None, "is_deleted": False}
-    return {"agent_id": agent_id, "display_name": setting.display_name, "is_deleted": setting.is_deleted}
+        return {"agent_id": agent_id, "display_name": None, "node_type": "agentCard", "is_deleted": False}
+    return {"agent_id": agent_id, "display_name": setting.display_name, "node_type": setting.node_type, "is_deleted": setting.is_deleted}
 
 
 @router.patch("/projects/{project_id}/live-view/agents/{agent_id}/settings")
@@ -107,6 +108,7 @@ def update_agent_settings(
     project_id: int,
     agent_id: str,
     display_name: Optional[str] = None,
+    node_type: Optional[str] = None,
     is_deleted: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -123,12 +125,15 @@ def update_agent_settings(
             project_id=project_id,
             system_prompt_hash=agent_id,
             display_name=display_name,
+            node_type=node_type or "agentCard",
             is_deleted=is_deleted or False,
         )
         db.add(setting)
     else:
         if display_name is not None:
             setting.display_name = display_name
+        if node_type is not None:
+            setting.node_type = node_type
         if is_deleted is not None:
             setting.is_deleted = is_deleted
     db.commit()

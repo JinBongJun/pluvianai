@@ -18,6 +18,9 @@ import 'reactflow/dist/style.css';
 import CanvasPageLayout from '@/components/layout/CanvasPageLayout';
 import { liveViewAPI, projectsAPI, organizationsAPI } from '@/lib/api';
 import { AgentCardNode } from '@/components/live-view/AgentCardNode';
+import { TestLabRouterNode } from '@/components/test-lab/TestLabRouterNode';
+import { TestLabEvalNode } from '@/components/test-lab/TestLabEvalNode';
+import { TestLabApprovalNode } from '@/components/test-lab/TestLabApprovalNode';
 import DrawIOEdge from '@/components/shared/DrawIOEdge';
 import RailwaySidePanel from '@/components/shared/RailwaySidePanel';
 import { NodeFocusHandler } from '@/components/shared/NodeFocusHandler';
@@ -25,6 +28,9 @@ import { Activity } from 'lucide-react';
 
 const nodeTypes = {
   agentCard: AgentCardNode,
+  routerNode: TestLabRouterNode,
+  evalNode: TestLabEvalNode,
+  approvalNode: TestLabApprovalNode,
 };
 
 const edgeTypes = {
@@ -52,7 +58,7 @@ function LiveViewContent() {
 
     const nextNodes: Node[] = (agentsData.agents || []).map((agent: any, idx: number) => ({
       id: agent.agent_id,
-      type: 'agentCard',
+      type: agent.node_type || 'agentCard',
       data: {
         label: agent.display_name || agent.agent_id,
         model: agent.model,

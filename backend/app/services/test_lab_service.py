@@ -823,9 +823,7 @@ class TestLabService:
                     connections.append({
                         "source": box_map[source_var],
                         "target": box_map[target_var],
-                    })
-
-        # Pattern 5: Agent initialization
+                    })        # Pattern 5: Agent initialization
         # agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION)
         agent_pattern = r'(\w+)\s*=\s*initialize_agent\([^)]*agent\s*=\s*AgentType\.(\w+)'
         agent_matches = re.finditer(agent_pattern, code, re.IGNORECASE)
