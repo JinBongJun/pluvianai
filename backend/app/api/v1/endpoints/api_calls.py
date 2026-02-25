@@ -1,5 +1,6 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import asyncio
+from typing import List, Optional, Any, Dict
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from pydantic import BaseModel, Field
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -9,8 +10,22 @@ from app.core.security import get_current_user
 from app.core.dependencies import get_api_call_service
 from app.models.user import User
 from app.core.permissions import check_project_access
+from app.services.data_normalizer import DataNormalizer
+from app.services.background_tasks import background_task_service
 
 router = APIRouter()
+
+
+class APICallIngestBody(BaseModel):
+    """SDK ingest: same shape as SDK sends."""
+    project_id: int = Field(..., description="Project ID")
+    request_data: Dict[str, Any] = Field(default_factory=dict, description="LLM request payload")
+    response_data: Dict[str, Any] = Field(default_factory=dict, description="LLM response payload")
+    latency_ms: float = Field(0.0, description="Latency in ms")
+    status_code: int = Field(200, description="HTTP status code")
+    agent_name: Optional[str] = None
+    chain_id: Optional[str] = None
+
 
 class APICallResponse(BaseModel):
     id: int
@@ -50,6 +65,41 @@ def list_api_calls(
         model=model,
         agent_name=agent_name
     )
+
+
+@router.post("", status_code=status.HTTP_202_ACCEPTED)
+async def ingest_api_call(
+    body: APICallIngestBody = Body(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Ingest a single API call from the SDK (no proxy).
+    Creates APICall + Snapshot so Live View shows the run.
+    Auth: Bearer token; project_id must be accessible by current user.
+    """
+    check_project_access(body.project_id, current_user, db)
+    normalizer = DataNormalizer()
+    normalized = normalizer.normalize(
+        request_data=body.request_data or {},
+        response_data=body.response_data or {},
+        url="",
+    )
+    asyncio.create_task(
+        background_task_service.save_api_call_async(
+            project_id=body.project_id,
+            request_data=body.request_data or {},
+            response_data=body.response_data or {},
+            normalized=normalized,
+            latency_ms=body.latency_ms,
+            status_code=body.status_code,
+            agent_name=body.agent_name,
+            chain_id=body.chain_id,
+            api_key=None,
+        )
+    )
+    return {"accepted": True}
+
 
 @router.get("/by-id/{id}", response_model=APICallResponse)
 def get_api_call(

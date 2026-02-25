@@ -49,7 +49,6 @@ from app.models import (
     RefreshToken,
     TestRun,
     TestResult,
-    TestLabCanvas,
     LiveViewConnection,
     SignalDetection,
     SignalConfig,

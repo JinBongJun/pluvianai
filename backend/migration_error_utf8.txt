@@ -1,0 +1,20 @@
+﻿{"timestamp": "2026-02-15 22:03:19", "level": "INFO", "logger": "agentguard", "message": "Database URL: postgresql:***@centerbeam.proxy.rlwy.net:54592/railway", "module": "database", "funcName": "<module>", "line": 23}
+{"timestamp": "2026-02-15 22:03:19", "level": "INFO", "logger": "agentguard", "message": "Database engine created successfully", "module": "database", "funcName": "<module>", "line": 44}
+python : INFO  [alembic.runtime.migration
+] Context impl PostgresqlImpl.
+위치 줄:1 문자:1
++ python -m alembic upgrade head > migrat
+ion_error.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecifi 
+   ed: (INFO  [alembic....PostgresqlImp  
+  l.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeComm 
+   andError
+ 
+INFO  [alembic.runtime.migration] Will as
+sume transactional DDL.
+INFO  [alembic.runtime.migration] Running
+ upgrade 67fc79a64a2d -> 5e5a8559f4d4, re
+store_test_lab_tables

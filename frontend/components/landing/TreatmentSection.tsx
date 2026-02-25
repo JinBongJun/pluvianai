@@ -44,7 +44,7 @@ export default function TreatmentSection() {
                                 <span className="text-emerald-400">Precision Surgery.</span>
                             </h2>
                             <p className="text-xl text-slate-400 leading-relaxed">
-                                Don't just log errors. Fix them. Pluvian acts as an active immune system for your AI architecture.
+                                PluvianAI&apos;s automated recovery protocols. Fix them. Pluvian acts as an active immune system for your AI architecture.
                             </p>
                         </div>
 

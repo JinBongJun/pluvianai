@@ -2,7 +2,7 @@
 Project model for multi-tenancy
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -21,6 +21,13 @@ class Project(Base):
     is_active = Column(Boolean, default=True)
     is_panic_mode = Column(Boolean, default=False)  # Panic Mode (Global Block) - stored in DB and synced to Redis
     usage_mode = Column(String(32), default="full", nullable=False)  # "full" | "test_only" (Design 5.1.5)
+    canvas_nodes = Column(JSON, nullable=True)  # Official live configuration from Test Lab
+    canvas_edges = Column(JSON, nullable=True)
+    
+    # Custom thresholds for the 12 extreme clinical factors (0.0 to 1.0)
+    # Default: 0.8 across all pillars
+    diagnostic_config = Column(JSON, nullable=True, server_default='{}')
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

@@ -12,6 +12,7 @@ from app.models.trace import Trace
 from app.models.snapshot import Snapshot
 from app.services.data_normalizer import DataNormalizer
 from app.utils.compression import optimize_api_call_data, compress_json
+from app.utils.tool_calls import extract_tool_calls_summary
 from app.core.logging_config import logger
 
 
@@ -112,6 +113,7 @@ class BackgroundTaskService:
                 "request": request_data,
                 "response": response_data,
             }
+            tool_calls_summary = extract_tool_calls_summary(payload_for_snapshot)
             try:
                 trace = db.query(Trace).filter(Trace.id == trace_id).first()
                 if not trace:
@@ -128,6 +130,7 @@ class BackgroundTaskService:
                     user_message=request_prompt,
                     response=response_text,
                     payload=payload_for_snapshot,
+                    tool_calls_summary=tool_calls_summary if tool_calls_summary else None,
                     latency_ms=int(latency_ms) if latency_ms is not None else None,
                     status_code=status_code,
                 )

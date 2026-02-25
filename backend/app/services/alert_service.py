@@ -224,7 +224,7 @@ class AlertService:
         )
 
         # Send email
-        subject = f"AgentGuard Alert: {alert.title}"
+        subject = f"PluvianAI Alert: {alert.title}"
         result = await self.email_service.send_alert_email(
             to=user_email,
             subject=subject,

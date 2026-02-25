@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import ProjectLayout from '@/components/layout/ProjectLayout';
 import JSONViewer from '@/components/ui/JSONViewer';
@@ -28,17 +28,7 @@ export default function APICallDetailPage() {
 
   const basePath = `/organizations/${orgId}/projects/${projectId}`;
 
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
-    loadAPICall();
-  }, [callId, projectId, router]);
-
-  const loadAPICall = async () => {
+  const loadAPICall = useCallback(async () => {
     try {
       const [callData, callsList] = await Promise.all([
         apiCallsAPI.get(callId),
@@ -72,13 +62,7 @@ export default function APICallDetailPage() {
         // Quality score not available, ignore
       }
     } catch (error: any) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to load API call:', error);
-      } else {
-        import('@sentry/nextjs').then((Sentry) => {
-          Sentry.captureException(error as Error, { extra: { projectId, callId } });
-        });
-      }
+      console.error('Failed to load API call:', error);
       toast.showToast(error.response?.data?.detail || 'Failed to load API call', 'error');
       if (error.response?.status === 401) {
         router.push('/login');
@@ -88,7 +72,17 @@ export default function APICallDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [callId, projectId, basePath, router, toast]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+
+    void loadAPICall();
+  }, [router, loadAPICall]);
 
   const navigateToCall = (newCallId: number) => {
     router.push(`${basePath}/api-calls/${newCallId}`);

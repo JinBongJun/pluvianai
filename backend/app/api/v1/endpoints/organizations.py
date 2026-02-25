@@ -72,7 +72,7 @@ class OrganizationDetail(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
-    type: Optional[str] = None
+    type: Optional[str] = None  # Deprecated: use plan_type. Kept for backward compatibility.
     plan_type: str
     stats: Optional[dict] = None  # For backward compatibility
 
@@ -335,7 +335,7 @@ def get_organization(
 
             try:
                 quality_rows = (
-                    db.query(func.avg(QualityScore.overall_score))
+                    db.query(func.avg(QualityScore.score))
                     .filter(
                         QualityScore.project_id.in_(project_ids),
                         QualityScore.created_at >= seven_days_ago,
@@ -376,7 +376,7 @@ def get_organization(
                     alerts_list.append(
                         {
                             "project": project_name,
-                            "summary": alert.message or "Alert detected",
+                            "summary": alert.title or "Alert detected",
                             "severity": alert.severity or "medium",
                         }
                     )
@@ -538,7 +538,7 @@ def list_org_projects(
                 quality_rows = (
                     db.query(
                         QualityScore.project_id,
-                        func.avg(QualityScore.overall_score).label("avg_quality"),
+                        func.avg(QualityScore.score).label("avg_quality"),
                     )
                     .filter(
                         QualityScore.project_id.in_(project_ids),

@@ -17,7 +17,6 @@ export default function NewProjectPage() {
   const toast = useToast();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [usageMode, setUsageMode] = useState<UsageMode>('full');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +39,7 @@ export default function NewProjectPage() {
         name: name.trim(),
         description: description.trim() || undefined,
         organization_id: Number(orgId),
-        usage_mode: usageMode,
+        usage_mode: 'full', // Defaulting to full mode as UI selection is removed
       });
 
       // Track project creation event
@@ -48,7 +47,7 @@ export default function NewProjectPage() {
         project_id: project.id,
         organization_id: Number(orgId),
         has_description: !!description.trim(),
-        usage_mode: usageMode,
+        usage_mode: 'full',
       });
 
       toast.showToast('Project created successfully', 'success');
@@ -100,7 +99,7 @@ export default function NewProjectPage() {
               onChange={(e) => setName(e.target.value)}
               placeholder="My Project"
               required
-              className="w-full rounded-lg border border-white/10 bg-ag-surface px-4 py-3 text-sm text-white placeholder:text-ag-muted focus:border-ag-accent focus:outline-none"
+              className="w-full rounded-lg border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
             />
             <p className="mt-1 text-xs text-slate-400">
               Choose a descriptive name for your project.
@@ -117,42 +116,8 @@ export default function NewProjectPage() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description of your project"
               rows={4}
-              className="w-full rounded-lg border border-white/10 bg-ag-surface px-4 py-3 text-sm text-white placeholder:text-ag-muted focus:border-ag-accent focus:outline-none resize-none"
+              className="w-full rounded-lg border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none resize-none"
             />
-          </div>
-
-          <div className="border-t border-white/10 pt-6">
-            <p className="block text-sm font-medium text-slate-300 mb-3">Usage Mode</p>
-            <div className="space-y-3">
-              <label className="flex items-start gap-3 rounded-lg border border-white/10 bg-ag-surface px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors has-[:checked]:border-ag-accent has-[:checked]:bg-ag-accent/10">
-                <input
-                  type="radio"
-                  name="usage_mode"
-                  value="full"
-                  checked={usageMode === 'full'}
-                  onChange={() => setUsageMode('full')}
-                  className="mt-1 h-4 w-4 border-white/20 text-ag-accent focus:ring-ag-accent"
-                />
-                <div>
-                  <span className="font-medium text-white">Full Mode (Live View + Test Lab)</span>
-                  <p className="text-xs text-slate-400 mt-0.5">Monitor real traffic and run tests</p>
-                </div>
-              </label>
-              <label className="flex items-start gap-3 rounded-lg border border-white/10 bg-ag-surface px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors has-[:checked]:border-ag-accent has-[:checked]:bg-ag-accent/10">
-                <input
-                  type="radio"
-                  name="usage_mode"
-                  value="test_only"
-                  checked={usageMode === 'test_only'}
-                  onChange={() => setUsageMode('test_only')}
-                  className="mt-1 h-4 w-4 border-white/20 text-ag-accent focus:ring-ag-accent"
-                />
-                <div>
-                  <span className="font-medium text-white">Test Only (Test Lab only, no SDK required)</span>
-                  <p className="text-xs text-slate-400 mt-0.5">Skip SDK setup, jump straight to testing</p>
-                </div>
-              </label>
-            </div>
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">

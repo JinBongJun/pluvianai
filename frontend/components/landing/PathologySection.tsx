@@ -67,14 +67,14 @@ export default function PathologySection() {
                 <div className="max-w-3xl mb-20">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-xs font-bold uppercase tracking-widest mb-6 border border-red-500/20">
                         <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                        The Diagnosis
+                        The &quot;Worst-Case&quot; diagnostic engine detects anomalies...
                     </div>
                     <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">
                         Agents get sick. <br />
-                        <span className="text-slate-500">It's inevitable.</span>
+                        <span className="text-slate-500">It&apos;s inevitable.</span>
                     </h2>
                     <p className="text-xl text-slate-400 leading-relaxed max-w-2xl">
-                        LLMs aren't deterministic code. They are biological in nature—prone to infection, confusion, and fatigue.
+                        LLMs aren&apos;t deterministic code. They are biological in nature—prone to infection, confusion, and fatigue.
                     </p>
                 </div>
 

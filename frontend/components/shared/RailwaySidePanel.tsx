@@ -42,7 +42,7 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
                     exit={{ x: '110%', opacity: 0 }}
                     transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                     className={clsx(
-                        'fixed top-6 right-6 bottom-6 w-[520px] bg-[#0d0d0f]/90 backdrop-blur-3xl border border-white/10 shadow-[0_30px_90px_rgba(0,0,0,0.9)] rounded-[48px] z-[4000] overflow-hidden flex flex-col',
+                        'fixed top-6 right-6 bottom-6 w-[1100px] bg-[#0d0d0f]/90 backdrop-blur-3xl border border-white/10 shadow-[0_30px_90px_rgba(0,0,0,0.9)] rounded-[48px] z-inspector overflow-hidden flex flex-col',
                         className
                     )}
                 >
@@ -52,18 +52,21 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
                             <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Unit Diagnostics</span>
                             <h2 className="text-3xl font-black text-white tracking-tighter">{title}</h2>
                         </div>
-                        <button
-                            onClick={onClose}
-                            className="p-3 rounded-full hover:bg-white/5 text-slate-400 hover:text-white transition-all active:scale-90"
-                        >
-                            <X className="w-6 h-6" />
-                        </button>
+                        <div className="flex items-center gap-6">
+                            {headerActions}
+                            <button
+                                onClick={onClose}
+                                className="p-3 rounded-full hover:bg-white/5 text-slate-400 hover:text-white transition-all active:scale-90"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
                     </div>
 
                     {/* Navigation Tabs (Optional) */}
                     {tabs && tabs.length > 0 && (
-                        <div className="border-b border-white/5 px-10 py-2 bg-black/20">
-                            <nav className="flex gap-8">
+                        <div className="border-b border-white/5 bg-black/20 pt-4">
+                            <nav className="flex gap-12 px-10">
                                 {tabs.map((tab) => (
                                     <button
                                         key={tab.id}
@@ -72,10 +75,10 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
                                             onTabChange?.(tab.id);
                                         }}
                                         className={clsx(
-                                            'px-1 py-4 text-xs font-black uppercase tracking-[0.2em] border-b-2 transition-all',
+                                            'px-8 py-6 text-[15px] font-black uppercase tracking-[0.2em] border-b-[4px] transition-all relative outline-none',
                                             activeTab === tab.id
                                                 ? 'text-white border-white'
-                                                : 'text-slate-600 hover:text-slate-400 border-transparent'
+                                                : 'text-slate-500 hover:text-slate-300 border-transparent hover:border-slate-700/50'
                                         )}
                                     >
                                         {tab.label}
@@ -93,7 +96,7 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
                     {/* Functional Footer */}
                     <div className="p-6 px-10 border-t border-white/5 bg-black/40 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            <div className="w-2 h-2 rounded-full bg-pluvian-bio-500 animate-pulse" />
                             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Clinical System Active</span>
                         </div>
                     </div>

@@ -1,5 +1,5 @@
 """
-Logging configuration for AgentGuard
+Logging configuration for PluvianAI
 """
 
 import logging
@@ -12,7 +12,7 @@ from app.core.config import settings
 LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
 
-logger = logging.getLogger("agentguard")
+logger = logging.getLogger("pluvianai")
 logger.setLevel(logging.DEBUG if settings.DEBUG else logging.INFO)
 logger.handlers.clear()
 
@@ -28,6 +28,8 @@ class JsonFormatter(logging.Formatter):
             "funcName": record.funcName,
             "line": record.lineno,
         }
+        if record.exc_info:
+            payload["exc_info"] = self.formatException(record.exc_info)
         # Mask obvious sensitive fields if present in extra
         if hasattr(record, "extra"):
             extra = getattr(record, "extra") or {}
@@ -43,11 +45,11 @@ class JsonFormatter(logging.Formatter):
 
 json_formatter = JsonFormatter(datefmt="%Y-%m-%d %H:%M:%S")
 console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setLevel(logging.INFO)
+console_handler.setLevel(logging.DEBUG)
 console_handler.setFormatter(json_formatter)
 logger.addHandler(console_handler)
 
-file_handler = RotatingFileHandler(LOG_DIR / "agentguard.log", maxBytes=10 * 1024 * 1024, backupCount=5)
+file_handler = RotatingFileHandler(LOG_DIR / "pluvianai.log", maxBytes=10 * 1024 * 1024, backupCount=5)
 file_handler.setLevel(logging.DEBUG)
 file_handler.setFormatter(json_formatter)
 logger.addHandler(file_handler)

@@ -16,7 +16,8 @@ class Organization(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
-    type = Column(String(50), nullable=True)  # deprecated: kept for backward compatibility
+    # Deprecated: use plan_type. Kept for backward compatibility; will be removed in a future migration.
+    type = Column(String(50), nullable=True)
     plan_type = Column(String(20), nullable=False, default="free")  # free, indie, startup, pro, enterprise
     paddle_customer_id = Column(String(255), nullable=True, index=True)
     paddle_subscription_id = Column(String(255), nullable=True, index=True)

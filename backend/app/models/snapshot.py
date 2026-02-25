@@ -44,10 +44,20 @@ class Snapshot(Base):
     tokens_used = Column(Integer, nullable=True)
     cost = Column(Numeric(10, 6), nullable=True)
 
-    # Signal detection results and Worst flags
+    # Signal detection results and Worst/Golden flags
     signal_result = Column(JSON, nullable=True)
+    # Evaluated result based on project diagnostic_config (Passed/Failed status per metric)
+    evaluation_result = Column(JSON, nullable=True)
+    # Live View eval checks at save time (empty, latency, status_code, refusal, etc.) so display does not change when config changes
+    eval_checks_result = Column(JSON, nullable=True)
+    # Hash of eval config used when eval_checks_result was computed; used to show "config changed" in Release Gate baseline
+    eval_config_version = Column(String(64), nullable=True)
+    # Tool calls summary for display (e.g. [{"name": "get_weather", "arguments": "..."}])
+    tool_calls_summary = Column(JSON, nullable=True)
+
     is_worst = Column(Boolean, default=False, server_default="false")
     worst_status = Column(String(20), nullable=True)
+    is_golden = Column(Boolean, default=False, server_default="false")
     
     # Whether high-risk data (PII) has been masked
     is_sanitized = Column(Boolean, default=False, server_default="false")

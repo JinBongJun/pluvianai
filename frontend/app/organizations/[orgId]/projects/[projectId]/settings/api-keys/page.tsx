@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import OrgLayout from '@/components/layout/OrgLayout';
 import ProjectTabs from '@/components/ProjectTabs';
@@ -39,18 +39,7 @@ export default function ProjectApiKeysPage() {
   const [formApiKey, setFormApiKey] = useState('');
   const [formName, setFormName] = useState('');
 
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    if (projectId && !isNaN(projectId)) {
-      loadKeys();
-    }
-  }, [projectId, router]);
-
-  const loadKeys = async () => {
+  const loadKeys = useCallback(async () => {
     if (!projectId || isNaN(projectId)) return;
     try {
       const list = await projectUserApiKeysAPI.list(projectId);
@@ -62,7 +51,18 @@ export default function ProjectApiKeysPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, toast]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    if (projectId && !isNaN(projectId)) {
+      void loadKeys();
+    }
+  }, [projectId, router, loadKeys]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,8 +116,8 @@ export default function ProjectApiKeysPage() {
                 API Keys
               </h1>
               <p className="text-slate-400">
-                LLM API keys for this project. Used in Test Lab when running tests (OpenAI, Anthropic, Google).
-                Custom models (model_id, base_url) can be added here and selected per box.
+                LLM API keys for this project. Used by Policy validation and replay-style checks (OpenAI, Anthropic, Google).
+                Custom models (model_id, base_url) can be added here and selected per evaluation flow.
               </p>
             </div>
 

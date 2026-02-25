@@ -67,11 +67,9 @@ class UserService:
 
         subscription = Subscription(
             user_id=user.id,
-            plan_type="free",
+            plan_id="free",
             status="active",
-            current_period_start=period_start,
             current_period_end=period_end,
-            cancel_at_period_end="false",
         )
         self.db.add(subscription)
         # Transaction is managed by get_db() dependency

@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import TopHeader from '@/components/layout/TopHeader';
-import { organizationsAPI, OrganizationSummary } from '@/lib/api';
+import { organizationsAPI } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/useDebounce';
 import { Plus, Search, Building2, Briefcase } from 'lucide-react';
 
@@ -14,29 +14,65 @@ export default function OrganizationsPage() {
   const debouncedQuery = useDebouncedValue(query, 300);
   const [userEmail, setUserEmail] = useState('');
   const [userName, setUserName] = useState('');
+  const [authReady, setAuthReady] = useState(false);
+  const retryCountRef = useRef(0);
+  const maxRetries = 3;
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
     const loadUser = async () => {
       try {
-        const { authAPI } = await import('@/lib/api');
-        const user = await authAPI.getCurrentUser();
-        setUserEmail(user.email || '');
-        setUserName(user.full_name || '');
+        if (typeof window === 'undefined') return;
+
+        const accessToken = localStorage.getItem('access_token');
+        const refreshToken = localStorage.getItem('refresh_token');
+        const hasTokens = !!(accessToken && accessToken !== 'undefined');
+
+        let userInfo: { email?: string; full_name?: string } | null = null;
+        const storedUser = localStorage.getItem('user_info');
+        if (storedUser) {
+          try {
+            userInfo = JSON.parse(storedUser);
+          } catch {
+            // ignore parse error
+          }
+        }
+
+        if (!userInfo && hasTokens && accessToken) {
+          try {
+            const payload = JSON.parse(atob(accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+            userInfo = { email: payload.email ?? 'user', full_name: payload.full_name ?? '' };
+            localStorage.setItem('user_info', JSON.stringify(userInfo));
+          } catch {
+            userInfo = { email: 'user', full_name: '' };
+          }
+        }
+
+        if (!userInfo && !hasTokens) {
+          if (retryCountRef.current < maxRetries) {
+            retryCountRef.current++;
+            setTimeout(loadUser, 300);
+            return;
+          }
+          router.push('/login?reauth=1');
+          return;
+        }
+
+        setUserEmail(userInfo?.email || '');
+        setUserName(userInfo?.full_name || '');
+        setAuthReady(true);
       } catch (error) {
-        console.error('Failed to load user info:', error);
+        console.error('🔴 [OrganizationsPage] Error in loadUser:', error);
+        router.push('/login?reauth=1');
       }
     };
-    loadUser();
-  }, []);
 
-  const { data: orgs, mutate } = useSWR(['organizations', debouncedQuery], ([, search]) =>
-    organizationsAPI.list({ includeStats: true, search }),
+    setTimeout(loadUser, 100);
+  }, [router]);
+
+  // Same SWR key as TopHeader so one request only (no duplicate 401)
+  const { data: orgs, mutate } = useSWR(
+    authReady ? 'organizations' : null,
+    () => organizationsAPI.list({ includeStats: false }),
   );
 
   const filtered = useMemo(() => {
@@ -53,6 +89,14 @@ export default function OrganizationsPage() {
       <TopHeader userName={userName} userEmail={userEmail} />
 
       <main className="pt-44 pb-32 px-12 max-w-[1400px] mx-auto relative z-10">
+        {process.env.NODE_ENV === 'development' && (
+          <p className="mb-4 text-xs text-slate-500 font-mono">
+            API: {process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}
+            {!(process.env.NEXT_PUBLIC_API_URL || '').includes('railway') && (process.env.NEXT_PUBLIC_API_URL || '').includes('localhost') && (
+              <span className="ml-2 text-amber-400">· Railway 쓰려면 .env.local에 NEXT_PUBLIC_API_URL=Railway URL 설정 후 재시작</span>
+            )}
+          </p>
+        )}
         <div className="mb-16">
           <h1 className="text-5xl md:text-6xl font-black text-white mb-12 tracking-tighter uppercase whitespace-nowrap">
             Your Organizations
@@ -130,4 +174,3 @@ export default function OrganizationsPage() {
     </div>
   );
 }
-

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import OrgLayout from '@/components/layout/OrgLayout';
 import ProjectTabs from '@/components/ProjectTabs';
@@ -23,18 +23,7 @@ export default function ProjectGeneralSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
 
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    if (projectId && !isNaN(projectId)) {
-      loadProject();
-    }
-  }, [projectId, router]);
-
-  const loadProject = async () => {
+  const loadProject = useCallback(async () => {
     if (!projectId || isNaN(projectId)) return;
     try {
       const p = await projectsAPI.get(projectId);
@@ -46,7 +35,18 @@ export default function ProjectGeneralSettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, toast]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    if (projectId && !isNaN(projectId)) {
+      void loadProject();
+    }
+  }, [projectId, router, loadProject]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,8 +128,8 @@ export default function ProjectGeneralSettingsPage() {
                   <label className="block text-sm font-medium text-slate-300 mb-2">Usage Mode</label>
                   <p className="text-slate-400 text-sm mb-2">
                     {usageMode === 'full'
-                      ? 'Full Mode — Live View and Test Lab are available. You can monitor real traffic and run tests.'
-                      : 'Test Only — Only Test Lab is available. No SDK required. Upgrade to Full Mode to enable Live View.'}
+                      ? 'Full Mode — Live View and Policy are available. You can monitor real traffic and validate policy.'
+                      : 'Test Only — Policy validation is available without Live SDK ingestion. Upgrade to Full Mode to enable Live View.'}
                   </p>
                   {usageMode === 'test_only' && (
                     <Button type="button" variant="primary" onClick={handleUpgradeToFullMode} disabled={upgrading}>

@@ -40,10 +40,11 @@ class TestResult(Base):
     tokens_used = Column(Integer, nullable=True)
     cost = Column(Numeric(10, 6), nullable=True)
 
-    # Signal / Worst flags
+    # Signal / Worst / Golden flags
     signal_result = Column(JSON, nullable=True)
     is_worst = Column(Boolean, default=False, server_default="false")
     worst_status = Column(String(20), nullable=True)
+    is_golden = Column(Boolean, default=False, server_default="false")
 
     # Baseline comparison
     baseline_snapshot_id = Column(Integer, ForeignKey("snapshots.id", ondelete="SET NULL"), nullable=True)

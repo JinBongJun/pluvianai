@@ -1,4 +1,4 @@
-# AgentGuard API Schema Specification
+# PluvianAI API Schema Specification
 
 > **중요**: 이 문서는 프론트엔드와 백엔드 간의 공식 스키마 계약입니다.
 > 모든 API 응답은 이 문서를 따라야 합니다.

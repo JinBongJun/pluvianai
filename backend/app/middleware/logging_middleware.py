@@ -72,6 +72,20 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 },
             )
 
+            # CRITICAL: Debug log headers for any 401 response
+            if response.status_code == 401:
+                auth_header = request.headers.get("authorization")
+                all_headers = dict(request.headers)
+                # Redact most of the header if present
+                redacted_auth = f"{auth_header[:25]}..." if auth_header else "MISSING"
+                from app.core.config import settings
+                logger.warning(
+                    f"🔴 401 UNAUTHORIZED DEBUG: Header: {redacted_auth}, "
+                    f"Path: {request.url.path}, Origin: {request.headers.get('origin')}, "
+                    f"SecretKeyLen: {len(settings.SECRET_KEY)}"
+                )
+                logger.debug(f"🔍 [401 All Headers]: {all_headers}")
+
             return response
 
         except Exception as e:

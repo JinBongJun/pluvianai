@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Search, Bell, HelpCircle, MessageSquare, ChevronDown, User, Settings, LogOut, Building2, LayoutGrid, Plus } from 'lucide-react';
@@ -34,11 +34,20 @@ const TopHeader: React.FC<TopHeaderProps> = ({
 
     const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+    // Only fetch when we have a token (avoids 401 on first paint after login redirect)
+    const [hasToken, setHasToken] = useState(false);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        setHasToken(!!localStorage.getItem('access_token'));
+    }, []);
 
-    // Data Fetching
-    const { data: organizations } = useSWR('organizations', () => organizationsAPI.list());
-    const { data: projects } = useSWR(currentOrgId ? ['organization-projects-list', currentOrgId] : null, ([, id]) =>
-        organizationsAPI.listProjects(id as string)
+    // Single shared key/fetcher with organizations page to avoid duplicate 401s
+    const { data: organizations } = useSWR(
+        hasToken ? 'organizations' : null,
+        () => organizationsAPI.list({ includeStats: false })
+    );
+    const { data: projects } = useSWR(hasToken && currentOrgId ? ['organization-projects-list', currentOrgId] : null, ([, id]) =>
+        organizationsAPI.listProjects(id as string, { includeStats: false })
     );
 
     const activeOrg = organizations?.find(o => String(o.id) === String(currentOrgId));

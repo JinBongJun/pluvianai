@@ -1,5 +1,5 @@
 """
-AgentGuard FastAPI Application
+PluvianAI FastAPI Application
 """
 
 import os
@@ -35,7 +35,7 @@ if settings.SENTRY_DSN:
         # Enable sending of PII (Personally Identifiable Information)
         send_default_pii=False,
         # Set release version
-        release=f"agentguard@{settings.APP_VERSION}",
+        release=f"pluvianai@{settings.APP_VERSION}",
     )
     logger.info(f"Sentry initialized for environment: {settings.SENTRY_ENVIRONMENT}")
 else:
@@ -76,6 +76,8 @@ from app.models import (  # noqa: F401
     Usage,
     NotificationSettings,
     LoginAttempt,
+    BehaviorRule,
+    BehaviorReport,
 )
 
 # Create database tables
@@ -109,10 +111,24 @@ app.add_exception_handler(Exception, general_exception_handler)
 # Parse CORS_ORIGINS from settings (supports comma-separated list or "*")
 cors_origins = settings.cors_origins_list
 
-# ALWAYS allow all origins for Railway/Vercel deployments
-# This ensures CORS works regardless of Vercel preview URL changes
-allow_origins = ["*"]
-allow_credentials = False  # Must be False when using allow_origins=["*"]
+# CORS configuration for cookie-based authentication
+# For cookies to work, we need:
+# 1. Specific origins (not "*")
+# 2. allow_credentials=True
+cors_origins = settings.cors_origins_list
+
+# Allow localhost for development and production origins
+allow_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+]
+
+# Add production origins from settings if available
+if cors_origins and cors_origins != ["*"]:
+    allow_origins.extend(cors_origins)
+
+allow_credentials = True  # Required for httpOnly cookies
 
 logger.info(f"CORS configuration: allow_origins={allow_origins}, allow_credentials={allow_credentials}")
 
@@ -244,8 +260,9 @@ async def startup_event():
     from app.services.stream_processor import stream_processor
     import asyncio
 
-    logger.info("Starting AgentGuard API...")
+    logger.info("Starting PluvianAI API...")
     logger.info(f"Environment: {'DEBUG' if settings.DEBUG else 'PRODUCTION'}")
+    logger.info(f"🔐 Security: SECRET_KEY_LEN: {len(settings.SECRET_KEY)}, ALGORITHM: {settings.ALGORITHM}")
     
     # Start stream processor background task
     asyncio.create_task(stream_processor.start())
@@ -448,7 +465,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    logger.info("Shutting down AgentGuard API...")
+    logger.info("Shutting down PluvianAI API...")
 
     # Shutdown background scheduler
     from app.services.scheduler_service import scheduler_service

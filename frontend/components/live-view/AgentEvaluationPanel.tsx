@@ -1,0 +1,772 @@
+'use client';
+
+import React, { useMemo, useState, useEffect } from 'react';
+import useSWR, { useSWRConfig } from 'swr';
+import clsx from 'clsx';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Code2,
+  DollarSign,
+  Hash,
+  ShieldAlert,
+  ShieldCheck,
+  SlidersHorizontal,
+  XCircle,
+  Plus,
+  Save,
+  RotateCcw,
+  Repeat,
+  FileCheck,
+  FileText,
+  Lock,
+  Sparkles,
+  CircleHelp
+} from 'lucide-react';
+import { liveViewAPI, behaviorAPI, type BehaviorRule } from '@/lib/api';
+import { PolicyRuleModal } from '@/components/live-view/PolicyRuleModal';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// --- Types ---
+
+// Configuration Schema
+type EvalConfig = {
+  enabled?: boolean;
+  empty?: { enabled?: boolean; min_chars?: number };
+  latency?: { enabled?: boolean; warn_ms?: number; crit_ms?: number };
+  status_code?: { enabled?: boolean; warn_from?: number; crit_from?: number };
+  json?: { enabled?: boolean; mode?: 'if_json' | 'always' | 'off' };
+  refusal?: { enabled?: boolean };
+  length?: { enabled?: boolean; warn_ratio?: number; crit_ratio?: number };
+  repetition?: { enabled?: boolean; warn_line_repeats?: number; crit_line_repeats?: number };
+  required?: { enabled?: boolean; keywords_csv?: string; json_fields_csv?: string };
+  format?: { enabled?: boolean; sections_csv?: string };
+  tokens?: { enabled?: boolean; warn?: number };
+  cost?: { enabled?: boolean; warn?: number };
+  leakage?: { enabled?: boolean };
+  coherence?: { enabled?: boolean; min_score?: number }; // 13th Factor
+  tool_use_policy?: { enabled?: boolean }; // 14th: behavior rules (tool order/allowlist/forbidden)
+  window?: { limit?: number };
+};
+
+const DEFAULT_EVAL: Required<EvalConfig> = {
+  enabled: true,
+  window: { limit: 50 },
+  empty: { enabled: true, min_chars: 16 },
+  latency: { enabled: true, warn_ms: 2000, crit_ms: 5000 },
+  status_code: { enabled: true, warn_from: 400, crit_from: 500 },
+  json: { enabled: true, mode: 'if_json' },
+  refusal: { enabled: true },
+  length: { enabled: true, warn_ratio: 0.35, crit_ratio: 0.75 },
+  repetition: { enabled: true, warn_line_repeats: 3, crit_line_repeats: 6 },
+  required: { enabled: false, keywords_csv: '', json_fields_csv: '' },
+  format: { enabled: false, sections_csv: '' },
+  tokens: { enabled: true, warn: 4000 },
+  cost: { enabled: true, warn: 0.5 },
+  leakage: { enabled: false },
+  coherence: { enabled: false, min_score: 80 },
+  tool_use_policy: { enabled: true },
+};
+
+// --- Helpers ---
+
+function normalizeEvalConfig(input?: Partial<EvalConfig> | null): Required<EvalConfig> {
+  const cfg = (input || {}) as Partial<EvalConfig>;
+  return {
+    enabled: cfg.enabled ?? DEFAULT_EVAL.enabled,
+    window: { ...DEFAULT_EVAL.window, ...(cfg.window || {}) },
+    empty: { ...DEFAULT_EVAL.empty, ...(cfg.empty || {}) },
+    latency: { ...DEFAULT_EVAL.latency, ...(cfg.latency || {}) },
+    status_code: { ...DEFAULT_EVAL.status_code, ...(cfg.status_code || {}) },
+    json: { ...DEFAULT_EVAL.json, ...(cfg.json || {}) },
+    refusal: { ...DEFAULT_EVAL.refusal, ...(cfg.refusal || {}) },
+    length: { ...DEFAULT_EVAL.length, ...(cfg.length || {}) },
+    repetition: { ...DEFAULT_EVAL.repetition, ...(cfg.repetition || {}) },
+    required: { ...DEFAULT_EVAL.required, ...(cfg.required || {}) },
+    format: { ...DEFAULT_EVAL.format, ...(cfg.format || {}) },
+    tokens: { ...DEFAULT_EVAL.tokens, ...(cfg.tokens || {}) },
+    cost: { ...DEFAULT_EVAL.cost, ...(cfg.cost || {}) },
+    leakage: { ...DEFAULT_EVAL.leakage, ...(cfg.leakage || {}) },
+    coherence: { ...DEFAULT_EVAL.coherence, ...(cfg.coherence || {}) },
+    tool_use_policy: { ...DEFAULT_EVAL.tool_use_policy, ...(cfg.tool_use_policy || {}) },
+  };
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+// --- Components ---
+
+interface SignalCardProps {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  config: any;
+  onUpdate: (newConfig: any) => void;
+  renderSettings: (config: any, update: (c: any) => void) => React.ReactNode;
+}
+
+const SignalCard: React.FC<SignalCardProps> = ({
+  id,
+  label,
+  icon: Icon,
+  config,
+  onUpdate,
+  renderSettings
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const isEnabled = config?.enabled !== false;
+
+  const statusColor = useMemo(() => {
+    if (!isEnabled) return 'text-slate-600';
+    return 'text-emerald-400';
+  }, [isEnabled]);
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onUpdate({ ...config, enabled: !isEnabled });
+  };
+
+  return (
+    <div className={clsx(
+      "border-b border-white/5 last:border-0 transition-colors duration-200 overflow-hidden",
+      isExpanded ? "bg-white/[0.02]" : "hover:bg-white/[0.01]"
+    )}>
+      <div
+        className="px-6 py-4 flex items-center justify-between cursor-pointer"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center gap-4">
+          <div className={clsx("p-2 rounded-lg bg-black/40 border border-white/5 shadow-sm", statusColor)}>
+            <Icon className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={clsx("text-sm font-medium tracking-wide", isEnabled ? "text-slate-200" : "text-slate-500")}>
+                {label}
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+              {isEnabled ? 'Enabled · click to configure' : 'Disabled'}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-6">
+          <div
+            role="button"
+            onClick={handleToggle}
+            className={clsx(
+              "w-9 h-5 rounded-full transition-colors relative flex items-center",
+              isEnabled ? "bg-emerald-500" : "bg-white/10"
+            )}
+          >
+            <div className={clsx(
+              "w-4 h-4 rounded-full bg-white shadow-sm absolute transition-transform",
+              isEnabled ? "translate-x-4" : "translate-x-0.5"
+            )} />
+          </div>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+          >
+            <div className="px-6 pb-6 pt-2 pl-[4.5rem] space-y-4">
+              {renderSettings(config, onUpdate)}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+type RuleScope = 'project' | 'agent';
+
+function PolicyRuleList({ rules, emptyMessage }: { rules: BehaviorRule[]; emptyMessage: string }) {
+  if (rules.length === 0) {
+    return <div className="px-4 py-6 text-sm text-slate-500 italic">{emptyMessage}</div>;
+  }
+  return (
+    <div className="divide-y divide-white/5">
+      {rules.map((rule) => (
+        <div key={rule.id} className="px-4 py-3 hover:bg-white/[0.02] transition-colors duration-200">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-medium text-slate-200 truncate">{rule.name}</div>
+            <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-white/5 px-2 py-0.5 rounded">{rule.rule_json?.type}</div>
+          </div>
+          {rule.description && <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">{rule.description}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// --- Main Panel ---
+
+export function AgentEvaluationPanel({ projectId, agentId }: { projectId: number; agentId: string }) {
+  const { mutate: globalMutate } = useSWRConfig();
+  // Same SWR key as ClinicalLog so saving here updates the log view immediately (shared cache).
+  const { data: settingsData, mutate: mutateSettings } = useSWR(
+    projectId && agentId ? ['agent-log-settings', projectId, agentId] : null,
+    () => liveViewAPI.getAgentSettings(projectId, agentId)
+  );
+
+  const [draft, setDraft] = useState<Required<EvalConfig> | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  // Tool use policy (behavior rules) — evaluation element
+  const { data: projectRulesData, mutate: mutateProjectRules } = useSWR(
+    projectId ? ['policy-rules-project', projectId] : null,
+    () => behaviorAPI.listRules(projectId, { enabled: true, scope_type: 'project' })
+  );
+  const { data: agentRulesData, mutate: mutateAgentRules } = useSWR(
+    projectId && agentId ? ['policy-rules-agent', projectId, agentId] : null,
+    () => behaviorAPI.listRules(projectId, { enabled: true, scope_type: 'agent', scope_ref: agentId })
+  );
+  const projectRules = useMemo(() => (Array.isArray(projectRulesData) ? projectRulesData : []), [projectRulesData]);
+  const agentRules = useMemo(() => (Array.isArray(agentRulesData) ? agentRulesData : []), [agentRulesData]);
+  const [policyModalScope, setPolicyModalScope] = useState<RuleScope | null>(null);
+  const [policyActionStatus, setPolicyActionStatus] = useState('');
+  const handleCreatePolicyRule = async (payload: Omit<BehaviorRule, 'id' | 'created_at' | 'updated_at' | 'project_id'>) => {
+    await behaviorAPI.createRule(projectId, payload);
+    await Promise.all([mutateProjectRules(), mutateAgentRules()]);
+    await globalMutate((k) => Array.isArray(k) && k[0] === 'policy-rules-project' && k[1] === projectId);
+    await globalMutate((k) => Array.isArray(k) && k[0] === 'policy-rules-agent' && k[1] === projectId && k[2] === agentId);
+    setPolicyActionStatus(payload.scope_type === 'project' ? 'Project rule created.' : 'Agent override created.');
+  };
+
+  // Load initial settings
+  const evalConfig: Required<EvalConfig> = useMemo(() => {
+    const configuredEval = (settingsData?.diagnostic_config?.eval || null) as Partial<EvalConfig> | null;
+    return normalizeEvalConfig(configuredEval);
+  }, [settingsData]);
+
+  // Initialize draft when data loads
+  useEffect(() => {
+    if (settingsData && !draft) {
+      setDraft(JSON.parse(JSON.stringify(normalizeEvalConfig(evalConfig))));
+    }
+  }, [evalConfig, settingsData, draft]);
+
+  // Handle Updates
+  const updateConfig = (section: keyof EvalConfig, newData: any) => {
+    if (!draft) return;
+    setDraft({ ...draft, [section]: newData });
+    setSaveStatus('idle'); // Reset status on change
+  };
+
+  const handleSave = async () => {
+    if (!draft) return;
+    setSaveStatus('saving');
+    try {
+      const payload = normalizeEvalConfig(draft);
+      await liveViewAPI.updateAgentSettings(projectId, agentId, { diagnostic_config: { eval: payload } });
+      await mutateSettings();
+      // Invalidate eval runtime so Clinical Log refetches pass/fail with new config.
+      await globalMutate(
+        (k) => Array.isArray(k) && k[0] === 'agent-eval-runtime' && k[1] === projectId && k[2] === agentId
+      );
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (e) {
+      setSaveStatus('error');
+    }
+  };
+
+  const handleReset = () => {
+    setDraft(JSON.parse(JSON.stringify(normalizeEvalConfig(evalConfig))));
+    setSaveStatus('idle');
+  };
+
+
+  if (!draft) return <div className="p-10 flex text-center justify-center"><Clock className="w-6 h-6 animate-pulse text-slate-600" /></div>;
+
+  const safeDraft = normalizeEvalConfig(draft);
+
+  const InputCls = "w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-emerald-500/50 transition-colors placeholder:text-slate-600 font-mono";
+  const LabelCls = "text-xs font-bold uppercase tracking-widest text-slate-400";
+  const HintCls = "text-xs text-slate-500 mt-1.5";
+  const FieldLabel = ({ label, help }: { label: string; help: string }) => (
+    <div className="mb-2 flex items-center gap-2">
+      <span className={LabelCls}>{label}</span>
+      <span
+        className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-slate-700 text-slate-400 hover:text-white hover:border-emerald-400/40 cursor-help transition-colors"
+        title={help}
+        aria-label={help}
+      >
+        <CircleHelp className="w-3.5 h-3.5" />
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col h-full bg-[#0a0f1e]/20 text-slate-200">
+      <PolicyRuleModal
+        isOpen={policyModalScope !== null}
+        initialScopeType={policyModalScope || 'project'}
+        agentId={agentId}
+        onClose={() => setPolicyModalScope(null)}
+        onSave={handleCreatePolicyRule}
+      />
+
+      {/* Header */}
+      <div className="p-6 border-b border-white/5 flex items-center justify-between bg-black/20 backdrop-blur-sm sticky top-0 z-10">
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <SlidersHorizontal className="w-5 h-5 text-emerald-400" />
+            <h2 className="text-lg font-black text-white uppercase tracking-widest">Active Diagnostics</h2>
+          </div>
+          <p className="text-xs text-slate-400 font-medium">Configure evaluation rules. Trace range is managed in Clinical Log.</p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {JSON.stringify(safeDraft) !== JSON.stringify(evalConfig) && (
+            <button onClick={handleReset} className="p-2.5 hover:bg-white/5 rounded-xl text-slate-400 hover:text-white transition-colors" title="Reset Changes">
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saveStatus === 'saving' || JSON.stringify(safeDraft) === JSON.stringify(evalConfig)}
+            className={clsx(
+              "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+              saveStatus === 'saved' ? "bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]" :
+                saveStatus === 'saving' ? "bg-emerald-500/50 text-white cursor-wait" :
+                  JSON.stringify(safeDraft) !== JSON.stringify(evalConfig) ? "bg-emerald-600 text-white shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:bg-emerald-500" :
+                    "bg-white/5 text-slate-500"
+            )}
+          >
+            {saveStatus === 'saving' ? <Clock className="w-4 h-4 animate-spin" /> : saveStatus === 'saved' ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+            {saveStatus === 'saved' ? 'Saved' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+
+      {/* Signal List Container */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+        <div className="max-w-4xl mx-auto rounded-xl border border-white/10 bg-black/20 overflow-hidden shadow-2xl">
+          {/* 1. Empty Answers */}
+          <SignalCard
+            id="empty"
+            label="Empty / Short Answers"
+            icon={AlertTriangle}
+            config={safeDraft.empty}
+            onUpdate={(c) => updateConfig('empty', c)}
+            renderSettings={(cfg, update) => (
+              <div>
+                <FieldLabel label="Minimum Characters" help="Minimum response length. If response is shorter than this, it is considered too short." />
+                <input
+                  type="number"
+                  min={1}
+                  max={10000}
+                  className={InputCls}
+                  value={cfg.min_chars}
+                  onChange={e => update({ ...cfg, min_chars: clampNumber(Number(e.target.value), 1, 10000) })}
+                />
+                <p className={HintCls}>Range: 1 to 10,000</p>
+              </div>
+            )}
+          />
+
+          {/* 2. Latency */}
+          <SignalCard
+            id="latency"
+            label="Latency Spikes"
+            icon={Clock}
+            config={safeDraft.latency}
+            onUpdate={(c) => updateConfig('latency', c)}
+            renderSettings={(cfg, update) => (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <FieldLabel label="Warn (ms)" help="Warning threshold for latency in milliseconds. Use your normal p95 as a starting point." />
+                  <input
+                    type="number"
+                    min={100}
+                    max={120000}
+                    className={InputCls}
+                    value={cfg.warn_ms}
+                    onChange={e => update({ ...cfg, warn_ms: clampNumber(Number(e.target.value), 100, 120000) })}
+                  />
+                  <p className={HintCls}>Range: 100 to 120,000 ms</p>
+                </div>
+                <div>
+                  <FieldLabel label="Critical (ms)" help="Critical threshold for latency in milliseconds. Use your normal p99 as a starting point." />
+                  <input
+                    type="number"
+                    min={200}
+                    max={180000}
+                    className={InputCls}
+                    value={cfg.crit_ms}
+                    onChange={e => update({ ...cfg, crit_ms: clampNumber(Number(e.target.value), 200, 180000) })}
+                  />
+                  <p className={HintCls}>Range: 200 to 180,000 ms</p>
+                </div>
+              </div>
+            )}
+          />
+
+          {/* 3. HTTP Errors */}
+          <SignalCard
+            id="status_code"
+            label="HTTP Error Codes"
+            icon={XCircle}
+            config={safeDraft.status_code}
+            onUpdate={(c) => updateConfig('status_code', c)}
+            renderSettings={(cfg, update) => (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <FieldLabel label="Warn From" help="HTTP status code at or above this value is treated as warning-level failure." />
+                  <input
+                    type="number"
+                    min={100}
+                    max={599}
+                    className={InputCls}
+                    value={cfg.warn_from}
+                    onChange={e => update({ ...cfg, warn_from: clampNumber(Number(e.target.value), 100, 599) })}
+                  />
+                  <p className={HintCls}>Range: 100 to 599</p>
+                </div>
+                <div>
+                  <FieldLabel label="Critical From" help="HTTP status code at or above this value is treated as critical failure. Common default is 500." />
+                  <input
+                    type="number"
+                    min={100}
+                    max={599}
+                    className={InputCls}
+                    value={cfg.crit_from}
+                    onChange={e => update({ ...cfg, crit_from: clampNumber(Number(e.target.value), 100, 599) })}
+                  />
+                  <p className={HintCls}>Range: 100 to 599</p>
+                </div>
+              </div>
+            )}
+          />
+
+          {/* 4. Refusal */}
+          <SignalCard
+            id="refusal"
+            label="Refusal / Non-Answer"
+            icon={ShieldAlert}
+            config={safeDraft.refusal}
+            onUpdate={(c) => updateConfig('refusal', c)}
+            renderSettings={(cfg, update) => (
+              <div className="space-y-2">
+                <FieldLabel label="Detection Logic" help="Built-in refusal patterns (e.g., 'I cannot', 'as an AI') are checked automatically." />
+                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <p className="text-xs text-emerald-400 font-medium">Built-in patterns active.</p>
+                </div>
+                <p className={HintCls}>No numeric threshold. Recommended: keep ON for customer-facing agents.</p>
+              </div>
+            )}
+          />
+
+          {/* 5. JSON Validity */}
+          <SignalCard
+            id="json"
+            label="JSON Validity"
+            icon={Code2}
+            config={safeDraft.json}
+            onUpdate={(c) => updateConfig('json', c)}
+            renderSettings={(cfg, update) => (
+              <div>
+                <FieldLabel label="Mode" help="if_json: only validate when output looks like JSON. always: always enforce JSON validity." />
+                <select className={InputCls} value={cfg.mode} onChange={e => update({ ...cfg, mode: e.target.value })}>
+                  <option value="if_json" className="bg-[#0a0f1e] text-slate-200">Auto-detect</option>
+                  <option value="always" className="bg-[#0a0f1e] text-slate-200">Always Enforce</option>
+                </select>
+              </div>
+            )}
+          />
+
+          {/* 6. Output Length Drift */}
+          <SignalCard
+            id="length"
+            label="Output Length Drift"
+            icon={SlidersHorizontal}
+            config={safeDraft.length}
+            onUpdate={(c) => updateConfig('length', c)}
+            renderSettings={(cfg, update) => (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <FieldLabel label="Warn ratio" help="Relative output-length change from baseline that triggers warning. Example: 0.35 means 35% drift." />
+                  <input
+                    type="number"
+                    min={0}
+                    max={2}
+                    step="0.05"
+                    className={InputCls}
+                    value={cfg.warn_ratio}
+                    onChange={e => update({ ...cfg, warn_ratio: clampNumber(Number(e.target.value), 0, 2) })}
+                  />
+                  <p className={HintCls}>Range: 0.00 to 2.00</p>
+                </div>
+                <div>
+                  <FieldLabel label="Critical ratio" help="Relative output-length change from baseline that triggers critical state." />
+                  <input
+                    type="number"
+                    min={0}
+                    max={3}
+                    step="0.05"
+                    className={InputCls}
+                    value={cfg.crit_ratio}
+                    onChange={e => update({ ...cfg, crit_ratio: clampNumber(Number(e.target.value), 0, 3) })}
+                  />
+                  <p className={HintCls}>Range: 0.00 to 3.00</p>
+                </div>
+              </div>
+            )}
+          />
+
+          {/* 7. Token Usage */}
+          <SignalCard
+            id="tokens"
+            label="Token Usage Spikes"
+            icon={Hash}
+            config={safeDraft.tokens}
+            onUpdate={(c) => updateConfig('tokens', c)}
+            renderSettings={(cfg, update) => (
+              <div>
+                <FieldLabel label="Warning Threshold" help="Token count threshold per response. Set this to your cost-safe ceiling." />
+                <input
+                  type="number"
+                  min={100}
+                  max={200000}
+                  className={InputCls}
+                  value={cfg.warn}
+                  onChange={e => update({ ...cfg, warn: clampNumber(Number(e.target.value), 100, 200000) })}
+                />
+                <p className={HintCls}>Range: 100 to 200,000</p>
+              </div>
+            )}
+          />
+
+          {/* 8. Cost */}
+          <SignalCard
+            id="cost"
+            label="High Cost Alert"
+            icon={DollarSign}
+            config={safeDraft.cost}
+            onUpdate={(c) => updateConfig('cost', c)}
+            renderSettings={(cfg, update) => (
+              <div>
+                <FieldLabel label="Warning Cost ($)" help="Estimated cost threshold per response in USD. Exceeding this triggers warning." />
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.001"
+                  className={InputCls}
+                  value={cfg.warn}
+                  onChange={e => update({ ...cfg, warn: clampNumber(Number(e.target.value), 0, 100) })}
+                />
+                <p className={HintCls}>Range: 0.000 to 100.000</p>
+              </div>
+            )}
+          />
+
+          {/* 9. Repetition */}
+          <SignalCard
+            id="repetition"
+            label="Repetition / Loops"
+            icon={Repeat}
+            config={safeDraft.repetition}
+            onUpdate={(c) => updateConfig('repetition', c)}
+            renderSettings={(cfg, update) => (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <FieldLabel label="Warn Repeats" help="Number of repeated lines that triggers warning-level repetition detection." />
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    className={InputCls}
+                    value={cfg.warn_line_repeats}
+                    onChange={e => update({ ...cfg, warn_line_repeats: clampNumber(Number(e.target.value), 1, 100) })}
+                  />
+                  <p className={HintCls}>Range: 1 to 100</p>
+                </div>
+                <div>
+                  <FieldLabel label="Critical Repeats" help="Number of repeated lines that triggers critical repetition detection." />
+                  <input
+                    type="number"
+                    min={1}
+                    max={150}
+                    className={InputCls}
+                    value={cfg.crit_line_repeats}
+                    onChange={e => update({ ...cfg, crit_line_repeats: clampNumber(Number(e.target.value), 1, 150) })}
+                  />
+                  <p className={HintCls}>Range: 1 to 150</p>
+                </div>
+              </div>
+            )}
+          />
+
+          {/* 10. Required Fields */}
+          <SignalCard
+            id="required"
+            label="Required Keywords / Fields"
+            icon={FileCheck}
+            config={safeDraft.required}
+            onUpdate={(c) => updateConfig('required', c)}
+            renderSettings={(cfg, update) => (
+              <div className="space-y-3">
+                <div>
+                  <FieldLabel label="Keywords (CSV)" help="Comma-separated keywords that must appear in the response." />
+                  <input type="text" className={InputCls} value={cfg.keywords_csv} onChange={e => update({ ...cfg, keywords_csv: e.target.value })} placeholder="error, failed, exception..." />
+                </div>
+                <div>
+                  <FieldLabel label="JSON Fields (CSV)" help="Comma-separated JSON fields that must exist when output is JSON." />
+                  <input type="text" className={InputCls} value={cfg.json_fields_csv} onChange={e => update({ ...cfg, json_fields_csv: e.target.value })} placeholder="id, status, result..." />
+                </div>
+              </div>
+            )}
+          />
+
+          {/* 11. Format Contract */}
+          <SignalCard
+            id="format"
+            label="Format Contract"
+            icon={FileText}
+            config={safeDraft.format}
+            onUpdate={(c) => updateConfig('format', c)}
+            renderSettings={(cfg, update) => (
+              <div>
+                <FieldLabel label="Required Sections (CSV)" help="Comma-separated section names or phrases that must appear in each response." />
+                <input type="text" className={InputCls} value={cfg.sections_csv} onChange={e => update({ ...cfg, sections_csv: e.target.value })} placeholder="summary, conclusion, references..." />
+              </div>
+            )}
+          />
+
+          {/* 12. PII Leakage */}
+          <SignalCard
+            id="leakage"
+            label="PII Leakage Shield"
+            icon={Lock}
+            config={safeDraft.leakage}
+            onUpdate={(c) => updateConfig('leakage', c)}
+            renderSettings={(cfg, update) => (
+              <div className="space-y-2">
+                <FieldLabel label="Detection Logic" help="Regex-based checks for common leakage patterns (email, phone, API keys)." />
+                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <p className="text-xs text-emerald-400 font-medium">
+                    Email, Phone, API Key patterns are actively monitored.
+                  </p>
+                </div>
+                <p className={HintCls}>No numeric threshold. Recommended: ON for production traffic.</p>
+              </div>
+            )}
+          />
+
+          {/* 13. Coherence */}
+          <SignalCard
+            id="coherence"
+            label="Reasoning Coherence"
+            icon={Sparkles}
+            config={safeDraft.coherence}
+            onUpdate={(c) => updateConfig('coherence', c)}
+            renderSettings={(cfg, update) => (
+              <div>
+                <FieldLabel label="Minimum Score (0-100)" help="Minimum coherence score. Lower scores indicate potential logical inconsistency." />
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  className={InputCls}
+                  value={cfg?.min_score ?? DEFAULT_EVAL.coherence.min_score}
+                  onChange={(e) =>
+                    update({
+                      ...(cfg || DEFAULT_EVAL.coherence),
+                      min_score: clampNumber(Number(e.target.value), 0, 100),
+                    })
+                  }
+                />
+                <p className={HintCls}>Range: 0 to 100</p>
+                <p className={HintCls}>Evaluate logical consistency of agent responses.</p>
+              </div>
+            )}
+          />
+
+          {/* 14. Tool use policy (behavior rules) */}
+          <div className={clsx(
+            "border-b border-white/5 last:border-0 overflow-hidden transition-opacity duration-200",
+            safeDraft.tool_use_policy?.enabled !== false ? "opacity-100" : "opacity-60"
+          )}>
+            <div className="px-6 py-4 flex items-center justify-between bg-white/[0.01]">
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div className={clsx(
+                  "p-2 rounded-lg bg-black/40 border border-white/5 shadow-sm shrink-0",
+                  safeDraft.tool_use_policy?.enabled !== false ? "text-emerald-400" : "text-slate-600"
+                )}>
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className={clsx(
+                    "text-sm font-medium tracking-wide",
+                    safeDraft.tool_use_policy?.enabled !== false ? "text-slate-200" : "text-slate-500"
+                  )}>
+                    Tool use policy
+                  </span>
+                  <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                    {safeDraft.tool_use_policy?.enabled !== false
+                      ? `Project: ${projectRules.length} · Agent: ${agentRules.length}. Validation runs in Clinical Log (Run check).`
+                      : 'Disabled'}
+                  </p>
+                </div>
+              </div>
+              <div
+                role="button"
+                onClick={() => updateConfig('tool_use_policy', { ...safeDraft.tool_use_policy, enabled: safeDraft.tool_use_policy?.enabled === false })}
+                className={clsx(
+                  "w-9 h-5 rounded-full transition-colors relative flex items-center shrink-0 ml-4 cursor-pointer",
+                  safeDraft.tool_use_policy?.enabled !== false ? "bg-emerald-500" : "bg-white/10"
+                )}
+              >
+                <div className={clsx(
+                  "w-4 h-4 rounded-full bg-white shadow-sm absolute transition-transform",
+                  safeDraft.tool_use_policy?.enabled !== false ? "translate-x-4" : "translate-x-0.5"
+                )} />
+              </div>
+            </div>
+            <div className={clsx("px-6 pb-6 pt-0 grid grid-cols-1 lg:grid-cols-2 gap-4", safeDraft.tool_use_policy?.enabled === false && "pointer-events-none")}>
+              <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+                <div className="flex items-center justify-between gap-2 p-3 border-b border-white/5">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">Project defaults</span>
+                  <button
+                    onClick={() => setPolicyModalScope('project')}
+                    className="px-2 py-1 rounded-lg border border-white/10 bg-white/[0.03] text-[11px] font-black uppercase text-slate-300 hover:bg-white/10 inline-flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" /> New
+                  </button>
+                </div>
+                <PolicyRuleList rules={projectRules} emptyMessage="No project rules yet." />
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+                <div className="flex items-center justify-between gap-2 p-3 border-b border-white/5">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">Agent overrides</span>
+                  <button
+                    onClick={() => setPolicyModalScope('agent')}
+                    className="px-2 py-1 rounded-lg border border-white/10 bg-white/[0.03] text-[11px] font-black uppercase text-slate-300 hover:bg-white/10 inline-flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" /> New
+                  </button>
+                </div>
+                <PolicyRuleList rules={agentRules} emptyMessage="No agent overrides yet." />
+              </div>
+            </div>
+            {policyActionStatus && <div className="px-6 pb-4 text-xs text-emerald-400">{policyActionStatus}</div>}
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}

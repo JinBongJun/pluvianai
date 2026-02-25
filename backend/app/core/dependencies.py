@@ -11,6 +11,7 @@ from app.infrastructure.repositories.trace_repository import TraceRepository
 from app.infrastructure.repositories.evaluation_rubric_repository import EvaluationRubricRepository
 from app.infrastructure.repositories.organization_member_repository import OrganizationMemberRepository
 from app.infrastructure.repositories.project_member_repository import ProjectMemberRepository
+from app.core.security import get_current_user, get_current_user_optional, get_user_from_api_key
 
 def get_project_repository(db: Session = Depends(get_db)) -> ProjectRepository:
     """

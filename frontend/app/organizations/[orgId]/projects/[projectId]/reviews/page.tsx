@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import ProjectLayout from '@/components/layout/ProjectLayout';
 import ProjectTabs from '@/components/ProjectTabs';
@@ -50,17 +50,7 @@ export default function ReviewsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
 
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
-    fetchData();
-  }, [router, projectId, filter]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const token = localStorage.getItem('access_token');
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -92,7 +82,17 @@ export default function ReviewsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter, projectId]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+
+    void fetchData();
+  }, [router, projectId, fetchData]);
 
   const handleDecision = async (reviewId: number, action: 'approve' | 'reject') => {
     try {
@@ -310,7 +310,7 @@ export default function ReviewsPage() {
             <div className="text-sm text-slate-400 space-y-2">
               <p>The review queue enables human oversight for deployment decisions:</p>
               <ol className="list-decimal list-inside space-y-1 ml-2">
-                <li>Run tests in Test Lab to compare model versions</li>
+                <li>Run Policy Compare / CI Gate to compare model or prompt revisions</li>
                 <li>Signals auto-detect potential issues</li>
                 <li>Reviews are created for human decision</li>
                 <li>Approve or reject based on results</li>

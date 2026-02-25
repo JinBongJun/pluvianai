@@ -14,7 +14,7 @@ class EmailService(NotificationChannel):
     def __init__(self):
         """Initialize email service with Resend configuration"""
         self.from_email = settings.EMAIL_FROM or "onboarding@resend.dev"
-        self.from_name = settings.EMAIL_FROM_NAME or "AgentGuard"
+        self.from_name = settings.EMAIL_FROM_NAME or "PluvianAI"
         self.api_key = settings.RESEND_API_KEY
         self.enabled = bool(self.api_key)
 
@@ -61,7 +61,7 @@ class EmailService(NotificationChannel):
         
         return await self.send_alert_email(
             to=to,
-            subject=f"AgentGuard Alert: {title}",
+            subject=f"PluvianAI Alert: {title}",
             html_content=html_content,
         )
     
@@ -269,7 +269,7 @@ class EmailService(NotificationChannel):
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚨 AgentGuard Alert</h1>
+            <h1>🚨 PluvianAI Alert</h1>
         </div>
         <div class="content">
             <div class="alert-box level-{level.lower()}">
@@ -297,7 +297,7 @@ class EmailService(NotificationChannel):
             {dashboard_link}
         </div>
         <div class="footer">
-            <p style="margin: 0;">This is an automated alert from AgentGuard.</p>
+            <p style="margin: 0;">This is an automated alert from PluvianAI.</p>
             <p style="margin: 5px 0 0 0;">You're receiving this because you're subscribed to alerts for this project.</p>
         </div>
     </div>

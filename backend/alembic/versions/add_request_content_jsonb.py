@@ -22,21 +22,10 @@ def upgrade():
     
     # 2. Migrate existing data (Text -> JSONB)
     # Convert simple text prompt to OpenAI message structure
-    op.execute("""
-        UPDATE snapshots 
-        SET request_content = jsonb_build_object(
-            'messages', jsonb_build_array(
-                jsonb_build_object(
-                    'role', 'user', 
-                    'content', CASE 
-                        WHEN user_message IS NOT NULL THEN user_message 
-                        ELSE '' 
-                    END
-                )
-            )
-        )
-        WHERE user_message IS NOT NULL AND request_content IS NULL
-    """)
+    # 2. Migrate existing data (Text -> JSONB) - SKIPPED for Railway Migration
+    # Old column 'user_message' does not exist in new DB, so we cannot migrate data.
+    # New data will be populated correctly by application logic.
+    pass
 
 def downgrade():
     op.drop_column('snapshots', 'request_content')

@@ -24,28 +24,23 @@ from app.api.v1.endpoints import (
     user_api_keys,
     # shared_results,
     firewall,
-    # ci,
-    # self_hosted,
     dashboard,
-    # notifications,
     settings,
     activity,
-    # drift,
-    # webhooks,
     signals,
-    # worst_prompts,
-    # reviews,
-    # regression,
     cost,
     live_view,
-    test_lab,
     test_runs,
+    self_hosted,
+    behavior,
+    release_gate,
 )
 
 api_router = APIRouter()
 
 api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])
 api_router.include_router(projects.router, prefix="/projects", tags=["projects"])
+api_router.include_router(self_hosted.router, prefix="/infrastructure", tags=["infrastructure"])
 # api_router.include_router(replay.router, prefix="/replay", tags=["replay"])
 api_router.include_router(project_members.router, prefix="", tags=["project-members"])
 api_router.include_router(api_calls.router, prefix="/api-calls", tags=["api-calls"])
@@ -78,5 +73,6 @@ api_router.include_router(signals.router, prefix="", tags=["signals"])
 # api_router.include_router(regression.router, prefix="", tags=["regression"])
 api_router.include_router(cost.router, prefix="/cost", tags=["cost"])
 api_router.include_router(live_view.router, prefix="", tags=["live-view"])
-api_router.include_router(test_lab.router, prefix="", tags=["test-lab"])
 api_router.include_router(test_runs.router, prefix="/test-runs", tags=["test-runs"])
+api_router.include_router(behavior.router, prefix="", tags=["behavior"])
+api_router.include_router(release_gate.router, prefix="", tags=["release-gate"])

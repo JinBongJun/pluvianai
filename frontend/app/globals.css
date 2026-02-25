@@ -12,9 +12,7 @@
 }
 
 .react-flow__node,
-.react-flow__handle {
-  cursor: default !important;
-}
+.react-flow__handle {}
 
 .react-flow__edgeinteraction,
 .react-flow__edge,
@@ -36,27 +34,62 @@
   --background-rgb: 10, 10, 12;
   --border-color: 255, 255, 255;
 
-  /* Atomic Lab Palette - High-Precision Aesthetic */
+  /* 📏 Spacing Grid (4px Step) */
+  --space-0: 0px;
+  --space-1: 0.25rem;
+  /* 4px */
+  --space-2: 0.5rem;
+  /* 8px */
+  --space-3: 0.75rem;
+  /* 12px */
+  --space-4: 1rem;
+  /* 16px */
+  --space-5: 1.25rem;
+  /* 20px */
+  --space-6: 1.5rem;
+  /* 24px */
+  --space-8: 2rem;
+  /* 32px */
+  --space-10: 2.5rem;
+  /* 40px */
+  --space-12: 3rem;
+  /* 48px */
+
+  /* 🥞 Z-Index Layering (The Vertical Order) */
+  --z-base: 0;
+  --z-flow-node: 10;
+  --z-sidebar: 100;
+  --z-inspector: 200;
+  --z-modal: 500;
+  --z-popover: 600;
+  --z-tooltip: 700;
+  --z-toast: 800;
+  --z-max: 9999;
+
+  /* 🎨 Atomic Lab Palette - High-Precision Aesthetic */
   --ag-bg: 10, 10, 12;
-  /* #0A0A0C Night Slate */
   --ag-bg-live: 13, 13, 17;
-  /* Slightly lighter slate for contrast */
   --ag-surface: 17, 17, 21;
-  /* #111115 Surface/Card color */
+
+  /* Semantic Mappings */
   --ag-primary: 16, 185, 129;
-  /* #10B981 Emerald Green (Precision) */
+  /* pluvian-bio-500 */
   --ag-primary-hover: 52, 211, 153;
-  /* Emerald 400 */
+  /* pluvian-bio-400 */
   --ag-accent: 6, 182, 212;
-  /* #06B6D4 Clinical Cyan (Intelligence) */
+  /* pluvian-clinical-500 */
   --ag-accent-light: 34, 211, 238;
-  /* Cyan 400 */
+  /* pluvian-clinical-400 */
   --ag-electric-blue: 14, 165, 233;
-  /* Sky 500 */
   --ag-text: 226, 232, 240;
-  /* Slate 200 */
   --ag-text-muted: 100, 116, 139;
-  /* Slate 500 */
+
+  /* State Colors */
+  --ag-success: 16, 185, 129;
+  --ag-warning: 245, 158, 11;
+  /* pluvian-predator-500 */
+  --ag-error: 239, 68, 68;
+  /* pluvian-triage-500 */
 }
 
 body {
@@ -430,4 +463,10 @@ body {
     box-shadow: 0 0 25px rgba(16, 185, 129, 0.8), 0 0 45px rgba(16, 185, 129, 0.3);
     filter: brightness(1.5);
   }
+}
+
+/* Honeycomb Background Pattern for Navbar */
+.bg-honeycomb {
+  background-image: url("data:image/svg+xml,%3Csvg width='56' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100' fill='none' stroke='%23ffffff' stroke-opacity='0.1' stroke-width='1.5'/%3E%3Cpath d='M28 0L28 34L0 50L0 84L28 100L56 84L56 50L28 34' fill='none' stroke='%23ffffff' stroke-opacity='0.1' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-size: 56px 100px;
 }
