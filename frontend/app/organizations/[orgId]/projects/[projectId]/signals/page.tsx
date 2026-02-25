@@ -42,18 +42,7 @@ export default function SignalsPage() {
   const [status, setStatus] = useState<ProjectStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
-    // Fetch project status
-    fetchProjectStatus();
-  }, [router, projectId]);
-
-  const fetchProjectStatus = async () => {
+  const fetchProjectStatus = useCallback(async () => {
     try {
       const token = localStorage.getItem('access_token');
       const response = await fetch(
@@ -73,7 +62,18 @@ export default function SignalsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+
+    // Fetch project status
+    void fetchProjectStatus();
+  }, [router, fetchProjectStatus]);
 
   if (!projectId || isNaN(projectId)) {
     return null;
@@ -216,8 +216,8 @@ export default function SignalsPage() {
               <Button variant="secondary" onClick={() => router.push(`${basePath}/reviews`)}>
                 Pending Reviews
               </Button>
-              <Button variant="secondary" onClick={() => router.push(`${basePath}/test-lab`)}>
-                Run Test (Test Lab)
+              <Button variant="secondary" onClick={() => router.push(`${basePath}/live-view`)}>
+                Open Live View
               </Button>
             </div>
           </div>

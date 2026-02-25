@@ -20,7 +20,7 @@ port = os.environ.get("PORT", "8000")
 
 # Log to both stdout and stderr so Railway captures it
 for output in [sys.stdout, sys.stderr]:
-    print(f"🚀 Starting AgentGuard backend on port {port}", file=output)
+    print(f"🚀 Starting PluvianAI backend on port {port}", file=output)
     print(f"📡 PORT environment variable: {port}", file=output)
     print(f"📡 All environment variables with PORT: {[k for k in os.environ.keys() if 'PORT' in k]}", file=output)
     print(f"📡 RAILWAY_ENVIRONMENT: {os.environ.get('RAILWAY_ENVIRONMENT', 'NOT SET')}", file=output)

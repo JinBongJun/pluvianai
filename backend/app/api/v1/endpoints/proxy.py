@@ -85,7 +85,7 @@ async def _stream_with_firewall(
                     # Return error JSON instead of continuing stream
                     error_response = {
                         "error": {
-                            "message": f"AgentGuard Firewall: {scan_result.get('reason')}",
+                            "message": f"Pluvian Sentinel Firewall: {scan_result.get('reason')}",
                             "type": "firewall_blocked",
                             "severity": scan_result.get("severity"),
                             "rule_id": scan_result.get("rule_id")
@@ -134,7 +134,7 @@ async def _proxy_request(
                 if is_panic == "1":
                     raise HTTPException(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                        detail="AgentGuard: Panic Mode Active. All traffic is blocked for safety."
+                        detail="Pluvian: Panic Mode Active. All traffic is blocked for safety."
                     )
         except HTTPException:
             raise
@@ -183,6 +183,10 @@ async def _proxy_request(
         try:
             # Parse body to JSON to capture context
             payload = json.loads(body)
+            if isinstance(payload, dict) and x_agent_name:
+                # Header-based agent name has highest priority for proxy traffic.
+                payload.setdefault("agent_id", x_agent_name)
+                payload.setdefault("agent_name", x_agent_name)
             
             # Sub-task to handle snapshot (async buffering via Redis Stream)
             def bg_snapshot(p_id: int, t_id: str, prov: str, mod: str, pay: Dict):
@@ -283,8 +287,8 @@ async def _proxy_request(
 
                 # Inject Trace-ID and Error Namespace into response
                 resp_headers = dict(response.headers)
-                resp_headers["X-AgentGuard-Trace-ID"] = trace_id
-                resp_headers["X-AgentGuard-Origin"] = "Upstream"  # Response from original LLM
+                resp_headers["X-Pluvian-Trace-ID"] = trace_id
+                resp_headers["X-Pluvian-Origin"] = "Upstream"  # Response from original LLM
                 
                 # Check if this is a streaming response (chat completions with stream=true)
                 content_type = response.headers.get("content-type", "")
@@ -328,7 +332,7 @@ async def _proxy_request(
                 error_response = JSONResponse(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     content={"error": "Upstream temporarily unavailable (circuit open)"},
-                    headers={"X-AgentGuard-Origin": "Proxy"},  # AgentGuard proxy error
+                    headers={"X-Pluvian-Origin": "Proxy"},  # Pluvian proxy error
                 )
                 return error_response
             except httpx.RequestError as e:
@@ -340,11 +344,11 @@ async def _proxy_request(
                     error_response = JSONResponse(
                         status_code=status.HTTP_502_BAD_GATEWAY,
                         content={"error": str(last_error)},
-                        headers={"X-AgentGuard-Origin": "Network"},  # Network error
+                        headers={"X-Pluvian-Origin": "Network"},  # Network error
                     )
                     return error_response
             except Exception as e:
-                # AgentGuard proxy error
+                # PluvianAI proxy error
                 last_error = e
                 retry_attempts_total.labels(service="proxy").inc()
                 if attempt == 2:
@@ -352,7 +356,10 @@ async def _proxy_request(
                     error_response = JSONResponse(
                         status_code=status.HTTP_502_BAD_GATEWAY,
                         content={"error": str(last_error)},
-                        headers={"X-AgentGuard-Origin": "Proxy"},  # AgentGuard error
+                        headers={
+                            "X-PluvianAI-Origin": "Proxy",
+                            "X-AgentGuard-Origin": "Proxy",  # legacy header for compatibility
+                        },
                     )
                     return error_response
         
@@ -360,7 +367,7 @@ async def _proxy_request(
         return JSONResponse(
             status_code=status.HTTP_502_BAD_GATEWAY,
             content={"error": "Proxy failed after retries"},
-            headers={"X-AgentGuard-Origin": "Proxy"},
+            headers={"X-Pluvian-Origin": "Proxy"},
         )
 
 

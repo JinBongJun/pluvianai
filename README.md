@@ -1,6 +1,14 @@
-# Synpira
+# PluvianAI
 
-**The test lab for agents.** — LLM/Agent 테스트 전용 서비스
+**The Symbiotic Guardian for AI Agents.** — LLM/Agent 검증 및 배포 전 검증 플랫폼
+
+---
+
+## 핵심 가치
+
+- **규칙 기반 검증**: LLM Judge 없이 결정론적 시그널(Atomic Signals)로 재현 가능한 평가
+- **에이전트 단위 진단**: Live View에서 에이전트별 Clinical Log·Data·시그널 한 화면
+- **Release Gate**: 저장된 트래픽 리플레이 → 규칙 검증 → 통과한 트레이스만 배포
 
 ---
 
@@ -8,12 +16,10 @@
 
 | 기능 | 설명 |
 |------|------|
-| **Auto-Mapping** | SDK 연동 → 트래픽 분석 → 에이전트 구조 자동 시각화 |
-| **Test Lab (모델 변경)** | 프롬프트 고정, 모델만 변경 → 재실행 |
-| **Test Lab (프롬프트 변경)** | 모델 고정, 프롬프트만 변경 → 실행 |
-| **Signal Detection** | 규칙 기반 평가 (LLM Judge 아님) |
-| **Worst Prompt Set** | 실패 케이스 자동 수집 |
-| **Human-in-the-loop** | 애매한 케이스 사람 검토 |
+| **Live View** | SDK 연동 → 트래픽 분석 → 에이전트 노드·Clinical Log·Data·Evaluation |
+| **Release Gate** | 고정 트레이스 + 리플레이(모델/프롬프트 오버라이드) + 정책 회귀 검증 → Pass/Fail |
+| **Atomic Signals** | 규칙 기반 평가 (길이·레이턴시·JSON·PII·키워드 등) — LLM Judge 아님 |
+| **Behavior Rules** | 툴 호출/궤적 검증, Validation Dataset, CI Gate |
 
 ---
 
@@ -22,7 +28,7 @@
 - **Backend**: FastAPI (Python)
 - **Database**: PostgreSQL + JSONB
 - **Frontend**: Next.js (TypeScript)
-- **SDK**: Python, Node.js
+- **SDK**: Python (`agentguard`), Node.js (`@agentguard/sdk`)
 - **Infrastructure**: Docker, Redis
 
 ---
@@ -43,28 +49,22 @@ import agentguard from '@agentguard/sdk';
 agentguard.init({ apiKey: 'YOUR_API_KEY' });
 ```
 
-### 2. 자동 구조 생성
+### 2. 에이전트 자동 감지 (Live View)
 
-SDK 연동 후 트래픽이 쌓이면 에이전트 구조가 자동으로 시각화됩니다.
+SDK 연동 후 트래픽이 쌓이면 에이전트가 Live View에 노드로 표시됩니다.
 
-```
-┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-│  Agent A    │ ───→ │  Agent B    │ ───→ │  Agent C    │
-│ (Classifier)│      │  (Writer)   │      │  (Summary)  │
-└─────────────┘      └─────────────┘      └─────────────┘
-```
+### 3. Release Gate (배포 전 검증)
 
-### 3. 테스트 실행
-
-- **Test Lab**: 프롬프트 그대로 모델만 바꿔서 재실행, 또는 모델 그대로 프롬프트만 바꿔서 실행
-- **Signal 평가**: 규칙 기반으로 SAFE / NEEDS_REVIEW / CRITICAL 판정
+- **Release Gate** 탭에서 Trace ID(또는 Validation Dataset) 입력
+- 모델/시스템 프롬프트 오버라이드 선택
+- Validate 실행 → 리플레이 + 정책 검증 → Pass/Fail 및 History 확인
 
 ---
 
 ## 프로젝트 구조
 
 ```
-AgentGuard/
+PluvianAI/
 ├── backend/              # FastAPI 백엔드
 │   ├── app/
 │   │   ├── api/         # API 라우터
@@ -80,18 +80,21 @@ AgentGuard/
 ├── sdk/                  # SDK 패키지
 │   ├── python/
 │   └── node/
-├── docs/                 # 문서
+├── docs/                 # 문서 (참고: 루트 .md가 단일 소스)
 └── docker-compose.yml
 ```
 
 ---
 
-## 문서
+## 문서 (단일 소스 — 루트 기준)
 
-- **[docs/BLUEPRINT.md](./docs/BLUEPRINT.md)** - 마스터 블루프린트
-- **[docs/DETAILED_DESIGN.md](./docs/DETAILED_DESIGN.md)** - 상세 설계
-- **[docs/QUICK_START.md](./docs/QUICK_START.md)** - 빠른 시작 가이드
-- **[SCHEMA_SPEC.md](./SCHEMA_SPEC.md)** - API 스키마 명세
+- **[DOCS_README.md](./DOCS_README.md)** — 문서 목록 및 안내 (먼저 참고)
+- **[BLUEPRINT.md](./BLUEPRINT.md)** — 기술 청사진 (아키텍처, API, 로드맵)
+- **[BUSINESS_PLAN.md](./BUSINESS_PLAN.md)** — 사업계획서
+- **[SCHEMA_SPEC.md](./SCHEMA_SPEC.md)** — API 스키마 명세
+- **[PRD_AGENT_BEHAVIOR_VALIDATION.md](./PRD_AGENT_BEHAVIOR_VALIDATION.md)** — Behavior Validation PRD
+
+> 문서는 이 루트의 `.md` 파일만 기준으로 합니다. `docs/` 내 이전 버전 문서는 참고하지 마세요. 경로: `C:\Users\user\Desktop\AgentGuard`, 브랜드: **PluvianAI**.
 
 ---
 
@@ -127,10 +130,10 @@ docker-compose up -d
 ## 환경 변수
 
 ```bash
-# AgentGuard SDK
+# PluvianAI SDK (패키지명은 agentguard 유지)
 export AGENTGUARD_API_KEY="your-api-key"
 export AGENTGUARD_PROJECT_ID="your-project-id"
-export AGENTGUARD_API_URL="https://api.agentguard.dev"  # Optional
+export AGENTGUARD_API_URL="https://api.example.com"  # Optional
 ```
 
 ---

@@ -3,7 +3,7 @@
 import React from 'react';
 import TopHeader from './TopHeader';
 import { LaboratoryNavbar } from './LaboratoryNavbar';
-import { TelemetryHUD } from './TelemetryHUD';
+import { TelemetryHUD, type TelemetryStat } from './TelemetryHUD';
 import clsx from 'clsx';
 import { Activity } from 'lucide-react';
 
@@ -16,9 +16,11 @@ interface CanvasPageLayoutProps {
     activeTab?: string;
     rightPanel?: React.ReactNode;
     showTelemetry?: boolean;
+    telemetryStats?: TelemetryStat[];
     mode?: 'PULSE' | 'LAB';
     status?: 'LIVE' | 'SANDBOX' | 'REPLAY';
     onAction?: (actionId: string) => void;
+    customActions?: { id: string; label: string; icon: any }[];
 }
 
 const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
@@ -27,9 +29,11 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
     projectId,
     rightPanel,
     showTelemetry = true,
+    telemetryStats,
     mode = 'PULSE',
     status = 'LIVE',
-    onAction = () => { }
+    onAction = () => { },
+    customActions
 }) => {
     // Ensure projectId is consistently handled for the navbar
     const effectiveProjectId = projectId ? Number(projectId) : undefined;
@@ -48,7 +52,11 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
             {/* Global Telemetry HUD - Positioned right below TopHeader */}
             {showTelemetry && (
                 <div className="fixed top-[90px] left-0 right-0 z-[1000]">
-                    <TelemetryHUD />
+                    <TelemetryHUD
+                        stats={telemetryStats}
+                        customActions={customActions}
+                        onAction={onAction}
+                    />
                 </div>
             )}
 

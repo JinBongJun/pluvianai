@@ -12,6 +12,7 @@ from app.services.cache_service import cache_service
 from app.core.database import SessionLocal
 from app.core.logging_config import logger
 from app.core.config import settings
+from app.utils.tool_calls import extract_tool_calls_summary
 import httpx
 
 
@@ -77,13 +78,40 @@ class StreamProcessor:
             for stream_name, messages in entries:
                 for message_id, data in messages:
                     try:
+                        eval_checks_raw = data.get("eval_checks_result")
+                        if isinstance(eval_checks_raw, str) and eval_checks_raw:
+                            try:
+                                eval_checks_result = json.loads(eval_checks_raw)
+                            except Exception:
+                                eval_checks_result = None
+                        else:
+                            eval_checks_result = eval_checks_raw if isinstance(eval_checks_raw, dict) else None
+                        payload = json.loads(data.get("payload")) if isinstance(data.get("payload"), str) else data.get("payload")
+                        tool_calls_raw = data.get("tool_calls_summary")
+                        if isinstance(tool_calls_raw, str) and tool_calls_raw:
+                            try:
+                                tool_calls_summary = json.loads(tool_calls_raw)
+                            except Exception:
+                                tool_calls_summary = extract_tool_calls_summary(payload) if payload else None
+                        else:
+                            tool_calls_summary = extract_tool_calls_summary(payload) if payload else None
+                        eval_config_version = data.get("eval_config_version") or None
+                        if isinstance(eval_config_version, str) and not eval_config_version.strip():
+                            eval_config_version = None
                         snapshot_data = {
                             "trace_id": data.get("trace_id"),
+                            "agent_id": data.get("agent_id") or None,
                             "provider": data.get("provider"),
                             "model": data.get("model"),
-                            "payload": json.loads(data.get("payload")) if isinstance(data.get("payload"), str) else data.get("payload"),
+                            "system_prompt": data.get("system_prompt") or None,
+                            "user_message": data.get("user_message") or None,
+                            "response": data.get("response") or None,
+                            "payload": payload,
                             "is_sanitized": data.get("is_sanitized", "true").lower() == "true",
                             "status_code": int(data.get("status_code")) if data.get("status_code") else None,
+                            "eval_checks_result": eval_checks_result,
+                            "eval_config_version": eval_config_version,
+                            "tool_calls_summary": tool_calls_summary if tool_calls_summary else None,
                         }
                         project_id = int(data.get("project_id")) if data.get("project_id") else None
                         
@@ -178,11 +206,19 @@ class StreamProcessor:
                     # Create snapshot
                     snapshot = Snapshot(
                         trace_id=snapshot_data["trace_id"],
+                        project_id=project_id,
+                        agent_id=snapshot_data.get("agent_id"),
                         provider=snapshot_data["provider"],
                         model=snapshot_data["model"],
+                        system_prompt=snapshot_data.get("system_prompt"),
+                        user_message=snapshot_data.get("user_message"),
+                        response=snapshot_data.get("response"),
                         payload=snapshot_data["payload"],
                         is_sanitized=snapshot_data["is_sanitized"],
-                        status_code=snapshot_data["status_code"]
+                        status_code=snapshot_data["status_code"],
+                        eval_checks_result=snapshot_data.get("eval_checks_result"),
+                        eval_config_version=snapshot_data.get("eval_config_version"),
+                        tool_calls_summary=snapshot_data.get("tool_calls_summary"),
                     )
                     db.add(snapshot)
                     inserted_count += 1
@@ -215,6 +251,29 @@ class StreamProcessor:
                 except Exception as e:
                     # 실패해도 프로덕션 흐름에는 영향 주지 않음
                     logger.debug(f"PostHog snapshot_created tracking failed: {str(e)}")
+
+                # Run policy (tool use) validation asynchronously per trace so Clinical Log shows result without Run check
+                try:
+                    import asyncio
+                    from app.api.v1.endpoints.behavior import run_behavior_validation_for_trace
+                    from app.core.database import SessionLocal
+                    unique_traces = set()
+                    for snapshot_data, proj_id, _ in filtered_snapshots:
+                        if proj_id and snapshot_data.get("trace_id"):
+                            unique_traces.add((proj_id, snapshot_data["trace_id"]))
+                    loop = asyncio.get_event_loop()
+                    def run_validation(pid: int, tid: str) -> None:
+                        sess = SessionLocal()
+                        try:
+                            run_behavior_validation_for_trace(pid, tid, sess)
+                        except Exception as e:
+                            logger.warning("Policy validation after stream snapshot failed: %s", e)
+                        finally:
+                            sess.close()
+                    for (pid, tid) in unique_traces:
+                        loop.run_in_executor(None, run_validation, pid, tid)
+                except Exception as e:
+                    logger.debug("Policy validation scheduling after stream failed: %s", e)
 
                 # Track snapshot usage for subscription limits (after successful insert)
                 # Only track if hard limit was not pre-checked (to avoid double counting)

@@ -3,10 +3,10 @@ Security utilities for JWT authentication
 """
 
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List, Any
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status, Header
+from fastapi import Depends, HTTPException, status, Header, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.core.config import settings
@@ -17,8 +17,8 @@ from app.models.user import User
 # Use bcrypt with explicit backend to avoid initialization issues
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 
-# OAuth2 scheme
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
+# OAuth2 scheme; auto_error=False so get_current_user can fall back to cookies
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login", auto_error=False)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -34,13 +34,14 @@ def get_password_hash(password: str) -> str:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create a JWT access token"""
     to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-
-    to_encode.update({"exp": expire, "type": "access"})
+    now = datetime.utcnow()
+    expire = now + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire, "iat": now, "type": "access"})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    
+    from app.core.logging_config import logger
+    logger.info(f"🔑 [create_access_token] Token created. Exp: {expire.isoformat()}, Minutes: {settings.ACCESS_TOKEN_EXPIRE_MINUTES}")
+    
     return encoded_jwt
 
 
@@ -55,42 +56,87 @@ def create_refresh_token(data: dict) -> str:
 
 def decode_token(token: str) -> Optional[dict]:
     """Decode and verify a JWT token"""
+    from app.core.logging_config import logger
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(
+            token, 
+            settings.SECRET_KEY, 
+            algorithms=[settings.ALGORITHM],
+            options={"leeway": 300}  # Increase leeway to 5 minutes
+        )
         return payload
-    except JWTError:
+    except JWTError as e:
+        error_msg = str(e)
+        logger.error(f"🔴 [decode_token] JWT Error: {error_msg}")
+        # Log specific reasons for failure
+        if "expired" in error_msg.lower():
+            logger.error(f"⏰ [decode_token] Token expired. Check server time vs client time.")
+        elif "signature" in error_msg.lower():
+            logger.error(f"🔑 [decode_token] Signature mismatch. Possible SECRET_KEY issue.")
         return None
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+async def get_current_user(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+) -> User:
     """
-    Dependency to get the current authenticated user from JWT token
+    Dependency to get the current authenticated user from JWT token.
+    Checks Authorization header first (via oauth2_scheme), then falls back to cookies.
     """
     from app.models.user import User
+    
+    from app.core.logging_config import logger
+    
+    # 1. Try to get token from Authorization header
+    final_token = token
+    source = "Authorization Header"
+    
+    # 2. Fallback to cookie if Header is missing
+    if not final_token:
+        final_token = request.cookies.get("access_token")
+        source = "Cookie"
 
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    if not final_token:
+        logger.warning(f"🟡 [get_current_user] 401 Unauthorized: No token provided via Header or Cookie. PATH: {request.url.path}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="NOT_AUTHENTICATED",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    payload = decode_token(token)
+    logger.debug(f"🔍 [get_current_user] Token source: {source}, Token length: {len(final_token)}")
+    payload = decode_token(final_token)
     if payload is None:
-        raise credentials_exception
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expired or invalid",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    # Extract user ID from token
-    user_id: Optional[str] = payload.get("sub")
+    user_id = payload.get("sub")
     if user_id is None:
-        raise credentials_exception
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token claims",
+        )
 
-    # Fetch user from database
-    try:
-        user = db.query(User).filter(User.id == int(user_id)).first()
-        if user is None or not user.is_active:
-            raise credentials_exception
-        return user
-    except (ValueError, TypeError):
-        raise credentials_exception
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Inactive user account",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return user
 
 
 async def get_current_user_optional(

@@ -1,5 +1,12 @@
 """
-Authentication endpoints
+Authentication endpoints — standard login/register/JWT flow.
+
+- Login: POST /login (OAuth2 form: username=email, password) → access_token + refresh_token.
+- Register: POST /register (JSON) → 201 + user; password policy + liability check.
+- Refresh: POST /refresh (body or cookie) → new tokens; refresh rotation + revoke old.
+- Me: GET /me (Bearer or cookie) → current user.
+
+Security: bcrypt passwords, JWT (HS256), brute-force protection, login attempts + audit.
 """
 
 import time
@@ -70,7 +77,7 @@ class TokenResponse(BaseModel):
 class TokenRefresh(BaseModel):
     """Token refresh schema"""
 
-    refresh_token: str
+    refresh_token: str | None = None
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -405,24 +412,42 @@ async def login(
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
-    token_data: TokenRefresh,
     request: Request,
+    token_data: TokenRefresh = None,
     db: Session = Depends(get_db),
     audit_service = Depends(get_audit_service)
 ):
     """Refresh access token using refresh token with rotation"""
     from app.core.security import rotate_refresh_token
     
-    payload = decode_token(token_data.refresh_token)
+    # Try to get refresh token from body first, then fallback to cookie
+    refresh_token_str = None
+    if token_data and token_data.refresh_token:
+        refresh_token_str = token_data.refresh_token
+        logger.info("🔵 [refresh_token] Token extracted from request body")
+    else:
+        refresh_token_str = request.cookies.get("refresh_token")
+        if refresh_token_str:
+            logger.info("🔵 [refresh_token] Token extracted from cookie")
+        else:
+            logger.warning("🔴 [refresh_token] No refresh_token found in body or cookie")
+
+    if not refresh_token_str:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token required in body or cookie",
+        )
+    
+    payload = decode_token(refresh_token_str)
 
     if payload is None or payload.get("type") != "refresh":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
     user_id = int(payload.get("sub"))
     
-    # Use rotation to issue new tokens (old token will be invalidated when token tracking is added)
+    # Use rotation to issue new tokens
     access_token, refresh_token = rotate_refresh_token(
-        old_refresh_token=token_data.refresh_token,
+        old_refresh_token=refresh_token_str,
         user_id=user_id,
         db=db
     )

@@ -150,6 +150,7 @@ class ProjectService:
         name: Optional[str] = None,
         description: Optional[str] = None,
         usage_mode: Optional[str] = None,
+        diagnostic_config: Optional[dict] = None,
     ) -> Optional[Project]:
         """
         Update project (Design 5.1.5: usage_mode upgrade to Full Mode).
@@ -173,6 +174,14 @@ class ProjectService:
             project.description = description
         if usage_mode is not None and usage_mode in ("full", "test_only"):
             project.usage_mode = usage_mode
+        if diagnostic_config is not None:
+            # Merge existing config or overwrite
+            existing = project.diagnostic_config or {}
+            if isinstance(existing, str):
+                import json
+                existing = json.loads(existing)
+            existing.update(diagnostic_config)
+            project.diagnostic_config = existing
 
         # Transaction is managed by get_db() dependency
         return self.project_repo.save(project)

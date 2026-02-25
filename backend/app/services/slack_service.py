@@ -58,13 +58,13 @@ class SlackService(NotificationChannel):
 
             # Build Slack message payload
             payload = {
-                "text": f"AgentGuard Alert: {title}",
+                "text": f"PluvianAI Alert: {title}",
                 "blocks": [
                     {
                         "type": "header",
                         "text": {
                             "type": "plain_text",
-                            "text": f"🚨 AgentGuard Alert",
+                            "text": f"🚨 PluvianAI Alert",
                         }
                     },
                     {
@@ -91,7 +91,7 @@ class SlackService(NotificationChannel):
                 "attachments": [
                     {
                         "color": color,
-                        "footer": "AgentGuard",
+                        "footer": "PluvianAI",
                         "ts": int(datetime.utcnow().timestamp())
                     }
                 ]

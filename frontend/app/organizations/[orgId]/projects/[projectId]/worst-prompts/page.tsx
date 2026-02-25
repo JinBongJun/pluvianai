@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import ProjectLayout from '@/components/layout/ProjectLayout';
 import ProjectTabs from '@/components/ProjectTabs';
@@ -54,17 +54,7 @@ export default function WorstPromptsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
 
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
-    fetchData();
-  }, [router, projectId, filter]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const token = localStorage.getItem('access_token');
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -97,7 +87,17 @@ export default function WorstPromptsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter, projectId]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+
+    void fetchData();
+  }, [router, projectId, fetchData]);
 
   const markAsReviewed = async (promptId: number, keepActive: boolean) => {
     try {
@@ -217,7 +217,7 @@ export default function WorstPromptsPage() {
               <div className="p-8 text-center text-slate-400">
                 <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No worst prompts collected yet.</p>
-                <p className="text-sm mt-2">Run tests in Test Lab to detect problematic prompts.</p>
+                <p className="text-sm mt-2">Validate traces in Policy to detect problematic prompts.</p>
               </div>
             ) : (
               <div className="divide-y divide-white/10">

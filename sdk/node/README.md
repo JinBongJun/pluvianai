@@ -1,4 +1,4 @@
-# AgentGuard Node.js SDK
+# PluvianAI Node.js SDK (package: @agentguard/sdk)
 
 Zero-config monitoring for LLM APIs. Automatically track all your OpenAI, Anthropic, and other LLM API calls without changing your code.
 
@@ -109,6 +109,17 @@ await agentguard.trackCall(
 - **Error handling**: Gracefully handles failures
 - **Agent tracking**: Track different agents in your system
 - **TypeScript support**: Full TypeScript definitions included
+
+## Tool calls & workflow structure (optional)
+
+The zero-config patching focuses on **LLM API calls** (requests/responses, latency, tokens/cost when available).
+
+If you want PluvianAI to reliably validate **tool usage policies** across *any* framework (custom tools, LangChain,
+n8n-style workflows, HTTP/DB/Slack/email actions) — especially tool **results** and strict ordering — you may need to
+add lightweight, explicit instrumentation in your code (for example, wrapping tool execution or emitting tool events).
+
+This is intentional: tool execution typically happens outside the LLM client, so it cannot always be inferred from LLM
+API traffic alone.
 
 ## License
 

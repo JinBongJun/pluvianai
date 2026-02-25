@@ -22,21 +22,43 @@ class ReplayService:
         self.timeout = httpx.Timeout(60.0)
 
     async def replay_snapshot(
-        self, 
-        snapshot: Snapshot, 
-        new_model: Optional[str] = None, 
+        self,
+        snapshot: Snapshot,
+        new_model: Optional[str] = None,
         new_system_prompt: Optional[str] = None,
-        api_key: Optional[str] = None
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
+        replay_overrides: Optional[Dict[str, Any]] = None,
+        api_key: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Execute a single replay with optional overrides.
+        replay_overrides: optional dict merged into the request body (e.g. tools, extra params).
         """
         async with self.semaphore:
             # 1. Prepare Payload
-            payload = snapshot.payload.copy()
+            raw = snapshot.payload
+            # Proxy-created snapshots store { "request": {...}, "response": {...} }; use request as body
+            if isinstance(raw, dict) and "request" in raw and "response" in raw:
+                payload = dict(raw["request"]) if isinstance(raw.get("request"), dict) else dict(raw)
+            else:
+                payload = dict(raw) if isinstance(raw, dict) else {}
             if new_model:
                 payload["model"] = new_model
-            
+            if temperature is not None:
+                payload["temperature"] = temperature
+            if max_tokens is not None:
+                payload["max_tokens"] = max_tokens
+            if top_p is not None:
+                payload["top_p"] = top_p
+            if isinstance(replay_overrides, dict) and replay_overrides:
+                for k, v in replay_overrides.items():
+                    if v is None:
+                        payload.pop(k, None)  # null in overrides = remove key from request
+                    else:
+                        payload[k] = v
+
             if new_system_prompt:
                 # Find system message and replace
                 messages = payload.get("messages", [])
@@ -49,16 +71,29 @@ class ReplayService:
                     messages.insert(0, {"role": "system", "content": new_system_prompt})
                 payload["messages"] = messages
 
+            if not payload.get("messages"):
+                return {
+                    "snapshot_id": snapshot.id,
+                    "success": False,
+                    "error": "Replay payload has no messages; cannot send to provider.",
+                }
+
             # 2. Build URL
             provider = snapshot.provider
             base_url = PROVIDER_URLS.get(provider)
-            # Assumption: Replay is mostly for Chat Completions
-            endpoint = "/chat/completions" if provider != "google" else f"/models/{payload['model']}:generateContent"
+            model_for_url = payload.get("model") or snapshot.model or "unknown"
+            endpoint = "/chat/completions" if provider != "google" else f"/models/{model_for_url}:generateContent"
             target_url = f"{base_url}{endpoint}"
 
             # 3. Headers
             # Use provided API key or fallback to environment
             final_key = api_key or getattr(settings, f"{provider.upper()}_API_KEY", None)
+            if not final_key or (isinstance(final_key, str) and not final_key.strip()):
+                return {
+                    "snapshot_id": snapshot.id,
+                    "success": False,
+                    "error": f"Replay requires an API key for provider '{provider}'. Set replay api_key in the request or {provider.upper()}_API_KEY in environment.",
+                }
             headers = {"Content-Type": "application/json"}
             if provider == "openai":
                 headers["Authorization"] = f"Bearer {final_key}"
@@ -97,6 +132,11 @@ class ReplayService:
         snapshots: List[Snapshot],
         new_model: Optional[str] = None,
         new_system_prompt: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
+        replay_overrides: Optional[Dict[str, Any]] = None,
+        api_key: Optional[str] = None,
         rubric: Optional[EvaluationRubric] = None,
         judge_model: str = "gpt-4o-mini",
         project_id: Optional[int] = None,
@@ -105,7 +145,19 @@ class ReplayService:
     ) -> List[Dict[str, Any]]:
         """Run multiple replays in parallel, evaluate, and apply signals."""
         results = await asyncio.gather(
-            *[self.replay_snapshot(s, new_model, new_system_prompt) for s in snapshots]
+            *[
+                self.replay_snapshot(
+                    s,
+                    new_model=new_model,
+                    new_system_prompt=new_system_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    top_p=top_p,
+                    replay_overrides=replay_overrides,
+                    api_key=api_key,
+                )
+                for s in snapshots
+            ]
         )
 
         normalizer = DataNormalizer()

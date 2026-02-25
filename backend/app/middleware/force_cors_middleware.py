@@ -19,13 +19,28 @@ class ForceCORSMiddleware(BaseHTTPMiddleware):
         # Process request
         response: Response = await call_next(request)
         
-        # FORCE CORS headers on ALL responses - this MUST happen
-        response.headers["Access-Control-Allow-Origin"] = "*"
+        # FORCE CORS headers on ALL responses
+        # For cookie-based authentication, we need to:
+        # 1. Reflect the origin (not use "*")
+        # 2. Set Access-Control-Allow-Credentials to "true"
+        # 3. Explicitly list allowed headers (not "*") when using credentials
+        allow_headers = "Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Allow-Origin, Access-Control-Allow-Credentials"
+        
+        if origin and origin != "none":
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        else:
+            # Fallback for requests without origin or server-to-server requests
+            # Still set credentials to true to allow cookie-based auth if possible
+            # But reflect localhost:3000 as the primary consumer
+            response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD"
-        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = allow_headers
         response.headers["Access-Control-Expose-Headers"] = "*"
         response.headers["Access-Control-Max-Age"] = "3600"
         
-        logger.info(f"🟢 FORCE CORS: Added headers to {request.method} {request.url.path}, status: {response.status_code}")
+        logger.info(f"🟢 FORCE CORS: Added headers to {request.method} {request.url.path}, status: {response.status_code}, origin: {origin}")
         
         return response

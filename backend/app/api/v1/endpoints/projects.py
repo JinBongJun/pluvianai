@@ -23,6 +23,7 @@ from app.core.analytics import analytics_service
 from app.models.user import User
 from app.models.project import Project
 from app.models.project_member import ProjectMember
+from app.models.validation_dataset import ValidationDataset
 from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 
 # Repository 패턴 사용 예시 (주석으로 추가)
@@ -49,6 +50,7 @@ class ProjectUpdate(BaseModel):
     description: str | None = Field(None, max_length=1000, description="Project description")
     global_block: bool | None = Field(None, description="Enable global block (panic mode) for this project")
     usage_mode: str | None = Field(None, description="Usage mode: 'full' or 'test_only' (upgrade to Full Mode)")
+    diagnostic_config: dict | None = Field(None, description="Diagnostic thresholds for the 12 factors")
 
 
 class ProjectResponse(BaseModel):
@@ -62,6 +64,7 @@ class ProjectResponse(BaseModel):
     role: str | None = None  # user's role in this project
     organization_id: int | None = None  # organization this project belongs to
     usage_mode: str = "full"  # "full" | "test_only" (Design 5.1.5)
+    diagnostic_config: dict | None = {}
 
     class Config:
         from_attributes = True
@@ -202,6 +205,7 @@ async def list_projects(
             role=get_user_project_role(p.id, current_user.id, db),
             organization_id=p.organization_id,
             usage_mode=getattr(p, "usage_mode", "full") or "full",
+            diagnostic_config=getattr(p, "diagnostic_config", {}) or {},
         )
         for p in all_projects
     ]
@@ -226,6 +230,7 @@ async def get_project(project_id: int, current_user: User = Depends(get_current_
         role=role,
         organization_id=project.organization_id,
         usage_mode=getattr(project, "usage_mode", "full") or "full",
+        diagnostic_config=getattr(project, "diagnostic_config", {}) or {},
     )
 
 
@@ -281,6 +286,7 @@ async def update_project(
         name=project_data.name,
         description=project_data.description,
         usage_mode=usage_mode if usage_mode else None,
+        diagnostic_config=project_data.diagnostic_config,
     )
     
     if not updated_project:
@@ -353,6 +359,8 @@ async def update_project(
         is_active=project.is_active,
         role=role,
         organization_id=project.organization_id,
+        usage_mode=getattr(project, "usage_mode", "full") or "full",
+        diagnostic_config=getattr(project, "diagnostic_config", {}) or {},
     )
 
 
@@ -527,3 +535,98 @@ async def list_rubrics(
     """List all evaluation rubrics for a project"""
     check_project_access(project_id, current_user, db)
     return rubric_repo.find_by_project_id(project_id, active_only=False)
+
+
+class ProjectPatch(BaseModel):
+    """Schema for applying a configuration patch from Test Lab"""
+    nodes: List[dict] = Field(..., description="List of nodes in the patched configuration")
+    edges: List[dict] = Field(..., description="List of edges in the patched configuration")
+    version: str | None = Field(None, description="Optional version name for the patch")
+
+
+@router.post("/{project_id}/apply-patch", response_model=ProjectResponse)
+@handle_errors
+async def apply_project_patch(
+    project_id: int,
+    patch_data: ProjectPatch,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    project_service = Depends(get_project_service),
+    audit_service = Depends(get_audit_service)
+):
+    """Apply a configuration patch from Test Lab to a Live project (Design 5.1.5: Audit Loop Closure)"""
+    # owner/admin access required to push patches to production
+    check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
+    
+    logger.info(f"Applying patch to project {project_id}", extra={"nodes_count": len(patch_data.nodes)})
+    
+    # Log activity
+    activity_logger.log_activity(
+        db=db,
+        user_id=current_user.id,
+        activity_type="project_patch",
+        action=f"Applied safety patch to project {project_id}",
+        description=f"Applied configuration patch featuring {len(patch_data.nodes)} nodes from Test Lab",
+        project_id=project_id,
+        activity_data={"nodes": len(patch_data.nodes), "edges": len(patch_data.edges), "version": patch_data.version}
+    )
+    
+    # Log audit event
+    ip_address = request.client.host if request and request.client else None
+    user_agent = request.headers.get("user-agent") if request else None
+    audit_service.log_action(
+        user_id=current_user.id,
+        action="project_patched",
+        resource_type="project",
+        resource_id=project_id,
+        new_value={"patch_version": patch_data.version, "nodes_count": len(patch_data.nodes)},
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+    
+    # Persist the patch to the project record (Official Live Configuration)
+    project.canvas_nodes = patch_data.nodes
+    project.canvas_edges = patch_data.edges
+    db.commit()
+    db.refresh(project)
+    
+    role = get_user_project_role(project_id, current_user.id, db)
+    
+    return ProjectResponse(
+        id=project.id,
+        name=project.name,
+        description=project.description,
+        owner_id=project.owner_id,
+        is_active=project.is_active,
+        role=role,
+        organization_id=project.organization_id,
+        usage_mode=getattr(project, "usage_mode", "full") or "full",
+    )
+
+
+@router.post("/{project_id}/behavior-datasets/{dataset_id}/delete")
+async def delete_behavior_dataset(
+    project_id: int,
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a validation dataset by ID. Exposed under projects for reliable routing."""
+    check_project_access(project_id, current_user, db)
+    ds = (
+        db.query(ValidationDataset)
+        .filter(
+            ValidationDataset.project_id == project_id,
+            ValidationDataset.id == dataset_id,
+        )
+        .first()
+    )
+    if not ds:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Validation dataset not found",
+        )
+    db.delete(ds)
+    db.commit()
+    return {"ok": True}

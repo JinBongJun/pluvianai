@@ -36,6 +36,9 @@ interface Alert {
   created_at: string;
 }
 
+// Default alert types from backend model (even if no data exists yet)
+const DEFAULT_ALERT_TYPES = ['drift', 'cost_spike', 'error', 'timeout', 'model_update', 'shadow_routing'];
+
 export default function AlertsPage() {
   const router = useRouter();
   const params = useParams();
@@ -69,7 +72,6 @@ export default function AlertsPage() {
   });
   const [allAlerts, setAllAlerts] = useState<Alert[]>([]); // For client-side filtering
   const [recentWorstLiveCount, setRecentWorstLiveCount] = useState(0);
-  const [recentWorstTestLabCount, setRecentWorstTestLabCount] = useState(0);
 
   const loadAlerts = useCallback(async () => {
     setLoading(true);
@@ -106,9 +108,6 @@ export default function AlertsPage() {
       });
       setRecentWorstLiveCount(
         recentWorst.filter((a: any) => a.alert_data?.target === 'live_view').length,
-      );
-      setRecentWorstTestLabCount(
-        recentWorst.filter((a: any) => a.alert_data?.target === 'test_lab').length,
       );
 
       // Apply client-side date range filtering
@@ -159,13 +158,7 @@ export default function AlertsPage() {
       setAlerts(paginated);
       setTotalItems(filtered.length);
     } catch (error: any) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to load alerts:', error);
-      } else {
-        import('@sentry/nextjs').then((Sentry) => {
-          Sentry.captureException(error as Error, { extra: { projectId } });
-        });
-      }
+      console.error('Failed to load alerts:', error);
 
       // Only show error toast for actual API failures, not empty results
       const status = error.response?.status;
@@ -188,7 +181,6 @@ export default function AlertsPage() {
       setLoading(false);
     }
   }, [
-    alertsAPI,
     projectId,
     filters.alert_type,
     filters.severity,
@@ -238,13 +230,7 @@ export default function AlertsPage() {
       toast.showToast('Alert resolved successfully', 'success');
       loadAlerts();
     } catch (error: any) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to resolve alert:', error);
-      } else {
-        import('@sentry/nextjs').then((Sentry) => {
-          Sentry.captureException(error as Error, { extra: { projectId, alertId } });
-        });
-      }
+      console.error('Failed to resolve alert:', error);
       toast.showToast(error.response?.data?.detail || 'Failed to resolve alert', 'error');
     }
   };
@@ -255,13 +241,7 @@ export default function AlertsPage() {
       toast.showToast('Alert sent successfully', 'success');
       loadAlerts();
     } catch (error: any) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to send alert:', error);
-      } else {
-        import('@sentry/nextjs').then((Sentry) => {
-          Sentry.captureException(error as Error, { extra: { projectId, alertId } });
-        });
-      }
+      console.error('Failed to send alert:', error);
       toast.showToast(error.response?.data?.detail || 'Failed to send alert', 'error');
     }
   };
@@ -293,11 +273,8 @@ export default function AlertsPage() {
     return labels[type] || type;
   };
 
-  // Default alert types from backend model (even if no data exists yet)
-  const defaultAlertTypes = ['drift', 'cost_spike', 'error', 'timeout', 'model_update', 'shadow_routing'];
-
   const availableTypes = useMemo(() => {
-    const types = new Set<string>(defaultAlertTypes); // Start with defaults
+    const types = new Set<string>(DEFAULT_ALERT_TYPES); // Start with defaults
     allAlerts.forEach((alert) => {
       if (alert.alert_type) types.add(alert.alert_type);
     });
@@ -325,7 +302,7 @@ export default function AlertsPage() {
         params.set('view', 'worst');
         const qs = params.toString();
         router.push(
-          `/organizations/${orgId}/projects/${projectId}/test-lab${qs ? `?${qs}` : ''}`,
+          `/organizations/${orgId}/projects/${projectId}/live-view${qs ? `?${qs}` : ''}`,
         );
         return;
       }
@@ -377,7 +354,7 @@ export default function AlertsPage() {
           orgId={orgId}
           worstAlertCounts={{
             liveView: recentWorstLiveCount,
-            testLab: recentWorstTestLabCount,
+            testLab: 0,
           }}
         />
 

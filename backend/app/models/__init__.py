@@ -33,11 +33,15 @@ from .public_benchmark import PublicBenchmark
 from .refresh_token import RefreshToken
 from .test_run import TestRun
 from .test_result import TestResult
-from .test_lab_canvas import TestLabCanvas
 from .live_view_connection import LiveViewConnection
 from .replay_run import ReplayRun
 from .agent_display_setting import AgentDisplaySetting
+from .agent_eval_config_history import AgentEvalConfigHistory
 from .signal_detection import SignalDetection, SignalConfig
+from .behavior_rule import BehaviorRule
+from .behavior_report import BehaviorReport
+from .trajectory_step import TrajectoryStep
+from .validation_dataset import ValidationDataset
 
 # Note: SignalDetection, WorstPrompt, Review models are imported directly in services
 # to avoid circular imports. Import them directly from their files when needed:
@@ -78,10 +82,14 @@ __all__ = [
     "RefreshToken",
     "TestRun",
     "TestResult",
-    "TestLabCanvas",
     "LiveViewConnection",
     "ReplayRun",
     "AgentDisplaySetting",
+    "AgentEvalConfigHistory",
     "SignalDetection",
     "SignalConfig",
+    "BehaviorRule",
+    "BehaviorReport",
+    "TrajectoryStep",
+    "ValidationDataset",
 ]

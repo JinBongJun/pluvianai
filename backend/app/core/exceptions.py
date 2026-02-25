@@ -12,7 +12,7 @@ from app.core.logging_config import logger
 
 
 class AgentGuardException(Exception):
-    """Base exception for AgentGuard"""
+    """Base exception for PluvianAI"""
 
     def __init__(self, message: str, status_code: int = 500):
         self.message = message
@@ -60,8 +60,8 @@ class UpgradeRequiredException(AgentGuardException):
 
 
 async def agentguard_exception_handler(request: Request, exc: AgentGuardException):
-    """Handle custom AgentGuard exceptions following API_REFERENCE.md format"""
-    logger.error(f"AgentGuardException: {exc.message}", extra={"path": request.url.path, "method": request.method})
+    """Handle custom PluvianAI exceptions following API_REFERENCE.md format"""
+    logger.error(f"PluvianAIException: {exc.message}", extra={"path": request.url.path, "method": request.method})
     
     from app.core.responses import error_response
     
@@ -83,7 +83,7 @@ async def agentguard_exception_handler(request: Request, exc: AgentGuardExceptio
         )
     
     # Determine error code based on exception type
-    error_code = "AGENTGUARD_ERROR"
+    error_code = "PLUVIANAI_ERROR"
     if isinstance(exc, NotFoundError):
         error_code = "NOT_FOUND"
     elif isinstance(exc, PermissionDeniedError):
@@ -95,7 +95,7 @@ async def agentguard_exception_handler(request: Request, exc: AgentGuardExceptio
         code=error_code,
         message=exc.message,
         status_code=exc.status_code,
-        origin="Proxy",  # AgentGuard server error
+        origin="Proxy",  # PluvianAI server error
     )
 
 
@@ -121,7 +121,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         error_code = detail["code"]
     elif hasattr(exc, "error_code"):
         error_code = exc.error_code
-    origin = request.headers.get("X-AgentGuard-Origin")
+    origin = request.headers.get("X-PluvianAI-Origin") or request.headers.get("X-AgentGuard-Origin")
     from app.core.responses import error_response
     return error_response(
         code=error_code,
@@ -154,7 +154,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         message="Validation error",
         details={"errors": errors, "error_messages": error_messages},
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        origin="Proxy",  # AgentGuard validation error
+        origin="Proxy",  # PluvianAI validation error
     )
 
 

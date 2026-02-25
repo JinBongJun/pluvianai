@@ -26,7 +26,7 @@ export default function IntegrationsPage() {
     {
       id: 'github',
       name: 'GitHub Actions',
-      description: 'Run Synpira CI checks on your pull requests',
+      description: 'Run PluvianAI CI checks on your pull requests',
       icon: Github,
       connected: false,
       comingSoon: false,
@@ -64,7 +64,7 @@ export default function IntegrationsPage() {
             <Plug className="h-8 w-8 text-ag-accent" />
             Integrations
           </h1>
-          <p className="text-slate-400 mt-2">Connect Synpira with your favorite tools</p>
+          <p className="text-slate-400 mt-2">Connect PluvianAI with your favorite tools</p>
         </div>
 
         <div className="grid gap-4">

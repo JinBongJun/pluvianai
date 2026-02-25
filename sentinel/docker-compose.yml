@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  pluvian-sentinel:
+    image: pluvianai/sentinel:latest
+    container_name: pluvian-sentinel
+    ports:
+      - "5678:5678"
+    environment:
+      - PLUVIAN_BACKEND_URL=http://your-pluvian-backend:8000
+      - PLUVIAN_PROJECT_ID=${PLUVIAN_PROJECT_ID}
+      - PLUVIAN_API_KEY=${PLUVIAN_API_KEY}
+      - SENTINEL_PORT=5678
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./data:/home/node/.pluvian-sentinel
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5678/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

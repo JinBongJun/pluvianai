@@ -62,7 +62,7 @@ class DiscordService(NotificationChannel):
 
             # Build Discord embed payload
             embed = {
-                "title": f"🚨 AgentGuard Alert: {title}",
+                "title": f"🚨 PluvianAI Alert: {title}",
                 "description": message,
                 "color": color,
                 "fields": [
@@ -79,7 +79,7 @@ class DiscordService(NotificationChannel):
                 ],
                 "timestamp": datetime.utcnow().isoformat(),
                 "footer": {
-                    "text": "AgentGuard"
+                    "text": "PluvianAI"
                 }
             }
 

@@ -25,7 +25,7 @@ export default function DocsPage() {
             content: (
                 <div className="space-y-8">
                     <p className="text-2xl text-slate-400 leading-relaxed font-semibold max-w-4xl">
-                        Welcome to the PluvianAI Clinical Lab documentation. Pluvian is a <span className="text-white">symbiotic validation layer</span> designed to "cure" AI agents from hallucinations, PII leaks, and logic breakdowns.
+                        Pluvian is a <span className="text-white">symbiotic validation layer</span> designed to &quot;cure&quot; AI agents from hallucinations, PII leaks, and logic breakdowns with clinical precision.
                     </p>
                     <div className="grid md:grid-cols-1 gap-8">
                         <div className="p-10 rounded-2xl bg-white/5 border border-white/10 hover:border-emerald-500/30 transition-all group cursor-pointer max-w-2xl" onClick={() => setActiveSection('quickstart')}>
@@ -47,8 +47,210 @@ export default function DocsPage() {
             content: (
                 <div className="space-y-10">
                     <p className="text-xl text-slate-400 leading-relaxed max-w-4xl">
-                        Get PluvianAI running in your environment in 3 simple steps.
+                        PluvianAI &quot;Diagnostic&quot; factors for AI reliability. Get PluvianAI running in your environment in 3 simple steps.
                     </p>
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 max-w-4xl">
+                        <div className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">Important</div>
+                        <p className="mt-3 text-sm text-slate-400 leading-relaxed">
+                            Zero-config setup captures <span className="text-white font-semibold">LLM API calls</span> automatically.
+                            For universal coverage of <span className="text-white font-semibold">tool executions</span> (HTTP/DB/Slack/email/custom tools)
+                            and precise workflow semantics, you may optionally add lightweight instrumentation (e.g., wrap tool execution) in your codebase.
+                        </p>
+                    </div>
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6 max-w-4xl">
+                        <div className="text-[10px] font-black uppercase tracking-[0.35em] text-emerald-300">Agent Identity Rule</div>
+                        <p className="mt-3 text-sm text-slate-300 leading-relaxed">
+                            Pluvian groups traces by a stable <span className="text-white font-semibold">agent_id</span>. Priority is:
+                            <span className="text-white"> explicit SDK/header agent name</span> → <span className="text-white">payload.agent_id/agent_name</span> →
+                            <span className="text-white"> deterministic system prompt hash</span> fallback. For clean Live View and Policy rules, always send a stable agent name.
+                        </p>
+                    </div>
+                    <div className="grid md:grid-cols-2 gap-4 max-w-5xl">
+                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
+                            <h4 className="text-sm font-black uppercase tracking-[0.2em] text-slate-300">Evaluation</h4>
+                            <p className="mt-3 text-sm text-slate-400 leading-relaxed">
+                                Atomic Signals (13 checks) score each incoming snapshot for quality, safety, and consistency trends.
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
+                            <h4 className="text-sm font-black uppercase tracking-[0.2em] text-slate-300">Policy</h4>
+                            <p className="mt-3 text-sm text-slate-400 leading-relaxed">
+                                Policy rules are explicit pass/fail guardrails (forbidden tool, tool order, args schema) used for validation and CI gate decisions.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 max-w-5xl space-y-5">
+                        <h4 className="text-base font-black uppercase tracking-[0.2em] text-slate-200">Evaluation Settings (Simple Guide)</h4>
+                        <p className="text-sm text-slate-400 leading-relaxed">
+                            Evaluation is your configuration area. Turn checks on/off, set thresholds, and save. Use <span className="text-white font-semibold">Clinical Log - Last N runs</span> to control how many recent runs are included when evaluation executes.
+                        </p>
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                <h5 className="text-sm font-black text-white">1) Empty / Short Answers</h5>
+                                <p className="mt-2 text-xs text-slate-400">Detects very short outputs.</p>
+                                <p className="mt-1 text-xs text-slate-500">Set: Minimum Characters (range 1-10,000). Start around 16-80 by use case.</p>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                <h5 className="text-sm font-black text-white">2) Latency Spikes</h5>
+                                <p className="mt-2 text-xs text-slate-400">Detects slow responses.</p>
+                                <p className="mt-1 text-xs text-slate-500">Set: Warn (100-120,000 ms), Critical (200-180,000 ms). Keep warn ≤ critical.</p>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                <h5 className="text-sm font-black text-white">3) HTTP Error Codes</h5>
+                                <p className="mt-2 text-xs text-slate-400">Flags HTTP failures.</p>
+                                <p className="mt-1 text-xs text-slate-500">Set: Warn From / Critical From (100-599). Common default: 400 / 500.</p>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                <h5 className="text-sm font-black text-white">4) Refusal / Non-Answer</h5>
+                                <p className="mt-2 text-xs text-slate-400">Pattern-based refusal detection.</p>
+                                <p className="mt-1 text-xs text-slate-500">Set: ON/OFF only.</p>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                <h5 className="text-sm font-black text-white">5) JSON Validity</h5>
+                                <p className="mt-2 text-xs text-slate-400">Checks output JSON format.</p>
+                                <p className="mt-1 text-xs text-slate-500">Set: if_json (recommended) or always.</p>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                <h5 className="text-sm font-black text-white">6) Output Length Drift</h5>
+                                <p className="mt-2 text-xs text-slate-400">Detects unusual length changes.</p>
+                                <p className="mt-1 text-xs text-slate-500">Set: Warn ratio (0-2), Critical ratio (0-3).</p>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                <h5 className="text-sm font-black text-white">7) Token Usage Spikes</h5>
+                                <p className="mt-2 text-xs text-slate-400">Controls token growth and cost risk.</p>
+                                <p className="mt-1 text-xs text-slate-500">Set: Warning Threshold (100-200,000 tokens).</p>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                <h5 className="text-sm font-black text-white">8) High Cost Alert</h5>
+                                <p className="mt-2 text-xs text-slate-400">Flags expensive responses.</p>
+                                <p className="mt-1 text-xs text-slate-500">Set: Warning Cost (0-100 USD).</p>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                <h5 className="text-sm font-black text-white">9) Repetition / Loops</h5>
+                                <p className="mt-2 text-xs text-slate-400">Detects repeated-line loops.</p>
+                                <p className="mt-1 text-xs text-slate-500">Set: Warn Repeats (1-100), Critical Repeats (1-150).</p>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                <h5 className="text-sm font-black text-white">10) Required Keywords / Fields</h5>
+                                <p className="mt-2 text-xs text-slate-400">Enforces required response content.</p>
+                                <p className="mt-1 text-xs text-slate-500">Set: keywords CSV and JSON fields CSV.</p>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                <h5 className="text-sm font-black text-white">11) Format Contract</h5>
+                                <p className="mt-2 text-xs text-slate-400">Enforces sections/phrases in output format.</p>
+                                <p className="mt-1 text-xs text-slate-500">Set: required sections CSV.</p>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                <h5 className="text-sm font-black text-white">12) PII Leakage Shield</h5>
+                                <p className="mt-2 text-xs text-slate-400">Detects potential PII and secret patterns.</p>
+                                <p className="mt-1 text-xs text-slate-500">Set: ON/OFF only.</p>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4 md:col-span-2">
+                                <h5 className="text-sm font-black text-white">13) Reasoning Coherence</h5>
+                                <p className="mt-2 text-xs text-slate-400">Checks logical consistency score.</p>
+                                <p className="mt-1 text-xs text-slate-500">Set: Minimum Score (0-100). Start around 70-85.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 max-w-5xl space-y-5">
+                        <h4 className="text-base font-black uppercase tracking-[0.2em] text-slate-200">Policy (Guardrails) — Scopes & Tool Definition</h4>
+                        <p className="text-sm text-slate-400 leading-relaxed">
+                            Policy is for <span className="text-white font-semibold">deterministic, enforceable constraints</span>. Unlike Evaluation (soft checks),
+                            Policy answers: “Did this run violate a hard rule?”.
+                        </p>
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                <h5 className="text-sm font-black text-white">1) Project Default Rules</h5>
+                                <p className="mt-2 text-xs text-slate-400">Apply to every agent in the project (baseline guardrails).</p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                    Use for org-wide safety: block dangerous tools, enforce “search before answer”, set required schema for critical actions.
+                                </p>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                <h5 className="text-sm font-black text-white">2) Agent Overrides</h5>
+                                <p className="mt-2 text-xs text-slate-400">Only apply when validating traces that include a specific agent id.</p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                    Use when one agent has special permissions (e.g., “payments_agent” can call billing tools; others cannot).
+                                </p>
+                                <p className="mt-2 text-xs text-slate-500">
+                                    Override strategy options: <span className="text-slate-300">replace_same_name</span>,
+                                    <span className="text-slate-300"> replace_same_type</span>, or
+                                    <span className="text-slate-300"> additive</span>.
+                                </p>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-4 md:col-span-2">
+                                <h5 className="text-sm font-black text-white">3) What is a “Tool”?</h5>
+                                <p className="mt-2 text-xs text-slate-400">
+                                    In PluvianAI, a tool is a <span className="text-white font-semibold">named action</span> the agent requests or executes.
+                                </p>
+                                <ul className="mt-2 text-xs text-slate-500 space-y-1 list-disc list-inside">
+                                    <li>
+                                        <span className="text-slate-300 font-semibold">Standard (no extra code)</span>: LLM function/tool calls embedded in model payload
+                                        (e.g., OpenAI-style <span className="font-mono">tool_calls[].function.name</span> + <span className="font-mono">arguments</span>).
+                                    </li>
+                                    <li>
+                                        <span className="text-slate-300 font-semibold">Optional (more power)</span>: instrument real tool execution as named events (HTTP, DB, Slack, email, filesystem),
+                                        so policies can validate what actually happened, not only what the model asked for.
+                                    </li>
+                                </ul>
+                                <p className="mt-3 text-xs text-slate-500">
+                                    Recommendation: start with LLM tool calls. Add lightweight instrumentation only for “must be correct” tools (payments, secrets, outbound side-effects).
+                                </p>
+                            </div>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                            <h5 className="text-sm font-black text-white">Supported Policy Rule Types (MVP)</h5>
+                            <ul className="mt-2 text-xs text-slate-500 space-y-1 list-disc list-inside">
+                                <li><span className="text-slate-300 font-semibold">tool_forbidden</span>: fail if any forbidden tool name is called.</li>
+                                <li><span className="text-slate-300 font-semibold">tool_allowlist</span>: fail if any tool is called outside the allowlist.</li>
+                                <li><span className="text-slate-300 font-semibold">tool_order</span>: enforce “A must happen before B”.</li>
+                                <li><span className="text-slate-300 font-semibold">tool_args_schema</span>: validate tool arguments against JSON Schema.</li>
+                            </ul>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
+                            <h5 className="text-sm font-black text-white">Example Rule JSON</h5>
+                            <p className="text-xs text-slate-500 leading-relaxed">
+                                Create these from <span className="text-slate-300 font-semibold">Live View → agent → Policy tab</span> or via API. Agent overrides are additive on top of project defaults.
+                            </p>
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <div className="rounded-lg border border-white/10 bg-black/30 p-3">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Project Default · Forbidden</div>
+                                    <pre className="text-[10px] font-mono leading-relaxed text-emerald-300 whitespace-pre-wrap">
+{`{
+  "name": "Block shell execution",
+  "scope_type": "project",
+  "severity_default": "critical",
+  "enabled": true,
+  "rule_json": {
+    "type": "tool_forbidden",
+    "severity": "critical",
+    "spec": { "tools": ["shell.exec", "os.system"] }
+  }
+}`}
+                                    </pre>
+                                </div>
+                                <div className="rounded-lg border border-white/10 bg-black/30 p-3">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Agent Override · Allowlist</div>
+                                    <pre className="text-[10px] font-mono leading-relaxed text-emerald-300 whitespace-pre-wrap">
+{`{
+  "name": "payments_agent allowed tools",
+  "scope_type": "agent",
+  "scope_ref": "payments_agent",
+  "severity_default": "high",
+  "enabled": true,
+  "rule_json": {
+    "type": "tool_allowlist",
+    "severity": "high",
+    "spec": { "tools": ["search", "billing.charge", "billing.refund"] }
+  }
+}`}
+                                    </pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="space-y-12">
                         <section className="space-y-4">
                             <h3 className="text-2xl font-bold flex items-center gap-3">
@@ -90,11 +292,19 @@ const pluvian = new Pluvian({
                     <div className="grid grid-cols-1 gap-6">
                         <div className="p-8 rounded-xl bg-white/5 border border-white/10">
                             <h4 className="text-xl font-bold mb-3 text-white">Symbiotic Guard</h4>
-                            <p className="text-slate-400">Unlike passive monitors, Pluvian lives within your agent's execution loop. It intercepts outputs, validates them against "Pathogens" (hallucinations, leaks), and applies a "Cure" before the user ever sees the error.</p>
+                            <p className="text-slate-400">Unlike passive monitors, Pluvian lives within your agent&apos;s execution loop. It intercepts outputs, validates them against &quot;Pathogens&quot; (hallucinations, leaks), and applies a &quot;Cure&quot; before the user ever sees the error.</p>
                         </div>
                         <div className="p-8 rounded-xl bg-white/5 border border-white/10">
                             <h4 className="text-xl font-bold mb-3 text-white">Atomic Signals</h4>
                             <p className="text-slate-400">We decompose AI risk into 13 discrete signals (e.g., Semantic Integrity, Logic Gaps). Each signal represents a measurable aspect of agent stability.</p>
+                        </div>
+                        <div className="p-8 rounded-xl bg-white/5 border border-white/10">
+                            <h4 className="text-xl font-bold mb-3 text-white">Evaluation vs Policy</h4>
+                            <p className="text-slate-400">Evaluation measures what happened on each trace; Policy enforces what must or must not happen. Use Evaluation for monitoring and regression trends, and Policy for release gates and deterministic validation.</p>
+                        </div>
+                        <div className="p-8 rounded-xl bg-white/5 border border-white/10">
+                            <h4 className="text-xl font-bold mb-3 text-white">Agent Grouping Contract</h4>
+                            <p className="text-slate-400">Agent-level dashboards and rule scopes rely on stable identity. Recommended contract: always set a durable agent name in SDK chain context or proxy header. Hash fallback exists for safety, not as primary identity.</p>
                         </div>
                     </div>
                 </div>
@@ -107,7 +317,7 @@ const pluvian = new Pluvian({
             content: (
                 <div className="space-y-8">
                     <p className="text-xl text-slate-400 leading-relaxed max-w-4xl">
-                        Pluvian sits between your LLM Orchestrator (LangChain, AutoGPT, etc.) and your API Interface.
+                        PluvianAI &quot;Shield&quot; prevents unauthorized model access. Pluvian sits between your LLM Orchestrator (LangChain, AutoGPT, etc.) and your API Interface.
                     </p>
                     <div className="p-16 rounded-2xl bg-white/5 border border-white/10 border-dashed flex flex-col items-center justify-center gap-4">
                         <div className="flex items-center gap-4">
@@ -129,8 +339,15 @@ const pluvian = new Pluvian({
             content: (
                 <div className="space-y-8">
                     <p className="text-xl text-slate-400 leading-relaxed max-w-4xl">
-                        Prevent hallucinations by enforcing deterministic rules on non-deterministic models. Logic Guard ensures your agent doesn't "invent" facts or skip critical workflow steps.
+                        Prevent hallucinations by enforcing deterministic rules on non-deterministic models. Logic Guard ensures your agent doesn&apos;t &quot;invent&quot; facts or skip critical workflow steps.
                     </p>
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-6 max-w-4xl">
+                        <h4 className="text-base font-black uppercase tracking-[0.2em] text-slate-300">Current Rule Types</h4>
+                        <p className="mt-3 text-sm text-slate-400 leading-relaxed">
+                            Start with practical policy checks: <span className="text-white">tool_forbidden</span>, <span className="text-white">tool_allowlist</span>, <span className="text-white">tool_order</span>, and <span className="text-white">tool_args_schema</span>.
+                            These rules evaluate trajectory/tool usage data and are designed for Policy reports and CI gates.
+                        </p>
+                    </div>
                 </div>
             )
         },
@@ -153,8 +370,14 @@ const pluvian = new Pluvian({
             content: (
                 <div className="space-y-8">
                     <p className="text-xl text-slate-400 leading-relaxed max-w-4xl">
-                        Every validation, correction, and signal metric is stored in your private trace history. Replay historic runs to optimize your "Immune System" rules.
+                        Every validation, correction, and signal metric is stored in your private trace history. Replay historic runs to optimize your &quot;Immune System&quot; rules.
                     </p>
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-6 max-w-4xl">
+                        <h4 className="text-base font-black uppercase tracking-[0.2em] text-slate-300">Execution Model</h4>
+                        <p className="mt-3 text-sm text-slate-400 leading-relaxed">
+                            Atomic Signal evaluation is automatic on snapshot ingestion. Policy validation is run on demand (e.g., Run Policy Check, Compare, CI Gate) so teams can control cost, noise, and release timing.
+                        </p>
+                    </div>
                 </div>
             )
         }
@@ -263,6 +486,7 @@ const pluvian = new Pluvian({
             {/* Simple Footer */}
             <footer className="py-32 border-t border-white/5 text-center bg-[#08080a]">
                 <p className="text-sm font-black uppercase tracking-[0.4em] text-slate-600">
+                    The &quot;PluvianAI&quot; Protocol: Secure, Technical, Clinical.
                     © 2026 PluvianAI Inc. Clinical Docs v1.0
                 </p>
             </footer>

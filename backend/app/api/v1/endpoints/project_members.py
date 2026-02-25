@@ -1,5 +1,5 @@
 """
-Project member management endpoints
+Project Members management for Pluvian Sentinel
 """
 
 from typing import List
@@ -100,7 +100,7 @@ async def add_project_member(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with email '{member_data.user_email}' not found. The user must have an existing AgentGuard account with this email address.",
+            detail=f"User with email '{member_data.user_email}' not found. The user must have an existing PluvianAI account with this email address.",
         )
 
     # Check if user is already owner

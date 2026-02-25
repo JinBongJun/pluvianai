@@ -1,4 +1,4 @@
-// Type definitions and schemas for AgentGuard
+// Type definitions and schemas for PluvianAI
 import { z } from 'zod';
 
 export interface User {
@@ -83,6 +83,11 @@ export interface EvaluationResult {
 }
 
 // Zod Schemas for API validation
+// Backend may send date fields as string (ISO), number (ms), or null — coerce to string
+const dateLike = z
+  .union([z.string(), z.number(), z.date(), z.null(), z.undefined()])
+  .transform((v) => (v == null ? '' : typeof v === 'string' ? v : v instanceof Date ? v.toISOString() : new Date(Number(v)).toISOString()));
+
 export const CostAnalysisSchema = z.object({
   total_cost: z.number(),
   by_model: z.record(z.string(), z.number()),
@@ -94,12 +99,12 @@ export const CostAnalysisSchema = z.object({
 export const QualityScoreSchema = z.object({
   id: z.number(),
   score: z.number(),
-  created_at: z.string(),
+  created_at: dateLike,
 }).passthrough();
 
 export const DriftDetectionSchema = z.object({
   id: z.number(),
-  detected_at: z.string(),
+  detected_at: dateLike,
   drift_score: z.number(),
 }).passthrough();
 
@@ -110,7 +115,7 @@ export const ProjectSchema = z.object({
   organization_id: z.number(),
   owner_id: z.number(),
   is_active: z.boolean(),
-  created_at: z.string(),
+  created_at: dateLike,
 }).passthrough();
 
 export const APICallSchema = z.object({
@@ -123,7 +128,7 @@ export const APICallSchema = z.object({
   request_tokens: z.number().nullable(),
   response_tokens: z.number().nullable(),
   agent_name: z.string().nullable(),
-  created_at: z.string(),
+  created_at: dateLike,
 }).passthrough();
 
 export const AlertSchema = z.object({
@@ -132,8 +137,8 @@ export const AlertSchema = z.object({
   type: z.string(),
   severity: z.string(),
   message: z.string(),
-  created_at: z.string(),
-  resolved_at: z.string().nullable(),
+  created_at: dateLike,
+  resolved_at: z.union([z.string(), z.number(), z.date(), z.null()]).transform((v) => (v == null ? null : typeof v === 'string' ? v : v instanceof Date ? v.toISOString() : new Date(Number(v)).toISOString())),
 }).passthrough();
 
 export const OrganizationSchema = z.object({

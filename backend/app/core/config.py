@@ -2,28 +2,40 @@
 Application configuration management
 """
 
-from pydantic_settings import BaseSettings
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 from pathlib import Path
 
 # Find project root (where .env file should be located)
-# This file is in backend/app/core/config.py, so go up 4 levels to reach project root
-# backend/app/core -> backend/app -> backend -> project root
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+# This file is in backend/app/core/config.py, so go up 3 levels to reach backend/
+# backend/app/core -> backend/app -> backend
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+# Also consider the current working directory just in case
+CWD = Path.cwd()
 
 
 class Settings(BaseSettings):
     """Application settings"""
 
     # Application
-    APP_NAME: str = "AgentGuard API"
+    APP_NAME: str = "Pluvian Sentinel API"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = False
     ENVIRONMENT: str = "development"  # development, staging, production
     PORT: int = 8000  # Railway/Vercel uses $PORT
 
     # Database
+    # Standard local dev URL - ensures we don't accidentally use Railway internal URLs
     DATABASE_URL: str = "postgresql://agentguard:agentguard@localhost:5432/agentguard"
+
+    @field_validator("DATABASE_URL", mode="after")
+    @classmethod
+    def force_local_db_if_internal(cls, v: str) -> str:
+        # If running locally but environment has Railway internal URL, override it
+        if "railway.internal" in v:
+            return "postgresql://agentguard:agentguard@localhost:5432/agentguard"
+        return v
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -65,7 +77,7 @@ class Settings(BaseSettings):
     # Email configuration (Resend)
     RESEND_API_KEY: Optional[str] = None
     EMAIL_FROM: Optional[str] = None  # e.g., "onboarding@resend.dev" or verified domain
-    EMAIL_FROM_NAME: str = "AgentGuard"
+    EMAIL_FROM_NAME: str = "PluvianAI"
 
     # Slack configuration
     SLACK_WEBHOOK_URL: Optional[str] = None  # Slack webhook URL for notifications
@@ -113,15 +125,15 @@ class Settings(BaseSettings):
     # Database backup configuration
     BACKUP_DIR: str = "./backups"  # Directory for database backups
 
-    class Config:
-        env_file = str(PROJECT_ROOT / ".env")
-        case_sensitive = True
+    model_config = SettingsConfigDict(
+        # Try multiple .env locations
+        env_file=(str(PROJECT_ROOT / ".env"), str(CWD / ".env"), ".env"),
+        case_sensitive=False,  # Map secret_key to SECRET_KEY automatically
+        extra="ignore",       # Do not fail on extra env vars like Port, User, etc.
+    )
 
     @property
     def cors_origins_list(self) -> list[str]:
-        """Parse CORS_ORIGINS string into list"""
-        if isinstance(self.CORS_ORIGINS, list):
-            return self.CORS_ORIGINS
 
         # Handle empty or None values - default to "*" for flexibility
         cors_origins_str = str(self.CORS_ORIGINS).strip() if self.CORS_ORIGINS else "*"

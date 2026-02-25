@@ -172,7 +172,7 @@ export default function Home() {
                             </h1>
                             <p className="text-xl md:text-2xl text-white max-w-3xl mx-auto font-semibold leading-relaxed pt-6">
                                 Cut hallucination rates & logic errors in half. Instantly.<br />
-                                <span className="text-slate-300">We don't build the Agent. We <span className="text-emerald-400 font-bold">cure</span> it.</span>
+                                <span className="text-slate-300">We don&apos;t build the Agent. We <span className="text-emerald-400 font-bold">cure</span> it.</span>
                             </p>
                         </div>
 

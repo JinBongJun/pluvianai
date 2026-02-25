@@ -1,0 +1,163 @@
+﻿
+> agentguard-frontend@0.1.0 build
+> next build
+
+   ??Next.js 14.0.3
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+node.exe :  ??Compiled with warnings
+위치 줄:1 문자:1
++ & "C:\Program Files\nodejs/node.exe" "C
+:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecifi 
+   ed: ( ??Compiled with warnings:Strin  
+  g) [], RemoteException
+    + FullyQualifiedErrorId : NativeComm 
+   andError
+ 
+
+./node_modules/require-in-the-middle/inde
+x.js
+Critical dependency: require function is 
+used in a way in which dependencies canno
+t be statically extracted
+
+Import trace for requested module:
+./node_modules/require-in-the-middle/inde
+x.js
+./node_modules/@opentelemetry/instrumenta
+tion/build/esm/platform/node/instrumentat
+ion.js
+./node_modules/@opentelemetry/instrumenta
+tion/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/instrumenta
+tion/build/esm/platform/index.js
+./node_modules/@opentelemetry/instrumenta
+tion/build/esm/index.js
+./node_modules/@sentry/node/build/cjs/int
+egrations/tracing/postgresjs.js
+./node_modules/@sentry/node/build/cjs/ind
+ex.js
+./node_modules/@sentry/nextjs/build/cjs/i
+ndex.server.js
+./components/ErrorBoundary.tsx
+
+   Linting and checking validity of types ...
+
+Failed to compile.
+
+./app/login/page.tsx
+156:21  Warning: Using `<img>` could resu
+lt in slower LCP and higher bandwidth. Co
+nsider using `<Image />` from `next/image
+` to automatically optimize images. This 
+may incur additional usage or cost from y
+our provider. See: https://nextjs.org/doc
+s/messages/no-img-element  @next/next/no-
+img-element
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/alerts/page.tsx
+190:6  Warning: React Hook useCallback ha
+s an unnecessary dependency: 'alertsAPI'.
+ Either exclude it or remove the dependen
+cy array. Outer scope values like 'alerts
+API' aren't valid dependencies because mu
+tating them doesn't re-render the compone
+nt.  react-hooks/exhaustive-deps
+305:6  Warning: React Hook useMemo has a 
+missing dependency: 'defaultAlertTypes'. 
+Either include it or remove the dependenc
+y array.  react-hooks/exhaustive-deps
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/api-calls/[callId]/page.tsx
+39:6  Warning: React Hook useEffect has a
+ missing dependency: 'loadAPICall'. Eithe
+r include it or remove the dependency arr
+ay.  react-hooks/exhaustive-deps
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/firewall/page.tsx
+36:6  Warning: React Hook useEffect has a
+ missing dependency: 'loadPanicStatus'. E
+ither include it or remove the dependency
+ array.  react-hooks/exhaustive-deps
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/reviews/page.tsx
+61:6  Warning: React Hook useEffect has a
+ missing dependency: 'fetchData'. Either 
+include it or remove the dependency array
+.  react-hooks/exhaustive-deps
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/settings/api-keys/page.tsx
+51:6  Warning: React Hook useEffect has a
+ missing dependency: 'loadKeys'. Either i
+nclude it or remove the dependency array.
+  react-hooks/exhaustive-deps
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/settings/general/page.tsx
+35:6  Warning: React Hook useEffect has a
+ missing dependency: 'loadProject'. Eithe
+r include it or remove the dependency arr
+ay.  react-hooks/exhaustive-deps
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/signals/page.tsx
+54:6  Warning: React Hook useEffect has a
+ missing dependency: 'fetchProjectStatus'
+. Either include it or remove the depende
+ncy array.  react-hooks/exhaustive-deps
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/surgical-room/page.tsx
+30:34  Error: `'` can be escaped with `&a
+pos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  re
+act/no-unescaped-entities
+
+./app/organizations/[orgId]/projects/[pro
+jectId]/worst-prompts/page.tsx
+65:6  Warning: React Hook useEffect has a
+ missing dependency: 'fetchData'. Either 
+include it or remove the dependency array
+.  react-hooks/exhaustive-deps
+
+./app/page.tsx
+175:72  Error: `'` can be escaped with `&
+apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  r
+eact/no-unescaped-entities
+
+./components/landing/AtomicSignalsSection
+.tsx
+36:27  Error: `'` can be escaped with `&a
+pos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  re
+act/no-unescaped-entities
+
+./components/landing/PathologySection.tsx
+74:60  Error: `'` can be escaped with `&a
+pos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  re
+act/no-unescaped-entities
+77:34  Error: `'` can be escaped with `&a
+pos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  re
+act/no-unescaped-entities
+
+./components/test-lab/input-renderer/Inpu
+tRenderer.tsx
+64:17  Warning: Using `<img>` could resul
+t in slower LCP and higher bandwidth. Con
+sider using `<Image />` from `next/image`
+ to automatically optimize images. This m
+ay incur additional usage or cost from yo
+ur provider. See: https://nextjs.org/docs
+/messages/no-img-element  @next/next/no-i
+mg-element
+
+info  - Need to disable some ESLint rules
+? Learn more here: https://nextjs.org/doc
+s/basic-features/eslint#disabling-rules

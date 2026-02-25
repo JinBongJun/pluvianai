@@ -1,36 +1,13 @@
 /**
- * API client for AgentGuard backend
+ * API client for PluvianAI backend
  */
 import axios from 'axios';
 import { toNumber } from '@/lib/format';
 import { validateArrayResponse } from '@/lib/validate';
 
-// Helper to log errors (development: console, production: Sentry)
-// Only send critical errors to Sentry to avoid rate limits
+// Helper to log API client errors consistently
 const logError = (message: string, error?: unknown, context?: Record<string, unknown>) => {
-  if (process.env.NODE_ENV === 'development') {
-    console.error(message, error, context);
-  } else {
-    // Only send to Sentry if it's a real error (not just a failed API call)
-    // This reduces Sentry load and prevents rate limiting
-    const shouldReportToSentry =
-      error instanceof Error &&
-      !error.message.includes('Network Error') &&
-      !error.message.includes('timeout') &&
-      !message.includes('Failed to fetch');
-
-    if (shouldReportToSentry) {
-      import('@sentry/nextjs').then((Sentry) => {
-        if (error instanceof Error) {
-          Sentry.captureException(error, { extra: { message, ...context } });
-        } else {
-          Sentry.captureMessage(message, { level: 'error', extra: { error, ...context } });
-        }
-      }).catch(() => {
-        // Silently fail if Sentry is unavailable (e.g., rate limited)
-      });
-    }
-  }
+  console.error(message, error, context);
 };
 
 const logWarn = (message: string, context?: Record<string, unknown>) => {
@@ -109,11 +86,17 @@ apiClient.interceptors.request.use(
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      if (process.env.NODE_ENV === 'development') {
+        const url = (config.baseURL || '') + (config.url || '');
+        console.debug('[API] Request with token:', url?.replace(/^.*\/api\/v1/, ''));
+      }
       return config;
     }
     if (isPublicPath(config.url || '')) return config;
-    // No token and protected path: redirect to login and abort request
-    window.location.href = '/login?session_expired=1';
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[API] No token in localStorage for protected request – redirecting to login. URL:', config.url);
+    }
+    window.location.href = '/login?reauth=1';
     return Promise.reject(new Error('Not authenticated'));
   },
   (err) => Promise.reject(err)
@@ -123,7 +106,7 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error?.config as any | undefined;
 
     // Handle Upgrade Required (403 with X-Upgrade-Required header)
     if (error.response?.status === 403 && error.response?.headers['x-upgrade-required'] === 'true') {
@@ -134,27 +117,39 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
+      if (process.env.NODE_ENV === 'development') {
+        const detail = error.response?.data?.detail ?? error.response?.data?.message ?? 'unknown';
+        console.warn('[API] 401 on', originalRequest.url, '– backend says:', typeof detail === 'string' ? detail : JSON.stringify(detail));
+      }
+
+      // Never touch browser-only APIs when an API helper is used from server context.
+      if (typeof window === 'undefined') {
+        return Promise.reject(error);
+      }
 
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
         try {
           const response = await axios.post(`${API_URL}/api/v1/auth/refresh`, {
             refresh_token: refreshToken,
-          });
-
-          const { access_token, refresh_token } = response.data;
+          }, { headers: { 'Content-Type': 'application/json' } });
+          const data = response.data?.data ?? response.data;
+          const access_token = data?.access_token;
+          const refresh_token_new = data?.refresh_token;
+          if (!access_token) {
+            throw new Error('Refresh response missing access_token');
+          }
           localStorage.setItem('access_token', access_token);
-          localStorage.setItem('refresh_token', refresh_token);
-
+          if (refresh_token_new) localStorage.setItem('refresh_token', refresh_token_new);
+          originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers.Authorization = `Bearer ${access_token}`;
           return apiClient(originalRequest);
         } catch (refreshError) {
-          // Refresh failed, redirect to login with session_expired so login page can show message
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
-          window.location.href = '/login?session_expired=1';
+          window.location.href = '/login?reauth=1';
           return Promise.reject(refreshError);
         }
       }
@@ -162,7 +157,7 @@ apiClient.interceptors.response.use(
       if (typeof window !== 'undefined') {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
-        window.location.href = '/login?session_expired=1';
+        window.location.href = '/login?reauth=1';
       }
     }
 
@@ -213,11 +208,24 @@ export const authAPI = {
       },
     });
 
-    const { access_token, refresh_token } = response.data;
-    localStorage.setItem('access_token', access_token);
-    localStorage.setItem('refresh_token', refresh_token);
+    const data = response.data?.data ?? response.data;
+    const access_token = data?.access_token ?? response.data?.access_token;
+    const refresh_token = data?.refresh_token ?? response.data?.refresh_token;
+    if (!access_token) throw new Error('Login response missing access_token');
 
-    return response.data;
+    localStorage.setItem('access_token', access_token);
+    if (refresh_token) localStorage.setItem('refresh_token', refresh_token);
+
+    let userInfo: { id?: string; email?: string; full_name?: string } | null = null;
+    try {
+      const payload = JSON.parse(atob(access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      userInfo = { id: payload.sub, email: payload.email ?? email, full_name: payload.full_name ?? '' };
+      localStorage.setItem('user_info', JSON.stringify(userInfo));
+    } catch {
+      localStorage.setItem('user_info', JSON.stringify({ email, full_name: '' }));
+    }
+
+    return { access_token, refresh_token, user_info: userInfo };
   },
 
   logout: () => {
@@ -428,6 +436,18 @@ export const projectsAPI = {
 
   delete: async (id: number) => {
     await apiClient.delete(`/projects/${id}`);
+  },
+
+  updateDiagnosticConfig: async (projectId: number, config: any) => {
+    const response = await apiClient.patch(`/projects/${projectId}`, {
+      diagnostic_config: config,
+    });
+    return unwrapResponse(response);
+  },
+
+  applyPatch: async (projectId: number, data: { nodes: any[]; edges: any[]; version?: string }) => {
+    const response = await apiClient.post(`/projects/${projectId}/apply-patch`, data);
+    return unwrapResponse(response);
   },
 };
 
@@ -1181,59 +1201,6 @@ export const sharedResultsAPI = {
   },
 };
 
-// Firewall API
-export const firewallAPI = {
-  getRules: async (projectId: number) => {
-    const response = await apiClient.get(`/projects/${projectId}/firewall/rules`);
-    return unwrapResponse(response);
-  },
-
-  createRule: async (projectId: number, data: {
-    rule_type: string;
-    name: string;
-    description?: string;
-    pattern?: string;
-    pattern_type?: string;
-    action?: string;
-    severity?: string;
-    enabled?: boolean;
-    config?: any;
-  }) => {
-    const response = await apiClient.post(`/projects/${projectId}/firewall/rules`, data);
-    return unwrapResponse(response);
-  },
-
-  updateRule: async (projectId: number, ruleId: number, data: {
-    name?: string;
-    description?: string;
-    pattern?: string;
-    pattern_type?: string;
-    action?: string;
-    severity?: string;
-    enabled?: boolean;
-    config?: any;
-  }) => {
-    const response = await apiClient.put(`/projects/${projectId}/firewall/rules/${ruleId}`, data);
-    return unwrapResponse(response);
-  },
-
-  deleteRule: async (projectId: number, ruleId: number) => {
-    await apiClient.delete(`/projects/${projectId}/firewall/rules/${ruleId}`);
-  },
-
-  /** Project-level panic (owner/admin). Use this for project settings. */
-  togglePanicMode: async (projectId: number, enabled: boolean) => {
-    const response = await apiClient.post(`/projects/${projectId}/panic`, { enabled });
-    return unwrapResponse(response);
-  },
-
-  /** Project-level panic status (any project member can read; owner/admin can toggle). */
-  getPanicModeStatus: async (projectId: number) => {
-    const response = await apiClient.get(`/projects/${projectId}/panic`);
-    return unwrapResponse(response);
-  },
-};
-
 // Judge Feedback API
 export const judgeFeedbackAPI = {
   createFeedback: async (projectId: number, data: {
@@ -1293,130 +1260,37 @@ export const liveViewAPI = {
   },
 
   getAgentSettings: async (projectId: number, agentId: string) => {
-    const response = await apiClient.get(`/projects/${projectId}/live-view/agents/${agentId}/settings`);
+    const safeAgentId = encodeURIComponent(agentId);
+    const response = await apiClient.get(`/projects/${projectId}/live-view/agents/${safeAgentId}/settings`);
     return unwrapResponse(response);
   },
 
-  updateAgentSettings: async (projectId: number, agentId: string, data: { display_name?: string; is_deleted?: boolean }) => {
-    const response = await apiClient.patch(`/projects/${projectId}/live-view/agents/${agentId}/settings`, null, {
-      params: data,
+  updateAgentSettings: async (projectId: number, agentId: string, data: { display_name?: string; is_deleted?: boolean; diagnostic_config?: any }) => {
+    const safeAgentId = encodeURIComponent(agentId);
+    const { diagnostic_config, ...params } = data;
+    const response = await apiClient.patch(`/projects/${projectId}/live-view/agents/${safeAgentId}/settings`, diagnostic_config, {
+      params,
     });
     return unwrapResponse(response);
   },
 
   deleteAgent: async (projectId: number, agentId: string) => {
-    await apiClient.delete(`/projects/${projectId}/live-view/agents/${agentId}`);
-  },
-
-  listConnections: async (projectId: number) => {
-    const response = await apiClient.get(`/projects/${projectId}/live-view/connections`);
-    return unwrapResponse(response);
-  },
-
-  createConnection: async (projectId: number, data: { source_agent_name: string; target_agent_name: string }) => {
-    const response = await apiClient.post(`/projects/${projectId}/live-view/connections`, null, {
-      params: data,
-    });
-    return unwrapResponse(response);
-  },
-
-  deleteConnection: async (projectId: number, connectionId: string) => {
-    await apiClient.delete(`/projects/${projectId}/live-view/connections/${connectionId}`);
+    const safeAgentId = encodeURIComponent(agentId);
+    await apiClient.delete(`/projects/${projectId}/live-view/agents/${safeAgentId}`);
   },
 
   listSnapshots: async (projectId: number, params: { agent_id?: string; is_worst?: boolean; limit?: number; offset?: number } = {}) => {
     const response = await apiClient.get(`/projects/${projectId}/snapshots`, { params });
     return unwrapResponse(response);
   },
-};
 
-// Test Lab API
-export const testLabAPI = {
-  listCanvases: async (projectId: number) => {
-    const response = await apiClient.get(`/projects/${projectId}/test-lab/canvases`);
-    return unwrapResponse(response);
-  },
-
-  createCanvas: async (
-    projectId: number,
-    data: { name: string; boxes?: any[]; connections?: any[] },
-  ) => {
-    const response = await apiClient.post(`/projects/${projectId}/test-lab/canvases`, data);
-    return unwrapResponse(response);
-  },
-
-  updateCanvas: async (
-    projectId: number,
-    canvasId: string,
-    data: { name?: string; boxes?: any[]; connections?: any[] },
-  ) => {
-    const response = await apiClient.put(
-      `/projects/${projectId}/test-lab/canvases/${canvasId}`,
-      data,
-    );
-    return unwrapResponse(response);
-  },
-
-  runTest: async (
-    projectId: number,
-    data: {
-      name?: string;
-      test_type?: string;
-      canvas_id: string;
-      input_prompts?: string[];
-      box_ids?: string[];
-    },
-  ) => {
-    const response = await apiClient.post(`/projects/${projectId}/test-lab/run`, data);
-    return unwrapResponse(response);
-  },
-
-  getRun: async (projectId: number, runId: string) => {
-    const response = await apiClient.get(`/projects/${projectId}/test-lab/runs/${runId}`);
-    return unwrapResponse(response);
-  },
-
-  listResults: async (
-    projectId: number,
-    params: { agent_id?: string; run_id?: string; is_worst?: boolean; limit?: number; offset?: number } = {},
-  ) => {
-    const response = await apiClient.get(`/projects/${projectId}/test-lab/results`, {
-      params,
-    });
-    return unwrapResponse(response);
-  },
-
-  markWorst: async (
-    projectId: number,
-    data: { result_id: string; worst_status?: string },
-  ) => {
-    const response = await apiClient.post(
-      `/projects/${projectId}/test-lab/results/mark-worst`,
-      data,
-    );
-    return unwrapResponse(response);
-  },
-
-  importCsv: async (projectId: number, file: File, inputColumn: string) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('input_column', inputColumn);
-    const response = await apiClient.post(
-      `/projects/${projectId}/test-lab/import-csv`,
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      },
-    );
-    return unwrapResponse(response);
-  },
-  importLangChain: async (projectId: number, data: { name: string; yaml_content: string }) => {
-    const response = await apiClient.post(`/projects/${projectId}/test-lab/import-langchain`, data);
+  getAgentEvaluation: async (projectId: number, agentId: string) => {
+    const safeAgentId = encodeURIComponent(agentId);
+    const response = await apiClient.get(`/projects/${projectId}/live-view/agents/${safeAgentId}/evaluation`);
     return unwrapResponse(response);
   },
 };
+
 
 // Self-hosted API
 export const selfHostedAPI = {
@@ -1618,6 +1492,350 @@ export const publicBenchmarksAPI = {
 };
 
 export default apiClient;
+
+// Behavior Rule API
+export interface RuleJSON {
+  type: 'tool_forbidden' | 'tool_allowlist' | 'tool_order' | 'tool_args_schema';
+  name?: string;
+  severity?: 'low' | 'medium' | 'high' | 'critical';
+  spec: any; // Defined in detail in contract, using any for flexibility here
+  meta?: any;
+}
+
+export interface BehaviorRule {
+  id: string;
+  project_id: number;
+  name: string;
+  description?: string | null;
+  scope_type: 'project' | 'agent' | 'canvas';
+  scope_ref?: string | null;
+  severity_default?: 'low' | 'medium' | 'high' | 'critical' | null;
+  rule_json: RuleJSON;
+  enabled: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface ValidationReport {
+  report_id: string;
+  status: 'pass' | 'fail';
+  summary: any;
+  violations: any[];
+}
+
+export interface CompareResult {
+  baseline_run_id: string;
+  candidate_run_id: string;
+  baseline_summary: any;
+  candidate_summary: any;
+  violation_count_delta: number;
+  severity_delta: any;
+  top_regressed_rules: any[];
+  first_broken_step: number | null;
+  is_regressed: boolean;
+}
+
+export interface CIGateResult {
+  pass: boolean;
+  exit_code: 0 | 1;
+  report_id: string;
+  report_url: string;
+  summary: any;
+  violations: any[];
+  failure_reasons: string[];
+  thresholds_used: Record<string, number>;
+  compare_mode: boolean;
+}
+
+export interface ReleaseGateRunResult {
+  run_index: number;
+  pass: boolean;
+  failure_reasons: string[];
+  violation_count_delta: number;
+  severity_delta: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+  replay: {
+    attempted: number;
+    succeeded: number;
+    failed: number;
+    avg_latency_ms?: number | null;
+    failed_snapshot_ids: string[];
+  };
+  summary: any;
+  violations: any[];
+  top_regressed_rules: any[];
+  first_broken_step: number | null;
+  /** Drift: eval elements that passed (no violation) */
+  eval_elements_passed?: { rule_id: string; rule_name: string }[];
+  /** Drift: eval elements that failed (has violations) */
+  eval_elements_failed?: { rule_id: string; rule_name: string; violation_count: number }[];
+  trace_id?: string;
+}
+
+export interface ReleaseGateResult {
+  pass: boolean;
+  summary?: string;
+  failed_signals?: string[];
+  exit_code: 0 | 1;
+  report_id: string;
+  trace_id: string;
+  baseline_trace_id: string;
+  failure_reasons: string[];
+  thresholds_used: Record<string, number>;
+  failed_run_ratio?: number;
+  ratio_band?: string;
+  repeat_runs: number;
+  run_results: ReleaseGateRunResult[];
+  /** Drift: per-trace runs with eval_elements_passed / eval_elements_failed */
+  drift_runs?: Array<{
+    run_index: number;
+    trace_id: string;
+    pass: boolean;
+    failure_reasons: string[];
+    violations: any[];
+    eval_elements_passed: { rule_id: string; rule_name: string }[];
+    eval_elements_failed: { rule_id: string; rule_name: string; violation_count: number }[];
+  }>;
+  evidence_pack: {
+    top_regressed_rules: any[];
+    first_violations: any[];
+    failed_replay_snapshot_ids: string[];
+    sample_failure_reasons: string[];
+  };
+}
+
+export interface ReleaseGateHistoryItem {
+  id: string;
+  status: 'pass' | 'fail';
+  trace_id: string;
+  baseline_trace_id?: string | null;
+  agent_id?: string | null;
+  created_at?: string | null;
+  mode?: 'regression' | 'stability' | 'drift';
+  repeat_runs?: number | null;
+  passed_runs?: number | null;
+  failed_runs?: number | null;
+  thresholds?: Record<string, number> | null;
+}
+
+export interface ReleaseGateHistoryResponse {
+  items: ReleaseGateHistoryItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export const behaviorAPI = {
+  listRules: async (
+    projectId: number,
+    params?: { enabled?: boolean; scope_type?: 'project' | 'agent' | 'canvas'; scope_ref?: string }
+  ) => {
+    const response = await apiClient.get(`/projects/${projectId}/behavior/rules`, { params });
+    return unwrapArrayResponse(response) as BehaviorRule[];
+  },
+
+  createRule: async (projectId: number, data: Omit<BehaviorRule, 'id' | 'created_at' | 'updated_at' | 'project_id'>) => {
+    const response = await apiClient.post(`/projects/${projectId}/behavior/rules`, data);
+    return response.data;
+  },
+
+  updateRule: async (projectId: number, ruleId: string, data: Partial<Omit<BehaviorRule, 'id' | 'created_at' | 'updated_at' | 'project_id'>>) => {
+    const response = await apiClient.put(`/projects/${projectId}/behavior/rules/${encodeURIComponent(ruleId)}`, data);
+    return response.data;
+  },
+
+  deleteRule: async (projectId: number, ruleId: string) => {
+    await apiClient.delete(`/projects/${projectId}/behavior/rules/${encodeURIComponent(ruleId)}`);
+  },
+
+  listReports: async (
+    projectId: number,
+    params?: {
+      agent_id?: string;
+      status?: 'pass' | 'fail';
+      limit?: number;
+      offset?: number;
+    }
+  ) => {
+    const response = await apiClient.get(`/projects/${projectId}/behavior/reports`, { params });
+    return response.data;
+  },
+
+  exportReport: async (
+    projectId: number,
+    reportId: string,
+    format: 'json' | 'csv' = 'json'
+  ) => {
+    if (format === 'csv') {
+      const response = await apiClient.get(
+        `/projects/${projectId}/behavior/reports/${reportId}/export`,
+        { params: { format: 'csv' }, responseType: 'blob' }
+      );
+      return response.data;
+    }
+    const response = await apiClient.get(
+      `/projects/${projectId}/behavior/reports/${reportId}/export`,
+      { params: { format: 'json' } }
+    );
+    return response.data;
+  },
+
+  validate: async (projectId: number, data: {
+    trace_id?: string;
+    test_run_id?: string;
+    rule_ids?: string[];
+    baseline_run_ref?: string;
+  }): Promise<ValidationReport> => {
+    const response = await apiClient.post(`/projects/${projectId}/behavior/validate`, data);
+    return response.data;
+  },
+
+  compare: async (projectId: number, data: {
+    baseline_test_run_id: string;
+    candidate_test_run_id: string;
+    rule_ids?: string[];
+  }): Promise<CompareResult> => {
+    const response = await apiClient.post(`/projects/${projectId}/behavior/compare`, data);
+    return response.data;
+  },
+
+  ciGate: async (projectId: number, data: {
+    baseline_test_run_id?: string;
+    candidate_test_run_id: string;
+    rule_ids?: string[];
+    thresholds?: {
+      critical?: number;
+      high?: number;
+      medium?: number;
+      low?: number;
+      critical_delta?: number;
+      high_delta?: number;
+      medium_delta?: number;
+      low_delta?: number;
+    };
+  }): Promise<CIGateResult> => {
+    const response = await apiClient.post(`/projects/${projectId}/behavior/ci-gate`, data);
+    return response.data;
+  },
+
+  createDataset: async (
+    projectId: number,
+    data: {
+      trace_ids?: string[];
+      snapshot_ids?: number[];
+      agent_id?: string;
+      label?: string;
+      tag?: string;
+      eval_config_snapshot?: Record<string, unknown>;
+      policy_ruleset_snapshot?: Array<{ id: string; revision?: string; rule_json: Record<string, unknown> }>;
+      ruleset_hash?: string;
+    }
+  ) => {
+    const response = await apiClient.post(`/projects/${projectId}/behavior/datasets`, data);
+    return response.data;
+  },
+
+  listDatasets: async (
+    projectId: number,
+    params?: { agent_id?: string; limit?: number; offset?: number }
+  ) => {
+    const response = await apiClient.get(`/projects/${projectId}/behavior/datasets`, { params });
+    return response.data;
+  },
+
+  getDataset: async (projectId: number, datasetId: string) => {
+    const response = await apiClient.get(`/projects/${projectId}/behavior/datasets/${encodeURIComponent(datasetId)}`);
+    return response.data;
+  },
+
+  getDatasetSnapshots: async (projectId: number, datasetId: string): Promise<{ items: any[]; total: number }> => {
+    const response = await apiClient.get(
+      `/projects/${projectId}/behavior/datasets/${encodeURIComponent(datasetId)}/snapshots`
+    );
+    const data = response.data;
+    if (data && typeof data === 'object' && 'items' in data) return data;
+    return { items: [], total: 0 };
+  },
+
+  deleteDataset: async (projectId: number, datasetId: string) => {
+    await apiClient.post(
+      `/projects/${projectId}/behavior-datasets/${encodeURIComponent(datasetId)}/delete`
+    );
+  }
+};
+
+export const releaseGateAPI = {
+  getAgents: async (projectId: number, limit: number = 50): Promise<{ items: { agent_id: string; display_name: string }[] }> => {
+    const response = await apiClient.get(`/projects/${projectId}/release-gate/agents`, { params: { limit } });
+    return response.data;
+  },
+
+  getRecentSnapshots: async (
+    projectId: number,
+    agentId: string,
+    limit: number = 20
+  ): Promise<{ items: { id: string; trace_id: string; created_at: string }[]; total: number; total_available?: number }> => {
+    const response = await apiClient.get(
+      `/projects/${projectId}/release-gate/agents/${encodeURIComponent(agentId)}/recent-snapshots`,
+      { params: { limit } }
+    );
+    return response.data;
+  },
+
+  validate: async (
+    projectId: number,
+    data: {
+      agent_id?: string;
+      use_recent_snapshots?: boolean;
+      recent_snapshot_limit?: number;
+      trace_id?: string;
+      dataset_id?: string;
+      dataset_ids?: string[];
+      snapshot_ids?: string[];
+      baseline_trace_id?: string;
+      new_model?: string;
+      new_system_prompt?: string;
+      replay_temperature?: number;
+      replay_max_tokens?: number;
+      replay_top_p?: number;
+      replay_overrides?: Record<string, unknown>;
+      rule_ids?: string[];
+      max_snapshots?: number;
+      repeat_runs?: number;
+      evaluation_mode?: 'regression' | 'stability' | 'drift';
+      failed_run_ratio_max?: number;
+    }
+  ): Promise<ReleaseGateResult> => {
+    const response = await apiClient.post(`/projects/${projectId}/release-gate/validate`, data);
+    return response.data;
+  },
+
+  suggestBaseline: async (
+    projectId: number,
+    params: { trace_id: string; agent_id?: string }
+  ): Promise<{
+    baseline_trace_id: string | null;
+    source?: string | null;
+    report_id?: string | null;
+    agent_id?: string | null;
+    created_at?: string | null;
+  }> => {
+    const response = await apiClient.get(`/projects/${projectId}/release-gate/suggest-baseline`, { params });
+    return response.data;
+  },
+
+  listHistory: async (
+    projectId: number,
+    params?: { status?: 'pass' | 'fail'; trace_id?: string; limit?: number; offset?: number }
+  ): Promise<ReleaseGateHistoryResponse> => {
+    const response = await apiClient.get(`/projects/${projectId}/release-gate/history`, { params });
+    return response.data;
+  },
+};
 
 
 

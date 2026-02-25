@@ -189,5 +189,5 @@ class TestUpgradeRequiredException:
             await agentguard_exception_handler(request, exc)
             
             call_args = mock_error_response.call_args
-            assert call_args.kwargs["code"] == "AGENTGUARD_ERROR"
+            assert call_args.kwargs["code"] == "PLUVIANAI_ERROR"
             assert call_args.kwargs["status_code"] == 500

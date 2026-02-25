@@ -1,0 +1,4 @@
+
+- [x] Fix the backend error by importing `func`, `case` and removing `db.` prefix <!-- id: 8 -->
+- [x] Verify the fix with reproduction script <!-- id: 9 -->
+- [ ] Restart backend server (missing --reload flag) <!-- id: 10 -->

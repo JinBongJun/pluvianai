@@ -46,12 +46,12 @@ export default function DashboardPage() {
               <div className="space-y-2">
                 <h2 className="text-2xl font-bold text-white tracking-tight uppercase italic">Neural Network Offline</h2>
                 <p className="text-sm font-mono text-slate-500 uppercase tracking-widest leading-relaxed">
-                  No active telemetry detected. Connect your system via the AgentGuard SDK to initialize the visualization engine.
+                  No active telemetry detected. Connect your system via the PluvianAI SDK to initialize the visualization engine.
                 </p>
               </div>
               <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl text-left inline-block">
                 <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-2">Terminal Integration</p>
-                <code className="text-sm text-emerald-500 font-mono">npm install @agentguard/sdk</code>
+                <code className="text-sm text-emerald-500 font-mono">npm install @pluvianai/sdk</code>
               </div>
             </div>
           </div>

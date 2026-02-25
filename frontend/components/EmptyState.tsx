@@ -31,7 +31,7 @@ export default function EmptyState({
           actions: [
             {
               label: 'View Documentation',
-              onClick: () => window.open('https://docs.agentguard.dev', '_blank'),
+              onClick: () => window.open('https://docs.pluvian.ai', '_blank'),
               variant: 'outline' as const,
             },
             {

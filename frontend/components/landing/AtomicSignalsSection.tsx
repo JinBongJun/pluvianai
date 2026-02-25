@@ -30,10 +30,10 @@ export default function AtomicSignalsSection() {
                     Atomic Lab
                 </div>
                 <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-                    The Periodic Table of AI Risk.
+                    The Lab&apos;s core telemetry infrastructure.
                 </h2>
                 <p className="text-xl text-slate-400 leading-relaxed max-w-2xl mx-auto mb-20">
-                    We don't just guess. We measure 13 fundamental elements of agent quality with clinical precision.
+                    We don&apos;t just guess. We measure 13 fundamental elements of agent quality with clinical precision.
                 </p>
 
                 <div className="flex flex-wrap justify-center gap-4 max-w-5xl mx-auto">
