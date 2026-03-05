@@ -439,7 +439,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
       .getSnapshot(projectId, expandedId)
       .then((full: Record<string, unknown>) => {
         if (!full || String(full.id) !== String(expandedId)) return;
-        const merged = (s ? { ...s, ...full } : full) as ClinicalSnapshot;
+        const merged = (s ? ({ ...s, ...full } as unknown) : (full as unknown)) as ClinicalSnapshot;
         snapshotDetailCacheRef.current.set(cacheKey, merged);
         setDetailFetchedSnapshot(merged);
       })
