@@ -155,8 +155,14 @@ async def create_project(
         user_agent=user_agent
     )
 
-    # Generate sample data if requested (for onboarding)
-    if project_data.generate_sample_data:
+    # Sample-data generation is an admin-only bootstrap capability.
+    if project_data.generate_sample_data and not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sample data generation is available to operators only.",
+        )
+
+    if project_data.generate_sample_data and current_user.is_superuser:
         try:
             from app.api.v1.endpoints.admin import generate_sample_data
 
@@ -613,7 +619,7 @@ async def delete_behavior_dataset(
     current_user: User = Depends(get_current_user),
 ):
     """Delete a validation dataset by ID. Exposed under projects for reliable routing."""
-    check_project_access(project_id, current_user, db)
+    check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
     ds = (
         db.query(ValidationDataset)
         .filter(

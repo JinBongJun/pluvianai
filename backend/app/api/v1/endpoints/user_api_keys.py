@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.core.permissions import check_project_access
+from app.core.permissions import check_project_access, ProjectRole
 from app.core.decorators import handle_errors
 from app.core.responses import success_response
 from app.core.logging_config import logger
@@ -25,12 +25,14 @@ class CreateUserApiKeyRequest(BaseModel):
     provider: str  # openai, anthropic, google
     api_key: str  # Plain API key (will be encrypted)
     name: Optional[str] = None
+    agent_id: Optional[str] = None
 
 
 class UserApiKeyResponse(BaseModel):
     """User API key response (without decrypted key)"""
     id: int
     project_id: int
+    agent_id: Optional[str]
     provider: str
     name: Optional[str]
     is_active: bool
@@ -55,8 +57,8 @@ async def create_user_api_key(
     
     The API key will be encrypted before storage.
     """
-    # Verify project access
-    check_project_access(project_id, current_user, db)
+    # Verify project access (owner/admin only for mutations)
+    check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
 
     # Validate provider
     if request.provider not in ["openai", "anthropic", "google"]:
@@ -74,6 +76,7 @@ async def create_user_api_key(
             provider=request.provider,
             api_key=request.api_key,
             name=request.name,
+            agent_id=(request.agent_id or "").strip() or None,
         )
         
         # Log audit event
@@ -87,7 +90,8 @@ async def create_user_api_key(
             new_value={
                 "project_id": project_id,
                 "provider": request.provider,
-                "name": request.name
+                "name": request.name,
+                "agent_id": (request.agent_id or "").strip() or None,
             },
             ip_address=ip_address,
             user_agent=user_agent
@@ -96,6 +100,7 @@ async def create_user_api_key(
         return success_response(data={
             "id": user_key.id,
             "project_id": user_key.project_id,
+            "agent_id": user_key.agent_id,
             "provider": user_key.provider,
             "name": user_key.name,
             "is_active": user_key.is_active,
@@ -129,6 +134,7 @@ async def list_user_api_keys(
         UserApiKeyResponse(
             id=k.id,
             project_id=k.project_id,
+            agent_id=k.agent_id,
             provider=k.provider,
             name=k.name,
             is_active=k.is_active,
@@ -151,8 +157,8 @@ async def delete_user_api_key(
     """
     Delete (deactivate) a user API key
     """
-    # Verify project access
-    check_project_access(project_id, current_user, db)
+    # Verify project access (owner/admin only for mutations)
+    check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
 
     service = UserApiKeyService(db)
     
@@ -174,7 +180,8 @@ async def delete_user_api_key(
     old_value = {
         "key_id": key_id,
         "project_id": project_id,
-        "provider": key_to_delete.provider if key_to_delete else None
+        "provider": key_to_delete.provider if key_to_delete else None,
+        "agent_id": key_to_delete.agent_id if key_to_delete else None,
     }
     audit_service.log_action(
         user_id=current_user.id,

@@ -134,7 +134,7 @@ class TestProjectsAPI:
         assert get_response.status_code == status.HTTP_404_NOT_FOUND
     
     async def test_create_project_with_sample_data(self, async_client, auth_headers):
-        """Test creating a project with sample data generation"""
+        """Non-superuser cannot request sample data generation"""
         response = await async_client.post(
             "/api/v1/projects",
             json={
@@ -144,27 +144,5 @@ class TestProjectsAPI:
             },
             headers=auth_headers
         )
-        
-        assert response.status_code == status.HTTP_201_CREATED
-        project_data = response.json()
-        assert "id" in project_data
-        project_id = project_data["id"]
-        
-        # Check if sample data was created (if feature is implemented)
-        api_calls_response = await async_client.get(
-            f"/api/v1/api-calls?project_id={project_id}",
-            headers=auth_headers
-        )
-        
-        # Accept both success and not implemented
-        assert api_calls_response.status_code in [
-            status.HTTP_200_OK,
-            status.HTTP_404_NOT_FOUND,
-            status.HTTP_501_NOT_IMPLEMENTED
-        ]
-        
-        # If endpoint exists and returns data, verify structure
-        if api_calls_response.status_code == status.HTTP_200_OK:
-            api_calls_data = api_calls_response.json()
-            # Response might be a list or dict with items key
-            assert isinstance(api_calls_data, (list, dict))
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
