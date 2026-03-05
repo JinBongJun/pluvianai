@@ -1,0 +1,406 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/Button";
+import { settingsAPI } from "@/lib/api";
+import { Key, Trash2, Copy, UserCircle2, Pencil, Check, X } from "lucide-react";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+
+type UserProfile = {
+  id: number;
+  email: string;
+  full_name?: string | null;
+  is_active: boolean;
+  created_at: string;
+};
+
+type UserApiKey = {
+  id: number;
+  name?: string | null;
+  is_active: boolean;
+  created_at: string;
+  last_used_at?: string | null;
+  key_prefix?: string | null;
+};
+
+type CreatedApiKey = {
+  id: number;
+  name?: string | null;
+  api_key: string;
+  message?: string;
+};
+
+export default function ProfileSettingsPage() {
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [apiKeys, setApiKeys] = useState<UserApiKey[]>([]);
+  const [fullName, setFullName] = useState("");
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [keyBusy, setKeyBusy] = useState(false);
+  const [deleteBusyId, setDeleteBusyId] = useState<number | null>(null);
+  const [renameBusyId, setRenameBusyId] = useState<number | null>(null);
+  const [editingKeyId, setEditingKeyId] = useState<number | null>(null);
+  const [editingKeyName, setEditingKeyName] = useState("");
+  const [notice, setNotice] = useState<string>("");
+  const [newlyCreatedKey, setNewlyCreatedKey] = useState<CreatedApiKey | null>(null);
+  const hasToken = useRequireAuth();
+
+  useEffect(() => {
+    if (!hasToken) return;
+
+    const load = async () => {
+      try {
+        const [p, keys] = await Promise.all([settingsAPI.getProfile(), settingsAPI.getAPIKeys()]);
+        setProfile(p);
+        setFullName((p?.full_name || "").trim());
+        setApiKeys(Array.isArray(keys) ? keys : []);
+      } catch (err) {
+        console.error(err);
+        setNotice("Failed to load profile settings.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void load();
+  }, [hasToken]);
+
+  const canSaveName = useMemo(() => {
+    const current = (profile?.full_name || "").trim();
+    return fullName.trim() !== current;
+  }, [fullName, profile?.full_name]);
+
+  const handleSaveProfile = async () => {
+    if (!canSaveName) return;
+    setSaveBusy(true);
+    setNotice("");
+    try {
+      const updated = await settingsAPI.updateProfile({ full_name: fullName.trim() || undefined });
+      setProfile(updated);
+      setFullName((updated?.full_name || "").trim());
+      setNotice("Profile updated.");
+    } catch (err) {
+      console.error(err);
+      setNotice("Failed to update profile.");
+    } finally {
+      setSaveBusy(false);
+    }
+  };
+
+  const handleCreateApiKey = async () => {
+    const name = newKeyName.trim();
+    if (!name) return;
+    setKeyBusy(true);
+    setNotice("");
+    try {
+      const created = await settingsAPI.createAPIKey(name);
+      const payload = (created?.data || created) as CreatedApiKey;
+      setNewlyCreatedKey(payload);
+      setNewKeyName("");
+      const keys = await settingsAPI.getAPIKeys();
+      setApiKeys(Array.isArray(keys) ? keys : []);
+      setNotice("API key created. Copy it now - it will not be shown again.");
+    } catch (err) {
+      console.error(err);
+      setNotice("Failed to create API key.");
+    } finally {
+      setKeyBusy(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPassword.trim() || !newPassword.trim() || !confirmNewPassword.trim()) {
+      setNotice("Please fill in all password fields.");
+      return;
+    }
+    if (newPassword.length < 12) {
+      setNotice("New password must be at least 12 characters.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setNotice("New password confirmation does not match.");
+      return;
+    }
+
+    setPasswordBusy(true);
+    setNotice("");
+    try {
+      await settingsAPI.changePassword(currentPassword, newPassword);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setNotice("Password changed successfully.");
+    } catch (err) {
+      console.error(err);
+      setNotice("Failed to change password. Check your current password.");
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
+  const handleDeleteApiKey = async (keyId: number) => {
+    setDeleteBusyId(keyId);
+    setNotice("");
+    try {
+      await settingsAPI.deleteAPIKey(keyId);
+      setApiKeys(prev => prev.filter(k => k.id !== keyId));
+      setNotice("API key removed.");
+    } catch (err) {
+      console.error(err);
+      setNotice("Failed to remove API key.");
+    } finally {
+      setDeleteBusyId(null);
+    }
+  };
+
+  const startRename = (key: UserApiKey) => {
+    setEditingKeyId(key.id);
+    setEditingKeyName((key.name || "").trim());
+  };
+
+  const cancelRename = () => {
+    setEditingKeyId(null);
+    setEditingKeyName("");
+  };
+
+  const handleRenameApiKey = async (keyId: number) => {
+    const nextName = editingKeyName.trim();
+    if (!nextName) {
+      setNotice("API key name cannot be empty.");
+      return;
+    }
+
+    setRenameBusyId(keyId);
+    setNotice("");
+    try {
+      await settingsAPI.updateAPIKey(keyId, nextName);
+      setApiKeys(prev => prev.map(k => (k.id === keyId ? { ...k, name: nextName } : k)));
+      setEditingKeyId(null);
+      setEditingKeyName("");
+      setNotice("API key name updated.");
+    } catch (err) {
+      console.error(err);
+      setNotice("Failed to rename API key.");
+    } finally {
+      setRenameBusyId(null);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!newlyCreatedKey?.api_key) return;
+    try {
+      await navigator.clipboard.writeText(newlyCreatedKey.api_key);
+      setNotice("Copied API key to clipboard.");
+    } catch {
+      setNotice("Could not copy automatically. Please copy manually.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0c] text-slate-200 flex items-center justify-center">
+        Loading profile settings...
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0c] text-slate-200 px-6 py-10">
+      <div className="max-w-4xl mx-auto space-y-8">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-3">
+            <UserCircle2 className="w-8 h-8 text-emerald-400" />
+            Profile & API Keys
+          </h1>
+          <Link href="/organizations">
+            <Button variant="outline">Back to Console</Button>
+          </Link>
+        </div>
+
+        {notice ? (
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm">
+            {notice}
+          </div>
+        ) : null}
+
+        <section className="rounded-xl border border-white/10 bg-white/[0.03] p-6 space-y-4">
+          <h2 className="text-lg font-bold text-white">Profile</h2>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">Email</label>
+              <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-slate-200">
+                {profile?.email || "-"}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">Full name</label>
+              <input
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                placeholder="Your name"
+              />
+            </div>
+          </div>
+          <Button onClick={handleSaveProfile} disabled={!canSaveName || saveBusy}>
+            {saveBusy ? "Saving..." : "Save profile"}
+          </Button>
+        </section>
+
+        <section className="rounded-xl border border-white/10 bg-white/[0.03] p-6 space-y-4">
+          <h2 className="text-lg font-bold text-white">Security</h2>
+          <p className="text-sm text-slate-400">
+            Update your account password. For security, use at least 12 characters.
+          </p>
+          <div className="grid md:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">Current password</label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={e => setCurrentPassword(e.target.value)}
+                className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                placeholder="Current password"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">New password</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                placeholder="At least 12 characters"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">Confirm new password</label>
+              <input
+                type="password"
+                value={confirmNewPassword}
+                onChange={e => setConfirmNewPassword(e.target.value)}
+                className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                placeholder="Re-enter new password"
+              />
+            </div>
+          </div>
+          <Button onClick={handleChangePassword} disabled={passwordBusy}>
+            {passwordBusy ? "Changing..." : "Change password"}
+          </Button>
+        </section>
+
+        <section className="rounded-xl border border-white/10 bg-white/[0.03] p-6 space-y-4">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <Key className="w-5 h-5 text-emerald-400" />
+            Service API Keys
+          </h2>
+          <p className="text-sm text-slate-400">
+            Create keys for SDK/API access. Full key values are shown only once at creation.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              value={newKeyName}
+              onChange={e => setNewKeyName(e.target.value)}
+              placeholder="Key name (e.g. Local SDK key)"
+              className="flex-1 rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+            />
+            <Button onClick={handleCreateApiKey} disabled={keyBusy || !newKeyName.trim()}>
+              {keyBusy ? "Creating..." : "Create API key"}
+            </Button>
+          </div>
+
+          {newlyCreatedKey?.api_key ? (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-2">
+              <p className="text-xs uppercase tracking-widest font-bold text-amber-300">
+                Save This Key Now (Shown Once)
+              </p>
+              <div className="font-mono text-sm break-all text-amber-100">{newlyCreatedKey.api_key}</div>
+              <Button variant="outline" onClick={handleCopy}>
+                <Copy className="w-4 h-4 mr-2" />
+                Copy key
+              </Button>
+            </div>
+          ) : null}
+
+          <div className="space-y-2">
+            {apiKeys.length === 0 ? (
+              <p className="text-sm text-slate-500">No API keys yet.</p>
+            ) : (
+              apiKeys.map(key => (
+                <div
+                  key={key.id}
+                  className="flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-4 py-3"
+                >
+                  <div>
+                    {editingKeyId === key.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={editingKeyName}
+                          onChange={e => setEditingKeyName(e.target.value)}
+                          placeholder="API key name"
+                          className="w-56 rounded-md border border-white/20 bg-white/5 px-2 py-1 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRenameApiKey(key.id)}
+                          disabled={renameBusyId === key.id}
+                          className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
+                          title="Save name"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelRename}
+                          disabled={renameBusyId === key.id}
+                          className="text-slate-400 hover:text-white disabled:opacity-50"
+                          title="Cancel rename"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-white font-medium">{key.name || `Key #${key.id}`}</p>
+                    )}
+                    <p className="text-xs text-slate-500">
+                      {key.key_prefix || "ag_live_****"} · created{" "}
+                      {key.created_at ? new Date(key.created_at).toLocaleString() : "-"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      onClick={() => startRename(key)}
+                      disabled={editingKeyId === key.id || renameBusyId === key.id}
+                      className="text-slate-300 hover:text-white"
+                    >
+                      <Pencil className="w-4 h-4 mr-1" />
+                      Rename
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleDeleteApiKey(key.id)}
+                      disabled={deleteBusyId === key.id}
+                      className="text-red-400 hover:text-red-300"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      {deleteBusyId === key.id ? "Removing..." : "Remove"}
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+

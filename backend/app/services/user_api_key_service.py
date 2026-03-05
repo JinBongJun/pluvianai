@@ -8,7 +8,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.backends import default_backend
 import base64
-import os
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.logging_config import logger
@@ -70,6 +69,7 @@ class UserApiKeyService:
         provider: str,
         api_key: str,
         name: Optional[str] = None,
+        agent_id: Optional[str] = None,
     ) -> UserApiKey:
         """
         Create and encrypt a user API key
@@ -80,6 +80,7 @@ class UserApiKeyService:
             provider: Provider name (openai, anthropic, google)
             api_key: Plain API key
             name: Optional name
+            agent_id: Optional node(agent) scope; null means project default
         
         Returns:
             Created UserApiKey
@@ -87,16 +88,22 @@ class UserApiKeyService:
         # Encrypt the key
         encrypted = self.encrypt_key(api_key)
 
-        # Deactivate existing keys for this project/provider
-        existing = (
+        normalized_agent_id = (agent_id or "").strip() or None
+
+        # Deactivate existing keys for the same scope
+        existing_query = (
             self.db.query(UserApiKey)
             .filter(
                 UserApiKey.project_id == project_id,
                 UserApiKey.provider == provider,
-                UserApiKey.is_active.is_(True)
+                UserApiKey.is_active.is_(True),
             )
-            .all()
         )
+        if normalized_agent_id:
+            existing_query = existing_query.filter(UserApiKey.agent_id == normalized_agent_id)
+        else:
+            existing_query = existing_query.filter(UserApiKey.agent_id.is_(None))
+        existing = existing_query.all()
         for key in existing:
             key.is_active = False
 
@@ -104,6 +111,7 @@ class UserApiKeyService:
         user_key = UserApiKey(
             project_id=project_id,
             user_id=user_id,
+            agent_id=normalized_agent_id,
             provider=provider,
             encrypted_key=encrypted,
             name=name or f"{provider} API key",
@@ -114,7 +122,12 @@ class UserApiKeyService:
 
         logger.info(
             f"User API key created for project {project_id}, provider {provider}",
-            extra={"project_id": project_id, "user_id": user_id, "provider": provider}
+            extra={
+                "project_id": project_id,
+                "user_id": user_id,
+                "provider": provider,
+                "agent_id": normalized_agent_id,
+            },
         )
 
         return user_key
@@ -123,6 +136,7 @@ class UserApiKeyService:
         self,
         project_id: int,
         provider: str,
+        agent_id: Optional[str] = None,
     ) -> Optional[str]:
         """
         Get decrypted user API key for a project/provider
@@ -130,19 +144,39 @@ class UserApiKeyService:
         Args:
             project_id: Project ID
             provider: Provider name
+            agent_id: Optional node(agent) scope
         
         Returns:
             Decrypted API key or None
         """
-        user_key = (
-            self.db.query(UserApiKey)
-            .filter(
-                UserApiKey.project_id == project_id,
-                UserApiKey.provider == provider,
-                UserApiKey.is_active.is_(True)
+        normalized_agent_id = (agent_id or "").strip() or None
+
+        user_key = None
+        if normalized_agent_id:
+            user_key = (
+                self.db.query(UserApiKey)
+                .filter(
+                    UserApiKey.project_id == project_id,
+                    UserApiKey.provider == provider,
+                    UserApiKey.agent_id == normalized_agent_id,
+                    UserApiKey.is_active.is_(True),
+                )
+                .order_by(UserApiKey.created_at.desc())
+                .first()
             )
-            .first()
-        )
+
+        if not user_key:
+            user_key = (
+                self.db.query(UserApiKey)
+                .filter(
+                    UserApiKey.project_id == project_id,
+                    UserApiKey.provider == provider,
+                    UserApiKey.agent_id.is_(None),
+                    UserApiKey.is_active.is_(True),
+                )
+                .order_by(UserApiKey.created_at.desc())
+                .first()
+            )
 
         if not user_key:
             return None
@@ -152,7 +186,11 @@ class UserApiKeyService:
         except Exception as e:
             logger.error(
                 f"Failed to decrypt user API key: {str(e)}",
-                extra={"project_id": project_id, "provider": provider},
+                extra={
+                    "project_id": project_id,
+                    "provider": provider,
+                    "agent_id": normalized_agent_id,
+                },
                 exc_info=True,
             )
             return None

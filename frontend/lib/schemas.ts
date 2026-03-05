@@ -1,5 +1,5 @@
 // Type definitions and schemas for PluvianAI
-import { z } from 'zod';
+import { z } from "zod";
 
 export interface User {
   id: number;
@@ -44,18 +44,18 @@ export interface Snapshot {
   input_data: any;
   output_data: any;
   metadata: any;
-  status: 'success' | 'error' | 'pending';
+  status: "success" | "error" | "pending";
   created_at: string;
 }
 
 export interface Signal {
   id: string;
-  name?: string;      // API Name / UI Display
-  label?: string;     // UI Display Alias
-  type: string;       // rule, metric, etc.
-  enabled?: boolean;  // API specific
-  config?: any;       // Configuration data
-  value?: any;        // UI Value / Result
+  name?: string; // API Name / UI Display
+  label?: string; // UI Display Alias
+  type: string; // rule, metric, etc.
+  enabled?: boolean; // API specific
+  config?: any; // Configuration data
+  value?: any; // UI Value / Result
   editable?: boolean; // UI specific
 }
 
@@ -68,7 +68,7 @@ export interface TestCase {
 
 export interface EvaluationResult {
   test_case_id: string;
-  status: 'pass' | 'fail' | 'error';
+  status: "pass" | "fail" | "error";
   signals: {
     [key: string]: {
       passed: boolean;
@@ -86,7 +86,15 @@ export interface EvaluationResult {
 // Backend may send date fields as string (ISO), number (ms), or null — coerce to string
 const dateLike = z
   .union([z.string(), z.number(), z.date(), z.null(), z.undefined()])
-  .transform((v) => (v == null ? '' : typeof v === 'string' ? v : v instanceof Date ? v.toISOString() : new Date(Number(v)).toISOString()));
+  .transform(v =>
+    v == null
+      ? ""
+      : typeof v === "string"
+        ? v
+        : v instanceof Date
+          ? v.toISOString()
+          : new Date(Number(v)).toISOString()
+  );
 
 export const CostAnalysisSchema = z.object({
   total_cost: z.number(),
@@ -96,77 +104,101 @@ export const CostAnalysisSchema = z.object({
   average_daily_cost: z.number(),
 });
 
-export const QualityScoreSchema = z.object({
-  id: z.number(),
-  score: z.number(),
-  created_at: dateLike,
-}).passthrough();
+export const QualityScoreSchema = z
+  .object({
+    id: z.number(),
+    score: z.number(),
+    created_at: dateLike,
+  })
+  .passthrough();
 
-export const DriftDetectionSchema = z.object({
-  id: z.number(),
-  detected_at: dateLike,
-  drift_score: z.number(),
-}).passthrough();
+export const DriftDetectionSchema = z
+  .object({
+    id: z.number(),
+    detected_at: dateLike,
+    drift_score: z.number(),
+  })
+  .passthrough();
 
-export const ProjectSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  description: z.string().nullable(),
-  organization_id: z.number(),
-  owner_id: z.number(),
-  is_active: z.boolean(),
-  created_at: dateLike,
-}).passthrough();
+export const ProjectSchema = z
+  .object({
+    id: z.number(),
+    name: z.string(),
+    description: z.string().nullable(),
+    organization_id: z.number(),
+    owner_id: z.number(),
+    is_active: z.boolean(),
+    created_at: dateLike,
+  })
+  .passthrough();
 
-export const APICallSchema = z.object({
-  id: z.number(),
-  project_id: z.number(),
-  provider: z.string().nullable(),
-  model: z.string().nullable(),
-  status_code: z.number().nullable(),
-  latency_ms: z.number().nullable(),
-  request_tokens: z.number().nullable(),
-  response_tokens: z.number().nullable(),
-  agent_name: z.string().nullable(),
-  created_at: dateLike,
-}).passthrough();
+export const APICallSchema = z
+  .object({
+    id: z.number(),
+    project_id: z.number(),
+    provider: z.string().nullable(),
+    model: z.string().nullable(),
+    status_code: z.number().nullable(),
+    latency_ms: z.number().nullable(),
+    request_tokens: z.number().nullable(),
+    response_tokens: z.number().nullable(),
+    agent_name: z.string().nullable(),
+    created_at: dateLike,
+  })
+  .passthrough();
 
-export const AlertSchema = z.object({
-  id: z.number(),
-  project_id: z.number(),
-  type: z.string(),
-  severity: z.string(),
-  message: z.string(),
-  created_at: dateLike,
-  resolved_at: z.union([z.string(), z.number(), z.date(), z.null()]).transform((v) => (v == null ? null : typeof v === 'string' ? v : v instanceof Date ? v.toISOString() : new Date(Number(v)).toISOString())),
-}).passthrough();
+export const AlertSchema = z
+  .object({
+    id: z.number(),
+    project_id: z.number(),
+    type: z.string(),
+    severity: z.string(),
+    message: z.string(),
+    created_at: dateLike,
+    resolved_at: z
+      .union([z.string(), z.number(), z.date(), z.null()])
+      .transform(v =>
+        v == null
+          ? null
+          : typeof v === "string"
+            ? v
+            : v instanceof Date
+              ? v.toISOString()
+              : new Date(Number(v)).toISOString()
+      ),
+  })
+  .passthrough();
 
-export const OrganizationSchema = z.object({
-  id: z.union([z.number(), z.string()]),
-  name: z.string(),
-  plan_type: z.string().optional(),
-  plan: z.string().optional(),
-  stats: z.any().optional(),
-  projects_count: z.number().optional(),
-  projects: z.number().optional(),
-}).passthrough();
+export const OrganizationSchema = z
+  .object({
+    id: z.union([z.number(), z.string()]),
+    name: z.string(),
+    plan_type: z.string().optional(),
+    plan: z.string().optional(),
+    stats: z.any().optional(),
+    projects_count: z.number().optional(),
+    projects: z.number().optional(),
+  })
+  .passthrough();
 
 export const OrganizationArraySchema = z.array(OrganizationSchema);
 
-export const OrganizationProjectStatsSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  description: z.string().nullable().optional(),
-  calls_24h: z.number().optional(),
-  calls24h: z.number().optional(),
-  cost_7d: z.number().optional(),
-  cost7d: z.number().optional(),
-  quality: z.number().nullable().optional(),
-  quality_score: z.number().nullable().optional(),
-  alerts_open: z.number().optional(),
-  alerts: z.number().optional(),
-  drift_detected: z.boolean().optional(),
-  drift: z.boolean().optional(),
-}).passthrough();
+export const OrganizationProjectStatsSchema = z
+  .object({
+    id: z.number(),
+    name: z.string(),
+    description: z.string().nullable().optional(),
+    calls_24h: z.number().optional(),
+    calls24h: z.number().optional(),
+    cost_7d: z.number().optional(),
+    cost7d: z.number().optional(),
+    quality: z.number().nullable().optional(),
+    quality_score: z.number().nullable().optional(),
+    alerts_open: z.number().optional(),
+    alerts: z.number().optional(),
+    drift_detected: z.boolean().optional(),
+    drift: z.boolean().optional(),
+  })
+  .passthrough();
 
 export const OrganizationProjectArraySchema = z.array(OrganizationProjectStatsSchema);

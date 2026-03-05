@@ -1,8 +1,22 @@
-import React from 'react';
+import React from "react";
+
+interface RobotBirdIconProps {
+    className?: string;
+    size?: number | string;
+}
 
 // Minimalist domed robot/bird icon
-export const RobotBirdIcon = ({ className }: { className?: string }) => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+export const RobotBirdIcon = ({ className, size = 24 }: RobotBirdIconProps) => (
+    <svg
+        viewBox="0 0 24 24"
+        style={{ width: size, height: size, minWidth: size, minHeight: size }}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+    >
         {/* Wider, flatter Dome Body */}
         <path d="M3 18v-5c0-4.4 3.6-8 9-8s9 3.6 9 8v5H3z" />
         {/* Solid Eye (centered on the wider head) */}

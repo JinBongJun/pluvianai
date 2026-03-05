@@ -34,6 +34,8 @@ from app.api.v1.endpoints import (
     self_hosted,
     behavior,
     release_gate,
+    internal_usage,
+    feedback,
 )
 
 api_router = APIRouter()
@@ -76,3 +78,5 @@ api_router.include_router(live_view.router, prefix="", tags=["live-view"])
 api_router.include_router(test_runs.router, prefix="/test-runs", tags=["test-runs"])
 api_router.include_router(behavior.router, prefix="", tags=["behavior"])
 api_router.include_router(release_gate.router, prefix="", tags=["release-gate"])
+api_router.include_router(internal_usage.router, prefix="/internal", tags=["internal-usage"])
+api_router.include_router(feedback.router, prefix="", tags=["feedback"])

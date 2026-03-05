@@ -1,16 +1,16 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import ProjectLayout from '@/components/layout/ProjectLayout';
-import JSONViewer from '@/components/ui/JSONViewer';
-import Badge from '@/components/ui/Badge';
-import Button from '@/components/ui/Button';
-import { apiCallsAPI, qualityAPI } from '@/lib/api';
-import { toFixedSafe } from '@/lib/format';
-import { useToast } from '@/components/ToastContainer';
-import { ArrowLeft, ArrowRight, Clock, DollarSign, CheckCircle, AlertCircle } from 'lucide-react';
-import { clsx } from 'clsx';
+import { useCallback, useEffect, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import ProjectLayout from "@/components/layout/ProjectLayout";
+import JSONViewer from "@/components/ui/JSONViewer";
+import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import { apiCallsAPI, qualityAPI } from "@/lib/api";
+import { toFixedSafe } from "@/lib/format";
+import { useToast } from "@/components/ToastContainer";
+import { ArrowLeft, ArrowRight, Clock, DollarSign, CheckCircle, AlertCircle } from "lucide-react";
+import { clsx } from "clsx";
 
 export default function APICallDetailPage() {
   const router = useRouter();
@@ -62,10 +62,10 @@ export default function APICallDetailPage() {
         // Quality score not available, ignore
       }
     } catch (error: any) {
-      console.error('Failed to load API call:', error);
-      toast.showToast(error.response?.data?.detail || 'Failed to load API call', 'error');
+      console.error("Failed to load API call:", error);
+      toast.showToast(error.response?.data?.detail || "Failed to load API call", "error");
       if (error.response?.status === 401) {
-        router.push('/login');
+        router.push("/login");
       } else if (error.response?.status === 404) {
         router.push(`${basePath}/api-calls`);
       }
@@ -75,9 +75,9 @@ export default function APICallDetailPage() {
   }, [callId, projectId, basePath, router, toast]);
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
+    const token = localStorage.getItem("access_token");
     if (!token) {
-      router.push('/login');
+      router.push("/login");
       return;
     }
 
@@ -110,7 +110,8 @@ export default function APICallDetailPage() {
     const inputPrice = 0.00003;
     const outputPrice = 0.00006;
 
-    const cost = (apiCall.request_tokens / 1000) * inputPrice + (apiCall.response_tokens / 1000) * outputPrice;
+    const cost =
+      (apiCall.request_tokens / 1000) * inputPrice + (apiCall.response_tokens / 1000) * outputPrice;
     return toFixedSafe(cost, 6);
   };
 
@@ -119,7 +120,10 @@ export default function APICallDetailPage() {
       <ProjectLayout
         orgId={orgId}
         projectId={projectId}
-        breadcrumb={[{ label: 'API Calls', href: `${basePath}/api-calls` }, { label: 'Loading...' }]}
+        breadcrumb={[
+          { label: "API Calls", href: `${basePath}/api-calls` },
+          { label: "Loading..." },
+        ]}
       >
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
@@ -133,17 +137,16 @@ export default function APICallDetailPage() {
       <ProjectLayout
         orgId={orgId}
         projectId={projectId}
-        breadcrumb={[{ label: 'API Calls', href: `${basePath}/api-calls` }, { label: 'Not Found' }]}
+        breadcrumb={[{ label: "API Calls", href: `${basePath}/api-calls` }, { label: "Not Found" }]}
       >
         <div className="text-center py-12">
           <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-white mb-2">API Call Not Found</h3>
           <p className="text-gray-400 mb-4">
-            The API call you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.
+            The API call you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to
+            it.
           </p>
-          <Button onClick={() => router.push(`${basePath}/api-calls`)}>
-            Back to API Calls
-          </Button>
+          <Button onClick={() => router.push(`${basePath}/api-calls`)}>Back to API Calls</Button>
         </div>
       </ProjectLayout>
     );
@@ -153,7 +156,10 @@ export default function APICallDetailPage() {
     <ProjectLayout
       orgId={orgId}
       projectId={projectId}
-      breadcrumb={[{ label: 'API Calls', href: `${basePath}/api-calls` }, { label: `Call #${callId}` }]}
+      breadcrumb={[
+        { label: "API Calls", href: `${basePath}/api-calls` },
+        { label: `Call #${callId}` },
+      ]}
     >
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
@@ -202,12 +208,14 @@ export default function APICallDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-[#1a1a1a] rounded-lg border border-gray-800 p-4">
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className={clsx(
-                'h-5 w-5',
-                apiCall.status_code >= 200 && apiCall.status_code < 300
-                  ? 'text-emerald-500'
-                  : 'text-red-500'
-              )} />
+              <CheckCircle
+                className={clsx(
+                  "h-5 w-5",
+                  apiCall.status_code >= 200 && apiCall.status_code < 300
+                    ? "text-emerald-500"
+                    : "text-red-500"
+                )}
+              />
               <span className="text-sm font-medium text-gray-400">Status</span>
             </div>
             <div className="flex items-center gap-2">
@@ -224,7 +232,7 @@ export default function APICallDetailPage() {
               <span className="text-sm font-medium text-gray-400">Latency</span>
             </div>
             <div className="text-lg font-semibold text-white">
-              {apiCall.latency_ms ? `${toFixedSafe(apiCall.latency_ms, 0)}ms` : 'N/A'}
+              {apiCall.latency_ms ? `${toFixedSafe(apiCall.latency_ms, 0)}ms` : "N/A"}
             </div>
           </div>
 
@@ -234,11 +242,12 @@ export default function APICallDetailPage() {
               <span className="text-sm font-medium text-gray-400">Cost</span>
             </div>
             <div className="text-lg font-semibold text-white">
-              {calculateCost() ? `$${calculateCost()}` : 'N/A'}
+              {calculateCost() ? `$${calculateCost()}` : "N/A"}
             </div>
             {apiCall.request_tokens && apiCall.response_tokens && (
               <div className="text-xs text-gray-500 mt-1">
-                {apiCall.request_tokens.toLocaleString()} in / {apiCall.response_tokens.toLocaleString()} out tokens
+                {apiCall.request_tokens.toLocaleString()} in /{" "}
+                {apiCall.response_tokens.toLocaleString()} out tokens
               </div>
             )}
           </div>
@@ -246,12 +255,11 @@ export default function APICallDetailPage() {
           <div className="bg-[#1a1a1a] rounded-lg border border-gray-800 p-4">
             <div className="text-sm font-medium text-gray-400 mb-2">Model</div>
             <div className="text-lg font-semibold text-white">
-              {apiCall.provider || 'unknown'}/{apiCall.model || apiCall.request_data?.model || 'unknown'}
+              {apiCall.provider || "unknown"}/
+              {apiCall.model || apiCall.request_data?.model || "unknown"}
             </div>
             {apiCall.agent_name && (
-              <div className="text-xs text-gray-500 mt-1">
-                Agent: {apiCall.agent_name}
-              </div>
+              <div className="text-xs text-gray-500 mt-1">Agent: {apiCall.agent_name}</div>
             )}
           </div>
         </div>

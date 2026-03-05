@@ -115,26 +115,38 @@ class BackgroundTaskService:
             }
             tool_calls_summary = extract_tool_calls_summary(payload_for_snapshot)
             try:
-                trace = db.query(Trace).filter(Trace.id == trace_id).first()
-                if not trace:
-                    trace = Trace(id=trace_id, project_id=project_id)
-                    db.add(trace)
-                    db.flush()
-                snapshot = Snapshot(
-                    trace_id=trace_id,
-                    project_id=project_id,
-                    agent_id=agent_id,
-                    provider=normalized.get("provider", "unknown"),
-                    model=normalized.get("model", "unknown"),
-                    system_prompt=system_prompt,
-                    user_message=request_prompt,
-                    response=response_text,
-                    payload=payload_for_snapshot,
-                    tool_calls_summary=tool_calls_summary if tool_calls_summary else None,
-                    latency_ms=int(latency_ms) if latency_ms is not None else None,
-                    status_code=status_code,
-                )
-                db.add(snapshot)
+                from app.models.project import Project as ProjectModel
+                from app.core.usage_limits import check_snapshot_limit
+
+                project_obj = db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
+                snapshot_allowed = True
+                if project_obj:
+                    snapshot_allowed, _ = check_snapshot_limit(db, project_obj.owner_id, is_superuser=False)
+                if not snapshot_allowed:
+                    logger.warning(
+                        f"Snapshot creation skipped for project {project_id}: free plan monthly limit reached."
+                    )
+                else:
+                    trace = db.query(Trace).filter(Trace.id == trace_id).first()
+                    if not trace:
+                        trace = Trace(id=trace_id, project_id=project_id)
+                        db.add(trace)
+                        db.flush()
+                    snapshot = Snapshot(
+                        trace_id=trace_id,
+                        project_id=project_id,
+                        agent_id=agent_id,
+                        provider=normalized.get("provider", "unknown"),
+                        model=normalized.get("model", "unknown"),
+                        system_prompt=system_prompt,
+                        user_message=request_prompt,
+                        response=response_text,
+                        payload=payload_for_snapshot,
+                        tool_calls_summary=tool_calls_summary if tool_calls_summary else None,
+                        latency_ms=int(latency_ms) if latency_ms is not None else None,
+                        status_code=status_code,
+                    )
+                    db.add(snapshot)
             except Exception as snap_err:
                 logger.warning(f"Failed to create snapshot for Live View (non-fatal): {snap_err}")
 

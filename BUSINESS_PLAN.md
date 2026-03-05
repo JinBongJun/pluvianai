@@ -15,16 +15,16 @@
 LLM 기반 에이전트의 규칙 기반 검증, 에이전트 단위 진단(Live View), 배포 전 검증(Release Gate)을 제공하는 SaaS 플랫폼
 
 ### 1.3 핵심 가치 제안
-- **규칙 기반 검증**: LLM Judge 없이 Atomic Signals로 재현 가능한 평가
-- **에이전트 단위 진단**: Live View에서 Clinical Log·Data·시그널 한 화면
-- **Release Gate**: 리플레이 → 규칙 검증 → 통과한 트레이스만 배포
-- **Zero-Config 모니터링**: SDK 한 줄 연동으로 즉시 시작
+- **규칙 기반 검증**: LLM Judge에만 의존하지 않고, Atomic Signals(형식·정책·지연 등)로 재현 가능한 평가
+- **에이전트 단위 진단**: Live View에서 에이전트(노드)별 Clinical Log·Data·Eval 시그널을 한 화면에서 추적
+- **노드 단위 Release Gate**: 특정 에이전트 하나를 기준으로 리플레이 → 규칙 검증 → 게이트 통과 여부까지 한 번에 확인하는 배포 전 테스트 플로우
+- **Zero-Config 모니터링**: SDK 한 줄 연동으로 즉시 시작하는 경량 도입 경험
 - **비용 최적화**: 모델별 비용 분석 및 최적화 제안
 
 ### 1.4 타겟 고객
-1. **개발자/스타트업**: LLM 에이전트를 개발하는 개발자 및 소규모 팀
-2. **중견 기업**: 프로덕션 환경에서 LLM 에이전트를 운영하는 기업
-3. **엔터프라이즈**: 대규모 LLM 시스템을 운영하는 기업 (금융, 헬스케어, 보안)
+1. **Indie Hackers / Solo-preneurs**: 혼자서 AI 앱이나 SaaS를 빠르게 빌드하고 검증해야 하는 1인 개발자
+2. **Open Source AI Contributors**: LangChain, LlamaIndex 등 에이전트 프레임워크에 기여하거나 성능을 증명하고 싶은 기여자
+3. **Prompt Engineers & Researchers**: 프롬프트의 한계를 테스트하고 실험 결과를 시각화/공유하고 싶은 연구자/취미가
 
 ---
 
@@ -43,11 +43,11 @@ LLM 기반 에이전트의 규칙 기반 검증, 에이전트 단위 진단(Live
 - **Arize AI**: ML 모니터링 및 관찰성 플랫폼
 
 **차별화 포인트**:
-1. **규칙 기반 + Release Gate**: 리플레이 후 규칙 검증·통과만 배포하는 한 덩어리 플로우
-2. **에이전트 단위 Live View**: 에이전트별 Clinical Log·Data·시그널 진단
-3. **Signal Detection**: LLM Judge 대신 규칙 기반 평가 (빠르고 예측 가능)
-4. **Zero-Config**: SDK 한 줄로 즉시 시작
-5. **비용 최적화**: 모델별 비용 분석 및 최적화 제안
+1. **노드(에이전트) 단위 Release Gate**: 하나의 에이전트를 단위로 리플레이 → Eval → 게이트 통과 여부를 즉시 확인하고, 통과한 트레이스만 배포하는 엔드포인트 레벨 안전망
+2. **일체형 워크플로우**: Live View(실시간 로그) ↔ Drift(과거 데이터 재평가) ↔ Regression(모델/프롬프트 비교) ↔ Stability(반복 실행 안정성, 예정) ↔ Release Gate가 한 화면/한 mental model 안에서 연결된 구조
+3. **Signal Detection**: LLM Judge 대신(또는 보완 재료로) 규칙 기반 평가를 중심에 두어 빠르고 예측 가능한 품질 신호 제공
+4. **Zero-Config**: SDK 한 줄로 에이전트 단위 모니터링·테스트를 시작할 수 있는 낮은 도입 장벽
+5. **비용 최적화**: 모델별 비용 분석 및 최적화 제안을 통해 품질·비용을 함께 관리
 
 ### 2.3 시장 기회
 - **Regression Fear 해소**: 개발자들이 가장 두려워하는 '업데이트로 인한 성능 저하'를 해결하는 Safe-to-deploy 결정 계층 제공
@@ -106,17 +106,15 @@ LLM 기반 에이전트의 규칙 기반 검증, 에이전트 단위 진단(Live
 - ✅ Cost Monitoring
 
 **Phase 2 (2026 Q2-Q3)**
-- 🔄 Advanced Test Lab 기능
-- 🔄 Webhook 지원
-- 🔄 CI/CD 통합
-- 🔄 Self-Hosted 옵션
-- 🔄 Advanced Analytics
+- 🔄 **Build in Public Tooling**: 원클릭 Eval 결과 공유 (Twitter/LinkedIn 연동)
+- 🔄 **Community Gold Sets**: 사용자들끼리 까다로운 데이터셋을 공유하고 경쟁하는 챌린지 탭
+- 🔄 Webhook & API 공개
+- 🔄 **Pluvian Badge**: GitHub 리드미에 부착 가능한 실시간 성능 뱃지
 
 **Phase 3 (2026 Q4)**
-- 📋 Rule Marketplace
-- 📋 Public Benchmarks
-- 📋 Multi-Region 지원
-- 📋 Enterprise SSO
+- 📋 Shadow Testing / Gold Set / LLM-as-a-Judge (핵심 하이테크 기능)
+- 📋 **AI Workbench**: 프롬프트 엔지니링을 위한 전문 시각 분석실
+- 📋 **OSS Contribution Gate**: 오픈소스 프로젝트용 자동 CI 체크 서버
 
 ---
 
@@ -131,10 +129,10 @@ LLM 기반 에이전트의 규칙 기반 검증, 에이전트 단위 진단(Live
 
 | 플랜 | 가격/월 | 타겟 | 핵심 제한 (미끼) |
 |------|:------:|------|-------------------|
-| **Hobby** | **$0** | 학생/찍먹 | 로그 1천 건, 보관 3일 (맛보기용) |
-| **Pro** | **$29** | 1인 개발자 | 로그 5만 건, 보관 30일, 개인 프로젝트 |
-| **Team** | **$99** | **초기 스타트업** | **로그 20만 건, 보관 90일, 팀원 5명** |
-| **Scale** | **문의** | 성장기/기업 | 로그 무제한(협의), SSO, 설치형(On-Prem) |
+| **Hobby** | **$0** | 입문자 | 로그 2천 건, 보관 7일 (충분히 써보게) |
+| **Indie** | **$19** | **Indie Hacker** | 로그 10만 건, 보관 30일, 공유 가능 리포트 |
+| **Expert** | **$49** | 파워 유저 | 로그 50만 건, 보관 1년, 전문 분석 도구 |
+| **OSS** | **Free** | 오픈소스 프로젝트 | 공익 목적 프로젝트에 무제한(협의) 지원 |
 
 ### 4.3 구독 플랜 상세 (Usage-Based)
 
@@ -171,15 +169,15 @@ LLM 기반 에이전트의 규칙 기반 검증, 에이전트 단위 진단(Live
 
 ### 5.1 타겟 고객 세그먼트 (Focus: AI Teams)
 
-**1차 타겟: "고통받는 실무자" (The Builders)**
-- **페르소나:** "LangChain 무한루프 때문에 퇴근 못하는 김대리"
-- **채널:** Discord, StackOverflow, GitHub Issues
-- **메시지:** "디버깅 시간, 3시간에서 3분으로."
+**1차 타겟: "빌드 인 퍼블릭" 개발자 (Indie Hackers)**
+- **페르소나:** "트위터에 내 AI 앱 성적표를 자랑하고 싶은 개발자"
+- **채널:** X (Twitter), Indie Hackers, Product Hunt
+- **메시지:** "당신의 AI 앱이 완벽하다는 것을 '데이터'로 증명하세요."
 
-**2차 타겟: "불안한 팀장" (The Decision Makers)**
-- **페르소나:** "우리 서비스가 이상한 말 할까 봐 밤잠 설치는 박팀장"
-- **채널:** LinkedIn, Tech Blog, Communities
-- **메시지:** "당신의 에이전트를 위한 안전벨트."
+**2차 타겟: "오픈소스 기여자" (The Contributors)**
+- **페르소나:** "내 PR이 성능을 얼마나 개선했는지 시각적으로 보여주고 싶은 기여자"
+- **채널:** GitHub, Discord (LangChain, LlamaIndex 등)
+- **메시지:** "Pluvian Badge로 신뢰받는 기여를 시작하세요."
 
 ### 5.2 마케팅 채널: GEO (Generative Engine Optimization) 전략
 **AI 비서가 우리를 추천하게 만드는 전략**

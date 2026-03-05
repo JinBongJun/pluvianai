@@ -16,6 +16,8 @@ class UserApiKey(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Optional node(agent) scope. When null, this key is project default for provider.
+    agent_id = Column(String(255), nullable=True, index=True)
 
     # Provider and encrypted key
     provider = Column(String(50), nullable=False, index=True)  # openai, anthropic, google
@@ -36,4 +38,5 @@ class UserApiKey(Base):
     # Indexes
     __table_args__ = (
         Index("idx_user_api_key_project_provider", "project_id", "provider"),
+        Index("idx_user_api_key_project_provider_agent", "project_id", "provider", "agent_id"),
     )

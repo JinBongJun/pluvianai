@@ -1,7 +1,52 @@
 """
 Shared helpers for extracting tool_calls from request/response payloads.
 """
+import json
 from typing import Any, List, Dict
+
+
+_MAX_TOOL_ARGS_BYTES = 65536  # 64KB
+
+
+def normalize_tool_name(name: Any) -> str:
+    """
+    Normalize tool name for canonical step and policy comparison: strip, lower, collapse whitespace.
+    Returns empty string if result would be empty.
+    """
+    s = str(name or "").strip().lower()
+    return " ".join(s.split())
+
+
+def parse_tool_args(raw_args: Any) -> Dict[str, Any]:
+    """
+    Normalize tool arguments to a dict (for canonical step layer).
+    Never raises. On invalid JSON or non-dict parse result, returns
+    {"_raw": raw_string, "_invalid": True} so policy can treat parse failure.
+    Size limit 64KB (str length or dict serialized); over limit returns _invalid + _too_large.
+    """
+    if isinstance(raw_args, str):
+        if len(raw_args) > _MAX_TOOL_ARGS_BYTES:
+            return {
+                "_invalid": True,
+                "_too_large": True,
+                "_raw": raw_args[:1024],
+            }
+        try:
+            parsed = json.loads(raw_args)
+            if isinstance(parsed, dict):
+                return parsed
+            return {"_raw": raw_args, "_invalid": True}
+        except Exception:
+            return {"_raw": raw_args, "_invalid": True}
+    if isinstance(raw_args, dict):
+        try:
+            serialized = json.dumps(raw_args, sort_keys=True)
+            if len(serialized) > _MAX_TOOL_ARGS_BYTES:
+                return {"_invalid": True, "_too_large": True}
+            return raw_args
+        except (TypeError, ValueError):
+            return {"_invalid": True}
+    return {}
 
 
 def extract_tool_calls_summary(payload: Any) -> List[Dict[str, Any]]:

@@ -1,19 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, BackgroundTasks
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case, desc
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
+import time
 import uuid
 import json
+from pydantic import BaseModel, Field
 from sqlalchemy.types import JSON
 from app.core.logging_config import logger
 
 from app.core.database import get_db, SessionLocal
 from app.core.security import get_current_user
 from app.core.dependencies import get_snapshot_service
-from app.core.permissions import check_project_access
+from app.core.permissions import check_project_access, ProjectRole
+from app.core.usage_limits import check_snapshot_limit
 from app.models.user import User
 from app.models.snapshot import Snapshot
+from app.models.saved_log import SavedLog
 from app.utils.tool_calls import extract_tool_calls_summary
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.agent_eval_config_history import AgentEvalConfigHistory
@@ -30,6 +35,28 @@ router = APIRouter()
 
 def _ensure_project(project_id: int, current_user: User, db: Session) -> Project:
     return check_project_access(project_id, current_user, db)
+
+
+def _ensure_project_admin(project_id: int, current_user: User, db: Session) -> Project:
+    return check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
+
+
+class SaveLogsRequest(BaseModel):
+    snapshot_ids: List[int] = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Snapshot IDs to save for the selected node.",
+    )
+
+
+class DeleteSavedLogsRequest(BaseModel):
+    snapshot_ids: List[int] = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Snapshot IDs to remove from saved logs for the selected node.",
+    )
 
 @router.get("/projects/{project_id}/live-view/agents")
 def list_agents(
@@ -216,12 +243,19 @@ def get_agent_settings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    t0 = time.perf_counter()
     _ensure_project(project_id, current_user, db)
     setting = (
         db.query(AgentDisplaySetting)
         .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash == agent_id)
         .first()
     )
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    if elapsed_ms > 1000:
+        logger.info(
+            "get_agent_settings slow: project_id=%s agent_id=%s elapsed_ms=%.0f",
+            project_id, agent_id, elapsed_ms,
+        )
     if not setting:
         return {
             "agent_id": agent_id,
@@ -254,6 +288,53 @@ def _deep_merge_dict(base: dict, incoming: dict) -> dict:
     return out
 
 
+def _csv_has_items(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    return any(part.strip() for part in value.split(","))
+
+
+def _validate_eval_config_for_save(eval_part: Dict[str, Any]) -> None:
+    normalized_eval = normalize_eval_config(eval_part)
+    required_cfg = normalized_eval.get("required", {})
+    if required_cfg.get("enabled"):
+        has_required_input = _csv_has_items(required_cfg.get("keywords_csv")) or _csv_has_items(
+            required_cfg.get("json_fields_csv")
+        )
+        if not has_required_input:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="When required is enabled, set keywords_csv or json_fields_csv.",
+            )
+
+    format_cfg = normalized_eval.get("format", {})
+    if format_cfg.get("enabled") and not _csv_has_items(format_cfg.get("sections_csv")):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="When format is enabled, set sections_csv.",
+        )
+
+    length_cfg = normalized_eval.get("length", {})
+    if length_cfg.get("enabled"):
+        warn_ratio = float(length_cfg.get("warn_ratio", 0.0))
+        crit_ratio = float(length_cfg.get("crit_ratio", 0.0))
+        if crit_ratio < warn_ratio:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="For length, crit_ratio must be greater than or equal to warn_ratio.",
+            )
+
+    repetition_cfg = normalized_eval.get("repetition", {})
+    if repetition_cfg.get("enabled"):
+        warn_repeats = int(repetition_cfg.get("warn_line_repeats", 0))
+        crit_repeats = int(repetition_cfg.get("crit_line_repeats", 0))
+        if crit_repeats < warn_repeats:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="For repetition, crit_line_repeats must be greater than or equal to warn_line_repeats.",
+            )
+
+
 @router.patch("/projects/{project_id}/live-view/agents/{agent_id}/settings")
 def update_agent_settings(
     project_id: int,
@@ -265,7 +346,7 @@ def update_agent_settings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _ensure_project(project_id, current_user, db)
+    _ensure_project_admin(project_id, current_user, db)
     if diagnostic_config is not None and not isinstance(diagnostic_config, dict):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -306,6 +387,7 @@ def update_agent_settings(
         merged = setting.diagnostic_config or {}
         eval_part = merged.get("eval") if isinstance(merged, dict) else None
         if isinstance(eval_part, dict):
+            _validate_eval_config_for_save(eval_part)
             normalized_eval = normalize_eval_config(eval_part)
             history_row = AgentEvalConfigHistory(
                 project_id=project_id,
@@ -332,7 +414,7 @@ def delete_agent(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _ensure_project(project_id, current_user, db)
+    _ensure_project_admin(project_id, current_user, db)
     setting = (
         db.query(AgentDisplaySetting)
         .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash == agent_id)
@@ -342,6 +424,169 @@ def delete_agent(
         setting.is_deleted = True
         db.commit()
     return None
+
+
+@router.get("/projects/{project_id}/live-view/agents/{agent_id}/saved-logs")
+def list_saved_logs(
+    project_id: int,
+    agent_id: str,
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_project(project_id, current_user, db)
+
+    total = (
+        db.query(func.count(SavedLog.id))
+        .filter(
+            SavedLog.project_id == project_id,
+            SavedLog.agent_id == agent_id,
+        )
+        .scalar()
+        or 0
+    )
+
+    rows = (
+        db.query(SavedLog, Snapshot)
+        .join(Snapshot, Snapshot.id == SavedLog.snapshot_id)
+        .filter(
+            SavedLog.project_id == project_id,
+            SavedLog.agent_id == agent_id,
+            Snapshot.project_id == project_id,
+            Snapshot.agent_id == agent_id,
+        )
+        .order_by(SavedLog.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    items = []
+    for saved, snap in rows:
+        items.append(
+            {
+                "id": saved.id,
+                "snapshot_id": snap.id,
+                "trace_id": snap.trace_id,
+                "agent_id": snap.agent_id,
+                "provider": snap.provider,
+                "model": snap.model,
+                "status_code": snap.status_code,
+                "latency_ms": snap.latency_ms,
+                "eval_checks_result": getattr(snap, "eval_checks_result", None),
+                "snapshot_created_at": snap.created_at.isoformat() if snap.created_at else None,
+                "saved_at": saved.created_at.isoformat() if saved.created_at else None,
+            }
+        )
+
+    return {"items": items, "total": int(total), "limit": limit, "offset": offset}
+
+
+@router.post("/projects/{project_id}/live-view/agents/{agent_id}/saved-logs")
+def save_logs_for_agent(
+    project_id: int,
+    agent_id: str,
+    body: SaveLogsRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_project_admin(project_id, current_user, db)
+    requested_ids = list(dict.fromkeys(int(sid) for sid in body.snapshot_ids if sid is not None))
+    if not requested_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="snapshot_ids is required")
+
+    rows = (
+        db.query(Snapshot.id, Snapshot.agent_id)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.id.in_(requested_ids),
+        )
+        .all()
+    )
+    existing_by_id = {int(row.id): str(row.agent_id or "") for row in rows if row.id is not None}
+    missing_snapshot_ids = [sid for sid in requested_ids if sid not in existing_by_id]
+    mismatched_snapshot_ids = [sid for sid in requested_ids if sid in existing_by_id and existing_by_id[sid] != agent_id]
+    valid_snapshot_ids = [sid for sid in requested_ids if sid in existing_by_id and existing_by_id[sid] == agent_id]
+
+    if not valid_snapshot_ids:
+        return {
+            "ok": True,
+            "saved_count": 0,
+            "already_saved_count": 0,
+            "missing_snapshot_ids": missing_snapshot_ids,
+            "mismatched_snapshot_ids": mismatched_snapshot_ids,
+        }
+
+    existing_saved_ids = {
+        int(row.snapshot_id)
+        for row in db.query(SavedLog.snapshot_id)
+        .filter(
+            SavedLog.project_id == project_id,
+            SavedLog.agent_id == agent_id,
+            SavedLog.snapshot_id.in_(valid_snapshot_ids),
+        )
+        .all()
+    }
+    to_create_ids = [sid for sid in valid_snapshot_ids if sid not in existing_saved_ids]
+    for sid in to_create_ids:
+        db.add(SavedLog(project_id=project_id, agent_id=agent_id, snapshot_id=sid))
+    if to_create_ids:
+        db.commit()
+
+    return {
+        "ok": True,
+        "saved_count": len(to_create_ids),
+        "already_saved_count": len(valid_snapshot_ids) - len(to_create_ids),
+        "missing_snapshot_ids": missing_snapshot_ids,
+        "mismatched_snapshot_ids": mismatched_snapshot_ids,
+    }
+
+
+@router.post("/projects/{project_id}/live-view/agents/{agent_id}/saved-logs/batch-delete")
+def delete_saved_logs_batch(
+    project_id: int,
+    agent_id: str,
+    body: DeleteSavedLogsRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_project_admin(project_id, current_user, db)
+    target_ids = list(dict.fromkeys(int(sid) for sid in body.snapshot_ids if sid is not None))
+    if not target_ids:
+        return {"ok": True, "deleted": 0}
+
+    deleted = (
+        db.query(SavedLog)
+        .filter(
+            SavedLog.project_id == project_id,
+            SavedLog.agent_id == agent_id,
+            SavedLog.snapshot_id.in_(target_ids),
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"ok": True, "deleted": int(deleted or 0)}
+
+
+@router.delete("/projects/{project_id}/live-view/agents/{agent_id}/saved-logs")
+def clear_saved_logs(
+    project_id: int,
+    agent_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_project_admin(project_id, current_user, db)
+    deleted = (
+        db.query(SavedLog)
+        .filter(
+            SavedLog.project_id == project_id,
+            SavedLog.agent_id == agent_id,
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"ok": True, "deleted": int(deleted or 0)}
 
 
 def _run_policy_validation_background(project_id: int, trace_id: str) -> None:
@@ -383,9 +628,18 @@ async def create_snapshot(
     For tool-call visibility (badge and policy checks): include in "payload" either
     a "response" object containing "tool_calls", or a top-level "tool_calls" array.
     Same shape as Proxy (e.g. response.choices[0].message.tool_calls) is supported.
+
+    Responses:
+    - 200 OK: Snapshot saved synchronously (no Redis or Redis unavailable). Body: { id, passed, violations }.
+    - 202 Accepted: Snapshot queued for processing (Redis stream). Body: { status: "accepted", message: "..." }.
+      The snapshot will appear in list/get after the background worker flushes (typically within a few seconds).
+    - 500: Save failed (e.g. queue failed, or sync save error).
     """
-    _ensure_project(project_id, current_user, db)
-    
+    project = _ensure_project(project_id, current_user, db)
+    allowed, err_msg = check_snapshot_limit(db, project.owner_id, getattr(current_user, "is_superuser", False))
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=err_msg)
+
     trace_id = payload.get("trace_id")
     provider = payload.get("provider", "unknown")
     model = payload.get("model", "unknown")
@@ -404,8 +658,15 @@ async def create_snapshot(
     )
     
     if not snapshot:
-        raise HTTPException(status_code=500, detail="Failed to save snapshot")
-    
+        # Queued to Redis stream; acknowledge with 202 so clients do not retry
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={
+                "status": "accepted",
+                "message": "Snapshot queued for processing. It will appear in the list shortly.",
+            },
+        )
+
     # Update agent_id if explicitly provided in wrapper
     if agent_id:
         snapshot.agent_id = agent_id
@@ -427,6 +688,7 @@ def list_snapshots(
     project_id: int,
     agent_id: Optional[str] = None,
     is_worst: Optional[bool] = None,
+    light: bool = Query(False, description="If true, omit payload and long text fields for faster list loading"),
     limit: int = Query(50, ge=1, le=400),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -434,6 +696,7 @@ def list_snapshots(
 ):
     """
     Snapshot list with filters for Live View.
+    Use light=true for list view; open detail with GET /snapshots/{id} for full payload.
     """
     _ensure_project(project_id, current_user, db)
     query = db.query(Snapshot).filter(Snapshot.project_id == project_id)
@@ -448,49 +711,109 @@ def list_snapshots(
         .limit(limit)
         .all()
     )
-    def _tool_fields(snap):
+
+    def _tool_fields(snap, skip_payload: bool = False):
         summary = getattr(snap, "tool_calls_summary", None)
-        if summary is None and snap.payload:
+        if summary is None and not skip_payload and getattr(snap, "payload", None):
             summary = extract_tool_calls_summary(snap.payload)
         return {
             "has_tool_calls": bool(summary),
             "tool_calls_summary": summary or [],
         }
 
+    def _item(s):
+        base = {
+            "id": s.id,
+            "trace_id": s.trace_id,
+            "agent_id": s.agent_id,
+            "provider": s.provider,
+            "model": s.model,
+            "model_settings": s.model_settings,
+            "latency_ms": s.latency_ms,
+            "tokens_used": s.tokens_used,
+            "cost": s.cost,
+            "status_code": s.status_code,
+            "is_worst": s.is_worst,
+            "worst_status": s.worst_status,
+            "is_golden": s.is_golden,
+            "signal_result": s.signal_result,
+            "evaluation_result": s.evaluation_result,
+            "eval_checks_result": getattr(s, "eval_checks_result", None),
+            "eval_config_version": getattr(s, "eval_config_version", None),
+            "created_at": s.created_at,
+            **_tool_fields(s, skip_payload=light),
+        }
+        if light:
+            base["system_prompt"] = None
+            base["user_message"] = None
+            base["response"] = None
+            base["request_prompt"] = None
+            base["response_text"] = None
+            base["payload"] = None
+        else:
+            base["system_prompt"] = s.system_prompt
+            base["user_message"] = s.user_message
+            base["response"] = s.response
+            base["request_prompt"] = s.user_message
+            base["response_text"] = s.response
+            base["payload"] = s.payload
+        return base
+
     return {
-        "items": [
-            {
-                "id": s.id,
-                "trace_id": s.trace_id,
-                "agent_id": s.agent_id,
-                "provider": s.provider,
-                "model": s.model,
-                "model_settings": s.model_settings,
-                "system_prompt": s.system_prompt,
-                "user_message": s.user_message,
-                "response": s.response,
-                "request_prompt": s.user_message,
-                "response_text": s.response,
-                "latency_ms": s.latency_ms,
-                "tokens_used": s.tokens_used,
-                "cost": s.cost,
-                "status_code": s.status_code,
-                "is_worst": s.is_worst,
-                "worst_status": s.worst_status,
-                "is_golden": s.is_golden,
-                "signal_result": s.signal_result,
-                "evaluation_result": s.evaluation_result,
-                "eval_checks_result": getattr(s, "eval_checks_result", None),
-                "eval_config_version": getattr(s, "eval_config_version", None),
-                "payload": s.payload,
-                "created_at": s.created_at,
-                **_tool_fields(s),
-            }
-            for s in items
-        ],
+        "items": [_item(s) for s in items],
         "count": len(items),
         "limit": limit,
         "offset": offset,
+    }
+
+
+@router.get("/projects/{project_id}/snapshots/{snapshot_id}")
+def get_snapshot(
+    project_id: int,
+    snapshot_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return a single snapshot by id with full fields (for detail modal)."""
+    _ensure_project(project_id, current_user, db)
+    snap = (
+        db.query(Snapshot)
+        .filter(Snapshot.project_id == project_id, Snapshot.id == snapshot_id)
+        .first()
+    )
+    if not snap:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
+    summary = getattr(snap, "tool_calls_summary", None)
+    if summary is None and snap.payload:
+        summary = extract_tool_calls_summary(snap.payload)
+    created_at = getattr(snap, "created_at", None)
+    return {
+        "id": snap.id,
+        "trace_id": snap.trace_id,
+        "agent_id": snap.agent_id,
+        "provider": snap.provider,
+        "model": snap.model,
+        "model_settings": snap.model_settings,
+        "system_prompt": snap.system_prompt,
+        "user_message": snap.user_message,
+        "response": snap.response,
+        "request_prompt": snap.user_message,
+        "response_text": snap.response,
+        "latency_ms": snap.latency_ms,
+        "tokens_used": snap.tokens_used,
+        "cost": snap.cost,
+        "status_code": snap.status_code,
+        "is_worst": snap.is_worst,
+        "worst_status": snap.worst_status,
+        "is_golden": snap.is_golden,
+        "signal_result": snap.signal_result,
+        "evaluation_result": snap.evaluation_result,
+        "eval_checks_result": getattr(snap, "eval_checks_result", None),
+        "eval_config_version": getattr(snap, "eval_config_version", None),
+        "payload": snap.payload,
+        "created_at": created_at.isoformat() if created_at else None,
+        "has_tool_calls": bool(summary),
+        "tool_calls_summary": summary or [],
     }
 
 

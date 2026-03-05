@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
+import clsx from 'clsx';
 import useSWR from 'swr';
 import { AnimatePresence } from 'framer-motion';
 import { AlertCircle, ChevronDown, ChevronRight, ExternalLink, Flag, Loader2, Plus, RefreshCcw, ShieldCheck, ShieldX, Trash2, Upload, Activity } from 'lucide-react';
@@ -18,6 +19,7 @@ import {
   behaviorAPI,
   liveViewAPI,
   organizationsAPI,
+  projectUserApiKeysAPI,
   projectsAPI,
   releaseGateAPI,
   type ReleaseGateHistoryResponse,
@@ -25,15 +27,143 @@ import {
 } from '@/lib/api';
 
 type GateTab = 'validate' | 'history';
-/** Regression: baseline eval is at capture time; run uses current eval (source of truth). Drift: compare recorded vs re-evaluated with current config. */
-type EvalMode = 'regression' | 'stability' | 'drift';
 type EditableTool = { id: string; name: string; description: string; parameters: string };
+type ThresholdPreset = 'strict' | 'default' | 'lenient' | 'custom';
+type GateThresholds = { failRateMax: number; flakyRateMax: number };
+type ReleaseGateDatasetSummary = {
+  id: string;
+  label?: string;
+  snapshot_ids?: unknown[];
+  snapshot_count?: number;
+};
+type ReplayProvider = 'openai' | 'anthropic' | 'google';
+type ProjectUserApiKeyItem = {
+  id: number;
+  provider: string;
+  agent_id?: string | null;
+  is_active: boolean;
+  name?: string | null;
+  created_at?: string | null;
+};
 const RECENT_SNAPSHOT_LIMIT = 100;
 const BASELINE_SNAPSHOT_LIMIT = 200;
+const REPLAY_PROVIDER_LABEL: Record<ReplayProvider, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  google: 'Google',
+};
+const REPLAY_PROVIDER_MODEL_LIBRARY: Record<ReplayProvider, string[]> = {
+  openai: [
+    'gpt-4o',
+    'gpt-4o-mini',
+    'gpt-4.1',
+    'gpt-4.1-mini',
+    'gpt-4.1-nano',
+    'o1',
+    'o1-mini',
+    'o3',
+    'o3-mini',
+    'o4-mini',
+  ],
+  anthropic: [
+    'claude-3-7-sonnet-latest',
+    'claude-3-5-sonnet-latest',
+    'claude-3-5-haiku-latest',
+    'claude-3-opus-latest',
+    'claude-3-opus-20240229',
+    'claude-3-sonnet-20240229',
+    'claude-3-haiku-20240307',
+  ],
+  google: [
+    'gemini-2.5-pro-preview',
+    'gemini-2.5-flash-preview',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-pro',
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-8b',
+  ],
+};
+const REPLAY_THRESHOLD_PRESETS = {
+  strict: {
+    label: 'Strict (5%/1%)',
+    failRateMax: 0.05,
+    flakyRateMax: 0.01,
+  },
+  default: {
+    label: 'Default (5%/3%)',
+    failRateMax: 0.05,
+    flakyRateMax: 0.03,
+  },
+  lenient: {
+    label: 'Lenient (10%/5%)',
+    failRateMax: 0.1,
+    flakyRateMax: 0.05,
+  },
+} as const;
 
 function toNum(value: string, fallback: number): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function clampRate(value: unknown, fallback: number): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(1, Math.max(0, n));
+}
+
+function normalizeGateThresholds(failRateMax: unknown, flakyRateMax: unknown): GateThresholds {
+    return {
+    failRateMax: clampRate(failRateMax, REPLAY_THRESHOLD_PRESETS.default.failRateMax),
+    flakyRateMax: clampRate(flakyRateMax, REPLAY_THRESHOLD_PRESETS.default.flakyRateMax),
+  };
+}
+
+function normalizeReplayProvider(raw: unknown): ReplayProvider | null {
+  const value = String(raw ?? '').trim().toLowerCase();
+  if (value === 'openai' || value === 'anthropic' || value === 'google') return value;
+  return null;
+}
+
+function inferProviderFromModelId(modelId: unknown): ReplayProvider | null {
+  const model = String(modelId ?? '').trim().toLowerCase();
+  if (!model) return null;
+  if (model.includes('claude') || model.startsWith('anthropic/')) return 'anthropic';
+  if (
+    model.includes('gemini') ||
+    model.includes('google') ||
+    model.startsWith('models/gemini') ||
+    model.startsWith('google/')
+  ) {
+    return 'google';
+  }
+  return 'openai';
+}
+
+function collectMissingProviderKeys(result: ReleaseGateResult | null): ReplayProvider[] {
+  if (!result) return [];
+  const direct = Array.isArray(result.missing_provider_keys)
+    ? result.missing_provider_keys
+        .map((v) => normalizeReplayProvider(v))
+        .filter((v): v is ReplayProvider => Boolean(v))
+    : [];
+  if (direct.length > 0) return Array.from(new Set(direct));
+
+  const fromReasons = (result.failure_reasons ?? [])
+    .join(' ')
+    .toLowerCase();
+  const inferred: ReplayProvider[] = [];
+  if (fromReasons.includes('openai')) inferred.push('openai');
+  if (fromReasons.includes('anthropic') || fromReasons.includes('claude')) inferred.push('anthropic');
+  if (fromReasons.includes('google') || fromReasons.includes('gemini')) inferred.push('google');
+  return Array.from(new Set(inferred));
+}
+
+function describeMissingProviderKeys(missingProviders: ReplayProvider[]): string {
+  if (missingProviders.length === 0) return '';
+  const labels = missingProviders.map((p) => REPLAY_PROVIDER_LABEL[p]).join(', ');
+  return `Run blocked: ${labels} API key is not registered for the selected node (or project default). Open Live View, click the node, then register the key in the Settings tab.`;
 }
 
 function extractToolsFromPayload(payload: Record<string, unknown> | null): EditableTool[] {
@@ -197,64 +327,6 @@ const LIVE_VIEW_CHECK_LABELS: Record<string, string> = {
   coherence: 'Coherence',
 };
 
-function ModelSelector({ value, onChange }: { value: string; onChange: (val: string) => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  const PRESETS = [
-    { id: '', label: 'Original Model', desc: 'Use baseline model' },
-    { id: 'gpt-4o-mini', label: 'GPT-4o Mini', desc: 'fast & cheap' },
-    { id: 'gpt-4o', label: 'GPT-4o', desc: 'high precision' },
-    { id: 'o1-preview', label: 'o1-preview', desc: 'reasoning' },
-  ];
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  return (
-    <div className="relative" ref={wrapperRef}>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onFocus={() => setIsOpen(true)}
-        onClick={() => !isOpen && setIsOpen(true)}
-        placeholder="e.g. gpt-4o (empty = original)"
-        className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-fuchsia-500/50 outline-none"
-      />
-      {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-[#1A1B20] border border-white/10 rounded-xl shadow-xl overflow-hidden py-1">
-          <div className="px-3 py-2 text-[10px] uppercase tracking-wider text-slate-500 border-b border-white/5 mb-1">
-            Suggested Models
-          </div>
-          {PRESETS.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              className="w-full text-left px-3 py-2 hover:bg-white/5 flex items-center justify-between group"
-              onClick={() => {
-                onChange(m.id);
-                setIsOpen(false);
-              }}
-            >
-              <span className="text-sm text-slate-200 group-hover:text-white transition-colors">{m.label}</span>
-              <span className="text-xs text-slate-500">{m.desc}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function ReleaseGatePage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -273,8 +345,12 @@ export default function ReleaseGatePage() {
   const [isValidating, setIsValidating] = useState(false);
   const [result, setResult] = useState<ReleaseGateResult | null>(null);
   const [error, setError] = useState('');
+  const [repeatRuns, setRepeatRuns] = useState<number>(3);
+  const [thresholdPreset, setThresholdPreset] = useState<ThresholdPreset>('default');
+  const [failRateMax, setFailRateMax] = useState<number>(REPLAY_THRESHOLD_PRESETS.default.failRateMax);
+  const [flakyRateMax, setFlakyRateMax] = useState<number>(REPLAY_THRESHOLD_PRESETS.default.flakyRateMax);
 
-  const [evalMode, setEvalMode] = useState<EvalMode>('regression');
+  const showPrimaryValidateLayout = true;
   const [agentId, setAgentId] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<AgentForPicker | null>(null);
   const [agentSelectModalOpen, setAgentSelectModalOpen] = useState(false);
@@ -284,6 +360,10 @@ export default function ReleaseGatePage() {
   const [datasetSelectModalOpen, setDatasetSelectModalOpen] = useState(false);
   const [nodeAndDataModalOpen, setNodeAndDataModalOpen] = useState(false);
   const [newModel, setNewModel] = useState('');
+  const [replayProvider, setReplayProvider] = useState<ReplayProvider>('openai');
+  const [modelOverrideEnabled, setModelOverrideEnabled] = useState(false);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [modelProviderTab, setModelProviderTab] = useState<ReplayProvider>('openai');
   const [requestBody, setRequestBody] = useState<Record<string, unknown>>({});
   const [requestJsonDraft, setRequestJsonDraft] = useState<string | null>(null);
   const [requestJsonError, setRequestJsonError] = useState('');
@@ -305,11 +385,10 @@ export default function ReleaseGatePage() {
   const historyLimit = 20;
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [resultDetailsOpen, setResultDetailsOpen] = useState(false);
-  const [selectedDriftRunIndex, setSelectedDriftRunIndex] = useState<number | null>(null);
+  const [selectedRunResultIndex, setSelectedRunResultIndex] = useState<number | null>(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [lastRunReportId, setLastRunReportId] = useState<string | null>(null);
-  const [driftDetailSnapshot, setDriftDetailSnapshot] = useState<SnapshotForDetail | null>(null);
   const [baselineDetailSnapshot, setBaselineDetailSnapshot] = useState<SnapshotForDetail | null>(null);
 
   useEffect(() => {
@@ -318,7 +397,7 @@ export default function ReleaseGatePage() {
   }, [searchParams]);
 
   useEffect(() => {
-    setSelectedDriftRunIndex(null);
+    setSelectedRunResultIndex(null);
   }, [result?.report_id]);
 
   const agentsKey = projectId && !isNaN(projectId) ? ['release-gate-agents', projectId] : null;
@@ -361,15 +440,14 @@ export default function ReleaseGatePage() {
   );
   const datasets = datasetsData?.items ?? [];
 
-  // For Drift preview: fetch snapshots from the FIRST selected dataset only, to avoid complex multi-fetch.
+  // For dataset preview: fetch snapshots from the FIRST selected dataset only.
   const previewDatasetId = datasetIds.length > 0 ? datasetIds[0] : null;
 
   const datasetSnapshotsKey =
-    (evalMode === 'drift' || evalMode === 'regression') &&
-      dataSource === 'datasets' &&
-      projectId &&
-      !isNaN(projectId) &&
-      previewDatasetId
+    dataSource === 'datasets' &&
+    projectId &&
+    !isNaN(projectId) &&
+    previewDatasetId
       ? ['behavior-dataset-snapshots', projectId, previewDatasetId]
       : null;
   const {
@@ -379,27 +457,36 @@ export default function ReleaseGatePage() {
   } = useSWR(
     datasetSnapshotsKey,
     async () => {
-      try {
-        return await behaviorAPI.getDatasetSnapshots(projectId, previewDatasetId!);
-      } catch (e: unknown) {
-        const status = (e as { response?: { status?: number } })?.response?.status;
-        if (status === 404) {
-          return { items: [], total: 0, _404: true };
-        }
-        throw e;
+    try {
+      return await behaviorAPI.getDatasetSnapshots(projectId, previewDatasetId!);
+    } catch (e: unknown) {
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      if (status === 404) {
+        return { items: [], total: 0, _404: true };
       }
+      throw e;
+    }
     }
   );
   const datasetSnapshots = datasetSnapshotsData?.items ?? [];
   const datasetSnapshots404 = !!(datasetSnapshotsData as { _404?: boolean } | undefined)?._404;
 
+  const dataSourceLabel = useMemo(() => {
+    if (dataSource === 'datasets') {
+      return datasetIds.length > 0 ? 'Dataset(s)' : '';
+    }
+    if (dataSource === 'recent') {
+      return snapshotIds.length > 0 ? 'Recent runs' : '';
+    }
+    return '';
+  }, [dataSource, snapshotIds.length, datasetIds.length]);
+
   const recentSnapshotsKey =
-    (evalMode === 'drift' || evalMode === 'regression') &&
-      dataSource === 'recent' &&
-      projectId &&
-      !isNaN(projectId) &&
-      agentId?.trim() &&
-      snapshotIds.length > 0
+    dataSource === 'recent' &&
+    projectId &&
+    !isNaN(projectId) &&
+    agentId?.trim() &&
+    snapshotIds.length > 0
       ? ['release-gate-recent-snapshots', projectId, agentId.trim(), RECENT_SNAPSHOT_LIMIT]
       : null;
   const { data: recentSnapshotsData } = useSWR(
@@ -413,10 +500,9 @@ export default function ReleaseGatePage() {
   );
 
   const baselineSnapshotPoolKey =
-    evalMode === 'regression' &&
-      projectId &&
-      !isNaN(projectId) &&
-      agentId?.trim()
+    projectId &&
+    !isNaN(projectId) &&
+    agentId?.trim()
       ? ['release-gate-baseline-payloads', projectId, agentId.trim(), BASELINE_SNAPSHOT_LIMIT]
       : null;
   const { data: baselineSnapshotPoolData } = useSWR(
@@ -545,6 +631,13 @@ export default function ReleaseGatePage() {
     if (typeof fromPayload === 'string' && fromPayload.trim()) return fromPayload.trim();
     return '';
   }, [liveNodeLatestSnapshot, baselineSeedSnapshot, baselinePayload]);
+  const runDataProvider = useMemo(() => {
+    const fromLatest = normalizeReplayProvider(liveNodeLatestSnapshot?.provider);
+    if (fromLatest) return fromLatest;
+    const fromBaseline = normalizeReplayProvider((baselineSeedSnapshot as Record<string, unknown> | null)?.provider);
+    if (fromBaseline) return fromBaseline;
+    return inferProviderFromModelId(runDataModel);
+  }, [liveNodeLatestSnapshot, baselineSeedSnapshot, runDataModel]);
   const runDataPrompt = useMemo(() => {
     const latestPrompt = liveNodeLatestSnapshot?.system_prompt;
     if (typeof latestPrompt === 'string' && latestPrompt.trim()) return latestPrompt.trim();
@@ -557,6 +650,145 @@ export default function ReleaseGatePage() {
     if (typeof fromSnapshot === 'string' && fromSnapshot.trim()) return fromSnapshot.trim();
     return extractSystemPromptFromPayload(baselinePayload);
   }, [liveNodeLatestSnapshot, baselineSeedSnapshot, baselinePayload]);
+  const effectiveProvider = modelOverrideEnabled ? replayProvider : runDataProvider;
+  const effectiveModel = modelOverrideEnabled ? newModel.trim() : runDataModel;
+
+  const canValidate =
+    !!agentId?.trim() &&
+    ((dataSource === 'recent' && runSnapshotIds.length > 0) || (dataSource === 'datasets' && runDatasetIds.length > 0));
+
+  const projectUserApiKeysKey = projectId && !isNaN(projectId)
+    ? ['project-user-api-keys', projectId]
+    : null;
+  const {
+    data: projectUserApiKeysData,
+    isLoading: projectUserApiKeysLoading,
+  } = useSWR(projectUserApiKeysKey, () => projectUserApiKeysAPI.list(projectId));
+  const keyPresenceByAgentAndProvider = useMemo(() => {
+    const projectDefaultProviders = new Set<ReplayProvider>();
+    const nodeScopedProviders = new Set<string>();
+    const items = Array.isArray(projectUserApiKeysData)
+      ? (projectUserApiKeysData as ProjectUserApiKeyItem[])
+      : [];
+    for (const item of items) {
+      if (!item?.is_active) continue;
+      const normalized = normalizeReplayProvider(item.provider);
+      if (!normalized) continue;
+      const keyAgentId = (item.agent_id || '').trim();
+      if (!keyAgentId) {
+        projectDefaultProviders.add(normalized);
+        continue;
+      }
+      nodeScopedProviders.add(`${keyAgentId}::${normalized}`);
+    }
+    return {
+      projectDefaultProviders,
+      nodeScopedProviders,
+    };
+  }, [projectUserApiKeysData]);
+
+  const hasEffectiveProviderKey = useCallback((provider: ReplayProvider, keyAgentId: string | null) => {
+    const normalizedAgentId = (keyAgentId || '').trim();
+    if (normalizedAgentId && keyPresenceByAgentAndProvider.nodeScopedProviders.has(`${normalizedAgentId}::${provider}`)) {
+      return true;
+    }
+    return keyPresenceByAgentAndProvider.projectDefaultProviders.has(provider);
+  }, [keyPresenceByAgentAndProvider]);
+
+  const requiredProviderResolution = useMemo(() => {
+    if (modelOverrideEnabled && replayProvider) {
+      return {
+        providers: [replayProvider],
+        unresolvedSnapshotCount: 0,
+      };
+    }
+    const providers = new Set<ReplayProvider>();
+    let unresolvedSnapshotCount = 0;
+    for (const snapshot of baselineSnapshotsForRun) {
+      const provider =
+        normalizeReplayProvider((snapshot as Record<string, unknown>).provider) ||
+        inferProviderFromModelId((snapshot as Record<string, unknown>).model);
+      if (!provider) {
+        unresolvedSnapshotCount += 1;
+        continue;
+      }
+      providers.add(provider);
+    }
+    if (providers.size === 0 && runDataProvider) providers.add(runDataProvider);
+    return {
+      providers: Array.from(providers),
+      unresolvedSnapshotCount,
+    };
+  }, [modelOverrideEnabled, replayProvider, baselineSnapshotsForRun, runDataProvider]);
+
+  const missingProviderKeys = useMemo(() => {
+    if (modelOverrideEnabled) return [];
+    const missing = new Set<ReplayProvider>();
+    for (const snapshot of baselineSnapshotsForRun) {
+      const provider =
+        normalizeReplayProvider((snapshot as Record<string, unknown>).provider) ||
+        inferProviderFromModelId((snapshot as Record<string, unknown>).model);
+      if (!provider) continue;
+      const snapshotAgentIdRaw = (snapshot as Record<string, unknown>).agent_id;
+      const snapshotAgentId = typeof snapshotAgentIdRaw === 'string' ? snapshotAgentIdRaw : null;
+      if (!hasEffectiveProviderKey(provider, snapshotAgentId)) {
+        missing.add(provider);
+      }
+    }
+    if (missing.size === 0 && requiredProviderResolution.providers.length > 0 && runDataProvider) {
+      if (!hasEffectiveProviderKey(runDataProvider, agentId.trim() || null)) {
+        missing.add(runDataProvider);
+      }
+    }
+    return Array.from(missing);
+  }, [
+    modelOverrideEnabled,
+    baselineSnapshotsForRun,
+    requiredProviderResolution.providers.length,
+    runDataProvider,
+    hasEffectiveProviderKey,
+    agentId,
+  ]);
+
+  const keyRegistrationMessage = useMemo(() => {
+    if (!canValidate) return '';
+    if (modelOverrideEnabled) return '';
+    if (projectUserApiKeysLoading) return 'Checking required API keys...';
+    if (requiredProviderResolution.providers.length === 0) {
+      return 'Run blocked: provider could not be detected from selected data. Open Live View and verify the latest node snapshot.';
+    }
+    if (requiredProviderResolution.unresolvedSnapshotCount > 0) {
+      return 'Run blocked: one or more selected snapshots have no detectable provider. Open Live View and verify the latest node snapshot.';
+    }
+    if (missingProviderKeys.length > 0) {
+      return describeMissingProviderKeys(missingProviderKeys);
+    }
+    return 'All required API keys are registered. Ready to run.';
+  }, [
+    canValidate,
+    modelOverrideEnabled,
+    projectUserApiKeysLoading,
+    requiredProviderResolution.providers.length,
+    requiredProviderResolution.unresolvedSnapshotCount,
+    missingProviderKeys,
+  ]);
+
+  const keyBlocked =
+    canValidate &&
+    !modelOverrideEnabled &&
+    (
+      projectUserApiKeysLoading ||
+      requiredProviderResolution.providers.length === 0 ||
+      requiredProviderResolution.unresolvedSnapshotCount > 0 ||
+      missingProviderKeys.length > 0
+    );
+  const modelOverrideInvalid = modelOverrideEnabled && !newModel.trim();
+  const runBlockedMessage = modelOverrideInvalid
+    ? 'Run blocked: select a model id for override or switch back to detected model.'
+    : keyRegistrationMessage;
+
+  const canRunValidate = canValidate && !keyBlocked && !modelOverrideInvalid;
+
   const runEvalElements = useMemo(() => {
     const data = agentEvalData as Record<string, unknown> | undefined;
     const configSrc = data?.config as Record<string, unknown> | undefined;
@@ -584,9 +816,7 @@ export default function ReleaseGatePage() {
     return [] as Array<{ name: string; value: unknown }>;
   }, [agentEvalData]);
 
-  const canValidate =
-    !!agentId?.trim() &&
-    ((dataSource === 'recent' && runSnapshotIds.length > 0) || (dataSource === 'datasets' && runDatasetIds.length > 0));
+  const liveViewSettingsHref = `/organizations/${orgId}/projects/${projectId}/live-view`;
 
   const requestSystemPrompt = useMemo(
     () => (typeof requestBody.system_prompt === 'string' ? requestBody.system_prompt : extractSystemPromptFromPayload(requestBody)) || '',
@@ -656,7 +886,6 @@ export default function ReleaseGatePage() {
   }, [toolsList]);
 
   useEffect(() => {
-    if (evalMode !== 'regression') return;
     const selectionKey = selectedSnapshotIdsForRun.join(',');
     if (!selectionKey) return;
     if (!baselineSeedSnapshot || !baselinePayload) return;
@@ -668,87 +897,150 @@ export default function ReleaseGatePage() {
 
     if (selectionKey !== overridesHydratedKey) {
       setRequestBody(payloadWithoutModel(baselinePayload));
+      if (!modelOverrideEnabled) {
       setNewModel(runDataModel);
+      }
+      const inferredProvider = runDataProvider || inferProviderFromModelId(runDataModel);
+      if (inferredProvider) {
+        setReplayProvider(inferredProvider);
+        if (!modelOverrideEnabled) setModelProviderTab(inferredProvider);
+      }
       setRequestJsonError('');
       setOverridesHydratedKey(selectionKey);
     }
   }, [
-    evalMode,
     selectedSnapshotIdsForRun,
     baselineSeedSnapshot,
     baselinePayload,
     baselineTools,
     runDataModel,
+    runDataProvider,
+    modelOverrideEnabled,
     toolsHydratedKey,
     overridesHydratedKey,
   ]);
 
+  useEffect(() => {
+    if (modelOverrideEnabled) return;
+    if (runDataModel) setNewModel(runDataModel);
+    const inferredProvider = runDataProvider || inferProviderFromModelId(runDataModel);
+    if (!inferredProvider) return;
+    setReplayProvider(inferredProvider);
+    setModelProviderTab(inferredProvider);
+  }, [modelOverrideEnabled, runDataProvider, runDataModel]);
+
   const handleValidate = async () => {
     if (!projectId || isNaN(projectId) || !canValidate || isValidating) return;
+    if (keyBlocked) {
+      setError(keyRegistrationMessage || 'Run blocked: required API key is not registered.');
+        return;
+      }
+    if (modelOverrideEnabled && !newModel.trim()) {
+      setError('Run blocked: select a model id for override or switch back to detected model.');
+      return;
+    }
     setIsValidating(true);
     setError('');
     try {
+      const thresholds = normalizeGateThresholds(failRateMax, flakyRateMax);
       const payload: Parameters<typeof releaseGateAPI.validate>[1] = {
         agent_id: agentId.trim() || undefined,
-        evaluation_mode: evalMode,
+        evaluation_mode: 'replay_test',
+        model_source: modelOverrideEnabled ? 'platform' : 'detected',
         max_snapshots: 100,
-        repeat_runs: 1,
+        repeat_runs: repeatRuns,
+        fail_rate_max: thresholds.failRateMax,
+        flaky_rate_max: thresholds.flakyRateMax,
       };
       if (dataSource === 'recent') {
         payload.snapshot_ids = runSnapshotIds.length ? runSnapshotIds : snapshotIds;
       } else {
         payload.dataset_ids = runDatasetIds.length ? runDatasetIds : datasetIds;
       }
-      if (evalMode === 'regression') {
-        payload.new_model = newModel.trim() || undefined;
-        payload.new_system_prompt = (typeof requestBody.system_prompt === 'string' ? requestBody.system_prompt : requestSystemPrompt).trim() || undefined;
-        const temp = requestBody.temperature;
-        const maxTok = requestBody.max_tokens;
-        const topP = requestBody.top_p;
-        if (temp != null && typeof temp === 'number' && Number.isFinite(temp) && temp >= 0) payload.replay_temperature = temp;
-        if (maxTok != null && (typeof maxTok === 'number' ? Number.isInteger(maxTok) : Number.isInteger(Number(maxTok))) && Number(maxTok) > 0) payload.replay_max_tokens = Number(maxTok);
-        if (topP != null && typeof topP === 'number' && Number.isFinite(topP)) payload.replay_top_p = topP;
-        const overrides: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(requestBody)) {
-          if (k === 'model' || k === 'system_prompt' || k === 'messages' || k === 'temperature' || k === 'max_tokens' || k === 'top_p') continue;
-          overrides[k] = v;
-        }
-        if (toolsList.length > 0) {
-          const built: Array<Record<string, unknown>> = [];
-          for (const t of toolsList) {
-            const name = t.name.trim();
-            if (!name) continue;
-            let params: Record<string, unknown> = {};
-            if (t.parameters.trim()) {
-              try {
-                const p = JSON.parse(t.parameters.trim());
-                if (p && typeof p === 'object') params = p as Record<string, unknown>;
-              } catch {
-                setError(`Tool "${name}": parameters must be valid JSON.`);
-                setIsValidating(false);
-                return;
-              }
-            }
-            built.push({
-              type: 'function',
-              function: { name, description: t.description.trim() || undefined, ...(Object.keys(params).length ? { parameters: params } : {}) },
-            });
-          }
-          if (built.length) overrides.tools = built;
-        } else if (Array.isArray(requestBody.tools) && requestBody.tools.length > 0) {
-          overrides.tools = requestBody.tools;
-        }
-        if (Object.keys(overrides).length) payload.replay_overrides = overrides;
+      if (modelOverrideEnabled) {
+        payload.new_model = newModel.trim();
+        payload.replay_provider = replayProvider;
       }
+      payload.new_system_prompt = (typeof requestBody.system_prompt === 'string' ? requestBody.system_prompt : requestSystemPrompt).trim() || undefined;
+      const temp = requestBody.temperature;
+      const maxTok = requestBody.max_tokens;
+      const topP = requestBody.top_p;
+      if (temp != null && typeof temp === 'number' && Number.isFinite(temp) && temp >= 0) payload.replay_temperature = temp;
+      if (maxTok != null && (typeof maxTok === 'number' ? Number.isInteger(maxTok) : Number.isInteger(Number(maxTok))) && Number(maxTok) > 0) payload.replay_max_tokens = Number(maxTok);
+      if (topP != null && typeof topP === 'number' && Number.isFinite(topP)) payload.replay_top_p = topP;
+      const overrides: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(requestBody)) {
+        if (k === 'model' || k === 'system_prompt' || k === 'messages' || k === 'temperature' || k === 'max_tokens' || k === 'top_p') continue;
+        overrides[k] = v;
+      }
+      if (toolsList.length > 0) {
+        const built: Array<Record<string, unknown>> = [];
+        for (const t of toolsList) {
+          const name = t.name.trim();
+          if (!name) continue;
+          let params: Record<string, unknown> = {};
+          if (t.parameters.trim()) {
+            try {
+              const p = JSON.parse(t.parameters.trim());
+              if (p && typeof p === 'object') params = p as Record<string, unknown>;
+            } catch {
+              setError(`Tool "${name}": parameters must be valid JSON.`);
+              setIsValidating(false);
+              return;
+            }
+          }
+          built.push({
+            type: 'function',
+            function: { name, description: t.description.trim() || undefined, ...(Object.keys(params).length ? { parameters: params } : {}) },
+          });
+        }
+        if (built.length) overrides.tools = built;
+      } else if (Array.isArray(requestBody.tools) && requestBody.tools.length > 0) {
+        overrides.tools = requestBody.tools;
+      }
+      if (Object.keys(overrides).length) payload.replay_overrides = overrides;
 
       const res = await releaseGateAPI.validate(projectId, payload);
       setResult(res);
-      setError('');
+      const missingProviders = collectMissingProviderKeys(res);
+      if (missingProviders.length > 0) {
+        setError(describeMissingProviderKeys(missingProviders));
+      } else {
+        setError('');
+      }
       if (res?.report_id) setLastRunReportId(String(res.report_id));
       mutateHistory();
     } catch (e: any) {
-      const msg = typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : (e?.message || 'Release Gate validation failed.');
-      setError(Array.isArray(e?.response?.data?.detail) ? e.response.data.detail.join(' ') : msg);
+      const detail = e?.response?.data?.detail;
+      const detailObj = detail && typeof detail === 'object' && !Array.isArray(detail)
+        ? (detail as { error_code?: string; missing_provider_keys?: string[]; message?: string })
+        : null;
+      const missingFromDetail = Array.isArray(detailObj?.missing_provider_keys)
+        ? detailObj!.missing_provider_keys
+          .map((provider) => normalizeReplayProvider(provider))
+          .filter((provider): provider is ReplayProvider => Boolean(provider))
+        : [];
+      const detailMessage = detailObj?.message
+        || (Array.isArray(detail)
+          ? detail.join(' ')
+          : typeof detail === 'string'
+        ? detail
+            : (e?.message || 'Release Gate validation failed.'));
+      const errorCode = String(
+        detailObj?.error_code ?? e?.response?.data?.error_code ?? ''
+      ).trim().toLowerCase();
+      if (errorCode === 'missing_provider_keys' && missingFromDetail.length > 0) {
+        setError(describeMissingProviderKeys(missingFromDetail));
+      } else if (
+        errorCode === 'dataset_agent_mismatch'
+        || errorCode === 'dataset_snapshot_agent_mismatch'
+      ) {
+        setError('Run blocked: selected data includes logs from another node. Re-open "Select node & data" and choose data from one node only.');
+      } else if (errorCode === 'missing_api_key' || /api key/i.test(detailMessage)) {
+        setError('Run blocked: required API key is not registered. Open Live View, click the node, then register the key in the Settings tab.');
+      } else {
+        setError(detailMessage);
+      }
       setResult(null);
     } finally {
       setIsValidating(false);
@@ -786,14 +1078,14 @@ export default function ReleaseGatePage() {
             <button
               onClick={() => setTab('validate')}
               className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${tab === 'validate' ? 'bg-white/10 text-white shadow-sm' : 'text-slate-400 hover:text-slate-300'
-                }`}
+              }`}
             >
               Validate
             </button>
             <button
               onClick={() => setTab('history')}
               className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${tab === 'history' ? 'bg-white/10 text-white shadow-sm' : 'text-slate-400 hover:text-slate-300'
-                }`}
+              }`}
             >
               Runs
             </button>
@@ -803,76 +1095,156 @@ export default function ReleaseGatePage() {
         {tab === 'validate' && (
           <>
             <div className="space-y-6">
-              {evalMode === 'regression' ? (
+              {showPrimaryValidateLayout ? (
                 <>
-                  {/* Regression: compact mode tabs */}
-                  <div className="rounded-2xl border border-white/10 bg-[#111216] p-3">
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEvalMode('regression')}
-                        title="Baseline eval at capture time; run uses current eval (source of truth)."
-                        className="rounded-xl border-2 border-fuchsia-500/60 bg-fuchsia-500/10 px-4 py-2 text-sm font-semibold text-slate-100"
-                      >
-                        Regression
-                      </button>
-                      <button type="button" disabled className="rounded-xl border-2 border-white/10 bg-white/[0.02] px-4 py-2 text-sm font-semibold text-slate-500 opacity-60 cursor-not-allowed">
-                        Stability
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEvalMode('drift')}
-                        title="Compare recorded (at capture) vs re-evaluated with current eval config."
-                        className="rounded-xl border-2 border-white/10 bg-white/[0.02] px-4 py-2 text-sm font-semibold text-slate-300 hover:border-white/20 hover:bg-white/5 transition-colors"
-                      >
-                        Drift
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Hero: Centered Gauge and Configuration */}
-                  <div className="flex flex-col items-center gap-10 rounded-3xl border border-white/5 bg-[#111216] p-10 lg:p-14 shadow-2xl relative overflow-hidden">
-                    {/* Background Glow */}
-                    <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-fuchsia-500/5 rounded-full blur-[120px] pointer-events-none" />
-
-                    <div className="relative z-10 flex flex-col items-center gap-3">
-                      <div className="scale-[1.3] transform origin-top">
-                        <PassRateGauge
-                          passedRatio={result != null && result.repeat_runs != null ? 1 - (result.failed_run_ratio ?? 0) : null}
-                          totalRuns={result?.repeat_runs ?? 0}
-                        />
+                  {/* Hero: Configuration Flow (Compact Horizontal Bar) */}
+                  <div className="relative z-10 w-full flex flex-col gap-4">
+                    <div className="rounded-2xl border border-white/10 bg-[#111216] overflow-hidden shadow-lg p-4 md:p-5 flex flex-col xl:flex-row xl:items-center gap-6 xl:gap-10">
+                      
+                      {/* Step 1: Target Data (Left) */}
+                      <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-4 xl:border-r border-white/10 xl:pr-10">
+                        <div className="shrink-0 flex items-center gap-2">
+                          <span className="flex items-center justify-center w-5 h-5 rounded-full bg-fuchsia-500/20 text-fuchsia-400 text-xs font-black">1</span>
+                          <span className="text-sm font-bold text-slate-200">Target Data</span>
+                        </div>
+                        <div className="flex-1 min-w-0 flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setNodeAndDataModalOpen(true)}
+                          disabled={agentsLoading}
+                            className="flex-1 flex items-center justify-between gap-3 rounded-lg bg-black/40 border border-white/10 px-4 py-2.5 text-left transition-all hover:border-fuchsia-500/40 hover:bg-white/5 disabled:opacity-50 min-w-0"
+                            title="Select the node and historical data you want to validate"
+                        >
+                            <span className="text-sm font-medium truncate text-slate-200">
+                            {selectedAgent &&
+                            ((dataSource === "recent" && snapshotIds.length > 0) ||
+                              datasetIds.length > 0)
+                              ? dataSource === "recent"
+                                  ? `${selectedAgent.display_name || selectedAgent.agent_id} · ${snapshotIds.length} runs`
+                                : datasetIds.length === 1
+                                  ? (() => {
+                                      const d = (datasets as ReleaseGateDatasetSummary[]).find(
+                                        (x) => x.id === datasetIds[0]
+                                      );
+                                      const n =
+                                        typeof d?.snapshot_count === "number"
+                                          ? d.snapshot_count
+                                          : Array.isArray(d?.snapshot_ids)
+                                        ? d.snapshot_ids.length
+                                        : 0;
+                                      return `${selectedAgent.display_name || selectedAgent.agent_id} · ${d?.label || datasetIds[0]} (${n})`;
+                                    })()
+                                    : `${selectedAgent.display_name || selectedAgent.agent_id} · ${datasetIds.length} sets`
+                                : 'Select node & data...'}
+                          </span>
+                            <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
+                        </button>
+                        {dataSourceLabel && (
+                            <span className="hidden sm:inline-flex items-center justify-center rounded-md bg-white/5 border border-white/10 px-2.5 py-1.5 text-[11px] font-medium text-slate-400 shrink-0">
+                              {dataSourceLabel}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      {(!result || result.repeat_runs == null) && (
-                        <p className="text-slate-400 text-sm font-medium mt-6">Configure target node and press validate</p>
-                      )}
+
+                      {/* Right Group: Repeat & Thresholds */}
+                      <div className="shrink-0 flex flex-col md:flex-row md:items-center gap-6 xl:gap-10">
+                        
+                        {/* Step 2: Repeat Runs */}
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2" title="Number of iterations per snapshot to detect flaky behaviors">
+                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-fuchsia-500/20 text-fuchsia-400 text-xs font-black">2</span>
+                            <span className="text-sm font-bold text-slate-200 whitespace-nowrap">Repeats</span>
+                          </div>
+                          <div className="flex bg-black/40 rounded-lg p-1 border border-white/10">
+                          {[1, 3, 5].map((n) => (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => setRepeatRuns(n)}
+                                className={clsx(
+                                  "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                                repeatRuns === n
+                                    ? "bg-fuchsia-500/20 text-fuchsia-300 shadow-sm"
+                                    : "text-slate-400 hover:text-slate-200"
+                                )}
+                            >
+                              {n}x
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                        {/* Step 3: Gate Thresholds */}
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2" title="Pass/fail criteria based on fail rate and flaky rate">
+                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-fuchsia-500/20 text-fuchsia-400 text-xs font-black">3</span>
+                            <span className="text-sm font-bold text-slate-200 whitespace-nowrap">Thresholds</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="hidden lg:flex bg-black/40 rounded-lg p-1 border border-white/10">
+                              {(Object.keys(REPLAY_THRESHOLD_PRESETS) as Array<keyof typeof REPLAY_THRESHOLD_PRESETS>).map(key => {
+                              const preset = REPLAY_THRESHOLD_PRESETS[key];
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onClick={() => {
+                                      const thresholds = normalizeGateThresholds(preset.failRateMax, preset.flakyRateMax);
+                                    setThresholdPreset(key);
+                                    setFailRateMax(thresholds.failRateMax);
+                                    setFlakyRateMax(thresholds.flakyRateMax);
+                                  }}
+                                    className={clsx(
+                                      "px-3 py-1 text-[11px] font-medium rounded-md transition-all whitespace-nowrap",
+                                    thresholdPreset === key
+                                        ? "bg-fuchsia-500/20 text-fuchsia-300 shadow-sm"
+                                        : "text-slate-400 hover:text-slate-200"
+                                    )}
+                                >
+                                  {preset.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                            
+                            <div className="flex items-center gap-2">
+                              <div className="relative w-[72px]" title="Fail rate limit">
+                                <input
+                                  type="number"
+                                  min={0} max={100} step={0.5}
+                                  value={failRateMax * 100}
+                                  onChange={e => {
+                                    const raw = Number(e.target.value);
+                                    if (!Number.isFinite(raw)) return;
+                                    setThresholdPreset("custom");
+                                    setFailRateMax(clampRate(raw / 100, REPLAY_THRESHOLD_PRESETS.default.failRateMax));
+                                  }}
+                                  className="w-full rounded-lg bg-black/40 border border-white/10 pl-3 pr-6 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:border-fuchsia-500/60 focus:ring-1 focus:ring-fuchsia-500/30 outline-none transition-all text-right"
+                                />
+                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 pointer-events-none">%</span>
+                              </div>
+                              <span className="text-white/20">/</span>
+                              <div className="relative w-[72px]" title="Flaky rate limit">
+                                <input
+                                  type="number"
+                                  min={0} max={100} step={0.5}
+                                  value={flakyRateMax * 100}
+                                  onChange={e => {
+                                    const raw = Number(e.target.value);
+                                    if (!Number.isFinite(raw)) return;
+                                    setThresholdPreset("custom");
+                                    setFlakyRateMax(clampRate(raw / 100, REPLAY_THRESHOLD_PRESETS.default.flakyRateMax));
+                                  }}
+                                  className="w-full rounded-lg bg-black/40 border border-white/10 pl-3 pr-6 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:border-fuchsia-500/60 focus:ring-1 focus:ring-fuchsia-500/30 outline-none transition-all text-right"
+                                />
+                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 pointer-events-none">%</span>
+                              </div>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="w-full max-w-2xl relative z-10">
-                      <div className="text-center mb-3">
-                        <span className="text-[11px] uppercase tracking-widest font-bold text-slate-500">Target Configuration</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setNodeAndDataModalOpen(true)}
-                        disabled={agentsLoading}
-                        className="w-full flex items-center justify-between gap-3 rounded-2xl bg-black/60 border border-white/10 px-6 py-4 text-left transition-all hover:border-fuchsia-500/40 hover:bg-white/5 disabled:opacity-50 shadow-inner group"
-                        aria-label="Select node and data"
-                      >
-                        <span className="text-[15px] font-medium truncate text-slate-200 group-hover:text-white transition-colors">
-                          {selectedAgent && (dataSource === 'recent' && snapshotIds.length > 0 || datasetIds.length > 0)
-                            ? dataSource === 'recent'
-                              ? `${selectedAgent.display_name || selectedAgent.agent_id} · ${snapshotIds.length} runs`
-                              : datasetIds.length === 1
-                                ? (() => {
-                                  const d = datasets.find((x: any) => x.id === datasetIds[0]);
-                                  const n = Array.isArray(d?.snapshot_ids) ? d.snapshot_ids.length : 0;
-                                  return `${selectedAgent.display_name || selectedAgent.agent_id} · ${d?.label || datasetIds[0]} (${n} runs)`;
-                                })()
-                                : `${selectedAgent.display_name || selectedAgent.agent_id} · ${datasetIds.length} datasets`
-                            : 'Select node & data to begin…'}
-                        </span>
-                        <ChevronDown className="w-5 h-5 text-slate-500 shrink-0 group-hover:text-slate-300 transition-colors" />
-                      </button>
                     </div>
                   </div>
                   {projectId && !isNaN(projectId) && (
@@ -889,12 +1261,12 @@ export default function ReleaseGatePage() {
                       onConfirm={(selection) => {
                         setAgentId(selection.agent.agent_id);
                         setSelectedAgent(selection.agent);
-                        if (selection.dataSource === 'recent') {
-                          setDataSource('recent');
+                        if (selection.dataSource === "recent") {
+                          setDataSource("recent");
                           setSnapshotIds(selection.snapshotIds);
                           setDatasetIds([]);
                         } else {
-                          setDataSource('datasets');
+                          setDataSource("datasets");
                           setDatasetIds(selection.datasetIds);
                           setSnapshotIds([]);
                         }
@@ -921,8 +1293,8 @@ export default function ReleaseGatePage() {
                               const currentVer = (agentEvalData as Record<string, unknown> | undefined)?.current_eval_config_version as string | undefined;
                               const anyStale = currentVer && Array.from(baselineSnapshotsById.values()).some((s) => {
                                 const v = (s as Record<string, unknown>)?.eval_config_version as string | undefined;
-                                return v && v !== currentVer;
-                              });
+                                  return v && v !== currentVer;
+                                });
                               return anyStale ? (
                                 <p className="px-4 py-2 text-xs text-amber-500/90 bg-amber-500/5 border-b border-amber-500/20" title="Some baseline snapshots were evaluated with a different eval config. Run result uses current config.">
                                   Eval config has changed since some snapshots were captured — baseline results may differ from Run.
@@ -945,47 +1317,47 @@ export default function ReleaseGatePage() {
                                 </div>
                                 {recentSnapshots.map((skinny: { id: string; trace_id?: string; created_at?: string }) => {
                                   const full = baselineSnapshotsById.get(String(skinny.id)) as Record<string, unknown> | undefined;
-                                  const snap = (full ?? skinny) as Record<string, unknown>;
-                                  const checked = runSnapshotIds.includes(String(skinny.id));
-                                  const failed = snapshotEvalFailed(full ?? null);
+                                    const snap = (full ?? skinny) as Record<string, unknown>;
+                                    const checked = runSnapshotIds.includes(String(skinny.id));
+                                    const failed = snapshotEvalFailed(full ?? null);
                                   const timeStr = (snap.created_at ? new Date(String(snap.created_at)).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—').split(' ');
                                   const prompt = String(snap.user_message ?? snap.request_prompt ?? '—').slice(0, 60);
                                   const model = String(snap.model ?? '—').split('/').pop() ?? '—';
-                                  return (
-                                    <div
-                                      key={skinny.id}
-                                      className={failed ? 'bg-rose-500/[0.06] border-l-2 border-l-rose-500/40' : 'border-l-2 border-l-transparent'}
-                                    >
+                                    return (
                                       <div
-                                        role="button"
-                                        tabIndex={0}
-                                        className="grid grid-cols-[auto_1fr_auto_1fr_auto] gap-2 px-3 py-2.5 items-center text-[13px] hover:bg-white/[0.03] cursor-pointer group"
+                                        key={skinny.id}
+                                      className={failed ? 'bg-rose-500/[0.06] border-l-2 border-l-rose-500/40' : 'border-l-2 border-l-transparent'}
+                                      >
+                                        <div
+                                          role="button"
+                                          tabIndex={0}
+                                          className="grid grid-cols-[auto_1fr_auto_1fr_auto] gap-2 px-3 py-2.5 items-center text-[13px] hover:bg-white/[0.03] cursor-pointer group"
                                         onClick={() => setBaselineDetailSnapshot(snap as unknown as SnapshotForDetail)}
                                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setBaselineDetailSnapshot(snap as unknown as SnapshotForDetail); } }}
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={checked}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={checked}
                                           onChange={() => setRunSnapshotIds((prev) => prev.includes(String(skinny.id)) ? prev.filter((x) => x !== String(skinny.id)) : [...prev, String(skinny.id)])}
                                           onClick={(e) => e.stopPropagation()}
-                                          className="rounded border-white/20 text-fuchsia-500 focus:ring-fuchsia-500/50 w-4 h-4"
-                                        />
+                                            className="rounded border-white/20 text-fuchsia-500 focus:ring-fuchsia-500/50 w-4 h-4"
+                                          />
                                         <div className="flex items-baseline gap-1" title={snap.created_at ? new Date(String(snap.created_at)).toLocaleString() : ''}>
                                           <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-slate-500 group-hover:bg-slate-400" style={failed ? { backgroundColor: 'rgba(244,63,94,0.8)' } : {}} />
                                           <span className="font-mono text-slate-300">{timeStr[0] ?? '—'}</span>
                                           <span className="text-[11px] text-slate-500 uppercase">{timeStr[1] ?? ''}</span>
-                                        </div>
+                                          </div>
                                         <span className="text-slate-200 truncate w-20" title={String(snap.model ?? '')}>{model}</span>
-                                        <div className="min-w-0 flex items-center gap-2">
+                                          <div className="min-w-0 flex items-center gap-2">
                                           <span title="Evaluated when this snapshot was captured (not current eval config)." className={failed ? 'px-2 py-0.5 rounded-full border border-rose-500/20 bg-rose-500/10 text-rose-400 text-[11px] font-bold uppercase' : 'px-2 py-0.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-[11px] font-bold uppercase'}>
                                             {failed ? 'FAIL' : 'PASS'}
-                                          </span>
+                                            </span>
                                           <span className="text-slate-400 truncate">{prompt}{prompt.length >= 60 ? '…' : ''}</span>
-                                        </div>
+                                          </div>
                                         <span className="text-slate-400 text-right font-mono text-xs">{snap.latency_ms != null ? `${Number(snap.latency_ms)}ms` : '—'}</span>
+                                        </div>
                                       </div>
-                                    </div>
-                                  );
+                                    );
                                 })}
                               </div>
                             )}
@@ -997,7 +1369,12 @@ export default function ReleaseGatePage() {
                             {datasetIds.map((id) => {
                               const d = datasets.find((x: { id: string }) => x.id === id);
                               const label = d?.label || id;
-                              const count = Array.isArray(d?.snapshot_ids) ? d.snapshot_ids.length : 0;
+                              const count =
+                                typeof d?.snapshot_count === "number"
+                                  ? d.snapshot_count
+                                  : Array.isArray(d?.snapshot_ids)
+                                ? d.snapshot_ids.length
+                                : 0;
                               const checked = runDatasetIds.includes(id);
                               return (
                                 <li key={id}>
@@ -1033,198 +1410,345 @@ export default function ReleaseGatePage() {
                             <span className="text-slate-500 block text-[10px] uppercase tracking-widest font-semibold mb-1">Agent Name</span>
                             <span className="text-slate-200 font-medium">{selectedAgent?.display_name || selectedAgent?.agent_id || agentId || 'Not selected'}</span>
                           </div>
-                          <div>
-                            <span className="text-slate-500 block text-[10px] uppercase tracking-widest font-semibold mb-1">Node Model (Live View latest)</span>
-                            <span className="text-slate-200 font-mono text-[11px] bg-white/5 px-2 py-1 rounded">{runDataModel || '(no recent live snapshot)'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block text-[10px] uppercase tracking-widest font-semibold mb-1">Node Prompt (Live View latest)</span>
-                            <div className="text-slate-300 leading-relaxed max-h-24 overflow-y-auto custom-scrollbar bg-black/40 p-3 rounded-lg border border-white/5 font-mono text-[11px] whitespace-pre-wrap">
-                              {runDataPrompt || '(no recent live snapshot)'}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 space-y-1">
+                              <span className="text-[10px] uppercase tracking-wide text-slate-500">Detected provider</span>
+                              <div className="text-sm text-slate-200 font-medium">
+                                {runDataProvider ? REPLAY_PROVIDER_LABEL[runDataProvider] : 'Not detected'}
+                              </div>
+                              <p className="text-[10px] text-slate-500">
+                                Derived from the selected node snapshots.
+                              </p>
                             </div>
-                          </div>
-                          <div>
+                            <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 space-y-1">
+                              <span className="text-[10px] uppercase tracking-wide text-slate-500">Detected model id</span>
+                              <div className="text-sm text-slate-200 font-medium break-all">
+                                {runDataModel || 'Not detected'}
+                              </div>
+                              <p className="text-[10px] text-slate-500">
+                                Model is read-only in Release Gate and follows selected data.
+                              </p>
+                            </div>
+                              </div>
+                              <div>
+                            <span className="text-slate-500 block text-[10px] uppercase tracking-widest font-semibold mb-1">Node Prompt (Live View latest)</span>
+                                <div className="text-slate-300 leading-relaxed max-h-24 overflow-y-auto custom-scrollbar bg-black/40 p-3 rounded-lg border border-white/5 font-mono text-[11px] whitespace-pre-wrap">
+                              {runDataPrompt || '(no recent live snapshot)'}
+                                </div>
+                              </div>
+                              <div>
                             <span className="text-slate-500 block text-[10px] uppercase tracking-widest font-semibold mb-2">Active Checks (Current Policy)</span>
-                            {runEvalElements.length > 0 ? (
-                              <div className="grid grid-cols-2 gap-2">
-                                {runEvalElements.map(({ name, value }) => {
-                                  const displayVal = formatEvalSetting(value);
+                                {runEvalElements.length > 0 ? (
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {runEvalElements.map(({ name, value }) => {
+                                      const displayVal = formatEvalSetting(value);
 
-                                  return (
+                                      return (
                                     <div key={name} className="flex flex-col gap-1 p-2 rounded-lg bg-white/5 border border-white/5 relative overflow-hidden">
                                       {/* Read-only indicator */}
-                                      <div className="absolute top-1 right-1 opacity-20">
+                                          <div className="absolute top-1 right-1 opacity-20">
                                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                                      </div>
+                                          </div>
                                       
-                                      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wide truncate pr-3">
+                                          <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wide truncate pr-3">
                                         {LIVE_VIEW_CHECK_LABELS[name] || name.replace(/_/g, ' ')}
-                                      </span>
+                                          </span>
                                       
-                                      <div className="flex items-center justify-between gap-2 mt-auto">
+                                          <div className="flex items-center justify-between gap-2 mt-auto">
                                         <span className="text-xs font-mono text-fuchsia-300 break-all">{displayVal}</span>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
                               <span className="text-slate-500 italic">No active checks found.</span>
-                            )}
-                          </div>
+                                )}
+                              </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 mt-4 mb-2">
+                          <div className="flex items-center gap-3 mt-4 mb-2">
                         <div className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">Candidate Overrides</div>
-                        <div className="h-px bg-white/10 flex-1"></div>
-                      </div>
+                            <div className="h-px bg-white/10 flex-1"></div>
+                          </div>
 
-                      <div className="block space-y-1">
-                        <span className="text-[10px] uppercase tracking-wide text-slate-500">Model (required)</span>
-                        <ModelSelector value={newModel} onChange={setNewModel} />
-                        <p className="text-[10px] text-slate-500">Model is set here only; it is not part of the request JSON below.</p>
+                      <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[11px] text-slate-400">
+                        {modelOverrideEnabled ? (
+                          <>Platform-provided model mode is active. Personal provider key is not required for this run.</>
+                        ) : (
+                          <>
+                            API key registration is managed in Live View node settings.
+                            {' '}
+                            <Link
+                              href={liveViewSettingsHref}
+                              className="text-fuchsia-300 hover:text-fuchsia-200 underline underline-offset-2"
+                            >
+                              Open Live View
+                            </Link>
+                            {' '}
+                            and click a node, then open the Settings tab.
+                          </>
+                        )}
                       </div>
-                      <div className="block space-y-1">
-                        <span className="text-[10px] uppercase tracking-wide text-slate-500">System prompt</span>
-                        <textarea
-                          value={requestSystemPrompt}
-                          onChange={(e) => setRequestBody((prev) => applySystemPromptToBody(prev, e.target.value))}
-                          rows={3}
-                          placeholder="From baseline or edit here; syncs with JSON below"
-                          className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-fuchsia-500/50 outline-none resize-none"
-                        />
-                        <p className="text-[10px] text-slate-500">Edits here update the Request JSON; editing JSON updates this field.</p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <button
-                          type="button"
-                          onClick={() => setOverridesOpen((o) => !o)}
-                          className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-slate-500 hover:text-slate-400 transition-colors"
-                          aria-expanded={overridesOpen}
-                        >
-                          {overridesOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                          Request JSON (no model) + tools
-                        </button>
-                        {overridesOpen && (
-                          <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-3">
-                            <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-2">
-                              <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <span className="text-[10px] uppercase tracking-wide text-slate-500">Request JSON</span>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] text-slate-500">
-                                    {baselineSeedSnapshot ? `From Snapshot #${String(baselineSeedSnapshot.id ?? '')} (model excluded)` : 'No run selected'}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={handleResetRequestJson}
-                                    disabled={!baselinePayload}
-                                    className="inline-flex items-center gap-1 rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-[10px] text-slate-400 hover:bg-white/10 hover:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                  >
-                                    <RefreshCcw className="w-3 h-3" aria-hidden />
-                                    Reset
-                                  </button>
-                                </div>
-                              </div>
-                              <textarea
-                                value={requestJsonDraft ?? JSON.stringify(requestBody, null, 2)}
-                                onChange={(e) => {
-                                  setRequestJsonDraft(e.target.value);
-                                  setRequestJsonError('');
-                                }}
-                                onBlur={handleRequestJsonBlur}
-                                onFocus={() => setRequestJsonDraft(requestJsonDraft ?? JSON.stringify(requestBody, null, 2))}
-                                rows={8}
-                                placeholder='{"system_prompt": "...", "temperature": 0.2, ...}'
-                                className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-[11px] font-mono text-slate-300 placeholder:text-slate-600 focus:border-fuchsia-500/50 outline-none resize-y"
-                              />
-                              {requestJsonError && <p className="text-[10px] text-rose-400">{requestJsonError}</p>}
-                              <p className="text-[10px] text-slate-500">Editable. Model is set above only. Blur to apply JSON changes. Use Reset to restore baseline.</p>
+                      <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wide text-slate-500">Model</span>
+                            <div className="text-sm text-slate-200 font-medium mt-1 break-all">
+                              {effectiveModel || 'Not detected'}
                             </div>
+                            <p className="text-[10px] text-slate-500 mt-1">
+                              Provider: {effectiveProvider ? REPLAY_PROVIDER_LABEL[effectiveProvider] : 'Not detected'}
+                              {modelOverrideEnabled ? ' (platform-provided override)' : ' (detected)'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                setModelOverrideEnabled(true);
+                                const inferredProvider = runDataProvider || inferProviderFromModelId(runDataModel) || replayProvider;
+                                setReplayProvider(inferredProvider);
+                                setModelProviderTab(inferredProvider);
+                                if (!newModel.trim()) setNewModel(runDataModel);
+                                setModelPickerOpen((open) => !open || !modelOverrideEnabled);
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg border border-white/20 bg-white/5 px-2.5 py-1.5 text-[11px] text-slate-300 hover:bg-white/10 transition-colors"
+                            >
+                              {modelOverrideEnabled ? 'Edit model' : 'Change model'}
+                              </button>
+                            {modelOverrideEnabled && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setModelOverrideEnabled(false);
+                                  setModelPickerOpen(false);
+                                  setNewModel(runDataModel);
+                                  const inferredProvider = runDataProvider || inferProviderFromModelId(runDataModel);
+                                  if (inferredProvider) {
+                                    setReplayProvider(inferredProvider);
+                                    setModelProviderTab(inferredProvider);
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg border border-white/20 bg-black/40 px-2.5 py-1.5 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+                              >
+                                Use detected
+                              </button>
+                            )}
+                            </div>
+                                  </div>
+                        {modelOverrideEnabled && modelPickerOpen && (
+                          <div className="space-y-3 rounded-lg border border-white/10 bg-black/30 p-3">
+                            <div className="inline-flex rounded-lg border border-white/10 bg-black/40 p-1">
+                              {(Object.keys(REPLAY_PROVIDER_MODEL_LIBRARY) as ReplayProvider[]).map((provider) => (
+                                <button
+                                  key={provider}
+                                  type="button"
+                                  onClick={() => {
+                                    setModelProviderTab(provider);
+                                    setReplayProvider(provider);
+                                  }}
+                                  className={clsx(
+                                    'px-3 py-1 text-[11px] font-semibold rounded-md transition-colors',
+                                    modelProviderTab === provider
+                                      ? 'bg-white/10 text-white'
+                                      : 'text-slate-400 hover:text-slate-200'
+                                  )}
+                                >
+                                  {REPLAY_PROVIDER_LABEL[provider]}
+                                </button>
+                              ))}
+                                </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              <div className="block space-y-1">
+                              {REPLAY_PROVIDER_MODEL_LIBRARY[modelProviderTab].map((modelId) => (
+                                <button
+                                  key={modelId}
+                                  type="button"
+                                  onClick={() => {
+                                    setReplayProvider(modelProviderTab);
+                                    setNewModel(modelId);
+                                    setModelPickerOpen(false);
+                                  }}
+                                  className={clsx(
+                                    'text-left rounded-lg border px-2.5 py-2 text-[11px] transition-colors',
+                                    newModel.trim() === modelId && replayProvider === modelProviderTab
+                                      ? 'border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-200'
+                                      : 'border-white/10 bg-black/30 text-slate-300 hover:bg-white/5'
+                                  )}
+                                >
+                                  {modelId}
+                                </button>
+                              ))}
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[10px] uppercase tracking-wide text-slate-500">Custom model id</span>
+                              <input
+                                value={newModel}
+                                onChange={(e) => setNewModel(e.target.value)}
+                                placeholder="Type model id"
+                                className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-fuchsia-500/50 outline-none"
+                              />
+                              <p className="text-[10px] text-slate-500">
+                                Select from presets or type a custom model id for {REPLAY_PROVIDER_LABEL[modelProviderTab]}.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                          </div>
+                          <div className="block space-y-1">
+                        <span className="text-[10px] uppercase tracking-wide text-slate-500">System prompt</span>
+                            <textarea
+                              value={requestSystemPrompt}
+                          onChange={(e) => setRequestBody((prev) => applySystemPromptToBody(prev, e.target.value))}
+                              rows={3}
+                              placeholder="From baseline or edit here; syncs with JSON below"
+                              className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-fuchsia-500/50 outline-none resize-none"
+                            />
+                        <p className="text-[10px] text-slate-500">Edits here update the Request JSON; editing JSON updates this field.</p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <button
+                              type="button"
+                          onClick={() => setOverridesOpen((o) => !o)}
+                              className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-slate-500 hover:text-slate-400 transition-colors"
+                              aria-expanded={overridesOpen}
+                            >
+                          {overridesOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                              Request JSON (no model) + tools
+                            </button>
+                            {overridesOpen && (
+                              <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-3">
+                                <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-2">
+                                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <span className="text-[10px] uppercase tracking-wide text-slate-500">Request JSON</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] text-slate-500">
+                                    {baselineSeedSnapshot ? `From Snapshot #${String(baselineSeedSnapshot.id ?? '')} (model excluded)` : 'No run selected'}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={handleResetRequestJson}
+                                        disabled={!baselinePayload}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-[10px] text-slate-400 hover:bg-white/10 hover:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                      >
+                                        <RefreshCcw className="w-3 h-3" aria-hidden />
+                                        Reset
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <textarea
+                                    value={requestJsonDraft ?? JSON.stringify(requestBody, null, 2)}
+                                onChange={(e) => {
+                                      setRequestJsonDraft(e.target.value);
+                                  setRequestJsonError('');
+                                    }}
+                                    onBlur={handleRequestJsonBlur}
+                                onFocus={() => setRequestJsonDraft(requestJsonDraft ?? JSON.stringify(requestBody, null, 2))}
+                                    rows={8}
+                                    placeholder='{"system_prompt": "...", "temperature": 0.2, ...}'
+                                    className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-[11px] font-mono text-slate-300 placeholder:text-slate-600 focus:border-fuchsia-500/50 outline-none resize-y"
+                                  />
+                              {requestJsonError && <p className="text-[10px] text-rose-400">{requestJsonError}</p>}
+                              <p className="text-[10px] text-slate-500">Editable. Model is controlled in the Model section above (detected or override). Blur to apply JSON changes. Use Reset to restore baseline.</p>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <div className="block space-y-1">
                                 <span className="text-[10px] uppercase tracking-wide text-slate-500">Temperature (optional)</span>
-                                <input
+                                    <input
                                   value={temperatureDraft ?? (requestBody.temperature != null ? String(requestBody.temperature) : '')}
                                   onChange={(e) => setTemperatureDraft(e.target.value)}
-                                  onBlur={() => {
+                                      onBlur={() => {
                                     const v = (temperatureDraft ?? (requestBody.temperature != null ? String(requestBody.temperature) : '')).trim();
                                     const n = v === '' ? undefined : parseFloat(v);
                                     setRequestBody((prev) => ({ ...prev, temperature: n !== undefined && Number.isFinite(n) ? (n as unknown) : undefined }));
-                                    setTemperatureDraft(null);
-                                  }}
-                                  placeholder="e.g. 0.2"
-                                  inputMode="decimal"
-                                  className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-fuchsia-500/50 outline-none"
-                                />
-                              </div>
-                              <div className="block space-y-1">
+                                        setTemperatureDraft(null);
+                                      }}
+                                      placeholder="e.g. 0.2"
+                                      inputMode="decimal"
+                                      className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-fuchsia-500/50 outline-none"
+                                    />
+                                  </div>
+                                  <div className="block space-y-1">
                                 <span className="text-[10px] uppercase tracking-wide text-slate-500">Max tokens (optional)</span>
-                                <input
+                                    <input
                                   value={maxTokensDraft ?? (requestBody.max_tokens != null ? String(requestBody.max_tokens) : '')}
                                   onChange={(e) => setMaxTokensDraft(e.target.value)}
-                                  onBlur={() => {
+                                      onBlur={() => {
                                     const v = (maxTokensDraft ?? (requestBody.max_tokens != null ? String(requestBody.max_tokens) : '')).trim();
                                     const n = v === '' ? undefined : parseInt(v, 10);
                                     setRequestBody((prev) => ({ ...prev, max_tokens: n !== undefined && Number.isFinite(n) && n > 0 ? (n as unknown) : undefined }));
-                                    setMaxTokensDraft(null);
-                                  }}
-                                  placeholder="e.g. 1024"
-                                  inputMode="numeric"
-                                  className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-fuchsia-500/50 outline-none"
-                                />
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between gap-2">
+                                        setMaxTokensDraft(null);
+                                      }}
+                                      placeholder="e.g. 1024"
+                                      inputMode="numeric"
+                                      className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-fuchsia-500/50 outline-none"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between gap-2">
                                 <span className="text-[10px] uppercase tracking-wide text-slate-500">Tools (editable list)</span>
-                                <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1">
                                   <input type="file" accept=".json,application/json" className="hidden" id="tools-upload-main-1" onChange={(e) => {
-                                    const f = e.target.files?.[0];
-                                    if (!f) return;
-                                    const reader = new FileReader();
-                                    reader.onload = () => {
-                                      try {
-                                        const parsed = JSON.parse(reader.result as string);
+                                          const f = e.target.files?.[0];
+                                          if (!f) return;
+                                          const reader = new FileReader();
+                                          reader.onload = () => {
+                                            try {
+                                              const parsed = JSON.parse(reader.result as string);
                                         const arr = Array.isArray(parsed) ? parsed : (parsed?.tools ? parsed.tools : []);
                                         const next = (Array.isArray(arr) ? arr : []).map((item: any) => ({ id: crypto.randomUUID(), name: item?.function?.name ?? item?.name ?? '', description: typeof item?.function?.description === 'string' ? item.function.description : (item?.description ?? ''), parameters: typeof item?.function?.parameters === 'object' ? JSON.stringify(item.function.parameters, null, 2) : (item?.parameters ? JSON.stringify(item.parameters) : '') })).filter((t: { name: string }) => t.name);
                                         setToolsList((prev) => [...prev, ...next]);
                                       } catch { setError('Uploaded file must be valid JSON.'); }
                                       e.target.value = '';
-                                    };
-                                    reader.readAsText(f);
+                                          };
+                                          reader.readAsText(f);
                                   }} />
                                   <label htmlFor="tools-upload-main-1" className="inline-flex items-center gap-1 rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-[10px] text-slate-400 hover:bg-white/10 cursor-pointer"><Upload className="w-3 h-3" /> Upload</label>
                                   <button type="button" onClick={() => setToolsList((prev) => [...prev, { id: crypto.randomUUID(), name: '', description: '', parameters: '{}' }])} className="inline-flex items-center gap-1 rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-[10px] text-slate-400 hover:bg-white/10"><Plus className="w-3 h-3" /> Add</button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setToolsList(baselineTools)}
-                                    disabled={!baselinePayload}
-                                    className="inline-flex items-center gap-1 rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-[10px] text-slate-400 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  >
-                                    Reset baseline
-                                  </button>
-                                </div>
-                              </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setToolsList(baselineTools)}
+                                        disabled={!baselinePayload}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-[10px] text-slate-400 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        Reset baseline
+                                      </button>
+                                    </div>
+                                  </div>
                               {toolsList.length === 0 ? <p className="text-[10px] text-slate-500">No tools loaded. Add manually, upload JSON, or reset to baseline.</p> : (
-                                <ul className="space-y-2 max-h-40 overflow-y-auto">
+                                    <ul className="space-y-2 max-h-40 overflow-y-auto">
                                   {toolsList.map((t) => (
                                     <li key={t.id} className="rounded-lg border border-white/10 bg-black/30 p-2 space-y-1">
-                                      <div className="flex items-center justify-between gap-2">
+                                          <div className="flex items-center justify-between gap-2">
                                         <input value={t.name} onChange={(e) => setToolsList((prev) => prev.map((x) => (x.id === t.id ? { ...x, name: e.target.value } : x)))} placeholder="Name" className="flex-1 min-w-0 rounded bg-black/40 border border-white/10 px-2 py-1 text-xs text-slate-200" />
                                         <button type="button" onClick={() => setToolsList((prev) => prev.filter((x) => x.id !== t.id))} className="p-1 text-slate-500 hover:text-rose-400" aria-label="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
-                                      </div>
+                                          </div>
                                       <input value={t.description} onChange={(e) => setToolsList((prev) => prev.map((x) => (x.id === t.id ? { ...x, description: e.target.value } : x)))} placeholder="Description (optional)" className="w-full rounded bg-black/40 border border-white/10 px-2 py-1 text-xs text-slate-200" />
                                       <textarea value={t.parameters} onChange={(e) => setToolsList((prev) => prev.map((x) => (x.id === t.id ? { ...x, parameters: e.target.value } : x)))} placeholder="{}" rows={1} className="w-full rounded bg-black/40 border border-white/10 px-2 py-1 text-[10px] font-mono text-slate-200 resize-y" />
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </div>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                      {canValidate && keyBlocked && !!keyRegistrationMessage && (
+                        <div
+                          role="status"
+                          className={clsx(
+                            "rounded-lg border px-3 py-2 text-xs",
+                            keyBlocked
+                              ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
+                              : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                          )}
+                        >
+                          {keyRegistrationMessage}
+                        </div>
+                      )}
                       {error && (
                         <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
                           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
@@ -1234,8 +1758,8 @@ export default function ReleaseGatePage() {
                       <div className="mt-auto pt-4">
                         <button
                           onClick={handleValidate}
-                          disabled={!canValidate || isValidating}
-                          title={!canValidate ? 'Select an agent and a dataset to validate' : undefined}
+                          disabled={!canRunValidate || isValidating}
+                          title={!canValidate ? 'Select a node and data to validate' : ((!canRunValidate && runBlockedMessage) ? runBlockedMessage : undefined)}
                           className="w-full justify-center inline-flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         >
                           {isValidating ? (
@@ -1251,7 +1775,7 @@ export default function ReleaseGatePage() {
                           )}
                         </button>
                         {!canValidate && !isValidating && (
-                          <p className="text-xs text-center text-slate-500 mt-2">Select agent and dataset to run.</p>
+                          <p className="text-xs text-center text-slate-500 mt-2">Select a node and data to run.</p>
                         )}
                       </div>
                     </div>
@@ -1259,7 +1783,7 @@ export default function ReleaseGatePage() {
                     {/* Right: Result list */}
                     <div className="rounded-2xl border-2 border-white/10 bg-[#111216] overflow-hidden flex flex-col min-h-[320px]">
                       <div className="px-4 py-3 border-b border-white/10 text-xs font-bold uppercase tracking-wider text-slate-400 shrink-0">
-                        Result
+                            Result
                       </div>
                       <div className="flex-1 overflow-y-auto min-h-0 p-4">
                         {!result ? (
@@ -1270,7 +1794,7 @@ export default function ReleaseGatePage() {
                             <p className="text-sm font-medium text-slate-400">Ready to validate</p>
                             <p className="text-xs text-slate-500 mt-1 max-w-[200px]">Configure your regression test and click Run to see results here.</p>
                           </div>
-                        ) : (result.run_results?.length ?? result.drift_runs?.length ?? 0) > 0 ? (
+                        ) : (result.run_results?.length ?? 0) > 0 ? (
                           <div className="border border-white/[0.06] rounded-xl overflow-hidden bg-[#18191e]">
                             <div className="grid grid-cols-[1fr_auto_1fr_auto] gap-2 px-3 py-2 text-[11px] font-bold text-slate-400 border-b border-white/[0.06]">
                               <span>run</span>
@@ -1278,30 +1802,30 @@ export default function ReleaseGatePage() {
                               <span className="min-w-0 truncate">summary</span>
                               <span className="w-16 text-right">latency</span>
                             </div>
-                            {(result.run_results ?? result.drift_runs ?? []).map((run: any, idx: number) => {
-                              const isSelected = selectedDriftRunIndex === idx;
+                            {(result.run_results ?? []).map((run: any, idx: number) => {
+                              const isSelected = selectedRunResultIndex === idx;
                               const failed = !run.pass;
                               const replay = run.replay ?? {};
                               const avgLatency = replay.avg_latency_ms;
                               const summaryStr = (run.failure_reasons ?? [])[0] ?? (run.eval_elements_failed?.length ? `Failed: ${run.eval_elements_failed.length} eval` : run.pass ? 'Passed' : '—');
-                              return (
-                                <div
-                                  key={run.trace_id ?? run.run_index ?? idx}
+                                return (
+                                  <div
+                                    key={run.trace_id ?? run.run_index ?? idx}
                                   className={failed ? 'bg-rose-500/[0.06] border-l-2 border-l-rose-500/40' : 'border-l-2 border-l-emerald-500/40 bg-emerald-500/[0.03]'}
-                                >
-                                  <button
-                                    type="button"
-                                    className="w-full text-left grid grid-cols-[1fr_auto_1fr_auto] gap-2 px-3 py-2.5 items-center text-[13px] hover:bg-white/[0.03] transition-colors"
-                                    onClick={() => setSelectedDriftRunIndex(isSelected ? null : idx)}
                                   >
-                                    <div className="flex items-baseline gap-1 min-w-0">
+                                    <button
+                                      type="button"
+                                      className="w-full text-left grid grid-cols-[1fr_auto_1fr_auto] gap-2 px-3 py-2.5 items-center text-[13px] hover:bg-white/[0.03] transition-colors"
+                                    onClick={() => setSelectedRunResultIndex(isSelected ? null : idx)}
+                                    >
+                                      <div className="flex items-baseline gap-1 min-w-0">
                                       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={failed ? { backgroundColor: 'rgba(244,63,94,0.8)' } : { backgroundColor: 'rgba(16,185,129,0.8)' }} />
                                       <span className="font-medium text-slate-200">Run {run.run_index ?? idx + 1}</span>
                                       {run.trace_id && <span className="text-slate-500 text-xs truncate">· {String(run.trace_id).slice(0, 8)}…</span>}
                                     </div>
                                     <span className={failed ? 'px-2 py-0.5 rounded-full border border-rose-500/20 bg-rose-500/10 text-rose-400 text-[11px] font-bold uppercase' : 'px-2 py-0.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-[11px] font-bold uppercase'}>
                                       {failed ? 'FAIL' : 'PASS'}
-                                    </span>
+                                        </span>
                                     <span className="text-slate-400 truncate text-xs">{summaryStr}</span>
                                     <span className="text-slate-400 text-right font-mono text-xs">{avgLatency != null ? `${Math.round(Number(avgLatency))}ms` : '—'}</span>
                                   </button>
@@ -1315,6 +1839,43 @@ export default function ReleaseGatePage() {
                                       {(run.has_tool_calls || (run.tool_calls_summary?.length ?? 0) > 0) && (
                                         <div className="text-xs text-amber-400/80">
                                           Tools: {(run.tool_calls_summary ?? []).map((t: { name?: string }) => t.name).filter(Boolean).join(', ') || (run.tool_calls_summary ?? []).length}
+                                        </div>
+                                      )}
+                                      {run.behavior_diff != null && (
+                                        <div className="rounded-lg border border-slate-500/20 bg-slate-500/5 px-2.5 py-2 space-y-1.5">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Behavior change</p>
+                                            {run.behavior_diff.change_band != null && (
+                                              <span className={run.behavior_diff.change_band === 'stable' ? 'px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : run.behavior_diff.change_band === 'minor' ? 'px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/20 text-rose-400 border border-rose-500/30'}>
+                                                {run.behavior_diff.change_band === 'stable' ? 'Stable' : run.behavior_diff.change_band === 'minor' ? 'Minor change' : 'Major change'}
+                                          </span>
+                                        )}
+                                      </div>
+                                          <p className="text-xs text-slate-400">
+                                            Tool call pattern changed by {run.behavior_diff.tool_divergence_pct ?? (run.behavior_diff.tool_divergence != null ? Math.round(run.behavior_diff.tool_divergence * 1000) / 10 : 0)}%.
+                                          </p>
+                                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-300">
+                                            <span>Sequence distance: <strong className="text-slate-200">{run.behavior_diff.sequence_distance}</strong></span>
+                                            <span>Tool divergence: <strong className="text-slate-200">{run.behavior_diff.tool_divergence_pct ?? run.behavior_diff.tool_divergence != null ? Math.round(run.behavior_diff.tool_divergence * 1000) / 10 : 0}%</strong></span>
+                                          </div>
+                                          {(run.behavior_diff.baseline_sequence?.length > 0 || run.behavior_diff.candidate_sequence?.length > 0) && (
+                                            <div className="grid grid-cols-1 gap-1 text-[11px] font-mono">
+                                              <div className="flex flex-wrap items-center gap-1">
+                                                <span className="text-slate-500 shrink-0">Baseline:</span>
+                                                {(run.behavior_diff.baseline_sequence ?? []).map((t, i) => (
+                                                  <span key={i} className="text-slate-400">{i > 0 && <span className="text-slate-600 mr-1">→</span>}<span className="text-amber-200/90">{t || '—'}</span></span>
+                                                ))}
+                                                {(run.behavior_diff.baseline_sequence?.length ?? 0) === 0 && <span className="text-slate-500">—</span>}
+                                              </div>
+                                              <div className="flex flex-wrap items-center gap-1">
+                                                <span className="text-slate-500 shrink-0">Run:</span>
+                                                {(run.behavior_diff.candidate_sequence ?? []).map((t, i) => (
+                                                  <span key={i} className="text-slate-400">{i > 0 && <span className="text-slate-600 mr-1">→</span>}<span className="text-emerald-200/90">{t || '—'}</span></span>
+                                                ))}
+                                                {(run.behavior_diff.candidate_sequence?.length ?? 0) === 0 && <span className="text-slate-500">—</span>}
+                                              </div>
+                                            </div>
+                                          )}
                                         </div>
                                       )}
                                       {(run.eval_elements_failed ?? []).length > 0 && (
@@ -1347,121 +1908,128 @@ export default function ReleaseGatePage() {
                 </>
               ) : (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start max-w-[1600px] mx-auto">
-                  <div className="space-y-6 rounded-3xl border border-white/5 bg-[#111216] shadow-xl p-7">
-                    {/* Step 1: Select agent (Live View node) */}
-                    <div className="space-y-3">
-                      <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 select-none">1. Select configuration</span>
-                      <button
-                        type="button"
-                        onClick={() => setAgentSelectModalOpen(true)}
-                        disabled={agentsLoading}
-                        className="w-full group flex items-center justify-between rounded-xl bg-black/40 border border-white/10 px-4 py-3 text-left transition-all hover:border-fuchsia-500/30 hover:bg-fuchsia-500/5 disabled:opacity-50 disabled:cursor-not-allowed"
-                        aria-label="Select agent"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${selectedAgent ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-white/10 bg-white/5 text-slate-500'}`}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                            </svg>
-                          </div>
-                          <div className="min-w-0">
-                            <div className={`text-sm font-medium truncate ${selectedAgent ? 'text-slate-200' : 'text-slate-500'}`}>
-                              {selectedAgent ? (selectedAgent.display_name || selectedAgent.agent_id) : 'Select agent...'}
+                  <div className="space-y-5 rounded-3xl border border-white/5 bg-[#111216] shadow-xl p-6">
+                    {/* Step 1 & 2: Select configuration + dataset */}
+                    <div className="grid gap-4 md:grid-cols-2 items-start">
+                      {/* Step 1: Agent */}
+                      <div className="space-y-2">
+                        <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 select-none">1. Configuration</span>
+                        <button
+                          type="button"
+                          onClick={() => setAgentSelectModalOpen(true)}
+                          disabled={agentsLoading}
+                          className="w-full group flex items-center justify-between rounded-xl bg-black/40 border border-white/10 px-4 py-2.5 text-left transition-all hover:border-fuchsia-500/30 hover:bg-fuchsia-500/5 disabled:opacity-50 disabled:cursor-not-allowed"
+                          aria-label="Select agent"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${selectedAgent ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400" : "border-white/10 bg-white/5 text-slate-500"}`}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                              </svg>
                             </div>
-                            {selectedAgent && (
-                              <div className="text-xs text-slate-500 truncate font-mono mt-0.5">
-                                {selectedAgent.model || 'Unknown model'}
+                            <div className="min-w-0">
+                              <div className={`text-sm font-medium truncate ${selectedAgent ? "text-slate-200" : "text-slate-500"}`}>
+                                {selectedAgent ? selectedAgent.display_name || selectedAgent.agent_id : "Select agent..."}
                               </div>
-                            )}
+                              {selectedAgent && (
+                                <div className="text-[11px] text-slate-500 truncate font-mono mt-0.5">
+                                  {selectedAgent.model || "Unknown model"}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors" />
-                      </button>
-                      {!agentsLoading && agents.length === 0 && (
-                        <p className="text-xs text-slate-500 mt-2">Run flows in Live View to see agents here.</p>
-                      )}
-                    </div>
+                          <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors" />
+                        </button>
+                        {!agentsLoading && agents.length === 0 && (
+                          <p className="text-[11px] text-slate-500 mt-1">Run flows in Live View to see agents here.</p>
+                        )}
+                      </div>
 
-                    {/* Step 2: Select dataset */}
-                    <div className="space-y-3">
-                      <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 select-none">2. Select dataset</span>
-                      <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 block hidden">Saved dataset</span>
-
-                      <button
-                        type="button"
-                        onClick={() => setDatasetSelectModalOpen(true)}
-                        disabled={datasetsLoading || !agentId?.trim()}
-                        className="w-full group flex items-center justify-between rounded-xl bg-black/40 border border-white/10 px-4 py-3 text-left transition-all hover:border-fuchsia-500/30 hover:bg-fuchsia-500/5 disabled:opacity-50 disabled:cursor-not-allowed"
-                        aria-label="Select dataset"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${datasetIds.length > 0 ? 'border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-400' : 'border-white/10 bg-white/5 text-slate-500'}`}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                            </svg>
-                          </div>
-                          <div className="min-w-0">
-                            {(() => {
-                              if (datasetIds.length === 0) {
-                                return <div className="text-sm font-medium text-slate-500">Select dataset...</div>;
-                              }
-                              if (datasetIds.length === 1) {
-                                const selectedDataset = datasets.find((d: any) => d.id === datasetIds[0]);
-                                if (!selectedDataset) return <div className="text-sm font-medium text-slate-200">{datasetIds[0]}</div>;
-                                const count = Array.isArray(selectedDataset.snapshot_ids) ? selectedDataset.snapshot_ids.length : 0;
+                      {/* Step 2: Dataset */}
+                      <div className="space-y-2">
+                        <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 select-none">2. Data</span>
+                        <button
+                          type="button"
+                          onClick={() => setDatasetSelectModalOpen(true)}
+                          disabled={datasetsLoading || !agentId?.trim()}
+                          className="w-full group flex items-center justify-between rounded-xl bg-black/40 border border-white/10 px-4 py-2.5 text-left transition-all hover:border-fuchsia-500/30 hover:bg-fuchsia-500/5 disabled:opacity-50 disabled:cursor-not-allowed"
+                          aria-label="Select data"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${datasetIds.length > 0 ? "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-400" : "border-white/10 bg-white/5 text-slate-500"}`}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                              </svg>
+                            </div>
+                            <div className="min-w-0">
+                              {(() => {
+                                if (datasetIds.length === 0) {
+                                  return <div className="text-sm font-medium text-slate-500">Select data...</div>;
+                                }
+                                if (datasetIds.length === 1) {
+                                  const selectedDataset = datasets.find((d: any) => d.id === datasetIds[0]);
+                                  if (!selectedDataset)
+                                    return <div className="text-sm font-medium text-slate-200">{datasetIds[0]}</div>;
+                                  const count =
+                                    typeof selectedDataset.snapshot_count === "number"
+                                      ? selectedDataset.snapshot_count
+                                      : Array.isArray(selectedDataset.snapshot_ids)
+                                        ? selectedDataset.snapshot_ids.length
+                                        : 0;
+                                  return (
+                                    <>
+                                      <div className="text-sm font-medium text-slate-200 truncate">
+                                        {selectedDataset.label || selectedDataset.id}
+                                        <span className="ml-2 inline-flex items-center rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 ring-1 ring-inset ring-white/10">
+                                          {count} runs
+                                      </span>
+                                      </div>
+                                      <div className="text-[11px] text-slate-500 truncate mt-0.5">
+                                        {selectedDataset.created_at
+                                          ? new Date(selectedDataset.created_at).toLocaleString()
+                                          : "Unknown date"}
+                                      </div>
+                                    </>
+                                  );
+                                }
+                                // Multiple
                                 return (
                                   <>
                                     <div className="text-sm font-medium text-slate-200 truncate">
-                                      {selectedDataset.label || selectedDataset.id}
-                                      <span className="ml-2 inline-flex items-center rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 ring-1 ring-inset ring-white/10">
-                                        {count} runs
-                                      </span>
+                                      {datasetIds.length} datasets selected
                                     </div>
-                                    <div className="text-xs text-slate-500 truncate mt-0.5">
-                                      {selectedDataset.created_at ? new Date(selectedDataset.created_at).toLocaleString() : 'Unknown date'}
+                                    <div className="text-[11px] text-slate-500 truncate mt-0.5">
+                                      Click to view or edit selection
                                     </div>
                                   </>
                                 );
-                              }
-                              // Multiple
-                              return (
-                                <>
-                                  <div className="text-sm font-medium text-slate-200 truncate">
-                                    {datasetIds.length} datasets selected
-                                  </div>
-                                  <div className="text-xs text-slate-500 truncate mt-0.5">
-                                    Click to view or edit selection
-                                  </div>
-                                </>
-                              );
-                            })()}
+                              })()}
+                            </div>
                           </div>
-                        </div>
-                        <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors" />
-                      </button>
-
-                      {!agentId?.trim() && (
-                        <p className="text-xs text-slate-500 mt-2">Select an agent in step 2 first.</p>
-                      )}
-                      {agentId?.trim() && !datasetsLoading && datasets.length === 0 && (
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <p className="text-xs text-slate-500/70">Save a dataset from Live View (DATA tab) for this agent.</p>
-                          <Link
-                            href={`/organizations/${orgId}/projects/${projectId}/live-view`}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-1.5 text-xs font-medium text-fuchsia-300 hover:bg-fuchsia-500/20 transition-colors"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" aria-hidden /> Go to Live View
-                          </Link>
-                        </div>
-                      )}
-                      {evalMode === 'drift' && agentId?.trim() && (
-                        <p className="text-xs text-slate-400 mt-2">Current behavior rules will be applied to the selected run&apos;s recorded data.</p>
-                      )}
+                          <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors" />
+                        </button>
+                        {!agentId?.trim() && (
+                          <p className="text-[11px] text-slate-500 mt-1">Select an agent first.</p>
+                        )}
+                        {agentId?.trim() && !datasetsLoading && datasets.length === 0 && (
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <p className="text-[11px] text-slate-500/80">
+                              Save datasets in Live View (DATA tab) for this node.
+                            </p>
+                            <Link
+                              href={`/organizations/${orgId}/projects/${projectId}/live-view`}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/10 px-2.5 py-1 text-[11px] font-medium text-fuchsia-300 hover:bg-fuchsia-500/20 transition-colors"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" aria-hidden /> Live View
+                            </Link>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Layout by mode: Regression = two boxes, Drift = two boxes, Stability = one box */}
-                    {(evalMode as EvalMode) === 'regression' && (
+                    {/* Baseline vs candidate editor */}
+                    {showPrimaryValidateLayout && (
                       <div className="space-y-3 pt-2">
                         <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 select-none">Baseline vs Candidate</span>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1592,18 +2160,6 @@ export default function ReleaseGatePage() {
                       </div>
                     )}
 
-                    {evalMode === 'stability' && (
-                      <div className="pt-2">
-                        <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 select-none block mb-3">Stability</span>
-                        <div className="rounded-2xl border-2 border-white/10 bg-white/[0.02] p-8 min-h-[200px] flex items-center justify-center">
-                          <p className="text-slate-500 text-center">
-                            <span className="font-semibold text-slate-400">Stability – Same input, N runs</span>
-                            <span className="block mt-2 text-sm">Coming soon</span>
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
                     <div className="pt-2">
                       <button
                         type="button"
@@ -1662,7 +2218,7 @@ export default function ReleaseGatePage() {
                         <button
                           onClick={handleValidate}
                           disabled={!canValidate || isValidating}
-                          title={!canValidate ? 'Select an agent and a dataset to validate' : undefined}
+                          title={!canValidate ? 'Select a node and data to validate' : undefined}
                           className="w-full justify-center inline-flex items-center gap-2.5 rounded-xl bg-slate-100 hover:bg-white px-6 py-4 text-[15px] font-bold text-slate-900 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-[1.01] active:scale-[0.99]"
                         >
                           {isValidating ? (
@@ -1679,7 +2235,7 @@ export default function ReleaseGatePage() {
                         </button>
                         {!canValidate && !isValidating && (
                           <p className="text-xs text-center text-slate-500 mt-2.5">
-                            Select an agent and a dataset above to continue.
+                            Select a node and data above to continue.
                           </p>
                         )}
                       </div>
@@ -1703,7 +2259,7 @@ export default function ReleaseGatePage() {
                       ) : (
                         <div className="space-y-6">
                           {(() => {
-                            const failedRatio = result.failed_run_ratio ?? (result.pass ? 0 : 1);
+                            const failedRatio = typeof result.fail_rate === 'number' ? clampRate(result.fail_rate, result.pass ? 0 : 1) : (result.pass ? 0 : 1);
                             const passRatio = 1 - failedRatio;
                             const percentage = Math.round(passRatio * 100);
 
@@ -1758,27 +2314,27 @@ export default function ReleaseGatePage() {
                             );
                           })()}
 
-                          {/* Drift: list of runs with passed/failed eval elements; click for detail */}
-                          {(result.drift_runs?.length ?? result.run_results?.some((r: any) => r.eval_elements_passed != null)) ? (
+                          {/* Per-run list with pass/fail eval details */}
+                          {(result.run_results?.length ?? 0) > 0 ? (
                             <div className="space-y-3">
                               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Runs (new eval applied)</p>
                               <div className="space-y-2">
-                                {(result.drift_runs ?? result.run_results ?? []).map((run: any, idx: number) => {
+                                {(result.run_results ?? []).map((run: any, idx: number) => {
                                   const passed = run.eval_elements_passed ?? [];
                                   const failed = run.eval_elements_failed ?? [];
-                                  const isSelected = selectedDriftRunIndex === idx;
+                                  const isSelected = selectedRunResultIndex === idx;
                                   return (
                                     <button
                                       key={run.trace_id ?? run.run_index ?? idx}
                                       type="button"
-                                      onClick={() => setSelectedDriftRunIndex(isSelected ? null : idx)}
+                                      onClick={() => setSelectedRunResultIndex(isSelected ? null : idx)}
                                       className={`w-full text-left rounded-xl border-2 p-3 transition-colors ${isSelected ? 'border-fuchsia-500/50 bg-fuchsia-500/10' : 'border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/5'}`}
                                     >
                                       <div className="flex items-center justify-between gap-2 flex-wrap">
                                         <span className="text-sm font-medium text-slate-200">
                                           Run {run.run_index ?? idx + 1}
                                           {run.trace_id && <span className="text-slate-500 font-normal ml-2 truncate">· {run.trace_id}</span>}
-                                        </span>
+                                          </span>
                                         {run.pass ? (
                                           <span className="text-xs font-medium text-emerald-400">Passed</span>
                                         ) : (
@@ -1790,11 +2346,48 @@ export default function ReleaseGatePage() {
                                         {(run.has_tool_calls || (run.tool_calls_summary?.length ?? 0) > 0) && (
                                           <span className="text-amber-400/80 ml-1">
                                             · Tools: {(run.tool_calls_summary ?? []).map((t: { name?: string }) => t.name).filter(Boolean).join(', ') || (run.tool_calls_summary ?? []).length}
-                                          </span>
+                                      </span>
                                         )}
-                                      </div>
+                                  </div>
                                       {isSelected && (
                                         <div className="mt-3 pt-3 border-t border-white/10 space-y-3">
+                                          {run.behavior_diff != null && (
+                                            <div className="rounded-lg border border-slate-500/20 bg-slate-500/5 px-2.5 py-2 space-y-1.5">
+                                              <div className="flex items-center gap-2 flex-wrap">
+                                                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Behavior change</p>
+                                                {run.behavior_diff.change_band != null && (
+                                                  <span className={run.behavior_diff.change_band === 'stable' ? 'px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : run.behavior_diff.change_band === 'minor' ? 'px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/20 text-rose-400 border border-rose-500/30'}>
+                                                    {run.behavior_diff.change_band === 'stable' ? 'Stable' : run.behavior_diff.change_band === 'minor' ? 'Minor change' : 'Major change'}
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <p className="text-xs text-slate-400">
+                                                Tool call pattern changed by {run.behavior_diff.tool_divergence_pct ?? (run.behavior_diff.tool_divergence != null ? Math.round(run.behavior_diff.tool_divergence * 1000) / 10 : 0)}%.
+                                              </p>
+                                              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-300">
+                                                <span>Sequence distance: <strong className="text-slate-200">{run.behavior_diff.sequence_distance}</strong></span>
+                                                <span>Tool divergence: <strong className="text-slate-200">{run.behavior_diff.tool_divergence_pct ?? (run.behavior_diff.tool_divergence != null ? Math.round(run.behavior_diff.tool_divergence * 1000) / 10 : 0)}%</strong></span>
+                                              </div>
+                                              {(run.behavior_diff.baseline_sequence?.length > 0 || run.behavior_diff.candidate_sequence?.length > 0) && (
+                                                <div className="grid grid-cols-1 gap-1 text-[11px] font-mono">
+                                                  <div className="flex flex-wrap items-center gap-1">
+                                                    <span className="text-slate-500 shrink-0">Baseline:</span>
+                                                    {(run.behavior_diff.baseline_sequence ?? []).map((t: string, i: number) => (
+                                                      <span key={i} className="text-slate-400">{i > 0 && <span className="text-slate-600 mr-1">→</span>}<span className="text-amber-200/90">{t || '—'}</span></span>
+                                                    ))}
+                                                    {(run.behavior_diff.baseline_sequence?.length ?? 0) === 0 && <span className="text-slate-500">—</span>}
+                                                  </div>
+                                                  <div className="flex flex-wrap items-center gap-1">
+                                                    <span className="text-slate-500 shrink-0">Run:</span>
+                                                    {(run.behavior_diff.candidate_sequence ?? []).map((t: string, i: number) => (
+                                                      <span key={i} className="text-slate-400">{i > 0 && <span className="text-slate-600 mr-1">→</span>}<span className="text-emerald-200/90">{t || '—'}</span></span>
+                                                    ))}
+                                                    {(run.behavior_diff.candidate_sequence?.length ?? 0) === 0 && <span className="text-slate-500">—</span>}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
                                           {passed.length > 0 && (
                                             <div>
                                               <p className="text-[10px] uppercase tracking-wider text-emerald-500/80 mb-1">Passed eval elements</p>
@@ -1831,9 +2424,9 @@ export default function ReleaseGatePage() {
                                         </div>
                                       )}
                                     </button>
-                                  );
-                                })}
-                              </div>
+                                );
+                              })}
+                          </div>
                               <p className="text-[11px] text-slate-500">Click a run to see passed/failed eval elements and violations.</p>
                             </div>
                           ) : null}
@@ -1861,7 +2454,7 @@ export default function ReleaseGatePage() {
                                   <li className="text-slate-400">… and {(result.failed_signals?.length ?? 0) - 10} more</li>
                                 )}
                               </ul>
-                            </div>
+                      </div>
                           )}
 
                           {!result.pass && (result.failure_reasons?.length || 0) > 0 && (
@@ -1872,7 +2465,7 @@ export default function ReleaseGatePage() {
                                   <li key={idx} className="text-xs text-rose-200/90">• {reason}</li>
                                 ))}
                               </ul>
-                            </div>
+                    </div>
                           )}
 
                           {(result.evidence_pack?.top_regressed_rules?.length || 0) > 0 && (
@@ -1885,7 +2478,7 @@ export default function ReleaseGatePage() {
                                   </li>
                                 ))}
                               </ul>
-                            </div>
+                  </div>
                           )}
 
                           <button
@@ -1904,7 +2497,7 @@ export default function ReleaseGatePage() {
                               <div>baseline_trace_id: {result.baseline_trace_id}</div>
                               <div>repeat_runs: {result.repeat_runs}</div>
                               <div>failed_replay_snapshots: {result.evidence_pack?.failed_replay_snapshot_ids?.length ?? 0}</div>
-                            </div>
+            </div>
                           )}
 
                           <div className="pt-2 border-t border-white/10">
@@ -1925,93 +2518,6 @@ export default function ReleaseGatePage() {
                       )}
                     </div>
                   </div>
-
-                  {/* Drift: two big boxes — Recorded data | Re-evaluation (current rules) */}
-                  {evalMode === 'drift' && (
-                    <div className="xl:col-span-3 space-y-3 pt-2 mt-4">
-                      <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 select-none block">Recorded data vs Re-evaluation</span>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div className="rounded-2xl border-2 border-white/10 bg-white/[0.02] overflow-hidden flex flex-col min-h-[280px]">
-                          <div className="px-4 py-3 border-b border-white/10 text-xs font-bold uppercase tracking-wider text-slate-400 shrink-0">
-                            Recorded data
-                          </div>
-                          <div className="flex-1 overflow-y-auto min-h-0">
-                            {datasetIds.length === 0 ? (
-                              <div className="p-6 text-sm text-slate-500 text-center">Select a dataset in step 3 to see recorded snapshots.</div>
-                            ) : datasetIds.length > 1 ? (
-                              <div className="p-6 text-sm text-slate-500 text-center">
-                                Multiple datasets selected.<br />Showing snapshots from <strong>{datasets.find((d: any) => d.id === previewDatasetId)?.label || previewDatasetId}</strong> as preview.
-                                <div className="mt-2 text-xs opacity-70">Total selected: {datasetIds.length}</div>
-                              </div>
-                            ) : datasetSnapshotsLoading ? (
-                              <div className="p-6 flex items-center justify-center">
-                                <Loader2 className="w-6 h-6 animate-spin text-slate-500" />
-                              </div>
-                            ) : datasetSnapshots404 || datasetSnapshotsError ? (
-                              <div className="p-6 text-sm text-amber-200/90 text-center space-y-2">
-                                <p>Dataset not found or API unavailable (404).</p>
-                                <p className="text-xs text-slate-500">Pick another dataset or check the backend.</p>
-                              </div>
-                            ) : datasetSnapshots.length === 0 ? (
-                              <div className="p-6 text-sm text-slate-500 text-center">No snapshots in this dataset.</div>
-                            ) : (
-                              <ul className="divide-y divide-white/5">
-                                {datasetSnapshots.map((snap: any) => (
-                                  <li key={snap.id}>
-                                    <button
-                                      type="button"
-                                      onClick={() => setDriftDetailSnapshot(snap)}
-                                      className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors flex flex-col gap-0.5"
-                                    >
-                                      <span className="text-sm font-medium text-slate-200 truncate">
-                                        {snap.trace_id ? `Trace ${String(snap.trace_id).slice(0, 8)}…` : `Snapshot ${snap.id}`}
-                                      </span>
-                                      <span className="text-xs text-slate-500">
-                                        {snap.created_at ? new Date(snap.created_at).toLocaleString() : '—'} · {snap.latency_ms != null ? `${snap.latency_ms}ms` : '—'}
-                                      </span>
-                                    </button>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        </div>
-                        <div className="rounded-2xl border-2 border-fuchsia-500/30 bg-fuchsia-500/5 overflow-hidden flex flex-col min-h-[280px]">
-                          <div className="px-4 py-3 border-b border-fuchsia-500/20 text-xs font-bold uppercase tracking-wider text-fuchsia-400 shrink-0">
-                            Re-evaluation (current rules)
-                          </div>
-                          <div className="flex-1 overflow-y-auto min-h-0 p-4">
-                            <p className="text-sm text-slate-500 mb-4">
-                              Current project behavior rules and thresholds are applied when you run Validate.
-                            </p>
-                            {!result ? (
-                              <p className="text-sm text-slate-500">Run Validate to see drift results here.</p>
-                            ) : (result.drift_runs?.length ?? 0) > 0 ? (
-                              <ul className="space-y-2">
-                                {(result.drift_runs ?? []).map((run: any, idx: number) => (
-                                  <li key={run.trace_id ?? idx} className="rounded-lg border border-white/5 bg-black/20 p-3">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="text-sm font-medium text-slate-200 truncate">
-                                        {run.trace_id ? `Trace ${String(run.trace_id).slice(0, 12)}…` : `Run ${run.run_index ?? idx + 1}`}
-                                      </span>
-                                      <span className={run.pass ? 'text-emerald-400 text-xs font-semibold' : 'text-rose-400 text-xs font-semibold'}>
-                                        {run.pass ? 'PASS' : 'FAIL'}
-                                      </span>
-                                    </div>
-                                    <div className="text-xs text-slate-500 mt-1">
-                                      Passed: {(run.eval_elements_passed?.length ?? 0)} · Failed: {(run.eval_elements_failed?.length ?? 0)}
-                                    </div>
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="text-sm text-slate-500">No drift runs in this result.</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
                 </div>
               )}
@@ -2092,7 +2598,7 @@ export default function ReleaseGatePage() {
                         setExpandedHistoryId((id) => (id === item.id ? null : item.id));
                       }}
                       className={`w-full text-left rounded-lg border p-3 transition-colors flex flex-wrap items-center justify-between gap-2 ${selectedRunId === item.id ? 'border-fuchsia-500/50 bg-fuchsia-500/10' : 'border-white/10 bg-black/20 hover:bg-white/5'
-                        }`}
+                      }`}
                     >
                       <div className="text-sm font-semibold text-slate-100 flex items-center gap-2 flex-wrap">
                         {item.status === 'pass' ? (
@@ -2103,9 +2609,7 @@ export default function ReleaseGatePage() {
                         <span className={item.status === 'pass' ? 'text-emerald-400' : 'text-rose-400'}>
                           {item.status === 'pass' ? 'Passed' : 'Failed'}
                         </span>
-                        <span className="text-slate-500 text-xs font-normal uppercase tracking-wider">
-                          {item.mode === 'drift' ? 'Drift' : 'Regression'}
-                        </span>
+                        <span className="text-slate-500 text-xs font-normal uppercase tracking-wider">Validation</span>
                         <span className="text-slate-400 font-normal truncate">· {item.trace_id}</span>
                       </div>
                       <div className="text-xs text-slate-400">{item.created_at || '-'}</div>
@@ -2136,13 +2640,13 @@ export default function ReleaseGatePage() {
                         <div className="rounded-xl border border-white/10 bg-black/20 p-6 space-y-6">
                           <div className="flex items-center justify-between gap-2">
                             <h3 className="text-sm font-bold text-slate-200">Run detail</h3>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedRunId(null)}
-                              className="text-xs text-slate-500 hover:text-slate-300"
-                            >
-                              Close
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRunId(null)}
+                                className="text-xs text-slate-500 hover:text-slate-300"
+                              >
+                                Close
+                              </button>
                           </div>
                           {runMeta && (
                             <div className="text-xs text-slate-500 space-y-1">
@@ -2159,9 +2663,7 @@ export default function ReleaseGatePage() {
                             <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Results</h4>
                             <div className={`rounded-lg border px-3 py-2 ${status === 'pass' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-rose-500/30 bg-rose-500/10 text-rose-200'}`}>
                               <span className="font-medium">
-                                {runMeta?.mode === 'drift'
-                                  ? (status === 'pass' ? 'Drift: Passed' : 'Drift: Failed')
-                                  : (status === 'pass' ? 'Regression: Passed' : 'Regression: Failed')}
+                                {status === 'pass' ? 'Passed' : 'Failed'}
                               </span>
                               {failureReasons.length > 0 && (
                                 <ul className="mt-2 space-y-0.5 text-xs">
@@ -2175,47 +2677,47 @@ export default function ReleaseGatePage() {
                           <div>
                             <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Tested data</h4>
                             <p className="text-xs text-slate-500 mb-2">Where each eval passed or failed. Click a row for more detail (coming soon).</p>
-                            <div className="rounded-lg border border-white/10 overflow-hidden">
-                              <table className="w-full text-xs">
-                                <thead>
-                                  <tr className="bg-white/5 border-b border-white/10">
+                              <div className="rounded-lg border border-white/10 overflow-hidden">
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="bg-white/5 border-b border-white/10">
                                     <th className="text-left py-2 px-3 font-semibold text-slate-400">Input / Rule</th>
-                                    <th className="text-left py-2 px-3 font-semibold text-slate-400">Regression</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {useCurrentResult && result!.pass && (
-                                    <tr className="border-b border-white/5">
-                                      <td className="py-2 px-3 text-slate-500">All inputs</td>
-                                      <td className="py-2 px-3 text-emerald-400">Passed</td>
+                                    <th className="text-left py-2 px-3 font-semibold text-slate-400">Result</th>
                                     </tr>
-                                  )}
-                                  {useCurrentResult && !result!.pass && failedIds.map((id: string) => (
-                                    <tr key={id} className="border-b border-white/5 hover:bg-white/5">
-                                      <td className="py-2 px-3 text-slate-300 font-mono">{id}</td>
-                                      <td className="py-2 px-3 text-rose-400">Failed</td>
-                                    </tr>
-                                  ))}
-                                  {useCurrentResult && !result!.pass && failedIds.length > 0 && (
-                                    <tr className="border-b border-white/5">
-                                      <td className="py-2 px-3 text-slate-500">Other inputs</td>
-                                      <td className="py-2 px-3 text-emerald-400">Passed</td>
-                                    </tr>
-                                  )}
+                                  </thead>
+                                  <tbody>
+                                    {useCurrentResult && result!.pass && (
+                                      <tr className="border-b border-white/5">
+                                        <td className="py-2 px-3 text-slate-500">All inputs</td>
+                                        <td className="py-2 px-3 text-emerald-400">Passed</td>
+                                      </tr>
+                                    )}
+                                  {useCurrentResult && !result!.pass && failedIds.map((id) => (
+                                    <tr key={String(id)} className="border-b border-white/5 hover:bg-white/5">
+                                      <td className="py-2 px-3 text-slate-300 font-mono">{String(id)}</td>
+                                          <td className="py-2 px-3 text-rose-400">Failed</td>
+                                        </tr>
+                                      ))}
+                                    {useCurrentResult && !result!.pass && failedIds.length > 0 && (
+                                      <tr className="border-b border-white/5">
+                                        <td className="py-2 px-3 text-slate-500">Other inputs</td>
+                                        <td className="py-2 px-3 text-emerald-400">Passed</td>
+                                      </tr>
+                                    )}
                                   {violations.slice(0, 20).map((v: any, idx: number) => (
                                     <tr key={idx} className="border-b border-white/5 hover:bg-white/5">
                                       <td className="py-2 px-3 text-slate-300">{v.rule_id || v.rule_name || '—'} {v.step_ref != null ? `(step ${v.step_ref})` : ''}</td>
-                                      <td className="py-2 px-3 text-rose-400">Failed</td>
-                                    </tr>
-                                  ))}
+                                        <td className="py-2 px-3 text-rose-400">Failed</td>
+                                      </tr>
+                                    ))}
                                   {violations.length === 0 && !(useCurrentResult && result && (result.pass || failedIds.length > 0)) && (
                                     <tr>
                                       <td colSpan={2} className="py-4 px-3 text-slate-500 text-center">No per-input breakdown in this report.</td>
-                                    </tr>
-                                  )}
-                                </tbody>
-                              </table>
-                            </div>
+                                        </tr>
+                                      )}
+                                  </tbody>
+                                </table>
+                              </div>
                           </div>
                         </div>
                       );
@@ -2279,15 +2781,6 @@ export default function ReleaseGatePage() {
               const stale = cur && snapVer && snapVer !== cur;
               return stale ? 'Eval result from snapshot capture time. Eval config has changed since then.' : 'Eval result from snapshot capture time.';
             })()}
-          />
-        )}
-        {driftDetailSnapshot && (
-          <SnapshotDetailModal
-            snapshot={driftDetailSnapshot}
-            onClose={() => setDriftDetailSnapshot(null)}
-            policyState={{ status: 'idle' }}
-            evalRows={[]}
-            evalEnabled={false}
           />
         )}
       </AnimatePresence>

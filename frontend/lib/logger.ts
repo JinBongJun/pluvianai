@@ -3,9 +3,9 @@
  * In production, logs to Sentry instead of console
  */
 
-import * as Sentry from '@sentry/nextjs';
+import * as Sentry from "@sentry/nextjs";
 
-const isDevelopment = process.env.NODE_ENV === 'development';
+const isDevelopment = process.env.NODE_ENV === "development";
 
 export const logger = {
   error: (message: string, error?: Error | unknown, context?: Record<string, unknown>) => {
@@ -19,7 +19,7 @@ export const logger = {
         });
       } else {
         Sentry.captureMessage(message, {
-          level: 'error',
+          level: "error",
           extra: { error, ...context },
         });
       }
@@ -31,7 +31,7 @@ export const logger = {
       console.warn(message, context);
     } else {
       Sentry.captureMessage(message, {
-        level: 'warning',
+        level: "warning",
         extra: context,
       });
     }

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.permissions import require_admin
 from app.core.decorators import handle_errors
 from app.core.responses import success_response, paginated_response
 from app.core.logging_config import logger
@@ -28,11 +29,7 @@ async def list_users(
     """
     List users (superuser only)
     """
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only superusers can list users"
-        )
+    require_admin(current_user)
 
     # Build query
     query = db.query(User)

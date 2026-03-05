@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.permissions import require_admin
 from app.core.decorators import handle_errors
 from app.core.responses import success_response
 from app.core.logging_config import logger
@@ -27,11 +28,7 @@ async def get_admin_stats(
     """
     Get admin statistics (superuser only)
     """
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only superusers can access admin statistics"
-        )
+    require_admin(current_user)
 
     # Get total users
     total_users = db.query(func.count(User.id)).scalar() or 0

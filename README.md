@@ -1,143 +1,144 @@
 # PluvianAI
 
-**The Symbiotic Guardian for AI Agents.** — LLM/Agent 검증 및 배포 전 검증 플랫폼
+**The symbiotic guardian for AI agents.**  
+Agent behavior firewall for multi‑LLM applications — capture traffic, replay safely, and enforce policies before release.
 
 ---
 
-## 핵심 가치
+## Core value
 
-- **규칙 기반 검증**: LLM Judge 없이 결정론적 시그널(Atomic Signals)로 재현 가능한 평가
-- **에이전트 단위 진단**: Live View에서 에이전트별 Clinical Log·Data·시그널 한 화면
-- **Release Gate**: 저장된 트래픽 리플레이 → 규칙 검증 → 통과한 트레이스만 배포
-
----
-
-## 핵심 기능
-
-| 기능 | 설명 |
-|------|------|
-| **Live View** | SDK 연동 → 트래픽 분석 → 에이전트 노드·Clinical Log·Data·Evaluation |
-| **Release Gate** | 고정 트레이스 + 리플레이(모델/프롬프트 오버라이드) + 정책 회귀 검증 → Pass/Fail |
-| **Atomic Signals** | 규칙 기반 평가 (길이·레이턴시·JSON·PII·키워드 등) — LLM Judge 아님 |
-| **Behavior Rules** | 툴 호출/궤적 검증, Validation Dataset, CI Gate |
+- **Deterministic, judge‑free evaluation**: atomic signals (JSON validity, latency, length, keywords, PII, etc.) instead of fuzzy “LLM judges”.
+- **Agent‑level diagnostics**: Live View shows nodes, clinical logs, input/output data, and evaluation on a single canvas.
+- **Release Gate**: replay saved traffic with model/prompt overrides, evaluate against policies, and get a pass/fail gate verdict so you can see whether the node still behaves like the baseline before you decide to ship.
 
 ---
 
-## 기술 스택
+## Main features
+
+| Area | Description |
+|------|-------------|
+| **Live View** | Ingest traffic via SDKs and inspect each agent node with logs, payloads, and evaluation signals. |
+| **Release Gate** | Fix a baseline trace or saved dataset, replay with new models/prompts, and run regression policies → pass/fail decision per run. |
+| **Atomic Signals** | Rule‑based checks (latency, length, JSON schema, PII, keywords, etc.) that are reproducible and provider‑agnostic. |
+| **Behavior Rules** | Validate tool usage and trajectories using a canonical step layer across OpenAI, Anthropic, Google, and others. |
+
+---
+
+## Tech stack
 
 - **Backend**: FastAPI (Python)
 - **Database**: PostgreSQL + JSONB
-- **Frontend**: Next.js (TypeScript)
-- **SDK**: Python (`agentguard`), Node.js (`@agentguard/sdk`)
+- **Frontend**: Next.js (TypeScript, App Router)
+- **SDKs**: Python (`agentguard`), Node.js (`@agentguard/sdk`)
 - **Infrastructure**: Docker, Redis
 
 ---
 
-## 빠른 시작
+## Quick start
 
-### 1. SDK 연동 (한 줄)
+### 1. Instrument your app with the SDKs
 
 **Python**
+
 ```python
 import agentguard
+
 agentguard.init(api_key="YOUR_API_KEY")
 ```
 
 **Node.js**
+
 ```typescript
 import agentguard from '@agentguard/sdk';
+
 agentguard.init({ apiKey: 'YOUR_API_KEY' });
 ```
 
-### 2. 에이전트 자동 감지 (Live View)
+Once SDKs are initialized and traffic flows, agents and nodes will appear in **Live View** automatically.
 
-SDK 연동 후 트래픽이 쌓이면 에이전트가 Live View에 노드로 표시됩니다.
+### 2. Capture and save data
 
-### 3. Release Gate (배포 전 검증)
+1. Send traffic through your application as usual.  
+2. Use **Live View → Save data** to create named datasets (e.g. `Saved 2026‑03‑02`).  
+3. Each dataset is a stable collection of snapshots you can reuse for regression and release decisions.
 
-- **Release Gate** 탭에서 Trace ID(또는 Validation Dataset) 입력
-- 모델/시스템 프롬프트 오버라이드 선택
-- Validate 실행 → 리플레이 + 정책 검증 → Pass/Fail 및 History 확인
+### 3. Validate changes with Release Gate
+
+1. Go to the **Release Gate** tab for a project.  
+2. Pick a node and a dataset (recent snapshots or a saved dataset).  
+3. Configure model/prompt overrides and gate thresholds (fail/flaky rates).  
+4. Run **Validate** to:
+   - replay snapshots with the new configuration,
+   - evaluate behavior using atomic signals and behavior rules,
+   - get a gate decision: **PASS** or **FAIL**, with per‑run breakdown and history.
 
 ---
 
-## 프로젝트 구조
+## Project structure
 
-```
+```text
 PluvianAI/
-├── backend/              # FastAPI 백엔드
+├── backend/              # FastAPI backend
 │   ├── app/
-│   │   ├── api/         # API 라우터
-│   │   ├── core/        # 설정, 보안
-│   │   ├── models/      # DB 모델
-│   │   ├── services/    # 비즈니스 로직
-│   │   └── middleware/  # Proxy
+│   │   ├── api/         # API routers
+│   │   ├── core/        # settings, security, canonical layer
+│   │   ├── models/      # DB models
+│   │   ├── services/    # business logic (replay, snapshots, gate, etc.)
+│   │   └── middleware/  # proxy & rate limiting
 │   └── tests/
-├── frontend/             # Next.js 프론트엔드
-│   ├── app/             # App Router
-│   ├── components/      # React 컴포넌트
-│   └── lib/             # 유틸리티
-├── sdk/                  # SDK 패키지
+├── frontend/             # Next.js frontend
+│   ├── app/             # App Router pages
+│   ├── components/      # React components
+│   └── lib/             # frontend utilities
+├── sdk/                  # SDK packages
 │   ├── python/
 │   └── node/
-├── docs/                 # 문서 (참고: 루트 .md가 단일 소스)
+├── docs/                 # product and architecture docs
 └── docker-compose.yml
 ```
 
 ---
 
-## 문서 (단일 소스 — 루트 기준)
+## Documentation
 
-- **[DOCS_README.md](./DOCS_README.md)** — 문서 목록 및 안내 (먼저 참고)
-- **[BLUEPRINT.md](./BLUEPRINT.md)** — 기술 청사진 (아키텍처, API, 로드맵)
-- **[BUSINESS_PLAN.md](./BUSINESS_PLAN.md)** — 사업계획서
-- **[SCHEMA_SPEC.md](./SCHEMA_SPEC.md)** — API 스키마 명세
-- **[PRD_AGENT_BEHAVIOR_VALIDATION.md](./PRD_AGENT_BEHAVIOR_VALIDATION.md)** — Behavior Validation PRD
+The root `.md` files are the single source of truth for documentation (the `docs/` folder may contain older drafts).
 
-> 문서는 이 루트의 `.md` 파일만 기준으로 합니다. `docs/` 내 이전 버전 문서는 참고하지 마세요. 경로: `C:\Users\user\Desktop\AgentGuard`, 브랜드: **PluvianAI**.
+- **[DOCS_README.md](./DOCS_README.md)** — documentation index and navigation.
+- **[BLUEPRINT.md](./BLUEPRINT.md)** — technical blueprint (architecture, APIs, roadmap).
+- **[BUSINESS_PLAN.md](./BUSINESS_PLAN.md)** — business plan.
+- **[SCHEMA_SPEC.md](./SCHEMA_SPEC.md)** — API schema specification.
+- **[PRD_AGENT_BEHAVIOR_VALIDATION.md](./PRD_AGENT_BEHAVIOR_VALIDATION.md)** — behavior validation PRD.
 
 ---
 
-## 배포
-
-### 프로덕션 (Vercel + Railway)
+## Running locally
 
 ```bash
-git add .
-git commit -m "feat: 새로운 기능"
-git push origin main
-```
-
-- **Frontend**: Vercel 자동 배포
-- **Backend**: Railway 자동 배포
-
-### 로컬 개발
-
-```bash
-# 환경 변수 설정
+# Copy and edit environment variables
 cp .env.example .env
 
-# Docker Compose로 실행
+# Start services with Docker Compose
 docker-compose up -d
 
-# 접속
-# Backend: http://localhost:8000
+# Default endpoints
+# Backend:  http://localhost:8000
 # Frontend: http://localhost:3000
 ```
 
 ---
 
-## 환경 변수
+## Environment variables (SDK)
 
 ```bash
-# PluvianAI SDK (패키지명은 agentguard 유지)
 export AGENTGUARD_API_KEY="your-api-key"
 export AGENTGUARD_PROJECT_ID="your-project-id"
-export AGENTGUARD_API_URL="https://api.example.com"  # Optional
+export AGENTGUARD_API_URL="https://api.example.com"  # Optional, defaults to hosted API
 ```
+
+Refer to the SDK READMEs under `sdk/python` and `sdk/node` for more details.
 
 ---
 
-## 라이선스
+## License
 
 MIT

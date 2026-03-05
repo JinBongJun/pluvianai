@@ -1,5 +1,5 @@
-import { FullScreenLoader } from '@/components/shared/FullScreenLoader';
+import { FullScreenLoader } from "@/components/shared/FullScreenLoader";
 
 export default function OrganizationsLoading() {
-    return <FullScreenLoader text="Loading Organizations" />;
+  return <FullScreenLoader text="Loading Organizations" />;
 }

@@ -9,6 +9,7 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
         "projects": 100,
         "api_calls_per_month": 1000,
         "snapshots_per_month": 500,  # Free plan snapshot limit
+        "guard_credits_per_month": 10_000,  # Free plan GuardCredit cap (Replay)
         "judge_calls_per_month": 100,  # Free plan Judge call limit
         "team_members_per_project": 1,
         "data_retention_days": 7,

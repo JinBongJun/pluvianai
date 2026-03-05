@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Loader2, X, Check, CheckSquare, Square } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { Loader2, X, Check, CheckSquare, Square } from "lucide-react";
 
 type DatasetSummary = {
   id: string;
@@ -38,10 +38,10 @@ export function DatasetPickerModal({
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === "Escape") onClose();
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
 
   const toggleSelection = (id: string) => {
@@ -58,7 +58,7 @@ export function DatasetPickerModal({
     if (tempSelected.size === datasets.length) {
       setTempSelected(new Set());
     } else {
-      setTempSelected(new Set(datasets.map((d) => d.id)));
+      setTempSelected(new Set(datasets.map(d => d.id)));
     }
   };
 
@@ -97,15 +97,13 @@ export function DatasetPickerModal({
         </div>
 
         <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 bg-white/[0.02] shrink-0">
-          <span className="text-xs text-slate-400 font-medium">
-            {tempSelected.size} selected
-          </span>
+          <span className="text-xs text-slate-400 font-medium">{tempSelected.size} selected</span>
           <button
             type="button"
             onClick={handleSelectAll}
             className="text-xs font-medium text-fuchsia-400 hover:text-fuchsia-300 transition-colors"
           >
-            {tempSelected.size === datasets.length ? 'Deselect All' : 'Select All'}
+            {tempSelected.size === datasets.length ? "Deselect All" : "Select All"}
           </button>
         </div>
 
@@ -119,23 +117,30 @@ export function DatasetPickerModal({
               No datasets for this agent yet.
             </p>
           ) : (
-            datasets.map((dataset) => {
+            datasets.map(dataset => {
               const isSelected = tempSelected.has(dataset.id);
               return (
                 <button
                   key={dataset.id}
                   type="button"
+                  role="checkbox"
+                  aria-label={`Select dataset ${dataset.label || dataset.id}`}
+                  aria-checked={isSelected}
                   onClick={() => toggleSelection(dataset.id)}
                   className={`w-full text-left rounded-xl border px-4 py-3 transition-all flex items-start gap-3 ${
                     isSelected
-                      ? 'border-fuchsia-500/60 bg-fuchsia-500/10'
-                      : 'border-white/10 bg-white/[0.02] hover:border-white/30 hover:bg-white/5'
+                      ? "border-fuchsia-500/60 bg-fuchsia-500/10"
+                      : "border-white/10 bg-white/[0.02] hover:border-white/30 hover:bg-white/5"
                   }`}
-                  aria-label={`Select dataset ${dataset.label || dataset.id}`}
-                  aria-checked={isSelected}
                 >
-                  <div className={`mt-0.5 shrink-0 ${isSelected ? 'text-fuchsia-400' : 'text-slate-600'}`}>
-                    {isSelected ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                  <div
+                    className={`mt-0.5 shrink-0 ${isSelected ? "text-fuchsia-400" : "text-slate-600"}`}
+                  >
+                    {isSelected ? (
+                      <CheckSquare className="w-5 h-5" />
+                    ) : (
+                      <Square className="w-5 h-5" />
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-slate-100 truncate">
@@ -143,7 +148,9 @@ export function DatasetPickerModal({
                     </div>
                     <div className="text-xs text-slate-500 mt-0.5 truncate">
                       {dataset.created_at && (
-                        <span>Created: {new Date(dataset.created_at).toLocaleString()}</span>
+                        <span title="Date this selection was saved.">
+                          Saved on: {new Date(dataset.created_at).toLocaleString()}
+                        </span>
                       )}
                     </div>
                   </div>

@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 interface Shortcut {
   key: string;
@@ -15,10 +15,10 @@ interface Shortcut {
 export function useKeyboardShortcuts(shortcuts: Shortcut[]) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      shortcuts.forEach((shortcut) => {
-        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      shortcuts.forEach(shortcut => {
+        const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
         const ctrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
-        
+
         if (
           event.key === shortcut.key &&
           (shortcut.ctrlKey ? ctrlOrCmd : true) &&
@@ -31,46 +31,46 @@ export function useKeyboardShortcuts(shortcuts: Shortcut[]) {
       });
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [shortcuts]);
 }
 
 export function useGlobalShortcuts() {
   const router = useRouter();
-  
+
   useKeyboardShortcuts([
     {
-      key: 'k',
+      key: "k",
       ctrlKey: true,
       action: () => {
         // Open global search (will be implemented)
-        const event = new CustomEvent('open-search');
+        const event = new CustomEvent("open-search");
         window.dispatchEvent(event);
       },
-      description: 'Open search',
+      description: "Open search",
     },
     {
-      key: 'n',
+      key: "n",
       ctrlKey: true,
       action: async () => {
-        const { getLastSelectedOrgId } = await import('@/components/layout/OrgSelector');
+        const { getLastSelectedOrgId } = await import("@/components/layout/OrgSelector");
         const lastOrgId = getLastSelectedOrgId();
         if (lastOrgId) {
           router.push(`/organizations/${lastOrgId}/projects/new`);
         } else {
-          router.push('/organizations');
+          router.push("/organizations");
         }
       },
-      description: 'New project',
+      description: "New project",
     },
     {
-      key: ',',
+      key: ",",
       ctrlKey: true,
       action: () => {
-        router.push('/settings');
+        router.push("/settings");
       },
-      description: 'Open settings',
+      description: "Open settings",
     },
   ]);
 }

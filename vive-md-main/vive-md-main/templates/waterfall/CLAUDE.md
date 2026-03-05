@@ -1,3 +1,8 @@
+---
+description: 
+alwaysApply: true
+---
+
 # Waterfall Methodology - Claude Code 산출물 생성 가이드
 
 > 이 문서는 Claude Code가 워터폴(Waterfall) 방법론에 따라 소프트웨어 개발 프로젝트의 각 단계별 산출물을 자동으로 생성하기 위한 종합 가이드입니다.

@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     RESEND_API_KEY: Optional[str] = None
     EMAIL_FROM: Optional[str] = None  # e.g., "onboarding@resend.dev" or verified domain
     EMAIL_FROM_NAME: str = "PluvianAI"
+    FEEDBACK_TO_EMAIL: Optional[str] = None  # If unset, defaults to EMAIL_FROM
 
     # Slack configuration
     SLACK_WEBHOOK_URL: Optional[str] = None  # Slack webhook URL for notifications

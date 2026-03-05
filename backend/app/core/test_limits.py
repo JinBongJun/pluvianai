@@ -101,8 +101,8 @@ def check_concurrent_test_runs(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "message": (
-                    f"동시에 실행할 수 있는 테스트는 최대 {concurrent_limit}개입니다. "
-                    "현재 다른 테스트가 실행 중입니다."
+                    f"You can run at most {concurrent_limit} test(s) at a time. "
+                    "Another test is currently running."
                 ),
                 "code": "CONCURRENT_TEST_NOT_ALLOWED",
                 "limit": concurrent_limit,
