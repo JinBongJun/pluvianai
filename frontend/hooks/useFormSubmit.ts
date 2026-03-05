@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from "react";
 
 interface UseFormSubmitOptions {
   onSubmit: () => Promise<void>;
@@ -9,7 +9,7 @@ interface UseFormSubmitOptions {
 export function useFormSubmit({ onSubmit }: UseFormSubmitOptions) {
   const [submitting, setSubmitting] = useState(false);
   const [idempotencyKey] = useState(() =>
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
       : Math.random().toString(36).slice(2)
   );

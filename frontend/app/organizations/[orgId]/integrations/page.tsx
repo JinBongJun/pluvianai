@@ -1,48 +1,48 @@
-'use client';
+"use client";
 
-import { useParams } from 'next/navigation';
-import useSWR from 'swr';
-import OrgLayout from '@/components/layout/OrgLayout';
-import { organizationsAPI } from '@/lib/api';
-import { Plug, Github, Slack, Webhook, Key, ExternalLink } from 'lucide-react';
+import { useParams } from "next/navigation";
+import useSWR from "swr";
+import OrgLayout from "@/components/layout/OrgLayout";
+import { organizationsAPI } from "@/lib/api";
+import { Plug, Github, Slack, Webhook, Key, ExternalLink } from "lucide-react";
 
 export default function IntegrationsPage() {
   const params = useParams();
   const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
 
-  const { data: org } = useSWR(orgId ? ['organization', orgId] : null, () =>
-    organizationsAPI.get(orgId, { includeStats: false }),
+  const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
+    organizationsAPI.get(orgId, { includeStats: false })
   );
 
   const integrations = [
     {
-      id: 'slack',
-      name: 'Slack',
-      description: 'Get real-time alerts and notifications in your Slack channels',
+      id: "slack",
+      name: "Slack",
+      description: "Get real-time alerts and notifications in your Slack channels",
       icon: Slack,
       connected: false,
       comingSoon: false,
     },
     {
-      id: 'github',
-      name: 'GitHub Actions',
-      description: 'Run PluvianAI CI checks on your pull requests',
+      id: "github",
+      name: "GitHub Actions",
+      description: "Run PluvianAI CI checks on your pull requests",
       icon: Github,
       connected: false,
       comingSoon: false,
     },
     {
-      id: 'webhooks',
-      name: 'Webhooks',
-      description: 'Send events to your own endpoints',
+      id: "webhooks",
+      name: "Webhooks",
+      description: "Send events to your own endpoints",
       icon: Webhook,
       connected: false,
       comingSoon: false,
     },
     {
-      id: 'api-keys',
-      name: 'API Keys',
-      description: 'Manage API keys for SDK integration',
+      id: "api-keys",
+      name: "API Keys",
+      description: "Manage API keys for SDK integration",
       icon: Key,
       connected: true,
       comingSoon: false,
@@ -53,9 +53,9 @@ export default function IntegrationsPage() {
     <OrgLayout
       orgId={orgId}
       breadcrumb={[
-        { label: 'Organizations', href: '/organizations' },
-        { label: org?.name || 'Organization', href: `/organizations/${orgId}/projects` },
-        { label: 'Integrations' },
+        { label: "Organizations", href: "/organizations" },
+        { label: org?.name || "Organization", href: `/organizations/${orgId}/projects` },
+        { label: "Integrations" },
       ]}
     >
       <div className="max-w-4xl mx-auto">
@@ -68,7 +68,7 @@ export default function IntegrationsPage() {
         </div>
 
         <div className="grid gap-4">
-          {integrations.map((integration) => {
+          {integrations.map(integration => {
             const Icon = integration.icon;
             return (
               <div

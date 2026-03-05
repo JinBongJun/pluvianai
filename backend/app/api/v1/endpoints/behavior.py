@@ -21,6 +21,8 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.canonical import response_to_canonical_steps
+from app.utils.tool_calls import normalize_tool_name
 from app.core.database import get_db
 from app.core.logging_config import logger
 from app.core.permissions import ProjectRole, check_project_access
@@ -97,39 +99,90 @@ class ValidationDatasetCreate(BaseModel):
     ruleset_hash: Optional[str] = None
 
 
-def _extract_tool_calls_from_payload(payload: Any) -> List[Dict[str, Any]]:
-    """
-    Best-effort extraction for tool calls from nested payload/response formats.
-    """
-    out: List[Dict[str, Any]] = []
+class ValidationDatasetUpdate(BaseModel):
+    """Update a validation dataset (e.g. snapshot_ids for removing one log)."""
 
-    def _walk(node: Any) -> None:
-        if isinstance(node, dict):
-            tool_calls = node.get("tool_calls")
-            if isinstance(tool_calls, list):
-                for tc in tool_calls:
-                    if isinstance(tc, dict):
-                        out.append(tc)
-            for v in node.values():
-                _walk(v)
-        elif isinstance(node, list):
-            for item in node:
-                _walk(item)
-
-    _walk(payload)
-    return out
+    snapshot_ids: Optional[List[int]] = Field(None, description="New list of snapshot IDs (replaces existing)")
+    label: Optional[str] = Field(None, max_length=200, description="Dataset label")
 
 
-def _parse_tool_args(raw_args: Any) -> Dict[str, Any]:
-    if isinstance(raw_args, dict):
-        return raw_args
-    if isinstance(raw_args, str):
-        try:
-            parsed = json.loads(raw_args)
-            return parsed if isinstance(parsed, dict) else {}
-        except Exception:
-            return {}
-    return {}
+class BatchDeleteDatasetsRequest(BaseModel):
+    """Request body for deleting multiple validation datasets in one call."""
+
+    dataset_ids: List[str] = Field(..., min_length=1, max_length=100, description="IDs of datasets to delete")
+
+
+class BatchCreateDatasetsRequest(BaseModel):
+    """Request body for creating multiple validation datasets in one call."""
+
+    items: List[ValidationDatasetCreate] = Field(..., min_length=1, max_length=50, description="One dataset spec per item")
+
+
+def _normalize_agent_id(value: Optional[str]) -> Optional[str]:
+    normalized = str(value or "").strip()
+    return normalized or None
+
+
+def _resolve_dataset_agent_id(
+    *,
+    project_id: int,
+    snapshot_ids: Optional[List[int]],
+    requested_agent_id: Optional[str],
+    db: Session,
+) -> Optional[str]:
+    normalized_requested = _normalize_agent_id(requested_agent_id)
+    if not snapshot_ids:
+        return normalized_requested
+
+    normalized_snapshot_ids = [int(sid) for sid in snapshot_ids if sid is not None]
+    if not normalized_snapshot_ids:
+        return normalized_requested
+
+    rows = (
+        db.query(Snapshot.id, Snapshot.agent_id)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.id.in_(normalized_snapshot_ids),
+        )
+        .all()
+    )
+    found_ids = {int(row.id) for row in rows if row.id is not None}
+    missing_ids = [sid for sid in normalized_snapshot_ids if sid not in found_ids]
+    if missing_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown snapshot IDs: {missing_ids[:20]}",
+        )
+
+    snapshot_agent_ids = sorted(
+        {
+            str(row.agent_id).strip()
+            for row in rows
+            if str(row.agent_id or "").strip()
+        }
+    )
+    if len(snapshot_agent_ids) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error_code": "dataset_agent_mismatch",
+                "message": "A dataset can only contain logs from one node.",
+                "agent_ids": snapshot_agent_ids,
+            },
+        )
+
+    inferred_agent_id = snapshot_agent_ids[0] if snapshot_agent_ids else None
+    if normalized_requested and inferred_agent_id and normalized_requested != inferred_agent_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error_code": "dataset_agent_mismatch",
+                "message": "Provided agent_id does not match selected snapshot_ids.",
+                "requested_agent_id": normalized_requested,
+                "snapshot_agent_id": inferred_agent_id,
+            },
+        )
+    return normalized_requested or inferred_agent_id
 
 
 def _build_trace_steps(project_id: int, trace_id: str, db: Session) -> List[Dict[str, Any]]:
@@ -149,29 +202,13 @@ def _build_trace_steps(project_id: int, trace_id: str, db: Session) -> List[Dict
             "signal_result": s.signal_result or {},
             "latency_ms": s.latency_ms,
         }
-        tool_calls = _extract_tool_calls_from_payload(s.payload)
-        if not tool_calls:
-            steps.append(
-                {
-                    **base_step,
-                    "step_type": "llm_call",
-                    "tool_name": None,
-                    "tool_args": {},
-                }
-            )
-            continue
-
-        for tc in tool_calls:
-            function = tc.get("function") if isinstance(tc, dict) else {}
-            function = function if isinstance(function, dict) else {}
-            steps.append(
-                {
-                    **base_step,
-                    "step_type": "tool_call",
-                    "tool_name": function.get("name") or tc.get("name"),
-                    "tool_args": _parse_tool_args(function.get("arguments") or tc.get("arguments")),
-                }
-            )
+        canonical_steps = response_to_canonical_steps(
+            s.payload,
+            provider_hint=getattr(s, "provider", None),
+            step_order_base=float(base_step["step_order"]),
+            base_meta=base_step,
+        )
+        steps.extend(canonical_steps)
     return sorted(steps, key=lambda x: x.get("step_order") or 0)
 
 
@@ -198,28 +235,33 @@ def _build_run_steps(project_id: int, test_run_id: str, db: Session) -> List[Dic
                 "latency_ms": r.latency_ms,
             }
         )
-        # Try to parse tool calls from response JSON if present.
+        # Parse response as JSON and extract tool_call steps via canonical layer (multi-provider).
         response_text = r.response or ""
         if response_text and response_text.strip().startswith("{"):
             try:
                 parsed = json.loads(response_text)
-                tool_calls = _extract_tool_calls_from_payload(parsed)
-                for tc in tool_calls:
-                    fn = tc.get("function") if isinstance(tc, dict) else {}
-                    fn = fn if isinstance(fn, dict) else {}
-                    steps.append(
-                        {
-                            "step_order": (r.step_order if r.step_order is not None else idx) + 0.01,
-                            "agent_id": r.agent_id,
-                            "source_id": r.id,
-                            "source_type": "test_result",
-                            "step_type": "tool_call",
-                            "tool_name": fn.get("name") or tc.get("name"),
-                            "tool_args": _parse_tool_args(fn.get("arguments") or tc.get("arguments")),
-                            "signal_result": r.signal_result or {},
-                            "latency_ms": r.latency_ms,
-                        }
-                    )
+                base_meta = {
+                    "agent_id": r.agent_id,
+                    "source_id": r.id,
+                    "source_type": "test_result",
+                    "signal_result": r.signal_result or {},
+                    "latency_ms": r.latency_ms,
+                }
+                canonical_steps = response_to_canonical_steps(
+                    parsed,
+                    provider_hint=None,
+                    step_order_base=float(r.step_order if r.step_order is not None else idx),
+                    base_meta=base_meta,
+                )
+                if canonical_steps:
+                    first_canonical = canonical_steps[0]
+                    if first_canonical.get("_provider_unknown"):
+                        steps[-1]["_provider_unknown"] = True
+                    if first_canonical.get("_id_conflict"):
+                        steps[-1]["_id_conflict"] = True
+                for st in canonical_steps:
+                    if st.get("step_type") == "tool_call":
+                        steps.append(st)
             except Exception:
                 pass
     return sorted(steps, key=lambda x: x.get("step_order") or 0)
@@ -335,8 +377,8 @@ def _validate_tool_order(rule: BehaviorRule, spec: Dict[str, Any], steps: List[D
         tool_indices.setdefault(str(t), []).append(float(s.get("step_order") or 0))
 
     for pair in pairs:
-        tool = pair.get("tool")
-        before_tool = pair.get("before_tool")
+        tool = normalize_tool_name(pair.get("tool") or "")
+        before_tool = normalize_tool_name(pair.get("before_tool") or "")
         if not tool or not before_tool:
             continue
         a = tool_indices.get(str(tool), [])
@@ -359,7 +401,7 @@ def _validate_tool_order(rule: BehaviorRule, spec: Dict[str, Any], steps: List[D
 
 def _validate_tool_forbidden(rule: BehaviorRule, spec: Dict[str, Any], steps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     violations: List[Dict[str, Any]] = []
-    forbidden = set((spec or {}).get("tools") or [])
+    forbidden = set(normalize_tool_name(t) for t in ((spec or {}).get("tools") or []))
     if not forbidden:
         return violations
     for s in steps:
@@ -383,7 +425,7 @@ def _validate_tool_allowlist(rule: BehaviorRule, spec: Dict[str, Any], steps: Li
     Fail if any tool call occurs that is not explicitly allowed.
     """
     violations: List[Dict[str, Any]] = []
-    allowed = set((spec or {}).get("tools") or [])
+    allowed = set(normalize_tool_name(t) for t in ((spec or {}).get("tools") or []))
     if not allowed:
         return violations
     for s in steps:
@@ -406,7 +448,7 @@ def _validate_tool_allowlist(rule: BehaviorRule, spec: Dict[str, Any], steps: Li
 
 def _validate_tool_args_schema(rule: BehaviorRule, spec: Dict[str, Any], steps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     violations: List[Dict[str, Any]] = []
-    target_tool = (spec or {}).get("tool")
+    target_tool = normalize_tool_name((spec or {}).get("tool") or "")
     schema = (spec or {}).get("json_schema") or {}
     required = schema.get("required") or []
     additional_allowed = schema.get("additionalProperties", True)
@@ -415,12 +457,42 @@ def _validate_tool_args_schema(rule: BehaviorRule, spec: Dict[str, Any], steps: 
     if not target_tool:
         return violations
 
+    _RESERVED_KEYS = frozenset({"_raw", "_invalid", "_too_large"})
+
     for s in steps:
         if s.get("tool_name") != target_tool:
             continue
         args = s.get("tool_args") or {}
+        if args.get("_too_large") is True:
+            violations.append(
+                {
+                    "rule_id": rule.id,
+                    "rule_name": rule.name,
+                    "severity": rule.severity_default or "critical",
+                    "step_ref": s.get("step_order"),
+                    "message": "Tool arguments exceeded size limit",
+                    "evidence": {"tool": target_tool},
+                }
+            )
+            continue
+        if args.get("_invalid") is True:
+            violations.append(
+                {
+                    "rule_id": rule.id,
+                    "rule_name": rule.name,
+                    "severity": rule.severity_default or "critical",
+                    "step_ref": s.get("step_order"),
+                    "message": "Tool arguments could not be parsed (invalid JSON or non-dict)",
+                    "evidence": {
+                        "tool": target_tool,
+                        "raw": args.get("_raw"),
+                    },
+                }
+            )
+            continue
+        args_keys = {k for k in args.keys() if k not in _RESERVED_KEYS}
         missing = [k for k in required if k not in args]
-        extras = [k for k in args.keys() if k not in properties] if not additional_allowed else []
+        extras = [k for k in args_keys if k not in properties] if not additional_allowed else []
         if missing or extras:
             violations.append(
                 {
@@ -621,6 +693,38 @@ def _persist_trajectory_steps(
 
 def _run_behavior_validation(rules: List[BehaviorRule], steps: List[Dict[str, Any]]) -> Tuple[str, Dict[str, Any], List[Dict[str, Any]]]:
     violations: List[Dict[str, Any]] = []
+
+    # System violations (must be added before status calculation)
+    if any(s.get("_provider_unknown") for s in steps):
+        violations.append({
+            "rule_id": None,
+            "rule_name": None,
+            "severity": "critical",
+            "step_ref": None,
+            "message": "Unknown provider response; cannot validate tool calls",
+            "evidence": {},
+        })
+    if any(s.get("_id_conflict") for s in steps):
+        violations.append({
+            "rule_id": None,
+            "rule_name": None,
+            "severity": "critical",
+            "step_ref": None,
+            "message": "Duplicate tool_call id with conflicting name or arguments",
+            "evidence": {},
+        })
+    if any(
+        s.get("step_type") == "tool_call" and (s.get("tool_name") == "" or s.get("_tool_name_empty"))
+        for s in steps
+    ):
+        violations.append({
+            "rule_id": None,
+            "rule_name": None,
+            "severity": "critical",
+            "step_ref": None,
+            "message": "Tool name empty or invalid",
+            "evidence": {},
+        })
 
     for rule in rules:
         if not rule.enabled:
@@ -824,6 +928,61 @@ async def list_behavior_reports(
     }
 
 
+@router.post("/projects/{project_id}/behavior/datasets/batch")
+async def batch_create_validation_datasets(
+    project_id: int,
+    body: BatchCreateDatasetsRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create multiple validation datasets in one request (one item per snapshot or group)."""
+    check_project_access(project_id, current_user, db)
+    created: List[Dict[str, Any]] = []
+    errors: List[Dict[str, Any]] = []
+    for idx, payload in enumerate(body.items):
+        if not payload.trace_ids and not payload.snapshot_ids:
+            errors.append({"index": idx, "message": "At least one of trace_ids or snapshot_ids is required"})
+            continue
+        try:
+            resolved_agent_id = _resolve_dataset_agent_id(
+                project_id=project_id,
+                snapshot_ids=payload.snapshot_ids,
+                requested_agent_id=payload.agent_id,
+                db=db,
+            )
+            ds = ValidationDataset(
+                project_id=project_id,
+                agent_id=resolved_agent_id,
+                trace_ids=payload.trace_ids,
+                snapshot_ids=payload.snapshot_ids,
+                eval_config_snapshot=payload.eval_config_snapshot,
+                policy_ruleset_snapshot=payload.policy_ruleset_snapshot,
+                ruleset_hash=payload.ruleset_hash,
+                label=payload.label,
+                tag=payload.tag,
+            )
+            db.add(ds)
+            db.commit()
+            db.refresh(ds)
+            created.append({
+                "id": ds.id,
+                "project_id": ds.project_id,
+                "agent_id": ds.agent_id,
+                "trace_ids": ds.trace_ids,
+                "snapshot_ids": ds.snapshot_ids,
+                "eval_config_snapshot": ds.eval_config_snapshot,
+                "policy_ruleset_snapshot": ds.policy_ruleset_snapshot,
+                "ruleset_hash": ds.ruleset_hash,
+                "label": ds.label,
+                "tag": ds.tag,
+                "created_at": ds.created_at.isoformat() if ds.created_at else None,
+            })
+        except Exception as e:
+            db.rollback()
+            errors.append({"index": idx, "message": str(e)})
+    return {"created": created, "errors": errors if errors else None}
+
+
 @router.post("/projects/{project_id}/behavior/datasets")
 async def create_validation_dataset(
     project_id: int,
@@ -838,9 +997,15 @@ async def create_validation_dataset(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least one of trace_ids or snapshot_ids is required",
         )
+    resolved_agent_id = _resolve_dataset_agent_id(
+        project_id=project_id,
+        snapshot_ids=payload.snapshot_ids,
+        requested_agent_id=payload.agent_id,
+        db=db,
+    )
     ds = ValidationDataset(
         project_id=project_id,
-        agent_id=payload.agent_id,
+        agent_id=resolved_agent_id,
         trace_ids=payload.trace_ids,
         snapshot_ids=payload.snapshot_ids,
         eval_config_snapshot=payload.eval_config_snapshot,
@@ -871,6 +1036,10 @@ async def create_validation_dataset(
 async def list_validation_datasets(
     project_id: int,
     agent_id: Optional[str] = None,
+    summary: bool = Query(
+        True,
+        description="If true, returns lightweight dataset list without heavy config snapshots.",
+    ),
     limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -883,27 +1052,32 @@ async def list_validation_datasets(
         query = query.filter(ValidationDataset.agent_id == agent_id)
     rows = query.order_by(ValidationDataset.created_at.desc()).offset(offset).limit(limit).all()
     total = query.count()
-    return {
-        "items": [
-            {
-                "id": d.id,
-                "project_id": d.project_id,
-                "agent_id": d.agent_id,
-                "trace_ids": d.trace_ids,
-                "snapshot_ids": d.snapshot_ids,
-                "eval_config_snapshot": d.eval_config_snapshot,
-                "policy_ruleset_snapshot": d.policy_ruleset_snapshot,
-                "ruleset_hash": d.ruleset_hash,
-                "label": d.label,
-                "tag": d.tag,
-                "created_at": d.created_at,
-            }
-            for d in rows
-        ],
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-    }
+    items = []
+    for d in rows:
+        snapshot_ids = d.snapshot_ids if isinstance(d.snapshot_ids, list) else []
+        base_item = {
+            "id": d.id,
+            "project_id": d.project_id,
+            "agent_id": d.agent_id,
+            "snapshot_count": len(snapshot_ids),
+            "label": d.label,
+            "tag": d.tag,
+            "created_at": d.created_at,
+        }
+        if summary:
+            items.append(base_item)
+        else:
+            items.append(
+                {
+                    **base_item,
+                    "trace_ids": d.trace_ids,
+                    "snapshot_ids": snapshot_ids,
+                    "eval_config_snapshot": d.eval_config_snapshot,
+                    "policy_ruleset_snapshot": d.policy_ruleset_snapshot,
+                    "ruleset_hash": d.ruleset_hash,
+                }
+            )
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/projects/{project_id}/behavior/datasets/{dataset_id}")
@@ -922,6 +1096,52 @@ async def get_validation_dataset(
     )
     if not ds:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Validation dataset not found")
+    return {
+        "id": ds.id,
+        "project_id": ds.project_id,
+        "agent_id": ds.agent_id,
+        "trace_ids": ds.trace_ids,
+        "snapshot_ids": ds.snapshot_ids,
+        "eval_config_snapshot": ds.eval_config_snapshot,
+        "policy_ruleset_snapshot": ds.policy_ruleset_snapshot,
+        "ruleset_hash": ds.ruleset_hash,
+        "label": ds.label,
+        "tag": ds.tag,
+        "created_at": ds.created_at,
+    }
+
+
+@router.patch("/projects/{project_id}/behavior/datasets/{dataset_id}")
+async def update_validation_dataset(
+    project_id: int,
+    dataset_id: str,
+    payload: ValidationDatasetUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update a validation dataset (e.g. snapshot_ids to remove a single log)."""
+    check_project_access(project_id, current_user, db)
+    ds = (
+        db.query(ValidationDataset)
+        .filter(ValidationDataset.project_id == project_id, ValidationDataset.id == dataset_id)
+        .first()
+    )
+    if not ds:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Validation dataset not found")
+    if payload.snapshot_ids is not None:
+        resolved_agent_id = _resolve_dataset_agent_id(
+            project_id=project_id,
+            snapshot_ids=payload.snapshot_ids,
+            requested_agent_id=ds.agent_id,
+            db=db,
+        )
+        ds.snapshot_ids = payload.snapshot_ids
+        ds.agent_id = resolved_agent_id
+    if payload.label is not None:
+        normalized_label = payload.label.strip()
+        ds.label = normalized_label or None
+    db.commit()
+    db.refresh(ds)
     return {
         "id": ds.id,
         "project_id": ds.project_id,
@@ -1001,6 +1221,8 @@ async def list_dataset_snapshots(
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "is_worst": r.is_worst,
             "is_golden": r.is_golden,
+            "eval_checks_result": getattr(r, "eval_checks_result", None),
+            "eval_config_version": getattr(r, "eval_config_version", None),
         })
     return {"items": items, "total": len(items)}
 
@@ -1020,6 +1242,26 @@ def _delete_validation_dataset_impl(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Validation dataset not found")
     db.delete(ds)
     db.commit()
+
+
+@router.post("/projects/{project_id}/behavior/datasets/batch-delete")
+async def batch_delete_validation_datasets(
+    project_id: int,
+    body: BatchDeleteDatasetsRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete multiple validation datasets in one request (faster than N single deletes)."""
+    check_project_access(project_id, current_user, db)
+    deleted = 0
+    for dataset_id in body.dataset_ids:
+        try:
+            _delete_validation_dataset_impl(project_id, dataset_id, db)
+            deleted += 1
+        except HTTPException:
+            # Skip not-found; continue with others
+            continue
+    return {"ok": True, "deleted": deleted}
 
 
 @router.delete("/projects/{project_id}/behavior/datasets/{dataset_id}")

@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from "react";
 
 export interface AsyncState<T> {
   data: T | null;
@@ -37,7 +37,7 @@ export interface UseAsyncDataReturn<T> extends AsyncState<T> {
 
 /**
  * Custom hook for async data fetching with loading and error states
- * 
+ *
  * @example
  * ```tsx
  * const { data, loading, error, refetch } = useAsyncData(
@@ -73,7 +73,7 @@ export function useAsyncData<T>(
   const fetchData = useCallback(async () => {
     const fetchId = ++fetchIdRef.current;
 
-    setState((prev) => ({
+    setState(prev => ({
       ...prev,
       loading: true,
       error: null,
@@ -83,7 +83,7 @@ export function useAsyncData<T>(
 
     try {
       const result = await fetcher();
-      
+
       // Ignore stale responses
       if (!mountedRef.current || fetchId !== fetchIdRef.current) {
         return;
@@ -107,7 +107,7 @@ export function useAsyncData<T>(
 
       const error = err instanceof Error ? err : new Error(String(err));
 
-      setState((prev) => ({
+      setState(prev => ({
         ...prev,
         loading: false,
         error,
@@ -128,7 +128,7 @@ export function useAsyncData<T>(
   }, [initialData]);
 
   const setData = useCallback((data: T | null) => {
-    setState((prev) => ({ ...prev, data }));
+    setState(prev => ({ ...prev, data }));
   }, []);
 
   // Fetch on mount and when deps change
@@ -160,7 +160,7 @@ export function useAsyncData<T>(
  */
 export function useAsyncFetch<T>(
   fetcher: () => Promise<T>,
-  options: Omit<UseAsyncDataOptions<T>, 'deps'> = {}
+  options: Omit<UseAsyncDataOptions<T>, "deps"> = {}
 ): UseAsyncDataReturn<T> {
   return useAsyncData(fetcher, { ...options, deps: [] });
 }

@@ -11,11 +11,10 @@ from sqlalchemy.orm import Session
 from app.models.snapshot import Snapshot
 from app.models.behavior_rule import BehaviorRule
 from app.api.v1.endpoints.behavior import (
-    _extract_tool_calls_from_payload,
-    _parse_tool_args,
     _resolve_effective_rules,
     _run_behavior_validation,
 )
+from app.core.canonical import response_to_canonical_steps
 
 
 def _clamp_int(value: Any, default: int, minimum: int, maximum: int) -> int:
@@ -83,6 +82,14 @@ def _detect_leakage_indicators(text: str) -> bool:
 
 def normalize_eval_config(raw_eval: Any) -> Dict[str, Any]:
     cfg = raw_eval if isinstance(raw_eval, dict) else {}
+    # Backward/forward compatibility:
+    # frontend currently stores tool policy as `tool_use_policy`,
+    # while runtime checks use the normalized key `tool`.
+    tool_cfg = cfg.get("tool")
+    if not isinstance(tool_cfg, dict):
+        tool_cfg = cfg.get("tool_use_policy")
+    if not isinstance(tool_cfg, dict):
+        tool_cfg = {}
     normalized = {
         "enabled": bool(cfg.get("enabled", True)),
         "window": {"limit": _clamp_int((cfg.get("window") or {}).get("limit"), 50, 10, 200)},
@@ -124,20 +131,8 @@ def normalize_eval_config(raw_eval: Any) -> Dict[str, Any]:
             "enabled": bool((cfg.get("format") or {}).get("enabled", False)),
             "sections_csv": str((cfg.get("format") or {}).get("sections_csv", "")),
         },
-        "tokens": {
-            "enabled": bool((cfg.get("tokens") or {}).get("enabled", True)),
-            "warn": _clamp_int((cfg.get("tokens") or {}).get("warn"), 4000, 100, 200000),
-        },
-        "cost": {
-            "enabled": bool((cfg.get("cost") or {}).get("enabled", True)),
-            "warn": _clamp_float((cfg.get("cost") or {}).get("warn"), 0.5, 0.0, 100.0),
-        },
         "leakage": {"enabled": bool((cfg.get("leakage") or {}).get("enabled", False))},
-        "coherence": {
-            "enabled": bool((cfg.get("coherence") or {}).get("enabled", False)),
-            "min_score": _clamp_int((cfg.get("coherence") or {}).get("min_score"), 80, 0, 100),
-        },
-        "tool": {"enabled": bool((cfg.get("tool") or {}).get("enabled", True))},
+        "tool": {"enabled": bool(tool_cfg.get("enabled", True))},
     }
     if normalized["json"]["mode"] not in ("if_json", "always", "off"):
         normalized["json"]["mode"] = "if_json"
@@ -161,12 +156,29 @@ CHECK_KEYS = [
     "repetition",
     "required",
     "format",
-    "tokens",
-    "cost",
     "leakage",
-    "coherence",
     "tool",
 ]
+
+PASS_STATUS = "pass"
+FAIL_STATUS = "fail"
+NOT_APPLICABLE_STATUS = "not_applicable"
+EVALUATED_STATUSES = {PASS_STATUS, FAIL_STATUS}
+# For aggregation in MVP, only explicit failures count as failed.
+# not_applicable is neutral and excluded from failed counts.
+FAILISH_STATUSES = {FAIL_STATUS}
+
+
+def _fold_required_status(status_map: Dict[str, str]) -> str:
+    parts = [status_map.get("required_keywords"), status_map.get("required_json_fields")]
+    values = [v for v in parts if isinstance(v, str)]
+    if not values:
+        return NOT_APPLICABLE_STATUS
+    if any(v == FAIL_STATUS for v in values):
+        return FAIL_STATUS
+    if any(v == PASS_STATUS for v in values):
+        return PASS_STATUS
+    return NOT_APPLICABLE_STATUS
 
 
 def _build_steps_from_payload(
@@ -174,43 +186,18 @@ def _build_steps_from_payload(
     agent_id: Optional[str] = None,
     step_order_base: int = 1,
 ) -> List[Dict[str, Any]]:
-    """Build behavior validation steps from a single snapshot payload (request/response)."""
-    steps: List[Dict[str, Any]] = []
-    # Payload may be { "request", "response" } or nested; extract tool_calls from anywhere
-    tool_calls = _extract_tool_calls_from_payload(payload)
-    if not tool_calls:
-        steps.append({
-            "step_order": step_order_base,
-            "agent_id": agent_id,
-            "source_id": None,
-            "source_type": "snapshot",
-            "step_type": "llm_call",
-            "tool_name": None,
-            "tool_args": {},
-        })
-        return steps
-    steps.append({
-        "step_order": step_order_base,
+    """Build behavior validation steps from a single snapshot payload (canonical, multi-provider)."""
+    base_meta = {
         "agent_id": agent_id,
         "source_id": None,
         "source_type": "snapshot",
-        "step_type": "llm_call",
-        "tool_name": None,
-        "tool_args": {},
-    })
-    for i, tc in enumerate(tool_calls):
-        function = tc.get("function") if isinstance(tc, dict) else {}
-        function = function if isinstance(function, dict) else {}
-        steps.append({
-            "step_order": step_order_base + (i + 1) * 0.01,
-            "agent_id": agent_id,
-            "source_id": None,
-            "source_type": "snapshot",
-            "step_type": "tool_call",
-            "tool_name": function.get("name") or tc.get("name"),
-            "tool_args": _parse_tool_args(function.get("arguments") or tc.get("arguments")),
-        })
-    return sorted(steps, key=lambda x: x.get("step_order") or 0)
+    }
+    return response_to_canonical_steps(
+        payload,
+        provider_hint=None,
+        step_order_base=float(step_order_base),
+        base_meta=base_meta,
+    )
 
 
 def _run_tool_policy_for_snapshot(
@@ -248,79 +235,126 @@ def _evaluate_one_snapshot(
     project_id: Optional[int] = None,
     agent_id: Optional[str] = None,
 ) -> Dict[str, str]:
-    """Run all enabled checks for one snapshot; returns status_map (check id -> 'pass'|'fail'|'not_implemented')."""
+    """Run all enabled checks for one snapshot; returns status_map (check id -> status)."""
     text = str(s.get("response_text") or "")
     trimmed = text.strip()
     status_map: Dict[str, str] = {}
 
     if cfg["empty"]["enabled"]:
         if len(trimmed) < cfg["empty"]["min_chars"]:
-            status_map["empty"] = "fail"
+            status_map["empty"] = FAIL_STATUS
         else:
-            status_map["empty"] = "pass"
+            status_map["empty"] = PASS_STATUS
 
-    if cfg["latency"]["enabled"] and isinstance(s.get("latency_ms"), (int, float)):
-        if s["latency_ms"] >= cfg["latency"]["warn_ms"]:
-            status_map["latency"] = "fail"
+    if cfg["latency"]["enabled"]:
+        if isinstance(s.get("latency_ms"), (int, float)):
+            if s["latency_ms"] >= cfg["latency"]["warn_ms"]:
+                status_map["latency"] = FAIL_STATUS
+            else:
+                status_map["latency"] = PASS_STATUS
         else:
-            status_map["latency"] = "pass"
+            status_map["latency"] = NOT_APPLICABLE_STATUS
 
-    if cfg["status_code"]["enabled"] and isinstance(s.get("status_code"), int):
-        if s["status_code"] >= cfg["status_code"]["warn_from"]:
-            status_map["status_code"] = "fail"
+    if cfg["status_code"]["enabled"]:
+        if isinstance(s.get("status_code"), int):
+            if s["status_code"] >= cfg["status_code"]["warn_from"]:
+                status_map["status_code"] = FAIL_STATUS
+            else:
+                status_map["status_code"] = PASS_STATUS
         else:
-            status_map["status_code"] = "pass"
+            status_map["status_code"] = NOT_APPLICABLE_STATUS
 
-    if cfg["refusal"]["enabled"] and trimmed:
-        status_map["refusal"] = "fail" if _detect_refusal(trimmed) else "pass"
+    if cfg["refusal"]["enabled"]:
+        if trimmed:
+            status_map["refusal"] = FAIL_STATUS if _detect_refusal(trimmed) else PASS_STATUS
+        else:
+            status_map["refusal"] = NOT_APPLICABLE_STATUS
 
-    if cfg["json"]["enabled"] and cfg["json"]["mode"] != "off":
-        should_check = cfg["json"]["mode"] == "always" or _looks_like_json(trimmed)
-        if should_check:
-            parsed_json = None
-            try:
-                parsed_json = json.loads(trimmed)
-                status_map["json"] = "pass"
-            except Exception:
-                status_map["json"] = "fail"
-            if cfg["required"]["enabled"] and required_json_fields and parsed_json and isinstance(parsed_json, dict):
+    if cfg["json"]["enabled"]:
+        mode = cfg["json"]["mode"]
+        should_check = False
+        parsed_json = None
+        if mode == "off":
+            status_map["json"] = NOT_APPLICABLE_STATUS
+        else:
+            should_check = mode == "always" or _looks_like_json(trimmed)
+            if should_check:
+                try:
+                    parsed_json = json.loads(trimmed)
+                    status_map["json"] = PASS_STATUS
+                except Exception:
+                    status_map["json"] = FAIL_STATUS
+            else:
+                status_map["json"] = NOT_APPLICABLE_STATUS
+
+        if cfg["required"]["enabled"] and required_json_fields:
+            if not should_check:
+                status_map["required_json_fields"] = NOT_APPLICABLE_STATUS
+            elif isinstance(parsed_json, dict):
                 missing = [f for f in required_json_fields if f not in parsed_json]
-                status_map["required_json_fields"] = "fail" if missing else "pass"
+                status_map["required_json_fields"] = FAIL_STATUS if missing else PASS_STATUS
+            else:
+                status_map["required_json_fields"] = NOT_APPLICABLE_STATUS
 
-    if cfg["length"]["enabled"] and baseline_len and baseline_len > 0 and len(trimmed) > 0:
-        ratio = abs(len(trimmed) - baseline_len) / baseline_len
-        status_map["length"] = "fail" if ratio >= cfg["length"]["warn_ratio"] else "pass"
+    if cfg["length"]["enabled"]:
+        # Length drift is only meaningful when we have a non-zero baseline and a non-empty response.
+        if baseline_len and baseline_len > 0 and len(trimmed) > 0:
+            ratio = abs(len(trimmed) - baseline_len) / baseline_len
+            crit_ratio = cfg["length"]["crit_ratio"]
+            warn_ratio = cfg["length"]["warn_ratio"]
+            # Fail when deviation crosses the critical band; warn band is treated as "pass" for now
+            # but can be surfaced as a softer signal in the future without changing the status shape.
+            if ratio >= crit_ratio:
+                status_map["length"] = FAIL_STATUS
+            else:
+                status_map["length"] = PASS_STATUS
+        else:
+            status_map["length"] = NOT_APPLICABLE_STATUS
 
-    if cfg["repetition"]["enabled"] and trimmed:
-        max_repeat = _max_line_repeat_count(trimmed)
-        status_map["repetition"] = "fail" if max_repeat >= cfg["repetition"]["warn_line_repeats"] else "pass"
+    if cfg["repetition"]["enabled"]:
+        if trimmed:
+            max_repeat = _max_line_repeat_count(trimmed)
+            crit_repeats = cfg["repetition"]["crit_line_repeats"]
+            warn_repeats = cfg["repetition"]["warn_line_repeats"]
+            if max_repeat >= crit_repeats:
+                status_map["repetition"] = FAIL_STATUS
+            else:
+                status_map["repetition"] = PASS_STATUS
+        else:
+            status_map["repetition"] = NOT_APPLICABLE_STATUS
 
-    if cfg["required"]["enabled"] and required_keywords and trimmed:
+    if cfg["required"]["enabled"] and required_keywords:
         lower = trimmed.lower()
         missing_keywords = [k for k in required_keywords if k.lower() not in lower]
-        status_map["required_keywords"] = "fail" if missing_keywords else "pass"
+        status_map["required_keywords"] = FAIL_STATUS if missing_keywords else PASS_STATUS
 
-    if cfg["format"]["enabled"] and required_sections and trimmed:
-        lower = trimmed.lower()
-        missing_sections = [sct for sct in required_sections if sct.lower() not in lower]
-        status_map["format"] = "fail" if missing_sections else "pass"
+    if cfg["required"]["enabled"]:
+        if required_keywords or required_json_fields:
+            status_map["required"] = _fold_required_status(status_map)
+        else:
+            status_map["required"] = NOT_APPLICABLE_STATUS
 
-    if cfg["tokens"]["enabled"] and isinstance(s.get("tokens_used"), (int, float)):
-        status_map["tokens"] = "fail" if s["tokens_used"] >= cfg["tokens"]["warn"] else "pass"
+    if cfg["format"]["enabled"]:
+        if required_sections:
+            lower = trimmed.lower()
+            missing_sections = [sct for sct in required_sections if sct.lower() not in lower]
+            status_map["format"] = FAIL_STATUS if missing_sections else PASS_STATUS
+        else:
+            status_map["format"] = NOT_APPLICABLE_STATUS
 
-    if cfg["cost"]["enabled"] and isinstance(s.get("cost"), (int, float)):
-        status_map["cost"] = "fail" if s["cost"] >= cfg["cost"]["warn"] else "pass"
+    if cfg["leakage"]["enabled"]:
+        if trimmed:
+            status_map["leakage"] = FAIL_STATUS if _detect_leakage_indicators(trimmed) else PASS_STATUS
+        else:
+            status_map["leakage"] = NOT_APPLICABLE_STATUS
 
-    if cfg["leakage"]["enabled"] and trimmed:
-        status_map["leakage"] = "fail" if _detect_leakage_indicators(trimmed) else "pass"
-
-    if cfg["coherence"]["enabled"]:
-        status_map["coherence"] = "not_implemented"
-
-    if cfg["tool"]["enabled"] and db is not None and project_id is not None and s.get("payload") is not None:
-        status_map["tool"] = _run_tool_policy_for_snapshot(
-            db, project_id, agent_id or s.get("agent_id"), s["payload"]
-        )
+    if cfg["tool"]["enabled"]:
+        if db is not None and project_id is not None and s.get("payload") is not None:
+            status_map["tool"] = _run_tool_policy_for_snapshot(
+                db, project_id, agent_id or s.get("agent_id"), s["payload"]
+            )
+        else:
+            status_map["tool"] = NOT_APPLICABLE_STATUS
 
     return status_map
 
@@ -391,11 +425,10 @@ def evaluate_recent_snapshots(
             if not cfg[key]["enabled"]:
                 continue
             stats[key]["enabled"] = True
-            stats[key]["applicable"] += 1
-            if key == "required":
-                if status_map.get("required_keywords") == "fail" or status_map.get("required_json_fields") == "fail":
-                    stats[key]["failed"] += 1
-            elif status_map.get(key) == "fail":
+            status = status_map.get(key)
+            if status in EVALUATED_STATUSES:
+                stats[key]["applicable"] += 1
+            if status in FAILISH_STATUSES:
                 stats[key]["failed"] += 1
 
         per_snapshot.append(
@@ -452,11 +485,13 @@ def evaluate_one_snapshot_at_save(
     project_id: Optional[int] = None,
     agent_id: Optional[str] = None,
     db: Optional[Session] = None,
+    baseline_len: Optional[float] = None,
 ) -> Dict[str, str]:
     """
     Evaluate a single snapshot at save time. Used to persist eval check results
     so Live View display does not change when the user later changes eval config.
-    baseline_len is None so length check is skipped at ingest.
+    baseline_len defaults to None (so length is not applied at ingest-time), but callers
+    like Release Gate drift can pass a computed baseline to enable length evaluation.
     When payload, project_id, and db are provided, the tool-policy check is run.
     """
     cfg = normalize_eval_config(eval_config or {})
@@ -473,7 +508,7 @@ def evaluate_one_snapshot_at_save(
     required_json_fields = _parse_csv(cfg["required"]["json_fields_csv"])
     required_sections = _parse_csv(cfg["format"]["sections_csv"])
     return _evaluate_one_snapshot(
-        s, cfg, baseline_len=None, required_keywords=required_keywords,
+        s, cfg, baseline_len=baseline_len, required_keywords=required_keywords,
         required_json_fields=required_json_fields, required_sections=required_sections,
         db=db, project_id=project_id, agent_id=agent_id,
     )
@@ -503,9 +538,10 @@ def aggregate_stored_eval_checks(
 
         # Normalize stored keys: required_keywords / required_json_fields -> "required" for aggregation
         status_map = dict(stored)
-        if "required_keywords" in status_map or "required_json_fields" in status_map:
-            req_fail = status_map.get("required_keywords") == "fail" or status_map.get("required_json_fields") == "fail"
-            status_map["required"] = "fail" if req_fail else "pass"
+        if "required" not in status_map and (
+            "required_keywords" in status_map or "required_json_fields" in status_map
+        ):
+            status_map["required"] = _fold_required_status(status_map)
 
         for key in CHECK_KEYS:
             # Consider check "enabled" if it was in config at save time OR if it appears in stored result (so baseline UI can show "applied" checks when no AgentDisplaySetting exists)
@@ -513,11 +549,10 @@ def aggregate_stored_eval_checks(
                 stats[key]["enabled"] = True
             if not stats[key]["enabled"]:
                 continue
-            stats[key]["applicable"] += 1
-            if key == "required":
-                if status_map.get("required_keywords") == "fail" or status_map.get("required_json_fields") == "fail":
-                    stats[key]["failed"] += 1
-            elif status_map.get(key) == "fail":
+            status = status_map.get(key)
+            if status in EVALUATED_STATUSES:
+                stats[key]["applicable"] += 1
+            if status in FAILISH_STATUSES:
                 stats[key]["failed"] += 1
 
         per_snapshot.append({

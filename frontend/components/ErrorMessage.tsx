@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { AlertCircle, X } from 'lucide-react';
-import { useState } from 'react';
+import { AlertCircle, X } from "lucide-react";
+import { useState } from "react";
 
 interface ErrorMessageProps {
   title?: string;
@@ -10,11 +10,11 @@ interface ErrorMessageProps {
   className?: string;
 }
 
-export default function ErrorMessage({ 
-  title = 'Error',
+export default function ErrorMessage({
+  title = "Error",
   message,
   onDismiss,
-  className = '' 
+  className = "",
 }: ErrorMessageProps) {
   const [dismissed, setDismissed] = useState(false);
 

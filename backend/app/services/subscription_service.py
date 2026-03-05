@@ -36,6 +36,8 @@ class SubscriptionService:
                 "api_calls_per_month": limits["api_calls_per_month"],
                 "team_members_per_project": limits["team_members_per_project"],
                 "data_retention_days": limits["data_retention_days"],
+                "snapshots_per_month": limits.get("snapshots_per_month"),
+                "guard_credits_per_month": limits.get("guard_credits_per_month"),
             },
             "features": limits["features"],
             "current_period_start": (

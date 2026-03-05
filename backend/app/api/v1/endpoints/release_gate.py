@@ -9,15 +9,15 @@ MVP flow:
 
 Baseline vs Run eval:
 - Baseline snapshots show eval result from snapshot capture time (eval_checks_result).
-  Do not re-evaluate baseline with current config here; that would be drift.
+  Do not re-evaluate baseline with current config in Release Gate MVP.
 - Run result is evaluated with current agent + current eval config; it is the source
   of truth for "pass/fail with current setup".
-- Drift mode is for comparing "at capture" vs "re-evaluated with current eval".
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from collections import defaultdict
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Literal, Optional, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -28,17 +28,19 @@ from sqlalchemy.orm import Session
 from app.api.v1.endpoints.behavior import (
     _append_violation_context,
     _build_ruleset_hash,
-    _build_trace_steps,
     _derive_agent_id,
-    _extract_tool_calls_from_payload,
     _iso,
-    _parse_tool_args,
     _resolve_effective_rules,
     _run_behavior_validation,
 )
-from app.utils.tool_calls import extract_tool_calls_summary
+from app.core.behavior_diff import compute_behavior_diff, tool_calls_summary_to_sequence
+from app.core.canonical import (
+    response_to_canonical_steps,
+    response_to_canonical_tool_calls_summary,
+)
 from app.core.database import get_db
 from app.core.permissions import check_project_access
+from app.core.usage_limits import check_guard_credits_limit
 from app.core.security import get_current_user, get_user_from_api_key
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.behavior_report import BehaviorReport
@@ -47,8 +49,126 @@ from app.models.snapshot import Snapshot
 from app.models.user import User
 from app.models.validation_dataset import ValidationDataset
 from app.services.replay_service import replay_service
+from app.services.user_api_key_service import UserApiKeyService
 
 router = APIRouter()
+SUPPORTED_REPLAY_PROVIDERS = {"openai", "anthropic", "google"}
+
+def _has_eval_fail(eval_checks_result: Any) -> bool:
+    """
+    True when at least one stored eval check is an explicit fail.
+    Expected shape: {check_id: "pass"|"fail"|"not_applicable"|...}
+    """
+    if not eval_checks_result or not isinstance(eval_checks_result, dict):
+        return False
+    for _k, v in eval_checks_result.items():
+        if str(v).lower() == "fail":
+            return True
+    return False
+
+
+def _is_pass_eval_checks(eval_checks_result: Any) -> bool:
+    """
+    PASS for Recommended-set Golden means:
+    - no explicit fail
+    - at least one explicit pass (N/A-only rows are neutral, not golden)
+    """
+    if not eval_checks_result or not isinstance(eval_checks_result, dict):
+        return False
+    has_pass = any(str(v).lower() == "pass" for v in eval_checks_result.values())
+    return has_pass and not _has_eval_fail(eval_checks_result)
+
+
+@router.get("/projects/{project_id}/release-gate/agents/{agent_id}/recommended-snapshots")
+def get_recommended_snapshots_for_agent(
+    project_id: int,
+    agent_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return the fixed MVP "Recommended set" for Release Gate:
+    - time window: last 7 days
+    - Worst 20: snapshots with explicit FAIL in eval_checks_result, newest first
+    - Golden 20: snapshots with PASS eval_checks_result, newest first
+    - fallback: fill up to 40 with most recent snapshots in the window
+    """
+    check_project_access(project_id, current_user, db)
+    effective_agent_id = str(agent_id or "").strip()
+    if not effective_agent_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="agent_id is required.",
+        )
+
+    window_days = 7
+    since = datetime.utcnow() - timedelta(days=window_days)
+    snapshots = (
+        db.query(Snapshot)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.agent_id == effective_agent_id,
+            Snapshot.created_at >= since,
+        )
+        .order_by(Snapshot.created_at.desc())
+        .limit(800)
+        .all()
+    )
+
+    worst: List[Snapshot] = []
+    golden: List[Snapshot] = []
+    for s in snapshots:
+        checks = getattr(s, "eval_checks_result", None)
+        if _has_eval_fail(checks):
+            worst.append(s)
+        elif _is_pass_eval_checks(checks):
+            golden.append(s)
+
+    worst = worst[:20]
+    golden = golden[:20]
+    picked_ids: List[int] = []
+    seen: Set[int] = set()
+    for s in worst + golden:
+        if s.id in seen:
+            continue
+        seen.add(s.id)
+        picked_ids.append(s.id)
+
+    # Fill to 40 with the most recent snapshots in the window.
+    target_total = 40
+    fill: List[Snapshot] = []
+    if len(picked_ids) < target_total:
+        for s in snapshots:
+            if s.id in seen:
+                continue
+            seen.add(s.id)
+            picked_ids.append(s.id)
+            fill.append(s)
+            if len(picked_ids) >= target_total:
+                break
+
+    def _to_item(s: Snapshot) -> Dict[str, Any]:
+        created_at = getattr(s, "created_at", None)
+        return {
+            "id": s.id,
+            "trace_id": getattr(s, "trace_id", None),
+            "created_at": (created_at.isoformat() if created_at else None),
+        }
+
+    w = len(worst)
+    g = len(golden)
+    return {
+        "snapshot_ids": picked_ids,
+        # Additive fields for UI: allow Worst/Golden to be shown as separate lists.
+        "worst_snapshot_ids": [s.id for s in worst],
+        "golden_snapshot_ids": [s.id for s in golden],
+        "fill_snapshot_ids": [s.id for s in fill],
+        "worst_items": [_to_item(s) for s in worst],
+        "golden_items": [_to_item(s) for s in golden],
+        "fill_items": [_to_item(s) for s in fill],
+        "meta": {"worst": w, "golden": g, "window_days": window_days},
+        "label": f"Recommended: Worst {w} + Golden {g} (last {window_days} days)",
+    }
 
 
 class ReleaseGateValidateRequest(BaseModel):
@@ -78,7 +198,21 @@ class ReleaseGateValidateRequest(BaseModel):
     baseline_trace_id: Optional[str] = Field(
         None, description="Optional baseline trace ID. Defaults to trace_id or first snapshot's trace."
     )
+    model_source: Literal["detected", "platform"] = Field(
+        "detected",
+        description="Model source mode. detected=use node model; platform=use platform-provided model override.",
+    )
     new_model: Optional[str] = Field(None, description="Replay model override")
+    replay_provider: Optional[Literal["openai", "anthropic", "google"]] = Field(
+        None, description="Optional provider override for replay calls."
+    )
+    replay_api_key: Optional[str] = Field(
+        None,
+        description=(
+            "Optional provider API key override for replay calls. "
+            "When omitted, server-side provider key is used."
+        ),
+    )
     new_system_prompt: Optional[str] = Field(None, description="Replay system prompt override")
     replay_temperature: Optional[float] = Field(None, description="Replay request temperature override")
     replay_max_tokens: Optional[int] = Field(None, description="Replay request max_tokens override")
@@ -88,28 +222,22 @@ class ReleaseGateValidateRequest(BaseModel):
     )
     rule_ids: Optional[List[str]] = Field(None, description="Optional specific rule IDs")
     max_snapshots: int = Field(20, ge=1, le=100, description="Max snapshots replayed from trace")
-    repeat_runs: int = Field(1, ge=1, le=5, description="Repeat replay N times")
-    failed_run_ratio_max: float = Field(
-        0.25,
+    repeat_runs: int = Field(3, ge=1, le=5, description="Repeat replay N times")
+    fail_rate_max: float = Field(
+        0.05,
         ge=0.0,
         le=1.0,
-        description=(
-            "Gate passes if (failed runs) / (total runs) <= this value. "
-            "A run is 'failed' when it has at least one failed eval element (same as Live View red). "
-            "E.g. 0.25 = pass when at most 25% of runs have any failure."
-        ),
+        description="Gate passes if FAIL case ratio <= this value.",
     )
-    thresholds: Optional[Dict[str, int]] = Field(
-        default=None,
-        description="Deprecated. Ignored. Gate uses failed_run_ratio_max only. Will be removed in a future version.",
+    flaky_rate_max: float = Field(
+        0.03,
+        ge=0.0,
+        le=1.0,
+        description="Gate passes if FLAKY case ratio <= this value.",
     )
-    fail_on_any_regression: Optional[bool] = Field(
-        default=None,
-        description="Deprecated. Ignored. Gate uses failed_run_ratio_max only. Will be removed in a future version.",
-    )
-    evaluation_mode: Literal["regression", "stability", "drift"] = Field(
-        "regression",
-        description="Regression: baseline vs candidate. Drift: re-eval past data with current rules. Stability: N runs consistency (coming soon).",
+    evaluation_mode: Literal["replay_test"] = Field(
+        "replay_test",
+        description="Replay Test only.",
     )
 
 
@@ -120,15 +248,6 @@ def _iso(value: Optional[datetime]) -> Optional[str]:
         return value.isoformat()
     except Exception:
         return None
-
-
-def _compute_severity_delta(candidate: Dict[str, int], baseline: Dict[str, int]) -> Dict[str, int]:
-    return {
-        "critical": candidate.get("critical", 0) - baseline.get("critical", 0),
-        "high": candidate.get("high", 0) - baseline.get("high", 0),
-        "medium": candidate.get("medium", 0) - baseline.get("medium", 0),
-        "low": candidate.get("low", 0) - baseline.get("low", 0),
-    }
 
 
 def _ratio_band(ratio: float) -> str:
@@ -179,21 +298,31 @@ def _build_replay_candidate_steps(
         if not res.get("success"):
             continue
 
-        tool_calls = _extract_tool_calls_from_payload(res.get("response_data"))
-        for tc in tool_calls:
-            function = tc.get("function") if isinstance(tc, dict) else {}
-            function = function if isinstance(function, dict) else {}
-            steps.append(
-                {
-                    **base,
-                    "step_order": order + 0.01,
-                    "step_type": "tool_call",
-                    "tool_name": function.get("name") or tc.get("name"),
-                    "tool_args": _parse_tool_args(function.get("arguments") or tc.get("arguments")),
-                }
-            )
+        canonical_steps = response_to_canonical_steps(
+            res.get("response_data"),
+            provider_hint=res.get("replay_provider"),
+            step_order_base=order,
+            base_meta=base,
+        )
+        if canonical_steps:
+            first_canonical = canonical_steps[0]
+            if first_canonical.get("_provider_unknown"):
+                steps[-1]["_provider_unknown"] = True
+            if first_canonical.get("_id_conflict"):
+                steps[-1]["_id_conflict"] = True
+        for st in canonical_steps:
+            if st.get("step_type") == "tool_call":
+                steps.append(st)
 
     return sorted(steps, key=lambda x: x.get("step_order") or 0)
+
+
+def _baseline_sequence_for_snapshot(snapshot: Snapshot) -> List[str]:
+    """Get ordered tool name list from snapshot for behavior diff baseline."""
+    raw = getattr(snapshot, "tool_calls_summary", None)
+    if isinstance(raw, list):
+        return tool_calls_summary_to_sequence(raw)
+    return []
 
 
 def _eval_elements_passed_failed(
@@ -225,42 +354,6 @@ def _eval_elements_passed_failed(
     return passed, failed
 
 
-def _top_regressed_rules(
-    rules: List[BehaviorRule],
-    baseline_violations: List[Dict[str, Any]],
-    candidate_violations: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
-    baseline_counts: Dict[str, int] = {}
-    candidate_counts: Dict[str, int] = {}
-
-    for v in baseline_violations:
-        rule_id = str(v.get("rule_id") or "")
-        if rule_id:
-            baseline_counts[rule_id] = baseline_counts.get(rule_id, 0) + 1
-
-    for v in candidate_violations:
-        rule_id = str(v.get("rule_id") or "")
-        if rule_id:
-            candidate_counts[rule_id] = candidate_counts.get(rule_id, 0) + 1
-
-    out: List[Dict[str, Any]] = []
-    for rule_id, candidate_count in candidate_counts.items():
-        baseline_count = baseline_counts.get(rule_id, 0)
-        if candidate_count > baseline_count:
-            rule = next((r for r in rules if r.id == rule_id), None)
-            out.append(
-                {
-                    "rule_id": rule_id,
-                    "rule_name": rule.name if rule else "Unknown",
-                    "baseline_violations": baseline_count,
-                    "candidate_violations": candidate_count,
-                    "delta": candidate_count - baseline_count,
-                }
-            )
-    out.sort(key=lambda row: row["delta"], reverse=True)
-    return out
-
-
 def _parse_snapshot_ids(raw: Optional[List[str]]) -> List[int]:
     if not raw:
         return []
@@ -278,12 +371,63 @@ def _parse_snapshot_ids(raw: Optional[List[str]]) -> List[int]:
     return out
 
 
+def _collect_replay_error_messages(results: List[Dict[str, Any]], limit: int = 3) -> List[str]:
+    msgs: List[str] = []
+    for r in results:
+        if r.get("success"):
+            continue
+        msg = (
+            str(r.get("error_user_message") or "").strip()
+            or str(r.get("error") or "").strip()
+            or "Replay request failed."
+        )
+        if msg and msg not in msgs:
+            msgs.append(msg)
+        if len(msgs) >= limit:
+            break
+    return msgs
+
+
+def _normalize_provider(value: Any) -> Optional[str]:
+    provider = str(value or "").strip().lower()
+    if provider in SUPPORTED_REPLAY_PROVIDERS:
+        return provider
+    return None
+
+
+def _infer_provider_from_model(model: Any) -> Optional[str]:
+    m = str(model or "").strip().lower()
+    if not m:
+        return None
+    if "claude" in m or m.startswith("anthropic/"):
+        return "anthropic"
+    if (
+        "gemini" in m
+        or "google" in m
+        or m.startswith("models/gemini")
+        or m.startswith("google/")
+    ):
+        return "google"
+    return "openai"
+
+
+def _resolve_snapshot_provider(snapshot: Snapshot) -> Optional[str]:
+    provider = _normalize_provider(getattr(snapshot, "provider", None))
+    if provider:
+        return provider
+    return _infer_provider_from_model(getattr(snapshot, "model", None))
+
+
 async def _run_release_gate(
     project_id: int, payload: ReleaseGateValidateRequest, db: Session
 ) -> Dict[str, Any]:
     trace_id = payload.trace_id
     baseline_trace_id = payload.baseline_trace_id
     snapshot_ids_to_use: Optional[List[Any]] = None
+    enforce_dataset_node_scope = False
+    selected_dataset_agent_id: Optional[str] = (
+        str(payload.agent_id).strip() if str(payload.agent_id or "").strip() else None
+    )
     target_dataset_ids: List[str] = list(payload.dataset_ids or []) or (
         [payload.dataset_id] if payload.dataset_id else []
     )
@@ -329,6 +473,7 @@ async def _run_release_gate(
 
     elif target_dataset_ids:
         snapshot_ids_to_use = []
+        enforce_dataset_node_scope = True
         datasets = (
             db.query(ValidationDataset)
             .filter(
@@ -342,9 +487,55 @@ async def _run_release_gate(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No validation datasets found for IDs {target_dataset_ids}",
             )
+        non_empty_dataset_agent_ids = sorted(
+            {
+                str(ds.agent_id).strip()
+                for ds in datasets
+                if str(ds.agent_id or "").strip()
+            }
+        )
+        if selected_dataset_agent_id:
+            mismatched_dataset_ids = [
+                ds.id
+                for ds in datasets
+                if str(ds.agent_id or "").strip()
+                and str(ds.agent_id).strip() != selected_dataset_agent_id
+            ]
+            if mismatched_dataset_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={
+                        "error_code": "dataset_agent_mismatch",
+                        "message": "Selected datasets must belong to the currently selected node.",
+                        "expected_agent_id": selected_dataset_agent_id,
+                        "dataset_ids": mismatched_dataset_ids[:20],
+                    },
+                )
+        elif len(non_empty_dataset_agent_ids) > 1:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error_code": "dataset_agent_mismatch",
+                    "message": "Selected datasets span multiple nodes. Please select datasets from one node only.",
+                    "agent_ids": non_empty_dataset_agent_ids,
+                },
+            )
+        elif len(non_empty_dataset_agent_ids) == 1:
+            selected_dataset_agent_id = non_empty_dataset_agent_ids[0]
+
         for ds in datasets:
             if ds.snapshot_ids:
                 snapshot_ids_to_use.extend(ds.snapshot_ids)
+        # Keep order while removing duplicates.
+        dedup_snapshot_ids: List[Any] = []
+        seen_snapshot_ids = set()
+        for sid in snapshot_ids_to_use:
+            sid_key = str(sid)
+            if sid_key in seen_snapshot_ids:
+                continue
+            seen_snapshot_ids.add(sid_key)
+            dedup_snapshot_ids.append(sid)
+        snapshot_ids_to_use = dedup_snapshot_ids
         
         # Determine fallback trace_id from the first dataset for reference
         if datasets and not trace_id:
@@ -391,6 +582,41 @@ async def _run_release_gate(
         }
         snapshots = [snapshots_by_id[sid] for sid in snapshot_ids_to_use if sid in snapshots_by_id]
         snapshots = snapshots[: payload.max_snapshots]
+        if enforce_dataset_node_scope:
+            snapshot_agent_ids = sorted(
+                {
+                    str(getattr(s, "agent_id", "") or "").strip()
+                    for s in snapshots
+                    if str(getattr(s, "agent_id", "") or "").strip()
+                }
+            )
+            if selected_dataset_agent_id:
+                mismatched_snapshot_ids = [
+                    s.id
+                    for s in snapshots
+                    if str(getattr(s, "agent_id", "") or "").strip() != selected_dataset_agent_id
+                ]
+                if mismatched_snapshot_ids:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail={
+                            "error_code": "dataset_snapshot_agent_mismatch",
+                            "message": "Selected datasets include logs from another node.",
+                            "expected_agent_id": selected_dataset_agent_id,
+                            "snapshot_ids": mismatched_snapshot_ids[:20],
+                        },
+                    )
+            elif len(snapshot_agent_ids) > 1:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={
+                        "error_code": "dataset_snapshot_agent_mismatch",
+                        "message": "Selected datasets include logs from multiple nodes.",
+                        "agent_ids": snapshot_agent_ids,
+                    },
+                )
+            elif len(snapshot_agent_ids) == 1:
+                selected_dataset_agent_id = snapshot_agent_ids[0]
     else:
         snapshots = (
             db.query(Snapshot)
@@ -405,12 +631,78 @@ async def _run_release_gate(
             detail=f"No snapshots found for trace_id={trace_id}",
         )
 
-    baseline_steps = _build_trace_steps(project_id, baseline_trace_id, db)
-    if not baseline_steps:
+    use_platform_model = payload.model_source == "platform"
+
+    explicit_provider = _normalize_provider(payload.replay_provider)
+    if use_platform_model and not explicit_provider:
+        inferred_provider = _infer_provider_from_model(payload.new_model)
+        if inferred_provider:
+            explicit_provider = inferred_provider
+    if payload.replay_provider and not explicit_provider:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No baseline steps found for trace_id={baseline_trace_id}",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Unsupported replay_provider. Use one of: openai, anthropic, google.",
         )
+    if use_platform_model and not explicit_provider:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Platform model mode requires replay_provider or provider-inferrable new_model.",
+        )
+
+    unresolved_snapshot_ids: List[int] = []
+    if not explicit_provider:
+        for snapshot in snapshots:
+            resolved = _resolve_snapshot_provider(snapshot)
+            if not resolved:
+                unresolved_snapshot_ids.append(snapshot.id)
+                continue
+
+    if unresolved_snapshot_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error_code": "provider_resolution_failed",
+                "message": "Could not resolve provider for one or more selected snapshots.",
+                "snapshot_ids": unresolved_snapshot_ids[:20],
+            },
+        )
+
+    if not use_platform_model:
+        key_service = UserApiKeyService(db)
+        key_presence_cache: Dict[Tuple[str, Optional[str]], bool] = {}
+
+        def _has_effective_provider_key(provider: str, agent_id: Optional[str]) -> bool:
+            normalized_agent_id = str(agent_id or "").strip() or None
+            cache_key = (provider, normalized_agent_id)
+            if cache_key in key_presence_cache:
+                return key_presence_cache[cache_key]
+            exists = bool(key_service.get_user_api_key(project_id, provider, normalized_agent_id))
+            key_presence_cache[cache_key] = exists
+            return exists
+
+        missing_provider_keys_set: Set[str] = set()
+        if explicit_provider:
+            for snapshot in snapshots:
+                if not _has_effective_provider_key(explicit_provider, getattr(snapshot, "agent_id", None)):
+                    missing_provider_keys_set.add(explicit_provider)
+        else:
+            for snapshot in snapshots:
+                resolved_provider = _resolve_snapshot_provider(snapshot)
+                if not resolved_provider:
+                    continue
+                if not _has_effective_provider_key(resolved_provider, getattr(snapshot, "agent_id", None)):
+                    missing_provider_keys_set.add(resolved_provider)
+
+        missing_provider_keys = sorted(missing_provider_keys_set)
+        if missing_provider_keys:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error_code": "missing_provider_keys",
+                    "missing_provider_keys": missing_provider_keys,
+                    "message": "Missing API keys for required providers.",
+                },
+            )
 
     rules_query = db.query(BehaviorRule).filter(BehaviorRule.project_id == project_id)
     if payload.rule_ids:
@@ -418,351 +710,424 @@ async def _run_release_gate(
     else:
         rules_query = rules_query.filter(BehaviorRule.enabled.is_(True))
     rules = rules_query.order_by(BehaviorRule.created_at.asc()).all()
+    baseline_steps: List[Dict[str, Any]] = []
 
-    baseline_rules, baseline_policy_resolution = _resolve_effective_rules(rules, baseline_steps)
-    _baseline_status, baseline_summary, baseline_violations = _run_behavior_validation(
-        baseline_rules, baseline_steps
-    )
-    baseline_summary["policy_resolution"] = baseline_policy_resolution
-    baseline_summary["ruleset_hash"] = _build_ruleset_hash(baseline_rules)
-    baseline_summary["rule_snapshot"] = [
-        {"id": r.id, "revision": _iso(r.updated_at), "rule_json": r.rule_json or {}}
-        for r in baseline_rules
-    ]
-    baseline_severity = baseline_summary.get("severity_breakdown", {})
+    if payload.evaluation_mode == "replay_test":
+        snapshot_by_id: Dict[int, Snapshot] = {s.id: s for s in snapshots}
+        attempts_by_snapshot: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+        all_reasons: List[str] = []
 
-    # Drift: re-evaluate recorded data with current rules (no replay). Support multiple traces from dataset.
-    if payload.evaluation_mode == "drift":
-        drift_runs: List[Dict[str, Any]] = []
-        all_trace_ids: List[str] = []
-
-        if (target_dataset_ids or payload.use_recent_snapshots) and snapshot_ids_to_use:
-            # Multiple traces: get unique trace_ids from dataset snapshots.
-            snapshots_for_traces = (
-                db.query(Snapshot.trace_id)
-                .filter(
-                    Snapshot.project_id == project_id,
-                    Snapshot.id.in_(snapshot_ids_to_use),
-                )
-                .distinct()
-                .all()
+        for run_idx in range(payload.repeat_runs):
+            replay_results = await replay_service.run_batch_replay(
+                snapshots=snapshots,
+                new_model=payload.new_model,
+                new_system_prompt=payload.new_system_prompt,
+                temperature=payload.replay_temperature,
+                max_tokens=payload.replay_max_tokens,
+                top_p=payload.replay_top_p,
+                replay_overrides=payload.replay_overrides,
+                replay_provider=payload.replay_provider,
+                api_key=None,
+                rubric=None,
+                project_id=project_id,
+                db=db,
+                allow_environment_key=use_platform_model,
+                prefer_environment_key=use_platform_model,
             )
-            all_trace_ids = [row.trace_id for row in snapshots_for_traces if row.trace_id]
-        else:
-            all_trace_ids = [trace_id]
 
-        for run_idx, tid in enumerate(all_trace_ids, start=1):
-            steps_for_trace = _build_trace_steps(project_id, tid, db)
-            if not steps_for_trace:
+            for res in replay_results:
+                snapshot = snapshot_by_id.get(res.get("snapshot_id"))
+                if not snapshot:
+                    continue
+
+                run_tool_summary = response_to_canonical_tool_calls_summary(
+                    res.get("response_data") or {}, res.get("replay_provider")
+                )
+                baseline_seq = _baseline_sequence_for_snapshot(snapshot)
+                candidate_seq = tool_calls_summary_to_sequence(run_tool_summary)
+                behavior_diff = compute_behavior_diff(baseline_seq, candidate_seq).to_dict()
+
+                if not res.get("success"):
+                    replay_error_msgs = _collect_replay_error_messages([res], limit=1)
+                    reasons = replay_error_msgs or ["Replay request failed."]
+                    replay_error_code = str(res.get("error_code") or "").strip() or None
+                    replay_provider = str(res.get("replay_provider") or "").strip() or None
+                    attempts_by_snapshot[snapshot.id].append(
+                        {
+                            "run_index": run_idx + 1,
+                            "trace_id": snapshot.trace_id,
+                            "pass": False,
+                            "failure_reasons": reasons,
+                            "violations": [],
+                            "summary": {},
+                            "eval_elements_passed": [],
+                            "eval_elements_failed": [],
+                            "replay": {
+                                "attempted": 1,
+                                "succeeded": 0,
+                                "failed": 1,
+                                "avg_latency_ms": None,
+                                "failed_snapshot_ids": [snapshot.id],
+                                "error_messages": replay_error_msgs,
+                                "error_codes": [replay_error_code] if replay_error_code else [],
+                                "missing_provider_keys": (
+                                    [replay_provider]
+                                    if replay_error_code == "missing_api_key" and replay_provider
+                                    else []
+                                ),
+                            },
+                            "has_tool_calls": len(run_tool_summary) > 0,
+                            "tool_calls_summary": run_tool_summary,
+                            "behavior_diff": behavior_diff,
+                        }
+                    )
+                    all_reasons.extend(reasons)
+                    continue
+
+                candidate_steps = _build_replay_candidate_steps([snapshot], [res])
+                if not candidate_steps:
+                    replay_error_msgs = _collect_replay_error_messages([res], limit=1)
+                    reason = (
+                        f"Replay produced no candidate steps: {replay_error_msgs[0]}"
+                        if replay_error_msgs
+                        else "Replay produced no candidate steps"
+                    )
+                    attempts_by_snapshot[snapshot.id].append(
+                        {
+                            "run_index": run_idx + 1,
+                            "trace_id": snapshot.trace_id,
+                            "pass": False,
+                            "failure_reasons": [reason],
+                            "violations": [],
+                            "summary": {},
+                            "eval_elements_passed": [],
+                            "eval_elements_failed": [],
+                            "replay": {
+                                "attempted": 1,
+                                "succeeded": 0,
+                                "failed": 1,
+                                "avg_latency_ms": None,
+                                "failed_snapshot_ids": [snapshot.id],
+                                "error_messages": replay_error_msgs,
+                                "error_codes": [],
+                                "missing_provider_keys": [],
+                            },
+                            "has_tool_calls": len(run_tool_summary) > 0,
+                            "tool_calls_summary": run_tool_summary,
+                            "behavior_diff": behavior_diff,
+                        }
+                    )
+                    all_reasons.append(reason)
+                    continue
+
+                candidate_rules, candidate_policy_resolution = _resolve_effective_rules(
+                    rules, candidate_steps
+                )
+                _candidate_status, candidate_summary, candidate_violations = _run_behavior_validation(
+                    candidate_rules, candidate_steps
+                )
+                candidate_summary["policy_resolution"] = candidate_policy_resolution
+                candidate_summary["ruleset_hash"] = _build_ruleset_hash(candidate_rules)
+                candidate_summary["rule_snapshot"] = [
+                    {"id": r.id, "revision": _iso(r.updated_at), "rule_json": r.rule_json or {}}
+                    for r in candidate_rules
+                ]
+
+                run_pass = len(candidate_violations) == 0
+                reasons = [f"{len(candidate_violations)} eval element(s) failed"] if not run_pass else []
+                if reasons:
+                    all_reasons.extend(reasons)
+
+                enriched_violations = _append_violation_context(candidate_violations, candidate_steps)
+                tr_passed, tr_failed = _eval_elements_passed_failed(candidate_rules, candidate_violations)
+                avg_latency_ms = (
+                    float(res.get("latency_ms"))
+                    if res.get("latency_ms") is not None
+                    else None
+                )
+                attempts_by_snapshot[snapshot.id].append(
+                    {
+                        "run_index": run_idx + 1,
+                        "trace_id": snapshot.trace_id,
+                        "pass": run_pass,
+                        "failure_reasons": reasons,
+                        "violations": enriched_violations,
+                        "summary": candidate_summary,
+                        "eval_elements_passed": tr_passed,
+                        "eval_elements_failed": tr_failed,
+                        "replay": {
+                            "attempted": 1,
+                            "succeeded": 1,
+                            "failed": 0,
+                            "avg_latency_ms": avg_latency_ms,
+                            "failed_snapshot_ids": [],
+                            "error_messages": [],
+                            "error_codes": [],
+                            "missing_provider_keys": [],
+                        },
+                        "has_tool_calls": len(run_tool_summary) > 0,
+                        "tool_calls_summary": run_tool_summary,
+                        "behavior_diff": behavior_diff,
+                    }
+                )
+
+        case_results: List[Dict[str, Any]] = []
+        for snapshot in snapshots:
+            attempts = sorted(
+                attempts_by_snapshot.get(snapshot.id, []),
+                key=lambda x: x.get("run_index") or 0,
+            )
+            if not attempts:
                 continue
-            tr_rules, tr_policy_resolution = _resolve_effective_rules(rules, steps_for_trace)
-            _tr_status, tr_summary, tr_violations = _run_behavior_validation(tr_rules, steps_for_trace)
-            tr_enriched = _append_violation_context(tr_violations, steps_for_trace)
-            tr_passed, tr_failed = _eval_elements_passed_failed(tr_rules, tr_violations)
-            run_pass = len(tr_violations) == 0
-            tr_reasons = [f"{len(tr_failed)} eval element(s) failed"] if not run_pass else []
-            drift_runs.append(
+
+            total_attempts = len(attempts)
+            passed_attempts = sum(1 for a in attempts if a.get("pass"))
+            failed_attempts = total_attempts - passed_attempts
+            if passed_attempts == total_attempts:
+                case_status = "pass"
+            elif failed_attempts == total_attempts:
+                case_status = "fail"
+            else:
+                case_status = "flaky"
+            is_flaky = case_status == "flaky"
+            is_consistently_failing = case_status == "fail"
+
+            latencies = [
+                float((a.get("replay") or {}).get("avg_latency_ms"))
+                for a in attempts
+                if (a.get("replay") or {}).get("avg_latency_ms") is not None
+            ]
+            latency_min_ms = min(latencies) if latencies else None
+            latency_max_ms = max(latencies) if latencies else None
+
+            failed_rule_counts: Dict[str, int] = {}
+            passed_rule_ids: Set[str] = set()
+            failed_reasons: List[str] = []
+            replay_error_messages: List[str] = []
+            replay_error_codes: List[str] = []
+            missing_provider_keys: List[str] = []
+            tool_summary_agg: List[Dict[str, Any]] = []
+            all_violations: List[Dict[str, Any]] = []
+            error_attempt_count = 0
+
+            for a in attempts:
+                for item in a.get("eval_elements_passed") or []:
+                    rid = str(item.get("rule_id") or "")
+                    if rid:
+                        passed_rule_ids.add(rid)
+                for item in a.get("eval_elements_failed") or []:
+                    rid = str(item.get("rule_id") or "")
+                    if not rid:
+                        continue
+                    failed_rule_counts[rid] = failed_rule_counts.get(rid, 0) + int(
+                        item.get("violation_count") or 1
+                    )
+                for msg in a.get("failure_reasons") or []:
+                    if msg and msg not in failed_reasons:
+                        failed_reasons.append(str(msg))
+                for msg in (a.get("replay") or {}).get("error_messages") or []:
+                    if msg and msg not in replay_error_messages:
+                        replay_error_messages.append(str(msg))
+                for code in (a.get("replay") or {}).get("error_codes") or []:
+                    code_str = str(code or "").strip()
+                    if code_str and code_str not in replay_error_codes:
+                        replay_error_codes.append(code_str)
+                for provider in (a.get("replay") or {}).get("missing_provider_keys") or []:
+                    provider_str = str(provider or "").strip()
+                    if provider_str and provider_str not in missing_provider_keys:
+                        missing_provider_keys.append(provider_str)
+                if int((a.get("replay") or {}).get("failed") or 0) > 0:
+                    error_attempt_count += 1
+                for tc in a.get("tool_calls_summary") or []:
+                    if tc not in tool_summary_agg:
+                        tool_summary_agg.append(tc)
+                all_violations.extend(a.get("violations") or [])
+
+            eval_elements_failed = [
                 {
-                    "run_index": run_idx,
-                    "trace_id": tid,
-                    "pass": run_pass,
-                    "failure_reasons": tr_reasons,
-                    "violations": tr_enriched,
+                    "rule_id": rid,
+                    "rule_name": next(
+                        (
+                            v.get("rule_name")
+                            for v in all_violations
+                            if v.get("rule_id") == rid and v.get("rule_name")
+                        ),
+                        rid,
+                    ),
+                    "violation_count": count,
+                }
+                for rid, count in sorted(failed_rule_counts.items())
+            ]
+            eval_elements_failed_ids = {item["rule_id"] for item in eval_elements_failed}
+            eval_elements_passed = [
+                {"rule_id": rid, "rule_name": rid}
+                for rid in sorted(passed_rule_ids - eval_elements_failed_ids)
+            ]
+            pass_ratio = passed_attempts / total_attempts if total_attempts else 0.0
+
+            case_results.append(
+                {
+                    "run_index": len(case_results) + 1,
+                    "trace_id": snapshot.trace_id,
+                    "snapshot_id": snapshot.id,
+                    "pass": case_status == "pass",
+                    "case_status": case_status,
+                    "failure_reasons": failed_reasons if case_status != "pass" else [],
+                    "violation_count_delta": 0,
+                    "severity_delta": {"critical": 0, "high": 0, "medium": 0, "low": 0},
                     "summary": {
-                        **tr_summary,
-                        "policy_resolution": tr_policy_resolution,
-                        "ruleset_hash": _build_ruleset_hash(tr_rules),
+                        "eval_mode": "replay_test",
+                        "case_status": case_status,
+                        "pass_ratio": round(pass_ratio, 4),
+                        "is_flaky": is_flaky,
+                        "is_consistently_failing": is_consistently_failing,
+                        "latency_min_ms": latency_min_ms,
+                        "latency_max_ms": latency_max_ms,
                     },
-                    "eval_elements_passed": tr_passed,
-                    "eval_elements_failed": tr_failed,
+                    "violations": all_violations,
+                    "eval_elements_passed": eval_elements_passed,
+                    "eval_elements_failed": eval_elements_failed,
+                    "top_regressed_rules": [],
+                    "first_broken_step": None,
+                    "replay": {
+                        "attempted": total_attempts,
+                        "succeeded": total_attempts - error_attempt_count,
+                        "failed": error_attempt_count,
+                        "avg_latency_ms": (sum(latencies) / len(latencies)) if latencies else None,
+                        "failed_snapshot_ids": [snapshot.id] if replay_error_messages else [],
+                        "error_messages": replay_error_messages,
+                        "error_codes": replay_error_codes,
+                        "missing_provider_keys": missing_provider_keys,
+                    },
+                    "has_tool_calls": len(tool_summary_agg) > 0,
+                    "tool_calls_summary": tool_summary_agg[:20],
+                    "attempts": attempts,
                 }
             )
 
-        if not drift_runs:
+        if not case_results:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="No trace data found to run Drift.",
+                detail="No snapshot data found to run Replay Test.",
             )
 
-        total_runs = len(drift_runs)
-        failed_runs_count = sum(1 for r in drift_runs if not r.get("pass"))
-        failed_ratio = failed_runs_count / total_runs if total_runs else 0.0
-        ratio_band = _ratio_band(failed_ratio)
-        gate_pass = failed_ratio <= payload.failed_run_ratio_max
+        total_cases = len(case_results)
+        failed_cases = sum(1 for r in case_results if r.get("case_status") == "fail")
+        flaky_cases = sum(1 for r in case_results if r.get("case_status") == "flaky")
+        fail_rate = failed_cases / total_cases if total_cases else 0.0
+        flaky_rate = flaky_cases / total_cases if total_cases else 0.0
+        ratio_band = _ratio_band(fail_rate)
+        gate_pass = fail_rate <= payload.fail_rate_max and flaky_rate <= payload.flaky_rate_max
 
-        primary_drift = next((r for r in drift_runs if not r.get("pass")), drift_runs[0])
-        primary_summary = dict(primary_drift.get("summary", {}))
+        primary_case = next((r for r in case_results if r.get("case_status") != "pass"), case_results[0])
+        primary_summary = dict(primary_case.get("summary", {}))
         primary_summary["target"] = {
-            "type": "release_gate_trace",
-            "trace_id": all_trace_ids[0] if all_trace_ids else trace_id,
+            "type": "release_gate_snapshot",
+            "trace_id": primary_case.get("trace_id") or trace_id,
             "baseline_trace_id": baseline_trace_id,
+            "snapshot_id": primary_case.get("snapshot_id"),
         }
         primary_summary["release_gate"] = {
-            "mode": "drift",
-            "repeat_runs": total_runs,
-            "passed_runs": total_runs - failed_runs_count,
-            "failed_runs": failed_runs_count,
-            "failed_run_ratio": round(failed_ratio, 4),
+            "mode": "replay_test",
+            "repeat_runs": payload.repeat_runs,
+            "total_inputs": total_cases,
+            "failed_inputs": failed_cases,
+            "flaky_inputs": flaky_cases,
+            "fail_rate": round(fail_rate, 4),
+            "flaky_rate": round(flaky_rate, 4),
             "ratio_band": ratio_band,
-            "failed_run_ratio_max": payload.failed_run_ratio_max,
-            "drift_runs": drift_runs,
+            "thresholds": {
+                "fail_rate_max": payload.fail_rate_max,
+                "flaky_rate_max": payload.flaky_rate_max,
+            },
         }
         report = BehaviorReport(
             project_id=project_id,
-            trace_id=all_trace_ids[0] if all_trace_ids else trace_id,
-            agent_id=_derive_agent_id(baseline_steps),
+            trace_id=primary_case.get("trace_id") or trace_id,
+            agent_id=(snapshots[0].agent_id if snapshots else _derive_agent_id(baseline_steps)),
             baseline_run_ref=baseline_trace_id,
             ruleset_hash=primary_summary.get("ruleset_hash"),
             status="pass" if gate_pass else "fail",
             summary_json=primary_summary,
-            violations_json=primary_drift.get("violations") or [],
+            violations_json=primary_case.get("violations") or [],
         )
         db.add(report)
         db.commit()
         db.refresh(report)
-        unique_reasons = list(dict.fromkeys(r for run in drift_runs for r in run.get("failure_reasons", [])))
-        failed_signals = list(dict.fromkeys(
-            v.get("rule_id") for run in drift_runs for v in (run.get("violations") or []) if v.get("rule_id")
-        ))
+
+        unique_reasons = list(dict.fromkeys(all_reasons))
+        replay_error_codes_global = list(
+            dict.fromkeys(
+                code
+                for run in case_results
+                for code in ((run.get("replay") or {}).get("error_codes") or [])
+                if code
+            )
+        )
+        missing_provider_keys_global = list(
+            dict.fromkeys(
+                provider
+                for run in case_results
+                for provider in ((run.get("replay") or {}).get("missing_provider_keys") or [])
+                if provider
+            )
+        )
+        failed_signals = list(
+            dict.fromkeys(
+                v.get("rule_id")
+                for run in case_results
+                for v in (run.get("violations") or [])
+                if v.get("rule_id")
+            )
+        )
+
+        threshold_text = (
+            f"fail<={int(payload.fail_rate_max * 100)}%, flaky<={int(payload.flaky_rate_max * 100)}%"
+        )
         return {
             "pass": gate_pass,
-            "summary": "Passed" if gate_pass else f"Failed: {failed_runs_count}/{total_runs} runs ({ratio_band}) exceed threshold {int(payload.failed_run_ratio_max * 100)}%",
+            "summary": (
+                "Passed"
+                if gate_pass
+                else (
+                    f"Failed: fail_rate={fail_rate:.2%}, flaky_rate={flaky_rate:.2%} "
+                    f"exceed thresholds ({threshold_text})"
+                )
+            ),
             "failed_signals": failed_signals,
             "exit_code": 0 if gate_pass else 1,
             "report_id": report.id,
-            "trace_id": all_trace_ids[0] if all_trace_ids else trace_id,
+            "trace_id": primary_case.get("trace_id") or trace_id,
             "baseline_trace_id": baseline_trace_id,
             "failure_reasons": unique_reasons if not gate_pass else [],
-            "thresholds_used": {"failed_run_ratio_max": payload.failed_run_ratio_max},
-            "failed_run_ratio": round(failed_ratio, 4),
-            "ratio_band": ratio_band,
-            "repeat_runs": total_runs,
-            "drift_runs": drift_runs,
-            "run_results": [
-                {
-                    "run_index": r.get("run_index"),
-                    "pass": r.get("pass"),
-                    "failure_reasons": r.get("failure_reasons", []),
-                    "violation_count_delta": 0,
-                    "severity_delta": {"critical": 0, "high": 0, "medium": 0, "low": 0},
-                    "summary": r.get("summary"),
-                    "violations": r.get("violations", []),
-                    "eval_elements_passed": r.get("eval_elements_passed", []),
-                    "eval_elements_failed": r.get("eval_elements_failed", []),
-                    "top_regressed_rules": [],
-                    "first_broken_step": None,
-                    "replay": {"attempted": 0, "succeeded": 0, "failed": 0, "avg_latency_ms": None, "failed_snapshot_ids": []},
-                    "has_tool_calls": False,
-                    "tool_calls_summary": [],
-                }
-                for r in drift_runs
-            ],
+            "thresholds_used": {
+                "fail_rate_max": payload.fail_rate_max,
+                "flaky_rate_max": payload.flaky_rate_max,
+            },
+            "fail_rate": round(fail_rate, 4),
+            "flaky_rate": round(flaky_rate, 4),
+            "failed_inputs": failed_cases,
+            "flaky_inputs": flaky_cases,
+            "total_inputs": total_cases,
+            "repeat_runs": payload.repeat_runs,
+            "replay_error_codes": replay_error_codes_global,
+            "missing_provider_keys": missing_provider_keys_global,
+            "run_results": case_results,
+            "case_results": case_results,
             "evidence_pack": {
                 "top_regressed_rules": [],
-                "first_violations": (primary_drift.get("violations") or [])[:5],
-                "failed_replay_snapshot_ids": [],
+                "first_violations": (primary_case.get("violations") or [])[:5],
+                "failed_replay_snapshot_ids": (
+                    (primary_case.get("replay") or {}).get("failed_snapshot_ids") or []
+                ),
                 "sample_failure_reasons": unique_reasons[:5],
             },
         }
 
-    run_results: List[Dict[str, Any]] = []
-    all_reasons: List[str] = []
-
-    for run_idx in range(payload.repeat_runs):
-        replay_results = await replay_service.run_batch_replay(
-            snapshots=snapshots,
-            new_model=payload.new_model,
-            new_system_prompt=payload.new_system_prompt,
-            temperature=payload.replay_temperature,
-            max_tokens=payload.replay_max_tokens,
-            top_p=payload.replay_top_p,
-            replay_overrides=payload.replay_overrides,
-            rubric=None,
-            project_id=None,
-            db=None,
-        )
-
-        candidate_steps = _build_replay_candidate_steps(snapshots, replay_results)
-        if not candidate_steps:
-            _tool_summary = []
-            for r in replay_results:
-                _tool_summary.extend(extract_tool_calls_summary(r.get("response_data") or {}))
-            reason = "Replay produced no candidate steps"
-            run_results.append(
-                {
-                    "run_index": run_idx + 1,
-                    "pass": False,
-                    "failure_reasons": [reason],
-                    "violation_count_delta": 0,
-                    "severity_delta": {"critical": 0, "high": 0, "medium": 0, "low": 0},
-                    "summary": {},
-                    "violations": [],
-                    "top_regressed_rules": [],
-                    "first_broken_step": None,
-                    "replay": {
-                        "attempted": len(replay_results),
-                        "succeeded": 0,
-                        "failed": len(replay_results),
-                        "avg_latency_ms": None,
-                        "failed_snapshot_ids": [r.get("snapshot_id") for r in replay_results],
-                    },
-                    "has_tool_calls": len(_tool_summary) > 0,
-                    "tool_calls_summary": _tool_summary,
-                }
-            )
-            all_reasons.append(reason)
-            continue
-
-        candidate_rules, candidate_policy_resolution = _resolve_effective_rules(rules, candidate_steps)
-        _candidate_status, candidate_summary, candidate_violations = _run_behavior_validation(
-            candidate_rules, candidate_steps
-        )
-        candidate_summary["policy_resolution"] = candidate_policy_resolution
-        candidate_summary["ruleset_hash"] = _build_ruleset_hash(candidate_rules)
-        candidate_summary["rule_snapshot"] = [
-            {"id": r.id, "revision": _iso(r.updated_at), "rule_json": r.rule_json or {}}
-            for r in candidate_rules
-        ]
-
-        run_pass = len(candidate_violations) == 0
-        reasons = [f"{len(candidate_violations)} eval element(s) failed"] if not run_pass else []
-
-        enriched_violations = _append_violation_context(candidate_violations, candidate_steps)
-        regressed_rules = _top_regressed_rules(rules, baseline_violations, candidate_violations)[:10]
-        severity_delta = _compute_severity_delta(
-            candidate_summary.get("severity_breakdown", {}),
-            baseline_severity,
-        )
-        violation_count_delta = (
-            candidate_summary.get("violation_count", 0) - baseline_summary.get("violation_count", 0)
-        )
-
-        baseline_step_refs = {
-            float(v.get("step_ref", 0))
-            for v in baseline_violations
-            if v.get("step_ref") is not None
-        }
-        candidate_step_refs = {
-            float(v.get("step_ref", 0))
-            for v in candidate_violations
-            if v.get("step_ref") is not None
-        }
-        new_violation_steps = sorted(candidate_step_refs - baseline_step_refs)
-        first_broken_step = new_violation_steps[0] if new_violation_steps else None
-
-        replay_success = [r for r in replay_results if r.get("success")]
-        replay_failed = [r for r in replay_results if not r.get("success")]
-        avg_latency_ms = (
-            sum(float(r.get("latency_ms") or 0) for r in replay_success) / len(replay_success)
-            if replay_success
-            else None
-        )
-        run_tool_summary: List[Dict[str, Any]] = []
-        for r in replay_results:
-            run_tool_summary.extend(extract_tool_calls_summary(r.get("response_data") or {}))
-
-        run_results.append(
-            {
-                "run_index": run_idx + 1,
-                "pass": run_pass,
-                "failure_reasons": reasons,
-                "violation_count_delta": violation_count_delta,
-                "severity_delta": severity_delta,
-                "summary": candidate_summary,
-                "violations": enriched_violations,
-                "top_regressed_rules": regressed_rules,
-                "first_broken_step": first_broken_step,
-                "replay": {
-                    "attempted": len(replay_results),
-                    "succeeded": len(replay_success),
-                    "failed": len(replay_failed),
-                    "avg_latency_ms": avg_latency_ms,
-                    "failed_snapshot_ids": [r.get("snapshot_id") for r in replay_failed],
-                },
-                "has_tool_calls": len(run_tool_summary) > 0,
-                "tool_calls_summary": run_tool_summary,
-            }
-        )
-        all_reasons.extend(reasons)
-
-    total_runs = len(run_results)
-    failed_runs_count = sum(1 for r in run_results if not r.get("pass"))
-    failed_ratio = failed_runs_count / total_runs if total_runs else 0.0
-    ratio_band = _ratio_band(failed_ratio)
-    gate_pass = failed_ratio <= payload.failed_run_ratio_max
-
-    failing_runs = [r for r in run_results if not r.get("pass")]
-    primary_run = failing_runs[0] if failing_runs else run_results[0]
-    primary_summary = primary_run.get("summary")
-    if not isinstance(primary_summary, dict):
-        primary_summary = {}
-    primary_summary["target"] = {
-        "type": "release_gate_trace",
-        "trace_id": trace_id,
-        "baseline_trace_id": baseline_trace_id,
-    }
-    primary_summary["release_gate"] = {
-        "mode": payload.evaluation_mode,
-        "repeat_runs": total_runs,
-        "passed_runs": total_runs - failed_runs_count,
-        "failed_runs": failed_runs_count,
-        "failed_run_ratio": round(failed_ratio, 4),
-        "ratio_band": ratio_band,
-        "failed_run_ratio_max": payload.failed_run_ratio_max,
-        "model_override": payload.new_model,
-        "system_prompt_override": bool(payload.new_system_prompt),
-    }
-
-    report = BehaviorReport(
-        project_id=project_id,
-        trace_id=trace_id,
-        agent_id=_derive_agent_id(baseline_steps),
-        baseline_run_ref=baseline_trace_id,
-        ruleset_hash=primary_summary.get("ruleset_hash"),
-        status="pass" if gate_pass else "fail",
-        summary_json=primary_summary,
-        violations_json=primary_run.get("violations") or [],
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Unsupported evaluation_mode: {payload.evaluation_mode}",
     )
-    db.add(report)
-    db.commit()
-    db.refresh(report)
-
-    unique_reasons = list(dict.fromkeys(all_reasons))
-    evidence_pack = {
-        "top_regressed_rules": primary_run.get("top_regressed_rules") or [],
-        "first_violations": (primary_run.get("violations") or [])[:5],
-        "failed_replay_snapshot_ids": (primary_run.get("replay") or {}).get("failed_snapshot_ids") or [],
-        "sample_failure_reasons": unique_reasons[:5],
-    }
-    top_regressed = primary_run.get("top_regressed_rules") or []
-    violations = primary_run.get("violations") or []
-    failed_signals = list(
-        dict.fromkeys(
-            [r.get("rule_id") for r in top_regressed if r.get("rule_id")]
-            + [v.get("rule_id") for v in violations if v.get("rule_id")]
-        )
-    )
-    if gate_pass:
-        summary = "Passed"
-    else:
-        summary = f"Failed: {failed_runs_count}/{total_runs} runs ({ratio_band}) exceed threshold {int(payload.failed_run_ratio_max * 100)}%"
-
-    return {
-        "pass": gate_pass,
-        "summary": summary,
-        "failed_signals": failed_signals,
-        "exit_code": 0 if gate_pass else 1,
-        "report_id": report.id,
-        "trace_id": trace_id,
-        "baseline_trace_id": baseline_trace_id,
-        "failure_reasons": unique_reasons if not gate_pass else [],
-        "thresholds_used": {"failed_run_ratio_max": payload.failed_run_ratio_max},
-        "failed_run_ratio": round(failed_ratio, 4),
-        "ratio_band": ratio_band,
-        "repeat_runs": total_runs,
-        "run_results": run_results,
-        "evidence_pack": evidence_pack,
-    }
 
 
 @router.get("/projects/{project_id}/release-gate/agents")
@@ -833,6 +1198,10 @@ def list_recent_snapshots_for_agent(
             Snapshot.latency_ms,
             Snapshot.tokens_used,
             Snapshot.cost,
+            Snapshot.user_message,
+            Snapshot.response,
+            Snapshot.eval_checks_result,
+            Snapshot.eval_config_version,
         )
         .filter(
             Snapshot.project_id == project_id,
@@ -854,6 +1223,10 @@ def list_recent_snapshots_for_agent(
             "latency_ms": r.latency_ms,
             "tokens_used": r.tokens_used,
             "cost": float(r.cost) if r.cost is not None else None,
+            "user_message": getattr(r, "user_message", None),
+            "response": getattr(r, "response", None),
+            "eval_checks_result": getattr(r, "eval_checks_result", None),
+            "eval_config_version": getattr(r, "eval_config_version", None),
         }
         for r in rows
     ]
@@ -873,6 +1246,9 @@ async def validate_release_gate(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="agent_id is required when use_recent_snapshots is True",
         )
+    allowed, err_msg = check_guard_credits_limit(db, current_user.id, getattr(current_user, "is_superuser", False))
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=err_msg)
     return await _run_release_gate(project_id, payload, db)
 
 
@@ -884,6 +1260,9 @@ async def release_gate_webhook(
     current_user: User = Depends(get_user_from_api_key),
 ):
     check_project_access(project_id, current_user, db)
+    allowed, err_msg = check_guard_credits_limit(db, current_user.id, getattr(current_user, "is_superuser", False))
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=err_msg)
     return await _run_release_gate(project_id, payload, db)
 
 
@@ -1010,7 +1389,7 @@ async def list_release_gate_history(
                 "baseline_trace_id": row.baseline_run_ref,
                 "agent_id": row.agent_id,
                 "created_at": _iso(row.created_at),
-                "mode": gate_meta.get("mode", "regression"),
+                "mode": gate_meta.get("mode", "replay_test"),
                 "repeat_runs": gate_meta.get("repeat_runs"),
                 "passed_runs": gate_meta.get("passed_runs"),
                 "failed_runs": gate_meta.get("failed_runs"),

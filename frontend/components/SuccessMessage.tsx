@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { CheckCircle, X } from 'lucide-react';
-import { useState } from 'react';
+import { CheckCircle, X } from "lucide-react";
+import { useState } from "react";
 
 interface SuccessMessageProps {
   title?: string;
@@ -10,11 +10,11 @@ interface SuccessMessageProps {
   className?: string;
 }
 
-export default function SuccessMessage({ 
-  title = 'Success',
+export default function SuccessMessage({
+  title = "Success",
   message,
   onDismiss,
-  className = '' 
+  className = "",
 }: SuccessMessageProps) {
   const [dismissed, setDismissed] = useState(false);
 

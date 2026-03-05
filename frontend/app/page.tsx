@@ -83,16 +83,16 @@ export default function Home() {
                                     <div className="p-2 rounded-lg bg-[#0a0a0c]/90 backdrop-blur-2xl border border-white/10 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] overflow-hidden">
                                         <div className="grid gap-1">
                                             <a href="#problem" className="flex flex-col gap-0.5 p-3 rounded-md hover:bg-white/5 transition-colors group/item">
-                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Logic Guard</span>
-                                                <span className="text-xs text-slate-500">Hallucination Prevention</span>
+                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Problem</span>
+                                                <span className="text-xs text-slate-500">Silent regressions, no gate</span>
                                             </a>
                                             <a href="#features" className="flex flex-col gap-0.5 p-3 rounded-md hover:bg-white/5 transition-colors group/item">
-                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Atomic Lab</span>
-                                                <span className="text-xs text-slate-500">The Periodic Table of AI Risk</span>
+                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Atomic Signals</span>
+                                                <span className="text-xs text-slate-500">Rule-based quality checks</span>
                                             </a>
                                             <a href="#workflow" className="flex flex-col gap-0.5 p-3 rounded-md hover:bg-white/5 transition-colors group/item">
-                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Surgical Workflow</span>
-                                                <span className="text-xs text-slate-500">Clinical Integration & Treatment</span>
+                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Workflow</span>
+                                                <span className="text-xs text-slate-500">Live View → Release Gate</span>
                                             </a>
                                         </div>
                                     </div>
@@ -105,13 +105,13 @@ export default function Home() {
 
                         <div className="h-8 w-[1px] bg-white/10 hidden lg:block" />
 
-                        {isLoggedIn ? (
-                            <Link href="/organizations">
-                                <Button className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-10 h-12 text-lg rounded-md shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:scale-105 whitespace-nowrap uppercase tracking-widest">
-                                    Enter Laboratory
-                                </Button>
-                            </Link>
-                        ) : (
+                            {isLoggedIn ? (
+                                <Link href="/organizations">
+                                    <Button className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-10 h-12 text-lg rounded-md shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:scale-105 whitespace-nowrap uppercase tracking-widest">
+                                        Go to PluvianAI console
+                                    </Button>
+                                </Link>
+                            ) : (
                             <>
                                 <div className="hidden md:flex items-center gap-6 text-lg font-bold">
                                     <Link href="/login" className="text-slate-400 hover:text-white transition-colors">Log In</Link>
@@ -119,7 +119,7 @@ export default function Home() {
                                 </div>
                                 <Link href="/login?intent=validation">
                                     <Button className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-8 h-12 text-lg rounded-md shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:scale-105 whitespace-nowrap uppercase tracking-widest">
-                                        Start Validation
+                                        Try Node Regression Guard
                                     </Button>
                                 </Link>
                             </>
@@ -158,7 +158,7 @@ export default function Home() {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </div>
-                        Clinical Grade Validation
+                        Node-level Regression Guard
                     </div>
 
                     <div className="max-w-6xl mx-auto space-y-10">
@@ -171,8 +171,8 @@ export default function Home() {
                                 </span>
                             </h1>
                             <p className="text-xl md:text-2xl text-white max-w-3xl mx-auto font-semibold leading-relaxed pt-6">
-                                Cut hallucination rates & logic errors in half. Instantly.<br />
-                                <span className="text-slate-300">We don&apos;t build the Agent. We <span className="text-emerald-400 font-bold">cure</span> it.</span>
+                                Stop shipping silent regressions.<br />
+                                <span className="text-slate-300">Get a pass/fail gate on real traces before you deploy.</span>
                             </p>
                         </div>
 
@@ -181,13 +181,13 @@ export default function Home() {
                             {isLoggedIn ? (
                                 <Link href="/organizations">
                                     <Button className="h-16 px-12 text-2xl font-black rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_50px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_70px_-10px_rgba(16,185,129,0.7)] transition-all hover:scale-[1.02] uppercase tracking-tighter">
-                                        Return to Laboratory
+                                        Go to PluvianAI console
                                     </Button>
                                 </Link>
                             ) : (
                                 <Link href="/login?mode=signup&intent=trial">
                                     <Button className="h-16 px-12 text-2xl font-black rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_50px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_70px_-10px_rgba(16,185,129,0.7)] transition-all hover:scale-[1.02] uppercase tracking-tighter">
-                                        Start Clinical Trial
+                                        Try Node Regression Guard
                                     </Button>
                                 </Link>
                             )}
@@ -200,7 +200,7 @@ export default function Home() {
             <section className="py-16 border-y border-white/5 bg-[#08080a]/80 backdrop-blur-sm relative z-10">
                 <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16">
                     <p className="text-center text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600 mb-10">
-                        Compatible with all major clinical models
+                        Compatible with OpenAI, Anthropic, Google & more
                     </p>
                     <div className="flex flex-wrap justify-center items-center gap-12 md:gap-24 opacity-30 grayscale hover:grayscale-0 transition-all duration-700 brightness-200">
                         <span className="text-xl font-bold tracking-tighter">ANTHROPIC</span>
@@ -217,7 +217,7 @@ export default function Home() {
                 <PathologySection />
             </div>
 
-            {/* 4.5. Atomic Signals (Periodic Table) */}
+            {/* 4.5. Atomic Signals */}
             <div className="relative z-10">
                 <AtomicSignalsSection />
             </div>
@@ -229,7 +229,7 @@ export default function Home() {
 
             {/* 6. Pricing Section */}
             <div className="relative z-10">
-                <PricingSection />
+                <PricingSection isLoggedIn={isLoggedIn} />
             </div>
 
             {/* 7. CTA Footer */}
@@ -247,13 +247,13 @@ export default function Home() {
                         {isLoggedIn ? (
                             <Link href="/organizations">
                                 <Button className="h-16 px-12 bg-emerald-500 text-black hover:bg-emerald-400 rounded-xl text-xl font-black transition-all shadow-[0_0_40px_-10px_rgba(16,185,129,0.6)] uppercase tracking-tight">
-                                    Launch Clinical Lab
+                                    Go to PluvianAI console
                                 </Button>
                             </Link>
                         ) : (
                             <Link href="/login?mode=signup&intent=free">
                                 <Button className="h-16 px-12 bg-emerald-500 text-black hover:bg-emerald-400 rounded-xl text-xl font-black transition-all shadow-[0_0_40px_-10px_rgba(16,185,129,0.6)] uppercase tracking-tight">
-                                    Enter the Lab for Free
+                                    Try Node Regression Guard
                                 </Button>
                             </Link>
                         )}
@@ -263,7 +263,7 @@ export default function Home() {
                         <div className="w-1 h-1 bg-slate-800 rounded-full" />
                         <span>Instant SDK integration</span>
                         <div className="w-1 h-1 bg-slate-800 rounded-full" />
-                        <span>Interactive Lab</span>
+                        <span>Live View & Release Gate</span>
                     </div>
                 </div>
             </footer>
@@ -273,7 +273,7 @@ export default function Home() {
                 <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16 flex flex-col md:flex-row items-center justify-between gap-8">
                     <div className="flex items-center gap-2.5">
                         <Beaker className="w-5 h-5 text-emerald-500" />
-                        <span className="text-sm font-bold tracking-tighter text-white uppercase">PluvianAI Atomic Lab</span>
+                        <span className="text-sm font-bold tracking-tighter text-white uppercase">PluvianAI</span>
                     </div>
                     <div className="flex gap-10 text-[11px] font-bold text-slate-600 uppercase tracking-widest">
                         <a href="#" className="hover:text-emerald-400 transition-colors">Documentation</a>

@@ -2,7 +2,7 @@
  * Safe number conversion utility
  */
 export const toNumber = (value: unknown, fallback: number = 0): number => {
-  const num = typeof value === 'number' ? value : Number(value);
+  const num = typeof value === "number" ? value : Number(value);
   return Number.isFinite(num) ? num : fallback;
 };
 
@@ -17,7 +17,7 @@ export const toFixedSafe = (value: unknown, digits: number = 0, fallback: number
 /**
  * Safe string conversion
  */
-export const safeString = (value: unknown, fallback: string = ''): string => {
+export const safeString = (value: unknown, fallback: string = ""): string => {
   if (value === null || value === undefined) return fallback;
   return String(value);
 };
@@ -26,11 +26,11 @@ export const safeString = (value: unknown, fallback: string = ''): string => {
  * Safe boolean conversion
  */
 export const safeBoolean = (value: unknown, fallback: boolean = false): boolean => {
-  if (typeof value === 'boolean') return value;
+  if (typeof value === "boolean") return value;
   if (value === null || value === undefined) return fallback;
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const lower = value.toLowerCase();
-    return lower === 'true' || lower === '1' || lower === 'yes';
+    return lower === "true" || lower === "1" || lower === "yes";
   }
   return Boolean(value);
 };
@@ -49,5 +49,5 @@ export const safeObject = <T extends Record<string, unknown>>(
   value: unknown,
   fallback: T = {} as T
 ): T => {
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as T) : fallback;
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as T) : fallback;
 };

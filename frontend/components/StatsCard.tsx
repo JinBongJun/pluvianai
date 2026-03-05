@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 interface StatsCardProps {
   title: string;
@@ -14,7 +14,7 @@ interface StatsCardProps {
 export default function StatsCard({ title, value, subtitle, icon, trend }: StatsCardProps) {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ag-surface p-6 shadow-2xl transition-all duration-300 hover:border-white/20 hover:shadow-glow-gold">
-      {/* 배경 Glow 효과 */}
+      {/* Background glow effect */}
       <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-ag-accent/20 blur-[60px]" />
 
       <div className="relative z-10 flex items-center justify-between">
@@ -22,12 +22,15 @@ export default function StatsCard({ title, value, subtitle, icon, trend }: Stats
           <p className="text-sm font-medium text-ag-muted mb-1">{title}</p>
           <div className="flex items-baseline gap-2">
             <p className="text-2xl font-bold text-ag-text font-mono">
-              {typeof value === 'number' ? value.toLocaleString() : value}
+              {typeof value === "number" ? value.toLocaleString() : value}
             </p>
             {trend && (
-              <span className={`text-xs font-medium ${trend.isPositive ? 'text-emerald-400' : 'text-rose-400'
-                }`}>
-                {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%
+              <span
+                className={`text-xs font-medium ${
+                  trend.isPositive ? "text-emerald-400" : "text-rose-400"
+                }`}
+              >
+                {trend.isPositive ? "↑" : "↓"} {Math.abs(trend.value)}%
               </span>
             )}
           </div>
@@ -38,4 +41,3 @@ export default function StatsCard({ title, value, subtitle, icon, trend }: Stats
     </div>
   );
 }
-

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.permissions import require_admin
 from app.core.decorators import handle_errors
 from app.core.logging_config import logger
 from app.models.user import User
@@ -26,12 +27,14 @@ router.include_router(impersonation_router, tags=["admin-impersonation"])
 
 @router.post("/init-db", status_code=status.HTTP_201_CREATED)
 @handle_errors
-async def init_database(db: Session = Depends(get_db)):
+async def init_database(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
     Initialize database tables using Alembic migrations
     ⚠️ WARNING: This endpoint should be removed or secured after initial deployment
     ⚠️ DEPRECATED: Use 'alembic upgrade head' instead
     """
+    require_admin(current_user)
+
     import subprocess
     import os
 
@@ -67,6 +70,9 @@ async def generate_sample_data(
     - Various agent types and models
     """
     from app.core.permissions import check_project_access
+
+    # Admin-only endpoint, then verify target project access.
+    require_admin(current_user)
 
     # Verify project access
     check_project_access(project_id, current_user, db)
@@ -286,11 +292,18 @@ async def generate_sample_data(
 
 @router.post("/upgrade-user-subscription")
 @handle_errors
-async def upgrade_user_subscription(email: str, plan_type: str = "startup", db: Session = Depends(get_db)):
+async def upgrade_user_subscription(
+    email: str,
+    plan_type: str = "startup",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     Upgrade user subscription by email (for testing/admin purposes)
     ⚠️ WARNING: This endpoint should be secured or removed in production
     """
+    require_admin(current_user)
+
     from app.services.subscription_service import SubscriptionService
     from app.core.subscription_limits import PLAN_PRICING
 

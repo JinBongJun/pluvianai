@@ -1,8 +1,12 @@
-# 테스트 가이드
+# Backend test guide
 
-## 🚀 빠른 시작
+This directory contains tests for the PluvianAI backend (FastAPI).
 
-### 1. 테스트 환경 설정
+---
+
+## 🚀 Quick start
+
+### 1. Set up the test environment
 
 ```bash
 cd backend
@@ -10,127 +14,144 @@ pip install -r requirements.txt
 pip install -r requirements-test.txt
 ```
 
-### 2. 테스트 실행
+### 2. Run tests
 
 ```bash
-# 모든 테스트 실행
+# Run all tests
 pytest
 
-# 특정 테스트만 실행
+# Run a specific test file
 pytest tests/unit/test_cache_service.py
 
-# 커버리지 포함 실행
+# Run with coverage report
 pytest --cov=app --cov-report=html
 
-# 특정 마커만 실행
+# Run by marker
 pytest -m unit          # Unit tests only
 pytest -m integration   # Integration tests only
 pytest -m e2e           # E2E tests only
 ```
 
-## 📁 테스트 구조
+---
 
-```
+## 📁 Test layout
+
+```text
 tests/
-├── conftest.py              # 공통 fixtures
-├── unit/                    # Unit tests (70%)
+├── conftest.py              # Shared fixtures
+├── unit/                    # Unit tests (majority)
 │   └── test_cache_service.py
-├── integration/             # Integration tests (20%)
+├── integration/             # Integration tests
 │   ├── test_api_auth.py
 │   └── test_api_projects.py
-└── e2e/                     # E2E tests (10%)
+└── e2e/                     # End‑to‑end tests
     └── test_user_flows.py
 ```
 
-## 🧪 테스트 작성 가이드
+---
 
-### Unit Test 예시
+## 🧪 Writing tests
+
+### Unit test example
 
 ```python
 # tests/unit/test_quality_evaluator.py
 import pytest
 from app.services.quality_evaluator import QualityEvaluator
 
+
 def test_evaluate_valid_response():
     evaluator = QualityEvaluator()
-    # Mock API call
     api_call = create_mock_api_call(...)
-    
+
     score = evaluator.evaluate(api_call)
-    
-    assert score.overall_score >= 0
-    assert score.overall_score <= 100
+
+    assert 0 <= score.overall_score <= 100
 ```
 
-### Integration Test 예시
+### Integration test example
 
 ```python
 # tests/integration/test_api_projects.py
+import pytest
+
+
 @pytest.mark.integration
 def test_create_project(client, auth_headers):
     response = client.post(
         "/api/v1/projects",
         json={"name": "Test", "description": "Test"},
-        headers=auth_headers
+        headers=auth_headers,
     )
-    
+
     assert response.status_code == 201
 ```
 
-## 📊 커버리지 목표
+---
 
-- **Unit Tests**: 80% 이상
-- **Integration Tests**: 60% 이상
-- **전체**: 70% 이상
+## 📊 Coverage targets (guideline)
 
-## 🔧 Fixtures 사용
+- **Unit tests**: ≥ 80%
+- **Integration tests**: ≥ 60%
+- **Overall**: ≥ 70%
 
-### 기본 Fixtures
+---
 
-- `db`: 테스트용 데이터베이스 세션
-- `client`: FastAPI 테스트 클라이언트
-- `test_user`: 테스트 사용자
-- `auth_headers`: 인증 헤더
-- `test_project`: 테스트 프로젝트
+## 🔧 Common fixtures
 
-### 사용 예시
+Typical fixtures defined in `conftest.py` (may evolve over time):
+
+- `db`: test database session
+- `client`: FastAPI test client
+- `test_user`: seeded test user
+- `auth_headers`: auth headers for the test user
+- `test_project`: seeded test project
+
+### Example usage
 
 ```python
-def test_something(client, auth_headers, test_project):
+def test_get_project(client, auth_headers, test_project):
     response = client.get(
         f"/api/v1/projects/{test_project.id}",
-        headers=auth_headers
+        headers=auth_headers,
     )
     assert response.status_code == 200
 ```
 
-## 🐛 문제 해결
+---
 
-### 테스트 DB 연결 실패
+## 🐛 Troubleshooting
+
+### Test DB connection issues
+
+Make sure test environment variables are set, for example:
 
 ```bash
-# 환경 변수 확인
 export DATABASE_URL=sqlite:///:memory:
 export REDIS_URL=redis://localhost:6379/0
 ```
 
-### Redis 연결 실패
+### Redis not available
 
-테스트는 Redis 없이도 실행 가능합니다. `CacheService`가 자동으로 비활성화됩니다.
+Tests are designed to run even without Redis. `CacheService` will automatically fall back or be disabled when Redis is not reachable.
 
-## 📝 테스트 작성 체크리스트
+---
 
-- [ ] 테스트는 독립적이어야 함 (다른 테스트에 의존하지 않음)
-- [ ] 각 테스트 후 데이터 정리
-- [ ] 명확한 테스트 이름 사용
-- [ ] Arrange-Act-Assert 패턴 사용
-- [ ] Edge cases 테스트 포함
-- [ ] 에러 케이스 테스트 포함
+## ✅ Test checklist
 
-## 🚀 CI/CD 통합
+- [ ] Tests are independent (no cross‑test ordering dependencies)
+- [ ] Data is cleaned up between tests
+- [ ] Test names clearly describe behavior
+- [ ] Follow Arrange‑Act‑Assert pattern
+- [ ] Include edge‑case and error‑path tests where relevant
 
-GitHub Actions에서 자동으로 테스트가 실행됩니다:
-- Push to main/develop
-- Pull Request 생성
+---
 
-테스트 결과는 Codecov에 업로드됩니다.
+## 🚀 CI/CD
+
+GitHub Actions runs the test suite automatically on:
+
+- Pushes to main/develop
+- Pull requests
+
+Coverage reports can be uploaded to Codecov or a similar service (see CI config).

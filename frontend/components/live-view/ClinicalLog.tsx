@@ -20,8 +20,10 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { behaviorAPI, liveViewAPI } from "@/lib/api";
-import useSWR from "swr";
+import { toEvalRows } from "@/lib/evalRows";
+import useSWR, { mutate as globalMutate } from "swr";
 import { SnapshotDetailModal } from "@/components/shared/SnapshotDetailModal";
+import { useToast } from "@/components/ToastContainer";
 
 interface EvaluationMetric {
   score: number;
@@ -111,12 +113,21 @@ const EVAL_CHECK_LABELS: Record<string, string> = {
   repetition: "Repetition / Loops",
   required: "Required Keywords / Fields",
   format: "Format Contract",
-  tokens: "Token Usage Spikes",
-  cost: "High Cost Alert",
   leakage: "PII Leakage Shield",
-  coherence: "Reasoning Coherence",
   tool: "Tool Use Policy",
 };
+
+function normalizeEvalConfigKey(key: string): string {
+  return key === "tool_use_policy" ? "tool" : key;
+}
+
+function isEvalSettingEnabled(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return true;
+  const enabled = (value as { enabled?: unknown }).enabled;
+  if (typeof enabled === "boolean") return enabled;
+  return true;
+}
 
 function formatPrettyTime(value?: string): string {
   if (!value) return "-";
@@ -125,7 +136,7 @@ function formatPrettyTime(value?: string): string {
   return `${date.toLocaleDateString("en-US")} ${date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}`;
 }
 
-function safeStringify(val: any): string {
+function safeStringify(val: unknown): string {
   if (val === null || val === undefined || val === "") return "—";
   if (typeof val === "string") return val;
   if (typeof val === "object") {
@@ -180,7 +191,7 @@ function extractStepLogs(
   const candidates = [payload.steps, payload.step_log, payload.trajectory?.steps, payload.events];
   const raw = candidates.find(c => Array.isArray(c));
   if (!Array.isArray(raw)) return [];
-  return raw.slice(0, MAX_STEP_ROWS).map((step: any, idx: number) => {
+  return raw.slice(0, MAX_STEP_ROWS).map((step: Record<string, unknown>, idx: number) => {
     if (typeof step === "string") {
       return { name: `step_${idx + 1}`, status: "unknown", detail: step };
     }
@@ -189,9 +200,9 @@ function extractStepLogs(
     );
     const status = String(
       step?.status ??
-      step?.state ??
-      step?.result ??
-      (step?.ok === false ? "fail" : step?.ok === true ? "pass" : "unknown")
+        step?.state ??
+        step?.result ??
+        (step?.ok === false ? "fail" : step?.ok === true ? "pass" : "unknown")
     ).toLowerCase();
     const runtimeCandidate = step?.runtime_ms ?? step?.duration_ms ?? step?.latency_ms;
     const runtimeMs = Number.isFinite(Number(runtimeCandidate))
@@ -211,7 +222,7 @@ function extractStepLogs(
 function extractToolNames(snapshot: ClinicalSnapshot): string[] {
   const summary = snapshot.tool_calls_summary;
   if (Array.isArray(summary) && summary.length > 0) {
-    return summary.map((t) => t.name).filter(Boolean);
+    return summary.map(t => t.name).filter(Boolean);
   }
   const payload = snapshot.payload || {};
   const out = new Set<string>();
@@ -241,40 +252,45 @@ function getEvalDetail(
   checkId: string,
   savedEvalConfig: Record<string, any>
 ): { actualStr: string; configStr: string } {
+  const toFiniteNumber = (value: unknown, fallback: number) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
   const cfg = (savedEvalConfig[checkId] || {}) as Record<string, any>;
   const res = (s.response_text || s.response || "").trim();
   const len = res.length;
-  const actualStr = "—";
+  let actualStr = "—";
   let configStr = "—";
   switch (checkId) {
     case "empty": {
-      const minChars = Number(cfg?.min_chars) ?? 16;
+      const minChars = toFiniteNumber(cfg?.min_chars, 16);
       configStr = `min ${minChars} chars`;
       return { actualStr: `${len} chars`, configStr };
     }
     case "latency": {
-      const warn = Number(cfg?.warn_ms) ?? 2000;
-      const crit = Number(cfg?.crit_ms) ?? 5000;
+      const warn = toFiniteNumber(cfg?.warn_ms, 2000);
+      const crit = toFiniteNumber(cfg?.crit_ms, 5000);
       configStr = `warn > ${warn}ms, crit > ${crit}ms`;
       const ms = s.latency_ms ?? 0;
       return { actualStr: `${ms}ms`, configStr };
     }
     case "status_code": {
-      const warnFrom = Number(cfg?.warn_from) ?? 400;
-      const critFrom = Number(cfg?.crit_from) ?? 500;
+      const warnFrom = toFiniteNumber(cfg?.warn_from, 400);
+      const critFrom = toFiniteNumber(cfg?.crit_from, 500);
       configStr = `warn ≥ ${warnFrom}, crit ≥ ${critFrom}`;
       const code = s.status_code ?? 200;
       return { actualStr: String(code), configStr };
     }
     case "length": {
-      const warnR = Number(cfg?.warn_ratio) ?? 0.35;
-      const critR = Number(cfg?.crit_ratio) ?? 0.75;
-      configStr = `warn > ${warnR}, crit > ${critR}`;
-      return { actualStr: "ratio (vs baseline)", configStr };
+      const warnR = toFiniteNumber(cfg?.warn_ratio, 0.35);
+      const critR = toFiniteNumber(cfg?.crit_ratio, 0.75);
+      configStr = `warn ±${Math.round(warnR * 100)}%, crit ±${Math.round(critR * 100)}% vs baseline`;
+      actualStr = `${len} chars (vs baseline window)`;
+      return { actualStr, configStr };
     }
     case "repetition": {
-      const warnR = Number(cfg?.warn_line_repeats) ?? 3;
-      const critR = Number(cfg?.crit_line_repeats) ?? 6;
+      const warnR = toFiniteNumber(cfg?.warn_line_repeats, 3);
+      const critR = toFiniteNumber(cfg?.crit_line_repeats, 6);
       configStr = `warn ${warnR}, crit ${critR} repeats`;
       const lines = res
         .split("\n")
@@ -288,32 +304,38 @@ function getEvalDetail(
       }
       return { actualStr: maxRep ? `${maxRep} max repeats` : "—", configStr };
     }
-    case "tokens": {
-      const warn = Number(cfg?.warn) ?? 4000;
-      configStr = `warn > ${warn}`;
-      const tok = s.tokens_used ?? "—";
-      return { actualStr: String(tok), configStr };
-    }
-    case "cost": {
-      const warn = Number(cfg?.warn) ?? 0.5;
-      configStr = `warn > ${warn}`;
-      const c = s.cost ?? "—";
-      return { actualStr: String(c), configStr };
-    }
     case "json":
       configStr = (cfg?.mode || "if_json") === "if_json" ? "if_json" : "always";
-      return { actualStr: "—", configStr };
-    case "refusal":
-    case "required":
-    case "format":
-    case "leakage":
-    case "coherence":
+      return { actualStr, configStr };
+    case "refusal": {
+      configStr = "auto-detect refusal / non-answer patterns";
+      return { actualStr, configStr };
+    }
+    case "required": {
+      const keywordsCsv = String(cfg?.keywords_csv || "");
+      const jsonFieldsCsv = String(cfg?.json_fields_csv || "");
+      const keywordCount = keywordsCsv.split(",").filter(part => part.trim().length > 0).length;
+      const fieldCount = jsonFieldsCsv.split(",").filter(part => part.trim().length > 0).length;
+      configStr = `keywords: ${keywordCount}, json fields: ${fieldCount}`;
+      return { actualStr, configStr };
+    }
+    case "format": {
+      const sectionsCsv = String(cfg?.sections_csv || "");
+      const sectionCount = sectionsCsv.split(",").filter(part => part.trim().length > 0).length;
+      configStr = `required sections: ${sectionCount}`;
+      return { actualStr, configStr };
+    }
+    case "leakage": {
+      configStr = "scan for PII (email, phone) & API keys";
+      return { actualStr, configStr };
+    }
     default:
-      return { actualStr: "—", configStr: "—" };
+      return { actualStr, configStr };
   }
 }
 
 export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) => {
+  const toast = useToast();
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [recentTraceLimit, setRecentTraceLimit] = React.useState<number>(DEFAULT_LAST_N_RUNS);
   const [recentTraceInput, setRecentTraceInput] = React.useState<string>(
@@ -325,7 +347,17 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
   const [policyByTrace, setPolicyByTrace] = React.useState<Record<string, PolicyState>>({});
   const [isSelectMode, setIsSelectMode] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-  const [isSavingDataset, setIsSavingDataset] = React.useState(false);
+  const [isSavingToDatasets, setIsSavingToDatasets] = React.useState(false);
+  const [isSaveModalOpen, setIsSaveModalOpen] = React.useState(false);
+  const [snapshotIdsToSave, setSnapshotIdsToSave] = React.useState<number[]>([]);
+  const [selectedDatasetIdsForSave, setSelectedDatasetIdsForSave] = React.useState<Set<string>>(new Set());
+  const [newDatasetName, setNewDatasetName] = React.useState("");
+
+  // Keep log selection strictly scoped to the current node.
+  React.useEffect(() => {
+    setSelectedIds(new Set());
+    setIsSelectMode(false);
+  }, [projectId, agentId]);
 
   const { data: settingsData, mutate: mutateSettings } = useSWR(
     projectId && agentId ? ["agent-log-settings", projectId, agentId] : null,
@@ -341,13 +373,15 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     }
   }, [settingsData]);
 
-  const { data, error, isLoading } = useSWR(
+  const { data, error, isLoading, mutate } = useSWR(
     projectId && agentId ? ["agent-snapshots", projectId, agentId, recentTraceLimit] : null,
     () =>
       liveViewAPI.listSnapshots(projectId, {
         agent_id: agentId,
         limit: recentTraceLimit,
-      })
+        light: true,
+      }),
+    { keepPreviousData: true }
   );
 
   const saveRecentTraceLimit = async () => {
@@ -358,7 +392,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     setRecentTraceInput(String(limit));
     setIsSavingLimit(true);
     try {
-      const existingEval = (settingsData?.diagnostic_config?.eval || {}) as any;
+      const existingEval = (settingsData?.diagnostic_config?.eval || {}) as Record<string, unknown>;
       await liveViewAPI.updateAgentSettings(projectId, agentId, {
         diagnostic_config: {
           eval: {
@@ -384,6 +418,33 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     // Collapse expanded card when filters/window change to avoid stale selection confusion.
     setExpandedId(null);
   }, [riskFilter, recentTraceLimit, agentId]);
+
+  // List uses light mode (no payload/long text); detail modal always needs full snapshot. Cache by (projectId, snapshotId).
+  const snapshotDetailCacheRef = React.useRef<Map<string, ClinicalSnapshot>>(new Map());
+  const [detailFetchedSnapshot, setDetailFetchedSnapshot] = React.useState<ClinicalSnapshot | null>(null);
+  React.useEffect(() => {
+    if (!expandedId || !projectId) {
+      setDetailFetchedSnapshot(null);
+      return;
+    }
+    const cacheKey = `${projectId}-${expandedId}`;
+    const cached = snapshotDetailCacheRef.current.get(cacheKey);
+    if (cached) {
+      setDetailFetchedSnapshot(cached);
+      return;
+    }
+    const s = snapshots.find(snap => String(snap.id) === String(expandedId));
+    setDetailFetchedSnapshot(null);
+    liveViewAPI
+      .getSnapshot(projectId, expandedId)
+      .then((full: Record<string, unknown>) => {
+        if (!full || String(full.id) !== String(expandedId)) return;
+        const merged = (s ? { ...s, ...full } : full) as ClinicalSnapshot;
+        snapshotDetailCacheRef.current.set(cacheKey, merged);
+        setDetailFetchedSnapshot(merged);
+      })
+      .catch(() => {});
+  }, [expandedId, projectId, snapshots]);
 
   const { data: evalData } = useSWR(
     projectId && agentId ? ["agent-eval-runtime", projectId, agentId, recentTraceLimit] : null,
@@ -411,34 +472,39 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
       .filter((c: EvalCheckSummary) => c.enabled)
       .map((c: EvalCheckSummary) => c.id);
     if (enabled.length > 0) return enabled;
-    return Object.keys(EVAL_CHECK_LABELS);
-  }, [evalRuntime?.checks]);
+    const fromSaved = Object.entries(savedEvalConfig)
+      .filter(([key, value]) => {
+        const normalized = normalizeEvalConfigKey(key);
+        if (!(normalized in EVAL_CHECK_LABELS)) return false;
+        return isEvalSettingEnabled(value);
+      })
+      .map(([key]) => normalizeEvalConfigKey(key));
+    if (fromSaved.length > 0) return Array.from(new Set(fromSaved));
+    return [];
+  }, [evalRuntime?.checks, savedEvalConfig]);
   const enabledEvalChecks = React.useMemo<EvalCheckSummary[]>(
     () => runtimeEnabledCheckIds.map(id => ({ id, enabled: true, failed: 0, applicable: 0 })),
     [runtimeEnabledCheckIds]
   );
-  const perSnapshotEvalMap = React.useMemo(() => {
-    const map: Record<string, Record<string, string>> = {};
-    const rows = Array.isArray(evalRuntime?.per_snapshot) ? evalRuntime.per_snapshot : [];
-    for (const row of rows) {
-      map[String(row.snapshot_id)] = row.checks || {};
-    }
-    return map;
-  }, [evalRuntime]);
+  // Use stored eval_checks_result only (single source of truth; matches DATA tab detail).
   const hasAnyEvalContext = React.useMemo(
-    () => Object.keys(perSnapshotEvalMap).length > 0,
-    [perSnapshotEvalMap]
+    () => snapshots.some(s => toEvalRows(s as unknown as Record<string, unknown>).length > 0),
+    [snapshots]
   );
   const evalEnabled = hasAnyEvalContext || enabledEvalChecks.length > 0;
+  const getSnapshotEvalRows = React.useCallback((snapshot: ClinicalSnapshot) => {
+    return toEvalRows(snapshot as unknown as Record<string, unknown>);
+  }, []);
   const getSnapshotFailedCount = React.useCallback(
     (snapshot: ClinicalSnapshot) => {
-      const statuses = perSnapshotEvalMap[String(snapshot.id)] || {};
-      return Object.values(statuses).reduce(
-        (acc, statusValue) => (statusValue === "fail" ? acc + 1 : acc),
-        0
-      );
+      const rows = getSnapshotEvalRows(snapshot);
+      return rows.reduce((acc, row) => {
+        const st = row.status;
+        // Gate/quality policy: both "fail" and "not_applicable" count as failures.
+        return st === "fail" || st === "not_applicable" ? acc + 1 : acc;
+      }, 0);
     },
-    [perSnapshotEvalMap]
+    [getSnapshotEvalRows]
   );
   const filteredSnapshots = React.useMemo(() => {
     const hasEvalContext = hasAnyEvalContext;
@@ -481,7 +547,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     const agentRules = Array.isArray(agentRulesData) ? agentRulesData : [];
     const merged = [...agentRules, ...projectRules];
     const seen = new Set<string>();
-    return merged.filter((r: any) => {
+    return merged.filter((r: { id?: unknown }) => {
       const id = String(r?.id || "");
       if (!id || seen.has(id)) return false;
       seen.add(id);
@@ -489,35 +555,37 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     });
   }, [projectRulesData, agentRulesData]);
   const configuredPolicyMap = React.useMemo(() => {
-    const map = new Map<string, any>();
+    const map = new Map<string, unknown>();
     for (const rule of configuredPolicies) {
-      map.set(String(rule?.id || ""), rule);
+      map.set(String((rule as { id?: unknown })?.id || ""), rule);
     }
     return map;
   }, [configuredPolicies]);
   React.useEffect(() => {
-    const reportItems = Array.isArray((reportsData as any)?.items)
-      ? (reportsData as any).items
+    const reportItems = Array.isArray((reportsData as { items?: unknown[] })?.items)
+      ? (reportsData as { items: unknown[] }).items
       : [];
     if (reportItems.length === 0) return;
+    const reports = reportItems as Array<Record<string, unknown>>;
     setPolicyByTrace(prev => {
       const next = { ...prev };
-      for (const report of reportItems) {
-        const traceId = String(report?.trace_id || "").trim();
+      for (const report of reports) {
+        const traceId = String(report?.trace_id ?? "").trim();
         if (!traceId || next[traceId]) continue;
-        const status = String(report?.status || "").toLowerCase();
+        const status = String(report?.status ?? "").toLowerCase();
         if (status !== "pass" && status !== "fail") continue;
+        const summary = report?.summary as Record<string, unknown> | undefined;
         const violations = Array.isArray(report?.violations) ? report.violations : [];
         const failedRuleIds = Array.from(
-          new Set<string>(violations.map((v: any) => String(v?.rule_id || "")).filter(Boolean))
+          new Set<string>(violations.map((v: { rule_id?: unknown }) => String(v?.rule_id || "")).filter(Boolean))
         );
         next[traceId] = {
           status: status as "pass" | "fail",
-          violationCount: Number(report?.summary?.violation_count ?? violations.length ?? 0),
-          reportId: String(report?.id || ""),
-          rulesetHash: String(report?.summary?.ruleset_hash || report?.ruleset_hash || ""),
-          ruleSnapshot: Array.isArray(report?.summary?.rule_snapshot)
-            ? report.summary.rule_snapshot
+          violationCount: Number(summary?.violation_count ?? violations.length ?? 0),
+          reportId: String(report?.id ?? ""),
+          rulesetHash: String(summary?.ruleset_hash ?? report?.ruleset_hash ?? ""),
+          ruleSnapshot: Array.isArray(summary?.rule_snapshot)
+            ? summary.rule_snapshot
             : undefined,
           message: status === "pass" ? "Policy check passed." : "Policy violations detected.",
           failedRuleIds,
@@ -544,45 +612,162 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     }
   };
 
-  const saveSelectionAsDataset = async () => {
-    if (selectedIds.size === 0 || !projectId || !agentId) return;
-    const label = window.prompt(
-      "Dataset label (optional)",
-      `Clinical selection ${new Date().toISOString().slice(0, 10)}`
-    );
-    if (label === null) return; // user cancelled
-    setIsSavingDataset(true);
+  const { data: datasetsData, mutate: mutateDatasets } = useSWR(
+    projectId && agentId ? ["behavior-datasets", projectId, agentId] : null,
+    () => behaviorAPI.listDatasets(projectId, { agent_id: agentId, limit: 200, offset: 0 }),
+    { keepPreviousData: true }
+  );
+  const datasetsForSave = React.useMemo(
+    () =>
+      Array.isArray((datasetsData as { items?: unknown[] } | undefined)?.items)
+        ? ((datasetsData as { items: any[] }).items as Array<{
+            id: string;
+            label?: string | null;
+            snapshot_count?: number | null;
+            created_at?: string | null;
+          }>)
+        : [],
+    [datasetsData]
+  );
+
+  const openSaveToDatasetsModal = () => {
+    if (!projectId || !agentId) return;
+    const visibleById = new Set(visibleSnapshots.map(s => String(s.id)));
+    const selectedSnapshotIds = Array.from(selectedIds)
+      .filter(id => visibleById.has(String(id)))
+      .map(Number)
+      .filter(Number.isFinite);
+    if (selectedSnapshotIds.length === 0) {
+      toast.showToast("No logs selected.", "warning");
+      return;
+    }
+    setSnapshotIdsToSave(selectedSnapshotIds);
+    setSelectedDatasetIdsForSave(new Set());
+    setNewDatasetName("");
+    setIsSaveModalOpen(true);
+  };
+
+  const closeSaveModal = () => {
+    if (isSavingToDatasets) return;
+    setIsSaveModalOpen(false);
+  };
+
+  const saveSelectionToDatasets = async () => {
+    if (!projectId || !agentId) return;
+    if (snapshotIdsToSave.length === 0) {
+      toast.showToast("No logs selected to save.", "warning");
+      return;
+    }
+    const targetDatasetIds = Array.from(selectedDatasetIdsForSave);
+    const trimmedName = newDatasetName.trim();
+    if (targetDatasetIds.length === 0 && !trimmedName) {
+      toast.showToast("Select at least one dataset or enter a new name.", "warning");
+      return;
+    }
+
+    setIsSavingToDatasets(true);
     try {
-      const evalConfig = (settingsData?.diagnostic_config?.eval || {}) as Record<string, unknown>;
-      const ruleSnapshot = configuredPolicies.map((r: any) => ({
-        id: String(r.id),
-        revision: r.updated_at,
-        rule_json: r.rule_json || {},
-      }));
-      await behaviorAPI.createDataset(projectId, {
-        snapshot_ids: Array.from(selectedIds).map(Number).filter(Number.isFinite),
-        agent_id: agentId,
-        label: label || undefined,
-        eval_config_snapshot: Object.keys(evalConfig).length ? evalConfig : undefined,
-        policy_ruleset_snapshot: ruleSnapshot.length ? ruleSnapshot : undefined,
-      });
+      const evalConfig = savedEvalConfig as Record<string, unknown>;
+      const ruleSnapshot = configuredPolicies.map(
+        (r: { id?: unknown; updated_at?: unknown; rule_json?: unknown }) => ({
+          id: String(r.id ?? ""),
+          revision: r.updated_at != null ? String(r.updated_at) : undefined,
+          rule_json: (r.rule_json as Record<string, unknown>) || {},
+        })
+      ).filter(r => r.id);
+
+      let createdDatasetName: string | null = null;
+      if (trimmedName) {
+        const body = {
+          snapshot_ids: snapshotIdsToSave,
+          agent_id: agentId,
+          label: trimmedName,
+          eval_config_snapshot: Object.keys(evalConfig).length ? evalConfig : undefined,
+          policy_ruleset_snapshot: ruleSnapshot.length ? ruleSnapshot : undefined,
+        };
+        await behaviorAPI.createDataset(projectId, body);
+        createdDatasetName = trimmedName;
+      }
+
+      let totalAdded = 0;
+      let totalAlready = 0;
+      for (const datasetId of targetDatasetIds) {
+        const detail = await behaviorAPI.getDataset(projectId, datasetId);
+        const existingSnapshotIds = Array.isArray(detail?.snapshot_ids)
+          ? detail.snapshot_ids.map(Number).filter(Number.isFinite)
+          : [];
+        const merged = Array.from(new Set([...existingSnapshotIds, ...snapshotIdsToSave]));
+        const added = Math.max(0, merged.length - existingSnapshotIds.length);
+        if (added > 0) {
+          await behaviorAPI.updateDataset(projectId, datasetId, { snapshot_ids: merged });
+          totalAdded += added;
+        } else {
+          totalAlready += snapshotIdsToSave.length;
+        }
+      }
+
+      await mutateDatasets();
+
+      if (trimmedName && targetDatasetIds.length === 0) {
+        const count = snapshotIdsToSave.length;
+        toast.showToast(
+          `Saved ${count} log${count !== 1 ? "s" : ""} to new dataset "${trimmedName}".`,
+          "success"
+        );
+      } else {
+        const parts: string[] = [];
+        if (totalAdded > 0) parts.push(`added ${totalAdded}`);
+        if (totalAlready > 0) parts.push(`already in target datasets`);
+        if (createdDatasetName) parts.push(`created "${createdDatasetName}"`);
+        const summary = parts.length > 0 ? parts.join(", ") : "no changes";
+        toast.showToast(
+          `Saved ${snapshotIdsToSave.length} log${snapshotIdsToSave.length !== 1 ? "s" : ""} to datasets: ${summary}.`,
+          totalAdded > 0 || createdDatasetName ? "success" : "warning"
+        );
+      }
+
       setSelectedIds(new Set());
       setIsSelectMode(false);
-    } catch (e: any) {
-      const msg = e?.response?.data?.detail || "Failed to save dataset";
-      window.alert(typeof msg === "string" ? msg : JSON.stringify(msg));
+      setIsSaveModalOpen(false);
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Failed to save logs to datasets";
+      toast.showToast(typeof msg === "string" ? msg : "Failed to save logs to datasets", "error");
     } finally {
-      setIsSavingDataset(false);
+      setIsSavingToDatasets(false);
     }
   };
 
   if (isLoading) {
     return (
-      <div className="p-10 flex flex-col items-center justify-center gap-4 opacity-40">
-        <Activity className="w-8 h-8 text-emerald-500 animate-pulse" />
-        <span className="text-xs font-black uppercase tracking-[0.2em]">
-          Decoding Neural Logs...
-        </span>
+      <div className="flex flex-col h-full bg-[#111216]" role="status" aria-label="Loading clinical log">
+        <div className="p-5 flex items-center justify-between gap-4 border-b border-white/[0.04] bg-[#18191e]">
+          <div className="animate-pulse h-5 w-24 rounded bg-white/10" />
+          <div className="flex items-center gap-3">
+            <div className="animate-pulse h-8 w-32 rounded-lg bg-white/10" />
+            <div className="animate-pulse h-8 w-20 rounded-xl bg-white/10" />
+          </div>
+        </div>
+        <div className="p-4 flex flex-col gap-3">
+          {[1, 2, 3, 4, 5, 6, 7].map(i => (
+            <div
+              key={i}
+              className="rounded-xl border border-white/[0.04] bg-white/[0.02] p-4 space-y-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="animate-pulse h-4 w-40 rounded bg-white/10" />
+                <div className="animate-pulse h-4 w-20 rounded bg-white/10" />
+              </div>
+              <div className="animate-pulse h-3 w-full max-w-md rounded bg-white/5" />
+              <div className="flex gap-2">
+                <div className="animate-pulse h-5 w-16 rounded bg-white/5" />
+                <div className="animate-pulse h-5 w-14 rounded bg-white/5" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <span className="sr-only">Decoding neural logs...</span>
       </div>
     );
   }
@@ -678,7 +863,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
 
           <div className="w-px h-4 bg-white/10 hidden md:block" />
 
-          {/* Export Actions */}
+          {/* Save selection to datasets (playlist-style) */}
           <button
             onClick={() => {
               setIsSelectMode(m => !m);
@@ -692,7 +877,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
             )}
           >
             {isSelectMode ? <XCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-            {isSelectMode ? "CANCEL" : "EXPORT"}
+            {isSelectMode ? "CANCEL" : "SAVE"}
           </button>
 
           {isSelectMode && (
@@ -704,19 +889,27 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                 {selectedIds.size === visibleSnapshots.length ? "DESELECT" : "ALL"}
               </button>
               <button
-                onClick={saveSelectionAsDataset}
-                disabled={selectedIds.size === 0 || isSavingDataset}
+                onClick={openSaveToDatasetsModal}
+                disabled={selectedIds.size === 0}
                 className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-[12px] font-bold uppercase tracking-wide text-emerald-300 hover:bg-emerald-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
               >
-                {isSavingDataset ? "SAVING…" : `SAVE (${selectedIds.size})`}
+                {isSavingToDatasets ? "SAVING…" : `SAVE (${selectedIds.size})`}
               </button>
             </div>
           )}
         </div>
       </div>
       {error && (
-        <div className="mx-4 mb-3 px-3 py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-xs text-rose-300 font-medium">
-          Failed to load snapshots. Please retry.
+        <div className="mx-4 mb-3 px-3 py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 flex items-center justify-between gap-3">
+          <span className="text-xs text-rose-300 font-medium">Failed to load snapshots. Please retry.</span>
+          <button
+            type="button"
+            onClick={() => mutate()}
+            className="shrink-0 px-3 py-1.5 rounded-lg border border-white/20 bg-white/5 text-slate-300 text-xs font-medium hover:bg-white/10 transition-colors"
+            aria-label="Retry loading snapshots"
+          >
+            Retry
+          </button>
         </div>
       )}
 
@@ -786,29 +979,25 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                 const traceKey = String(s.trace_id || "");
                 const policyState = policyByTrace[traceKey] ||
                   policyByTrace[String(s.id)] || { status: "idle" as const };
-                const evalStatuses = perSnapshotEvalMap[String(s.id)] || {};
-                const evalRows = runtimeEnabledCheckIds.map(checkId => ({
-                  id: checkId,
-                  status: evalStatuses[checkId] || "na",
-                }));
+                const evalRows = getSnapshotEvalRows(s);
                 const snapshotRules = Array.isArray(policyState.ruleSnapshot)
                   ? policyState.ruleSnapshot
                   : [];
                 const policyRulesForRun =
                   snapshotRules.length > 0
-                    ? snapshotRules.map((snapRule: any) => {
-                      const ruleId = String(snapRule?.id || "");
-                      const currentRule = configuredPolicyMap.get(ruleId);
-                      return {
-                        id: ruleId || `snapshot-${String(s.id)}`,
-                        name: String(
-                          snapRule?.name || currentRule?.name || `Rule ${ruleId || "snapshot"}`
-                        ),
-                        scope_type: currentRule?.scope_type || "snapshot",
-                        scope_ref: currentRule?.scope_ref || "",
-                        rule_json: snapRule?.rule_json || currentRule?.rule_json || {},
-                      };
-                    })
+                    ? snapshotRules.map((snapRule: Record<string, unknown>) => {
+                        const ruleId = String(snapRule?.id || "");
+                        const currentRule = configuredPolicyMap.get(ruleId) as Record<string, unknown> | undefined;
+                        return {
+                          id: ruleId || `snapshot-${String(s.id)}`,
+                          name: String(
+                            snapRule?.name ?? currentRule?.name ?? `Rule ${ruleId || "snapshot"}`
+                          ),
+                          scope_type: (currentRule?.scope_type as string) || "snapshot",
+                          scope_ref: (currentRule?.scope_ref as string) ?? "",
+                          rule_json: (snapRule?.rule_json as object) ?? (currentRule?.rule_json as object) ?? {},
+                        };
+                      })
                     : configuredPolicies;
                 const canEvaluatePolicy =
                   Boolean(s.trace_id) && configuredPolicies.length > 0 && hasPolicyContext;
@@ -828,21 +1017,21 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                       "group transition-colors duration-200 overflow-hidden border-b border-white/[0.04]",
                       isExpanded
                         ? clsx(
-                          "bg-white/[0.02]",
-                          failedCount > 0
-                            ? "border-l-[2px] border-l-rose-500/40"
-                            : passedCount > 0
-                              ? "border-l-[2px] border-l-emerald-500/40"
-                              : "border-l-[2px] border-l-emerald-500/20"
-                        )
+                            "bg-white/[0.02]",
+                            failedCount > 0
+                              ? "border-l-[2px] border-l-rose-500/40"
+                              : passedCount > 0
+                                ? "border-l-[2px] border-l-emerald-500/40"
+                                : "border-l-[2px] border-l-emerald-500/20"
+                          )
                         : clsx(
-                          "border-l-[2px] border-l-transparent",
-                          failedCount > 0
-                            ? "bg-rose-500/[0.03] hover:bg-rose-500/[0.06]"
-                            : passedCount > 0
-                              ? "bg-emerald-500/[0.02] hover:bg-emerald-500/[0.04]"
-                              : "bg-transparent hover:bg-white/[0.02]"
-                        )
+                            "border-l-[2px] border-l-transparent",
+                            failedCount > 0
+                              ? "bg-rose-500/[0.03] hover:bg-rose-500/[0.06]"
+                              : passedCount > 0
+                                ? "bg-emerald-500/[0.02] hover:bg-emerald-500/[0.04]"
+                                : "bg-transparent hover:bg-white/[0.02]"
+                          )
                     )}
                   >
                     {/* Summary Line */}
@@ -907,12 +1096,19 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                               EVAL: {failedCount > 0 ? "FAIL" : "PASS"}
                             </div>
                           )}
-                          {(s.has_tool_calls || (toolNames.length > 0)) && (
+                          {(s.has_tool_calls || toolNames.length > 0) && (
                             <div
                               className="shrink-0 px-2.5 py-0.5 rounded-full border border-amber-500/20 bg-amber-500/10 text-amber-400/90 text-[11px] font-bold uppercase tracking-widest flex items-center gap-1"
-                              title={toolNames.length > 0 ? `Tools: ${toolNames.join(", ")}` : "Tool use"}
+                              title={
+                                toolNames.length > 0 ? `Tools: ${toolNames.join(", ")}` : "Tool use"
+                              }
                             >
-                              Tool{toolNames.length !== 1 ? "s" : ""}: {toolNames.length > 0 ? (toolNames.length > 2 ? `${toolNames.length} calls` : toolNames.join(", ")) : "—"}
+                              Tool{toolNames.length !== 1 ? "s" : ""}:{" "}
+                              {toolNames.length > 0
+                                ? toolNames.length > 2
+                                  ? `${toolNames.length} calls`
+                                  : toolNames.join(", ")
+                                : "—"}
                             </div>
                           )}
 
@@ -948,8 +1144,6 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                         </div>
                       </div>
                     </div>
-
-
                   </div>
                 );
               })}
@@ -963,29 +1157,179 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
   return (
     <>
       {mainContent}
+      {/* Save to datasets modal */}
+      <AnimatePresence>
+        {isSaveModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#050814] shadow-2xl overflow-hidden"
+            >
+              <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-black text-slate-100 uppercase tracking-[0.18em]">
+                    Save logs to datasets
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Select existing datasets for this node or create a new one.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeSaveModal}
+                  className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-slate-100 hover:bg-white/5 transition-colors"
+                  aria-label="Close"
+                  disabled={isSavingToDatasets}
+                >
+                  <XCircle className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="px-5 py-4 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono text-emerald-300">
+                    {snapshotIdsToSave.length} log{snapshotIdsToSave.length !== 1 ? "s" : ""} selected
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Node-scoped only. Datasets from other nodes are hidden.
+                  </span>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
+                      Existing datasets
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      {datasetsForSave.length} available
+                    </span>
+                  </div>
+                  {datasetsForSave.length === 0 ? (
+                    <div className="px-3 py-2 rounded-lg border border-dashed border-white/10 text-[11px] text-slate-500">
+                      No datasets yet. Create a new dataset below.
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {datasetsForSave.map(ds => {
+                        const id = String(ds.id);
+                        const label = (ds.label?.trim() || `Dataset ${id.slice(0, 8)}`) as string;
+                        const count =
+                          typeof ds.snapshot_count === "number"
+                            ? ds.snapshot_count
+                            : 0;
+                        const checked = selectedDatasetIdsForSave.has(id);
+                        return (
+                          <label
+                            key={id}
+                            className={clsx(
+                              "flex items-center gap-3 px-3 py-2 rounded-lg border text-xs cursor-pointer transition-colors",
+                              checked
+                                ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-100"
+                                : "border-white/10 bg-white/[0.02] text-slate-200 hover:border-white/20 hover:bg-white/5"
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              className="w-3.5 h-3.5 rounded border border-white/30 bg-black/40"
+                              checked={checked}
+                              onChange={() =>
+                                setSelectedDatasetIdsForSave(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(id)) next.delete(id);
+                                  else next.add(id);
+                                  return next;
+                                })
+                              }
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="truncate">{label}</div>
+                              <div className="text-[10px] text-slate-400">
+                                {count} log{count !== 1 ? "s" : ""}
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-white/10 pt-3">
+                  <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-slate-400 mb-2">
+                    Create new dataset
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newDatasetName}
+                      onChange={e => setNewDatasetName(e.target.value)}
+                      placeholder="Dataset name (optional)"
+                      maxLength={200}
+                      className="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-fuchsia-500/60"
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    If you enter a name, a new dataset will be created and these logs will be included.
+                  </p>
+                </div>
+              </div>
+
+              <div className="px-5 py-3 border-t border-white/10 flex items-center justify-between bg-black/40">
+                <button
+                  type="button"
+                  onClick={closeSaveModal}
+                  disabled={isSavingToDatasets}
+                  className="px-4 py-1.5 rounded-lg border border-white/15 text-xs font-semibold text-slate-200 hover:bg-white/5 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={saveSelectionToDatasets}
+                  disabled={isSavingToDatasets}
+                  className="px-4 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/60 text-xs font-bold uppercase tracking-wide text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isSavingToDatasets && (
+                    <span className="inline-block w-3 h-3 border-2 border-emerald-300 border-t-transparent rounded-full animate-spin" />
+                  )}
+                  {isSavingToDatasets ? "Saving…" : "Save to datasets"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Expanded Data Block Modal */}
       <AnimatePresence>
-        {expandedId && (() => {
-          const s = snapshots.find(s => s.id === expandedId);
-          if (!s) return null;
-          const traceKey = String(s.trace_id || "");
-          const policyStateForModal = policyByTrace[traceKey] || policyByTrace[String(s.id)] || { status: "idle" as const };
-          const evalStatuses = perSnapshotEvalMap[String(s.id)] || {};
-          const evalRowsForModal = runtimeEnabledCheckIds.map(checkId => ({
-            id: checkId,
-            status: evalStatuses[checkId] || "na",
-          }));
-          return (
-            <SnapshotDetailModal
-              snapshot={s}
-              onClose={() => setExpandedId(null)}
-              policyState={policyStateForModal}
-              evalRows={evalRowsForModal}
-              savedEvalConfig={savedEvalConfig}
-              evalEnabled={evalEnabled}
-            />
-          );
-        })()}
+        {expandedId &&
+          (() => {
+            const s = snapshots.find(snap => String(snap.id) === String(expandedId));
+            if (!s) return null;
+            const cacheKey = projectId && expandedId ? `${projectId}-${expandedId}` : "";
+            const fullSnap = detailFetchedSnapshot ?? (cacheKey ? snapshotDetailCacheRef.current.get(cacheKey) : undefined);
+            const snapshotToShow = (fullSnap ?? s) as ClinicalSnapshot;
+            const traceKey = String(snapshotToShow.trace_id || "");
+            const policyStateForModal = policyByTrace[traceKey] ||
+              policyByTrace[String(snapshotToShow.id)] || { status: "idle" as const };
+            const evalRowsForModal = getSnapshotEvalRows(snapshotToShow);
+            return (
+              <SnapshotDetailModal
+                snapshot={snapshotToShow}
+                onClose={() => setExpandedId(null)}
+                policyState={policyStateForModal}
+                evalRows={evalRowsForModal}
+                savedEvalConfig={savedEvalConfig}
+                evalEnabled={evalEnabled}
+              />
+            );
+          })()}
       </AnimatePresence>
     </>
   );

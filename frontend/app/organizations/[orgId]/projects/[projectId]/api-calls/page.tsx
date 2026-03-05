@@ -1,43 +1,45 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useState, useMemo } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import ProjectLayout from '@/components/layout/ProjectLayout';
-import FilterPanel, { FilterState } from '@/components/filters/FilterPanel';
-import Pagination from '@/components/ui/Pagination';
-import Badge from '@/components/ui/Badge';
-import Button from '@/components/ui/Button';
-import { apiCallsAPI, organizationsAPI } from '@/lib/api';
-import { toFixedSafe } from '@/lib/format';
-import { useToast } from '@/components/ToastContainer';
-import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, RefreshCw, Search, X } from 'lucide-react';
-import ExportButton from '@/components/export/ExportButton';
-import PulseIndicator from '@/components/streaming/PulseIndicator';
-import LiveStreamView from '@/components/streaming/LiveStreamView';
-import { clsx } from 'clsx';
-import ProjectTabs from '@/components/ProjectTabs';
-import useSWR from 'swr';
+import { useCallback, useEffect, useState, useMemo } from "react";
+import { useRouter, useParams } from "next/navigation";
+import ProjectLayout from "@/components/layout/ProjectLayout";
+import FilterPanel, { FilterState } from "@/components/filters/FilterPanel";
+import Pagination from "@/components/ui/Pagination";
+import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import { apiCallsAPI, organizationsAPI } from "@/lib/api";
+import { toFixedSafe } from "@/lib/format";
+import { useToast } from "@/components/ToastContainer";
+import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, RefreshCw, Search, X } from "lucide-react";
+import ExportButton from "@/components/export/ExportButton";
+import PulseIndicator from "@/components/streaming/PulseIndicator";
+import LiveStreamView from "@/components/streaming/LiveStreamView";
+import { clsx } from "clsx";
+import ProjectTabs from "@/components/ProjectTabs";
+import useSWR from "swr";
 
-type SortField = 'created_at' | 'latency_ms' | 'status_code' | 'provider' | 'model';
-type SortDirection = 'asc' | 'desc';
+type SortField = "created_at" | "latency_ms" | "status_code" | "provider" | "model";
+type SortDirection = "asc" | "desc";
 
 export default function APICallsListPage() {
   const router = useRouter();
   const params = useParams();
   const toast = useToast();
   const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Number(Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId);
+  const projectId = Number(
+    Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId
+  );
 
-  const { data: org } = useSWR(orgId ? ['organization', orgId] : null, () =>
-    organizationsAPI.get(orgId, { includeStats: false }),
+  const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
+    organizationsAPI.get(orgId, { includeStats: false })
   );
 
   const [apiCalls, setApiCalls] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<FilterState>({});
-  const [searchInput, setSearchInput] = useState(''); // Local search input state
-  const [sortField, setSortField] = useState<SortField>('created_at');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [searchInput, setSearchInput] = useState(""); // Local search input state
+  const [sortField, setSortField] = useState<SortField>("created_at");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [totalItems, setTotalItems] = useState(0);
@@ -49,7 +51,12 @@ export default function APICallsListPage() {
       // Fetch more data if client-side filters are active (date range, status, search)
       // Otherwise use server-side pagination
       // Note: Backend max limit is 1000, so we can't fetch all data at once
-      const needsClientSideFiltering = !!(filters.dateFrom || filters.dateTo || filters.status || filters.search);
+      const needsClientSideFiltering = !!(
+        filters.dateFrom ||
+        filters.dateTo ||
+        filters.status ||
+        filters.search
+      );
       const fetchLimit = needsClientSideFiltering ? 1000 : itemsPerPage; // Max 1000 per backend validation
       const fetchOffset = needsClientSideFiltering ? 0 : (currentPage - 1) * itemsPerPage;
 
@@ -87,9 +94,9 @@ export default function APICallsListPage() {
         });
       }
 
-      if (filters.status && filters.status !== 'all') {
+      if (filters.status && filters.status !== "all") {
         filtered = filtered.filter((call: any) => {
-          if (filters.status === 'success') {
+          if (filters.status === "success") {
             return call.status_code >= 200 && call.status_code < 300;
           } else {
             return !(call.status_code >= 200 && call.status_code < 300);
@@ -118,19 +125,19 @@ export default function APICallsListPage() {
         let aVal: any = a[sortField];
         let bVal: any = b[sortField];
 
-        if (sortField === 'created_at') {
+        if (sortField === "created_at") {
           aVal = new Date(aVal).getTime();
           bVal = new Date(bVal).getTime();
-        } else if (sortField === 'provider' || sortField === 'model') {
+        } else if (sortField === "provider" || sortField === "model") {
           // String comparison for provider and model
-          aVal = aVal?.toLowerCase() || '';
-          bVal = bVal?.toLowerCase() || '';
+          aVal = aVal?.toLowerCase() || "";
+          bVal = bVal?.toLowerCase() || "";
         }
 
-        if (aVal === null || aVal === undefined || aVal === '') return 1;
-        if (bVal === null || bVal === undefined || bVal === '') return -1;
+        if (aVal === null || aVal === undefined || aVal === "") return 1;
+        if (bVal === null || bVal === undefined || bVal === "") return -1;
 
-        if (sortDirection === 'asc') {
+        if (sortDirection === "asc") {
           return aVal > bVal ? 1 : -1;
         } else {
           return aVal < bVal ? 1 : -1;
@@ -145,14 +152,20 @@ export default function APICallsListPage() {
       setApiCalls(paginatedResults);
       setTotalItems(filtered.length); // Total filtered count for pagination
     } catch (error: any) {
-      console.error('Failed to load API calls:', error);
-      const errMsg = error.response?.data?.error?.message ?? error.response?.data?.detail ?? 'Failed to load API calls';
-      toast.showToast(typeof errMsg === 'string' ? errMsg : 'Failed to load API calls', 'error');
+      console.error("Failed to load API calls:", error);
+      const errMsg =
+        error.response?.data?.error?.message ??
+        error.response?.data?.detail ??
+        "Failed to load API calls";
+      toast.showToast(typeof errMsg === "string" ? errMsg : "Failed to load API calls", "error");
       if (error.response?.status === 401) {
-        router.push('/login');
-      } else if (error.response?.status === 404 && (errMsg === 'Project not found' || errMsg === 'Not Found')) {
+        router.push("/login");
+      } else if (
+        error.response?.status === 404 &&
+        (errMsg === "Project not found" || errMsg === "Not Found")
+      ) {
         if (orgId) router.push(`/organizations/${orgId}/projects`);
-        else router.push('/organizations');
+        else router.push("/organizations");
       }
       // Set empty arrays on error
       setApiCalls([]);
@@ -161,12 +174,22 @@ export default function APICallsListPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, filters, itemsPerPage, orgId, projectId, sortDirection, sortField, toast, router]);
+  }, [
+    currentPage,
+    filters,
+    itemsPerPage,
+    orgId,
+    projectId,
+    sortDirection,
+    sortField,
+    toast,
+    router,
+  ]);
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
+    const token = localStorage.getItem("access_token");
     if (!token) {
-      router.push('/login');
+      router.push("/login");
       return;
     }
 
@@ -174,7 +197,7 @@ export default function APICallsListPage() {
       if (orgId) {
         router.push(`/organizations/${orgId}/projects`);
       } else {
-        router.push('/organizations');
+        router.push("/organizations");
       }
       return;
     }
@@ -184,10 +207,10 @@ export default function APICallsListPage() {
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
-      setSortDirection('desc');
+      setSortDirection("desc");
     }
     setCurrentPage(1); // Reset to first page when sorting
   };
@@ -200,7 +223,7 @@ export default function APICallsListPage() {
   // Apply search - called on Enter key or button click
   const applySearch = () => {
     const trimmedSearch = searchInput.trim();
-    if (trimmedSearch !== (filters.search || '')) {
+    if (trimmedSearch !== (filters.search || "")) {
       setFilters({ ...filters, search: trimmedSearch || undefined });
       setCurrentPage(1);
     }
@@ -208,14 +231,14 @@ export default function APICallsListPage() {
 
   // Clear search
   const clearSearch = () => {
-    setSearchInput('');
+    setSearchInput("");
     setFilters({ ...filters, search: undefined });
     setCurrentPage(1);
   };
 
   // Handle Enter key press in search
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       e.preventDefault();
       applySearch();
     }
@@ -237,7 +260,7 @@ export default function APICallsListPage() {
   // Extract available options from all fetched data, not just current page
   const availableProviders = useMemo(() => {
     const providers = new Set<string>();
-    (allData.length > 0 ? allData : apiCalls).forEach((call) => {
+    (allData.length > 0 ? allData : apiCalls).forEach(call => {
       if (call.provider) providers.add(call.provider);
     });
     return Array.from(providers).sort();
@@ -245,7 +268,7 @@ export default function APICallsListPage() {
 
   const availableModels = useMemo(() => {
     const models = new Set<string>();
-    (allData.length > 0 ? allData : apiCalls).forEach((call) => {
+    (allData.length > 0 ? allData : apiCalls).forEach(call => {
       if (call.model) models.add(call.model);
     });
     return Array.from(models).sort();
@@ -253,7 +276,7 @@ export default function APICallsListPage() {
 
   const availableAgents = useMemo(() => {
     const agents = new Set<string>();
-    (allData.length > 0 ? allData : apiCalls).forEach((call) => {
+    (allData.length > 0 ? allData : apiCalls).forEach(call => {
       if (call.agent_name) agents.add(call.agent_name);
     });
     return Array.from(agents).sort();
@@ -271,8 +294,8 @@ export default function APICallsListPage() {
         orgId={orgId}
         projectId={projectId}
         breadcrumb={[
-          { label: org?.name || 'Organization', href: `/organizations/${orgId}/projects` },
-          { label: 'API Calls' },
+          { label: org?.name || "Organization", href: `/organizations/${orgId}/projects` },
+          { label: "API Calls" },
         ]}
       >
         <div className="flex items-center justify-center min-h-[400px]">
@@ -287,8 +310,8 @@ export default function APICallsListPage() {
       orgId={orgId}
       projectId={projectId}
       breadcrumb={[
-        { label: org?.name || 'Organization', href: `/organizations/${orgId}/projects` },
-        { label: 'API Calls' },
+        { label: org?.name || "Organization", href: `/organizations/${orgId}/projects` },
+        { label: "API Calls" },
       ]}
     >
       <div className="max-w-7xl mx-auto">
@@ -330,7 +353,7 @@ export default function APICallsListPage() {
             onFiltersChange={handleFiltersChange}
             onReset={() => {
               setFilters({});
-              setSearchInput(''); // Also clear search input
+              setSearchInput(""); // Also clear search input
               setCurrentPage(1);
             }}
             availableProviders={availableProviders}
@@ -347,7 +370,7 @@ export default function APICallsListPage() {
               <input
                 type="text"
                 value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
+                onChange={e => setSearchInput(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
                 placeholder="Search in prompts and responses... (Press Enter)"
                 className="w-full pl-10 pr-10 py-2.5 bg-[#1e293b] border border-white/10 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-ag-accent focus:border-ag-accent transition-colors"
@@ -362,12 +385,7 @@ export default function APICallsListPage() {
                 </button>
               )}
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={applySearch}
-              className="px-4 shrink-0"
-            >
+            <Button variant="primary" size="sm" onClick={applySearch} className="px-4 shrink-0">
               Search
             </Button>
           </div>
@@ -384,26 +402,30 @@ export default function APICallsListPage() {
           {loading && apiCalls.length > 0 && (
             <div className="absolute top-0 left-0 right-0 z-10">
               <div className="h-1 bg-ag-accent/20 overflow-hidden">
-                <div className="h-full w-1/3 bg-ag-accent animate-[slide_1s_ease-in-out_infinite]"
-                  style={{ animation: 'slide 1s ease-in-out infinite' }} />
+                <div
+                  className="h-full w-1/3 bg-ag-accent animate-[slide_1s_ease-in-out_infinite]"
+                  style={{ animation: "slide 1s ease-in-out infinite" }}
+                />
               </div>
             </div>
           )}
-          <div className={clsx(
-            "overflow-x-auto transition-opacity duration-200",
-            loading && apiCalls.length > 0 && "opacity-60"
-          )}>
+          <div
+            className={clsx(
+              "overflow-x-auto transition-opacity duration-200",
+              loading && apiCalls.length > 0 && "opacity-60"
+            )}
+          >
             <table className="min-w-full divide-y divide-white/10">
               <thead className="bg-white/5">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     <button
-                      onClick={() => handleSort('created_at')}
+                      onClick={() => handleSort("created_at")}
                       className="flex items-center gap-1 hover:text-white transition-colors"
                     >
                       Time
-                      {sortField === 'created_at' ? (
-                        sortDirection === 'asc' ? (
+                      {sortField === "created_at" ? (
+                        sortDirection === "asc" ? (
                           <ArrowUp className="h-4 w-4" />
                         ) : (
                           <ArrowDown className="h-4 w-4" />
@@ -415,12 +437,12 @@ export default function APICallsListPage() {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     <button
-                      onClick={() => handleSort('provider')}
+                      onClick={() => handleSort("provider")}
                       className="flex items-center gap-1 hover:text-white transition-colors"
                     >
                       Provider
-                      {sortField === 'provider' ? (
-                        sortDirection === 'asc' ? (
+                      {sortField === "provider" ? (
+                        sortDirection === "asc" ? (
                           <ArrowUp className="h-4 w-4" />
                         ) : (
                           <ArrowDown className="h-4 w-4" />
@@ -432,12 +454,12 @@ export default function APICallsListPage() {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     <button
-                      onClick={() => handleSort('model')}
+                      onClick={() => handleSort("model")}
                       className="flex items-center gap-1 hover:text-white transition-colors"
                     >
                       Model
-                      {sortField === 'model' ? (
-                        sortDirection === 'asc' ? (
+                      {sortField === "model" ? (
+                        sortDirection === "asc" ? (
                           <ArrowUp className="h-4 w-4" />
                         ) : (
                           <ArrowDown className="h-4 w-4" />
@@ -452,12 +474,12 @@ export default function APICallsListPage() {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     <button
-                      onClick={() => handleSort('latency_ms')}
+                      onClick={() => handleSort("latency_ms")}
                       className="flex items-center gap-1 hover:text-white transition-colors"
                     >
                       Latency
-                      {sortField === 'latency_ms' ? (
-                        sortDirection === 'asc' ? (
+                      {sortField === "latency_ms" ? (
+                        sortDirection === "asc" ? (
                           <ArrowUp className="h-4 w-4" />
                         ) : (
                           <ArrowDown className="h-4 w-4" />
@@ -483,20 +505,42 @@ export default function APICallsListPage() {
                 {loading && apiCalls.length === 0 ? (
                   [...Array(5)].map((_, i) => (
                     <tr key={`skeleton-${i}`} className="animate-pulse">
-                      <td className="px-6 py-4"><div className="h-4 bg-white/10 rounded w-24"></div></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-white/10 rounded w-16"></div></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-white/10 rounded w-20"></div></td>
-                      <td className="px-6 py-4"><div className="h-6 bg-white/10 rounded w-12"></div></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-white/10 rounded w-16"></div></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-white/10 rounded w-14"></div></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-white/10 rounded w-20"></div></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-white/10 rounded w-8 ml-auto"></div></td>
+                      <td className="px-6 py-4">
+                        <div className="h-4 bg-white/10 rounded w-24"></div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="h-4 bg-white/10 rounded w-16"></div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="h-4 bg-white/10 rounded w-20"></div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="h-6 bg-white/10 rounded w-12"></div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="h-4 bg-white/10 rounded w-16"></div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="h-4 bg-white/10 rounded w-14"></div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="h-4 bg-white/10 rounded w-20"></div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="h-4 bg-white/10 rounded w-8 ml-auto"></div>
+                      </td>
                     </tr>
                   ))
                 ) : apiCalls.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
-                      {filters.search || filters.dateFrom || filters.dateTo || filters.status || filters.provider || filters.model || filters.agentName ? (
+                      {filters.search ||
+                      filters.dateFrom ||
+                      filters.dateTo ||
+                      filters.status ||
+                      filters.provider ||
+                      filters.model ||
+                      filters.agentName ? (
                         <div>
                           <p>No API calls found matching the current filters.</p>
                           <p className="text-sm mt-2 text-slate-500">
@@ -525,42 +569,47 @@ export default function APICallsListPage() {
                     </td>
                   </tr>
                 ) : (
-                  apiCalls.map((call) => (
+                  apiCalls.map(call => (
                     <tr key={call.id} className="hover:bg-white/5 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
                         {new Date(call.created_at).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-white">
-                          {call.provider || 'unknown'}
+                          {call.provider || "unknown"}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-white">
-                          {call.model || 'unknown'}
+                          {call.model || "unknown"}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getStatusBadge(call.status_code)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
-                        {call.latency_ms ? `${toFixedSafe(call.latency_ms, 0)}ms` : 'N/A'}
+                        {call.latency_ms ? `${toFixedSafe(call.latency_ms, 0)}ms` : "N/A"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                         {call.request_tokens && call.response_tokens ? (
                           <>
-                            {call.request_tokens.toLocaleString()} / {call.response_tokens.toLocaleString()}
+                            {call.request_tokens.toLocaleString()} /{" "}
+                            {call.response_tokens.toLocaleString()}
                           </>
                         ) : (
-                          'N/A'
+                          "N/A"
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
-                        {call.agent_name || '-'}
+                        {call.agent_name || "-"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
-                          onClick={() => router.push(`/organizations/${orgId}/projects/${projectId}/api-calls/${call.id}`)}
+                          onClick={() =>
+                            router.push(
+                              `/organizations/${orgId}/projects/${projectId}/api-calls/${call.id}`
+                            )
+                          }
                           className="text-ag-accent hover:text-ag-accentLight transition-colors"
                         >
                           View
@@ -583,7 +632,7 @@ export default function APICallsListPage() {
               totalItems={totalItems}
               itemsPerPage={itemsPerPage}
               onPageChange={setCurrentPage}
-              onItemsPerPageChange={(newItemsPerPage) => {
+              onItemsPerPageChange={newItemsPerPage => {
                 setItemsPerPage(newItemsPerPage);
                 setCurrentPage(1); // Reset to first page when changing items per page
               }}
@@ -593,13 +642,15 @@ export default function APICallsListPage() {
         )}
 
         {/* Show info when client-side filtering is applied */}
-        {(filters.dateFrom || filters.dateTo || filters.status || filters.search) && totalItems > 0 && (
-          <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-            <p className="text-sm text-blue-400">
-              Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} filtered results
-            </p>
-          </div>
-        )}
+        {(filters.dateFrom || filters.dateTo || filters.status || filters.search) &&
+          totalItems > 0 && (
+            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <p className="text-sm text-blue-400">
+                Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} to{" "}
+                {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} filtered results
+              </p>
+            </div>
+          )}
       </div>
     </ProjectLayout>
   );

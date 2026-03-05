@@ -164,7 +164,7 @@ class SnapshotService:
                     if agent_settings and agent_settings.diagnostic_config:
                         agent_config = agent_settings.diagnostic_config if isinstance(agent_settings.diagnostic_config, dict) else json.loads(agent_settings.diagnostic_config)
                         
-                        # Deep Merge: Agent config priority for thresholds and rules
+                        # Deep Merge: Agent config priority for thresholds, rules, and eval
                         if "thresholds" in agent_config or "rules" in agent_config:
                             # New nested structure
                             if "thresholds" not in diagnostic_config:
@@ -182,6 +182,9 @@ class SnapshotService:
                                 diagnostic_config["thresholds"].update(agent_config)
                             else:
                                 diagnostic_config.update(agent_config)
+                        # Always apply agent's eval config (Live View eval) so save_snapshot can compute eval_checks_result
+                        if "eval" in agent_config and agent_config["eval"]:
+                            diagnostic_config["eval"] = agent_config["eval"]
                         
             except Exception as e:
                 logger.warning(f"Failed to fetch diagnostic_config for evaluation: {str(e)}")
@@ -194,38 +197,38 @@ class SnapshotService:
         
         is_worst = payload.get("is_violation", False)
 
-        # Live View eval checks at save time (stable display when user changes config later)
-        eval_checks_result = None
+        # Live View eval checks at save time (always run so Worst/Golden and detail use stored eval)
         eval_config = (diagnostic_config or {}).get("eval") if isinstance(diagnostic_config, dict) else None
-        if eval_config:
-            try:
-                response_text = prompt_fields.get("response") or ""
-                latency_ms = payload.get("latency_ms")
-                if latency_ms is not None and not isinstance(latency_ms, (int, float)):
-                    latency_ms = None
-                tokens_used = payload.get("tokens_used")
-                cost_val = payload.get("cost")
-                eval_checks_result = evaluate_one_snapshot_at_save(
-                    response_text=response_text,
-                    latency_ms=int(latency_ms) if latency_ms is not None else None,
-                    status_code=status_code,
-                    tokens_used=int(tokens_used) if tokens_used is not None else None,
-                    cost=float(cost_val) if cost_val is not None else None,
-                    eval_config=eval_config,
-                    payload=sanitized_payload,
-                    project_id=project_id,
-                    agent_id=agent_id,
-                    db=self.db,
-                )
-            except Exception as e:
-                logger.warning(f"Failed to compute eval_checks_result at save: {e}")
-        
+        eval_config = eval_config if isinstance(eval_config, dict) else {}
+        eval_checks_result = None
+        try:
+            response_text = prompt_fields.get("response") or ""
+            latency_ms = payload.get("latency_ms")
+            if latency_ms is not None and not isinstance(latency_ms, (int, float)):
+                latency_ms = None
+            tokens_used = payload.get("tokens_used")
+            cost_val = payload.get("cost")
+            eval_checks_result = evaluate_one_snapshot_at_save(
+                response_text=response_text,
+                latency_ms=int(latency_ms) if latency_ms is not None else None,
+                status_code=status_code,
+                tokens_used=int(tokens_used) if tokens_used is not None else None,
+                cost=float(cost_val) if cost_val is not None else None,
+                eval_config=eval_config,
+                payload=sanitized_payload,
+                project_id=project_id,
+                agent_id=agent_id,
+                db=self.db,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to compute eval_checks_result at save: {e}")
+            eval_checks_result = {}
+
         eval_config_version = None
-        if eval_checks_result is not None and eval_config:
-            try:
-                eval_config_version = eval_config_version_hash(eval_config)
-            except Exception:
-                pass
+        try:
+            eval_config_version = eval_config_version_hash(eval_config)
+        except Exception:
+            pass
         tool_calls_summary = extract_tool_calls_summary(sanitized_payload)
         snapshot_data = {
             "trace_id": trace_id,

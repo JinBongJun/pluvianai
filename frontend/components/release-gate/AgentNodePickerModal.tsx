@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import React, { useEffect } from 'react';
-import { X, Loader2 } from 'lucide-react';
-import { AgentPickerCard } from './AgentPickerCard';
-import type { AgentForPicker } from './AgentPickerCard';
+import React, { useEffect } from "react";
+import { X, Loader2 } from "lucide-react";
+import { AgentPickerCard } from "./AgentPickerCard";
+import type { AgentForPicker } from "./AgentPickerCard";
 
 type AgentNodePickerModalProps = {
   open: boolean;
@@ -23,10 +23,10 @@ export function AgentNodePickerModal({
   useEffect(() => {
     if (!open) return;
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === "Escape") onClose();
     };
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
   }, [open, onClose]);
 
   if (!open) return null;
@@ -67,7 +67,7 @@ export function AgentNodePickerModal({
               No agents yet. Run flows in Live View to see nodes here.
             </p>
           ) : (
-            agents.map((agent) => (
+            agents.map(agent => (
               <AgentPickerCard
                 key={agent.agent_id}
                 agent={agent}

@@ -15,6 +15,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, Field
 from app.core.database import get_db
+from app.core.usage_limits import get_snapshots_count_this_month, get_guard_credits_this_month
+from app.services.subscription_service import SubscriptionService
 from app.core.security import (
     verify_password,
     get_password_hash,
@@ -471,3 +473,27 @@ async def refresh_token(
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information"""
     return current_user
+
+
+@router.get("/me/usage")
+async def get_my_usage(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Return current user's plan, limits, and usage this month (for free-tier visibility).
+    Used by Billing/Usage page to show "X / limit" for snapshots and GuardCredits.
+    """
+    service = SubscriptionService(db)
+    plan_info = service.get_user_plan(current_user.id)
+    snapshots = get_snapshots_count_this_month(db, current_user.id)
+    guard_credits = get_guard_credits_this_month(db, current_user.id)
+    limits = plan_info.get("limits", {})
+    return {
+        "plan_type": plan_info.get("plan_type", "free"),
+        "limits": limits,
+        "usage_this_month": {
+            "snapshots": snapshots,
+            "guard_credits": guard_credits,
+        },
+    }

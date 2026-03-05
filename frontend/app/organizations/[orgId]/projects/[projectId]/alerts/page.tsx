@@ -1,22 +1,33 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import ProjectLayout from '@/components/layout/ProjectLayout';
-import Pagination from '@/components/ui/Pagination';
-import Badge from '@/components/ui/Badge';
-import Button from '@/components/ui/Button';
-import Select from '@/components/ui/Select';
-import DateRangePicker from '@/components/ui/DateRangePicker';
-import { alertsAPI, organizationsAPI } from '@/lib/api';
-import { useToast } from '@/components/ToastContainer';
-import { ArrowUpDown, ArrowUp, ArrowDown, Eye, Bell, CheckCircle, XCircle, AlertTriangle, Send, RefreshCw } from 'lucide-react';
-import { clsx } from 'clsx';
-import ProjectTabs from '@/components/ProjectTabs';
-import useSWR from 'swr';
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { useRouter, useParams } from "next/navigation";
+import ProjectLayout from "@/components/layout/ProjectLayout";
+import Pagination from "@/components/ui/Pagination";
+import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import Select from "@/components/ui/Select";
+import DateRangePicker from "@/components/ui/DateRangePicker";
+import { alertsAPI, organizationsAPI } from "@/lib/api";
+import { useToast } from "@/components/ToastContainer";
+import {
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Eye,
+  Bell,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  Send,
+  RefreshCw,
+} from "lucide-react";
+import { clsx } from "clsx";
+import ProjectTabs from "@/components/ProjectTabs";
+import useSWR from "swr";
 
-type SortField = 'created_at' | 'severity' | 'alert_type';
-type SortDirection = 'asc' | 'desc';
+type SortField = "created_at" | "severity" | "alert_type";
+type SortDirection = "asc" | "desc";
 
 interface Alert {
   id: number;
@@ -37,30 +48,39 @@ interface Alert {
 }
 
 // Default alert types from backend model (even if no data exists yet)
-const DEFAULT_ALERT_TYPES = ['drift', 'cost_spike', 'error', 'timeout', 'model_update', 'shadow_routing'];
+const DEFAULT_ALERT_TYPES = [
+  "drift",
+  "cost_spike",
+  "error",
+  "timeout",
+  "model_update",
+  "shadow_routing",
+];
 
 export default function AlertsPage() {
   const router = useRouter();
   const params = useParams();
   const toast = useToast();
   const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Number(Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId);
+  const projectId = Number(
+    Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId
+  );
 
-  const { data: org } = useSWR(orgId ? ['organization', orgId] : null, () =>
-    organizationsAPI.get(orgId, { includeStats: false }),
+  const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
+    organizationsAPI.get(orgId, { includeStats: false })
   );
 
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sortField, setSortField] = useState<SortField>('created_at');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [sortField, setSortField] = useState<SortField>("created_at");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [totalItems, setTotalItems] = useState(0);
   const [filters, setFilters] = useState({
-    alert_type: 'all' as string,
-    severity: 'all' as string,
-    is_resolved: 'all' as string,
+    alert_type: "all" as string,
+    severity: "all" as string,
+    is_resolved: "all" as string,
   });
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
     from: (() => {
@@ -82,14 +102,14 @@ export default function AlertsPage() {
       };
 
       // Apply server-side filters
-      if (filters.alert_type && filters.alert_type !== 'all') {
+      if (filters.alert_type && filters.alert_type !== "all") {
         params.alert_type = filters.alert_type;
       }
-      if (filters.severity && filters.severity !== 'all') {
+      if (filters.severity && filters.severity !== "all") {
         params.severity = filters.severity;
       }
-      if (filters.is_resolved !== 'all') {
-        params.is_resolved = filters.is_resolved === 'resolved';
+      if (filters.is_resolved !== "all") {
+        params.is_resolved = filters.is_resolved === "resolved";
       }
 
       const data = await alertsAPI.list(projectId, params);
@@ -101,13 +121,13 @@ export default function AlertsPage() {
       const now = new Date();
       const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const recentWorst = (data || []).filter((alert: any) => {
-        if (alert.alert_type !== 'worst_case') return false;
+        if (alert.alert_type !== "worst_case") return false;
         if (alert.is_resolved) return false;
         const createdAt = new Date(alert.created_at);
         return createdAt >= cutoff;
       });
       setRecentWorstLiveCount(
-        recentWorst.filter((a: any) => a.alert_data?.target === 'live_view').length,
+        recentWorst.filter((a: any) => a.alert_data?.target === "live_view").length
       );
 
       // Apply client-side date range filtering
@@ -130,10 +150,10 @@ export default function AlertsPage() {
         let aVal: any = a[sortField];
         let bVal: any = b[sortField];
 
-        if (sortField === 'created_at') {
+        if (sortField === "created_at") {
           aVal = new Date(aVal).getTime();
           bVal = new Date(bVal).getTime();
-        } else if (sortField === 'severity') {
+        } else if (sortField === "severity") {
           // Severity order: critical > high > medium > low
           const severityOrder: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
           aVal = severityOrder[aVal] || 0;
@@ -143,7 +163,7 @@ export default function AlertsPage() {
         if (aVal === null || aVal === undefined) return 1;
         if (bVal === null || bVal === undefined) return -1;
 
-        if (sortDirection === 'asc') {
+        if (sortDirection === "asc") {
           return aVal > bVal ? 1 : -1;
         } else {
           return aVal < bVal ? 1 : -1;
@@ -158,19 +178,19 @@ export default function AlertsPage() {
       setAlerts(paginated);
       setTotalItems(filtered.length);
     } catch (error: any) {
-      console.error('Failed to load alerts:', error);
+      console.error("Failed to load alerts:", error);
 
       // Only show error toast for actual API failures, not empty results
       const status = error.response?.status;
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to load alerts';
+      const errorMessage = error.response?.data?.detail || error.message || "Failed to load alerts";
 
       // 404 or empty results should not show error toast
       if (status !== 404 && status !== 200) {
-        toast.showToast(errorMessage, 'error');
+        toast.showToast(errorMessage, "error");
       }
 
       if (status === 401) {
-        router.push('/login');
+        router.push("/login");
       }
 
       // Set empty arrays on error (graceful degradation)
@@ -196,9 +216,9 @@ export default function AlertsPage() {
   ]);
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
+    const token = localStorage.getItem("access_token");
     if (!token) {
-      router.push('/login');
+      router.push("/login");
       return;
     }
 
@@ -206,7 +226,7 @@ export default function AlertsPage() {
       if (orgId) {
         router.push(`/organizations/${orgId}/projects`);
       } else {
-        router.push('/organizations');
+        router.push("/organizations");
       }
       return;
     }
@@ -216,10 +236,10 @@ export default function AlertsPage() {
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
-      setSortDirection('desc');
+      setSortDirection("desc");
     }
     setCurrentPage(1);
   };
@@ -227,34 +247,34 @@ export default function AlertsPage() {
   const handleResolve = async (alertId: number) => {
     try {
       await alertsAPI.resolve(alertId);
-      toast.showToast('Alert resolved successfully', 'success');
+      toast.showToast("Alert resolved successfully", "success");
       loadAlerts();
     } catch (error: any) {
-      console.error('Failed to resolve alert:', error);
-      toast.showToast(error.response?.data?.detail || 'Failed to resolve alert', 'error');
+      console.error("Failed to resolve alert:", error);
+      toast.showToast(error.response?.data?.detail || "Failed to resolve alert", "error");
     }
   };
 
   const handleSend = async (alertId: number) => {
     try {
       await alertsAPI.send(alertId);
-      toast.showToast('Alert sent successfully', 'success');
+      toast.showToast("Alert sent successfully", "success");
       loadAlerts();
     } catch (error: any) {
-      console.error('Failed to send alert:', error);
-      toast.showToast(error.response?.data?.detail || 'Failed to send alert', 'error');
+      console.error("Failed to send alert:", error);
+      toast.showToast(error.response?.data?.detail || "Failed to send alert", "error");
     }
   };
 
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
-      case 'critical':
+      case "critical":
         return <Badge variant="error">Critical</Badge>;
-      case 'high':
+      case "high":
         return <Badge variant="warning">High</Badge>;
-      case 'medium':
+      case "medium":
         return <Badge variant="default">Medium</Badge>;
-      case 'low':
+      case "low":
         return <Badge variant="success">Low</Badge>;
       default:
         return <Badge variant="default">{severity}</Badge>;
@@ -263,19 +283,19 @@ export default function AlertsPage() {
 
   const getAlertTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
-      drift: 'Drift Detection',
-      cost_spike: 'Cost Anomaly',
-      error: 'Error',
-      timeout: 'Timeout',
-      model_update: 'Model Update',
-      quality_drop: 'Quality Drop',
+      drift: "Drift Detection",
+      cost_spike: "Cost Anomaly",
+      error: "Error",
+      timeout: "Timeout",
+      model_update: "Model Update",
+      quality_drop: "Quality Drop",
     };
     return labels[type] || type;
   };
 
   const availableTypes = useMemo(() => {
     const types = new Set<string>(DEFAULT_ALERT_TYPES); // Start with defaults
-    allAlerts.forEach((alert) => {
+    allAlerts.forEach(alert => {
       if (alert.alert_type) types.add(alert.alert_type);
     });
     return Array.from(types).sort();
@@ -285,25 +305,21 @@ export default function AlertsPage() {
 
   const handleAlertNavigate = (alert: Alert) => {
     const data = alert.alert_data || {};
-    if (alert.alert_type === 'worst_case' && data?.target) {
-      if (data.target === 'live_view') {
+    if (alert.alert_type === "worst_case" && data?.target) {
+      if (data.target === "live_view") {
         const params = new URLSearchParams();
-        if (data.agent_id) params.set('agent', String(data.agent_id));
-        params.set('view', 'worst');
+        if (data.agent_id) params.set("agent", String(data.agent_id));
+        params.set("view", "worst");
         const qs = params.toString();
-        router.push(
-          `/organizations/${orgId}/projects/${projectId}/live-view${qs ? `?${qs}` : ''}`,
-        );
+        router.push(`/organizations/${orgId}/projects/${projectId}/live-view${qs ? `?${qs}` : ""}`);
         return;
       }
-      if (data.target === 'test_lab') {
+      if (data.target === "test_lab") {
         const params = new URLSearchParams();
-        if (data.test_run_id) params.set('run_id', String(data.test_run_id));
-        params.set('view', 'worst');
+        if (data.test_run_id) params.set("run_id", String(data.test_run_id));
+        params.set("view", "worst");
         const qs = params.toString();
-        router.push(
-          `/organizations/${orgId}/projects/${projectId}/live-view${qs ? `?${qs}` : ''}`,
-        );
+        router.push(`/organizations/${orgId}/projects/${projectId}/live-view${qs ? `?${qs}` : ""}`);
         return;
       }
     }
@@ -321,12 +337,13 @@ export default function AlertsPage() {
         orgId={orgId}
         projectId={projectId}
         breadcrumb={[
-          { label: org?.name || 'Organization', href: `/organizations/${orgId}/projects` },
-          { label: 'Alerts' },
+          { label: org?.name || "Organization", href: `/organizations/${orgId}/projects` },
+          { label: "Alerts" },
         ]}
       >
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent"></div>
+        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4" role="status" aria-label="Loading alerts">
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent" aria-hidden />
+          <p className="text-sm text-slate-500 font-medium">Loading alerts…</p>
         </div>
       </ProjectLayout>
     );
@@ -337,8 +354,8 @@ export default function AlertsPage() {
       orgId={orgId}
       projectId={projectId}
       breadcrumb={[
-        { label: org?.name || 'Organization', href: `/organizations/${orgId}/projects` },
-        { label: 'Alerts' },
+        { label: org?.name || "Organization", href: `/organizations/${orgId}/projects` },
+        { label: "Alerts" },
       ]}
     >
       <div className="max-w-7xl mx-auto">
@@ -371,14 +388,14 @@ export default function AlertsPage() {
               <label className="block text-sm font-medium text-white mb-2">Alert Type</label>
               <Select
                 value={filters.alert_type}
-                onChange={(value) => {
-                  setFilters({ ...filters, alert_type: value || 'all' });
+                onChange={value => {
+                  setFilters({ ...filters, alert_type: value || "all" });
                   setCurrentPage(1);
                 }}
                 placeholder="All types..."
                 options={[
-                  { value: 'all', label: 'All Types' },
-                  ...availableTypes.map((type) => ({
+                  { value: "all", label: "All Types" },
+                  ...availableTypes.map(type => ({
                     value: type,
                     label: getAlertTypeLabel(type),
                   })),
@@ -390,17 +407,17 @@ export default function AlertsPage() {
               <label className="block text-sm font-medium text-white mb-2">Severity</label>
               <Select
                 value={filters.severity}
-                onChange={(value) => {
-                  setFilters({ ...filters, severity: value || 'all' });
+                onChange={value => {
+                  setFilters({ ...filters, severity: value || "all" });
                   setCurrentPage(1);
                 }}
                 placeholder="All severities..."
                 options={[
-                  { value: 'all', label: 'All Severities' },
-                  { value: 'critical', label: 'Critical' },
-                  { value: 'high', label: 'High' },
-                  { value: 'medium', label: 'Medium' },
-                  { value: 'low', label: 'Low' },
+                  { value: "all", label: "All Severities" },
+                  { value: "critical", label: "Critical" },
+                  { value: "high", label: "High" },
+                  { value: "medium", label: "Medium" },
+                  { value: "low", label: "Low" },
                 ]}
                 className="w-full"
               />
@@ -409,15 +426,15 @@ export default function AlertsPage() {
               <label className="block text-sm font-medium text-white mb-2">Status</label>
               <Select
                 value={filters.is_resolved}
-                onChange={(value) => {
-                  setFilters({ ...filters, is_resolved: value || 'all' });
+                onChange={value => {
+                  setFilters({ ...filters, is_resolved: value || "all" });
                   setCurrentPage(1);
                 }}
                 placeholder="All statuses..."
                 options={[
-                  { value: 'all', label: 'All Statuses' },
-                  { value: 'unresolved', label: 'Unresolved' },
-                  { value: 'resolved', label: 'Resolved' },
+                  { value: "all", label: "All Statuses" },
+                  { value: "unresolved", label: "Unresolved" },
+                  { value: "resolved", label: "Resolved" },
                 ]}
                 className="w-full"
               />
@@ -433,12 +450,12 @@ export default function AlertsPage() {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     <button
-                      onClick={() => handleSort('created_at')}
+                      onClick={() => handleSort("created_at")}
                       className="flex items-center gap-1 hover:text-white transition-colors"
                     >
                       Created At
-                      {sortField === 'created_at' ? (
-                        sortDirection === 'asc' ? (
+                      {sortField === "created_at" ? (
+                        sortDirection === "asc" ? (
                           <ArrowUp className="h-4 w-4" />
                         ) : (
                           <ArrowDown className="h-4 w-4" />
@@ -450,12 +467,12 @@ export default function AlertsPage() {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     <button
-                      onClick={() => handleSort('alert_type')}
+                      onClick={() => handleSort("alert_type")}
                       className="flex items-center gap-1 hover:text-white transition-colors"
                     >
                       Type
-                      {sortField === 'alert_type' ? (
-                        sortDirection === 'asc' ? (
+                      {sortField === "alert_type" ? (
+                        sortDirection === "asc" ? (
                           <ArrowUp className="h-4 w-4" />
                         ) : (
                           <ArrowDown className="h-4 w-4" />
@@ -470,12 +487,12 @@ export default function AlertsPage() {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     <button
-                      onClick={() => handleSort('severity')}
+                      onClick={() => handleSort("severity")}
                       className="flex items-center gap-1 hover:text-white transition-colors"
                     >
                       Severity
-                      {sortField === 'severity' ? (
-                        sortDirection === 'asc' ? (
+                      {sortField === "severity" ? (
+                        sortDirection === "asc" ? (
                           <ArrowUp className="h-4 w-4" />
                         ) : (
                           <ArrowDown className="h-4 w-4" />
@@ -509,16 +526,28 @@ export default function AlertsPage() {
                           <Bell className="h-12 w-12 text-slate-500 mx-auto mb-4" />
                           <p>No alerts found</p>
                           <p className="text-sm mt-2 text-slate-500">
-                            {filters.alert_type !== 'all' || filters.severity !== 'all' || filters.is_resolved !== 'all' || dateRange.from || dateRange.to
-                              ? 'Try adjusting your filters'
-                              : 'Alerts will appear here when issues are detected'}
+                            {filters.alert_type !== "all" ||
+                            filters.severity !== "all" ||
+                            filters.is_resolved !== "all" ||
+                            dateRange.from ||
+                            dateRange.to
+                              ? "Try adjusting your filters"
+                              : "Alerts will appear here when issues are detected"}
                           </p>
-                          {(filters.alert_type !== 'all' || filters.severity !== 'all' || filters.is_resolved !== 'all' || dateRange.from || dateRange.to) && (
+                          {(filters.alert_type !== "all" ||
+                            filters.severity !== "all" ||
+                            filters.is_resolved !== "all" ||
+                            dateRange.from ||
+                            dateRange.to) && (
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => {
-                                setFilters({ alert_type: 'all', severity: 'all', is_resolved: 'all' });
+                                setFilters({
+                                  alert_type: "all",
+                                  severity: "all",
+                                  is_resolved: "all",
+                                });
                                 setDateRange({ from: null, to: null });
                                 setCurrentPage(1);
                               }}
@@ -532,21 +561,27 @@ export default function AlertsPage() {
                     </td>
                   </tr>
                 ) : (
-                  alerts.map((alert) => (
+                  alerts.map(alert => (
                     <tr key={alert.id} className="hover:bg-white/5 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
                         {new Date(alert.created_at).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-medium text-white">
-                          {getAlertTypeLabel(alert.alert_type || '')}
+                          {getAlertTypeLabel(alert.alert_type || "")}
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-white max-w-md truncate" title={alert.title}>
+                        <div
+                          className="text-sm font-medium text-white max-w-md truncate"
+                          title={alert.title}
+                        >
                           {alert.title}
                         </div>
-                        <div className="text-xs text-slate-400 mt-1 max-w-md truncate" title={alert.message}>
+                        <div
+                          className="text-xs text-slate-400 mt-1 max-w-md truncate"
+                          title={alert.message}
+                        >
                           {alert.message}
                         </div>
                       </td>
@@ -644,13 +679,19 @@ export default function AlertsPage() {
         )}
 
         {/* Show info when filters are applied */}
-        {(filters.alert_type !== 'all' || filters.severity !== 'all' || filters.is_resolved !== 'all' || dateRange.from || dateRange.to) && totalItems > 0 && (
-          <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-            <p className="text-sm text-blue-400">
-              Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} filtered results
-            </p>
-          </div>
-        )}
+        {(filters.alert_type !== "all" ||
+          filters.severity !== "all" ||
+          filters.is_resolved !== "all" ||
+          dateRange.from ||
+          dateRange.to) &&
+          totalItems > 0 && (
+            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <p className="text-sm text-blue-400">
+                Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} to{" "}
+                {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} filtered results
+              </p>
+            </div>
+          )}
       </div>
     </ProjectLayout>
   );

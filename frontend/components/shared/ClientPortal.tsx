@@ -1,24 +1,24 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 interface ClientPortalProps {
-    children: React.ReactNode;
+  children: React.ReactNode;
 }
 
 export const ClientPortal: React.FC<ClientPortalProps> = ({ children }) => {
-    const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-    useEffect(() => {
-        setMounted(true);
-        return () => setMounted(false);
-    }, []);
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
 
-    // Ensure we are mounted and document.body is available
-    if (!mounted || typeof document === 'undefined' || !document.body) {
-        return null;
-    }
+  // Ensure we are mounted and document.body is available
+  if (!mounted || typeof document === "undefined" || !document.body) {
+    return null;
+  }
 
-    return createPortal(children, document.body);
+  return createPortal(children, document.body);
 };
