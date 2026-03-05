@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import useSWR from "swr";
+import useSWR, { type KeyedMutator } from "swr";
 import clsx from "clsx";
 import { AnimatePresence } from "framer-motion";
 import { Database, FileArchive, Trash2, X, ChevronDown, ChevronRight, Pencil, Check } from "lucide-react";
@@ -37,6 +37,8 @@ type DatasetSnapshotItem = {
   eval_checks_result?: Record<string, unknown> | null;
 };
 
+type MutateDatasetSnapshots = KeyedMutator<{ items?: DatasetSnapshotItem[]; total?: number }>;
+
 /** Loads one dataset's snapshots when expanded (Phase 4 lazy load). */
 function DatasetSnapshotList({
   projectId,
@@ -56,8 +58,11 @@ function DatasetSnapshotList({
   onRemoveLog: (
     datasetId: string,
     snapshotId: string | number,
-    options: { currentSnapshots: DatasetSnapshotItem[]; mutateThisDataset: (data?: unknown, opts?: { revalidate?: boolean }) => void }
-  ) => void;
+    options: {
+      currentSnapshots: DatasetSnapshotItem[];
+      mutateThisDataset: MutateDatasetSnapshots;
+    }
+  ) => Promise<void>;
   removingKey: string | null;
   isClearingAll: boolean;
 }) {
@@ -247,11 +252,6 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
     () => toEvalRows((detailSnapshot as Record<string, unknown> | null) ?? null),
     [detailSnapshot]
   );
-
-  type MutateDatasetSnapshots = (
-    data?: { items: DatasetSnapshotItem[]; total: number } | ((prev: { items: DatasetSnapshotItem[]; total: number } | undefined) => { items: DatasetSnapshotItem[]; total: number } | undefined),
-    opts?: { revalidate?: boolean }
-  ) => void;
 
   const handleRemoveLogFromDataset = async (
     datasetId: string,

@@ -1862,14 +1862,14 @@ export default function ReleaseGatePage() {
                                             <div className="grid grid-cols-1 gap-1 text-[11px] font-mono">
                                               <div className="flex flex-wrap items-center gap-1">
                                                 <span className="text-slate-500 shrink-0">Baseline:</span>
-                                                {(run.behavior_diff.baseline_sequence ?? []).map((t, i) => (
+                                                {(run.behavior_diff.baseline_sequence ?? []).map((t: string | null | undefined, i: number) => (
                                                   <span key={i} className="text-slate-400">{i > 0 && <span className="text-slate-600 mr-1">→</span>}<span className="text-amber-200/90">{t || '—'}</span></span>
                                                 ))}
                                                 {(run.behavior_diff.baseline_sequence?.length ?? 0) === 0 && <span className="text-slate-500">—</span>}
                                               </div>
                                               <div className="flex flex-wrap items-center gap-1">
                                                 <span className="text-slate-500 shrink-0">Run:</span>
-                                                {(run.behavior_diff.candidate_sequence ?? []).map((t, i) => (
+                                                {(run.behavior_diff.candidate_sequence ?? []).map((t: string | null | undefined, i: number) => (
                                                   <span key={i} className="text-slate-400">{i > 0 && <span className="text-slate-600 mr-1">→</span>}<span className="text-emerald-200/90">{t || '—'}</span></span>
                                                 ))}
                                                 {(run.behavior_diff.candidate_sequence?.length ?? 0) === 0 && <span className="text-slate-500">—</span>}
