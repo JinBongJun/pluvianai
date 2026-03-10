@@ -1,15 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import ProjectSettingsShell from "@/components/layout/ProjectSettingsShell";
 import { projectsAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
 import { Button } from "@/components/ui/Button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export default function ProjectGeneralSettingsPage() {
   const params = useParams();
+  const router = useRouter();
   const toast = useToast();
   const hasToken = useRequireAuth();
 
@@ -20,10 +24,9 @@ export default function ProjectGeneralSettingsPage() {
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [usageMode, setUsageMode] = useState<"full" | "test_only">("full");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [upgrading, setUpgrading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const loadProject = useCallback(async () => {
     if (!projectId || isNaN(projectId)) return;
@@ -31,7 +34,6 @@ export default function ProjectGeneralSettingsPage() {
       const p = await projectsAPI.get(projectId);
       setName(p.name ?? "");
       setDescription(p.description ?? "");
-      setUsageMode((p.usage_mode as "full" | "test_only") ?? "full");
     } catch (e) {
       toast.showToast("Failed to load project", "error");
     } finally {
@@ -63,17 +65,22 @@ export default function ProjectGeneralSettingsPage() {
     }
   };
 
-  const handleUpgradeToFullMode = async () => {
+  const handleDeleteProject = async () => {
     if (!projectId || isNaN(projectId)) return;
-    setUpgrading(true);
+    const confirmed = window.confirm(
+      "Delete this project permanently? This action cannot be undone."
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
     try {
-      await projectsAPI.update(projectId, { usage_mode: "full" });
-      setUsageMode("full");
-      toast.showToast("Upgraded to Full Mode. Live View is now available.", "success");
+      await projectsAPI.delete(projectId);
+      toast.showToast("Project deleted", "success");
+      router.push(`/organizations/${orgId}/projects`);
     } catch (err: any) {
-      toast.showToast(err?.response?.data?.detail ?? "Failed to upgrade", "error");
+      toast.showToast(err?.response?.data?.detail ?? "Failed to delete project", "error");
     } finally {
-      setUpgrading(false);
+      setDeleting(false);
     }
   };
 
@@ -91,52 +98,56 @@ export default function ProjectGeneralSettingsPage() {
       {loading ? (
         <p className="text-slate-400">Loading...</p>
       ) : (
-        <form onSubmit={handleSave} className="space-y-4 max-w-xl">
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Project name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-ag-accent focus:outline-none"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
-              Description (optional)
-            </label>
-            <textarea
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              rows={3}
-              className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-ag-accent focus:outline-none resize-none"
-            />
-          </div>
+        <div className="space-y-6 max-w-4xl">
+          <Card>
+            <CardHeader>
+              <CardTitle>Project Details</CardTitle>
+              <CardDescription>Update project name and description.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSave} className="space-y-4">
+                <div>
+                  <Label htmlFor="project-name">Project name</Label>
+                  <Input
+                    id="project-name"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    className="h-12 text-base"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="project-description">Description (optional)</Label>
+                  <textarea
+                    id="project-description"
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    rows={4}
+                    className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-base text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none resize-none"
+                    placeholder="Briefly describe this project."
+                  />
+                </div>
+                <Button type="submit" disabled={saving}>
+                  {saving ? "Saving..." : "Save changes"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
 
-          <div className="border-t border-white/10 pt-6 mt-6">
-            <label className="block text-sm font-medium text-slate-300 mb-2">Usage Mode</label>
-            <p className="text-slate-400 text-sm mb-2">
-              {usageMode === "full"
-                ? "Full Mode — Live View and Policy are available. You can monitor real traffic and validate policy."
-                : "Test Only — Policy validation is available without Live SDK ingestion. Upgrade to Full Mode to enable Live View."}
-            </p>
-            {usageMode === "test_only" && (
-              <Button
-                type="button"
-                variant="primary"
-                onClick={handleUpgradeToFullMode}
-                disabled={upgrading}
-              >
-                {upgrading ? "Upgrading..." : "Upgrade to Full Mode"}
+          <Card className="border-rose-500/30 bg-rose-500/[0.04]">
+            <CardHeader>
+              <CardTitle className="text-rose-400">Danger Zone</CardTitle>
+              <CardDescription>
+                This permanently deletes the project and related records.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button type="button" variant="danger" disabled={deleting} onClick={handleDeleteProject}>
+                {deleting ? "Deleting..." : "Delete project"}
               </Button>
-            )}
-          </div>
-
-          <Button type="submit" disabled={saving}>
-            {saving ? "Saving..." : "Save"}
-          </Button>
-        </form>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </ProjectSettingsShell>
   );
