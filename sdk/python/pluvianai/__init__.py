@@ -1,5 +1,5 @@
 """
-AgentGuard Python SDK - Zero-config monitoring for LLM APIs
+PluvianAI Python SDK - Zero-config monitoring for LLM APIs
 """
 import os
 import json
@@ -11,9 +11,9 @@ from functools import wraps
 from contextlib import contextmanager
 
 
-class AgentGuard:
-    """AgentGuard SDK for automatic LLM API monitoring"""
-    
+class PluvianAI:
+    """PluvianAI SDK for automatic LLM API monitoring"""
+
     def __init__(
         self,
         api_key: Optional[str] = None,
@@ -28,13 +28,13 @@ class AgentGuard:
         health_check_interval: float = 30.0
     ):
         """
-        Initialize AgentGuard SDK
-        
+        Initialize PluvianAI SDK
+
         Args:
-            api_key: AgentGuard API key (defaults to AGENTGUARD_API_KEY env var)
-            project_id: Project ID (defaults to AGENTGUARD_PROJECT_ID env var)
-            api_url: AgentGuard API URL (defaults to AGENTGUARD_API_URL env var)
-            agent_name: Agent name for tracking (defaults to AGENTGUARD_AGENT_NAME env var)
+            api_key: PluvianAI API key (defaults to PLUVIANAI_API_KEY env var)
+            project_id: Project ID (defaults to PLUVIANAI_PROJECT_ID env var)
+            api_url: PluvianAI API URL (defaults to PLUVIANAI_API_URL env var)
+            agent_name: Agent name for tracking (defaults to PLUVIANAI_AGENT_NAME env var)
             enabled: Whether monitoring is enabled (defaults to True)
             proxy_timeout: Proxy timeout in seconds (default: 30.0)
             firewall_timeout: Firewall timeout in seconds (default: 1.0)
@@ -42,18 +42,18 @@ class AgentGuard:
             circuit_breaker: Circuit breaker config (default: failure_threshold=5, recovery_time=30)
             health_check_interval: Health check interval in seconds (default: 30.0)
         """
-        self.api_key = api_key or os.getenv("AGENTGUARD_API_KEY")
-        self.project_id = project_id or os.getenv("AGENTGUARD_PROJECT_ID")
-        self.api_url = api_url or os.getenv("AGENTGUARD_API_URL", "https://api.agentguard.dev")
-        self.agent_name = agent_name or os.getenv("AGENTGUARD_AGENT_NAME")
+        self.api_key = api_key or os.getenv("PLUVIANAI_API_KEY")
+        self.project_id = project_id or os.getenv("PLUVIANAI_PROJECT_ID")
+        self.api_url = api_url or os.getenv("PLUVIANAI_API_URL", "https://api.pluvianai.com")
+        self.agent_name = agent_name or os.getenv("PLUVIANAI_AGENT_NAME")
         self.enabled = enabled and self.api_key and self.project_id
-        
+
         # Timeout configuration
         self.proxy_timeout = proxy_timeout
         self.firewall_timeout = firewall_timeout
         self.pii_timeout = pii_timeout
         self.health_check_interval = health_check_interval
-        
+
         # Circuit Breaker configuration
         self.circuit_breaker_config = circuit_breaker or {
             "failure_threshold": 5,
@@ -63,114 +63,114 @@ class AgentGuard:
         self._circuit_state = "closed"  # closed, open, half-open
         self._circuit_failures = 0
         self._circuit_opened_at = None
-        
+
         self._patched = False
         self._original_functions = {}
-        
+
         # Thread-local storage for chain_id and agent_name context
         self._local = threading.local()
-        
+
         # Start health check monitoring
         if self.enabled:
             self._start_health_check()
-    
+
     def init(self):
         """
         Initialize and patch OpenAI SDK automatically
-        
+
         This method automatically patches the OpenAI Python SDK to capture
         all API calls without requiring code changes.
-        
+
         Example:
-            import agentguard
-            agentguard.init()
-            
+            import pluvianai
+            pluvianai.init()
+
             # Now all OpenAI calls are automatically monitored
             from openai import OpenAI
             client = OpenAI()
             response = client.chat.completions.create(...)
         """
         if not self.enabled:
-            print("AgentGuard: Monitoring disabled (missing API key or project ID)")
+            print("PluvianAI: Monitoring disabled (missing API key or project ID)")
             return
-        
+
         if self._patched:
-            print("AgentGuard: Already initialized")
+            print("PluvianAI: Already initialized")
             return
-        
+
         try:
             self._patch_openai()
             self._patched = True
-            print(f"AgentGuard: Successfully initialized for project {self.project_id}")
+            print(f"PluvianAI: Successfully initialized for project {self.project_id}")
         except Exception as e:
-            print(f"AgentGuard: Failed to initialize: {e}")
-    
+            print(f"PluvianAI: Failed to initialize: {e}")
+
     def _patch_openai(self):
         """Patch OpenAI SDK to capture API calls"""
         try:
             import openai
         except ImportError:
-            print("AgentGuard: OpenAI SDK not found. Install with: pip install openai")
+            print("PluvianAI: OpenAI SDK not found. Install with: pip install openai")
             return
-        
-        ag_instance = self  # Capture self for closures
-        
+
+        pluvian_instance = self  # Capture self for closures
+
         # Patch ChatCompletion.create (OpenAI v0.x)
         if hasattr(openai, "ChatCompletion") and hasattr(openai.ChatCompletion, "create"):
             original_create = openai.ChatCompletion.create
-            
+
             def patched_create(*args, **kwargs):
-                return ag_instance._capture_call(original_create, *args, **kwargs)
-            
+                return pluvian_instance._capture_call(original_create, *args, **kwargs)
+
             # Copy attributes manually to avoid __name__ issues
             patched_create.__doc__ = getattr(original_create, '__doc__', None)
             openai.ChatCompletion.create = patched_create
             self._original_functions["ChatCompletion.create"] = original_create
-        
+
         # Patch OpenAI client (v1.0+)
         if hasattr(openai, "OpenAI"):
             # Store original class methods
             original_init = openai.OpenAI.__init__
-            
+
             # Patch at class level for chat.completions.create
             def patched_init(self_instance, *args, **kwargs):
                 original_init(self_instance, *args, **kwargs)
                 # Patch the chat.completions.create method on this instance
                 if hasattr(self_instance, "chat") and hasattr(self_instance.chat, "completions"):
                     original_chat_create = self_instance.chat.completions.create
-                    
+
                     def patched_chat_create(*call_args, **call_kwargs):
-                        return ag_instance._capture_call(original_chat_create, *call_args, **call_kwargs)
-                    
+                        return pluvian_instance._capture_call(original_chat_create, *call_args, **call_kwargs)
+
                     # Copy attributes manually
                     patched_chat_create.__doc__ = getattr(original_chat_create, '__doc__', None)
                     self_instance.chat.completions.create = patched_chat_create
-                    ag_instance._original_functions[f"{id(self_instance)}.chat.completions.create"] = original_chat_create
-            
+                    pluvian_instance._original_functions[f"{id(self_instance)}.chat.completions.create"] = original_chat_create
+
             openai.OpenAI.__init__ = patched_init
             self._original_functions["OpenAI.__init__"] = original_init
-        
+
         # Also try to patch completions directly for already-created clients
         try:
             from openai.resources.chat import completions
             if hasattr(completions, 'Completions'):
                 original_completions_create = completions.Completions.create
-                
+
                 def patched_completions_create(self_instance, *args, **kwargs):
-                    return ag_instance._capture_call(
+                    return pluvian_instance._capture_call(
                         lambda *a, **kw: original_completions_create(self_instance, *a, **kw),
                         *args, **kwargs
                     )
-                
+
                 completions.Completions.create = patched_completions_create
                 self._original_functions["completions.Completions.create"] = original_completions_create
         except (ImportError, AttributeError):
             pass  # OpenAI v0.x or structure changed
-    
+
     def _capture_call(self, original_func: Callable, *args, **kwargs):
         """Capture and log an API call"""
         start_time = time.time()
-        
+
         # Build request_data from kwargs (OpenAI API parameters)
         request_data = {}
         try:
@@ -185,7 +185,7 @@ class AgentGuard:
                 request_data['temperature'] = kwargs['temperature']
             if 'stream' in kwargs:
                 request_data['stream'] = kwargs['stream']
-            
+
             # If no specific params found, try to serialize kwargs
             if not request_data:
                 # Filter out non-serializable items
@@ -197,14 +197,14 @@ class AgentGuard:
                         request_data[k] = str(v)
         except Exception:
             request_data = {"raw_kwargs": str(kwargs)}
-        
+
         try:
             # Call original function
             response = original_func(*args, **kwargs)
-            
+
             # Calculate latency
             latency_ms = (time.time() - start_time) * 1000
-            
+
             # Extract response data
             response_data = {}
             if hasattr(response, "model_dump"):
@@ -213,52 +213,52 @@ class AgentGuard:
                 response_data = response.dict()
             elif hasattr(response, "__dict__"):
                 response_data = response.__dict__
-            
-            # Send to AgentGuard API (async, non-blocking)
+
+            # Send to PluvianAI API (async, non-blocking)
             self._send_to_api(request_data, response_data, latency_ms, 200)
-            
+
             return response
-            
+
         except Exception as e:
             # Calculate latency even on error
             latency_ms = (time.time() - start_time) * 1000
-            
-            # Send error to AgentGuard API
+
+            # Send error to PluvianAI API
             error_data = {
                 "error": str(e),
                 "error_type": type(e).__name__,
             }
             self._send_to_api(request_data, error_data, latency_ms, 500)
-            
+
             # Re-raise the exception
             raise
-    
+
     def _get_chain_id(self) -> Optional[str]:
         """Get chain_id from thread-local storage"""
         return getattr(self._local, 'chain_id', None)
-    
+
     def _get_agent_name(self) -> Optional[str]:
         """Get agent_name from thread-local storage or instance default"""
         return getattr(self._local, 'agent_name', self.agent_name)
-    
+
     @contextmanager
     def chain(self, chain_id: str, agent_name: Optional[str] = None):
         """
         Context manager to set chain_id and agent_name for a chain of API calls
-        
+
         Example:
-            with agentguard.chain("user-query-123", agent_name="data-collector"):
+            with pluvianai.chain("user-query-123", agent_name="data-collector"):
                 response1 = openai.chat.completions.create(...)
                 response2 = openai.chat.completions.create(...)
             # Both calls will have chain_id="user-query-123"
         """
         old_chain_id = getattr(self._local, 'chain_id', None)
         old_agent_name = getattr(self._local, 'agent_name', None)
-        
+
         self._local.chain_id = chain_id
         if agent_name:
             self._local.agent_name = agent_name
-        
+
         try:
             yield
         finally:
@@ -266,22 +266,22 @@ class AgentGuard:
                 self._local.chain_id = old_chain_id
             else:
                 delattr(self._local, 'chain_id')
-            
+
             if old_agent_name is not None:
                 self._local.agent_name = old_agent_name
             elif hasattr(self._local, 'agent_name'):
                 delattr(self._local, 'agent_name')
-    
+
     def _send_to_api(self, request_data: Dict[str, Any], response_data: Dict[str, Any], latency_ms: float, status_code: int):
-        """Send API call data to AgentGuard (non-blocking)"""
+        """Send API call data to PluvianAI (non-blocking)"""
         if not self.enabled:
             return
-        
+
         try:
             # Get chain_id and agent_name from context
             chain_id = self._get_chain_id()
             agent_name = self._get_agent_name()
-            
+
             # Prepare payload
             payload = {
                 "project_id": int(self.project_id),
@@ -291,16 +291,16 @@ class AgentGuard:
                 "status_code": status_code,
                 "agent_name": agent_name,
             }
-            
+
             # Add chain_id if available
             if chain_id:
                 payload["chain_id"] = chain_id
-            
+
             # Check Circuit Breaker state
             if not self._check_circuit_breaker():
-                # Circuit is open, bypass AgentGuard (fail-open)
+                # Circuit is open, bypass PluvianAI (fail-open)
                 return
-            
+
             # Send asynchronously (fire and forget)
             # In production, use a background thread or queue
             try:
@@ -320,11 +320,11 @@ class AgentGuard:
                 self._record_circuit_failure()
                 # Silently fail - don't block the application (fail-open)
                 pass
-                
+
         except Exception:
             # Silently fail - don't block the application
             pass
-    
+
     def track_call(
         self,
         request_data: Dict[str, Any],
@@ -336,9 +336,9 @@ class AgentGuard:
     ):
         """
         Manually track an API call
-        
+
         Use this if you want to manually track calls instead of using auto-patching.
-        
+
         Args:
             request_data: Request payload
             response_data: Response payload
@@ -349,16 +349,16 @@ class AgentGuard:
         """
         if not self.enabled:
             return
-        
+
         # Store chain_id and agent_name temporarily
         old_chain_id = getattr(self._local, 'chain_id', None)
         old_agent_name = getattr(self._local, 'agent_name', None)
-        
+
         if chain_id:
             self._local.chain_id = chain_id
         if agent_name:
             self._local.agent_name = agent_name
-        
+
         try:
             self._send_to_api(
                 request_data,
@@ -372,12 +372,12 @@ class AgentGuard:
                 self._local.chain_id = old_chain_id
             elif hasattr(self._local, 'chain_id') and not chain_id:
                 delattr(self._local, 'chain_id')
-            
+
             if old_agent_name is not None:
                 self._local.agent_name = old_agent_name
             elif hasattr(self._local, 'agent_name') and not agent_name:
                 delattr(self._local, 'agent_name')
-    
+
     def _check_circuit_breaker(self) -> bool:
         """Check if circuit breaker allows requests"""
         if self._circuit_state == "closed":
@@ -394,14 +394,14 @@ class AgentGuard:
         elif self._circuit_state == "half-open":
             return True
         return True
-    
+
     def _record_circuit_failure(self):
         """Record a circuit breaker failure"""
         self._circuit_failures += 1
         if self._circuit_failures >= self.circuit_breaker_config["failure_threshold"]:
             self._circuit_state = "open"
             self._circuit_opened_at = time.time()
-    
+
     def _reset_circuit_breaker(self):
         """Reset circuit breaker on success"""
         if self._circuit_state == "half-open":
@@ -409,7 +409,7 @@ class AgentGuard:
             self._circuit_failures = 0
         elif self._circuit_state == "closed":
             self._circuit_failures = 0
-    
+
     def _start_health_check(self):
         """Start periodic health check monitoring"""
         def health_check_loop():
@@ -423,17 +423,17 @@ class AgentGuard:
                             self._record_circuit_failure()
                 except Exception:
                     self._record_circuit_failure()
-                
+
                 time.sleep(self.health_check_interval)
-        
+
         # Start health check in background thread
         thread = threading.Thread(target=health_check_loop, daemon=True)
         thread.start()
-    
+
     # ============================================
     # Signal Detection / Regression Status Methods
     # ============================================
-    
+
     def check_status(
         self,
         response_text: str,
@@ -443,20 +443,20 @@ class AgentGuard:
     ) -> Dict[str, Any]:
         """
         Check regression status for a response using signal-based detection.
-        
+
         Returns status: 'safe', 'regressed', or 'critical'
-        
+
         Args:
             response_text: The LLM response text to check
             request_data: Original request data (optional)
             response_data: Full response data including latency (optional)
             baseline_response: Previous response for comparison (optional)
-            
+
         Returns:
             Dict with 'status', 'signals', 'signal_count', etc.
-            
+
         Example:
-            result = agentguard.check_status(
+            result = pluvianai.check_status(
                 response_text="I cannot help with that.",
                 request_data={"messages": [...]},
             )
@@ -465,7 +465,7 @@ class AgentGuard:
         """
         if not self.enabled:
             return {"status": "safe", "signals": [], "signal_count": 0}
-        
+
         try:
             payload = {
                 "project_id": int(self.project_id),
@@ -474,7 +474,7 @@ class AgentGuard:
                 "response_data": response_data,
                 "baseline_response": baseline_response,
             }
-            
+
             with httpx.Client(timeout=self.proxy_timeout) as client:
                 response = client.post(
                     f"{self.api_url}/api/v1/projects/{self.project_id}/regression/check",
@@ -484,30 +484,30 @@ class AgentGuard:
                         "Content-Type": "application/json",
                     },
                 )
-                
+
                 if response.status_code == 200:
                     return response.json()
                 else:
                     return {"status": "safe", "signals": [], "signal_count": 0, "error": f"HTTP {response.status_code}"}
-                    
+
         except Exception as e:
             # Fail-open: return safe status on error
             return {"status": "safe", "signals": [], "signal_count": 0, "error": str(e)}
-    
+
     def get_project_status(self) -> Dict[str, Any]:
         """
         Get the current regression status for the project.
-        
+
         Returns:
             Dict with 'current_status', 'review_stats', 'worst_prompt_stats', etc.
-            
+
         Example:
-            status = agentguard.get_project_status()
+            status = pluvianai.get_project_status()
             print(f"Project status: {status['current_status']}")
         """
         if not self.enabled:
-            return {"current_status": "safe", "error": "AgentGuard not enabled"}
-        
+            return {"current_status": "safe", "error": "PluvianAI not enabled"}
+
         try:
             with httpx.Client(timeout=self.proxy_timeout) as client:
                 response = client.get(
@@ -516,15 +516,15 @@ class AgentGuard:
                         "Authorization": f"Bearer {self.api_key}",
                     },
                 )
-                
+
                 if response.status_code == 200:
                     return response.json()
                 else:
                     return {"current_status": "safe", "error": f"HTTP {response.status_code}"}
-                    
+
         except Exception as e:
             return {"current_status": "safe", "error": str(e)}
-    
+
     def is_safe(
         self,
         response_text: str,
@@ -532,16 +532,16 @@ class AgentGuard:
     ) -> bool:
         """
         Quick check if a response is safe (no regression detected).
-        
+
         Args:
             response_text: The LLM response text to check
             request_data: Original request data (optional)
-            
+
         Returns:
             True if status is 'safe', False otherwise
-            
+
         Example:
-            if agentguard.is_safe(response.content):
+            if pluvianai.is_safe(response.content):
                 print("Response is safe!")
             else:
                 print("Potential regression detected!")
@@ -551,7 +551,7 @@ class AgentGuard:
 
 
 # Global instance
-_global_instance: Optional[AgentGuard] = None
+_global_instance: Optional[PluvianAI] = None
 
 
 def init(
@@ -566,27 +566,27 @@ def init(
     health_check_interval: float = 30.0
 ):
     """
-    Initialize AgentGuard with zero-config setup
-    
+    Initialize PluvianAI with zero-config setup
+
     This function automatically patches the OpenAI SDK to capture all API calls.
-    
+
     Example:
-        import agentguard
-        agentguard.init()
-        
+        import pluvianai
+        pluvianai.init()
+
         # Now all OpenAI calls are automatically monitored
         from openai import OpenAI
         client = OpenAI()
         response = client.chat.completions.create(...)
-    
+
     Args:
-        api_key: AgentGuard API key (defaults to AGENTGUARD_API_KEY env var)
-        project_id: Project ID (defaults to AGENTGUARD_PROJECT_ID env var)
-        api_url: AgentGuard API URL (defaults to AGENTGUARD_API_URL env var)
-        agent_name: Agent name for tracking (defaults to AGENTGUARD_AGENT_NAME env var)
+        api_key: PluvianAI API key (defaults to PLUVIANAI_API_KEY env var)
+        project_id: Project ID (defaults to PLUVIANAI_PROJECT_ID env var)
+        api_url: PluvianAI API URL (defaults to PLUVIANAI_API_URL env var)
+        agent_name: Agent name for tracking (defaults to PLUVIANAI_AGENT_NAME env var)
     """
     global _global_instance
-    _global_instance = AgentGuard(
+    _global_instance = PluvianAI(
         api_key=api_key,
         project_id=project_id,
         api_url=api_url,
@@ -603,19 +603,19 @@ def init(
 def chain(chain_id: str, agent_name: Optional[str] = None):
     """
     Context manager to set chain_id and agent_name for a chain of API calls
-    
+
     Example:
-        import agentguard
-        agentguard.init()
-        
-        with agentguard.chain("user-query-123", agent_name="data-collector"):
+        import pluvianai
+        pluvianai.init()
+
+        with pluvianai.chain("user-query-123", agent_name="data-collector"):
             response1 = openai.chat.completions.create(...)
             response2 = openai.chat.completions.create(...)
         # Both calls will have chain_id="user-query-123"
     """
     global _global_instance
     if not _global_instance:
-        raise RuntimeError("AgentGuard not initialized. Call agentguard.init() first.")
+        raise RuntimeError("PluvianAI not initialized. Call pluvianai.init() first.")
     return _global_instance.chain(chain_id, agent_name)
 
 
@@ -629,9 +629,9 @@ def track_call(
 ):
     """
     Manually track an API call
-    
+
     Use this if you want to manually track calls instead of using auto-patching.
-    
+
     Args:
         request_data: Request payload
         response_data: Response payload
@@ -652,7 +652,7 @@ def track_call(
         )
     else:
         # Create a temporary instance
-        instance = AgentGuard()
+        instance = PluvianAI()
         instance.track_call(
             request_data,
             response_data,
@@ -671,20 +671,20 @@ def check_status(
 ) -> Dict[str, Any]:
     """
     Check regression status for a response using signal-based detection.
-    
+
     Returns status: 'safe', 'regressed', or 'critical'
-    
+
     Args:
         response_text: The LLM response text to check
         request_data: Original request data (optional)
         response_data: Full response data including latency (optional)
         baseline_response: Previous response for comparison (optional)
-        
+
     Returns:
         Dict with 'status', 'signals', 'signal_count', etc.
-        
+
     Example:
-        result = agentguard.check_status(
+        result = pluvianai.check_status(
             response_text="I cannot help with that.",
             request_data={"messages": [...]},
         )
@@ -697,7 +697,7 @@ def check_status(
             response_text, request_data, response_data, baseline_response
         )
     else:
-        instance = AgentGuard()
+        instance = PluvianAI()
         return instance.check_status(
             response_text, request_data, response_data, baseline_response
         )
@@ -706,19 +706,19 @@ def check_status(
 def get_project_status() -> Dict[str, Any]:
     """
     Get the current regression status for the project.
-    
+
     Returns:
         Dict with 'current_status', 'review_stats', 'worst_prompt_stats', etc.
-        
+
     Example:
-        status = agentguard.get_project_status()
+        status = pluvianai.get_project_status()
         print(f"Project status: {status['current_status']}")
     """
     global _global_instance
     if _global_instance:
         return _global_instance.get_project_status()
     else:
-        instance = AgentGuard()
+        instance = PluvianAI()
         return instance.get_project_status()
 
 
@@ -728,16 +728,16 @@ def is_safe(
 ) -> bool:
     """
     Quick check if a response is safe (no regression detected).
-    
+
     Args:
         response_text: The LLM response text to check
         request_data: Original request data (optional)
-        
+
     Returns:
         True if status is 'safe', False otherwise
-        
+
     Example:
-        if agentguard.is_safe(response.content):
+        if pluvianai.is_safe(response.content):
             print("Response is safe!")
         else:
             print("Potential regression detected!")
@@ -746,7 +746,7 @@ def is_safe(
     if _global_instance:
         return _global_instance.is_safe(response_text, request_data)
     else:
-        instance = AgentGuard()
+        instance = PluvianAI()
         return instance.is_safe(response_text, request_data)
 
 
@@ -754,7 +754,7 @@ def is_safe(
 from .ci import CIClient
 
 __all__ = [
-    "AgentGuard",
+    "PluvianAI",
     "init",
     "chain",
     "track_call",

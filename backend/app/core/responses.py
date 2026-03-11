@@ -94,14 +94,10 @@ def error_response(
     }
     
     # Add X-PluvianAI-Origin header for Error Namespace consistency
-    # Keep X-AgentGuard-Origin for backward compatibility (legacy clients)
     if origin:
         default_headers["X-PluvianAI-Origin"] = origin
-        default_headers["X-AgentGuard-Origin"] = origin
     else:
-        # Default to "Proxy" for PluvianAI server errors
         default_headers["X-PluvianAI-Origin"] = "Proxy"
-        default_headers["X-AgentGuard-Origin"] = "Proxy"
     
     if headers:
         default_headers.update(headers)

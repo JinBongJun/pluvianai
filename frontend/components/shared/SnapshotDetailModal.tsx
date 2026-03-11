@@ -10,10 +10,8 @@ import {
   CheckCircle2,
   Clock,
   Code2,
-  Coins,
   FileCheck,
   FileText,
-  Hash,
   Lock,
   Repeat,
   Scale,
@@ -119,9 +117,7 @@ function getEnabledCheckIdsFromConfig(savedEvalConfig: Record<string, unknown>):
 
   // Preserve user-facing order defined by EVAL_CHECK_LABELS.
   const order = Object.keys(EVAL_CHECK_LABELS);
-  return Array.from(new Set(enabled)).sort(
-    (a, b) => order.indexOf(a) - order.indexOf(b)
-  );
+  return Array.from(new Set(enabled)).sort((a, b) => order.indexOf(a) - order.indexOf(b));
 }
 
 function formatPrettyTime(value?: string): string {
@@ -322,6 +318,8 @@ export interface SnapshotDetailModalProps {
   evalContextLabel?: string | null;
   /** When "saved", Evaluation block uses past/archived styling (muted colors, dashed border, clock icon). */
   appearance?: "current" | "saved";
+  /** Override z-index of the overlay (e.g. 10000) when modal must appear above portaled side panels. */
+  overlayZIndex?: number;
 }
 
 export function SnapshotDetailModal({
@@ -334,6 +332,7 @@ export function SnapshotDetailModal({
   evalResultOverride = null,
   evalContextLabel = null,
   appearance = "current",
+  overlayZIndex,
 }: SnapshotDetailModalProps) {
   const isSavedAppearance = appearance === "saved";
   const stepLogs = extractStepLogs(s);
@@ -342,9 +341,7 @@ export function SnapshotDetailModal({
   const useOverride = !!evalResultOverride;
 
   // Base eval rows coming from caller (Live View runtime or Release Gate run).
-  const baseEvalRows: EvalRow[] = useOverride
-    ? (evalResultOverride?.evalRows ?? [])
-    : evalRows;
+  const baseEvalRows: EvalRow[] = useOverride ? (evalResultOverride?.evalRows ?? []) : evalRows;
 
   // For re-evaluation result views (override mode), show all currently enabled checks.
   // For historical snapshot views, keep rows exactly as stored to avoid introducing
@@ -366,8 +363,7 @@ export function SnapshotDetailModal({
           }));
         })();
 
-  const effectiveEvalEnabled =
-    displayEvalRows.length > 0 || (!useOverride && evalEnabled);
+  const effectiveEvalEnabled = displayEvalRows.length > 0 || (!useOverride && evalEnabled);
 
   const failedCount = displayEvalRows.filter(r => r.status === "fail").length;
   const passedCount = displayEvalRows.filter(r => r.status === "pass").length;
@@ -377,7 +373,8 @@ export function SnapshotDetailModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[1100] flex items-start justify-center p-4 pt-[90px] md:p-8 md:pt-[90px]"
+      className="fixed inset-0 flex items-start justify-center p-4 pt-[90px] md:p-8 md:pt-[90px]"
+      style={{ zIndex: overlayZIndex ?? 1100 }}
     >
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-md"
@@ -414,7 +411,7 @@ export function SnapshotDetailModal({
 
         <div className="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar">
           <div className="bg-[#030806] p-6 rounded-[24px] mb-10 shadow-inner shrink-0">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="bg-[#18191e] border border-white/5 rounded-[20px] p-5 flex flex-col items-center justify-center gap-2 hover:border-white/10 transition-colors">
                 <Activity className="w-6 h-6 text-blue-500 mb-1" />
                 <span className="text-sm font-medium text-slate-400">Status</span>
@@ -441,16 +438,6 @@ export function SnapshotDetailModal({
                 <span className="text-lg font-black text-slate-200">
                   {s.latency_ms != null ? `${s.latency_ms}ms` : "—"}
                 </span>
-              </div>
-              <div className="bg-[#18191e] border border-white/5 rounded-[20px] p-5 flex flex-col items-center justify-center gap-2 hover:border-white/10 transition-colors">
-                <Hash className="w-6 h-6 text-emerald-500 mb-1" />
-                <span className="text-sm font-medium text-slate-400">Tokens</span>
-                <span className="text-lg font-black text-slate-200">{s.tokens_used ?? "—"}</span>
-              </div>
-              <div className="bg-[#18191e] border border-white/5 rounded-[20px] p-5 flex flex-col items-center justify-center gap-2 hover:border-white/10 transition-colors">
-                <Coins className="w-6 h-6 text-emerald-500 mb-1" />
-                <span className="text-sm font-medium text-slate-400">Cost</span>
-                <span className="text-lg font-black text-slate-200">{s.cost ?? "—"}</span>
               </div>
             </div>
           </div>

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AgentGuard 수동 E2E 테스트 스크립트
+PluvianAI 수동 E2E 테스트 스크립트
 
 pytest 없이 직접 실행 가능한 테스트 스크립트입니다.
 백엔드 서버가 실행 중이어야 합니다.
@@ -375,7 +375,7 @@ class TestRunner:
     
     def run_all(self):
         """모든 테스트 실행"""
-        print_header(f"AgentGuard E2E Test - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print_header(f"PluvianAI E2E Test - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print_info(f"Target: {self.base_url}")
         print_info(f"Test account: {self.test_email}")
         
@@ -430,7 +430,7 @@ class TestRunner:
 
 
 def main():
-    print(f"\n{Colors.BOLD}AgentGuard E2E Test Suite{Colors.RESET}")
+    print(f"\n{Colors.BOLD}PluvianAI E2E Test Suite{Colors.RESET}")
     print(f"{'='*40}\n")
     
     # 서버 연결 확인

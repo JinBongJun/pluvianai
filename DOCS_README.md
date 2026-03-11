@@ -1,7 +1,7 @@
 # PluvianAI — 문서 안내
 
 **브랜드**: PluvianAI  
-**저장소 경로**: `C:\Users\user\Desktop\AgentGuard` (또는 현재 워크스페이스 루트)
+**저장소 경로**: 현재 워크스페이스 루트
 
 ---
 

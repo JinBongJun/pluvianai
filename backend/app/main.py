@@ -41,8 +41,8 @@ if settings.SENTRY_DSN:
 else:
     logger.info("Sentry DSN not configured, skipping Sentry initialization")
 from app.core.exceptions import (
-    AgentGuardException,
-    agentguard_exception_handler,
+    PluvianAIException,
+    pluvianai_exception_handler,
     http_exception_handler,
     validation_exception_handler,
     sqlalchemy_exception_handler,
@@ -99,7 +99,7 @@ app = FastAPI(
 update_app_info(settings.APP_VERSION, settings.SENTRY_ENVIRONMENT)
 
 # Add exception handlers
-app.add_exception_handler(AgentGuardException, agentguard_exception_handler)
+app.add_exception_handler(PluvianAIException, pluvianai_exception_handler)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
@@ -213,7 +213,7 @@ async def add_api_version_headers(request, call_next):
     # if request.url.path.startswith("/api/v1/deprecated-endpoint"):
     #     response.headers["X-API-Deprecation"] = "This endpoint will be deprecated on 2026-06-01. Migrate to /api/v2/..."
     #     response.headers["X-API-Deprecation-Date"] = "2026-06-01"
-    #     response.headers["X-API-Migration-Guide"] = "https://docs.agentguard.dev/api/migration/v1-to-v2"
+    #     response.headers["X-API-Migration-Guide"] = "https://docs.pluvianai.com/api/migration/v1-to-v2"
     
     return response
 
@@ -348,6 +348,7 @@ async def startup_event():
     # Start background scheduler only if DB is available
     if db_available:
         from app.services.scheduler_service import scheduler_service
+        from app.services.release_gate_job_runner import release_gate_job_runner
 
         scheduler_service.start()
         logger.info("Background scheduler started")
@@ -357,6 +358,12 @@ async def startup_event():
 
         asyncio.create_task(update_business_metrics_periodically())
         logger.info("Business metrics update task started")
+
+        if getattr(settings, "RELEASE_GATE_JOB_RUNNER_ENABLED", True):
+            asyncio.create_task(release_gate_job_runner.start())
+            logger.info("Release Gate job runner background task started")
+        else:
+            logger.info("Release Gate job runner disabled in web process (RELEASE_GATE_JOB_RUNNER_ENABLED=false)")
     else:
         logger.warning("Skipping scheduler startup because database is unavailable.")
 
@@ -384,8 +391,13 @@ async def shutdown_event():
 
     # Shutdown background scheduler
     from app.services.scheduler_service import scheduler_service
+    from app.services.release_gate_job_runner import release_gate_job_runner
 
     scheduler_service.shutdown()
+    try:
+        await release_gate_job_runner.stop()
+    except Exception:
+        logger.warning("Failed stopping Release Gate job runner", exc_info=True)
 
     # Additional cleanup tasks can be added here
 

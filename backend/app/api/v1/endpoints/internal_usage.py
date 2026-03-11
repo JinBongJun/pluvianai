@@ -54,7 +54,7 @@ def _parse_month(month: str) -> tuple[datetime, datetime]:
 @router.get(
     "/credits/by-project",
     response_model=ProjectUsageResponse,
-    summary="Get GuardCredit usage by project for a given month (admin only).",
+    summary="Get platform replay credit usage by project for a given month (admin only).",
 )
 def get_guard_credits_by_project(
     month: str = Query(..., description="Billing month in YYYY-MM format, e.g. 2026-03"),
@@ -62,7 +62,7 @@ def get_guard_credits_by_project(
     current_user: User = Depends(get_current_user),
 ) -> ProjectUsageResponse:
     """
-    Aggregate GuardCredit usage (from Replay) per project for the given month.
+    Aggregate hosted replay credit usage per project for the given month.
 
     This is an internal/admin-only endpoint intended for monitoring platform
     cost exposure during MVP / beta.
@@ -71,7 +71,7 @@ def get_guard_credits_by_project(
 
     start, end = _parse_month(month)
 
-    # Aggregate usage for GuardCredit-based replay runs.
+    # Aggregate hosted replay credit usage.
     query = (
         db.query(
             Usage.project_id,

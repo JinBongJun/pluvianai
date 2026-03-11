@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
 import { organizationsAPI, authAPI } from "@/lib/api";
-import { CreditCard, Zap, Activity, Database, ShieldCheck, CheckCircle2, BarChart3, TrendingUp } from "lucide-react";
+import { Zap, Activity, Database, ShieldCheck, CheckCircle2, BarChart3 } from "lucide-react";
 
 export default function BillingPage() {
   const params = useParams();
@@ -14,70 +14,82 @@ export default function BillingPage() {
     organizationsAPI.get(orgId, { includeStats: true })
   );
 
-  const { data: myUsage } = useSWR("my-usage", () => authAPI.getMyUsage(), { revalidateOnFocus: false });
+  const { data: myUsage } = useSWR("my-usage", () => authAPI.getMyUsage(), {
+    revalidateOnFocus: false,
+  });
 
   const currentPlanId = org?.plan || "free";
 
   // Mock limits if not returned by backend
   const usageLimits = {
-    free: { calls: 10000, projects: 3 },
-    pro: { calls: 100000, projects: -1 }, // -1 implies unlimited
-    enterprise: { calls: -1, projects: -1 },
+    free: { calls: 10000, projects: 3, platformReplayCredits: 1000, teamMembers: 1 },
+    pro: { calls: 100000, projects: 10, platformReplayCredits: 10000, teamMembers: 5 },
+    enterprise: { calls: -1, projects: -1, platformReplayCredits: -1, teamMembers: -1 },
   };
 
   const limitData = usageLimits[currentPlanId as keyof typeof usageLimits] || usageLimits.free;
 
   const callsUsed = org?.calls7d || 0; // Ideally backend should provide monthly usage, defaulting to 7d for demo
   const projectsUsed = org?.projects || 0;
+  const platformReplayCreditsUsed =
+    myUsage?.usage_this_month?.platform_replay_credits ??
+    myUsage?.usage_this_month?.guard_credits ??
+    0;
+  const platformReplayCreditsLimit =
+    (myUsage?.limits?.platform_replay_credits_per_month as number | undefined) ??
+    (myUsage?.limits?.guard_credits_per_month as number | undefined) ??
+    limitData.platformReplayCredits;
 
   const callsPercent = limitData.calls > 0 ? Math.min(100, (callsUsed / limitData.calls) * 100) : 0;
   const projectsPercent =
     limitData.projects > 0 ? Math.min(100, (projectsUsed / limitData.projects) * 100) : 0;
+  const platformReplayCreditsPercent =
+    platformReplayCreditsLimit > 0
+      ? Math.min(100, (platformReplayCreditsUsed / platformReplayCreditsLimit) * 100)
+      : 0;
 
   const plans = [
     {
       id: "free",
-      name: "Laboratory Basics",
+      name: "Free",
       price: "$0",
       period: "/month",
-      desc: "For individual researchers and hobbyists.",
+      desc: "For teams getting started with Live View and Release Gate during the MVP.",
       features: [
-        "Up to 3 Active Protocols",
-        "10,000 Validations/mo",
-        "7-day Telemetry Retention",
-        "Standard Encryption",
+        "Up to 3 Active Projects",
+        "500 snapshots per month",
+        "1,000 platform replay credits per month",
+        "Use your own provider keys anytime",
+        "7-day trace retention",
       ],
       current: currentPlanId === "free",
     },
     {
       id: "pro",
-      name: "Clinical Operations",
+      name: "Pro",
       price: "$49",
       period: "/month",
-      desc: "For professional teams pushing models to production.",
+      desc: "For teams that need higher hosted replay budgets, more retention, and team access.",
       features: [
-        "Unlimited Protocols",
-        "100,000 Validations/mo",
-        "30-day Telemetry Retention",
-        "Priority Defense Updates",
-        "Advanced Agentic Analytics",
+        "10 active projects",
+        "10,000 platform replay credits per month",
+        "30-day trace retention",
+        "Priority support",
       ],
       current: false,
-      popular: true,
     },
     {
       id: "enterprise",
-      name: "Enterprise Defense",
+      name: "Enterprise",
       price: "Custom",
       period: "",
-      desc: "For mission-critical AI infrastructure.",
+      desc: "For teams that need custom limits, procurement, and deployment controls.",
       features: [
-        "Unlimited Everything",
-        "Custom Validation Thresholds",
-        "90-day Telemetry Retention",
-        "Dedicated Cyber-Analyst",
-        "SLA Guarantee (99.99%)",
-        "SSO / SAML Security",
+        "Custom hosted replay budget",
+        "Custom limits, SLAs, and retention",
+        "Dedicated support",
+        "Security review and deployment options",
+        "SSO / SAML",
       ],
       current: false,
     },
@@ -101,15 +113,14 @@ export default function BillingPage() {
           <div className="flex items-center gap-3 mb-4">
             <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,1)] animate-pulse" />
             <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em]">
-              Resource Allocation
+              Usage Policy
             </p>
           </div>
           <h1 className="text-5xl font-black text-white uppercase tracking-tighter mb-4">
-            Usage & Licensing
+            Usage & Billing
           </h1>
           <p className="text-slate-400 font-bold uppercase tracking-widest text-sm max-w-2xl leading-relaxed">
-            Monitor your clinical activity, manage billing, and scale your PluvianAI infrastructure
-            to meet compliance.
+            Track product usage, monitor hosted replay credits, and preview upcoming plans.
           </p>
         </div>
 
@@ -243,9 +254,7 @@ export default function BillingPage() {
                 <Activity className="h-5 w-5 text-blue-400" />
                 <span className="text-sm text-slate-400">API Calls (7d)</span>
               </div>
-              <div className="text-3xl font-bold text-white">
-                {callsUsed.toLocaleString()}
-              </div>
+              <div className="text-3xl font-bold text-white">{callsUsed.toLocaleString()}</div>
             </div>
             <div className="rounded-xl border border-white/10 bg-white/5 p-6">
               <div className="flex items-center gap-2 mb-2">
@@ -256,11 +265,11 @@ export default function BillingPage() {
             </div>
             <div className="rounded-xl border border-white/10 bg-white/5 p-6">
               <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="h-5 w-5 text-green-400" />
-                <span className="text-sm text-slate-400">Total Cost (7d)</span>
+                <Zap className="h-5 w-5 text-cyan-400" />
+                <span className="text-sm text-slate-400">Platform Replay Credits</span>
               </div>
               <div className="text-3xl font-bold text-white">
-                ${org?.cost7d?.toFixed(2) || "0.00"}
+                {platformReplayCreditsUsed.toLocaleString()}
               </div>
             </div>
           </div>
@@ -293,37 +302,37 @@ export default function BillingPage() {
                       style={{
                         width: `${Math.min(
                           100,
-                          (myUsage.usage_this_month.snapshots / myUsage.limits.snapshots_per_month) * 100
+                          (myUsage.usage_this_month.snapshots /
+                            myUsage.limits.snapshots_per_month) *
+                            100
                         )}%`,
                       }}
                     />
                   </div>
                 </div>
               )}
-            {typeof myUsage?.usage_this_month?.guard_credits === "number" &&
-              myUsage?.limits?.guard_credits_per_month != null &&
-              myUsage.limits.guard_credits_per_month > 0 && (
-                <div>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-slate-400">GuardCredits this month</span>
-                    <span className="text-white">
-                      {myUsage.usage_this_month.guard_credits.toLocaleString()} /{" "}
-                      {myUsage.limits.guard_credits_per_month.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-cyan-500 rounded-full transition-all"
-                      style={{
-                        width: `${Math.min(
-                          100,
-                          (myUsage.usage_this_month.guard_credits / myUsage.limits.guard_credits_per_month) * 100
-                        )}%`,
-                      }}
-                    />
-                  </div>
+            {platformReplayCreditsLimit != null && platformReplayCreditsLimit > 0 && (
+              <div>
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-slate-400">Platform replay credits this month</span>
+                  <span className="text-white">
+                    {platformReplayCreditsUsed.toLocaleString()} /{" "}
+                    {platformReplayCreditsLimit.toLocaleString()}
+                  </span>
                 </div>
-              )}
+                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-cyan-500 rounded-full transition-all"
+                    style={{
+                      width: `${platformReplayCreditsPercent}%`,
+                    }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  Hosted PluvianAI model usage spends these credits. BYOK runs do not.
+                </p>
+              </div>
+            )}
             <div>
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-slate-400">API Calls</span>
@@ -358,12 +367,16 @@ export default function BillingPage() {
             <div>
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-slate-400">Team Members</span>
-                <span className="text-white">1 / 3</span>
+                <span className="text-white">
+                  1{limitData.teamMembers > 0 ? ` / ${limitData.teamMembers}` : ""}
+                </span>
               </div>
               <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-emerald-500 rounded-full transition-all"
-                  style={{ width: "33%" }}
+                  style={{
+                    width: `${limitData.teamMembers > 0 ? Math.min(100, (1 / limitData.teamMembers) * 100) : 0}%`,
+                  }}
                 />
               </div>
             </div>
@@ -378,34 +391,26 @@ export default function BillingPage() {
           </h2>
 
           <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mb-8">
-            During the MVP, only the free Community plan is available. Paid plans are read-only previews.
+            During the MVP, only the free plan is available. Paid plans are preview-only.
           </p>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
-            {plans.map((plan, index) => {
-              const isPro = plan.id === "pro";
+            {plans.map(plan => {
               const isCurrent = plan.current;
 
               return (
                 <div
                   key={plan.id}
                   className={`relative w-full rounded-[40px] p-10 transition-all duration-300 group
-                    ${isPro ? "bg-[#0a0f12] border-2 border-emerald-500/40 shadow-[0_0_50px_-15px_rgba(16,185,129,0.3)] z-10 scale-[1.02] lg:-mx-2 py-14" : "bg-white/[0.02] border border-white/10 backdrop-blur-3xl hover:bg-white/[0.04]"}
+                    ${isCurrent ? "bg-[#0a0f12] border-2 border-emerald-500/40 shadow-[0_0_50px_-15px_rgba(16,185,129,0.3)]" : "bg-white/[0.02] border border-white/10 backdrop-blur-3xl hover:bg-white/[0.04]"}
                   `}
                 >
-                  {/* Pro specific effects */}
-                  {isPro && (
-                    <>
-                      {/* Glow Behind */}
-                      <div className="absolute inset-0 bg-emerald-500/5 blur-3xl rounded-[40px] -z-10" />
-                      {/* Popular Badge */}
-                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-emerald-500 rounded-full flex items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.5)] z-20">
-                        <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
-                        <span className="text-[10px] font-black text-black uppercase tracking-[0.2em] whitespace-nowrap">
-                          Standard Recommendation
-                        </span>
-                      </div>
-                    </>
+                  {!isCurrent && (
+                    <div className="absolute top-8 right-8 px-3 py-1 bg-white/5 border border-white/10 rounded-full">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                        Coming Soon
+                      </span>
+                    </div>
                   )}
 
                   {/* Active Indicator inside card */}
@@ -420,7 +425,7 @@ export default function BillingPage() {
 
                   <div className="relative z-10">
                     <h3
-                      className={`text-2xl font-black uppercase tracking-tighter mb-2 ${isPro ? "text-white" : "text-slate-300"}`}
+                      className={`text-2xl font-black uppercase tracking-tighter mb-2 ${isCurrent ? "text-white" : "text-slate-300"}`}
                     >
                       {plan.name}
                     </h3>
@@ -430,7 +435,7 @@ export default function BillingPage() {
 
                     <div className="flex items-baseline gap-2 mb-10 pb-10 border-b border-white/10">
                       <span
-                        className={`text-6xl font-black tracking-tighter ${isPro ? "text-emerald-400" : "text-white"}`}
+                        className={`text-6xl font-black tracking-tighter ${isCurrent ? "text-emerald-400" : "text-white"}`}
                       >
                         {plan.price}
                       </span>
@@ -445,12 +450,12 @@ export default function BillingPage() {
                       {plan.features.map((feature, i) => (
                         <li key={i} className="flex items-start gap-4">
                           <div
-                            className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${isPro ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-slate-400"}`}
+                            className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${isCurrent ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-slate-400"}`}
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" />
                           </div>
                           <span
-                            className={`${isPro ? "text-slate-200" : "text-slate-400"} text-sm font-semibold tracking-wide flex-1`}
+                            className={`${isCurrent ? "text-slate-200" : "text-slate-400"} text-sm font-semibold tracking-wide flex-1`}
                           >
                             {feature}
                           </span>
@@ -468,7 +473,7 @@ export default function BillingPage() {
                         }
                       `}
                     >
-                      {isCurrent ? "Current License" : "Coming Soon"}
+                      {isCurrent ? "Current Plan" : "Preview Only"}
                     </button>
                   </div>
                 </div>

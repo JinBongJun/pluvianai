@@ -62,13 +62,16 @@ const cardVariants = {
 export default function PathologySection() {
   return (
     <section id="problem" className="py-32 relative bg-transparent overflow-hidden">
-      {/* Background Grid */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f293720_1px,transparent_1px),linear-gradient(to_bottom,#1f293720_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none" />
+      {/* Background Abstract Typography/Shape */}
+      <div className="absolute top-[10%] right-[-5%] text-[400px] font-black text-white/[0.02] pointer-events-none select-none leading-none tracking-tighter mix-blend-screen blur-[2px]">
+        01
+      </div>
+      <div className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] border-[2px] border-emerald-500/10 rounded-full pointer-events-none -z-10 blur-[10px]" />
 
-      <div className="container mx-auto px-6 relative z-10">
+      <div className="w-[95%] max-w-[1800px] mx-auto relative z-10">
         <div className="max-w-3xl mb-20">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-xs font-bold uppercase tracking-widest mb-6 border border-red-500/20">
-            <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold uppercase tracking-widest mb-6 border border-emerald-500/20">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             We help you catch regressions before they ship.
           </div>
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">
@@ -93,44 +96,42 @@ export default function PathologySection() {
               key={pathology.id}
               variants={cardVariants}
               whileHover={{ scale: 1.02 }}
-              className={`group relative p-8 rounded-xl bg-black/40 backdrop-blur-sm border border-white/10 transition-all duration-500 ${pathology.borderColor} ${pathology.shadowColor} hover:shadow-2xl overflow-hidden`}
+              className={`group relative p-8 md:p-10 rounded-[32px] bg-[#121215]/95 backdrop-blur-xl border border-white/10 transition-all duration-500 hover:border-white/20 shadow-2xl overflow-hidden`}
             >
-              {/* HUD Corners (Brackets) */}
-              <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-white/20 group-hover:border-emerald-500/50 transition-colors duration-500 rounded-tl-sm" />
-              <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-white/20 group-hover:border-emerald-500/50 transition-colors duration-500 rounded-tr-sm" />
-              <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-white/20 group-hover:border-emerald-500/50 transition-colors duration-500 rounded-bl-sm" />
-              <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-white/20 group-hover:border-emerald-500/50 transition-colors duration-500 rounded-br-sm" />
+              {/* Bottom Right Glow Element */}
+              <div className="absolute -bottom-24 -right-24 w-72 h-72 bg-emerald-500/10 group-hover:bg-emerald-500/20 blur-[60px] rounded-full transition-all duration-500 pointer-events-none" />
 
-              {/* Scanning Laser Effect on Hover */}
-              <motion.div
-                className={`absolute inset-x-0 h-[2px] ${pathology.scanColor} shadow-[0_0_15px_rgba(255,255,255,0.5)] z-20`}
-                initial={{ top: "-10%" }}
-                whileHover={{
-                  top: "120%",
-                  transition: { duration: 1.5, repeat: Infinity, ease: "linear" as const },
-                }}
-              />
-
-              <div
-                className={`w-14 h-14 rounded-xl flex items-center justify-center mb-8 bg-white/5 border border-white/10 group-hover:scale-110 transition-transform duration-500 ${pathology.color}`}
-              >
-                <pathology.icon className="w-7 h-7" />
+              {/* Top Right Arrow Button (Figma Style) */}
+              <div className="absolute top-6 md:top-8 right-6 md:right-8 w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-black opacity-90 group-hover:scale-105 transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] z-10">
+                <svg
+                  className="w-5 h-5 -rotate-45"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={3}
+                    d="M14 5l7 7m0 0l-7 7m7-7H3"
+                  />
+                </svg>
               </div>
 
-              <h3 className="text-2xl font-bold text-white mb-4 group-hover:text-emerald-50 transition-colors">
-                {pathology.title}
-              </h3>
-              <p className="text-slate-400 leading-relaxed font-light">{pathology.description}</p>
-
-              {/* Tech Decor: Deterministic numbers/lines */}
-              <div className="absolute right-4 bottom-4 flex flex-col items-end gap-1 opacity-20 group-hover:opacity-100 transition-opacity duration-500">
-                <span className="text-[10px] font-mono text-emerald-500">
-                  SYS.DIAG.0{index + 1}
-                </span>
-                <div className="flex gap-1">
-                  <div className="w-1 h-1 bg-emerald-500 rounded-full animate-ping" />
-                  <div className="w-8 h-[2px] bg-emerald-500/50" />
+              <div className="relative z-10">
+                <div
+                  className={`w-14 h-14 rounded-full flex items-center justify-center mb-8 bg-white/5 border border-white/10 group-hover:scale-110 transition-transform duration-500 text-emerald-400`}
+                >
+                  <pathology.icon className="w-7 h-7" />
                 </div>
+
+                <h3 className="text-2xl md:text-3xl font-bold text-white mb-4 pr-12 group-hover:text-emerald-50 transition-colors tracking-tight">
+                  {pathology.title}
+                </h3>
+                <p className="text-sm md:text-base text-slate-300 leading-relaxed font-medium">
+                  {pathology.description}
+                </p>
               </div>
             </motion.div>
           ))}

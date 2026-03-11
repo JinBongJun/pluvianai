@@ -209,7 +209,7 @@ class AlertService:
         dashboard_url = None
         if alert.project_id:
             # In production, this would be the actual dashboard URL
-            dashboard_url = f"https://app.agentguard.ai/projects/{alert.project_id}/alerts/{alert.id}"
+            dashboard_url = f"https://app.pluvianai.com/projects/{alert.project_id}/alerts/{alert.id}"
 
         # Render HTML email
         if not self.email_service:
@@ -258,7 +258,7 @@ class AlertService:
         # Get project and user info for all channels
         project = self.db.query(Project).filter(Project.id == alert.project_id).first()
         project_name = project.name if project else "Unknown Project"
-        dashboard_url = f"https://app.agentguard.ai/projects/{alert.project_id}/alerts/{alert.id}" if alert.project_id else None
+        dashboard_url = f"https://app.pluvianai.com/projects/{alert.project_id}/alerts/{alert.id}" if alert.project_id else None
         
         # Get user email for email channel
         user_email = None

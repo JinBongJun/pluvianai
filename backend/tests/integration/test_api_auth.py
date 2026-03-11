@@ -3,6 +3,8 @@ Integration tests for Authentication API
 """
 import pytest
 from fastapi import status
+from app.models.subscription import Subscription
+from app.models.usage import Usage
 
 
 @pytest.mark.integration
@@ -128,3 +130,28 @@ class TestAuthAPI:
         response = await async_client.get("/api/v1/auth/me")
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    async def test_get_my_usage_includes_platform_replay_credit_fields(
+        self, async_client, auth_headers, db, test_user, test_project
+    ):
+        db.add(Subscription(user_id=test_user.id, plan_type="free", status="active"))
+        db.add(
+            Usage(
+                user_id=test_user.id,
+                project_id=test_project.id,
+                metric_name="guard_credits_replay",
+                quantity=125,
+                unit="credits",
+            )
+        )
+        db.commit()
+
+        response = await async_client.get("/api/v1/auth/me/usage", headers=auth_headers)
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["plan_type"] == "free"
+        assert data["limits"]["platform_replay_credits_per_month"] == 1000
+        assert data["limits"]["guard_credits_per_month"] == 1000
+        assert data["usage_this_month"]["platform_replay_credits"] == 125
+        assert data["usage_this_month"]["guard_credits"] == 125

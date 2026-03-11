@@ -14,6 +14,7 @@ interface CanvasPageLayoutProps {
   projectName?: string;
   orgName?: string;
   activeTab?: string;
+  leftPanel?: React.ReactNode;
   rightPanel?: React.ReactNode;
   showTelemetry?: boolean;
   telemetryStats?: TelemetryStat[];
@@ -21,12 +22,14 @@ interface CanvasPageLayoutProps {
   status?: "LIVE" | "SANDBOX" | "REPLAY";
   onAction?: (actionId: string) => void;
   customActions?: { id: string; label: string; icon: any }[];
+  navigationVariant?: "top" | "side";
 }
 
 const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
   children,
   orgId,
   projectId,
+  leftPanel,
   rightPanel,
   showTelemetry = true,
   telemetryStats,
@@ -34,20 +37,19 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
   status = "LIVE",
   onAction = () => {},
   customActions,
+  navigationVariant = "top",
 }) => {
   // Ensure projectId is consistently handled for the navbar
   const effectiveProjectId = projectId ? Number(projectId) : undefined;
+  const hasValidProject = orgId && effectiveProjectId !== undefined && !isNaN(effectiveProjectId);
 
   return (
     <div className="h-screen w-screen bg-[#0a0a0c] overflow-hidden flex flex-col font-sans text-slate-200">
       {/* Global Top Header - Fixed at 90px */}
       <TopHeader
         nav={
-          orgId &&
-          effectiveProjectId !== undefined &&
-          !isNaN(effectiveProjectId) && (
-            <LaboratoryNavbar orgId={orgId} projectId={effectiveProjectId} />
-          )
+          navigationVariant === "top" &&
+          hasValidProject && <LaboratoryNavbar orgId={orgId!} projectId={effectiveProjectId!} />
         }
       />
 
@@ -65,10 +67,22 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
           showTelemetry ? "pt-[140px]" : "pt-[90px]"
         )}
       >
-        {/* Main Content Area - Scrollable Workspace */}
+        {/* Main Content Area - Scrollable Workspace (map); Live View / Release Gate float on the map */}
         <main className="flex-1 flex flex-col relative z-0 overflow-y-auto custom-scrollbar bg-[#0d0d12] rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] border-t border-l border-r border-white/5">
+          {navigationVariant === "side" && hasValidProject && (
+            <div className="absolute left-6 top-6 z-[100]">
+              <LaboratoryNavbar orgId={orgId!} projectId={effectiveProjectId!} variant="side" />
+            </div>
+          )}
           {children}
         </main>
+
+        {/* Left side panel (e.g. Live View detail) */}
+        {leftPanel && (
+          <div className="absolute top-0 left-0 h-full z-[3000] shadow-[20px_0_50px_rgba(0,0,0,0.5)]">
+            {leftPanel}
+          </div>
+        )}
 
         {/* Right Diagnostics Panel (The Hospital Wing) */}
         {rightPanel && (

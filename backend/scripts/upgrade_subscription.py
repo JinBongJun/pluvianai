@@ -10,9 +10,9 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 # Try to get API URL from environment or use default Railway pattern
-API_URL = os.getenv("RAILWAY_API_URL") or "https://agentguard-production.up.railway.app"
+API_URL = os.getenv("RAILWAY_API_URL") or os.getenv("PLUVIANAI_API_URL") or "https://api.pluvianai.com"
 
-def upgrade_subscription(email: str, plan_type: str = "startup"):
+def upgrade_subscription(email: str, plan_type: str = "pro"):
     """Upgrade user subscription"""
     url = f"{API_URL}/api/v1/admin/upgrade-user-subscription"
     params = {
@@ -43,7 +43,7 @@ def upgrade_subscription(email: str, plan_type: str = "startup"):
 
 if __name__ == "__main__":
     email = "bongjun0289@daum.net"
-    plan_type = "startup"
+    plan_type = "pro"
     
     # Allow override via command line args
     if len(sys.argv) > 1:

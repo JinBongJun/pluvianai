@@ -2,7 +2,6 @@
 
 import React from "react";
 import OrgLayout from "@/components/layout/OrgLayout";
-import ProjectTabs from "@/components/ProjectTabs";
 
 interface ProjectSettingsShellProps {
   orgId: string;
@@ -14,23 +13,25 @@ interface ProjectSettingsShellProps {
 
 export default function ProjectSettingsShell({
   orgId,
-  projectId,
+  projectId: _projectId,
   title,
   description,
   children,
 }: ProjectSettingsShellProps) {
-  const basePath = `/organizations/${orgId}/projects/${projectId}`;
-
   return (
     <OrgLayout orgId={orgId}>
-      <div className="min-h-screen bg-ag-bg">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ProjectTabs projectId={projectId} orgId={orgId} basePath={basePath} />
-
-          <div className="mt-8">
-            <div className="mb-6">
-              <h1 className="text-2xl font-bold text-white mb-2">{title}</h1>
-              {description ? <p className="text-slate-400">{description}</p> : null}
+      <div className="min-h-screen relative overflow-hidden">
+        <div className="max-w-5xl mx-auto px-8 pt-10 pb-32 relative z-10">
+          <div className="">
+            <div className="mb-12">
+              <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter leading-none mb-6">
+                Project <span className="text-emerald-500">Settings</span>
+              </h1>
+              {description ? (
+                <p className="text-slate-400 text-lg font-medium leading-relaxed max-w-xl">
+                  {description}
+                </p>
+              ) : null}
             </div>
             {children}
           </div>
@@ -39,4 +40,3 @@ export default function ProjectSettingsShell({
     </OrgLayout>
   );
 }
-

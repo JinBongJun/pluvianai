@@ -1,6 +1,6 @@
-from app.core.exceptions import AgentGuardException
+from app.core.exceptions import PluvianAIException
 
-class RepositoryException(AgentGuardException):
+class RepositoryException(PluvianAIException):
     """Base exception for repository operations"""
     pass
 

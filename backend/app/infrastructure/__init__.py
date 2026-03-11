@@ -1,3 +1,3 @@
 """
-Infrastructure layer for AgentGuard
+Infrastructure layer for PluvianAI
 """

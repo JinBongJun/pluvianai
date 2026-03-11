@@ -1,5 +1,5 @@
 """
-End-to-End Integration Test Script for AgentGuard
+End-to-End Integration Test Script for PluvianAI
 
 이 스크립트는 실제 사용자 플로우를 테스트합니다:
 Phase 1: 인프라 검증
@@ -554,7 +554,7 @@ class TestCleanup:
 def run_quick_test():
     """빠른 연결 테스트"""
     print(f"\n{'='*60}")
-    print(f"AgentGuard E2E Quick Test")
+    print(f"PluvianAI E2E Quick Test")
     print(f"Base URL: {BASE_URL}")
     print(f"{'='*60}\n")
     

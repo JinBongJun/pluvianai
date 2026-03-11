@@ -18,7 +18,7 @@
 | 가입 시 플랜 | `user_service` | Subscription 기본 `plan_id="free"` |
 | 플랜/한도 조회 | `SubscriptionService.get_user_plan()` | limits, features 반환 |
 | GuardCredit 로깅 | `replay_service` + `Usage` | `metric_name="guard_credits_replay"`, `quantity` 누적 |
-| 데이터 보존 | `data_lifecycle_service` | `data_retention_days` 사용 (free=7) |
+| 데이터 보존 | `data_lifecycle_service` | `data_retention_days` 사용 (free=7). Raw snapshots + Release Gate history 모두 동일 retention 적용 |
 
 ### 1.2 안 맞는 것 / 비어 있는 것
 

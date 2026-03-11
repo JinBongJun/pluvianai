@@ -49,7 +49,7 @@ class OnboardingService:
             project_id = project.id if project else None
 
         # Determine base URL
-        base_url = "https://api.agentguard.ai"
+        base_url = "https://api.pluvianai.com"
         if settings.CORS_ORIGINS and settings.CORS_ORIGINS != "*":
             origins = settings.CORS_ORIGINS.split(",")
             if origins:

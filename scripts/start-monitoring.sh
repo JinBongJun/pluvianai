@@ -1,10 +1,10 @@
 #!/bin/bash
-# AgentGuard Monitoring Startup Script
+# PluvianAI Monitoring Startup Script
 # This script starts the monitoring stack and opens Grafana dashboard
 
 set -e
 
-echo "🚀 Starting AgentGuard Monitoring..."
+echo "🚀 Starting PluvianAI Monitoring..."
 
 # Colors for output
 GREEN='\033[0;32m'

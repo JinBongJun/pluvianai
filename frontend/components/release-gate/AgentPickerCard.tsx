@@ -55,7 +55,8 @@ export function AgentPickerCard({ agent, onSelect }: AgentPickerCardProps) {
               isCritical ? "text-rose-400" : agent.is_ghost ? "text-amber-400" : "text-emerald-400"
             )}
           >
-            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+            <line x1="4" x2="4" y1="22" y2="15" />
           </svg>
         </div>
         <div className="min-w-0 flex-1">
