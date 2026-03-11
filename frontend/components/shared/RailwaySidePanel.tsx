@@ -20,6 +20,12 @@ interface RailwaySidePanelProps {
   children: React.ReactNode;
   className?: string;
   headerActions?: React.ReactNode;
+  /** Panel width (default 1100px). Use a smaller value (e.g. 400) for split left/right layout. */
+  width?: number;
+  /** If true, show close (X) button prominently in header. */
+  showCloseButton?: boolean;
+  /** Which side the panel is on (for slide animation direction). */
+  side?: "left" | "right";
 }
 
 const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
@@ -32,36 +38,48 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
   children,
   className = "",
   headerActions,
+  width = 1100,
+  showCloseButton = true,
+  side = "right",
 }) => {
+  const isLeft = side === "left";
+  const slideFrom = isLeft ? "-100%" : "100%";
+  const slideExit = isLeft ? "-110%" : "110%";
+
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ x: "100%", opacity: 0 }}
+          initial={{ x: slideFrom, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          exit={{ x: "110%", opacity: 0 }}
+          exit={{ x: slideExit, opacity: 0 }}
           transition={{ type: "spring", damping: 25, stiffness: 200 }}
           className={clsx(
-            "fixed top-6 right-6 bottom-6 w-[1100px] bg-[#0d0d0f]/90 backdrop-blur-3xl border border-white/10 shadow-[0_30px_90px_rgba(0,0,0,0.9)] rounded-[48px] z-inspector overflow-hidden flex flex-col",
+            "fixed top-6 bottom-6 bg-[#0d0d0f]/90 backdrop-blur-3xl border border-white/10 shadow-[0_30px_90px_rgba(0,0,0,0.9)] rounded-[48px] z-[9999] overflow-hidden flex flex-col",
+            isLeft ? "left-6" : "right-6",
             className
           )}
+          style={{ width: width }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-10 py-8 border-b border-white/5 bg-black/40">
-            <div className="space-y-1">
+          <div className="flex items-center justify-between px-6 py-6 border-b border-white/5 bg-black/40">
+            <div className="space-y-1 min-w-0">
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
                 Unit Diagnostics
               </span>
-              <h2 className="text-3xl font-black text-white tracking-tighter">{title}</h2>
+              <h2 className="text-xl font-black text-white tracking-tighter truncate">{title}</h2>
             </div>
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3 shrink-0">
               {headerActions}
-              <button
-                onClick={onClose}
-                className="p-3 rounded-full hover:bg-white/5 text-slate-400 hover:text-white transition-all active:scale-90"
-              >
-                <X className="w-6 h-6" />
-              </button>
+              {showCloseButton && (
+                <button
+                  onClick={onClose}
+                  className="p-2.5 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all active:scale-90 border border-white/10"
+                  title="Close and reset view"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
             </div>
           </div>
 

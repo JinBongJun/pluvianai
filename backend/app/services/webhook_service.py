@@ -117,7 +117,7 @@ class WebhookService:
                 signature = hmac.new(
                     webhook.secret.encode(), json.dumps(payload, sort_keys=True).encode(), hashlib.sha256
                 ).hexdigest()
-                headers["X-AgentGuard-Signature"] = f"sha256={signature}"
+                headers["X-PluvianAI-Signature"] = f"sha256={signature}"
 
             # Send webhook
             async with httpx.AsyncClient(timeout=10.0) as client:

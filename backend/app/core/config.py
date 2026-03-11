@@ -27,14 +27,14 @@ class Settings(BaseSettings):
 
     # Database
     # Standard local dev URL - ensures we don't accidentally use Railway internal URLs
-    DATABASE_URL: str = "postgresql://agentguard:agentguard@localhost:5432/agentguard"
+    DATABASE_URL: str = "postgresql://pluvianai:pluvianai@localhost:5432/pluvianai"
 
     @field_validator("DATABASE_URL", mode="after")
     @classmethod
     def force_local_db_if_internal(cls, v: str) -> str:
         # If running locally but environment has Railway internal URL, override it
         if "railway.internal" in v:
-            return "postgresql://agentguard:agentguard@localhost:5432/agentguard"
+            return "postgresql://pluvianai:pluvianai@localhost:5432/pluvianai"
         return v
 
     # Redis
@@ -107,6 +107,16 @@ class Settings(BaseSettings):
     FEATURE_FLAG_ENHANCED_ANALYTICS: bool = False
     FEATURE_FLAG_BETA_FEATURES: bool = False
     FEATURE_FLAG_EXPERIMENTAL_API: bool = False
+
+    # Release Gate policy flags
+    # When False (default), production Release Gate should enforce pinned-only model ids for reproducibility.
+    # When True, allow custom (non-pinned) model ids as an emergency escape hatch.
+    RELEASE_GATE_ALLOW_CUSTOM_MODELS: bool = False
+
+    # Release Gate async worker
+    # Production-grade setup runs the job runner in a dedicated worker process,
+    # not inside the web server process.
+    RELEASE_GATE_JOB_RUNNER_ENABLED: bool = True
 
     # Monitoring (optional, for production)
     GRAFANA_URL: Optional[str] = None

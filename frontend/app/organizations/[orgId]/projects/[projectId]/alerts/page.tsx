@@ -341,8 +341,15 @@ export default function AlertsPage() {
           { label: "Alerts" },
         ]}
       >
-        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4" role="status" aria-label="Loading alerts">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent" aria-hidden />
+        <div
+          className="flex flex-col items-center justify-center min-h-[400px] gap-4"
+          role="status"
+          aria-label="Loading alerts"
+        >
+          <div
+            className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent"
+            aria-hidden
+          />
           <p className="text-sm text-slate-500 font-medium">Loading alerts…</p>
         </div>
       </ProjectLayout>

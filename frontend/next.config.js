@@ -8,9 +8,7 @@ const nextConfig = {
     formats: ["image/avif", "image/webp"],
   },
   async rewrites() {
-    return [
-      { source: "/favicon.ico", destination: "/icon.svg" },
-    ];
+    return [{ source: "/favicon.ico", destination: "/icon.svg" }];
   },
   // Code splitting optimization
   experimental: {

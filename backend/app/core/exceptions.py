@@ -11,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.core.logging_config import logger
 
 
-class AgentGuardException(Exception):
+class PluvianAIException(Exception):
     """Base exception for PluvianAI"""
 
     def __init__(self, message: str, status_code: int = 500):
@@ -20,28 +20,28 @@ class AgentGuardException(Exception):
         super().__init__(self.message)
 
 
-class NotFoundError(AgentGuardException):
+class NotFoundError(PluvianAIException):
     """Resource not found exception"""
 
     def __init__(self, message: str = "Resource not found"):
         super().__init__(message, status_code=404)
 
 
-class PermissionDeniedError(AgentGuardException):
+class PermissionDeniedError(PluvianAIException):
     """Permission denied exception"""
 
     def __init__(self, message: str = "Permission denied"):
         super().__init__(message, status_code=403)
 
 
-class ValidationError(AgentGuardException):
+class ValidationError(PluvianAIException):
     """Validation error exception"""
 
     def __init__(self, message: str = "Validation error"):
         super().__init__(message, status_code=400)
 
 
-class UpgradeRequiredException(AgentGuardException):
+class UpgradeRequiredException(PluvianAIException):
     """Upgrade required exception for Pro/Enterprise features"""
 
     def __init__(
@@ -59,7 +59,7 @@ class UpgradeRequiredException(AgentGuardException):
         super().__init__(message, status_code=403)
 
 
-async def agentguard_exception_handler(request: Request, exc: AgentGuardException):
+async def pluvianai_exception_handler(request: Request, exc: PluvianAIException):
     """Handle custom PluvianAI exceptions following API_REFERENCE.md format"""
     logger.error(f"PluvianAIException: {exc.message}", extra={"path": request.url.path, "method": request.method})
     
@@ -78,7 +78,7 @@ async def agentguard_exception_handler(request: Request, exc: AgentGuardExceptio
                 "upgrade_url": exc.upgrade_url,
             },
             status_code=exc.status_code,
-            origin="Proxy",  # AgentGuard server error
+            origin="Proxy",  # PluvianAI server error
             headers=headers,
         )
     
@@ -121,7 +121,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         error_code = detail["code"]
     elif hasattr(exc, "error_code"):
         error_code = exc.error_code
-    origin = request.headers.get("X-PluvianAI-Origin") or request.headers.get("X-AgentGuard-Origin")
+    origin = request.headers.get("X-PluvianAI-Origin")
     from app.core.responses import error_response
     return error_response(
         code=error_code,
@@ -171,14 +171,14 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
             code="DATABASE_INTEGRITY_ERROR",
             message="Database integrity error. The resource may already exist.",
             status_code=status.HTTP_409_CONFLICT,
-            origin="Proxy",  # AgentGuard database error
+            origin="Proxy",  # PluvianAI database error
         )
 
     return error_response(
         code="DATABASE_ERROR",
         message="Database error occurred",
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        origin="Proxy",  # AgentGuard database error
+        origin="Proxy",  # PluvianAI database error
     )
 
 
@@ -193,7 +193,7 @@ async def general_exception_handler(request: Request, exc: Exception):
         code="INTERNAL_SERVER_ERROR",
         message="An unexpected error occurred",
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        origin="Proxy",  # AgentGuard server error
+        origin="Proxy",  # PluvianAI server error
     )
     # Ensure CORS headers are added even on errors
     response.headers["Access-Control-Allow-Origin"] = "*"

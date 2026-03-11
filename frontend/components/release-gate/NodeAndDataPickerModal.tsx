@@ -42,6 +42,7 @@ type NodeAndDataPickerModalProps = {
   initialDataSource: "recent" | "datasets";
   initialSnapshotIds: string[];
   initialDatasetIds: string[];
+  lockAgent?: boolean;
   onConfirm: (selection: NodeAndDataSelection) => void;
 };
 
@@ -60,6 +61,7 @@ export function NodeAndDataPickerModal({
   initialDataSource,
   initialSnapshotIds,
   initialDatasetIds,
+  lockAgent,
   onConfirm,
 }: NodeAndDataPickerModalProps) {
   const [step, setStep] = useState<Step>("node");
@@ -278,14 +280,16 @@ export function NodeAndDataPickerModal({
             </h2>
           ) : (
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleBack}
-                className="rounded-lg p-2 text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
-                aria-label="Back to node selection"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
+              {!lockAgent && (
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="rounded-lg p-2 text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
+                  aria-label="Back to node selection"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+              )}
               <h2 id="node-data-picker-title" className="text-base font-bold text-white">
                 Select data for {pickedAgent?.display_name || pickedAgent?.agent_id || "agent"}
               </h2>
@@ -559,7 +563,7 @@ export function NodeAndDataPickerModal({
                                       ·{" "}
                                       {typeof dataset.snapshot_count === "number"
                                         ? dataset.snapshot_count
-                                        : dataset.snapshot_ids?.length ?? 0}{" "}
+                                        : (dataset.snapshot_ids?.length ?? 0)}{" "}
                                       runs
                                     </span>
                                   )}

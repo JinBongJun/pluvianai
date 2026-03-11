@@ -183,7 +183,9 @@ export default function ProjectApiKeysPage() {
                   className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3"
                 >
                   <div>
-                    <span className="font-medium text-white">{PROVIDER_LABELS[k.provider] ?? k.provider}</span>
+                    <span className="font-medium text-white">
+                      {PROVIDER_LABELS[k.provider] ?? k.provider}
+                    </span>
                     {k.name && <span className="text-slate-400 ml-2">({k.name})</span>}
                     <span className="text-slate-500 text-sm ml-2">
                       added {k.created_at ? new Date(k.created_at).toLocaleDateString() : ""}

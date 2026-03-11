@@ -23,7 +23,7 @@ def _get_fernet_key() -> Fernet:
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=b"agentguard_salt",  # Fixed salt for consistency
+            salt=b"pluvianai_salt",  # Fixed salt for consistency
             iterations=100000,
             backend=default_backend()
         )
@@ -39,7 +39,7 @@ def _get_fernet_key() -> Fernet:
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=b"agentguard_salt",
+            salt=b"pluvianai_salt",
             iterations=100000,
             backend=default_backend()
         )

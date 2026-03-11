@@ -10,9 +10,10 @@
 
 ---
 
-### 1. 기본 개념: GuardCredit
+### 1. 기본 개념: Platform replay credit
 
-- 모든 모델/프로바이더(OpenAI, Anthropic, Google)를 **공통 단위인 `GuardCredit`** 로 환산한다.
+- 모든 플랫폼 호스팅 replay 실행을 공통 단위인 **platform replay credit** 으로 환산한다.
+- 내부 저장 필드/metric 이름은 기존 `guard_credits_*`, `guard_credits_replay` 를 유지해도 되지만, **사용자 노출 문구는 platform replay credits로 통일**한다.
 - 크레딧 계산식(런 1회에 대해):
 
   \[
@@ -23,7 +24,8 @@
   - `model_factor` = 모델별 가중치 (저가 1x, 중간 2~3x, 고가 5~10x 등)
 
 - **중요한 점**:  
-  - 내부 코드에서는 **달러 가격을 직접 계산하지 않고**, `used_credits`만 누적한다.
+  - 내부 코드에서는 **달러 가격을 직접 계산하지 않고**, hosted run에 대해서만 `used_credits`를 누적한다.
+  - **BYOK run은 credit usage를 기록하지 않는다.**
   - Paddle/결제 시스템과 통합할 때는 **“이번 달 조직이 쓴 총 크레딧 수”** 만 넘기면 된다.
 
 ---
@@ -93,12 +95,12 @@
 **사용량 한도(Soft/Hard Cap)**
 
 - 조직(org) 기준:
-  - **Soft cap**: 월 `20,000 GuardCredits` (예: 1K 토큰 × factor 1 기준 대략 2,000K = 2M 토큰 수준)
-  - **Hard cap**: Soft cap + `5,000 GuardCredits` 초과 시 해당 월 더 이상 플랫폼 키 사용 불가
-    - BYO 키는 계속 허용 (비용은 사용자가 부담).
+  - **Free included hosted budget**: 월 `1,000 platform replay credits`
+  - **Hard block**: Free budget 초과 시 해당 월 더 이상 **플랫폼 키 기반 Release Gate run 불가**
+    - BYOK run은 계속 허용 (비용은 사용자가 부담).
 - UI 표기(대략):
-  - “This month: 12,400 / 20,000 credits used (platform key usage).”
-  - “MVP 기간에는 과금되지 않지만, 베타 안정성을 위해 월 사용량 상한이 있습니다.”
+  - “This month: 420 / 1,000 platform replay credits used.”
+  - “Hosted PluvianAI model usage spends these credits. BYOK runs do not.”
 
 **콘텐츠 전략과 연결**
 
@@ -116,7 +118,7 @@
 
 **해야 할 일(요약)**
 
-- `GuardCredit` 집계 데이터로:
+- `platform replay credit` 집계 데이터로:
   - org별 월 사용량 분포
   - 모델 그룹(Standard/Plus/Premium/Ultra)별 비중
   - 한 run 당 평균 크레딧
@@ -129,10 +131,10 @@
 
 **요금제 구조 초안**
 
-- Starter: 월 $49, **20k 크레딧 포함**
-- Pro: 월 $199, **200k 크레딧 포함**
-- Enterprise: 커스텀 (수백 k ~ 수백만 크레딧)
-- 초과분: 예를 들어 `1 GuardCredit = $0.0005` 수준으로 책정  
+- Free: 월 $0, **1k platform replay credits 포함**
+- Pro: 월 $49, **10k platform replay credits 포함**
+- Enterprise: 커스텀 hosted replay budget (수십 k ~ 수백만 credits)
+- 초과분: 예를 들어 `1 platform replay credit = $0.0005` 수준으로 책정  
   → 원가(cheap 모델 기준) 대비 대략 3~5배 마진을 남기도록 factor/단가 조정.
 
 **Paddle 연동 개념**
@@ -191,9 +193,9 @@
 #### 4.4 한도(Soft/Hard Cap) 체크 위치
 
 - Release Gate run 시작 전:
-  - org의 **이번 달 누적 `used_credits`** 를 조회.
-  - Soft cap 초과 시 경고 메시지, Hard cap 초과 시 플랫폼 키 기반 Run 거절.
-  - BYO 키 사용 시에는 cap 체크를 완화하거나 별도 정책을 둘 수 있음.
+  - org의 **이번 달 누적 hosted `used_credits`** 를 조회.
+  - Free included budget 초과 시 플랫폼 키 기반 Run을 403으로 거절.
+  - BYOK 키 사용 시에는 credit cap 체크를 건너뛴다.
 
 ---
 
@@ -208,10 +210,9 @@
     - 정식 출시 이후: 상위 플랜 또는 초과 과금 안내.
 
 - **Usage 표시**
-  - 조직/프로젝트 설정 또는 상단 HUD에:
-    - “This month: 12,400 / 20,000 credits used (platform key).”
-  - Soft cap 근처에서 경고:
-    - “You are nearing the free beta usage limit. Heavy usage may be rate-limited.”
+  - 조직 Billing/Usage에:
+    - “This month: 420 / 1,000 platform replay credits used.”
+    - “Hosted PluvianAI model usage spends these credits. BYOK runs do not.”
 
 ---
 
@@ -232,4 +233,46 @@
 - Paddle 상품/플랜 정의
 
 를 점진적으로 확정하면 된다.
+
+---
+
+### 7. Paddle 연동 계획 (정식 출시 시)
+
+**시점**: MVP는 Free만 사용·Pro/Enterprise는 Preview only. **Paddle 구현은 정식 출시 직전~출시 시점에 한 번에 진행**하는 것을 권장. (요금제·크레딧 구조 확정 후, 실제 결제 플로우 검증과 함께 진행.)
+
+**참고**: Paddle 공식 문서 — [Build](https://developer.paddle.com/build/overview), [Webhooks](https://developer.paddle.com/webhooks/overview), [API Reference](https://developer.paddle.com/api-reference/overview).
+
+#### 7.1 Paddle 쪽에서 하라고 하는 것
+
+| 항목 | 내용 |
+|------|------|
+| **Notification destination** | Developer Tools > Notifications에서 웹훅 수신 URL 등록. |
+| **웹훅 서명 검증** | 수신 payload 서명 검증 필수. [Signature verification](https://developer.paddle.com/webhooks/signature-verification) |
+| **구독 이벤트 구독** | 최소: `transaction.created`, `subscription.created`, `transaction.updated`, `subscription.updated` |
+| **프로비저닝** | 웹훅 수신 시 DB에 저장할 필드: `subscription.id`, `subscription.status`, `subscription.items[].price.id` / `quantity`, `subscription.items[].price.product_id`, `subscription.collection_mode`, `subscription.scheduled_change`, `notification.occurred_at` |
+| **체크아웃** | Overlay / Inline / Pricing page 중 하나로 Paddle Checkout 연동. 결제 완료 후 `transaction.paid` → `subscription.created` 순으로 구독 생성. |
+
+#### 7.2 우리 쪽 준비 상태
+
+- **DB**: `Subscription` / Organization에 `paddle_subscription_id`, `paddle_customer_id` (또는 org 기준) 컬럼 이미 존재.
+- **사용량 집계**: org별 “이번 달 platform replay credits”는 `Usage` 테이블 `metric_name='guard_credits_replay'` 기준으로 월별 합산 가능.
+
+#### 7.3 사용량(크레딧)을 Paddle에 넘기는 방식
+
+Paddle에는 “사용량 이벤트를 보내면 기간 끝에 자동 청구”하는 미터드 리포팅 API는 없음. 아래 중 하나로 구현:
+
+- **Charges API**: 청구 주기마다 우리가 월 사용량 합산 후, 초과분만 **일회성 과금(charge)** 으로 청구.
+- **Subscription Modifiers API**: 구독 금액을 사용량에 따라 조정(예: 포함 크레딧 초과 시 modifier 추가).
+- **Update subscription**: 구독 항목의 **quantity**를 크레딧 단위(예: 1단위 = 1,000 credits)로 두고, 주기마다 quantity 업데이트.
+
+→ **정식 출시 전**에 플랜·가격 확정 후, 위 셋 중 하나로 “이번 달 사용한 platform replay credits”를 Paddle에 반영하면 됨.
+
+#### 7.4 정식 출시 시 구현 체크리스트 (요약)
+
+- [ ] Paddle Sandbox에서 상품/가격 생성 (Free 제외, Pro/Enterprise 또는 크레딧 add-on).
+- [ ] 웹훅 수신 URL 등록 및 서명 검증 구현.
+- [ ] `subscription.created` / `subscription.updated` 등 수신 시 `paddle_subscription_id`, `subscription.status`, `items` 등 저장 및 앱 접근 권한(프로비저닝) 반영.
+- [ ] Pro/Enterprise CTA 클릭 시 Paddle Checkout으로 이동 (세션 생성 후 리다이렉트).
+- [ ] 청구 주기 종료 시점에 월별 platform replay credits 합산 → Charges API 또는 Modifiers/Update subscription 중 선택 구현.
+- [ ] (선택) Paddle SDK: [Python](https://developer.paddle.com/resources/overview) / [Node](https://developer.paddle.com/resources/overview) 사용 검토.
 

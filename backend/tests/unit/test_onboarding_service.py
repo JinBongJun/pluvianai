@@ -27,7 +27,7 @@ class TestOnboardingService:
         assert "node_code" in result
         assert "api_key" in result
         assert result["project_id"] == test_project.id
-        assert "api.agentguard.ai" in result["base_url"] or "localhost" in result["base_url"]
+        assert "api.pluvianai.com" in result["base_url"] or "localhost" in result["base_url"]
         assert result["api_key"] in result["curl_command"]
         assert result["api_key"] in result["python_code"]
         assert result["api_key"] in result["node_code"]

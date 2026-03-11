@@ -1,14 +1,30 @@
 "use client";
 
-import React, { useState } from "react";
-import { Button } from "@/components/ui/Button";
-import { ChevronRight, Shield, Zap, Book, Layers, Search, History, Activity, Terminal } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import {
+  ChevronRight,
+  Shield,
+  Zap,
+  Book,
+  Layers,
+  Search,
+  History,
+  Activity,
+  Terminal,
+  Code2,
+  KeyRound,
+  AlertTriangle,
+} from "lucide-react";
+import MarketingNavbar from "@/components/layout/MarketingNavbar";
 import { RobotBirdIcon } from "@/components/shared/RobotBirdIcon";
 
 type SectionId =
   | "introduction"
   | "quickstart"
+  | "integrations"
+  | "when-things-dont-work"
   | "key-concepts"
   | "architecture"
   | "logic-guard"
@@ -23,7 +39,14 @@ interface ContentItem {
 }
 
 export default function DocsPage() {
+  const searchParams = useSearchParams();
   const [activeSection, setActiveSection] = useState<SectionId>("introduction");
+
+  useEffect(() => {
+    const section = searchParams.get("section");
+    if (section === "integrations") setActiveSection("integrations");
+    if (section === "when-things-dont-work") setActiveSection("when-things-dont-work");
+  }, [searchParams]);
 
   const DOCS_CONTENT: Record<SectionId, ContentItem> = {
     introduction: {
@@ -41,8 +64,9 @@ export default function DocsPage() {
             <span className="text-white font-black underline decoration-emerald-500/30 underline-offset-4">
               node-level regression guard
             </span>{" "}
-            for AI agents. It replays real traces under your new model or prompt configuration, compares
-            behavior against a baseline, and gives you a clear pass/fail gate before you deploy.
+            for AI agents. It replays real traces under your new model or prompt configuration,
+            compares behavior against a baseline, and gives you a clear pass/fail gate before you
+            deploy.
           </p>
           <div className="grid md:grid-cols-1 gap-8">
             <div
@@ -57,8 +81,8 @@ export default function DocsPage() {
                 Live View &amp; Release Gate
               </h3>
               <p className="text-lg text-slate-500 leading-relaxed mb-8">
-                Learn how to send production traces to PluvianAI and use Live View and Release Gate to validate
-                behavior changes before rollout.
+                Learn how to send production traces to PluvianAI and use Live View and Release Gate
+                to validate behavior changes before rollout.
               </p>
               <div className="flex items-center text-xs font-black text-emerald-400 uppercase tracking-widest gap-2 group-hover:gap-4 transition-all">
                 Initiate Protocol <ChevronRight className="w-4 h-4" />
@@ -79,8 +103,9 @@ export default function DocsPage() {
       content: (
         <div className="space-y-12">
           <p className="text-2xl text-slate-400 leading-relaxed font-medium max-w-4xl tracking-tight">
-            PluvianAI runs on real traces from your agents. This quickstart shows how to send snapshots into Live
-            View and run Release Gate to compare baseline versus candidate behavior.
+            PluvianAI runs on real traces from your agents. This quickstart shows how to send
+            snapshots into Live View and run Release Gate to compare baseline versus candidate
+            behavior.
           </p>
 
           <div className="rounded-[24px] border border-amber-500/30 bg-amber-500/5 p-8 max-w-4xl relative overflow-hidden">
@@ -90,9 +115,10 @@ export default function DocsPage() {
               Critical Initialization
             </div>
             <p className="text-base text-amber-500/80 leading-relaxed font-medium">
-              Start by mirroring your agent&apos;s requests and responses to PluvianAI as snapshots. Most teams add a
-              small helper in their orchestrator or gateway that forwards trace data over HTTP, so Live View can
-              observe behavior without changing how traffic reaches your users.
+              Start by mirroring your agent&apos;s requests and responses to PluvianAI as snapshots.
+              Most teams add a small helper in their orchestrator or gateway that forwards trace
+              data over HTTP, so Live View can observe behavior without changing how traffic reaches
+              your users.
             </p>
           </div>
 
@@ -102,12 +128,23 @@ export default function DocsPage() {
               Agent Identity Protocol
             </div>
             <p className="text-base text-slate-400 leading-relaxed">
-              Pluvian groups traces by a stable <span className="text-white font-bold bg-white/10 px-2 py-0.5 rounded">agent_id</span>. Priority hierarchy:
-              <br /><br />
+              Pluvian groups traces by a stable{" "}
+              <span className="text-white font-bold bg-white/10 px-2 py-0.5 rounded">agent_id</span>
+              . Priority hierarchy:
+              <br />
+              <br />
               <span className="flex items-center gap-3">
-                <span className="px-3 py-1 rounded bg-emerald-500/10 text-emerald-400 font-bold text-sm">1. Explicit Name</span> <ChevronRight className="w-4 h-4 text-slate-600" />
-                <span className="px-3 py-1 rounded bg-white/5 text-slate-300 font-bold text-sm">2. Payload ID</span> <ChevronRight className="w-4 h-4 text-slate-600" />
-                <span className="px-3 py-1 rounded bg-white/5 text-slate-500 font-bold text-sm">3. Prompt Hash Fallback</span>
+                <span className="px-3 py-1 rounded bg-emerald-500/10 text-emerald-400 font-bold text-sm">
+                  1. Explicit Name
+                </span>{" "}
+                <ChevronRight className="w-4 h-4 text-slate-600" />
+                <span className="px-3 py-1 rounded bg-white/5 text-slate-300 font-bold text-sm">
+                  2. Payload ID
+                </span>{" "}
+                <ChevronRight className="w-4 h-4 text-slate-600" />
+                <span className="px-3 py-1 rounded bg-white/5 text-slate-500 font-bold text-sm">
+                  3. Prompt Hash Fallback
+                </span>
               </span>
             </p>
           </div>
@@ -118,8 +155,8 @@ export default function DocsPage() {
                 <Activity className="w-5 h-5 text-indigo-400" /> Evaluation
               </h4>
               <p className="text-sm text-slate-400 leading-relaxed">
-                Atomic Signals run deterministic checks on each snapshot – for example latency, JSON validity, length,
-                refusal, PII, and basic tool policy signals.
+                Atomic Signals run deterministic checks on each snapshot – for example latency, JSON
+                validity, length, refusal, PII, and basic tool policy signals.
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 hover:bg-white/[0.04] transition-colors">
@@ -127,7 +164,8 @@ export default function DocsPage() {
                 <Shield className="w-5 h-5 text-rose-400" /> Policy
               </h4>
               <p className="text-sm text-slate-400 leading-relaxed">
-                Explicit pass/fail guardrails (forbidden tool, tool order, args schema) used for validation and CI gate decisions.
+                Explicit pass/fail guardrails (forbidden tool, tool order, args schema) used for
+                validation and CI gate decisions.
               </p>
             </div>
           </div>
@@ -139,21 +177,55 @@ export default function DocsPage() {
                 Evaluation Matrix
               </h4>
               <p className="text-sm text-slate-400 leading-relaxed mb-8 max-w-3xl">
-                Evaluation represents your soft-validation configuration. Activate checks, define thresholds, and secure stability. Use <span className="text-white font-bold bg-white/10 px-2 py-0.5 rounded">Clinical Log</span> to dictate sample sizes.
+                Evaluation represents your soft-validation configuration. Activate checks, define
+                thresholds, and secure stability. Use{" "}
+                <span className="text-white font-bold bg-white/10 px-2 py-0.5 rounded">
+                  Clinical Log
+                </span>{" "}
+                to dictate sample sizes.
               </p>
 
               <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {[
-                  { title: "Empty / Short Answers", desc: "Detects overly short or empty outputs.", value: "Min chars or tokens" },
-                  { title: "JSON Validity", desc: "Ensures responses are valid JSON when required.", value: "Strict / lenient modes" },
-                  { title: "Refusal Detection", desc: "Flags pattern-based refusals instead of helpful answers.", value: "Boolean check" },
-                  { title: "Output Length Guard", desc: "Detects unusual length drift between runs.", value: "Length / token ratios" },
-                  { title: "Latency Guard", desc: "Tracks response latency for each snapshot.", value: "Warning thresholds" },
-                  { title: "PII & Secret Guard", desc: "Helps catch obvious PII or secret-like strings.", value: "Rule-based filters", span: true }
+                  {
+                    title: "Empty / Short Answers",
+                    desc: "Detects overly short or empty outputs.",
+                    value: "Min chars or tokens",
+                  },
+                  {
+                    title: "JSON Validity",
+                    desc: "Ensures responses are valid JSON when required.",
+                    value: "Strict / lenient modes",
+                  },
+                  {
+                    title: "Refusal Detection",
+                    desc: "Flags pattern-based refusals instead of helpful answers.",
+                    value: "Boolean check",
+                  },
+                  {
+                    title: "Output Length Guard",
+                    desc: "Detects unusual length drift between runs.",
+                    value: "Length / token ratios",
+                  },
+                  {
+                    title: "Latency Guard",
+                    desc: "Tracks response latency for each snapshot.",
+                    value: "Warning thresholds",
+                  },
+                  {
+                    title: "PII & Secret Guard",
+                    desc: "Helps catch obvious PII or secret-like strings.",
+                    value: "Rule-based filters",
+                    span: true,
+                  },
                 ].map((item, i) => (
-                  <div key={i} className={`rounded-2xl border border-white/5 bg-black/40 p-5 hover:border-emerald-500/30 transition-colors group ${item.span ? 'md:col-span-2 xl:col-span-3 bg-emerald-500/5' : ''}`}>
+                  <div
+                    key={i}
+                    className={`rounded-2xl border border-white/5 bg-black/40 p-5 hover:border-emerald-500/30 transition-colors group ${item.span ? "md:col-span-2 xl:col-span-3 bg-emerald-500/5" : ""}`}
+                  >
                     <h5 className="text-[11px] font-black tracking-widest uppercase text-white mb-2 flex items-center gap-2">
-                      <span className="text-emerald-500/50">{String(i + 1).padStart(2, '0')}</span> {item.title}
+                      <span className="text-emerald-500/50">{String(i + 1).padStart(2, "0")}</span>{" "}
+                      {item.title}
                     </h5>
                     <p className="text-xs text-slate-400 leading-relaxed mb-3">{item.desc}</p>
                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-black/40 px-3 py-1.5 rounded inline-block border border-white/5">
@@ -339,9 +411,9 @@ Content-Type: application/json
                 Inspect in Live View
               </h3>
               <p className="text-sm text-slate-400 leading-relaxed max-w-3xl">
-                Once snapshots arrive, open Live View to see traces grouped by node. Each snapshot is scored by Atomic
-                Signals, and you can drill into payloads, evaluations, and policy violations before setting up Release
-                Gate.
+                Once snapshots arrive, open Live View to see traces grouped by node. Each snapshot
+                is scored by Atomic Signals, and you can drill into payloads, evaluations, and
+                policy violations before setting up Release Gate.
               </p>
             </section>
 
@@ -353,13 +425,563 @@ Content-Type: application/json
                 Run Release Gate
               </h3>
               <p className="text-sm text-slate-400 leading-relaxed max-w-3xl">
-                Pick baseline snapshots for a node, choose a new model or prompt configuration, and run Release Gate.
-                PluvianAI replays each trace, computes a behavior diff between baseline and candidate, applies your
-                Atomic Signals and Policy rules, and returns a pass/fail verdict plus Stable / Minor / Major change
-                labels for each attempt.
+                Pick baseline snapshots for a node, choose a new model or prompt configuration, and
+                run Release Gate. PluvianAI replays each trace, computes a behavior diff between
+                baseline and candidate, applies your Atomic Signals and Policy rules, and returns a
+                pass/fail verdict plus Stable / Minor / Major change labels for each attempt.
               </p>
             </section>
           </div>
+        </div>
+      ),
+    },
+    integrations: {
+      id: "integrations",
+      title: "Integrations by tool",
+      icon: (
+        <div className="w-16 h-16 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-500 shadow-[0_0_30px_rgba(139,92,246,0.15)] mb-8">
+          <Code2 className="w-8 h-8" />
+        </div>
+      ),
+      content: (
+        <div className="space-y-12">
+          <p className="text-xl text-slate-400 leading-relaxed max-w-4xl">
+            No matter what you use (Python, Node, n8n, MCP, LangChain), you do the same thing: send
+            one HTTP request with your LLM request and response. Below we show exactly how, step by
+            step, for each tool.
+          </p>
+
+          {/* Before you start: for complete beginners */}
+          <div className="rounded-2xl border border-slate-500/30 bg-slate-500/5 p-6 max-w-4xl">
+            <h4 className="text-sm font-black uppercase tracking-wider text-slate-200 mb-3">
+              Before you start (for complete beginners)
+            </h4>
+            <div className="space-y-4 text-sm text-slate-300 leading-relaxed">
+              <p>
+                <strong className="text-slate-200">Terminal / command line.</strong> The steps below
+                ask you to run commands like{" "}
+                <code className="px-1.5 py-0.5 rounded bg-black/40 text-slate-200 font-mono text-xs">
+                  pip install pluvianai
+                </code>{" "}
+                or{" "}
+                <code className="px-1.5 py-0.5 rounded bg-black/40 text-slate-200 font-mono text-xs">
+                  npm install pluvianai
+                </code>
+                . Open a <strong>terminal</strong> (on Mac: Spotlight → type &quot;Terminal&quot;;
+                on Windows: Command Prompt or PowerShell, or the Terminal tab in VS Code/Cursor).
+                Type the command and press Enter. <code className="font-mono text-xs">pip</code> and{" "}
+                <code className="font-mono text-xs">npm</code> are installers — they download the
+                library so your code can use it.
+              </p>
+              <p>
+                <strong className="text-slate-200">Which file to paste the code into.</strong> The
+                init code goes at the top of the <strong>file where you call the LLM</strong> (e.g.
+                where you have{" "}
+                <code className="font-mono text-xs">openai.ChatCompletion.create</code> or{" "}
+                <code className="font-mono text-xs">client.chat.completions.create</code> in Python,
+                or <code className="font-mono text-xs">new OpenAI()</code> /{" "}
+                <code className="font-mono text-xs">require(&apos;openai&apos;)</code> in Node).
+                That file is often named <code className="font-mono text-xs">main.py</code>,{" "}
+                <code className="font-mono text-xs">app.py</code>,{" "}
+                <code className="font-mono text-xs">chat.py</code>, or in Node{" "}
+                <code className="font-mono text-xs">index.js</code> or{" "}
+                <code className="font-mono text-xs">app.js</code>. Paste the init lines after your
+                other imports (at the top of the file).
+              </p>
+            </div>
+          </div>
+
+          {/* 유의: 두 종류의 API 키 */}
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 max-w-4xl">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-6 h-6 text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-3">
+                <h4 className="text-sm font-black uppercase tracking-wider text-amber-200">
+                  Note: There are two types of API keys
+                </h4>
+                <ul className="text-sm text-slate-300 space-y-1 list-disc list-inside">
+                  <li>
+                    <strong className="text-slate-200">PluvianAI API key</strong> — Used when you
+                    first integrate (init). Issued by PluvianAI; it authenticates traffic sent to
+                    our server. It is not the same as your OpenAI/Anthropic keys.
+                  </li>
+                  <li>
+                    <strong className="text-slate-200">
+                      Provider API keys (OpenAI, Anthropic, Google)
+                    </strong>{" "}
+                    — Registered in Live View → node → Settings. Only needed when re-running Release
+                    Gate. Do not confuse these with the key you enter at init.
+                  </li>
+                </ul>
+                <p className="text-xs text-slate-400 pt-1">
+                  In the steps below, &quot;YOUR_API_KEY&quot; is where you enter your{" "}
+                  <strong>PluvianAI API key</strong>. If you don&apos;t have one yet, create it
+                  using the button below.
+                </p>
+                <Link
+                  href="/settings/profile"
+                  className="inline-flex items-center gap-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-4 py-2.5 text-sm font-bold text-amber-200 transition-all"
+                >
+                  <KeyRound className="w-4 h-4" />
+                  Get your PluvianAI API key
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Deploying: no need to stop your service */}
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6 max-w-4xl">
+            <h4 className="text-sm font-black uppercase tracking-wider text-emerald-200 mb-2">
+              Deploying the integration
+            </h4>
+            <p className="text-sm text-slate-300 leading-relaxed mb-2">
+              Adding PluvianAI is a small code change (one init call). For it to take effect, you
+              deploy the new version and the process loads the new code — same as any other deploy.
+              You do <strong className="text-slate-200">not</strong> have to stop your whole service
+              first.
+            </p>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              If you use <strong className="text-slate-200">rolling updates</strong>,{" "}
+              <strong className="text-slate-200">blue-green</strong>, or{" "}
+              <strong className="text-slate-200">canary</strong> deployments, you can ship the
+              integration with zero or minimal downtime. Single-instance restarts may have a brief
+              outage; the change itself is minimal and low-risk.
+            </p>
+          </div>
+
+          {/* Python */}
+          <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-8">
+            <h3 className="text-lg font-black uppercase tracking-widest text-white flex items-center gap-3">
+              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 text-sm">
+                1
+              </span>
+              Python
+            </h3>
+            <ol className="list-decimal list-inside space-y-3 text-sm text-slate-300">
+              <li>
+                Open a terminal. Run:{" "}
+                <code className="px-1.5 py-0.5 rounded bg-black/40 text-emerald-300 font-mono text-xs">
+                  pip install pluvianai
+                </code>
+              </li>
+              <li>
+                In your Python file where you call OpenAI (or another LLM), add at the top (after
+                your other imports):
+                <br />
+                <code className="block mt-2 p-3 rounded-lg bg-black/40 text-emerald-300 font-mono text-xs whitespace-pre-wrap">
+                  import pluvianai\npluvianai.init(api_key=&quot;YOUR_API_KEY&quot;,
+                  project_id=YOUR_PROJECT_ID)
+                </code>
+              </li>
+              <li>
+                Replace <strong className="text-slate-200">YOUR_API_KEY</strong> with your real API
+                key (Project Settings → API Keys). Replace{" "}
+                <strong className="text-slate-200">YOUR_PROJECT_ID</strong> with your project ID
+                (the number in the URL when you&apos;re in the project).
+              </li>
+              <li>Run your app and make one LLM call (e.g. send one chat message).</li>
+              <li>Go back to Live View and refresh. You should see one run.</li>
+            </ol>
+          </section>
+
+          {/* Node */}
+          <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-8">
+            <h3 className="text-lg font-black uppercase tracking-widest text-white flex items-center gap-3">
+              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 text-sm">
+                2
+              </span>
+              Node.js
+            </h3>
+            <ol className="list-decimal list-inside space-y-3 text-sm text-slate-300">
+              <li>
+                In your project folder run:{" "}
+                <code className="px-1.5 py-0.5 rounded bg-black/40 text-emerald-300 font-mono text-xs">
+                  npm install pluvianai
+                </code>
+              </li>
+              <li>
+                At the top of the file where you call the LLM, add:
+                <br />
+                <code className="block mt-2 p-3 rounded-lg bg-black/40 text-emerald-300 font-mono text-xs whitespace-pre-wrap">{`const pluvianai = require('pluvianai');\npluvianai.init({ apiKey: 'YOUR_API_KEY', projectId: YOUR_PROJECT_ID });`}</code>
+              </li>
+              <li>
+                Replace <strong className="text-slate-200">YOUR_API_KEY</strong> and{" "}
+                <strong className="text-slate-200">YOUR_PROJECT_ID</strong> with your real values
+                (API key from Project Settings → API Keys; project ID from the project URL).
+              </li>
+              <li>Run your app and make one LLM call.</li>
+              <li>Open Live View and refresh — you should see the run.</li>
+            </ol>
+          </section>
+
+          {/* n8n */}
+          <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-8">
+            <h3 className="text-lg font-black uppercase tracking-widest text-white flex items-center gap-3">
+              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 text-sm">
+                3
+              </span>
+              n8n
+            </h3>
+            <ol className="list-decimal list-inside space-y-3 text-sm text-slate-300">
+              <li>
+                In your workflow, after the node that calls the LLM (e.g. OpenAI), add an{" "}
+                <strong className="text-slate-200">HTTP Request</strong> node.
+              </li>
+              <li>
+                Set the HTTP Request: <strong className="text-slate-200">Method</strong> = POST,{" "}
+                <strong className="text-slate-200">URL</strong> ={" "}
+                <code className="px-1.5 py-0.5 rounded bg-black/40 text-amber-300 font-mono text-xs">
+                  https://api.pluvian.ai/api/v1/api-calls
+                </code>
+                , <strong className="text-slate-200">Authentication</strong> = Header Auth → Header
+                name <code className="font-mono text-xs">Authorization</code>, Value{" "}
+                <code className="font-mono text-xs">Bearer YOUR_API_KEY</code>.
+              </li>
+              <li>
+                Body = JSON. Use this shape (fill{" "}
+                <code className="font-mono text-xs">request_data</code> and{" "}
+                <code className="font-mono text-xs">response_data</code> from the previous
+                node&apos;s output):
+                <br />
+                <pre className="mt-2 p-4 rounded-lg bg-black/50 border border-white/5 text-xs text-slate-300 overflow-x-auto">{`{
+  "project_id": YOUR_PROJECT_ID,
+  "agent_name": "my_n8n_workflow",
+  "request_data": { /* LLM request from previous node */ },
+  "response_data": { /* LLM response from previous node */ },
+  "latency_ms": 0,
+  "status_code": 200
+}`}</pre>
+              </li>
+              <li>
+                Run the workflow once. Then open Live View and refresh — you should see the run.
+              </li>
+            </ol>
+          </section>
+
+          {/* MCP */}
+          <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-8">
+            <h3 className="text-lg font-black uppercase tracking-widest text-white flex items-center gap-3">
+              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 text-sm">
+                4
+              </span>
+              MCP (Model Context Protocol)
+            </h3>
+            <ol className="list-decimal list-inside space-y-3 text-sm text-slate-300">
+              <li>
+                Where your MCP server or client gets the LLM request and response, add a small piece
+                of code that sends the same data to PluvianAI.
+              </li>
+              <li>
+                Send one HTTP POST to:{" "}
+                <code className="px-1.5 py-0.5 rounded bg-black/40 text-amber-300 font-mono text-xs">
+                  https://api.pluvian.ai/api/v1/api-calls
+                </code>
+              </li>
+              <li>
+                Headers:{" "}
+                <code className="font-mono text-xs">Authorization: Bearer YOUR_API_KEY</code>,{" "}
+                <code className="font-mono text-xs">Content-Type: application/json</code>
+              </li>
+              <li>
+                Body (JSON): <code className="font-mono text-xs">project_id</code>,{" "}
+                <code className="font-mono text-xs">agent_name</code> (e.g. &quot;mcp_agent&quot;),{" "}
+                <code className="font-mono text-xs">request_data</code>,{" "}
+                <code className="font-mono text-xs">response_data</code>,{" "}
+                <code className="font-mono text-xs">latency_ms</code> (optional, 0 if you don&apos;t
+                have it), <code className="font-mono text-xs">status_code</code> = 200.
+              </li>
+              <li>After one LLM call, check Live View — the run should appear.</li>
+            </ol>
+          </section>
+
+          {/* LangChain */}
+          <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-8">
+            <h3 className="text-lg font-black uppercase tracking-widest text-white flex items-center gap-3">
+              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-violet-500/20 text-violet-400 text-sm">
+                5
+              </span>
+              LangChain
+            </h3>
+            <ol className="list-decimal list-inside space-y-3 text-sm text-slate-300">
+              <li>
+                If your app is in Python or Node, the easiest way is to use our SDK: follow the{" "}
+                <strong className="text-slate-200">Python</strong> or{" "}
+                <strong className="text-slate-200">Node.js</strong> steps above in the same project
+                where you use LangChain. One init and all LLM calls will be sent to PluvianAI.
+              </li>
+              <li>
+                If you prefer not to use the SDK, after each LLM call in LangChain send the same
+                request/response to PluvianAI with a POST to{" "}
+                <code className="font-mono text-xs">https://api.pluvian.ai/api/v1/api-calls</code>{" "}
+                and the same JSON body as in the MCP section (project_id, agent_name, request_data,
+                response_data, latency_ms, status_code).
+              </li>
+            </ol>
+          </section>
+
+          {/* Direct API */}
+          <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-8">
+            <h3 className="text-lg font-black uppercase tracking-widest text-white flex items-center gap-3">
+              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-500/20 text-slate-400 text-sm">
+                6
+              </span>
+              Direct API (curl or any script)
+            </h3>
+            <ol className="list-decimal list-inside space-y-3 text-sm text-slate-300">
+              <li>
+                Get your API key (Project Settings → API Keys) and your project ID (from the URL).
+              </li>
+              <li>
+                Send a POST request to:{" "}
+                <code className="px-1.5 py-0.5 rounded bg-black/40 text-slate-300 font-mono text-xs">
+                  https://api.pluvian.ai/api/v1/api-calls
+                </code>
+              </li>
+              <li>
+                Headers:{" "}
+                <code className="font-mono text-xs">Authorization: Bearer YOUR_API_KEY</code>,{" "}
+                <code className="font-mono text-xs">Content-Type: application/json</code>
+              </li>
+              <li>
+                Body (JSON):
+                <br />
+                <pre className="mt-2 p-4 rounded-lg bg-black/50 border border-white/5 text-xs text-slate-300 overflow-x-auto">{`{
+  "project_id": 123,
+  "agent_name": "my_agent",
+  "request_data": { "messages": [...], "model": "gpt-4o" },
+  "response_data": { "choices": [...] },
+  "latency_ms": 150,
+  "status_code": 200
+}`}</pre>
+              </li>
+              <li>
+                If you get <strong className="text-emerald-400">202 Accepted</strong>, the run will
+                show up in Live View.
+              </li>
+            </ol>
+          </section>
+        </div>
+      ),
+    },
+    "when-things-dont-work": {
+      id: "when-things-dont-work",
+      title: "When things don't work",
+      icon: (
+        <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shadow-[0_0_30px_rgba(245,158,11,0.15)] mb-8">
+          <AlertTriangle className="w-8 h-8" />
+        </div>
+      ),
+      content: (
+        <div className="space-y-12">
+          <p className="text-xl text-slate-400 leading-relaxed max-w-4xl">
+            PluvianAI works best when you have a single node (agent) per Release Gate run and when
+            required keys and data are set. Below are common cases where the service blocks or
+            fails, and what to do.
+          </p>
+
+          <section className="space-y-4">
+            <h3 className="text-lg font-black uppercase tracking-widest text-white">
+              1. Release Gate won&apos;t run
+            </h3>
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-white/10 bg-black/20">
+                    <th className="px-4 py-3 text-slate-400 font-bold uppercase tracking-wider">
+                      Situation
+                    </th>
+                    <th className="px-4 py-3 text-slate-400 font-bold uppercase tracking-wider">
+                      What to do
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="text-slate-300">
+                  <tr className="border-b border-white/5">
+                    <td className="px-4 py-3 font-medium text-slate-200">
+                      Provider API key not registered (using your own model)
+                    </td>
+                    <td className="px-4 py-3">
+                      In Live View, open the node → <strong>Settings</strong> →{" "}
+                      <strong>Provider API Keys</strong>, then add the key for the provider (OpenAI,
+                      Anthropic, or Google) you use.
+                    </td>
+                  </tr>
+                  <tr className="border-b border-white/5">
+                    <td className="px-4 py-3 font-medium text-slate-200">
+                      No model selected (platform override with empty model)
+                    </td>
+                    <td className="px-4 py-3">
+                      Choose a model in Candidate Overrides or switch back to the detected model.
+                    </td>
+                  </tr>
+                  <tr className="border-b border-white/5">
+                    <td className="px-4 py-3 font-medium text-slate-200">
+                      Provider could not be detected
+                    </td>
+                    <td className="px-4 py-3">
+                      Ensure the selected data includes valid request/response from a supported
+                      provider. Check the latest node snapshot in Live View.
+                    </td>
+                  </tr>
+                  <tr className="border-b border-white/5">
+                    <td className="px-4 py-3 font-medium text-slate-200">
+                      No agent or data selected
+                    </td>
+                    <td className="px-4 py-3">
+                      Use <strong>Select node &amp; data</strong> and pick an agent and at least one
+                      snapshot or dataset.
+                    </td>
+                  </tr>
+                  <tr className="border-b border-white/5">
+                    <td className="px-4 py-3 font-medium text-slate-200">
+                      Data from more than one node
+                    </td>
+                    <td className="px-4 py-3">
+                      Re-open <strong>Select node &amp; data</strong> and choose snapshots or
+                      datasets that belong to <strong>one node only</strong>. Release Gate runs one
+                      node at a time.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <h3 className="text-lg font-black uppercase tracking-widest text-white">
+              2. Limits and quotas
+            </h3>
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-white/10 bg-black/20">
+                    <th className="px-4 py-3 text-slate-400 font-bold uppercase tracking-wider">
+                      Situation
+                    </th>
+                    <th className="px-4 py-3 text-slate-400 font-bold uppercase tracking-wider">
+                      What to do
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="text-slate-300">
+                  <tr className="border-b border-white/5">
+                    <td className="px-4 py-3 font-medium text-slate-200">
+                      Snapshot limit reached (e.g. free plan monthly cap)
+                    </td>
+                    <td className="px-4 py-3">
+                      Wait for the next billing cycle or upgrade your plan.
+                    </td>
+                  </tr>
+                  <tr className="border-b border-white/5">
+                    <td className="px-4 py-3 font-medium text-slate-200">
+                      Platform replay credits exhausted (when using PluvianAI-hosted model)
+                    </td>
+                    <td className="px-4 py-3">
+                      Use your own provider key (BYOK) for the node so the run does not use platform
+                      credits, or upgrade your plan.
+                    </td>
+                  </tr>
+                  <tr className="border-b border-white/5">
+                    <td className="px-4 py-3 font-medium text-slate-200">Project limit reached</td>
+                    <td className="px-4 py-3">Upgrade your plan or remove an existing project.</td>
+                  </tr>
+                  <tr className="border-b border-white/5">
+                    <td className="px-4 py-3 font-medium text-slate-200">Rate limit</td>
+                    <td className="px-4 py-3">
+                      Reduce request frequency; retry after the limit window resets.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <h3 className="text-lg font-black uppercase tracking-widest text-white">
+              3. Data and policy
+            </h3>
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-white/10 bg-black/20">
+                    <th className="px-4 py-3 text-slate-400 font-bold uppercase tracking-wider">
+                      Situation
+                    </th>
+                    <th className="px-4 py-3 text-slate-400 font-bold uppercase tracking-wider">
+                      What to do
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="text-slate-300">
+                  <tr className="border-b border-white/5">
+                    <td className="px-4 py-3 font-medium text-slate-200">
+                      Dataset spans multiple nodes
+                    </td>
+                    <td className="px-4 py-3">
+                      Create or select a dataset that contains logs from a single node only.
+                    </td>
+                  </tr>
+                  <tr className="border-b border-white/5">
+                    <td className="px-4 py-3 font-medium text-slate-200">
+                      Unsupported or unknown provider
+                    </td>
+                    <td className="px-4 py-3">
+                      Use request/response formats from supported providers (OpenAI, Anthropic,
+                      Google).
+                    </td>
+                  </tr>
+                  <tr className="border-b border-white/5">
+                    <td className="px-4 py-3 font-medium text-slate-200">
+                      Tool arguments too large (e.g. over 64KB)
+                    </td>
+                    <td className="px-4 py-3">
+                      Policy layer may mark the step as invalid. Reduce payload size or split the
+                      workflow if possible.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <h3 className="text-lg font-black uppercase tracking-widest text-white">
+              4. Access and auth
+            </h3>
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-white/10 bg-black/20">
+                    <th className="px-4 py-3 text-slate-400 font-bold uppercase tracking-wider">
+                      Situation
+                    </th>
+                    <th className="px-4 py-3 text-slate-400 font-bold uppercase tracking-wider">
+                      What to do
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="text-slate-300">
+                  <tr className="border-b border-white/5">
+                    <td className="px-4 py-3 font-medium text-slate-200">
+                      Wrong or missing PluvianAI API key (at init)
+                    </td>
+                    <td className="px-4 py-3">
+                      Get a key from <strong>Settings → Profile</strong> (Get your PluvianAI API
+                      key) and use it in your app init.
+                    </td>
+                  </tr>
+                  <tr className="border-b border-white/5">
+                    <td className="px-4 py-3 font-medium text-slate-200">
+                      No access to the project
+                    </td>
+                    <td className="px-4 py-3">
+                      Ensure you are a member of the organization/project with the right role.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
       ),
     },
@@ -374,8 +996,8 @@ Content-Type: application/json
       content: (
         <div className="space-y-12">
           <p className="text-2xl text-slate-400 leading-relaxed font-medium max-w-4xl tracking-tight">
-            Deep dive into the key concepts that power PluvianAI&apos;s node-level regression guard: Live View, behavior
-            diff, Atomic Signals, and Policy versus Evaluation.
+            Deep dive into the key concepts that power PluvianAI&apos;s node-level regression guard:
+            Live View, behavior diff, Atomic Signals, and Policy versus Evaluation.
           </p>
           <div className="grid md:grid-cols-2 gap-6">
             <div className="p-10 rounded-[32px] bg-white/[0.02] border border-white/10 hover:border-indigo-500/30 transition-colors relative overflow-hidden group">
@@ -387,9 +1009,10 @@ Content-Type: application/json
                 Behavior Diff
               </h4>
               <p className="text-sm text-slate-400 leading-relaxed relative z-10">
-                PluvianAI compares how a node behaves before and after a change. It derives canonical steps from each
-                response, computes sequence and tool-usage distance between baseline and candidate traces, and labels
-                changes as Stable, Minor, or Major to guide deployment decisions.
+                PluvianAI compares how a node behaves before and after a change. It derives
+                canonical steps from each response, computes sequence and tool-usage distance
+                between baseline and candidate traces, and labels changes as Stable, Minor, or Major
+                to guide deployment decisions.
               </p>
             </div>
 
@@ -398,11 +1021,13 @@ Content-Type: application/json
               <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-6 border border-emerald-500/20 relative z-10">
                 <Zap className="w-5 h-5 text-emerald-400" />
               </div>
-              <h4 className="text-lg font-black uppercase tracking-widest mb-4 text-white relative z-10">Atomic Signals</h4>
+              <h4 className="text-lg font-black uppercase tracking-widest mb-4 text-white relative z-10">
+                Atomic Signals
+              </h4>
               <p className="text-sm text-slate-400 leading-relaxed relative z-10">
-                Atomic Signals are rule-based checks on each snapshot – for example JSON validity, length, latency,
-                refusal, PII, and tool policy. They provide simple, deterministic signals that can be combined into
-                dashboards and gates.
+                Atomic Signals are rule-based checks on each snapshot – for example JSON validity,
+                length, latency, refusal, PII, and tool policy. They provide simple, deterministic
+                signals that can be combined into dashboards and gates.
               </p>
             </div>
 
@@ -411,9 +1036,13 @@ Content-Type: application/json
               <div className="w-12 h-12 rounded-xl bg-rose-500/10 flex items-center justify-center mb-6 border border-rose-500/20 relative z-10">
                 <Terminal className="w-5 h-5 text-rose-400" />
               </div>
-              <h4 className="text-lg font-black uppercase tracking-widest mb-4 text-white relative z-10">Evaluation vs Policy Protocol</h4>
+              <h4 className="text-lg font-black uppercase tracking-widest mb-4 text-white relative z-10">
+                Evaluation vs Policy Protocol
+              </h4>
               <p className="text-sm text-slate-400 leading-relaxed max-w-3xl relative z-10">
-                Evaluation measures what happened on each trace; Policy enforces what must or must not happen. Use Evaluation for holistic monitoring and regression trends, and rely on Policy for strict release gates and deterministic validation constraints.
+                Evaluation measures what happened on each trace; Policy enforces what must or must
+                not happen. Use Evaluation for holistic monitoring and regression trends, and rely
+                on Policy for strict release gates and deterministic validation constraints.
               </p>
             </div>
           </div>
@@ -431,8 +1060,9 @@ Content-Type: application/json
       content: (
         <div className="space-y-12">
           <p className="text-2xl text-slate-400 leading-relaxed font-medium max-w-4xl tracking-tight">
-            The PluvianAI guard layer sits between your orchestrator and LLM providers, or receives mirrored traces via
-            HTTP. It evaluates behavior before and after changes so you can ship new configs with confidence.
+            The PluvianAI guard layer sits between your orchestrator and LLM providers, or receives
+            mirrored traces via HTTP. It evaluates behavior before and after changes so you can ship
+            new configs with confidence.
           </p>
           <div className="p-20 rounded-[40px] bg-white/[0.02] border border-white/10 flex flex-col items-center justify-center gap-6 relative overflow-hidden backdrop-blur-xl">
             <div className="absolute inset-0 bg-flowing-lines opacity-[0.03] pointer-events-none" />
@@ -440,7 +1070,9 @@ Content-Type: application/json
 
             <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8 relative z-10 w-full max-w-3xl justify-center">
               <div className="p-6 w-full md:w-48 text-center rounded-2xl bg-black/40 border border-white/10 shadow-lg">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-2">Source</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-2">
+                  Source
+                </span>
                 <span className="text-sm font-bold text-white">LLM MODEL</span>
               </div>
 
@@ -450,7 +1082,9 @@ Content-Type: application/json
 
               <div className="p-8 w-full md:w-56 text-center rounded-3xl bg-cyan-500/10 border border-cyan-500/40 shadow-[0_0_40px_rgba(6,182,212,0.2)] relative">
                 <div className="absolute inset-0 rounded-3xl border border-cyan-400/50 animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-cyan-500 block mb-2">Gateway</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-cyan-500 block mb-2">
+                  Gateway
+                </span>
                 <span className="text-base font-black text-white">PLUVIAN GUARD</span>
               </div>
 
@@ -459,7 +1093,9 @@ Content-Type: application/json
               </div>
 
               <div className="p-6 w-full md:w-48 text-center rounded-2xl bg-black/40 border border-white/10 shadow-lg">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-2">Destination</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-2">
+                  Destination
+                </span>
                 <span className="text-sm font-bold text-white">END USER</span>
               </div>
             </div>
@@ -478,8 +1114,9 @@ Content-Type: application/json
       content: (
         <div className="space-y-8">
           <p className="text-xl text-slate-400 leading-relaxed max-w-4xl">
-            Define rule-based policies on tool usage and trace structure. Logic Guard evaluates forbidden tools,
-            allowlists, ordering, and argument schemas so you can enforce strict rules in Release Gate and CI.
+            Define rule-based policies on tool usage and trace structure. Logic Guard evaluates
+            forbidden tools, allowlists, ordering, and argument schemas so you can enforce strict
+            rules in Release Gate and CI.
           </p>
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-6 max-w-4xl">
             <h4 className="text-base font-black uppercase tracking-[0.2em] text-slate-300">
@@ -503,8 +1140,9 @@ Content-Type: application/json
       content: (
         <div className="space-y-8">
           <p className="text-xl text-slate-400 leading-relaxed max-w-4xl">
-            Apply basic security checks such as PII masking and prompt firewall rules to traffic routed through the
-            PluvianAI proxy. These controls help reduce accidental leakage of sensitive data and system prompts.
+            Apply basic security checks such as PII masking and prompt firewall rules to traffic
+            routed through the PluvianAI proxy. These controls help reduce accidental leakage of
+            sensitive data and system prompts.
           </p>
         </div>
       ),
@@ -516,8 +1154,9 @@ Content-Type: application/json
       content: (
         <div className="space-y-8">
           <p className="text-xl text-slate-400 leading-relaxed max-w-4xl">
-            Snapshots and evaluation results are stored for your data retention window (for example, 7 days on the free
-            plan). Replay past traces in Release Gate to compare behavior under new models and prompts.
+            Snapshots and evaluation results are stored for your data retention window (for example,
+            7 days on the free plan). Replay past traces in Release Gate to compare behavior under
+            new models and prompts.
           </p>
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-6 max-w-4xl">
             <h4 className="text-base font-black uppercase tracking-[0.2em] text-slate-300">
@@ -540,6 +1179,8 @@ Content-Type: application/json
       links: [
         { id: "introduction", label: "Introduction" },
         { id: "quickstart", label: "Quickstart" },
+        { id: "integrations", label: "Integrations by tool" },
+        { id: "when-things-dont-work", label: "When things don't work" },
         { id: "key-concepts", label: "Key Concepts" },
         { id: "architecture", label: "Architecture" },
       ],
@@ -556,34 +1197,8 @@ Content-Type: application/json
 
   return (
     <div className="min-h-screen bg-[#030303] text-white selection:bg-emerald-500/30 font-sans">
-      {/* 1. Navbar */}
-      <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-[#030303]/80 backdrop-blur-xl">
-        <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-4 group">
-              <div className="text-emerald-500 transform group-hover:scale-110 transition-transform duration-300">
-                <RobotBirdIcon size={32} />
-              </div>
-              <span className="text-xl font-bold tracking-tight text-white group-hover:text-emerald-400 transition-colors">
-                PluvianAI
-              </span>
-            </Link>
-          </div>
-
-          <div className="flex items-center gap-8 lg:gap-10">
-            <div className="hidden md:flex items-center gap-6 text-xs font-black uppercase tracking-widest">
-              <Link href="/login" className="text-slate-400 hover:text-white transition-colors">
-                Sign In
-              </Link>
-            </div>
-            <Link href="/organizations">
-              <Button className="bg-emerald-500 text-black font-black px-6 h-10 text-xs uppercase tracking-widest rounded-lg shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:scale-105 hover:bg-emerald-400 whitespace-nowrap">
-                Open Console
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </nav>
+      {/* 1. Navbar (shared with landing) */}
+      <MarketingNavbar active="docs" />
 
       <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16 py-[160px] flex gap-16 relative">
         {/* Ambient Overlays */}
@@ -605,10 +1220,11 @@ Content-Type: application/json
                       key={item.id}
                       onClick={() => setActiveSection(item.id as SectionId)}
                       className={`flex w-full items-center justify-between px-4 py-3.5 rounded-xl transition-all text-left text-sm font-bold
-                          ${activeSection === item.id
-                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]"
-                          : "text-slate-400 hover:bg-white/[0.03] hover:text-slate-200 border border-transparent"
-                        }`}
+                          ${
+                            activeSection === item.id
+                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]"
+                              : "text-slate-400 hover:bg-white/[0.03] hover:text-slate-200 border border-transparent"
+                          }`}
                     >
                       {item.label}
                       {activeSection === item.id && (
@@ -633,7 +1249,9 @@ Content-Type: application/json
               <div className="mb-8">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-2 h-2 rounded-full bg-slate-500" />
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Documentation Section</p>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
+                    Documentation Section
+                  </p>
                 </div>
                 <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter mb-8 text-white">
                   {DOCS_CONTENT[activeSection].title}

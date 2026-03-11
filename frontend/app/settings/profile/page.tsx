@@ -321,7 +321,9 @@ export default function ProfileSettingsPage() {
               <p className="text-xs uppercase tracking-widest font-bold text-amber-300">
                 Save This Key Now (Shown Once)
               </p>
-              <div className="font-mono text-sm break-all text-amber-100">{newlyCreatedKey.api_key}</div>
+              <div className="font-mono text-sm break-all text-amber-100">
+                {newlyCreatedKey.api_key}
+              </div>
               <Button variant="outline" onClick={handleCopy}>
                 <Copy className="w-4 h-4 mr-2" />
                 Copy key
@@ -403,4 +405,3 @@ export default function ProfileSettingsPage() {
     </div>
   );
 }
-

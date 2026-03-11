@@ -322,13 +322,13 @@ Organization (조직)
 
 ### 4.3 SDK
 
-**Python SDK** (제품명: PluvianAI, 패키지명: agentguard):
-- `agentguard` 패키지
+**Python SDK** (제품명: PluvianAI, 패키지명: pluvianai):
+- `pluvianai` 패키지
 - LLM 호출 인터셉션
 - 비동기/동기 지원
 
-**Node.js SDK** (제품명: PluvianAI, 패키지명: @agentguard/sdk):
-- `@agentguard/sdk` 패키지
+**Node.js SDK** (제품명: PluvianAI, 패키지명: pluvianai):
+- `pluvianai` 패키지
 - TypeScript 지원
 - Promise 기반 API
 

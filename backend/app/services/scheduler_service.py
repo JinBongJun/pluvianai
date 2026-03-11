@@ -283,23 +283,34 @@ class SchedulerService:
             projects = db.query(Project).filter(Project.is_active.is_(True)).all()
             logger.info(f"Found {len(projects)} active projects")
 
-            total_cleaned = 0
+            total_snapshots_cleaned = 0
+            total_release_gate_reports_cleaned = 0
             lifecycle_service = DataLifecycleService(db)
 
             for project in projects:
                 try:
                     # Run cleanup for this project
                     result = lifecycle_service.cleanup_expired_data(project_id=project.id)
-                    if result.get("deleted_count", 0) > 0:
-                        total_cleaned += result["deleted_count"]
+                    deleted_snapshots = result.get("deleted_snapshots_count", result.get("deleted_count", 0))
+                    deleted_reports = result.get("deleted_release_gate_reports_count", 0)
+                    if deleted_snapshots > 0 or deleted_reports > 0:
+                        total_snapshots_cleaned += deleted_snapshots
+                        total_release_gate_reports_cleaned += deleted_reports
                         logger.info(
-                            f"Project {project.id}: Cleaned up {result['deleted_count']} expired snapshots"
+                            "Project %s: Cleaned up %s expired snapshots and %s expired release-gate history records",
+                            project.id,
+                            deleted_snapshots,
+                            deleted_reports,
                         )
                 except Exception as e:
                     logger.error(f"Error cleaning up data for project {project.id}: {str(e)}")
                     continue
 
-            logger.info(f"Scheduled data lifecycle cleanup completed: {total_cleaned} snapshots cleaned")
+            logger.info(
+                "Scheduled data lifecycle cleanup completed: %s snapshots cleaned, %s release-gate history records purged",
+                total_snapshots_cleaned,
+                total_release_gate_reports_cleaned,
+            )
         except Exception as e:
             logger.error(f"Error in scheduled data lifecycle cleanup: {str(e)}")
         finally:
