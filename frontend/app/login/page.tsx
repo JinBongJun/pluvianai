@@ -8,7 +8,7 @@ import { authAPI } from "@/lib/api";
 import { getAuthErrorMessage } from "@/lib/auth-messages";
 import posthog from "posthog-js";
 import { passwordStrength } from "@/lib/validation";
-import { Lock, Mail, User, Eye, EyeOff, ArrowLeft, ArrowRight } from "lucide-react";
+import { Lock, Mail, User, Eye, EyeOff, ArrowLeft, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useLoading } from "@/hooks/useLoading";
@@ -31,10 +31,18 @@ function SubmitButton({
     <button
       type="submit"
       disabled={isDisabled}
-      className="w-full flex justify-center py-5 px-4 bg-emerald-500 hover:bg-emerald-400 text-black text-base font-black rounded-2xl shadow-[0_10px_30px_-5px_rgba(16,185,129,0.3)] disabled:opacity-50 transition-all group"
+      className="w-full h-14 flex items-center justify-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_30px_-5px_rgba(16,185,129,0.5)] hover:shadow-[0_0_40px_-5px_rgba(16,185,129,0.6)] transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
     >
-      {isSubmitting ? "Authenticating..." : isLogin ? "Access Clinical Lab" : "Register Profile"}
-      <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1.5 transition-transform" />
+      <span className="text-base">
+        {isSubmitting
+          ? isLogin
+            ? "Verifying..."
+            : "Initializing..."
+          : isLogin
+            ? "Commence Session"
+            : "Port Protocol"}
+      </span>
+      {!isSubmitting && <ArrowRight className="w-5 h-5 stroke-[2.5px]" />}
     </button>
   );
 }
@@ -194,91 +202,96 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#0a0a0c] selection:bg-emerald-500/30 font-sans relative">
+    <div className="min-h-screen flex bg-[#030303] selection:bg-emerald-500/30 font-sans relative overflow-hidden">
+      {/* Global Antigravity Background */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#030303]">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#101018,transparent_50%)] opacity-50" />
+
+        {/* 1. Global Diagonal Curtain Lights */}
+        <div className="absolute top-[-10%] right-[-10%] w-[120%] h-[500px] bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent -rotate-[35deg] blur-[100px] pointer-events-none mix-blend-screen" />
+        <div className="absolute top-[20%] left-[-20%] w-[150%] h-[600px] bg-gradient-to-r from-transparent via-emerald-500/10 to-transparent -rotate-[35deg] blur-[120px] pointer-events-none mix-blend-screen" />
+
+        {/* 2. Geometric Light Beams */}
+        <div className="absolute top-1/2 -left-[20%] w-[40%] h-[120%] -translate-y-1/2 rounded-[100%] pointer-events-none opacity-40 border-r-[2px] border-cyan-400/30 bg-gradient-to-l from-cyan-500/20 via-transparent to-transparent shadow-[inset_-20px_0_100px_rgba(34,211,238,0.2)] mix-blend-screen" />
+        <div className="absolute top-1/2 -right-[20%] w-[40%] h-[120%] -translate-y-1/2 rounded-[100%] pointer-events-none opacity-30 border-l-[2px] border-emerald-400/30 bg-gradient-to-r from-emerald-500/20 via-transparent to-transparent shadow-[inset_20px_0_100px_rgba(16,185,129,0.2)] mix-blend-screen" />
+
+        {/* 3. High-Density Floating Particles */}
+        <div className="absolute top-[10%] left-[30%] w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.8)] animate-pulse" />
+        <div className="absolute bottom-[20%] left-[10%] w-1.5 h-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.6)]" />
+        <div className="absolute top-[40%] right-[15%] w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.8)] animate-bounce duration-[3000ms]" />
+        <div className="absolute bottom-[10%] right-[30%] w-2 h-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.6)]" />
+      </div>
+
       {/* Back Button */}
       <Link
         href="/"
-        className="fixed top-8 left-8 z-50 flex items-center gap-2 text-slate-400 hover:text-white font-bold text-xs uppercase tracking-widest transition-all group bg-black/20 backdrop-blur-md px-4 py-2 rounded-full border border-white/5 hover:border-white/20"
+        className="fixed top-8 left-8 z-50 flex items-center gap-2 text-slate-400 hover:text-white font-black text-[10px] uppercase tracking-[0.3em] transition-all group bg-black/40 backdrop-blur-xl px-5 py-2.5 rounded-full border border-white/10 hover:border-emerald-500/30 shadow-2xl"
       >
-        <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
+        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1.5 transition-transform stroke-[3px]" />
         Back to Home
       </Link>
 
       {/* Left Section: Visual & Marketing */}
-      <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden items-center justify-center border-r border-white/5">
+      <div className="hidden lg:flex lg:w-[50%] relative overflow-hidden items-center justify-center border-r border-white/5">
         <div className="absolute inset-0 bg-black">
           <Image
-            src="/images/Croc-Bird%20image.png"
-            alt="Pluvian AI Symbiosis"
+            src="/images/agentic-lab.png"
+            alt="Pluvian AI Laboratory"
             fill
             priority
-            sizes="55vw"
-            className="object-cover opacity-70 transition-opacity duration-700"
+            sizes="50vw"
+            className="object-cover opacity-60 scale-105"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-black" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/20 to-black" />
         </div>
 
-        <div className="relative z-10 p-12 max-w-2xl bg-[#0a0a0c]/40 backdrop-blur-md rounded-[40px] m-10 border border-white/10 shadow-2xl">
-          <div className="mb-12">
-            {/* Logo */}
-            <div className="relative w-16 h-16 mb-8">
-              <svg
-                viewBox="0 0 100 100"
-                className="w-full h-full drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]"
-              >
-                <path
-                  d="M20 50 C 20 20, 80 20, 80 50 L 80 80 L 20 80 Z"
-                  fill="none"
-                  stroke="#06b6d4"
-                  strokeWidth="4"
-                />
-                <circle cx="40" cy="45" r="5" fill="#10b981" />
-                <path d="M60 60 L 90 40" stroke="#10b981" strokeWidth="2" />
-              </svg>
-            </div>
-            <h1 className="text-6xl font-black text-white leading-tight mb-6">
-              Secure your <span className="text-emerald-400">Agentic</span> future.
-            </h1>
-            <p className="text-xl text-slate-300 font-medium leading-relaxed">
-              PluvianAI provides high-resolution clinical validation for modern AI agents. Join the
-              symbiosis of safety and speed.
-            </p>
-          </div>
+        <div className="relative z-10 p-12 max-w-xl bg-black/20 backdrop-blur-3xl rounded-[40px] m-10 border border-white/10 shadow-[0_0_80px_rgba(0,0,0,0.5)] overflow-hidden">
+          {/* Rim Highlight */}
+          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-100" />
 
-          <div className="grid grid-cols-1 gap-8 pt-8 border-t border-white/10">
-            <div>
-              <p className="text-3xl font-black text-white mb-2">13+</p>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                Atomic Signals tracked
-              </p>
+          <div className="relative z-10">
+            {/* Logo */}
+            <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] mb-10 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+              <Plus className="w-3.5 h-3.5 stroke-[3px]" />
+              PluvianAI Protocol
             </div>
+
+            <h1 className="text-5xl md:text-6xl font-black text-white leading-none tracking-tighter uppercase mb-6 drop-shadow-2xl">
+              Secure your <br />
+              <span className="text-emerald-500">Agentic</span> future.
+            </h1>
+            <p className="text-lg text-slate-400 font-medium leading-relaxed max-w-md">
+              Validate and ship AI agents with confidence. <br />
+              <span className="text-slate-200">Safety and speed, together.</span>
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Right Section: Auth Form — render after mount to avoid hydration mismatch (searchParams/URL differ server vs client) */}
-      <div className="w-full lg:w-[45%] flex flex-col items-center justify-center p-8 sm:p-12 relative overflow-hidden">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-emerald-500/5 blur-[120px] rounded-full pointer-events-none" />
+      {/* Right Section: Auth Form */}
+      <div className="w-full lg:w-[50%] flex flex-col items-center justify-center p-8 sm:p-12 relative z-10">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-emerald-500/5 blur-[120px] rounded-full pointer-events-none mix-blend-screen" />
 
         {!mounted ? (
-          <div
-            className="w-full max-w-[420px] min-h-[360px] relative z-10 mt-12 lg:mt-0"
-            aria-hidden="true"
-          />
+          <div className="w-full max-w-[440px] min-h-[400px]" aria-hidden="true" />
         ) : (
-          <div className="w-full max-w-[420px] space-y-10 relative z-10 mt-12 lg:mt-0">
-            <div className="text-center lg:text-left">
-              <h2 className="text-4xl font-black tracking-tight text-white mb-3">
+          <div className="w-full max-w-[440px] space-y-10 relative z-10">
+            <div className="text-center">
+              <h2 className="text-4xl md:text-5xl font-black tracking-tighter text-white uppercase mb-3 leading-none">
                 {isLogin ? "Verify Credentials" : "Initialize Account"}
               </h2>
-              <p className="text-sm text-slate-500 font-black uppercase tracking-[0.2em]">
-                {isLogin ? "Enter Laboratory Access code" : "Register professional lab profile"}
+              <p className="text-[10px] text-emerald-400 font-black uppercase tracking-[0.4em]">
+                {isLogin ? "IDENTITY VERIFICATION REQUIRED" : "ACCESS PROTOCOL INITIATION"}
               </p>
             </div>
 
-            <div className="bg-[#0f0f12]/60 backdrop-blur-3xl border border-white/5 p-8 rounded-[32px] shadow-[0_20px_50px_-15px_rgba(0,0,0,0.5)]">
+            <div className="bg-[#1a1a1e]/90 border border-white/[0.15] p-10 rounded-[40px] backdrop-blur-3xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] relative overflow-hidden group">
+              {/* Top Rim Highlight */}
+              <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-100 z-10" />
+              <div className="absolute top-[1px] inset-x-10 h-16 bg-gradient-to-b from-white/[0.05] to-transparent pointer-events-none z-10" />
+
               <form
-                className="space-y-6"
+                className="space-y-6 relative z-10"
                 action={isLogin ? undefined : registerFormAction}
                 onSubmit={isLogin ? handleClientLogin : undefined}
               >
@@ -314,18 +327,18 @@ export default function LoginPage() {
                         htmlFor="full-name"
                         className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1"
                       >
-                        Clinical Identity
+                        Full name
                       </label>
                       <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-emerald-400 transition-colors">
-                          <User className="h-4 w-4" />
+                          <User className="h-5 w-5 stroke-[1.5px]" />
                         </div>
                         <input
                           id="full-name"
                           name="fullName"
                           type="text"
                           required={!isLogin}
-                          className="block w-full pl-12 pr-4 py-4 bg-white/[0.03] border border-white/5 rounded-2xl text-white placeholder-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm font-bold"
+                          className="w-full pl-14 pr-6 py-4 bg-[#0a0a0c]/80 border border-white/20 rounded-2xl text-lg text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/60 focus:ring-4 focus:ring-emerald-500/10 transition-all font-black shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]"
                           placeholder="Dr. John Doe"
                           onInvalid={e =>
                             (e.target as HTMLInputElement).setCustomValidity(
@@ -348,7 +361,7 @@ export default function LoginPage() {
                     </label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-emerald-400 transition-colors">
-                        <Mail className="h-4 w-4" />
+                        <Mail className="h-5 w-5 stroke-[1.5px]" />
                       </div>
                       <input
                         id="email-address"
@@ -356,7 +369,7 @@ export default function LoginPage() {
                         type="email"
                         autoComplete="email"
                         required
-                        className="block w-full pl-12 pr-4 py-4 bg-white/[0.03] border border-white/5 rounded-2xl text-white placeholder-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm font-bold"
+                        className="w-full pl-14 pr-6 py-4 bg-[#0a0a0c]/80 border border-white/20 rounded-2xl text-lg text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/60 focus:ring-4 focus:ring-emerald-500/10 transition-all font-black shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]"
                         placeholder="name@company.com"
                         onInvalid={e =>
                           (e.target as HTMLInputElement).setCustomValidity(
@@ -378,7 +391,7 @@ export default function LoginPage() {
                     </label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-emerald-400 transition-colors">
-                        <Lock className="h-4 w-4" />
+                        <Lock className="h-5 w-5 stroke-[1.5px]" />
                       </div>
                       <input
                         id="password"
@@ -386,7 +399,7 @@ export default function LoginPage() {
                         type={showPassword ? "text" : "password"}
                         autoComplete="current-password"
                         required
-                        className="block w-full pl-12 pr-12 py-4 bg-white/[0.03] border border-white/5 rounded-2xl text-white placeholder-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm font-bold"
+                        className="w-full pl-14 pr-12 py-4 bg-[#0a0a0c]/80 border border-white/20 rounded-2xl text-lg text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/60 focus:ring-4 focus:ring-emerald-500/10 transition-all font-black shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]"
                         placeholder="••••••••"
                         value={password}
                         onChange={e => setPassword(e.target.value)}
@@ -440,7 +453,7 @@ export default function LoginPage() {
                           className="mt-1 h-5 w-5 border-white/10 rounded-lg bg-black text-emerald-500 focus:ring-emerald-500/20 transition-all"
                           onInvalid={e =>
                             (e.target as HTMLInputElement).setCustomValidity(
-                              "Please accept the clinical protocol to proceed"
+                              "Please accept the terms to proceed"
                             )
                           }
                           onInput={e => (e.target as HTMLInputElement).setCustomValidity("")}
@@ -450,10 +463,10 @@ export default function LoginPage() {
                           className="text-[11px] text-slate-400 cursor-pointer leading-relaxed font-bold"
                         >
                           <span className="font-black text-emerald-400 uppercase tracking-widest block mb-1 underline decoration-emerald-500/30">
-                            Clinical Protocol accepted
+                            Terms accepted
                           </span>
-                          I formalize clinical accountability for my agents. I understand that AI
-                          results are non-deterministic.
+                          I understand that AI outputs are non-deterministic and I use PluvianAI at
+                          my own responsibility.
                         </label>
                       </div>
                     </div>
@@ -478,9 +491,9 @@ export default function LoginPage() {
                       setPassword("");
                       setLiabilityAgreementAccepted(false);
                     }}
-                    className="text-sm font-black text-slate-500 hover:text-emerald-400 transition-colors uppercase tracking-widest"
+                    className="text-xs font-black text-slate-500 hover:text-emerald-400 transition-colors uppercase tracking-[0.2em]"
                   >
-                    {isLogin ? "Need credentials? Register" : "Already a clinical user? Sign in"}
+                    {isLogin ? "Create credentials" : "Return to sign in"}
                   </button>
                 </div>
               </form>
@@ -488,7 +501,7 @@ export default function LoginPage() {
 
             <div className="text-center lg:text-left">
               <p className="text-[10px] font-black text-slate-700 uppercase tracking-[0.4em]">
-                © 2026 PluvianAI Clinical Labs • Ver. 2.9.1
+                © 2026 PluvianAI • Ver. 2.9.1
               </p>
             </div>
           </div>

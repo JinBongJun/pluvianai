@@ -10,8 +10,6 @@ import {
   Square,
   CheckSquare,
   Save,
-  Zap,
-  Coins,
   Hash,
   AlignLeft,
   CheckCircle2,
@@ -350,7 +348,9 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
   const [isSavingToDatasets, setIsSavingToDatasets] = React.useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = React.useState(false);
   const [snapshotIdsToSave, setSnapshotIdsToSave] = React.useState<number[]>([]);
-  const [selectedDatasetIdsForSave, setSelectedDatasetIdsForSave] = React.useState<Set<string>>(new Set());
+  const [selectedDatasetIdsForSave, setSelectedDatasetIdsForSave] = React.useState<Set<string>>(
+    new Set()
+  );
   const [newDatasetName, setNewDatasetName] = React.useState("");
 
   // Keep log selection strictly scoped to the current node.
@@ -421,7 +421,9 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
 
   // List uses light mode (no payload/long text); detail modal always needs full snapshot. Cache by (projectId, snapshotId).
   const snapshotDetailCacheRef = React.useRef<Map<string, ClinicalSnapshot>>(new Map());
-  const [detailFetchedSnapshot, setDetailFetchedSnapshot] = React.useState<ClinicalSnapshot | null>(null);
+  const [detailFetchedSnapshot, setDetailFetchedSnapshot] = React.useState<ClinicalSnapshot | null>(
+    null
+  );
   React.useEffect(() => {
     if (!expandedId || !projectId) {
       setDetailFetchedSnapshot(null);
@@ -577,16 +579,16 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
         const summary = report?.summary as Record<string, unknown> | undefined;
         const violations = Array.isArray(report?.violations) ? report.violations : [];
         const failedRuleIds = Array.from(
-          new Set<string>(violations.map((v: { rule_id?: unknown }) => String(v?.rule_id || "")).filter(Boolean))
+          new Set<string>(
+            violations.map((v: { rule_id?: unknown }) => String(v?.rule_id || "")).filter(Boolean)
+          )
         );
         next[traceId] = {
           status: status as "pass" | "fail",
           violationCount: Number(summary?.violation_count ?? violations.length ?? 0),
           reportId: String(report?.id ?? ""),
           rulesetHash: String(summary?.ruleset_hash ?? report?.ruleset_hash ?? ""),
-          ruleSnapshot: Array.isArray(summary?.rule_snapshot)
-            ? summary.rule_snapshot
-            : undefined,
+          ruleSnapshot: Array.isArray(summary?.rule_snapshot) ? summary.rule_snapshot : undefined,
           message: status === "pass" ? "Policy check passed." : "Policy violations detected.",
           failedRuleIds,
         };
@@ -668,13 +670,13 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     setIsSavingToDatasets(true);
     try {
       const evalConfig = savedEvalConfig as Record<string, unknown>;
-      const ruleSnapshot = configuredPolicies.map(
-        (r: { id?: unknown; updated_at?: unknown; rule_json?: unknown }) => ({
+      const ruleSnapshot = configuredPolicies
+        .map((r: { id?: unknown; updated_at?: unknown; rule_json?: unknown }) => ({
           id: String(r.id ?? ""),
           revision: r.updated_at != null ? String(r.updated_at) : undefined,
           rule_json: (r.rule_json as Record<string, unknown>) || {},
-        })
-      ).filter(r => r.id);
+        }))
+        .filter(r => r.id);
 
       let createdDatasetName: string | null = null;
       if (trimmedName) {
@@ -741,7 +743,11 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
 
   if (isLoading) {
     return (
-      <div className="flex flex-col h-full bg-[#111216]" role="status" aria-label="Loading clinical log">
+      <div
+        className="flex flex-col h-full bg-[#111216]"
+        role="status"
+        aria-label="Loading clinical log"
+      >
         <div className="p-5 flex items-center justify-between gap-4 border-b border-white/[0.04] bg-[#18191e]">
           <div className="animate-pulse h-5 w-24 rounded bg-white/10" />
           <div className="flex items-center gap-3">
@@ -901,7 +907,9 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
       </div>
       {error && (
         <div className="mx-4 mb-3 px-3 py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 flex items-center justify-between gap-3">
-          <span className="text-xs text-rose-300 font-medium">Failed to load snapshots. Please retry.</span>
+          <span className="text-xs text-rose-300 font-medium">
+            Failed to load snapshots. Please retry.
+          </span>
           <button
             type="button"
             onClick={() => mutate()}
@@ -987,7 +995,9 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                   snapshotRules.length > 0
                     ? snapshotRules.map((snapRule: Record<string, unknown>) => {
                         const ruleId = String(snapRule?.id || "");
-                        const currentRule = configuredPolicyMap.get(ruleId) as Record<string, unknown> | undefined;
+                        const currentRule = configuredPolicyMap.get(ruleId) as
+                          | Record<string, unknown>
+                          | undefined;
                         return {
                           id: ruleId || `snapshot-${String(s.id)}`,
                           name: String(
@@ -995,7 +1005,10 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                           ),
                           scope_type: (currentRule?.scope_type as string) || "snapshot",
                           scope_ref: (currentRule?.scope_ref as string) ?? "",
-                          rule_json: (snapRule?.rule_json as object) ?? (currentRule?.rule_json as object) ?? {},
+                          rule_json:
+                            (snapRule?.rule_json as object) ??
+                            (currentRule?.rule_json as object) ??
+                            {},
                         };
                       })
                     : configuredPolicies;
@@ -1195,7 +1208,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
               <div className="px-5 py-4 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono text-emerald-300">
-                    {snapshotIdsToSave.length} log{snapshotIdsToSave.length !== 1 ? "s" : ""} selected
+                    {snapshotIdsToSave.length} log{snapshotIdsToSave.length !== 1 ? "s" : ""}{" "}
+                    selected
                   </span>
                   <span className="text-[11px] text-slate-500">
                     Node-scoped only. Datasets from other nodes are hidden.
@@ -1220,10 +1234,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                       {datasetsForSave.map(ds => {
                         const id = String(ds.id);
                         const label = (ds.label?.trim() || `Dataset ${id.slice(0, 8)}`) as string;
-                        const count =
-                          typeof ds.snapshot_count === "number"
-                            ? ds.snapshot_count
-                            : 0;
+                        const count = typeof ds.snapshot_count === "number" ? ds.snapshot_count : 0;
                         const checked = selectedDatasetIdsForSave.has(id);
                         return (
                           <label
@@ -1276,7 +1287,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                     />
                   </div>
                   <p className="mt-1 text-[11px] text-slate-500">
-                    If you enter a name, a new dataset will be created and these logs will be included.
+                    If you enter a name, a new dataset will be created and these logs will be
+                    included.
                   </p>
                 </div>
               </div>
@@ -1313,7 +1325,9 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
             const s = snapshots.find(snap => String(snap.id) === String(expandedId));
             if (!s) return null;
             const cacheKey = projectId && expandedId ? `${projectId}-${expandedId}` : "";
-            const fullSnap = detailFetchedSnapshot ?? (cacheKey ? snapshotDetailCacheRef.current.get(cacheKey) : undefined);
+            const fullSnap =
+              detailFetchedSnapshot ??
+              (cacheKey ? snapshotDetailCacheRef.current.get(cacheKey) : undefined);
             const snapshotToShow = (fullSnap ?? s) as ClinicalSnapshot;
             const traceKey = String(snapshotToShow.trace_id || "");
             const policyStateForModal = policyByTrace[traceKey] ||

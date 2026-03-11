@@ -147,7 +147,7 @@ class TestAlertService:
         with patch('app.services.alert_service.settings') as mock_settings:
             mock_settings.RESEND_API_KEY = None
             mock_settings.EMAIL_FROM = None
-            mock_settings.EMAIL_FROM_NAME = "AgentGuard"
+            mock_settings.EMAIL_FROM_NAME = "PluvianAI"
             
             result = await service._send_email(alert, db=db)
             
@@ -182,7 +182,7 @@ class TestAlertService:
             with patch('app.services.alert_service.settings') as mock_settings:
                 mock_settings.RESEND_API_KEY = "test-key"
                 mock_settings.EMAIL_FROM = "test@example.com"
-                mock_settings.EMAIL_FROM_NAME = "AgentGuard"
+                mock_settings.EMAIL_FROM_NAME = "PluvianAI"
                 
                 result = await service._send_email_resend(alert, test_user.email)
                 
@@ -221,7 +221,7 @@ class TestAlertService:
             with patch('app.services.alert_service.settings') as mock_settings:
                 mock_settings.RESEND_API_KEY = "test-key"
                 mock_settings.EMAIL_FROM = "test@example.com"
-                mock_settings.EMAIL_FROM_NAME = "AgentGuard"
+                mock_settings.EMAIL_FROM_NAME = "PluvianAI"
                 
                 alerts = db.query(Alert).filter(Alert.project_id == test_project.id).all()
                 

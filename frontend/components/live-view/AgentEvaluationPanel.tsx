@@ -970,7 +970,9 @@ export function AgentEvaluationPanel({
                       help="Built-in refusal patterns (e.g., 'I cannot', 'as an AI') are checked automatically."
                     />
                     <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                      <p className="text-xs text-emerald-400 font-medium">Built-in patterns active.</p>
+                      <p className="text-xs text-emerald-400 font-medium">
+                        Built-in patterns active.
+                      </p>
                     </div>
                     <p className={HintCls}>
                       No numeric threshold. Recommended: keep ON for customer-facing agents.
@@ -1135,7 +1137,6 @@ export function AgentEvaluationPanel({
               />
             </>
           )}
-
         </div>
       </div>
     </div>

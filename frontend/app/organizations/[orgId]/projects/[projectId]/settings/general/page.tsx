@@ -142,7 +142,12 @@ export default function ProjectGeneralSettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button type="button" variant="danger" disabled={deleting} onClick={handleDeleteProject}>
+              <Button
+                type="button"
+                variant="danger"
+                disabled={deleting}
+                onClick={handleDeleteProject}
+              >
                 {deleting ? "Deleting..." : "Delete project"}
               </Button>
             </CardContent>

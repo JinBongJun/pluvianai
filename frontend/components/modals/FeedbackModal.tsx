@@ -4,37 +4,98 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, MessageSquare, Send, Image as ImageIcon } from "lucide-react";
 import apiClient from "@/lib/api";
+import { useToast } from "@/components/ToastContainer";
 
 interface FeedbackModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+const MIN_MESSAGE_LENGTH = 6;
+
 export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
   const [feedback, setFeedback] = useState("");
+  const [evidence, setEvidence] = useState("");
+  const [showEvidenceField, setShowEvidenceField] = useState(false);
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const message = feedback.trim();
+
     if (!message || isSubmitting) return;
+
+    if (message.length < MIN_MESSAGE_LENGTH) {
+      const warning = "Please write at least 6 characters so we can understand your feedback.";
+      setError(warning);
+      showToast(warning, "warning");
+      return;
+    }
+
+    const evidenceText = evidence.trim();
+    const fullMessage = evidenceText ? `${message}\n\n[Evidence]\n${evidenceText}` : message;
 
     try {
       setIsSubmitting(true);
-      await apiClient.post("/feedback", {
-        message,
-        page:
-          typeof window !== "undefined"
-            ? `${window.location.pathname}${window.location.search || ""}`
-            : undefined,
-      });
+      const page =
+        typeof window !== "undefined"
+          ? `${window.location.pathname}${window.location.search || ""}`
+          : undefined;
+
+      if (evidenceFile) {
+        const formData = new FormData();
+        formData.append("message", fullMessage);
+        if (page) {
+          formData.append("page", page);
+        }
+        formData.append("evidence", evidenceFile);
+        await apiClient.post("/feedback/with-attachment", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        await apiClient.post("/feedback", {
+          message: fullMessage,
+          page,
+        });
+      }
       setFeedback("");
+      setEvidence("");
+      setEvidenceFile(null);
+      setError(null);
+      showToast("Feedback sent. Thank you for helping us improve PluvianAI.", "success");
       onClose();
     } catch (err) {
       console.error("Failed to submit feedback", err);
+      showToast("Failed to send feedback. Please try again.", "error");
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleFeedbackChange = (value: string) => {
+    setFeedback(value);
+    if (error && value.trim().length >= MIN_MESSAGE_LENGTH) {
+      setError(null);
+    }
+  };
+
+  const handleEvidenceFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setEvidenceFile(null);
+      return;
+    }
+    // Light client-side guard; backend enforces the actual limit.
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Evidence file is too large. Please attach a file under 5MB.", "warning");
+      setEvidenceFile(null);
+      event.target.value = "";
+      return;
+    }
+    setEvidenceFile(file);
   };
 
   return (
@@ -81,26 +142,71 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-10">
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <textarea
                     autoFocus
                     value={feedback}
-                    onChange={e => setFeedback(e.target.value)}
+                    onChange={e => handleFeedbackChange(e.target.value)}
                     placeholder="My idea for improving PluvianAI is..."
                     className="w-full h-64 p-8 bg-white/[0.02] border border-white/10 rounded-[32px] text-white placeholder-slate-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all resize-none text-xl font-bold shadow-inner"
                   />
+                  {error && <p className="text-sm text-amber-400 font-medium">{error}</p>}
                 </div>
 
-                <div className="flex items-center justify-between pt-6 border-t border-white/5">
+                <div className="space-y-4">
                   <button
                     type="button"
                     className="flex items-center gap-3 p-4 hover:bg-white/5 rounded-2xl text-slate-500 hover:text-white transition-all font-black uppercase text-xs tracking-widest"
-                    title="Attach screenshot"
+                    title="Attach evidence (screenshot, links, IDs, or notes)"
+                    onClick={() => setShowEvidenceField(prev => !prev)}
                   >
                     <ImageIcon className="w-6 h-6" />
                     <span>Attach Evidence</span>
+                    <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-600">
+                      Optional
+                    </span>
                   </button>
 
+                  {showEvidenceField && (
+                    <div className="space-y-2">
+                      {/* Screenshot / file evidence */}
+                      <div className="flex items-center justify-between gap-4">
+                        <label className="inline-flex items-center gap-3 px-4 py-3 rounded-2xl border border-dashed border-white/15 text-xs font-bold uppercase tracking-widest text-slate-400 hover:border-emerald-500/40 hover:text-emerald-300 transition-colors cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleEvidenceFileChange}
+                          />
+                          <ImageIcon className="w-4 h-4" />
+                          <span>Upload Screenshot</span>
+                        </label>
+                        {evidenceFile && (
+                          <div className="flex-1 text-right text-[11px] text-slate-400 truncate">
+                            <span className="font-medium text-slate-200">{evidenceFile.name}</span>
+                            <span className="ml-2 text-slate-500">
+                              {(evidenceFile.size / 1024).toFixed(0)} KB
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Text / link evidence */}
+                      <textarea
+                        value={evidence}
+                        onChange={e => setEvidence(e.target.value)}
+                        placeholder="Paste links, run IDs, or short notes that help us reproduce the issue."
+                        className="w-full h-28 p-4 bg-white/[0.02] border border-dashed border-white/15 rounded-2xl text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500/40 transition-all resize-none"
+                      />
+                      <p className="text-[11px] text-slate-500">
+                        Evidence text is appended to your message and any screenshot is attached
+                        securely to the feedback email.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end pt-6 border-t border-white/5">
                   <button
                     type="submit"
                     disabled={!feedback.trim() || isSubmitting}

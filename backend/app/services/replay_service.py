@@ -17,6 +17,38 @@ from app.models.replay_run import ReplayRun
 from app.models.usage import Usage
 from app.models.project import Project
 
+
+def _persist_replay_usage(
+    db: Optional[Session],
+    project_id: Optional[int],
+    results: List[Dict[str, Any]],
+    track_platform_credits: bool,
+) -> None:
+    """
+    Persist hosted replay credit usage for a replay batch.
+
+    We only charge/store credits for platform-hosted runs. BYOK runs still execute,
+    but they should not consume hosted credits.
+    """
+    if not db or not project_id or not track_platform_credits:
+        return
+
+    total_credits = sum(int(r.get("used_credits") or 0) for r in results if r.get("success"))
+    if total_credits <= 0:
+        return
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    owner_id = project.owner_id if project else None
+    usage_record = Usage(
+        user_id=owner_id,
+        project_id=project_id,
+        metric_name="guard_credits_replay",
+        quantity=total_credits,
+        unit="credits",
+    )
+    db.add(usage_record)
+
+
 class ReplayService:
     """Service for re-executing historical AI requests for testing"""
 
@@ -698,6 +730,7 @@ class ReplayService:
         replay_run: Optional[ReplayRun] = None,
         allow_environment_key: bool = True,
         prefer_environment_key: bool = False,
+        track_platform_credits: bool = False,
     ) -> List[Dict[str, Any]]:
         """Run multiple replays in parallel, evaluate, and apply signals."""
         results = await asyncio.gather(
@@ -793,23 +826,12 @@ class ReplayService:
 
         # SignalEngine integration, Worst marking, Alerts & HITL Reviews (when DB/session is provided)
         if db and project_id:
-            # Persist aggregated GuardCredit usage for this batch (best-effort; never break replay flow)
+            # Persist hosted replay credit usage for this batch (best-effort; never break replay flow)
             try:
-                total_credits = sum(int(r.get("used_credits") or 0) for r in results if r.get("success"))
-                if total_credits > 0:
-                    project = db.query(Project).filter(Project.id == project_id).first()
-                    owner_id = project.owner_id if project else None
-                    usage_record = Usage(
-                        user_id=owner_id,
-                        project_id=project_id,
-                        metric_name="guard_credits_replay",
-                        quantity=total_credits,
-                        unit="credits",
-                    )
-                    db.add(usage_record)
+                _persist_replay_usage(db, project_id, results, track_platform_credits)
             except Exception as e:
                 # Usage tracking is auxiliary; log and continue
-                logger.warning(f"Failed to record GuardCredit usage for project {project_id}: {str(e)}")
+                logger.warning(f"Failed to record hosted replay credit usage for project {project_id}: {str(e)}")
 
             signal_service = SignalDetectionService(db)
             review_service = ReviewService(db)

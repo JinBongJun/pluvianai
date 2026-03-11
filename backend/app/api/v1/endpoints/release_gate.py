@@ -18,7 +18,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Literal, Optional, Set, Tuple
+import json
+import re
+import time
+from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -40,19 +43,154 @@ from app.core.canonical import (
 )
 from app.core.database import get_db
 from app.core.permissions import check_project_access
+from app.core.config import settings as app_settings
 from app.core.usage_limits import check_guard_credits_limit
 from app.core.security import get_current_user, get_user_from_api_key
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.behavior_report import BehaviorReport
 from app.models.behavior_rule import BehaviorRule
+from app.models.release_gate_job import ReleaseGateJob
 from app.models.snapshot import Snapshot
 from app.models.user import User
 from app.models.validation_dataset import ValidationDataset
+from app.services.data_lifecycle_service import DataLifecycleService
 from app.services.replay_service import replay_service
 from app.services.user_api_key_service import UserApiKeyService
 
 router = APIRouter()
 SUPPORTED_REPLAY_PROVIDERS = {"openai", "anthropic", "google"}
+
+
+class ReleaseGateCancelled(Exception):
+    pass
+
+
+def _is_pinned_anthropic_model_id(model_id: Any) -> bool:
+    """
+    Anthropic pinned model ids are versioned snapshots ending in YYYYMMDD.
+    Examples: claude-sonnet-4-20250514, claude-haiku-4-5-20251001
+    """
+    s = str(model_id or "").strip()
+    if not s:
+        return False
+    return bool(re.search(r"-\d{8}$", s))
+
+
+def _should_block_release_gate_custom_model(
+    provider: Optional[str], model_id: Any, current_user: Optional[User]
+) -> bool:
+    """
+    Option A policy:
+    - In production, Release Gate should require pinned model ids for Anthropic.
+    - Escape hatches:
+      - current_user.is_superuser
+      - RELEASE_GATE_ALLOW_CUSTOM_MODELS=true
+    """
+    if provider != "anthropic":
+        return False
+    s = str(model_id or "").strip()
+    if not s:
+        return False
+    is_production = str(app_settings.ENVIRONMENT).strip().lower() == "production"
+    if not is_production:
+        return False
+    if bool(getattr(current_user, "is_superuser", False)):
+        return False
+    if bool(getattr(app_settings, "RELEASE_GATE_ALLOW_CUSTOM_MODELS", False)):
+        return False
+    return not _is_pinned_anthropic_model_id(s)
+
+
+def _safe_preview_json(value: Any, max_chars: int = 12000) -> Optional[str]:
+    """
+    Best-effort stringify for UI diagnostics. Truncates to keep responses bounded.
+    """
+    if value is None:
+        return None
+    try:
+        if isinstance(value, (dict, list)):
+            text = json.dumps(value, ensure_ascii=False, indent=2)
+        else:
+            text = str(value)
+    except Exception:
+        try:
+            text = str(value)
+        except Exception:
+            return None
+    text = text.strip()
+    if not text:
+        return None
+    if len(text) > max_chars:
+        return text[:max_chars] + "\n…(truncated)…"
+    return text
+
+
+DISALLOWED_REPLAY_OVERRIDE_KEYS: Set[str] = {
+    # Content / trace fields that must not be overridden via replay_overrides.
+    "messages",
+    "message",
+    "user_message",
+    "response",
+    "responses",
+    "input",
+    "inputs",
+    "trace_id",
+    "agent_id",
+    "agent_name",
+}
+
+
+def _sanitize_replay_overrides(
+    overrides: Optional[Dict[str, Any]]
+) -> Optional[Dict[str, Any]]:
+    """
+    Keep replay_overrides focused on configuration-only fields.
+
+    Snapshot content (messages/user_message/response), trace identifiers,
+    and similar fields are always derived from the baseline snapshot, not
+    from client-provided overrides. This helper removes such keys so that
+    Release Gate cannot accidentally change the underlying test cases via
+    replay_overrides.
+    """
+    if not overrides or not isinstance(overrides, dict):
+        return overrides
+
+    cleaned: Dict[str, Any] = {
+        key: value
+        for key, value in overrides.items()
+        if key not in DISALLOWED_REPLAY_OVERRIDE_KEYS
+    }
+    return cleaned or None
+
+
+def _enforce_platform_replay_credit_limit(
+    payload: "ReleaseGateValidateRequest", db: Session, current_user: User
+) -> None:
+    """
+    Hosted replay credits only apply when Release Gate uses platform-hosted models.
+    BYOK runs remain subject to product limits, but do not spend hosted credits.
+    """
+    if payload.model_source != "platform":
+        return
+
+    allowed, err_msg = check_guard_credits_limit(
+        db, current_user.id, getattr(current_user, "is_superuser", False)
+    )
+    if allowed:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "code": "LIMIT_PLATFORM_REPLAY_CREDITS",
+            "message": err_msg,
+            "model_source": payload.model_source,
+            "next_steps": [
+                "Use your own provider key for this run.",
+                "Upgrade your plan for more hosted replay credits.",
+            ],
+        },
+    )
 
 def _has_eval_fail(eval_checks_result: Any) -> bool:
     """
@@ -218,11 +356,16 @@ class ReleaseGateValidateRequest(BaseModel):
     replay_max_tokens: Optional[int] = Field(None, description="Replay request max_tokens override")
     replay_top_p: Optional[float] = Field(None, description="Replay request top_p override")
     replay_overrides: Optional[Dict[str, Any]] = Field(
-        None, description="Optional dict merged into replay request body (e.g. tools, extra params)"
+        None,
+        description=(
+            "Optional configuration-only overrides merged into the replay request body "
+            "(e.g. tools, sampling/format knobs). Snapshot content fields such as "
+            "messages/user_message/response/trace_id/agent_id/agent_name are ignored."
+        ),
     )
     rule_ids: Optional[List[str]] = Field(None, description="Optional specific rule IDs")
     max_snapshots: int = Field(20, ge=1, le=100, description="Max snapshots replayed from trace")
-    repeat_runs: int = Field(3, ge=1, le=5, description="Repeat replay N times")
+    repeat_runs: int = Field(3, ge=1, le=100, description="Repeat replay N times (1=quick, 10/50/100=stability)")
     fail_rate_max: float = Field(
         0.05,
         ge=0.0,
@@ -239,6 +382,61 @@ class ReleaseGateValidateRequest(BaseModel):
         "replay_test",
         description="Replay Test only.",
     )
+
+
+ReleaseGateJobStatus = Literal["queued", "running", "succeeded", "failed", "canceled"]
+
+
+class ReleaseGateJobProgressOut(BaseModel):
+    done: int = 0
+    total: Optional[int] = None
+    phase: Optional[str] = None
+
+
+class ReleaseGateJobOut(BaseModel):
+    id: str
+    status: ReleaseGateJobStatus
+    created_at: Optional[str] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    cancel_requested_at: Optional[str] = None
+    progress: ReleaseGateJobProgressOut
+    report_id: Optional[str] = None
+    error_detail: Optional[Dict[str, Any]] = None
+
+
+class ReleaseGateJobCreateResponse(BaseModel):
+    job: ReleaseGateJobOut
+
+
+class ReleaseGateJobGetResponse(BaseModel):
+    job: ReleaseGateJobOut
+    result: Optional[Dict[str, Any]] = None
+
+
+def _job_to_out(job: ReleaseGateJob) -> ReleaseGateJobOut:
+    return ReleaseGateJobOut(
+        id=str(job.id),
+        status=str(job.status),
+        created_at=_iso(getattr(job, "created_at", None)),
+        started_at=_iso(getattr(job, "started_at", None)),
+        finished_at=_iso(getattr(job, "finished_at", None)),
+        cancel_requested_at=_iso(getattr(job, "cancel_requested_at", None)),
+        progress=ReleaseGateJobProgressOut(
+            done=int(getattr(job, "progress_done", 0) or 0),
+            total=(int(job.progress_total) if getattr(job, "progress_total", None) is not None else None),
+            phase=(str(job.progress_phase) if getattr(job, "progress_phase", None) else None),
+        ),
+        report_id=str(job.report_id) if getattr(job, "report_id", None) else None,
+        error_detail=job.error_detail if isinstance(job.error_detail, dict) else None,
+    )
+
+
+def _sanitize_release_gate_job_request(payload: ReleaseGateValidateRequest) -> Dict[str, Any]:
+    data = payload.model_dump()
+    # Never persist secrets.
+    data.pop("replay_api_key", None)
+    return data
 
 
 def _iso(value: Optional[datetime]) -> Optional[str]:
@@ -325,35 +523,6 @@ def _baseline_sequence_for_snapshot(snapshot: Snapshot) -> List[str]:
     return []
 
 
-def _eval_elements_passed_failed(
-    rules: List[BehaviorRule],
-    violations: List[Dict[str, Any]],
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Split rules into passed (no violation) and failed (has violations)."""
-    violated_rule_ids: Set[str] = set()
-    violation_counts: Dict[str, int] = {}
-    for v in violations:
-        rid = str(v.get("rule_id") or "")
-        if rid:
-            violated_rule_ids.add(rid)
-            violation_counts[rid] = violation_counts.get(rid, 0) + 1
-    passed = [
-        {"rule_id": r.id, "rule_name": r.name or "Unknown"}
-        for r in rules
-        if r.id not in violated_rule_ids
-    ]
-    failed = [
-        {
-            "rule_id": r.id,
-            "rule_name": r.name or "Unknown",
-            "violation_count": violation_counts.get(r.id, 0),
-        }
-        for r in rules
-        if r.id in violated_rule_ids
-    ]
-    return passed, failed
-
-
 def _parse_snapshot_ids(raw: Optional[List[str]]) -> List[int]:
     if not raw:
         return []
@@ -411,6 +580,25 @@ def _infer_provider_from_model(model: Any) -> Optional[str]:
     return "openai"
 
 
+def _assert_provider_matches_model(replay_provider: Any, model: Any) -> None:
+    provider = _normalize_provider(replay_provider)
+    inferred = _infer_provider_from_model(model)
+    if not provider or not inferred:
+        return
+    if provider == inferred:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail={
+            "error_code": "provider_model_mismatch",
+            "message": "Selected replay_provider does not match provider inferred from new_model.",
+            "replay_provider": provider,
+            "inferred_provider": inferred,
+            "model_id": str(model or "").strip(),
+        },
+    )
+
+
 def _resolve_snapshot_provider(snapshot: Snapshot) -> Optional[str]:
     provider = _normalize_provider(getattr(snapshot, "provider", None))
     if provider:
@@ -419,7 +607,12 @@ def _resolve_snapshot_provider(snapshot: Snapshot) -> Optional[str]:
 
 
 async def _run_release_gate(
-    project_id: int, payload: ReleaseGateValidateRequest, db: Session
+    project_id: int,
+    payload: ReleaseGateValidateRequest,
+    db: Session,
+    current_user: User,
+    cancel_check: Optional[Callable[[], bool]] = None,
+    progress_hook: Optional[Callable[[int, Optional[int], Optional[str], Optional[Dict[str, Any]]], None]] = None,
 ) -> Dict[str, Any]:
     trace_id = payload.trace_id
     baseline_trace_id = payload.baseline_trace_id
@@ -634,6 +827,8 @@ async def _run_release_gate(
     use_platform_model = payload.model_source == "platform"
 
     explicit_provider = _normalize_provider(payload.replay_provider)
+    if use_platform_model and str(payload.new_model or "").strip() and payload.replay_provider:
+        _assert_provider_matches_model(payload.replay_provider, payload.new_model)
     if use_platform_model and not explicit_provider:
         inferred_provider = _infer_provider_from_model(payload.new_model)
         if inferred_provider:
@@ -647,6 +842,26 @@ async def _run_release_gate(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Platform model mode requires replay_provider or provider-inferrable new_model.",
+        )
+
+    # Enforce pinned-only model ids for Anthropic in production (Option A),
+    # with escape hatch for superusers or RELEASE_GATE_ALLOW_CUSTOM_MODELS=true.
+    if (
+        use_platform_model
+        and explicit_provider == "anthropic"
+        and str(payload.new_model or "").strip()
+        and _should_block_release_gate_custom_model(explicit_provider, payload.new_model, current_user)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error_code": "release_gate_requires_pinned_model",
+                "message": (
+                    "Release Gate requires a pinned Anthropic model id (ends with YYYYMMDD) for reproducibility."
+                ),
+                "provider": "anthropic",
+                "model_id": str(payload.new_model or "").strip(),
+            },
         )
 
     unresolved_snapshot_ids: List[int] = []
@@ -671,12 +886,24 @@ async def _run_release_gate(
         key_service = UserApiKeyService(db)
         key_presence_cache: Dict[Tuple[str, Optional[str]], bool] = {}
 
+        def _env_key_available(provider: str) -> bool:
+            """
+            In local dev / self-hosted, allow falling back to server .env keys
+            even in 'detected' mode to reduce setup friction.
+            """
+            if not (app_settings.SELF_HOSTED_MODE or str(app_settings.ENVIRONMENT).lower() != "production"):
+                return False
+            v = getattr(app_settings, f"{provider.upper()}_API_KEY", None)
+            return isinstance(v, str) and bool(v.strip())
+
         def _has_effective_provider_key(provider: str, agent_id: Optional[str]) -> bool:
             normalized_agent_id = str(agent_id or "").strip() or None
             cache_key = (provider, normalized_agent_id)
             if cache_key in key_presence_cache:
                 return key_presence_cache[cache_key]
-            exists = bool(key_service.get_user_api_key(project_id, provider, normalized_agent_id))
+            exists = _env_key_available(provider) or bool(
+                key_service.get_user_api_key(project_id, provider, normalized_agent_id)
+            )
             key_presence_cache[cache_key] = exists
             return exists
 
@@ -716,8 +943,19 @@ async def _run_release_gate(
         snapshot_by_id: Dict[int, Snapshot] = {s.id: s for s in snapshots}
         attempts_by_snapshot: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
         all_reasons: List[str] = []
+        perf_attempts: List[Dict[str, Any]] = []
+        perf_started = time.monotonic()
+        perf_total = int(payload.repeat_runs or 0) or 0
 
         for run_idx in range(payload.repeat_runs):
+            if cancel_check and cancel_check():
+                raise ReleaseGateCancelled()
+            allow_env_fallback = bool(
+                use_platform_model
+                or app_settings.SELF_HOSTED_MODE
+                or str(app_settings.ENVIRONMENT).lower() != "production"
+            )
+            t0 = time.monotonic()
             replay_results = await replay_service.run_batch_replay(
                 snapshots=snapshots,
                 new_model=payload.new_model,
@@ -725,15 +963,52 @@ async def _run_release_gate(
                 temperature=payload.replay_temperature,
                 max_tokens=payload.replay_max_tokens,
                 top_p=payload.replay_top_p,
-                replay_overrides=payload.replay_overrides,
+                replay_overrides=_sanitize_replay_overrides(payload.replay_overrides),
                 replay_provider=payload.replay_provider,
                 api_key=None,
                 rubric=None,
                 project_id=project_id,
                 db=db,
-                allow_environment_key=use_platform_model,
+                allow_environment_key=allow_env_fallback,
+                # Platform mode prefers env keys (hosted). Detected mode uses DB keys first,
+                # with env as a fallback (self-hosted/local convenience).
                 prefer_environment_key=use_platform_model,
+                track_platform_credits=use_platform_model,
             )
+            wall_ms = int((time.monotonic() - t0) * 1000)
+            latencies = [
+                float(r.get("latency_ms"))
+                for r in replay_results
+                if r.get("latency_ms") is not None
+            ]
+            avg_latency_ms = (sum(latencies) / len(latencies)) if latencies else None
+            succeeded = sum(1 for r in replay_results if r.get("success"))
+            failed = len(replay_results) - succeeded
+            perf_attempts.append(
+                {
+                    "run_index": run_idx + 1,
+                    "batch_wall_ms": wall_ms,
+                    "snapshots": len(replay_results),
+                    "succeeded": succeeded,
+                    "failed": failed,
+                    "avg_snapshot_latency_ms": avg_latency_ms,
+                }
+            )
+            if progress_hook:
+                try:
+                    progress_hook(
+                        run_idx + 1,
+                        perf_total or None,
+                        "replay",
+                        {
+                            "run_index": run_idx + 1,
+                            "batch_wall_ms": wall_ms,
+                            "avg_snapshot_latency_ms": avg_latency_ms,
+                        },
+                    )
+                except Exception:
+                    # Progress reporting must never fail the run.
+                    pass
 
             for res in replay_results:
                 snapshot = snapshot_by_id.get(res.get("snapshot_id"))
@@ -752,6 +1027,15 @@ async def _run_release_gate(
                     reasons = replay_error_msgs or ["Replay request failed."]
                     replay_error_code = str(res.get("error_code") or "").strip() or None
                     replay_provider = str(res.get("replay_provider") or "").strip() or None
+                    provider_error_preview = _safe_preview_json(res.get("response_data"))
+                    provider_error_obj = {
+                        "provider": replay_provider,
+                        "status_code": res.get("status_code"),
+                        "error_code": res.get("error_code"),
+                        "error_type": res.get("error_type"),
+                        "message": res.get("error"),
+                        "response_preview": provider_error_preview,
+                    }
                     attempts_by_snapshot[snapshot.id].append(
                         {
                             "run_index": run_idx + 1,
@@ -760,8 +1044,6 @@ async def _run_release_gate(
                             "failure_reasons": reasons,
                             "violations": [],
                             "summary": {},
-                            "eval_elements_passed": [],
-                            "eval_elements_failed": [],
                             "replay": {
                                 "attempted": 1,
                                 "succeeded": 0,
@@ -770,14 +1052,13 @@ async def _run_release_gate(
                                 "failed_snapshot_ids": [snapshot.id],
                                 "error_messages": replay_error_msgs,
                                 "error_codes": [replay_error_code] if replay_error_code else [],
+                                "provider_error": provider_error_obj,
                                 "missing_provider_keys": (
                                     [replay_provider]
                                     if replay_error_code == "missing_api_key" and replay_provider
                                     else []
                                 ),
                             },
-                            "has_tool_calls": len(run_tool_summary) > 0,
-                            "tool_calls_summary": run_tool_summary,
                             "behavior_diff": behavior_diff,
                         }
                     )
@@ -792,6 +1073,7 @@ async def _run_release_gate(
                         if replay_error_msgs
                         else "Replay produced no candidate steps"
                     )
+                    provider_error_preview = _safe_preview_json(res.get("response_data"))
                     attempts_by_snapshot[snapshot.id].append(
                         {
                             "run_index": run_idx + 1,
@@ -800,8 +1082,6 @@ async def _run_release_gate(
                             "failure_reasons": [reason],
                             "violations": [],
                             "summary": {},
-                            "eval_elements_passed": [],
-                            "eval_elements_failed": [],
                             "replay": {
                                 "attempted": 1,
                                 "succeeded": 0,
@@ -810,10 +1090,16 @@ async def _run_release_gate(
                                 "failed_snapshot_ids": [snapshot.id],
                                 "error_messages": replay_error_msgs,
                                 "error_codes": [],
+                                "provider_error": {
+                                    "provider": str(res.get("replay_provider") or "").strip() or None,
+                                    "status_code": res.get("status_code"),
+                                    "error_code": res.get("error_code"),
+                                    "error_type": res.get("error_type"),
+                                    "message": res.get("error"),
+                                    "response_preview": provider_error_preview,
+                                },
                                 "missing_provider_keys": [],
                             },
-                            "has_tool_calls": len(run_tool_summary) > 0,
-                            "tool_calls_summary": run_tool_summary,
                             "behavior_diff": behavior_diff,
                         }
                     )
@@ -828,8 +1114,10 @@ async def _run_release_gate(
                 )
                 candidate_summary["policy_resolution"] = candidate_policy_resolution
                 candidate_summary["ruleset_hash"] = _build_ruleset_hash(candidate_rules)
+                # Keep rule snapshot lightweight for Release Gate jobs.
+                # Full rule definitions can be fetched from Behavior APIs when needed.
                 candidate_summary["rule_snapshot"] = [
-                    {"id": r.id, "revision": _iso(r.updated_at), "rule_json": r.rule_json or {}}
+                    {"id": r.id, "revision": _iso(r.updated_at)}
                     for r in candidate_rules
                 ]
 
@@ -839,7 +1127,6 @@ async def _run_release_gate(
                     all_reasons.extend(reasons)
 
                 enriched_violations = _append_violation_context(candidate_violations, candidate_steps)
-                tr_passed, tr_failed = _eval_elements_passed_failed(candidate_rules, candidate_violations)
                 avg_latency_ms = (
                     float(res.get("latency_ms"))
                     if res.get("latency_ms") is not None
@@ -853,8 +1140,6 @@ async def _run_release_gate(
                         "failure_reasons": reasons,
                         "violations": enriched_violations,
                         "summary": candidate_summary,
-                        "eval_elements_passed": tr_passed,
-                        "eval_elements_failed": tr_failed,
                         "replay": {
                             "attempted": 1,
                             "succeeded": 1,
@@ -865,8 +1150,6 @@ async def _run_release_gate(
                             "error_codes": [],
                             "missing_provider_keys": [],
                         },
-                        "has_tool_calls": len(run_tool_summary) > 0,
-                        "tool_calls_summary": run_tool_summary,
                         "behavior_diff": behavior_diff,
                     }
                 )
@@ -901,27 +1184,14 @@ async def _run_release_gate(
             latency_max_ms = max(latencies) if latencies else None
 
             failed_rule_counts: Dict[str, int] = {}
-            passed_rule_ids: Set[str] = set()
             failed_reasons: List[str] = []
             replay_error_messages: List[str] = []
             replay_error_codes: List[str] = []
             missing_provider_keys: List[str] = []
-            tool_summary_agg: List[Dict[str, Any]] = []
             all_violations: List[Dict[str, Any]] = []
             error_attempt_count = 0
 
             for a in attempts:
-                for item in a.get("eval_elements_passed") or []:
-                    rid = str(item.get("rule_id") or "")
-                    if rid:
-                        passed_rule_ids.add(rid)
-                for item in a.get("eval_elements_failed") or []:
-                    rid = str(item.get("rule_id") or "")
-                    if not rid:
-                        continue
-                    failed_rule_counts[rid] = failed_rule_counts.get(rid, 0) + int(
-                        item.get("violation_count") or 1
-                    )
                 for msg in a.get("failure_reasons") or []:
                     if msg and msg not in failed_reasons:
                         failed_reasons.append(str(msg))
@@ -938,10 +1208,13 @@ async def _run_release_gate(
                         missing_provider_keys.append(provider_str)
                 if int((a.get("replay") or {}).get("failed") or 0) > 0:
                     error_attempt_count += 1
-                for tc in a.get("tool_calls_summary") or []:
-                    if tc not in tool_summary_agg:
-                        tool_summary_agg.append(tc)
                 all_violations.extend(a.get("violations") or [])
+
+            for violation in all_violations:
+                rid = str(violation.get("rule_id") or "").strip()
+                if not rid:
+                    continue
+                failed_rule_counts[rid] = failed_rule_counts.get(rid, 0) + 1
 
             eval_elements_failed = [
                 {
@@ -957,11 +1230,6 @@ async def _run_release_gate(
                     "violation_count": count,
                 }
                 for rid, count in sorted(failed_rule_counts.items())
-            ]
-            eval_elements_failed_ids = {item["rule_id"] for item in eval_elements_failed}
-            eval_elements_passed = [
-                {"rule_id": rid, "rule_name": rid}
-                for rid in sorted(passed_rule_ids - eval_elements_failed_ids)
             ]
             pass_ratio = passed_attempts / total_attempts if total_attempts else 0.0
 
@@ -985,7 +1253,6 @@ async def _run_release_gate(
                         "latency_max_ms": latency_max_ms,
                     },
                     "violations": all_violations,
-                    "eval_elements_passed": eval_elements_passed,
                     "eval_elements_failed": eval_elements_failed,
                     "top_regressed_rules": [],
                     "first_broken_step": None,
@@ -999,8 +1266,6 @@ async def _run_release_gate(
                         "error_codes": replay_error_codes,
                         "missing_provider_keys": missing_provider_keys,
                     },
-                    "has_tool_calls": len(tool_summary_agg) > 0,
-                    "tool_calls_summary": tool_summary_agg[:20],
                     "attempts": attempts,
                 }
             )
@@ -1018,6 +1283,10 @@ async def _run_release_gate(
         flaky_rate = flaky_cases / total_cases if total_cases else 0.0
         ratio_band = _ratio_band(fail_rate)
         gate_pass = fail_rate <= payload.fail_rate_max and flaky_rate <= payload.flaky_rate_max
+
+        # If cancellation was requested mid-run, do not persist a report.
+        if cancel_check and cancel_check():
+            raise ReleaseGateCancelled()
 
         primary_case = next((r for r in case_results if r.get("case_status") != "pass"), case_results[0])
         primary_summary = dict(primary_case.get("summary", {}))
@@ -1084,6 +1353,12 @@ async def _run_release_gate(
         threshold_text = (
             f"fail<={int(payload.fail_rate_max * 100)}%, flaky<={int(payload.flaky_rate_max * 100)}%"
         )
+        total_wall_ms = int((time.monotonic() - perf_started) * 1000)
+        avg_attempt_wall_ms = (
+            (sum(int(a.get("batch_wall_ms") or 0) for a in perf_attempts) / len(perf_attempts))
+            if perf_attempts
+            else None
+        )
         return {
             "pass": gate_pass,
             "summary": (
@@ -1110,9 +1385,13 @@ async def _run_release_gate(
             "flaky_inputs": flaky_cases,
             "total_inputs": total_cases,
             "repeat_runs": payload.repeat_runs,
+            "perf": {
+                "total_wall_ms": total_wall_ms,
+                "avg_attempt_wall_ms": avg_attempt_wall_ms,
+                "attempts": perf_attempts,
+            },
             "replay_error_codes": replay_error_codes_global,
             "missing_provider_keys": missing_provider_keys_global,
-            "run_results": case_results,
             "case_results": case_results,
             "evidence_pack": {
                 "top_regressed_rules": [],
@@ -1246,10 +1525,104 @@ async def validate_release_gate(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="agent_id is required when use_recent_snapshots is True",
         )
-    allowed, err_msg = check_guard_credits_limit(db, current_user.id, getattr(current_user, "is_superuser", False))
-    if not allowed:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=err_msg)
-    return await _run_release_gate(project_id, payload, db)
+    _enforce_platform_replay_credit_limit(payload, db, current_user)
+    return await _run_release_gate(project_id, payload, db, current_user)
+
+
+@router.post(
+    "/projects/{project_id}/release-gate/validate-async",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=ReleaseGateJobCreateResponse,
+)
+async def validate_release_gate_async(
+    project_id: int,
+    payload: ReleaseGateValidateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    check_project_access(project_id, current_user, db)
+    if payload.use_recent_snapshots and not payload.agent_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="agent_id is required when use_recent_snapshots is True",
+        )
+    _enforce_platform_replay_credit_limit(payload, db, current_user)
+
+    job = ReleaseGateJob(
+        project_id=project_id,
+        user_id=int(getattr(current_user, "id")),
+        status="queued",
+        progress_done=0,
+        progress_total=int(payload.repeat_runs or 0) or None,
+        progress_phase="replay",
+        request_json=_sanitize_release_gate_job_request(payload),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return ReleaseGateJobCreateResponse(job=_job_to_out(job))
+
+
+@router.get(
+    "/projects/{project_id}/release-gate/jobs/{job_id}",
+    response_model=ReleaseGateJobGetResponse,
+)
+async def get_release_gate_job(
+    project_id: int,
+    job_id: str,
+    include_result: int = Query(0, ge=0, le=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    check_project_access(project_id, current_user, db)
+    job = (
+        db.query(ReleaseGateJob)
+        .filter(ReleaseGateJob.project_id == project_id, ReleaseGateJob.id == job_id)
+        .first()
+    )
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release Gate job not found")
+    result = job.result_json if include_result and isinstance(job.result_json, dict) else None
+    return ReleaseGateJobGetResponse(job=_job_to_out(job), result=result)
+
+
+@router.post(
+    "/projects/{project_id}/release-gate/jobs/{job_id}/cancel",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=ReleaseGateJobCreateResponse,
+)
+async def cancel_release_gate_job(
+    project_id: int,
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    check_project_access(project_id, current_user, db)
+    job = (
+        db.query(ReleaseGateJob)
+        .filter(ReleaseGateJob.project_id == project_id, ReleaseGateJob.id == job_id)
+        .first()
+    )
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release Gate job not found")
+    current_status = str(getattr(job, "status", "") or "").lower()
+    if current_status not in {"succeeded", "failed", "canceled"}:
+        now = datetime.utcnow()
+        if getattr(job, "cancel_requested_at", None) is None:
+            job.cancel_requested_at = now
+        # If the job has not started yet, we can finalize cancel immediately.
+        if current_status == "queued":
+            job.status = "canceled"
+            job.finished_at = now
+            job.progress_phase = "canceled"
+        else:
+            # For running jobs, keep status as running until the worker acknowledges,
+            # but expose cancel_requested_at so UI can show "Canceling…".
+            job.progress_phase = "cancel_requested"
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+    return ReleaseGateJobCreateResponse(job=_job_to_out(job))
 
 
 @router.post("/projects/{project_id}/release-gate/webhook")
@@ -1260,10 +1633,8 @@ async def release_gate_webhook(
     current_user: User = Depends(get_user_from_api_key),
 ):
     check_project_access(project_id, current_user, db)
-    allowed, err_msg = check_guard_credits_limit(db, current_user.id, getattr(current_user, "is_superuser", False))
-    if not allowed:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=err_msg)
-    return await _run_release_gate(project_id, payload, db)
+    _enforce_platform_replay_credit_limit(payload, db, current_user)
+    return await _run_release_gate(project_id, payload, db, current_user)
 
 
 @router.get("/projects/{project_id}/release-gate/suggest-baseline")
@@ -1357,9 +1728,21 @@ async def list_release_gate_history(
 ):
     check_project_access(project_id, current_user, db)
 
+    lifecycle = DataLifecycleService(db)
+    summary = lifecycle.get_data_retention_summary(project_id)
+    if "error" in summary:
+        retention_days = 7
+    else:
+        retention_days = summary.get("retention_days", 7)
+    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+
     query = (
         db.query(BehaviorReport)
-        .filter(BehaviorReport.project_id == project_id, BehaviorReport.trace_id.isnot(None))
+        .filter(
+            BehaviorReport.project_id == project_id,
+            BehaviorReport.trace_id.isnot(None),
+            BehaviorReport.created_at >= cutoff,
+        )
         .order_by(BehaviorReport.created_at.desc())
     )
     if status_filter in {"pass", "fail"}:
@@ -1397,5 +1780,11 @@ async def list_release_gate_history(
             }
         )
 
-    return {"items": items, "total": total, "limit": limit, "offset": offset}
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "retention_days": retention_days,
+    }
 

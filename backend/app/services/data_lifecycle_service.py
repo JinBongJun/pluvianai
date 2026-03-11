@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
+from app.models.behavior_report import BehaviorReport
 from app.models.snapshot import Snapshot
 from app.models.trace import Trace
 from app.models.project import Project
@@ -26,44 +27,66 @@ class DataLifecycleService:
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
         return limits.get("data_retention_days", 7)
 
+    def _get_projects(self, project_id: Optional[int] = None) -> List[Project]:
+        """Return either a single project or all projects."""
+        if project_id is not None:
+            project = self.db.query(Project).filter(Project.id == project_id).first()
+            return [project] if project else []
+        return self.db.query(Project).all()
+
+    def _get_project_retention_context(
+        self,
+        project: Project,
+        now: Optional[datetime] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Resolve plan and retention window for a project owner."""
+        user = self.db.query(User).filter(User.id == project.owner_id).first()
+        if not user:
+            return None
+
+        subscription = self.db.query(Subscription).filter(Subscription.user_id == user.id).first()
+        plan_type = subscription.plan_type if subscription else "free"
+        retention_days = self.get_retention_days(plan_type)
+        cutoff_date = (now or datetime.utcnow()) - timedelta(days=retention_days)
+
+        return {
+            "plan_type": plan_type,
+            "retention_days": retention_days,
+            "cutoff_date": cutoff_date,
+        }
+
+    def _is_release_gate_report(self, report: BehaviorReport) -> bool:
+        """Return True only for persisted release-gate runs."""
+        return (
+            isinstance(report.summary_json, dict)
+            and isinstance(report.summary_json.get("release_gate"), dict)
+        )
+
     def get_expired_snapshots(self, project_id: Optional[int] = None) -> List[Snapshot]:
         """
         Get snapshots that have exceeded their TTL
         Returns list of expired snapshots
         """
-        # Get all projects with their plan types
-        if project_id:
-            projects = [self.db.query(Project).filter(Project.id == project_id).first()]
-            if not projects[0]:
-                return []
-        else:
-            projects = self.db.query(Project).all()
+        projects = self._get_projects(project_id)
+        if not projects:
+            return []
 
         expired_snapshots = []
         now = datetime.utcnow()
 
         for project in projects:
-            # Get project owner's plan
-            user = self.db.query(User).filter(User.id == project.owner_id).first()
-            if not user:
+            retention = self._get_project_retention_context(project, now=now)
+            if not retention:
                 continue
 
-            subscription = self.db.query(Subscription).filter(Subscription.user_id == user.id).first()
-            plan_type = subscription.plan_type if subscription else "free"
-            retention_days = self.get_retention_days(plan_type)
-
-            # Calculate cutoff date
-            cutoff_date = now - timedelta(days=retention_days)
-
             # Find expired snapshots for this project
-            from app.models.trace import Trace
             expired = (
                 self.db.query(Snapshot)
                 .join(Trace)
                 .filter(
                     and_(
                         Trace.project_id == project.id,
-                        Snapshot.created_at < cutoff_date
+                        Snapshot.created_at < retention["cutoff_date"]
                     )
                 )
                 .all()
@@ -93,27 +116,117 @@ class DataLifecycleService:
 
         return count
 
+    def get_expired_release_gate_reports(self, project_id: Optional[int] = None) -> List[BehaviorReport]:
+        """
+        Get persisted release-gate reports that have exceeded their TTL.
+        Only release-gate history is eligible; general behavior reports are preserved.
+        """
+        projects = self._get_projects(project_id)
+        if not projects:
+            return []
+
+        expired_reports: List[BehaviorReport] = []
+        now = datetime.utcnow()
+
+        for project in projects:
+            retention = self._get_project_retention_context(project, now=now)
+            if not retention:
+                continue
+
+            candidates = (
+                self.db.query(BehaviorReport)
+                .filter(
+                    BehaviorReport.project_id == project.id,
+                    BehaviorReport.created_at < retention["cutoff_date"],
+                )
+                .all()
+            )
+            expired_reports.extend(
+                report for report in candidates if self._is_release_gate_report(report)
+            )
+
+        return expired_reports
+
+    def delete_behavior_reports(self, report_ids: List[str]) -> int:
+        """Delete persisted behavior reports by id."""
+        count = 0
+        for report_id in report_ids:
+            report = self.db.query(BehaviorReport).filter(BehaviorReport.id == report_id).first()
+            if report:
+                self.db.delete(report)
+                count += 1
+
+        if count > 0:
+            self.db.commit()
+            logger.info(f"Deleted {count} expired behavior reports")
+
+        return count
+
+    def purge_expired_release_gate_history(
+        self,
+        project_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Hard-delete expired release-gate history rows.
+        Returns purge statistics.
+        """
+        expired_reports = self.get_expired_release_gate_reports(project_id)
+
+        if not expired_reports:
+            return {
+                "expired_count": 0,
+                "deleted_count": 0,
+                "message": "No expired release-gate history found",
+            }
+
+        report_ids = [report.id for report in expired_reports]
+        deleted_count = self.delete_behavior_reports(report_ids)
+
+        return {
+            "expired_count": len(expired_reports),
+            "deleted_count": deleted_count,
+            "message": f"Purged {deleted_count} expired release-gate history records",
+        }
+
     def cleanup_expired_data(self, project_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Clean up expired data based on TTL
         Returns cleanup statistics
         """
         expired_snapshots = self.get_expired_snapshots(project_id)
-        
-        if not expired_snapshots:
+        snapshot_ids = [s.id for s in expired_snapshots]
+        deleted_snapshot_count = self.mark_for_deletion(snapshot_ids) if snapshot_ids else 0
+        release_gate_cleanup = self.purge_expired_release_gate_history(project_id)
+
+        if not expired_snapshots and release_gate_cleanup["expired_count"] == 0:
             return {
                 "expired_count": 0,
                 "deleted_count": 0,
+                "expired_snapshots_count": 0,
+                "deleted_snapshots_count": 0,
+                "expired_release_gate_reports_count": 0,
+                "deleted_release_gate_reports_count": 0,
                 "message": "No expired data found",
             }
 
-        snapshot_ids = [s.id for s in expired_snapshots]
-        deleted_count = self.mark_for_deletion(snapshot_ids)
+        message_parts = []
+        if deleted_snapshot_count > 0:
+            message_parts.append(f"{deleted_snapshot_count} expired snapshots")
+        if release_gate_cleanup["deleted_count"] > 0:
+            message_parts.append(
+                f"{release_gate_cleanup['deleted_count']} expired release-gate history records"
+            )
+        if not message_parts:
+            message_parts.append("0 expired records")
 
         return {
             "expired_count": len(expired_snapshots),
-            "deleted_count": deleted_count,
-            "message": f"Cleaned up {deleted_count} expired snapshots",
+            "deleted_count": deleted_snapshot_count,
+            "expired_snapshots_count": len(expired_snapshots),
+            "deleted_snapshots_count": deleted_snapshot_count,
+            "expired_release_gate_reports_count": release_gate_cleanup["expired_count"],
+            "deleted_release_gate_reports_count": release_gate_cleanup["deleted_count"],
+            "message": "Cleaned up " + " and ".join(message_parts),
         }
 
     def archive_to_s3(self, snapshot_ids: List[int], project_id: Optional[int] = None) -> Dict[str, Any]:
@@ -218,21 +331,18 @@ class DataLifecycleService:
 
     def get_data_retention_summary(self, project_id: int) -> Dict[str, Any]:
         """Get data retention summary for a project"""
-        project = self.db.query(Project).filter(Project.id == project_id).first()
-        if not project:
+        projects = self._get_projects(project_id)
+        if not projects:
             return {"error": "Project not found"}
+        project = projects[0]
 
-        # Get project owner's plan
-        user = self.db.query(User).filter(User.id == project.owner_id).first()
-        if not user:
+        retention = self._get_project_retention_context(project)
+        if not retention:
             return {"error": "User not found"}
-
-        subscription = self.db.query(Subscription).filter(Subscription.user_id == user.id).first()
-        plan_type = subscription.plan_type if subscription else "free"
-        retention_days = self.get_retention_days(plan_type)
+        plan_type = retention["plan_type"]
+        retention_days = retention["retention_days"]
 
         # Count total snapshots
-        from app.models.trace import Trace
         total_snapshots = (
             self.db.query(Snapshot)
             .join(Trace)

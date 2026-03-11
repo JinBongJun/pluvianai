@@ -29,7 +29,7 @@ Agent behavior firewall for multi‑LLM applications — capture traffic, replay
 - **Backend**: FastAPI (Python)
 - **Database**: PostgreSQL + JSONB
 - **Frontend**: Next.js (TypeScript, App Router)
-- **SDKs**: Python (`agentguard`), Node.js (`@agentguard/sdk`)
+- **SDKs**: Python (`pluvianai`), Node.js (`pluvianai`)
 - **Infrastructure**: Docker, Redis
 
 ---
@@ -41,17 +41,17 @@ Agent behavior firewall for multi‑LLM applications — capture traffic, replay
 **Python**
 
 ```python
-import agentguard
+import pluvianai
 
-agentguard.init(api_key="YOUR_API_KEY")
+pluvianai.init(api_key="YOUR_API_KEY")
 ```
 
 **Node.js**
 
 ```typescript
-import agentguard from '@agentguard/sdk';
+import pluvianai from 'pluvianai';
 
-agentguard.init({ apiKey: 'YOUR_API_KEY' });
+pluvianai.init({ apiKey: 'YOUR_API_KEY' });
 ```
 
 Once SDKs are initialized and traffic flows, agents and nodes will appear in **Live View** automatically.

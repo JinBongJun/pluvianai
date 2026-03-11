@@ -280,8 +280,17 @@ export const authAPI = {
   /** Current user's plan, limits, and usage this month (for free-tier visibility). */
   getMyUsage: async (): Promise<{
     plan_type: string;
-    limits: { snapshots_per_month?: number; guard_credits_per_month?: number; [k: string]: unknown };
-    usage_this_month: { snapshots: number; guard_credits: number };
+    limits: {
+      snapshots_per_month?: number;
+      guard_credits_per_month?: number;
+      platform_replay_credits_per_month?: number;
+      [k: string]: unknown;
+    };
+    usage_this_month: {
+      snapshots: number;
+      guard_credits: number;
+      platform_replay_credits?: number;
+    };
   }> => {
     const response = await apiClient.get("/auth/me/usage");
     return response.data;
@@ -291,10 +300,11 @@ export const authAPI = {
 // Organizations API
 const normalizePlan = (plan?: string): PlanType => {
   const normalized = (plan || "free").toLowerCase();
-  if (["free", "indie", "startup", "pro", "enterprise"].includes(normalized)) {
-    return normalized as PlanType;
-  }
-  return (plan as PlanType) || "free";
+  // Map legacy plan ids into our 3 official plans
+  if (normalized === "free") return "free";
+  if (normalized === "indie" || normalized === "startup" || normalized === "pro") return "pro";
+  if (normalized === "enterprise") return "enterprise";
+  return "free";
 };
 
 const normalizeOrganization = (org: any): OrganizationSummary => {
@@ -1116,7 +1126,8 @@ export const webhooksAPI = {
 };
 
 // Types
-export type PlanType = "free" | "indie" | "startup" | "pro" | "enterprise" | string;
+// Public subscription plans (MVP: all orgs effectively use the free plan)
+export type PlanType = "free" | "pro" | "enterprise";
 
 export interface OrganizationSummary {
   id: number;
@@ -1568,7 +1579,10 @@ export const projectUserApiKeysAPI = {
     return Array.isArray(response.data) ? response.data : (response.data?.data ?? []);
   },
 
-  create: async (projectId: number, data: { provider: string; api_key: string; name?: string; agent_id?: string }) => {
+  create: async (
+    projectId: number,
+    data: { provider: string; api_key: string; name?: string; agent_id?: string }
+  ) => {
     const response = await apiClient.post(`/projects/${projectId}/user-api-keys`, data);
     return response.data?.data ?? response.data;
   },
@@ -1771,7 +1785,7 @@ export interface CIGateResult {
 }
 
 /** Human-readable behavior change band (by tool_divergence_pct: 0–5% stable, 5–20% minor, >20% major). */
-export type BehaviorChangeBand = 'stable' | 'minor' | 'major';
+export type BehaviorChangeBand = "stable" | "minor" | "major";
 
 /** Behavior diff: baseline vs run tool sequence/set comparison (for Release Gate). */
 export interface BehaviorDiffResult {
@@ -1874,7 +1888,7 @@ export interface ReleaseGateResult {
   repeat_runs: number;
   replay_error_codes?: string[];
   missing_provider_keys?: string[];
-  run_results: ReleaseGateRunResult[];
+  run_results?: ReleaseGateRunResult[];
   case_results?: ReleaseGateRunResult[];
   evidence_pack: {
     top_regressed_rules: any[];
@@ -2050,8 +2064,14 @@ export const behaviorAPI = {
         }>;
       }>;
     }
-  ): Promise<{ created: Array<Record<string, unknown>>; errors?: Array<{ index: number; message: string }> }> => {
-    const response = await apiClient.post(`/projects/${projectId}/behavior/datasets/batch`, payload);
+  ): Promise<{
+    created: Array<Record<string, unknown>>;
+    errors?: Array<{ index: number; message: string }>;
+  }> => {
+    const response = await apiClient.post(
+      `/projects/${projectId}/behavior/datasets/batch`,
+      payload
+    );
     return response.data;
   },
 
@@ -2113,6 +2133,32 @@ export const behaviorAPI = {
   },
 };
 
+type ReleaseGateValidatePayload = {
+  agent_id?: string;
+  use_recent_snapshots?: boolean;
+  recent_snapshot_limit?: number;
+  trace_id?: string;
+  dataset_id?: string;
+  dataset_ids?: string[];
+  snapshot_ids?: string[];
+  baseline_trace_id?: string;
+  model_source?: "detected" | "platform";
+  new_model?: string;
+  replay_provider?: "openai" | "anthropic" | "google";
+  replay_api_key?: string;
+  new_system_prompt?: string;
+  replay_temperature?: number;
+  replay_max_tokens?: number;
+  replay_top_p?: number;
+  replay_overrides?: Record<string, unknown>;
+  rule_ids?: string[];
+  max_snapshots?: number;
+  repeat_runs?: number;
+  evaluation_mode?: "replay_test";
+  fail_rate_max?: number;
+  flaky_rate_max?: number;
+};
+
 export const releaseGateAPI = {
   getAgents: async (
     projectId: number,
@@ -2166,23 +2212,36 @@ export const releaseGateAPI = {
         : { worst: 0, golden: 0, window_days: 7 };
 
     const toNumIds = (arr: unknown): number[] =>
-      Array.isArray(arr) ? arr.map((x) => (typeof x === "number" ? x : Number(x))).filter(Number.isFinite) : [];
-    const toItems = (arr: unknown): { id: number; trace_id?: string | null; created_at?: string | null }[] =>
       Array.isArray(arr)
-        ? arr.map((item) => {
+        ? arr.map(x => (typeof x === "number" ? x : Number(x))).filter(Number.isFinite)
+        : [];
+    const toItems = (
+      arr: unknown
+    ): { id: number; trace_id?: string | null; created_at?: string | null }[] =>
+      Array.isArray(arr)
+        ? arr.map(item => {
             const o = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
             const id = typeof o.id === "number" ? o.id : Number(o.id);
             return {
               id: Number.isFinite(id) ? id : 0,
-              trace_id: typeof o.trace_id === "string" ? o.trace_id : o.trace_id == null ? null : String(o.trace_id),
+              trace_id:
+                typeof o.trace_id === "string"
+                  ? o.trace_id
+                  : o.trace_id == null
+                    ? null
+                    : String(o.trace_id),
               created_at:
-                typeof o.created_at === "string" ? o.created_at : o.created_at == null ? null : String(o.created_at),
+                typeof o.created_at === "string"
+                  ? o.created_at
+                  : o.created_at == null
+                    ? null
+                    : String(o.created_at),
             };
           })
         : [];
 
     return {
-      snapshot_ids: rawIds.map((x) => String(x)),
+      snapshot_ids: rawIds.map(x => String(x)),
       worst_snapshot_ids: toNumIds(raw.worst_snapshot_ids),
       golden_snapshot_ids: toNumIds(raw.golden_snapshot_ids),
       fill_snapshot_ids: toNumIds(raw.fill_snapshot_ids),
@@ -2196,33 +2255,79 @@ export const releaseGateAPI = {
 
   validate: async (
     projectId: number,
-    data: {
-      agent_id?: string;
-      use_recent_snapshots?: boolean;
-      recent_snapshot_limit?: number;
-      trace_id?: string;
-      dataset_id?: string;
-      dataset_ids?: string[];
-      snapshot_ids?: string[];
-      baseline_trace_id?: string;
-      model_source?: "detected" | "platform";
-      new_model?: string;
-      replay_provider?: "openai" | "anthropic" | "google";
-      replay_api_key?: string;
-      new_system_prompt?: string;
-      replay_temperature?: number;
-      replay_max_tokens?: number;
-      replay_top_p?: number;
-      replay_overrides?: Record<string, unknown>;
-      rule_ids?: string[];
-      max_snapshots?: number;
-      repeat_runs?: number;
-      evaluation_mode?: "replay_test";
-      fail_rate_max?: number;
-      flaky_rate_max?: number;
-    }
+    data: ReleaseGateValidatePayload
   ): Promise<ReleaseGateResult> => {
     const response = await apiClient.post(`/projects/${projectId}/release-gate/validate`, data);
+    return response.data;
+  },
+
+  validateAsync: async (
+    projectId: number,
+    data: ReleaseGateValidatePayload
+  ): Promise<{
+    job: {
+      id: string;
+      status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+      created_at?: string | null;
+      started_at?: string | null;
+      finished_at?: string | null;
+      cancel_requested_at?: string | null;
+      progress: { done: number; total?: number | null; phase?: string | null };
+      report_id?: string | null;
+      error_detail?: Record<string, unknown> | null;
+    };
+  }> => {
+    const response = await apiClient.post(
+      `/projects/${projectId}/release-gate/validate-async`,
+      data
+    );
+    return response.data;
+  },
+
+  getJob: async (
+    projectId: number,
+    jobId: string,
+    includeResult: 0 | 1 = 0
+  ): Promise<{
+    job: {
+      id: string;
+      status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+      created_at?: string | null;
+      started_at?: string | null;
+      finished_at?: string | null;
+      cancel_requested_at?: string | null;
+      progress: { done: number; total?: number | null; phase?: string | null };
+      report_id?: string | null;
+      error_detail?: Record<string, unknown> | null;
+    };
+    result?: ReleaseGateResult | null;
+  }> => {
+    const response = await apiClient.get(
+      `/projects/${projectId}/release-gate/jobs/${encodeURIComponent(jobId)}`,
+      { params: { include_result: includeResult }, timeout: 10000 }
+    );
+    return response.data;
+  },
+
+  cancelJob: async (
+    projectId: number,
+    jobId: string
+  ): Promise<{
+    job: {
+      id: string;
+      status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+      created_at?: string | null;
+      started_at?: string | null;
+      finished_at?: string | null;
+      cancel_requested_at?: string | null;
+      progress: { done: number; total?: number | null; phase?: string | null };
+      report_id?: string | null;
+      error_detail?: Record<string, unknown> | null;
+    };
+  }> => {
+    const response = await apiClient.post(
+      `/projects/${projectId}/release-gate/jobs/${encodeURIComponent(jobId)}/cancel`
+    );
     return response.data;
   },
 

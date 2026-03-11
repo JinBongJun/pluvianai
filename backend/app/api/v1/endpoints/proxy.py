@@ -358,7 +358,6 @@ async def _proxy_request(
                         content={"error": str(last_error)},
                         headers={
                             "X-PluvianAI-Origin": "Proxy",
-                            "X-AgentGuard-Origin": "Proxy",  # legacy header for compatibility
                         },
                     )
                     return error_response

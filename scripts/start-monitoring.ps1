@@ -1,7 +1,7 @@
-# AgentGuard Monitoring Startup Script (PowerShell)
+# PluvianAI Monitoring Startup Script (PowerShell)
 # This script starts the monitoring stack and opens Grafana dashboard
 
-Write-Host "🚀 Starting AgentGuard Monitoring..." -ForegroundColor Cyan
+Write-Host "🚀 Starting PluvianAI Monitoring..." -ForegroundColor Cyan
 
 # Check if backend is running
 Write-Host "📡 Checking backend status..." -ForegroundColor Yellow

@@ -51,14 +51,16 @@ export default function InternalUsagePage() {
       setLoading(true);
       setError(null);
       try {
-        const result = (await internalUsageAPI.getGuardCreditsByProject(month)) as ProjectUsageResponse;
+        const result = (await internalUsageAPI.getGuardCreditsByProject(
+          month
+        )) as ProjectUsageResponse;
         setData(result);
       } catch (err: any) {
-        console.error("Failed to load GuardCredits usage:", err);
+        console.error("Failed to load platform replay credit usage:", err);
         setError(
           err?.response?.data?.detail ||
             err?.message ||
-            "Failed to load usage data. This page is for admin/internal use.",
+            "Failed to load usage data. This page is for admin/internal use."
         );
       } finally {
         setLoading(false);
@@ -75,9 +77,9 @@ export default function InternalUsagePage() {
       <div className="max-w-5xl mx-auto space-y-6">
         <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">GuardCredits usage (Replay)</h1>
+            <h1 className="text-2xl font-bold">Platform replay credit usage</h1>
             <p className="text-sm text-slate-400 mt-1">
-              Internal dashboard to monitor platform GuardCredit usage per project.{" "}
+              Internal dashboard to monitor hosted replay credit exposure per project.{" "}
               <span className="font-medium text-slate-300">
                 Month: <span className="text-sky-300">{monthLabel}</span>
               </span>
@@ -105,13 +107,15 @@ export default function InternalUsagePage() {
 
         <section className="rounded-xl border border-white/10 bg-slate-950/70 p-4 shadow-lg shadow-black/40">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-200">Projects by GuardCredits used</h2>
+            <h2 className="text-sm font-semibold text-slate-200">
+              Projects by platform replay credits used
+            </h2>
             <span className="text-xs text-slate-500">
               {loading
                 ? "Loading..."
                 : items.length
-                ? `${items.length} project${items.length > 1 ? "s" : ""}`
-                : "No usage for this month"}
+                  ? `${items.length} project${items.length > 1 ? "s" : ""}`
+                  : "No usage for this month"}
             </span>
           </div>
 
@@ -121,7 +125,7 @@ export default function InternalUsagePage() {
                 <tr className="border-b border-white/5 text-xs uppercase text-slate-400">
                   <th className="px-3 py-2">Project</th>
                   <th className="px-3 py-2">Owner</th>
-                  <th className="px-3 py-2 text-right">GuardCredits</th>
+                  <th className="px-3 py-2 text-right">Replay credits</th>
                   <th className="px-3 py-2 text-right">Replay runs</th>
                 </tr>
               </thead>
@@ -135,12 +139,15 @@ export default function InternalUsagePage() {
                 ) : items.length === 0 ? (
                   <tr>
                     <td className="px-3 py-4 text-center text-slate-500" colSpan={4}>
-                      No GuardCredit usage recorded for this month.
+                      No platform replay credit usage recorded for this month.
                     </td>
                   </tr>
                 ) : (
                   items.map(item => (
-                    <tr key={`project-${item.project_id ?? "none"}`} className="border-b border-white/5">
+                    <tr
+                      key={`project-${item.project_id ?? "none"}`}
+                      className="border-b border-white/5"
+                    >
                       <td className="px-3 py-2">
                         <div className="font-medium text-slate-100">
                           {item.project_name || "(no project name)"}
@@ -171,4 +178,3 @@ export default function InternalUsagePage() {
     </main>
   );
 }
-

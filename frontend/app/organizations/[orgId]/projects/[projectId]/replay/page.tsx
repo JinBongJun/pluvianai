@@ -9,7 +9,7 @@ import { replayAPI, apiCallsAPI, organizationsAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
 import { Play, History, Split, ArrowRight, Settings2, Trash2 } from "lucide-react";
 import ProjectTabs from "@/components/ProjectTabs";
-import posthog from "posthog-js";
+import { analytics } from "@/lib/analytics";
 import { clsx } from "clsx";
 import useSWR from "swr";
 
@@ -113,7 +113,7 @@ export default function ReplayPage() {
       });
 
       // Track replay execution event
-      posthog.capture("replay_executed", {
+      analytics.capture("replay_executed", {
         project_id: projectId,
         item_count: selectedIds.length,
         has_rubric: !!selectedRubricId,
@@ -318,7 +318,10 @@ export default function ReplayPage() {
                 {loading ? (
                   <div className="p-4 space-y-3" role="status" aria-label="Loading logs">
                     {[1, 2, 3, 4, 5].map(i => (
-                      <div key={i} className="flex gap-3 p-4 rounded-lg border border-white/5 bg-white/5">
+                      <div
+                        key={i}
+                        className="flex gap-3 p-4 rounded-lg border border-white/5 bg-white/5"
+                      >
                         <div className="animate-pulse h-5 w-16 rounded bg-white/10" />
                         <div className="flex-1 space-y-2">
                           <div className="animate-pulse h-3 rounded bg-white/10 w-full max-w-xs" />

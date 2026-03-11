@@ -70,17 +70,21 @@ export default function NewProjectPage() {
       breadcrumb={[
         { label: "Organizations", href: "/organizations" },
         { label: org?.name || "Organization", href: `/organizations/${orgId}/projects` },
-        { label: "New Protocol" },
+        { label: "New Project" },
       ]}
     >
-      <div className="max-w-2xl mx-auto py-8">
-        <div className="mb-10 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col items-center justify-center text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
-            <span className="text-[10px] font-black uppercase tracking-widest">Init</span>
+      <div className="max-w-2xl mx-auto pt-20 pb-32 relative z-10">
+        <div className="mb-10 flex items-center gap-6">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col items-center justify-center text-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.15)] shrink-0">
+            <span className="text-[11px] font-black uppercase tracking-widest">Init</span>
           </div>
           <div>
-            <h1 className="text-3xl font-black uppercase tracking-widest mb-2 text-white">Initialize Project Protocol</h1>
-            <p className="text-sm font-medium text-slate-400">Establish a new compartmentalized secure zone for LLM trace monitoring and policy enforcement.</p>
+            <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2 text-white leading-none">
+              New Project
+            </h1>
+            <p className="text-base font-medium text-slate-400 max-w-xl leading-relaxed">
+              Create a project for LLM trace monitoring and policy enforcement.
+            </p>
           </div>
         </div>
 
@@ -90,67 +94,91 @@ export default function NewProjectPage() {
               <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
             </div>
             <div>
-              <h4 className="text-xs font-black uppercase tracking-widest text-rose-400 mb-1">Initialization Failure</h4>
+              <h4 className="text-xs font-black uppercase tracking-widest text-rose-400 mb-1">
+                Initialization Failure
+              </h4>
               <p className="text-sm text-rose-300/80 leading-relaxed font-medium">{error}</p>
             </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-8 rounded-3xl border border-white/10 bg-slate-900/40 p-10 backdrop-blur-2xl relative overflow-hidden shadow-2xl">
+        <form
+          onSubmit={handleSubmit}
+          className="relative space-y-10 bg-[#1a1a1e]/95 border border-white/[0.15] p-10 md:p-12 rounded-[40px] backdrop-blur-3xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] overflow-hidden"
+        >
+          {/* Top Rim Highlight (Persistent) */}
+          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-100 z-10" />
+          <div className="absolute top-[1px] inset-x-10 h-16 bg-gradient-to-b from-white/[0.05] to-transparent pointer-events-none z-10" />
+
+          {/* Internal Inner Glow Layer */}
+          <div className="absolute inset-0.5 rounded-[38px] bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none z-0" />
+
           <div className="absolute inset-0 bg-flowing-lines opacity-[0.03] pointer-events-none" />
 
           <div className="relative z-10 space-y-8">
             <div>
-              <label htmlFor="name" className="flex items-center gap-3 text-xs font-black uppercase tracking-widest text-slate-300 mb-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" />
+              <label
+                htmlFor="name"
+                className="flex items-center gap-3 text-[11px] font-black uppercase tracking-[0.3em] text-slate-500 mb-4 ml-2"
+              >
+                <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
                 Project Designation
               </label>
-              <input
-                id="name"
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="e.g. CORE-SYSTEM-A"
-                required
-                className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-5 py-4 text-base font-medium text-white placeholder:text-slate-500 focus:border-emerald-500 focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all shadow-inner"
-              />
-              <p className="mt-3 text-sm text-slate-400">
+              <div className="relative group/input">
+                <input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="e.g. CORE-SYSTEM-A"
+                  required
+                  className="w-full rounded-2xl border border-white/20 bg-[#0a0a0c]/80 px-6 py-4 text-lg font-black text-white placeholder:text-slate-600 focus:border-emerald-500/60 focus:bg-[#0a0a0c]/90 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]"
+                />
+                <div className="absolute inset-x-6 -bottom-px h-px bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent opacity-0 group-focus-within/input:opacity-100 transition-opacity" />
+              </div>
+              <p className="mt-4 text-[11px] text-slate-600 font-bold uppercase tracking-widest ml-2">
                 A unique namespace for this implementation.
               </p>
             </div>
 
             <div>
-              <label htmlFor="description" className="flex items-center gap-3 text-xs font-black uppercase tracking-widest text-slate-300 mb-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-                Protocol Briefing (Optional)
+              <label
+                htmlFor="description"
+                className="flex items-center gap-3 text-[11px] font-black uppercase tracking-[0.3em] text-slate-500 mb-4 ml-2"
+              >
+                <div className="w-2 h-2 rounded-full bg-slate-600" />
+                Description (optional)
               </label>
-              <textarea
-                id="description"
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="Outline the operational parameters and objectives..."
-                rows={4}
-                className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-5 py-4 text-base font-medium text-white placeholder:text-slate-500 focus:border-emerald-500 focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all resize-none shadow-inner"
-              />
+              <div className="relative group/input">
+                <textarea
+                  id="description"
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder="Outline the operational parameters and objectives..."
+                  rows={4}
+                  className="w-full rounded-2xl border border-white/20 bg-[#0a0a0c]/80 px-6 py-4 text-lg font-black text-white placeholder:text-slate-600 focus:border-emerald-500/60 focus:bg-[#0a0a0c]/90 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all resize-none shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]"
+                />
+                <div className="absolute inset-x-6 -bottom-px h-px bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent opacity-0 group-focus-within/input:opacity-100 transition-opacity" />
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-8 border-t border-white/10 relative z-10">
+          <div className="flex items-center justify-between pt-8 border-t border-white/5 relative z-10 mt-8">
             <button
               type="button"
               onClick={() => router.push(`/organizations/${orgId}/projects`)}
-              className="px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+              className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all"
             >
-              Abort
+              Cancel
             </button>
             <button
               type="submit"
               disabled={loading || !name.trim()}
-              className="px-8 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed
-                bg-emerald-500 text-black hover:bg-emerald-400 hover:scale-[1.02] shadow-[0_0_20px_-5px_rgba(16,185,129,0.5)]
+              className="h-14 px-10 rounded-full font-black uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed
+                bg-emerald-500 text-black hover:bg-emerald-400 hover:scale-[1.02] shadow-[0_0_30px_-5px_rgba(16,185,129,0.5)] text-sm
               "
             >
-              {loading ? "INITIALIZING..." : "COMMENCE PROTOCOL"}
+              {loading ? "Creating..." : "Create Project"}
             </button>
           </div>
         </form>

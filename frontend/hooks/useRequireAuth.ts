@@ -30,4 +30,3 @@ export function useRequireAuth(options?: UseRequireAuthOptions): boolean {
 
   return hasToken;
 }
-

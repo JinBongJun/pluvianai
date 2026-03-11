@@ -1,5 +1,5 @@
 """
-Database backup script for AgentGuard
+Database backup script for PluvianAI
 Supports PostgreSQL backup and restore operations
 """
 
@@ -38,7 +38,7 @@ class BackupService:
         """
         if not backup_name:
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-            backup_name = f"agentguard_backup_{timestamp}.sql"
+            backup_name = f"pluvianai_backup_{timestamp}.sql"
 
         backup_path = self.backup_dir / backup_name
 
@@ -61,7 +61,7 @@ class BackupService:
             host_port = host_port_db[0].split(":")
             host = host_port[0]
             port = host_port[1] if len(host_port) > 1 else "5432"
-            database = host_port_db[1] if len(host_port_db) > 1 else "agentguard"
+            database = host_port_db[1] if len(host_port_db) > 1 else "pluvianai"
 
             # Set PGPASSWORD environment variable for pg_dump
             env = os.environ.copy()
@@ -121,7 +121,7 @@ class BackupService:
             host_port = host_port_db[0].split(":")
             host = host_port[0]
             port = host_port[1] if len(host_port) > 1 else "5432"
-            database = host_port_db[1] if len(host_port_db) > 1 else "agentguard"
+            database = host_port_db[1] if len(host_port_db) > 1 else "pluvianai"
 
             # Set PGPASSWORD environment variable
             env = os.environ.copy()
@@ -216,7 +216,7 @@ class BackupService:
 
 def main():
     """CLI interface for backup operations"""
-    parser = argparse.ArgumentParser(description="AgentGuard Database Backup Tool")
+    parser = argparse.ArgumentParser(description="PluvianAI Database Backup Tool")
     parser.add_argument("action", choices=["backup", "restore", "list", "cleanup"], help="Action to perform")
     parser.add_argument("--file", help="Backup file path (for restore)")
     parser.add_argument("--name", help="Custom backup name (for backup)")

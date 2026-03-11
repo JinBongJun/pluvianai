@@ -145,7 +145,7 @@ export default function TeamPage() {
         { label: "Organizations", href: "/organizations" },
         { label: org?.name || "Organization", href: `/organizations/${orgId}/projects` },
         { label: "Settings", href: `/organizations/${orgId}/settings` },
-        { label: "Laboratory Protocols" },
+        { label: "Team & Access" },
       ]}
     >
       <div className="max-w-5xl mx-auto pb-24 relative">
@@ -160,7 +160,7 @@ export default function TeamPage() {
             </p>
           </div>
           <h1 className="text-5xl font-black text-white uppercase tracking-tighter mb-4">
-            Laboratory Protocols
+            Team & Access
           </h1>
           <p className="text-slate-400 font-bold uppercase tracking-widest text-sm max-w-2xl leading-relaxed">
             Manage organization members, assign security clearance levels, and oversee operational

@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover - optional dependency
     trace = None
 
 
-def setup_tracing(service_name: str = "agentguard"):
+def setup_tracing(service_name: str = "pluvianai"):
     if trace is None:
         return
     if os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") is None:
@@ -28,7 +28,7 @@ def setup_tracing(service_name: str = "agentguard"):
     trace.set_tracer_provider(provider)
 
 
-def get_tracer(name: str = "agentguard"):
+def get_tracer(name: str = "pluvianai"):
     if trace is None:
         return None
     return trace.get_tracer(name)
