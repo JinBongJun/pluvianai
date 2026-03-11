@@ -10,100 +10,86 @@ import clsx from "clsx";
 interface LaboratoryNavbarProps {
   orgId: string;
   projectId: number;
+  variant?: "top" | "side";
 }
 
-export const LaboratoryNavbar: React.FC<LaboratoryNavbarProps> = ({ orgId, projectId }) => {
+export function LaboratoryNavbar({ orgId, projectId, variant = "top" }: LaboratoryNavbarProps) {
   const pathname = usePathname();
 
   const navItems = [
     {
-      name: "Live View",
+      label: "Live View",
       href: `/organizations/${orgId}/projects/${projectId}/live-view`,
       icon: Activity,
-      color: "violet",
+      color: "emerald",
     },
     {
-      name: "Release Gate",
+      label: "Release Gate",
       href: `/organizations/${orgId}/projects/${projectId}/release-gate`,
       icon: Flag,
       color: "fuchsia",
     },
   ];
 
-  const effectiveProjectId = projectId && !isNaN(projectId) ? projectId : 0;
+  // Side variant: match sidebar menu (LiveViewToolbar) — bg, border, shadow, rounded-[20px]
+  const sideContainerClass =
+    "bg-[#1a1a1e]/95 border border-white/[0.15] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] rounded-[20px] backdrop-blur-3xl transition-all duration-500 hover:border-white/30";
 
   return (
-    <nav className="flex items-center gap-1.5 h-full">
-      {navItems.map(item => {
-        const isActive = pathname === item.href;
-        const Icon = item.icon;
-        // Construct safe href
-        const href = effectiveProjectId
-          ? `/organizations/${orgId}/projects/${effectiveProjectId}/${item.href.split("/").pop()}`
-          : "#";
+    <div
+      className={clsx(
+        "flex items-center transition-all duration-500",
+        variant === "top" &&
+          "gap-1.5 p-1 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl bg-black/40",
+        variant === "side" && clsx("gap-1 p-1.5", sideContainerClass)
+      )}
+    >
+      <nav className="flex items-center gap-1 h-full">
+        {navItems.map(item => {
+          const isActive = pathname === item.href;
+          const Icon = item.icon;
 
-        const colorMap: Record<
-          string,
-          { active: string; bg: string; icon: string; border: string }
-        > = {
-          fuchsia: {
-            active: "text-fuchsia-400",
-            bg: "bg-fuchsia-500/10",
-            icon: "text-fuchsia-500",
-            border: "border-fuchsia-500/20",
-          },
-          violet: {
-            active: "text-violet-400",
-            bg: "bg-violet-500/10",
-            icon: "text-violet-500",
-            border: "border-violet-500/20",
-          },
-          emerald: {
-            active: "text-emerald-400",
-            bg: "bg-emerald-500/10",
-            icon: "text-emerald-500",
-            border: "border-emerald-500/20",
-          },
-          sky: {
-            active: "text-sky-400",
-            bg: "bg-sky-500/10",
-            icon: "text-sky-500",
-            border: "border-sky-500/20",
-          },
-        };
-
-        const theme = colorMap[item.color] || colorMap.emerald;
-
-        if (!effectiveProjectId) return null;
-
-        return (
-          <Link
-            key={item.name}
-            href={href}
-            className={clsx(
-              "group flex items-center gap-2.5 px-4 py-1.5 rounded-lg transition-all duration-200 border",
-              isActive
-                ? `${theme.bg} ${theme.active} ${theme.border} shadow-[0_0_15px_rgba(0,0,0,0.2)]`
-                : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/[0.03]"
-            )}
-          >
-            <Icon
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
               className={clsx(
-                "w-4 h-4 transition-colors",
-                isActive ? theme.active : `${theme.icon} opacity-50`
-              )}
-            />
-            <span
-              className={clsx(
-                "text-[12px] font-bold tracking-tight",
-                isActive ? "opacity-100" : "opacity-70"
+                "relative py-2.5 rounded-xl flex items-center transition-all duration-500 group overflow-hidden",
+                variant === "top" ? "px-6 gap-3" : "px-3 gap-2",
+                isActive
+                  ? "text-white"
+                  : "text-zinc-400 hover:text-emerald-400 hover:bg-white/[0.05]"
               )}
             >
-              {item.name}
-            </span>
-          </Link>
-        );
-      })}
-    </nav>
+              {/* Top Rim Highlight for active tab */}
+              {isActive && (
+                <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-80" />
+              )}
+
+              <Icon
+                className={clsx(
+                  "w-5 h-5 transition-all duration-700",
+                  isActive
+                    ? item.color === "emerald"
+                      ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse"
+                      : "text-fuchsia-400 drop-shadow-[0_0_8px_rgba(232,121,249,0.8)]"
+                    : "group-hover:scale-110 opacity-40"
+                )}
+                strokeWidth={isActive ? 2.5 : 2}
+              />
+
+              <span
+                className={clsx(
+                  "text-[10px] font-black tracking-[0.2em] uppercase transition-all duration-300",
+                  isActive ? "opacity-100" : "opacity-50"
+                )}
+              >
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
   );
-};
+}

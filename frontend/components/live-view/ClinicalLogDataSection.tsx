@@ -4,7 +4,16 @@ import React, { useMemo, useState } from "react";
 import useSWR, { type KeyedMutator } from "swr";
 import clsx from "clsx";
 import { AnimatePresence } from "framer-motion";
-import { Database, FileArchive, Trash2, X, ChevronDown, ChevronRight, Pencil, Check } from "lucide-react";
+import {
+  Database,
+  FileArchive,
+  Trash2,
+  X,
+  ChevronDown,
+  ChevronRight,
+  Pencil,
+  Check,
+} from "lucide-react";
 import { behaviorAPI, liveViewAPI } from "@/lib/api";
 import { toEvalRows } from "@/lib/evalRows";
 import {
@@ -67,7 +76,9 @@ function DatasetSnapshotList({
   isClearingAll: boolean;
 }) {
   const { data, isLoading, mutate } = useSWR<{ items?: DatasetSnapshotItem[]; total?: number }>(
-    projectId && dataset.id && isExpanded ? ["behavior-dataset-snapshots", projectId, dataset.id] : null,
+    projectId && dataset.id && isExpanded
+      ? ["behavior-dataset-snapshots", projectId, dataset.id]
+      : null,
     () => behaviorAPI.getDatasetSnapshots(projectId, dataset.id)
   );
   const snapshots = (Array.isArray(data?.items) ? data.items : []) as DatasetSnapshotItem[];
@@ -108,13 +119,22 @@ function DatasetSnapshotList({
               title="Open snapshot details"
             >
               <div className="text-sm text-slate-200 font-mono truncate">
-                {snap.trace_id ? `Trace ${String(snap.trace_id).slice(0, 16)}...` : `Snapshot ${String(snap.id)}`}
+                {snap.trace_id
+                  ? `Trace ${String(snap.trace_id).slice(0, 16)}...`
+                  : `Snapshot ${String(snap.id)}`}
               </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">{formatDate(snap.created_at ?? dataset.created_at)}</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                {formatDate(snap.created_at ?? dataset.created_at)}
+              </div>
             </button>
             <button
               type="button"
-              onClick={() => onRemoveLog(dataset.id, snap.id, { currentSnapshots: snapshots, mutateThisDataset: mutate })}
+              onClick={() =>
+                onRemoveLog(dataset.id, snap.id, {
+                  currentSnapshots: snapshots,
+                  mutateThisDataset: mutate,
+                })
+              }
               disabled={isRemoving || isClearingAll}
               className="shrink-0 p-2 rounded-lg border border-transparent text-slate-500 hover:text-amber-400 hover:border-amber-500/30 hover:bg-amber-500/10 disabled:opacity-50 transition-colors"
               title="Remove this log from dataset"
@@ -172,8 +192,9 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
     () => liveViewAPI.getAgentSettings(projectId, agentId)
   );
   const savedEvalConfig = useMemo(
-    () => ((settingsData as { diagnostic_config?: { eval?: Record<string, unknown> } } | undefined)
-      ?.diagnostic_config?.eval ?? {}) as Record<string, unknown>,
+    () =>
+      ((settingsData as { diagnostic_config?: { eval?: Record<string, unknown> } } | undefined)
+        ?.diagnostic_config?.eval ?? {}) as Record<string, unknown>,
     [settingsData]
   );
 
@@ -187,7 +208,11 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
     { keepPreviousData: true }
   );
   const detailedSnapshotItems = useMemo(() => {
-    const payload = detailedSnapshotsData as { items?: DatasetSnapshotItem[] } | DatasetSnapshotItem[] | null | undefined;
+    const payload = detailedSnapshotsData as
+      | { items?: DatasetSnapshotItem[] }
+      | DatasetSnapshotItem[]
+      | null
+      | undefined;
     if (Array.isArray(payload)) return payload;
     if (Array.isArray(payload?.items)) return payload.items;
     return [] as DatasetSnapshotItem[];
@@ -268,7 +293,10 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
       .map(s => (typeof s.id === "number" ? s.id : parseInt(String(s.id), 10)))
       .filter(n => !Number.isNaN(n));
 
-    mutateThisDataset({ items: newSnapshotList, total: newSnapshotList.length }, { revalidate: false });
+    mutateThisDataset(
+      { items: newSnapshotList, total: newSnapshotList.length },
+      { revalidate: false }
+    );
     if (removingEntireDataset) {
       setExpandedDatasetIds(prev => {
         const next = new Set(prev);
@@ -372,7 +400,11 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
 
   if (isLoading) {
     return (
-      <div className="p-10 flex flex-col gap-6 w-full max-w-2xl mx-auto" role="status" aria-label="Loading datasets">
+      <div
+        className="p-10 flex flex-col gap-6 w-full max-w-2xl mx-auto"
+        role="status"
+        aria-label="Loading datasets"
+      >
         <div className="flex items-center gap-3">
           <div className="animate-pulse p-3 rounded-full bg-white/10 w-10 h-10" />
           <div className="flex-1 space-y-2">
@@ -385,7 +417,9 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
             <div key={i} className="animate-pulse h-10 rounded-lg bg-white/5 w-full" />
           ))}
         </div>
-        <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 sr-only">Loading datasets...</span>
+        <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 sr-only">
+          Loading datasets...
+        </span>
       </div>
     );
   }

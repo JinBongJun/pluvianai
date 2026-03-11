@@ -32,7 +32,8 @@ cost_analyzer = CostAnalyzer()
 class OrganizationCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=2000)
-    plan_type: str = Field("free", pattern="^(free|indie|startup|pro|enterprise)$")
+    # Public plans: free, pro, enterprise (MVP: all free)
+    plan_type: str = Field("free", pattern="^(free|pro|enterprise)$")
 
 
 class OrganizationUpdate(BaseModel):
@@ -149,10 +150,13 @@ def list_organizations(
 
     org_ids = [o.id for o in orgs]
 
-    # Base projects count per org
+    # Base projects count per org (active projects only)
     projects_counts = dict(
         db.query(Project.organization_id, func.count(Project.id))
-        .filter(Project.organization_id.in_(org_ids))
+        .filter(
+            Project.organization_id.in_(org_ids),
+            Project.is_active.is_(True),
+        )
         .group_by(Project.organization_id)
         .all()
     )
@@ -167,7 +171,10 @@ def list_organizations(
         # Collect project ids per org
         proj_rows = (
             db.query(Project.id, Project.organization_id)
-            .filter(Project.organization_id.in_(org_ids))
+            .filter(
+                Project.organization_id.in_(org_ids),
+                Project.is_active.is_(True),
+            )
             .all()
         )
         org_to_project_ids = {}
@@ -177,13 +184,14 @@ def list_organizations(
         now = datetime.utcnow()
         seven_days_ago = now - timedelta(days=7)
 
-        # API calls per org (7d)
+        # API calls per org (7d) for active projects only
         if proj_rows:
             calls_rows = (
                 db.query(Project.organization_id, func.count(APICall.id))
                 .join(APICall, APICall.project_id == Project.id)
                 .filter(
                     Project.organization_id.in_(org_ids),
+                    Project.is_active.is_(True),
                     APICall.created_at >= seven_days_ago,
                     APICall.created_at <= now,
                 )
@@ -192,22 +200,27 @@ def list_organizations(
             )
             calls_map.update({oid: count for oid, count in calls_rows})
 
-        # Alerts per org (open)
+        # Alerts per org (open, active projects only)
         alerts_rows = (
             db.query(Project.organization_id, func.count(Alert.id))
             .join(Alert, Alert.project_id == Project.id)
-            .filter(Project.organization_id.in_(org_ids), Alert.is_resolved.is_(False))
+            .filter(
+                Project.organization_id.in_(org_ids),
+                Project.is_active.is_(True),
+                Alert.is_resolved.is_(False),
+            )
             .group_by(Project.organization_id)
             .all()
         )
         alerts_map.update({oid: count for oid, count in alerts_rows})
 
-        # Drift projects per org (projects that have any drift alerts)
+        # Drift projects per org (active projects that have any drift alerts)
         drift_rows = (
             db.query(Project.organization_id, func.count(func.distinct(Alert.project_id)))
             .join(Alert, Alert.project_id == Project.id)
             .filter(
                 Project.organization_id.in_(org_ids),
+                Project.is_active.is_(True),
                 Alert.alert_type == "drift",
                 Alert.is_resolved.is_(False),
             )

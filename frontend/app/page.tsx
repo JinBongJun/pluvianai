@@ -1,290 +1,323 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import Image from 'next/image';
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
-    Bot,
-    Zap,
-    Shield,
-    BarChart3,
-    ChevronRight,
-    Beaker,
-    CheckCircle2,
-    AlertTriangle,
-    Layers,
-    Cpu,
-    ArrowRight,
-    Terminal,
-    Search,
-    History,
-    Activity
-} from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import SymbioticGuardianVisual from '@/components/landing/SymbioticGuardianVisual';
-import PathologySection from '@/components/landing/PathologySection';
-import TreatmentSection from '@/components/landing/TreatmentSection';
-import AtomicSignalsSection from '@/components/landing/AtomicSignalsSection';
-import PricingSection from '@/components/landing/PricingSection';
-import InteractiveHoverText from '@/components/ui/InteractiveHoverText';
+  BarChart3,
+  ChevronRight,
+  Beaker,
+  CheckCircle2,
+  AlertTriangle,
+  Layers,
+  Cpu,
+  ArrowRight,
+  Terminal,
+  Search,
+  History,
+  Activity,
+} from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import SymbioticGuardianVisual from "@/components/landing/SymbioticGuardianVisual";
+import PathologySection from "@/components/landing/PathologySection";
+import TreatmentSection from "@/components/landing/TreatmentSection";
+import AtomicSignalsSection from "@/components/landing/AtomicSignalsSection";
+import PricingSection from "@/components/landing/PricingSection";
+import InteractiveHoverText from "@/components/ui/InteractiveHoverText";
+import SilkGradientBg from "@/components/landing/SilkGradientBg";
+import MarketingNavbar from "@/components/layout/MarketingNavbar";
 
 export default function Home() {
-    const router = useRouter();
-    const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-    useEffect(() => {
-        const token = localStorage.getItem('access_token');
-        if (token) {
-            setIsLoggedIn(true);
-        }
-    }, []);
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (token) {
+      setIsLoggedIn(true);
+    }
+  }, []);
 
-    return (
-        <div className="min-h-screen text-slate-200 selection:bg-emerald-500/30 font-sans">
-            {/* 1. Navbar */}
-            <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-[#0a0a0c]/80 backdrop-blur-xl">
-                <div className="w-full px-6 md:px-12 lg:px-16 h-[90px] flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        {/* Logo: Croc & Bird Silhouette (SVG for now, replace with logo.png later) */}
-                        <div className="relative w-14 h-14 pointer-events-none select-none hover:scale-105 transition-transform duration-300 flex items-center justify-center">
-                            {/* Logo: Croc & Bird Silhouette (SVG for now, replace with logo.png later) */}
-                            <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]">
-                                <path
-                                    d="M20 50 C 20 20, 80 20, 80 50 L 80 80 L 20 80 Z"
-                                    fill="none"
-                                    stroke="#06b6d4"
-                                    strokeWidth="4"
-                                    className="animate-pulse"
-                                />
-                                <circle cx="40" cy="45" r="5" fill="#10b981" />
-                                <path d="M60 60 L 90 40" stroke="#10b981" strokeWidth="2.5" />
-                            </svg>
-                        </div>
-                        <span className="text-3xl font-black tracking-tighter text-white uppercase transition-colors group-hover:text-emerald-400">PLUVIANAI</span>
-                    </div>
+  return (
+    <div className="min-h-screen text-slate-200 selection:bg-emerald-500/30 font-sans relative">
+      {/* Global Antigravity Background */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#030303]">
+        {/* Deep space radial gradient */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#101018,transparent_50%)] opacity-50" />
 
+        {/* Starry Dust Layer 1 (Dense & Small) */}
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iNDAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJub25lIi8+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjE1KSIvPjxjaXJjbGUgY3g9IjE4MCIgY3k9IjEyMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjIpIi8+PGNpcmNsZSBjeD0iMzIwIiBjeT0iODAiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4xKSIvPjxjaXJjbGUgY3g9IjI1MCIgY3k9IjMyMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjI1KSIvPjxjaXJjbGUgY3g9IjkwIiBjeT0iMjgwIiByPSIxIiBmaWxsPSJyZ2JhLDI1NSwyNTUsMjU1LDAuMTUpIi8+PGNpcmNsZSBjeD0iMzcwIiBjeT0iMjIwIiByPSIxIiBmaWxsPSJyZ2JhLDI1NSwyNTUsMjU1LDAuMikiLz48L3N2Zz4=')] bg-[size:300px_300px] opacity-60" />
 
-                    {/* Right Side Navigation & Actions */}
-                    <div className="flex items-center gap-8 lg:gap-10">
-                        {/* Desktop Navigation Links */}
-                        <div className="hidden lg:flex items-center gap-8 md:gap-10">
-                            {/* Platform Dropdown */}
-                            <div className="relative group/nav">
-                                <button className="flex items-center gap-1.5 text-lg font-medium text-slate-400 hover:text-emerald-400 transition-colors py-8">
-                                    Platform
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="group-hover/nav:rotate-180 transition-transform duration-300">
-                                        <path d="m6 9 6 6 6-6" />
-                                    </svg>
-                                </button>
+        {/* Starry Dust Layer 2 (Sparse & Bright) */}
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJub25lIi8+PGNpcmNsZSBjeD0iMTUwIiBjeT0iMTUwIiByPSIyIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMykiLz48Y2lyY2xlIGN4PSI2NTAiIGN5PSI0NTAiIHI9IjEuNSIgZmlsbD0icmdiYSg2LDE4MiwyMTIsMC41KSIvPjxjaXJjbGUgY3g9IjI1MCIgY3k9IjY1MCIgcj0iMiIgZmlsbD0icmdiYSgxNiwxODUsMTI5LDAuNCkiLz48Y2lyY2xlIGN4PSI1NTAiIGN5PSIyNTAiIHI9IjIuNSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjIpIi8+PC9zdmc+')] bg-[size:800px_800px] opacity-80" />
 
-                                {/* Dropdown Menu - Aligned to Right */}
-                                <div className="absolute top-[80px] right-0 w-64 opacity-0 invisible group-hover/nav:opacity-100 group-hover/nav:visible transition-all duration-300 translate-y-2 group-hover/nav:translate-y-0 z-[60]">
-                                    <div className="p-2 rounded-lg bg-[#0a0a0c]/90 backdrop-blur-2xl border border-white/10 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] overflow-hidden">
-                                        <div className="grid gap-1">
-                                            <a href="#problem" className="flex flex-col gap-0.5 p-3 rounded-md hover:bg-white/5 transition-colors group/item">
-                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Problem</span>
-                                                <span className="text-xs text-slate-500">Silent regressions, no gate</span>
-                                            </a>
-                                            <a href="#features" className="flex flex-col gap-0.5 p-3 rounded-md hover:bg-white/5 transition-colors group/item">
-                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Atomic Signals</span>
-                                                <span className="text-xs text-slate-500">Rule-based quality checks</span>
-                                            </a>
-                                            <a href="#workflow" className="flex flex-col gap-0.5 p-3 rounded-md hover:bg-white/5 transition-colors group/item">
-                                                <span className="text-sm font-bold text-white group-hover/item:text-emerald-400">Workflow</span>
-                                                <span className="text-xs text-slate-500">Live View → Release Gate</span>
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+        {/* Photographic Light Leaks & Lens Flares */}
+        <div className="absolute top-[10%] left-[20%] w-[500px] h-[500px] bg-cyan-900/20 blur-[120px] rounded-full pointer-events-none mix-blend-screen" />
+        <div className="absolute bottom-[20%] right-[10%] w-[600px] h-[600px] bg-emerald-900/20 blur-[150px] rounded-full pointer-events-none mix-blend-screen" />
 
-                            <a href="#pricing" className="text-lg font-bold text-slate-400 hover:text-emerald-400 transition-colors">Pricing</a>
-                            <a href="/docs" className="text-lg font-bold text-slate-400 hover:text-emerald-400 transition-colors">Docs</a>
-                        </div>
+        {/* Anamorphic Flare Line */}
+        <div className="absolute top-[40%] left-[-10%] w-[120%] h-[2px] bg-cyan-500/30 blur-[2px] -rotate-12 pointer-events-none mix-blend-screen" />
+        <div className="absolute top-[40%] left-[-10%] w-[120%] h-[20px] bg-cyan-500/10 blur-[20px] -rotate-12 pointer-events-none mix-blend-screen" />
 
-                        <div className="h-8 w-[1px] bg-white/10 hidden lg:block" />
+        {/* Floating Particles (Photographic depth) */}
+        <div className="absolute top-[15%] left-[15%] w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_10px_2px_rgba(16,185,129,0.8)] opacity-80" />
+        <div className="absolute top-[30%] left-[20%] w-3 h-3 rounded-full bg-emerald-300 blur-[1px] shadow-[0_0_15px_3px_rgba(16,185,129,0.6)] opacity-60" />
+        <div className="absolute top-[20%] right-[18%] w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_2px_rgba(6,182,212,0.8)] opacity-90" />
+        <div className="absolute bottom-[25%] left-[25%] w-2.5 h-2.5 rounded-full bg-cyan-300 blur-[1px] shadow-[0_0_12px_2px_rgba(6,182,212,0.8)] opacity-70" />
+        <div className="absolute bottom-[35%] right-[15%] w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_10px_2px_rgba(16,185,129,0.8)] opacity-80" />
+      </div>
 
-                            {isLoggedIn ? (
-                                <Link href="/organizations">
-                                    <Button className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-10 h-12 text-lg rounded-md shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:scale-105 whitespace-nowrap uppercase tracking-widest">
-                                        Go to PluvianAI console
-                                    </Button>
-                                </Link>
-                            ) : (
-                            <>
-                                <div className="hidden md:flex items-center gap-6 text-lg font-bold">
-                                    <Link href="/login" className="text-slate-400 hover:text-white transition-colors">Log In</Link>
-                                    <Link href="/login?mode=signup" className="text-slate-400 hover:text-white transition-colors">Sign Up</Link>
-                                </div>
-                                <Link href="/login?intent=validation">
-                                    <Button className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-8 h-12 text-lg rounded-md shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:scale-105 whitespace-nowrap uppercase tracking-widest">
-                                        Try Node Regression Guard
-                                    </Button>
-                                </Link>
-                            </>
-                        )}
-                    </div>
-                </div>
-            </nav>
+      {/* ====== Global Vector Shapes & Curtain Lights ====== */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 mix-blend-screen">
+        {/* 1. Global Diagonal Curtain Lights (Upper-Mid Section) */}
+        <div className="fixed top-[20%] right-[-10%] w-[120%] h-[300px] bg-gradient-to-r from-transparent via-cyan-900/20 to-transparent -rotate-[35deg] blur-[60px] pointer-events-none" />
+        <div className="fixed top-[40%] right-[-20%] w-[150%] h-[400px] bg-gradient-to-r from-transparent via-emerald-900/15 to-transparent -rotate-[35deg] blur-[80px] pointer-events-none" />
 
-            {/* 2. Hero Section */}
-            <section className="relative min-h-screen flex flex-col items-center justify-center pt-40 pb-20 overflow-hidden bg-[#0a0a0c] z-10 transition-all duration-700">
-                {/* Background Video - Absolute to Hero Section */}
-                <div className="absolute inset-0 w-full h-full z-0 pointer-events-none">
-                    <video
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        className="w-full h-full object-cover opacity-60 scale-105"
-                    >
-                        <source src="/new-hero.mp4" type="video/mp4" />
-                    </video>
-                    {/* Dark Overlay for Text Readability - Optimized for text pop */}
-                    <div className="absolute inset-0 bg-black/40" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0c] via-transparent to-[#0a0a0c]/60" />
-                    <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0c]/80 via-transparent to-transparent" />
-                </div>
+        {/* 2. Middle Section Vector Capsules (Near Pathology/Treatment) */}
+        <div className="absolute top-[1200px] -left-[120px] w-[250px] h-[600px] border-[8px] border-cyan-500 rounded-r-full opacity-60 shadow-[0_0_50px_rgba(6,182,212,0.3)]" />
+        <div className="absolute top-[2800px] -right-[250px] w-[600px] h-[900px] border-[10px] border-emerald-500 rounded-l-full opacity-50 shadow-[0_0_70px_rgba(16,185,129,0.2)]" />
+        <div className="absolute top-[3500px] -left-[100px] w-[200px] h-[300px] border-[8px] border-white/80 rounded-r-full opacity-80 shadow-[0_0_40px_rgba(255,255,255,0.2)]" />
+      </div>
 
-                {/* Ambient Glow */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[800px] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-emerald-500/10 via-transparent to-transparent pointer-events-none -z-10 blur-3xl" />
+      {/* 1. Navbar */}
+      <MarketingNavbar active="home" />
 
-                <div className="w-full max-w-[1400px] mx-auto px-6 relative z-10 text-center flex flex-col items-center">
+      {/* 2. Hero Section */}
+      <section className="relative min-h-screen flex flex-col items-center justify-center pt-40 pb-20 overflow-hidden bg-transparent z-10 transition-all duration-700">
+        {/* ====== Flashy Geometric Light Beams Background ====== */}
 
-                    {/* Validation Badge - Premium Glassmorphism */}
-                    <div className="inline-flex items-center gap-3 px-5 py-2 rounded-full bg-emerald-950/30 border border-emerald-500/20 text-emerald-400 text-sm font-bold tracking-widest uppercase mb-16 shadow-[0_0_30px_-5px_rgba(16,185,129,0.2)] backdrop-blur-md hover:border-emerald-500/40 transition-colors cursor-default">
-                        <div className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                        </div>
-                        Node-level Regression Guard
-                    </div>
+        {/* -- LEFT BEAM (Cyan/Emerald) -- */}
+        <div
+          className="absolute top-1/2 -left-[40%] md:-left-[25%] w-[60%] md:w-[45%] h-[160%] -translate-y-1/2 rounded-[100%] pointer-events-none -z-10
+                    border-r-[4px] border-cyan-400 
+                    bg-gradient-to-l from-cyan-500/40 via-emerald-900/10 to-transparent 
+                    shadow-[inset_-40px_0_120px_rgba(34,211,238,0.4),_10px_0_60px_rgba(16,185,129,0.3)] 
+                    opacity-90 transform-gpu rotate-[-8deg] md:rotate-[-6deg]"
+        />
 
-                    <div className="max-w-6xl mx-auto space-y-10">
-                        {/* Headline - Brand Promise First */}
-                        <div className="space-y-4">
-                            <h1 className="text-6xl md:text-8xl font-[900] tracking-tight text-white leading-[1.1] drop-shadow-2xl">
-                                The Symbiotic Guardian <br />
-                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-emerald-400 animate-gradient-x pb-2">
-                                    for AI Agents.
-                                </span>
-                            </h1>
-                            <p className="text-xl md:text-2xl text-white max-w-3xl mx-auto font-semibold leading-relaxed pt-6">
-                                Stop shipping silent regressions.<br />
-                                <span className="text-slate-300">Get a pass/fail gate on real traces before you deploy.</span>
-                            </p>
-                        </div>
+        {/* -- RIGHT BEAM (Emerald/Cyan) -- */}
+        <div
+          className="absolute top-1/2 -right-[40%] md:-right-[25%] w-[60%] md:w-[45%] h-[160%] -translate-y-1/2 rounded-[100%] pointer-events-none -z-10
+                    border-l-[4px] border-emerald-400 
+                    bg-gradient-to-r from-emerald-500/40 via-cyan-900/10 to-transparent 
+                    shadow-[inset_40px_0_120px_rgba(16,185,129,0.4),_-10px_0_60px_rgba(34,211,238,0.3)] 
+                    opacity-90 transform-gpu rotate-[8deg] md:rotate-[6deg]"
+        />
 
-                        {/* CTA Buttons */}
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-8">
-                            {isLoggedIn ? (
-                                <Link href="/organizations">
-                                    <Button className="h-16 px-12 text-2xl font-black rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_50px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_70px_-10px_rgba(16,185,129,0.7)] transition-all hover:scale-[1.02] uppercase tracking-tighter">
-                                        Go to PluvianAI console
-                                    </Button>
-                                </Link>
-                            ) : (
-                                <Link href="/login?mode=signup&intent=trial">
-                                    <Button className="h-16 px-12 text-2xl font-black rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_50px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_70px_-10px_rgba(16,185,129,0.7)] transition-all hover:scale-[1.02] uppercase tracking-tighter">
-                                        Try Node Regression Guard
-                                    </Button>
-                                </Link>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </section>
+        {/* -- BOTTOM FLARE -- */}
+        <div
+          className="absolute bottom-[-10%] left-1/2 -translate-x-1/2 w-[80%] h-[40%] pointer-events-none -z-10
+                    bg-gradient-to-t from-cyan-950/60 via-emerald-900/20 to-transparent 
+                    blur-[80px] rounded-full mix-blend-screen"
+        />
 
-            {/* 3. Social Proof */}
-            <section className="py-16 border-y border-white/5 bg-[#08080a]/80 backdrop-blur-sm relative z-10">
-                <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16">
-                    <p className="text-center text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600 mb-10">
-                        Compatible with OpenAI, Anthropic, Google & more
-                    </p>
-                    <div className="flex flex-wrap justify-center items-center gap-12 md:gap-24 opacity-30 grayscale hover:grayscale-0 transition-all duration-700 brightness-200">
-                        <span className="text-xl font-bold tracking-tighter">ANTHROPIC</span>
-                        <span className="text-xl font-bold tracking-tighter">OPENAI</span>
-                        <span className="text-xl font-bold tracking-tighter">MISTRAL</span>
-                        <span className="text-xl font-bold tracking-tighter">LANGCHAIN</span>
-                        <span className="text-xl font-bold tracking-tighter">COHERE</span>
-                    </div>
-                </div>
-            </section>
+        {/* Center vignette to push focus to text */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_40%,transparent_30%,#030303_100%)] pointer-events-none -z-10 opacity-70" />
 
-            {/* 4. The Pathology (Problem) */}
-            <div className="relative z-10">
-                <PathologySection />
+        <div className="w-full max-w-[1400px] mx-auto px-6 relative z-10 text-center flex flex-col items-center">
+          <div className="max-w-6xl mx-auto space-y-10">
+            {/* Headline - Brand Promise First */}
+            <div className="space-y-4">
+              <h1 className="text-7xl md:text-[90px] font-extrabold tracking-tight text-white leading-[1.0] drop-shadow-2xl">
+                Build confidence. <br />
+                <span className="text-emerald-500">Before you deploy.</span>
+              </h1>
+              <p className="text-xl text-slate-400 max-w-3xl mx-auto font-medium leading-relaxed pt-6">
+                Replay real production traces, compare behavior diffs, and enforce a strict
+                pass/fail Release Gate so you ship only what’s safe.
+              </p>
             </div>
 
-            {/* 4.5. Atomic Signals */}
-            <div className="relative z-10">
-                <AtomicSignalsSection />
+            {/* CTA Buttons */}
+            <div className="flex items-center justify-center pt-10">
+              {isLoggedIn ? (
+                <Link href="/organizations">
+                  <Button className="h-16 px-12 text-xl !font-extrabold rounded-full bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_60px_-10px_rgba(16,185,129,0.55)] hover:shadow-[0_0_80px_-10px_rgba(16,185,129,0.75)] transition-all hover:scale-[1.03]">
+                    Get Started
+                    <ArrowRight className="w-5 h-5" />
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/login?mode=signup&intent=trial">
+                  <Button className="h-16 px-12 text-xl !font-extrabold rounded-full bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_60px_-10px_rgba(16,185,129,0.55)] hover:shadow-[0_0_80px_-10px_rgba(16,185,129,0.75)] transition-all hover:scale-[1.03]">
+                    Get Started
+                    <ArrowRight className="w-5 h-5" />
+                  </Button>
+                </Link>
+              )}
             </div>
-
-            {/* 5. The Treatment (Solution/Workflow) */}
-            <div className="relative z-10">
-                <TreatmentSection />
-            </div>
-
-            {/* 6. Pricing Section */}
-            <div className="relative z-10">
-                <PricingSection isLoggedIn={isLoggedIn} />
-            </div>
-
-            {/* 7. CTA Footer */}
-            <footer className="py-48 border-t border-white/5 relative overflow-hidden text-center bg-[#08080a]/90 backdrop-blur-md z-10">
-                <div className="absolute -bottom-60 left-1/2 -translate-x-1/2 w-full max-w-5xl h-96 bg-emerald-500/10 blur-[150px] rounded-full opacity-50 pointer-events-none" />
-
-                <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16 space-y-12 relative z-10">
-                    <h2 className="text-6xl md:text-[80px] font-bold tracking-tight text-white leading-[0.9]">
-                        Stop praying, <br /> start testing.
-                    </h2>
-                    <p className="text-xl text-slate-400 max-w-xl mx-auto leading-relaxed">
-                        Join the elite engineering teams using PluvianAI to build safe, scalable, and predictable AI agents.
-                    </p>
-                    <div className="pt-8 flex flex-col sm:flex-row gap-6 justify-center">
-                        {isLoggedIn ? (
-                            <Link href="/organizations">
-                                <Button className="h-16 px-12 bg-emerald-500 text-black hover:bg-emerald-400 rounded-xl text-xl font-black transition-all shadow-[0_0_40px_-10px_rgba(16,185,129,0.6)] uppercase tracking-tight">
-                                    Go to PluvianAI console
-                                </Button>
-                            </Link>
-                        ) : (
-                            <Link href="/login?mode=signup&intent=free">
-                                <Button className="h-16 px-12 bg-emerald-500 text-black hover:bg-emerald-400 rounded-xl text-xl font-black transition-all shadow-[0_0_40px_-10px_rgba(16,185,129,0.6)] uppercase tracking-tight">
-                                    Try Node Regression Guard
-                                </Button>
-                            </Link>
-                        )}
-                    </div>
-                    <div className="flex items-center justify-center gap-6 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-600 pt-16">
-                        <span>No credit card</span>
-                        <div className="w-1 h-1 bg-slate-800 rounded-full" />
-                        <span>Instant SDK integration</span>
-                        <div className="w-1 h-1 bg-slate-800 rounded-full" />
-                        <span>Live View & Release Gate</span>
-                    </div>
-                </div>
-            </footer>
-
-            {/* 8. Final Credits */}
-            <div className="py-12 border-t border-white/5 bg-[#0a0a0c]">
-                <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16 flex flex-col md:flex-row items-center justify-between gap-8">
-                    <div className="flex items-center gap-2.5">
-                        <Beaker className="w-5 h-5 text-emerald-500" />
-                        <span className="text-sm font-bold tracking-tighter text-white uppercase">PluvianAI</span>
-                    </div>
-                    <div className="flex gap-10 text-[11px] font-bold text-slate-600 uppercase tracking-widest">
-                        <a href="#" className="hover:text-emerald-400 transition-colors">Documentation</a>
-                        <a href="#" className="hover:text-emerald-400 transition-colors">Security</a>
-                        <a href="#" className="hover:text-emerald-400 transition-colors">Twitter (X)</a>
-                    </div>
-                    <div className="text-[11px] text-slate-700 font-bold uppercase tracking-widest">
-                        © 2026 PluvianAI Inc. Verified.
-                    </div>
-                </div>
-            </div>
+          </div>
         </div>
-    );
+      </section>
+
+      {/* 4. The Pathology (Problem) */}
+      <div className="relative z-10">
+        <PathologySection />
+      </div>
+
+      {/* 4.5. Atomic Signals */}
+      <div className="relative z-10">
+        <AtomicSignalsSection />
+      </div>
+
+      {/* 5. The Treatment (Solution/Workflow) */}
+      <div className="relative z-10">
+        <TreatmentSection />
+      </div>
+
+      {/* 6. Pricing Section */}
+      <div className="relative z-10">
+        <PricingSection isLoggedIn={isLoggedIn} />
+      </div>
+
+      {/* 7. CTA Footer */}
+      <footer className="py-48 border-t border-white/5 relative overflow-hidden text-center bg-transparent z-10">
+        {/* ====== Vector Shapes & Curtain Lights (Figma Match) ====== */}
+
+        {/* Left Side Vector Capsules */}
+        <div className="absolute top-[10%] -left-[100px] md:-left-[80px] w-[180px] md:w-[220px] h-[400px] md:h-[500px] border-[6px] md:border-[10px] border-cyan-500 rounded-r-full opacity-80 pointer-events-none shadow-[0_0_40px_rgba(6,182,212,0.3)]" />
+        <div className="absolute bottom-[10%] -left-[100px] md:-left-[80px] w-[180px] md:w-[220px] h-[200px] md:h-[250px] border-[6px] md:border-[10px] border-white rounded-r-full opacity-90 pointer-events-none shadow-[0_0_30px_rgba(255,255,255,0.4)]" />
+
+        {/* Right Side Vector Arc */}
+        <div className="absolute top-[-30%] -right-[300px] md:-right-[250px] w-[600px] md:w-[800px] h-[800px] md:h-[1100px] border-[6px] md:border-[10px] border-emerald-500 rounded-l-full opacity-60 pointer-events-none shadow-[0_0_60px_rgba(16,185,129,0.2)]" />
+
+        {/* Diagonal Curtain Lights */}
+        <div className="absolute top-[-40%] right-[-20%] w-[150%] h-[400px] bg-gradient-to-r from-transparent via-cyan-900/40 to-transparent -rotate-[35deg] blur-[80px] pointer-events-none mix-blend-screen" />
+        <div className="absolute top-[-10%] right-[-10%] w-[150%] h-[200px] bg-gradient-to-r from-transparent via-emerald-900/30 to-transparent -rotate-[35deg] blur-[60px] pointer-events-none mix-blend-screen" />
+        <div className="absolute top-[20%] right-[-30%] w-[120%] h-[150px] bg-gradient-to-r from-transparent via-white/5 to-transparent -rotate-[35deg] blur-[40px] pointer-events-none mix-blend-screen" />
+
+        {/* Emerald Glow behind the glass box */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-emerald-500/20 blur-[120px] rounded-full pointer-events-none" />
+        {/* Diagonal grid lines specific to this section to match the Figma reference */}
+        <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.03)_50%,transparent_75%)] bg-[length:60px_60px] pointer-events-none -z-10" />
+
+        <div className="w-full max-w-5xl mx-auto px-6 md:px-12 relative z-10">
+          <div className="rounded-[40px] border border-white/10 bg-white/[0.02] backdrop-blur-2xl py-24 px-8 shadow-2xl relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
+            <h2 className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-6 relative z-10">
+              Ready to PluvianAI?
+            </h2>
+            <p className="text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed mb-12 relative z-10">
+              Don&apos;t be afraid anymore, and distribute with confidence!
+            </p>
+            <div className="flex justify-center relative z-10">
+              {isLoggedIn ? (
+                <Link href="/organizations">
+                  <Button className="h-14 px-8 bg-emerald-500 text-black hover:bg-emerald-400 rounded-full text-lg font-bold transition-all shadow-[0_0_30px_-5px_rgba(16,185,129,0.5)]">
+                    Get Started
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/login?mode=signup&intent=free">
+                  <Button className="h-14 px-8 bg-emerald-500 text-black hover:bg-emerald-400 rounded-full text-lg font-bold transition-all shadow-[0_0_30px_-5px_rgba(16,185,129,0.5)]">
+                    Get Started
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Button>
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      </footer>
+
+      {/* 8. Final Credits */}
+      <div className="py-20 border-t border-white/5 bg-black/50 text-slate-400">
+        <div className="w-full max-w-7xl mx-auto px-6 md:px-12 grid grid-cols-1 md:grid-cols-4 gap-12 text-sm">
+          <div className="col-span-1 md:col-span-1 space-y-4">
+            <h3 className="text-xl font-bold text-white mb-6">About Us</h3>
+            <p className="leading-relaxed text-slate-500">
+              We&apos;re a team of designers, engineers, and innovators building AI tools that
+              empower anyone to turn imagination into stunning visuals—faster, smarter, and
+              effortlessly.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="font-bold text-emerald-500 mb-6">Useful Links</h4>
+            <ul className="space-y-4">
+              <li>
+                <a href="#" className="hover:text-emerald-400 transition-colors">
+                  About
+                </a>
+              </li>
+              <li>
+                <a href="#" className="hover:text-emerald-400 transition-colors">
+                  Services
+                </a>
+              </li>
+              <li>
+                <a href="#" className="hover:text-emerald-400 transition-colors">
+                  Team
+                </a>
+              </li>
+              <li>
+                <a href="#" className="hover:text-emerald-400 transition-colors">
+                  Prices
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="font-bold text-emerald-500 mb-6">Help</h4>
+            <ul className="space-y-4">
+              <li>
+                <a href="#" className="hover:text-emerald-400 transition-colors">
+                  Customer Support
+                </a>
+              </li>
+              <li>
+                <a href="#" className="hover:text-emerald-400 transition-colors">
+                  Terms & Conditions
+                </a>
+              </li>
+              <li>
+                <a href="#" className="hover:text-emerald-400 transition-colors">
+                  Privacy Policy
+                </a>
+              </li>
+              <li>
+                <a href="#" className="hover:text-emerald-400 transition-colors">
+                  Contact Us
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="font-bold text-emerald-500 mb-6">Connect With Us</h4>
+            <ul className="space-y-4 text-slate-500">
+              <li>
+                27 Division St, New York,
+                <br />
+                NY 10002, USA
+              </li>
+              <li className="pt-2">+123 324 2653</li>
+              <li>username@mail.com</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Massive Brand Text (CodeRabbit Style) */}
+        <div className="w-full overflow-hidden flex justify-center mt-12 md:mt-24 select-none pointer-events-none relative z-10">
+          <h2
+            className="text-[17vw] font-black tracking-tighter uppercase whitespace-nowrap text-transparent leading-none"
+            style={{
+              WebkitTextStroke: "1px rgba(16, 185, 129, 0.6)",
+              maskImage: "linear-gradient(to bottom, black 20%, transparent 90%)",
+              WebkitMaskImage: "linear-gradient(to bottom, black 20%, transparent 90%)",
+            }}
+          >
+            PLUVIANAI
+          </h2>
+        </div>
+
+        <div className="w-full max-w-7xl mx-auto px-6 md:px-12 mt-[-20px] md:mt-[-40px] pt-8 border-t border-emerald-500/10 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500 relative z-20">
+          <div>© 2026 All Right Reserved.</div>
+        </div>
+      </div>
+    </div>
+  );
 }

@@ -1,22 +1,22 @@
 version: '3.8'
 
-# AgentGuard Self-hosted Deployment
-# For Enterprise customers who need to run AgentGuard on their own infrastructure
+# PluvianAI Self-hosted Deployment
+# For Enterprise customers who need to run PluvianAI on their own infrastructure
 
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: agentguard-postgres-selfhosted
+    container_name: pluvianai-postgres-selfhosted
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-agentguard}
+      POSTGRES_USER: ${POSTGRES_USER:-pluvianai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-production}
-      POSTGRES_DB: ${POSTGRES_DB:-agentguard}
+      POSTGRES_DB: ${POSTGRES_DB:-pluvianai}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agentguard}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pluvianai}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,7 +24,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: agentguard-redis-selfhosted
+    container_name: pluvianai-redis-selfhosted
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
@@ -41,12 +41,12 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: agentguard-backend-selfhosted
+    container_name: pluvianai-backend-selfhosted
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
       # Database
-      DATABASE_URL: postgresql://${POSTGRES_USER:-agentguard}:${POSTGRES_PASSWORD:-change-me-in-production}@postgres:5432/${POSTGRES_DB:-agentguard}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pluvianai}:${POSTGRES_PASSWORD:-change-me-in-production}@postgres:5432/${POSTGRES_DB:-pluvianai}
       
       # Redis
       REDIS_URL: redis://:${REDIS_PASSWORD:-change-me-in-production}@redis:6379/0
@@ -62,7 +62,7 @@ services:
       # CORS (configure for your domain)
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
       
-      # Optional: LLM Provider API Keys (if using AgentGuard's proxy)
+      # Optional: LLM Provider API Keys (if using PluvianAI proxy)
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
@@ -70,7 +70,7 @@ services:
       # Optional: Email (Resend)
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
-      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-AgentGuard}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-PluvianAI}
       
       # Optional: Slack
       SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
@@ -103,7 +103,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: agentguard-frontend-selfhosted
+    container_name: pluvianai-frontend-selfhosted
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
@@ -132,4 +132,4 @@ volumes:
 
 networks:
   default:
-    name: agentguard-network
+    name: pluvianai-network

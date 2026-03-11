@@ -13,9 +13,7 @@ function normalizeEvalCheckId(rawId: string): string {
  * Build eval rows from a snapshot's stored eval_checks_result (DB).
  * Returns [] if snapshot or eval_checks_result is missing/invalid.
  */
-export function toEvalRows(
-  snapshot: Record<string, unknown> | null | undefined
-): EvalRow[] {
+export function toEvalRows(snapshot: Record<string, unknown> | null | undefined): EvalRow[] {
   if (!snapshot) return [];
   const checks = snapshot.eval_checks_result;
   if (!checks || typeof checks !== "object" || Array.isArray(checks)) return [];

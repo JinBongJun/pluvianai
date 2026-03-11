@@ -5,14 +5,14 @@ import sys
 # Add local SDK path for testing without installation
 sys.path.append(os.path.join(os.getcwd(), 'sdk', 'python'))
 
-import agentguard
+import pluvianai
 
 def verify_sdk():
-    print("AgentGuard SDK Verification Tool")
+    print("PluvianAI SDK Verification Tool")
     print("--------------------------------")
     
     # 1. Get configuration from user
-    api_key = input("Enter your AgentGuard API Key (from Dashboard > Settings > API Keys): ").strip()
+    api_key = input("Enter your PluvianAI API Key (from Dashboard > Settings > API Keys): ").strip()
     if not api_key:
         print("API Key is required!")
         return
@@ -22,15 +22,15 @@ def verify_sdk():
         print("Project ID is required!")
         return
 
-    api_url = input("Enter AgentGuard API URL (default: http://localhost:8000): ").strip()
+    api_url = input("Enter PluvianAI API URL (default: http://localhost:8000): ").strip()
     if not api_url:
         api_url = "http://localhost:8000"
 
-    print(f"\nInitializing AgentGuard with Project ID: {project_id}...")
+    print(f"\nInitializing PluvianAI with Project ID: {project_id}...")
     
     # 2. Initialize SDK
     try:
-        agentguard.init(
+        pluvianai.init(
             api_key=api_key,
             project_id=int(project_id),
             api_url=api_url
@@ -43,10 +43,10 @@ def verify_sdk():
 
     # 3. Manually track a fake call
     try:
-        agentguard.track_call(
+        pluvianai.track_call(
             request_data={
                 "model": "gpt-4-test",
-                "messages": [{"role": "user", "content": "Hello AgentGuard!"}]
+                "messages": [{"role": "user", "content": "Hello PluvianAI!"}]
             },
             response_data={
                 "choices": [{"message": {"content": "Hello! I confirm the SDK is working."}}],

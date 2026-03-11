@@ -1,5 +1,5 @@
 {
-  "name": "@agentguard/sdk",
+  "name": "pluvianai",
   "version": "0.1.0",
   "description": "Zero-config monitoring for LLM APIs",
   "main": "dist/index.js",
@@ -9,8 +9,8 @@
     "test": "jest",
     "prepublishOnly": "npm run build"
   },
-  "keywords": ["llm", "monitoring", "agent", "openai", "anthropic"],
-  "author": "AgentGuard",
+  "keywords": ["llm", "monitoring", "agent", "openai", "anthropic", "pluvianai"],
+  "author": "PluvianAI",
   "license": "MIT",
   "dependencies": {
     "axios": "^1.6.0"
@@ -28,7 +28,3 @@
     }
   }
 }
-
-
-
-

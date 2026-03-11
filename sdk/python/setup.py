@@ -1,5 +1,5 @@
 """
-Setup script for AgentGuard Python SDK
+Setup script for PluvianAI Python SDK
 """
 from setuptools import setup, find_packages
 
@@ -7,13 +7,13 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="agentguard",
+    name="pluvianai",
     version="0.1.0",
-    author="AgentGuard",
+    author="PluvianAI",
     description="Zero-config monitoring for LLM APIs",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/agentguard/agentguard-python",
+    url="https://github.com/pluvianai/pluvianai-python",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",

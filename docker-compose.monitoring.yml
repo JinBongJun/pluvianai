@@ -1,12 +1,12 @@
 version: '3.8'
 
-# Monitoring stack for AgentGuard
+# Monitoring stack for PluvianAI
 # Usage: docker-compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 
 services:
   prometheus:
     image: prom/prometheus:latest
-    container_name: agentguard-prometheus
+    container_name: pluvianai-prometheus
     ports:
       - "9090:9090"
     volumes:
@@ -24,7 +24,7 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    container_name: agentguard-grafana
+    container_name: pluvianai-grafana
     ports:
       - "3001:3000"
     environment:

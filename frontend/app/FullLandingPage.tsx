@@ -28,6 +28,7 @@ import TreatmentSection from "@/components/landing/TreatmentSection";
 import AtomicSignalsSection from "@/components/landing/AtomicSignalsSection";
 import PricingSection from "@/components/landing/PricingSection";
 import InteractiveHoverText from "@/components/ui/InteractiveHoverText";
+import SilkGradientBg from "@/components/landing/SilkGradientBg";
 
 export default function Home() {
   const router = useRouter();
@@ -41,7 +42,18 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen text-slate-200 selection:bg-emerald-500/30 font-sans">
+    <div className="min-h-screen text-slate-200 selection:bg-emerald-500/30 font-sans relative">
+      {/* ====== Global Vector Shapes & Curtain Lights ====== */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 mix-blend-screen">
+        {/* 1. Global Diagonal Curtain Lights (Upper-Mid Section) */}
+        <div className="fixed top-[20%] right-[-10%] w-[120%] h-[300px] bg-gradient-to-r from-transparent via-cyan-900/20 to-transparent -rotate-[35deg] blur-[60px] pointer-events-none" />
+        <div className="fixed top-[40%] right-[-20%] w-[150%] h-[400px] bg-gradient-to-r from-transparent via-emerald-900/15 to-transparent -rotate-[35deg] blur-[80px] pointer-events-none" />
+        {/* 2. Middle Section Vector Capsules (Near Pathology/Treatment) */}
+        <div className="absolute top-[1200px] -left-[120px] w-[250px] h-[600px] border-[8px] border-cyan-500 rounded-r-full opacity-60 shadow-[0_0_50px_rgba(6,182,212,0.3)]" />
+        <div className="absolute top-[2800px] -right-[250px] w-[600px] h-[900px] border-[10px] border-emerald-500 rounded-l-full opacity-50 shadow-[0_0_70px_rgba(16,185,129,0.2)]" />
+        <div className="absolute top-[3500px] -left-[100px] w-[200px] h-[300px] border-[8px] border-white/80 rounded-r-full opacity-80 shadow-[0_0_40px_rgba(255,255,255,0.2)]" />
+      </div>
+
       {/* 1. Navbar */}
       <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-[#0a0a0c]/80 backdrop-blur-xl">
         <div className="w-full px-6 md:px-12 lg:px-16 h-[90px] flex items-center justify-between">
@@ -75,7 +87,7 @@ export default function Home() {
             <div className="hidden lg:flex items-center gap-8 md:gap-10">
               {/* Platform Dropdown */}
               <div className="relative group/nav">
-                <button className="flex items-center gap-1.5 text-lg font-medium text-slate-400 hover:text-emerald-400 transition-colors py-8">
+                <button className="flex items-center gap-1.5 text-lg font-bold text-slate-400 hover:text-emerald-400 transition-colors py-8">
                   Platform
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -135,13 +147,13 @@ export default function Home() {
 
               <a
                 href="#pricing"
-                className="text-lg font-bold text-slate-400 hover:text-emerald-400 transition-colors"
+                className="text-lg font-extrabold text-slate-400 hover:text-emerald-400 transition-colors"
               >
                 Pricing
               </a>
               <a
                 href="/docs"
-                className="text-lg font-bold text-slate-400 hover:text-emerald-400 transition-colors"
+                className="text-lg font-extrabold text-slate-400 hover:text-emerald-400 transition-colors"
               >
                 Docs
               </a>
@@ -151,8 +163,9 @@ export default function Home() {
 
             {isLoggedIn ? (
               <Link href="/organizations">
-                <Button className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-10 h-12 text-lg rounded-md shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:scale-105 whitespace-nowrap uppercase tracking-widest">
-                  Enter Laboratory
+                <Button className="bg-emerald-500 hover:bg-emerald-400 text-black !font-extrabold px-10 h-12 text-lg rounded-full shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:scale-105 whitespace-nowrap uppercase tracking-widest">
+                  Guard My Agents
+                  <ArrowRight className="w-5 h-5" />
                 </Button>
               </Link>
             ) : (
@@ -169,8 +182,9 @@ export default function Home() {
                   </Link>
                 </div>
                 <Link href="/login?intent=validation">
-                  <Button className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-8 h-12 text-lg rounded-md shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:scale-105 whitespace-nowrap uppercase tracking-widest">
-                    Start Validation
+                  <Button className="bg-emerald-500 hover:bg-emerald-400 text-black !font-extrabold px-8 h-12 text-lg rounded-full shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:scale-105 whitespace-nowrap uppercase tracking-widest">
+                    Guard My Agents
+                    <ArrowRight className="w-5 h-5" />
                   </Button>
                 </Link>
               </>
@@ -180,26 +194,36 @@ export default function Home() {
       </nav>
 
       {/* 2. Hero Section */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center pt-40 pb-20 overflow-hidden bg-[#0a0a0c] z-10 transition-all duration-700">
-        {/* Background Video - Absolute to Hero Section */}
-        <div className="absolute inset-0 w-full h-full z-0 pointer-events-none">
-          <video
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover opacity-60 scale-105"
-          >
-            <source src="/new-hero.mp4" type="video/mp4" />
-          </video>
-          {/* Dark Overlay for Text Readability - Optimized for text pop */}
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0c] via-transparent to-[#0a0a0c]/60" />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0c]/80 via-transparent to-transparent" />
-        </div>
+      <section className="relative min-h-screen flex flex-col items-center justify-center pt-40 pb-20 overflow-hidden bg-[#030303] z-10 transition-all duration-700">
+        {/* ====== Flashy Geometric Light Beams Background ====== */}
 
-        {/* Ambient Glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[800px] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-emerald-500/10 via-transparent to-transparent pointer-events-none -z-10 blur-3xl" />
+        {/* -- LEFT BEAM (Cyan/Emerald) -- */}
+        <div
+          className="absolute top-1/2 -left-[50%] md:-left-[25%] w-[80%] md:w-[45%] h-[180%] -translate-y-1/2 rounded-[100%] pointer-events-none -z-10
+            border-r-[6px] border-cyan-300 
+            bg-gradient-to-l from-cyan-400/40 via-emerald-800/20 to-transparent 
+            shadow-[inset_-60px_0_150px_rgba(34,211,238,0.5),_10px_0_80px_rgba(16,185,129,0.4)] 
+            opacity-90 transform-gpu rotate-[-6deg] md:rotate-[-4deg]"
+        />
+
+        {/* -- RIGHT BEAM (Emerald/Cyan) -- */}
+        <div
+          className="absolute top-1/2 -right-[50%] md:-right-[25%] w-[80%] md:w-[45%] h-[180%] -translate-y-1/2 rounded-[100%] pointer-events-none -z-10
+            border-l-[6px] border-emerald-300 
+            bg-gradient-to-r from-emerald-400/40 via-cyan-800/20 to-transparent 
+            shadow-[inset_60px_0_150px_rgba(16,185,129,0.5),_-10px_0_80px_rgba(34,211,238,0.4)] 
+            opacity-90 transform-gpu rotate-[6deg] md:rotate-[4deg]"
+        />
+
+        {/* -- BOTTOM FLARE -- */}
+        <div
+          className="absolute bottom-[-10%] left-1/2 -translate-x-1/2 w-[80%] h-[40%] pointer-events-none -z-10
+            bg-gradient-to-t from-cyan-950/60 via-emerald-900/20 to-transparent 
+            blur-[80px] rounded-full mix-blend-screen"
+        />
+
+        {/* Center vignette to push focus to text */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_40%,transparent_30%,#030303_100%)] pointer-events-none -z-10 opacity-80" />
 
         <div className="w-full max-w-[1400px] mx-auto px-6 relative z-10 text-center flex flex-col items-center">
           {/* Validation Badge - Premium Glassmorphism */}
@@ -214,16 +238,16 @@ export default function Home() {
           <div className="max-w-6xl mx-auto space-y-10">
             {/* Headline - Brand Promise First */}
             <div className="space-y-4">
-              <h1 className="text-6xl md:text-8xl font-[900] tracking-tight text-white leading-[1.1] drop-shadow-2xl">
+              <h1 className="text-6xl md:text-8xl font-extrabold tracking-tight text-white leading-[1.1] drop-shadow-2xl">
                 The Symbiotic Guardian <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-emerald-400 animate-gradient-x pb-2">
                   for AI Agents.
                 </span>
               </h1>
-              <p className="text-xl md:text-2xl text-white max-w-3xl mx-auto font-semibold leading-relaxed pt-6">
-                Cut hallucination rates & logic errors in half. Instantly.
+              <p className="text-xl md:text-2xl text-white max-w-3xl mx-auto font-extrabold leading-relaxed pt-6">
+                Cut hallucination rates &amp; logic errors in half. Instantly.
                 <br />
-                <span className="text-slate-300">
+                <span className="text-slate-300 font-bold">
                   We don&apos;t build the Agent. We{" "}
                   <span className="text-emerald-400 font-bold">cure</span> it.
                 </span>
@@ -231,37 +255,57 @@ export default function Home() {
             </div>
 
             {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-8">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
               {isLoggedIn ? (
                 <Link href="/organizations">
-                  <Button className="h-16 px-12 text-2xl font-black rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_50px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_70px_-10px_rgba(16,185,129,0.7)] transition-all hover:scale-[1.02] uppercase tracking-tighter">
-                    Return to Laboratory
+                  <Button className="h-14 px-10 text-lg !font-extrabold rounded-full bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_50px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_70px_-10px_rgba(16,185,129,0.7)] transition-all hover:scale-[1.02]">
+                    Get Started
+                    <ArrowRight className="w-5 h-5" />
                   </Button>
                 </Link>
               ) : (
                 <Link href="/login?mode=signup&intent=trial">
-                  <Button className="h-16 px-12 text-2xl font-black rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_50px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_70px_-10px_rgba(16,185,129,0.7)] transition-all hover:scale-[1.02] uppercase tracking-tighter">
-                    Start Clinical Trial
+                  <Button className="h-14 px-10 text-lg !font-extrabold rounded-full bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_50px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_70px_-10px_rgba(16,185,129,0.7)] transition-all hover:scale-[1.02]">
+                    Get Started
+                    <ArrowRight className="w-5 h-5" />
                   </Button>
                 </Link>
               )}
+              <a href="#problem">
+                <Button
+                  variant="outline"
+                  className="h-14 px-10 text-lg !font-bold rounded-full border-white/20 hover:border-white/40 text-white hover:bg-white/5 transition-all"
+                >
+                  See Details
+                </Button>
+              </a>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 3. Social Proof */}
-      <section className="py-16 border-y border-white/5 bg-[#08080a]/80 backdrop-blur-sm relative z-10">
-        <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16">
-          <p className="text-center text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600 mb-10">
-            Compatible with all major clinical models
-          </p>
-          <div className="flex flex-wrap justify-center items-center gap-12 md:gap-24 opacity-30 grayscale hover:grayscale-0 transition-all duration-700 brightness-200">
-            <span className="text-xl font-bold tracking-tighter">ANTHROPIC</span>
-            <span className="text-xl font-bold tracking-tighter">OPENAI</span>
-            <span className="text-xl font-bold tracking-tighter">MISTRAL</span>
-            <span className="text-xl font-bold tracking-tighter">LANGCHAIN</span>
-            <span className="text-xl font-bold tracking-tighter">COHERE</span>
+      {/* 3. Stats Bar */}
+      <section className="py-16 border-y border-white/5 bg-[#030303] relative z-10">
+        <div className="w-full max-w-[1400px] mx-auto px-6 md:px-12 lg:px-16">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8 text-center">
+            <div className="space-y-2">
+              <p className="text-emerald-400 text-sm font-bold uppercase tracking-widest">
+                Agents Protected
+              </p>
+              <p className="text-5xl md:text-6xl font-black text-white tracking-tight">2.4K+</p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-emerald-400 text-sm font-bold uppercase tracking-widest">
+                Traces Analyzed
+              </p>
+              <p className="text-5xl md:text-6xl font-black text-white tracking-tight">1.2M+</p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-emerald-400 text-sm font-bold uppercase tracking-widest">
+                Regressions Caught
+              </p>
+              <p className="text-5xl md:text-6xl font-black text-white tracking-tight">18K+</p>
+            </div>
           </div>
         </div>
       </section>
@@ -288,6 +332,19 @@ export default function Home() {
 
       {/* 7. CTA Footer */}
       <footer className="py-48 border-t border-white/5 relative overflow-hidden text-center bg-[#08080a]/90 backdrop-blur-md z-10">
+        {/* ====== Vector Shapes & Curtain Lights (Figma Match) ====== */}
+        {/* Left Side Vector Capsules */}
+        <div className="absolute top-[10%] -left-[100px] md:-left-[80px] w-[180px] md:w-[220px] h-[400px] md:h-[500px] border-[6px] md:border-[10px] border-cyan-500 rounded-r-full opacity-80 pointer-events-none shadow-[0_0_40px_rgba(6,182,212,0.3)]" />
+        <div className="absolute bottom-[10%] -left-[100px] md:-left-[80px] w-[180px] md:w-[220px] h-[200px] md:h-[250px] border-[6px] md:border-[10px] border-white rounded-r-full opacity-90 pointer-events-none shadow-[0_0_30px_rgba(255,255,255,0.4)]" />
+
+        {/* Right Side Vector Arc */}
+        <div className="absolute top-[-30%] -right-[300px] md:-right-[250px] w-[600px] md:w-[800px] h-[800px] md:h-[1100px] border-[6px] md:border-[10px] border-emerald-500 rounded-l-full opacity-60 pointer-events-none shadow-[0_0_60px_rgba(16,185,129,0.2)]" />
+
+        {/* Diagonal Curtain Lights */}
+        <div className="absolute top-[-40%] right-[-20%] w-[150%] h-[400px] bg-gradient-to-r from-transparent via-cyan-900/40 to-transparent -rotate-[35deg] blur-[80px] pointer-events-none mix-blend-screen" />
+        <div className="absolute top-[-10%] right-[-10%] w-[150%] h-[200px] bg-gradient-to-r from-transparent via-emerald-900/30 to-transparent -rotate-[35deg] blur-[60px] pointer-events-none mix-blend-screen" />
+        <div className="absolute top-[20%] right-[-30%] w-[120%] h-[150px] bg-gradient-to-r from-transparent via-white/5 to-transparent -rotate-[35deg] blur-[40px] pointer-events-none mix-blend-screen" />
+
         <div className="absolute -bottom-60 left-1/2 -translate-x-1/2 w-full max-w-5xl h-96 bg-emerald-500/10 blur-[150px] rounded-full opacity-50 pointer-events-none" />
 
         <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16 space-y-12 relative z-10">
@@ -301,14 +358,16 @@ export default function Home() {
           <div className="pt-8 flex flex-col sm:flex-row gap-6 justify-center">
             {isLoggedIn ? (
               <Link href="/organizations">
-                <Button className="h-16 px-12 bg-emerald-500 text-black hover:bg-emerald-400 rounded-xl text-xl font-black transition-all shadow-[0_0_40px_-10px_rgba(16,185,129,0.6)] uppercase tracking-tight">
-                  Launch Clinical Lab
+                <Button className="h-16 px-10 bg-emerald-500 text-black hover:bg-emerald-400 rounded-full text-lg font-bold transition-all shadow-[0_0_40px_-10px_rgba(16,185,129,0.6)] uppercase tracking-tight">
+                  Guard My Agents
+                  <ArrowRight className="w-5 h-5" />
                 </Button>
               </Link>
             ) : (
               <Link href="/login?mode=signup&intent=free">
-                <Button className="h-16 px-12 bg-emerald-500 text-black hover:bg-emerald-400 rounded-xl text-xl font-black transition-all shadow-[0_0_40px_-10px_rgba(16,185,129,0.6)] uppercase tracking-tight">
-                  Enter the Lab for Free
+                <Button className="h-16 px-10 bg-emerald-500 text-black hover:bg-emerald-400 rounded-full text-lg font-bold transition-all shadow-[0_0_40px_-10px_rgba(16,185,129,0.6)] uppercase tracking-tight">
+                  Guard My Agents
+                  <ArrowRight className="w-5 h-5" />
                 </Button>
               </Link>
             )}

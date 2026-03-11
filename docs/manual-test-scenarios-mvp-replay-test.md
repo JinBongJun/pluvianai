@@ -13,10 +13,10 @@
 - **Dataset 커스텀성**: Clinical Log에서 여러 로그를 한 번에 1개 dataset으로 저장하고, 같은 이름 dataset이 있으면 append할 수 있어야 한다.
 - **노드 범위 고정**: dataset은 **single node scope**로 저장/표시/실행되어야 하며, 다른 노드 데이터와 혼합 시 실행 전 차단되어야 한다.
 - **UI 문구 정책**: Live View / Release Gate의 사용자 노출 문구는 **영어(English)만** 사용한다.
-- **Replay Test**: 후보 설정(모델/프롬프트/JSON/tools)을 적용해 `repeat_runs`(1/3/5)로 실행하고 **PASS/FAIL/FLAKY**를 제공한다.
+- **Replay Test**: 후보 설정(모델/프롬프트/JSON/tools)을 적용해 `repeat_runs`(1/10/50/100)로 실행하고 **PASS/FAIL/FLAKY**를 제공한다. JSON 패널은 **model call configuration만** 다루며, snapshot content(user messages/responses)는 여기서 편집하지 않는다.
 - **게이트 판정**: `fail_rate`/`flaky_rate`로 PASS/FAIL을 명확히 결정한다(기본 5%/3%).
 - **에러 UX**: 실패는 항상 **상단 배너 + 필드 하이라이트**로 즉시 이해 가능해야 한다.
-- **Free Tier 한도**: Free 플랜에 대해 **스냅샷·프로젝트·GuardCredits** 월간 한도가 적용되고, 한도 초과 시 403 및 명확한 영어 메시지가 반환·표시된다. Billing/Usage에서 사용량·한도가 노출된다.
+- **Free Tier 한도**: Free 플랜에 대해 **스냅샷·프로젝트·platform replay credits** 월간 한도가 적용되고, 한도 초과 시 403 및 명확한 영어 메시지가 반환·표시된다. Billing/Usage에서 사용량·한도가 노출된다.
 
 ---
 
@@ -40,8 +40,8 @@
 
 | 통합 유형 | 데이터가 우리에게 오는 방식 | 비고 |
 |-----------|-----------------------------|------|
-| **SDK (Python)** | 앱에서 `agentguard.init()` 후 OpenAI 호출 → SDK가 `POST /api/v1/api-calls` 전송 | 현재 구현됨 |
-| **SDK (Node)** | Node에서 `agentguard.init()` 후 OpenAI 호출 → 동일 API 전송 | 현재 구현됨 |
+| **SDK (Python)** | 앱에서 `pluvianai.init()` 후 OpenAI 호출 → SDK가 `POST /api/v1/api-calls` 전송 | 현재 구현됨 |
+| **SDK (Node)** | Node에서 `pluvianai.init()` 후 OpenAI 호출 → 동일 API 전송 | 현재 구현됨 |
 | **n8n** | n8n 워크플로에서 HTTP Request 등으로 우리 API 호출, 또는 (있다면) 전용 노드 | 전용 노드 없으면 사용자가 직접 API 호출 구현 |
 | **MCP** | MCP 서버/클라이언트가 우리 API로 전송하는 루트를 둔 경우 | 우리 쪽 MCP 어댑터 구현 여부에 따름 |
 | **LangChain** | LangChain 앱 안에서 우리 SDK 사용 시 → SDK와 동일 경로; callback만 쓰면 우리 API 직접 호출 | SDK 사용 시 Python/Node와 동일 |
@@ -57,9 +57,9 @@
 
 ### INT-2. 사용자 코드에 연동
 
-1. **SDK (Python)**: `pip install agentguard` → `import agentguard` → `agentguard.init(api_key="...", project_id=123)` (또는 env: `AGENTGUARD_API_KEY`, `AGENTGUARD_PROJECT_ID`).
-2. **SDK (Node)**: `npm install @agentguard/sdk` → `agentguard.init({ apiKey: "...", projectId: 123 })` (또는 env).
-3. 로컬/자체 백엔드 사용 시 `AGENTGUARD_API_URL`로 API URL 지정.
+1. **SDK (Python)**: `pip install pluvianai` → `import pluvianai` → `pluvianai.init(api_key="...", project_id=123)` (또는 env: `PLUVIANAI_API_KEY`, `PLUVIANAI_PROJECT_ID`).
+2. **SDK (Node)**: `npm install pluvianai` → `pluvianai.init({ apiKey: "...", projectId: 123 })` (또는 env).
+3. 로컬/자체 백엔드 사용 시 `PLUVIANAI_API_URL`로 API URL 지정.
 4. **n8n / MCP / LangChain 등** 다른 빌더를 쓰는 경우: 해당 환경에서 우리 API(`POST /api/v1/api-calls`)를 호출하도록 설정하거나, 공식 연동이 있으면 해당 가이드대로 구성한다.
 
 ### INT-3. 호출 발생
@@ -344,16 +344,16 @@ Expected:
 1. Release Gate로 이동한다.
 2. 노드를 고른다.
 3. “Select node & data”에서 Saved datasets 또는 Live View logs를 선택한다.
-4. `repeat_runs=3`(기본)으로 Run 실행.
+4. `repeat_runs=1`(기본)으로 Run 실행.
 
 Expected:
 - 선택한 데이터 소스 기준으로 실행 가능하다.
 
-### RG-2. repeat_runs (1 / 3 / 5)
+### RG-2. repeat_runs (1 / 10 / 50 / 100)
 
-1. 동일 데이터로 `repeat_runs=1` 실행.
-2. 동일 데이터로 `repeat_runs=3` 실행.
-3. 동일 데이터로 `repeat_runs=5` 실행.
+1. Run 버튼 옆 드롭다운에서 1x, 10x, 50x, 100x 선택 가능한지 확인.
+2. 50x 또는 100x 선택 시 경고 문구(비용/시간) 및 드롭다운 내 해당 옵션 빨간 칸 표시 확인.
+3. 동일 데이터로 `repeat_runs=1`, 10, 50, 100 각각 실행해 결과 행·시도 수가 N과 일치하는지 확인.
 
 Expected:
 - `repeat_runs=1`에서는 FLAKY가 발생하지 않는다(항상 PASS 또는 FAIL)
@@ -370,32 +370,33 @@ Expected:
 - 결과 표에서 케이스별 상태가 위 정의대로 표기된다.
 - attempts 패턴(예: ●●●)이 PASS/FAIL 혼합을 직관적으로 보여준다.
 
-### RG-4. Gate verdict (fail_rate / flaky_rate)
+### RG-4. Gate verdict (fail_rate / flaky_rate) + Strictness UI
 
-1. 기본 threshold(프로젝트 기본): Fail rate limit 5%, Flaky rate limit 3%로 실행. (UI에는 5, 3으로 % 단위 표시됨.)
-2. Strict (5%/1%), Default (5%/3%), Lenient (10%/5%) 프리셋을 바꿔 실행 시 입력란에 해당 %가 반영되는지 확인.
-3. 커스텀 값으로도 실행(“이번 run에만” 적용).
+1. **라벨·설명**: Step 3이 "Strictness"로 표시되고, "Strict = fewer failures allowed; lenient = some failure or flakiness OK." 한 줄 설명이 보이는지 확인.
+2. **프리셋**: Strict / Normal / Lenient / Custom 네 가지 버튼이 보이고, 호버 시 툴팁에 각각 Fail·Flaky %(Strict 5%/1%, Normal 5%/3%, Lenient 10%/5%, Custom은 "Set your own...")가 표시되는지 확인.
+3. **기본값**: Normal 선택 시 Fail 5%, Flaky 3%로 실행되는지 확인. (Custom이 아닐 때는 % 입력란은 숨겨져 있음.)
+4. **프리셋 전환**: Strict → Normal → Lenient 순으로 클릭 시, Run 시 사용되는 값이 각각 5%/1%, 5%/3%, 10%/5%로 적용되는지 확인.
+5. **Custom**: Custom 클릭 시에만 Fail %·Flaky % 입력란이 나타나는지 확인. 입력란에서 값을 변경 후 Run 시 해당 값이 적용되는지 확인.
+6. **판정 로직**: `fail_rate = (# FAIL 케이스) / total`, `flaky_rate = (# FLAKY 케이스) / total`, PASS iff `fail_rate<=fail_rate_max` AND `flaky_rate<=flaky_rate_max`.
 
 Expected:
-- `fail_rate = (# FAIL 케이스) / total`
-- `flaky_rate = (# FLAKY 케이스) / total`
-- PASS iff `fail_rate<=fail_rate_max` AND `flaky_rate<=flaky_rate_max`
+- Strictness UI가 위 동작대로 표시·전환되며, Run payload의 fail_rate_max/flaky_rate_max가 선택된 프리셋 또는 Custom 입력값과 일치한다.
 
 ### RG-5. 여러 데이터 + 반복 실행 시 평가 결과 표시 검증 (필수)
 
-여러 개의 스냅샷을 선택하고 Repeat Runs(1x/3x/5x)를 사용했을 때, 결과 테이블·요약·게이지에 **평가가 올바르게 뜨는지** 검증한다.
+여러 개의 스냅샷을 선택하고 Repeat Runs(1x/10x/50x/100x)를 사용했을 때, 결과 테이블·요약·게이지에 **평가가 올바르게 뜨는지** 검증한다.
 
 1. **데이터 선택**
    - Release Gate에서 노드를 선택한 뒤, “Select node & data”로 **스냅샷 여러 개**를 선택한다(Last 10/25/50/100 또는 개별 선택).
    - 선택한 스냅샷 개수(N)를 확인한다.
 
 2. **반복 실행**
-   - **Repeat Runs**를 **3x**로 두고 Run 실행한다.
+   - **Repeat Runs**를 **10x**로 두고 Run 실행한다.
    - 실행이 끝날 때까지 대기한다.
 
 3. **결과 테이블**
    - 결과 테이블에 **행 수 = 선택한 스냅샷 개수(N)** 인지 확인한다(1행 = 1케이스).
-   - 각 행에 **시도 패턴**(예: ●●●)이 **repeat_runs 수(3)** 만큼 표시되는지 확인한다.
+   - 각 행에 **시도 패턴**이 **repeat_runs 수**(예: 10) 만큼 표시되는지 확인한다.
    - 각 행의 **PASS/FAIL/FLAKY** 라벨이, 해당 케이스의 N번 시도 결과(전부 성공 → PASS, 전부 실패 → FAIL, 일부만 성공 → FLAKY)와 일치하는지 확인한다.
 
 4. **요약·게이지**
@@ -409,6 +410,71 @@ Expected:
 - **테이블**: 선택한 스냅샷 개수만큼 행이 있고, 각 행에 repeat_runs만큼 시도 표시 및 해당 케이스의 PASS/FAIL/FLAKY가 정확히 표시된다.
 - **요약·게이지**: fail_rate, flaky_rate, Gate verdict가 계산과 일치하고 올바르게 표시된다.
 - **Export/Copy**: repeat_runs·총 run 수·케이스별 상태가 빠짐없이 포함된다.
+
+### RG-6. Result UI: 케이스 펼치기·시도 목록·시도 상세 (필수)
+
+Release Gate Run 실행 후 **Result 패널**에서 Gate verdict, 케이스별 k/N passed, 펼침 시 시도(attempt) 목록, 시도 클릭 시 eval·behavior diff 상세가 올바르게 동작하는지 검증한다.
+
+1. **전제**
+   - 노드·데이터를 선택한 뒤 Repeat Runs를 **10x** 이상(또는 50x/100x)으로 두고 Run 실행한다.
+   - 결과가 정상 반환된 상태에서 Result 패널을 확인한다.
+
+2. **Gate Pass / Gate Fail 상단 표시**
+   - Result 패널 **맨 위**에 **Gate Pass** 또는 **Gate Fail** 배너가 표시되는지 확인한다.
+   - (선택) fail_rate, flaky_rate 퍼센트가 배너 옆 또는 아래에 표시되는지 확인한다.
+
+3. **케이스 행: k/N passed · 펼치기**
+   - 결과 테이블에서 **한 행 = 한 케이스(스냅샷)** 인지 확인한다.
+   - 각 행에 **run** 번호, **eval**(PASS/FAIL), **passed** 컬럼에 **k/N passed**(예: 7/10 passed, 24/50 passed) 형식이 표시되는지 확인한다.
+   - 각 행 오른쪽에 **chevron**(▼/▲) 아이콘이 있는지 확인한다.
+   - **행 클릭** 시 해당 케이스가 **펼쳐지거나 접히는지** 확인한다(다른 행 클릭 시 이전 행은 접히고 새 행만 펼쳐져도 됨).
+
+4. **펼침 시 시도(attempt) 목록**
+   - 케이스 행을 펼쳤을 때 **그 아래**에 시도 목록이 **드롭다운** 형태로 나타나는지 확인한다.
+   - 시도 목록 테이블에 **#**(Run 번호), **status**(Pass/Fail), **latency**(ms), **behavior**(Stable/Minor/Major), **eval**(요약) 컬럼이 있는지 확인한다.
+   - **시도 개수**가 repeat_runs(예: 10, 50, 100)와 일치하는지 확인한다.
+   - 목록이 길 경우(50·100) **스크롤**로 전부 볼 수 있는지 확인한다.
+
+5. **시도 행 클릭 시 상세**
+   - 시도 목록에서 **한 시도 행을 클릭**하면 해당 행이 강조(선택)되고, **그 아래**에 **Attempt N detail** 블록이 나타나는지 확인한다.
+   - 상세 블록에 **Eval**: Passed 룰 목록, Failed 룰 목록이 표시되는지 확인한다.
+   - 상세 블록에 **Behavior change**: Stable/Minor/Major 뱃지, tool divergence %, sequence distance, **Baseline** 시퀀스 vs **Run** 시퀀스(툴 이름 순서)가 표시되는지 확인한다.
+   - (있을 경우) **violations** 요약이 표시되는지 확인한다.
+   - 같은 시도 행을 다시 클릭하면 상세가 **접히는지** 확인한다.
+
+6. **attempts가 없는 경우**
+   - repeat_runs=1 이거나 레거시 응답처럼 **attempts** 배열이 비어 있는 케이스에서 행을 펼쳤을 때, "No per-attempt breakdown for this run." 등 안내 문구가 표시되는지 확인한다.
+
+Expected:
+- Result 상단에 Gate Pass/Fail이 명확히 보이고, 케이스 행에 k/N passed와 chevron이 있다.
+- 펼치면 시도 목록(#, status, latency, behavior, eval)이 나오며, 시도 행 클릭 시 해당 시도의 eval·behavior diff 상세가 아래에 표시된다.
+- 100개 시도까지 스크롤로 전부 확인 가능하다.
+
+### RG-7. History retention + hard delete
+
+Release Gate history는 스냅샷과 동일한 plan-based retention을 따른다.
+
+1. **전제 준비**
+   - 테스트 프로젝트 owner plan을 확인한다:
+     - Free = 7 days
+     - Pro = 30 days
+     - Enterprise = 365 days
+   - DB fixture 또는 admin helper로, 해당 프로젝트에 아래 두 row를 만든다:
+     - retention 밖의 **release-gate history** (`BehaviorReport.summary_json.release_gate` 존재)
+     - retention 밖의 **general behavior report** (`summary_json.release_gate` 없음)
+2. **History API / UI 확인**
+   - `GET /api/v1/projects/{project_id}/release-gate/history` 를 호출하거나 Release Gate > HISTORY 탭을 연다.
+   - retention 밖의 release-gate row가 보이지 않는지 확인한다.
+3. **Scheduled cleanup 실행**
+   - data lifecycle cleanup 스케줄러를 기다리거나, 동일 cleanup job을 수동 실행한다.
+4. **삭제 검증**
+   - DB에서 retention 밖 release-gate row가 실제로 삭제되었는지 확인한다.
+   - retention 밖 general behavior report row는 그대로 남아 있는지 확인한다.
+
+Expected:
+- Release Gate HISTORY 탭과 API는 retention window 밖 row를 반환하지 않는다.
+- scheduled cleanup 이후 retention 밖 release-gate row는 DB에서 실제로 사라진다.
+- 일반 behavior report는 purge 대상이 아니므로 삭제되지 않는다.
 
 ---
 
@@ -438,6 +504,44 @@ Expected:
 - platform-provided model override에서는 개인 provider key가 없어도 실행 전 key 차단이 발생하지 않는다.
 - override 활성 상태에서는 run payload에 `new_model` + `replay_provider`가 포함된다.
 - detected 복귀 시 `new_model`/`replay_provider` override 없이 실행된다.
+
+### OVR-2a. Anthropic pinned-only 목록 + Pinned/Custom 배지/경고
+
+Release Gate는 재현성을 위해 Anthropic preset 목록을 **pinned(버전 고정) 모델만** 노출한다. Custom 입력은 Advanced escape hatch로 유지하되 경고/배지를 통해 “비교 가능성”을 명확히 한다.
+
+1. Candidate Overrides에서 `Change model`(또는 Model settings 섹션)으로 들어간다.
+2. **Anthropic** 탭을 선택한다.
+3. preset 목록에 `YYYYMMDD`로 끝나는 **pinned 모델만** 보이는지 확인한다. (예: `claude-sonnet-4-20250514`)
+4. pinned 모델 하나를 클릭해 선택한다.
+5. 상단의 Model settings 영역(또는 선택된 모델 표시)에 **Pinned** 배지가 보이는지 확인한다.
+6. 같은 화면에서 **Custom model ID (Advanced)** 입력란에 날짜가 없는 모델(또는 `latest`)을 입력한다(예: `claude-opus-4-6`).
+7. Custom 입력 후 **Custom** 배지와 노란 경고(“pinned 권장”)가 보이는지 확인한다.
+8. 설정을 닫고 노드 카드(Release Gate node summary)의 “Model mode” 요약이 pinned일 때는 `Pinned override`, custom일 때는 `Custom override`로 보이는지 확인한다.
+
+Expected:
+- Anthropic preset list는 pinned 모델만 노출한다(레거시/alias/`latest`는 기본 목록에서 제외).
+- pinned 선택 시 **Pinned** 배지, custom 입력 시 **Custom** 배지 + 경고가 표시된다.
+- 노드 카드 요약(Model mode)이 pinned/custom을 구분해 표시한다.
+
+### OVR-2b. Anthropic pinned-only 서버 강제(Production) + Escape hatch
+
+Production 환경에서는 Anthropic override에 대해 **서버가 pinned-only를 강제**한다. (클라이언트 변조/직접 API 호출 우회 방지)
+
+1. **Precondition**
+   - 서버 `ENVIRONMENT=production`
+   - `RELEASE_GATE_ALLOW_CUSTOM_MODELS`는 기본값(False)로 둔다.
+   - 테스트 계정은 superuser가 아니어야 한다.
+2. Release Gate에서 Model override를 활성화하고 provider를 Anthropic으로 둔다.
+3. Custom model id에 **날짜가 없는 Anthropic 모델**을 입력한다(예: `claude-opus-4-6`).
+4. Run을 실행한다.
+
+Expected:
+- API는 **422**를 반환하고, UI는 `release_gate_requires_pinned_model` 기반으로
+  “pinned Anthropic model id(YYYYMMDD)가 필요” 배너를 표시한다.
+
+Escape hatch 확인:
+1. 같은 조건에서 **superuser 계정**으로 실행하면 차단되지 않아야 한다.
+2. 또는 서버에 `RELEASE_GATE_ALLOW_CUSTOM_MODELS=true`를 설정하면 차단되지 않아야 한다.
 
 ### OVR-3. System prompt override
 
@@ -638,18 +742,18 @@ Expected:
 Expected:
 - 한도 도달 시 새 프로젝트 생성이 **거부**되고, 403 + 명확한 메시지가 반환된다.
 
-### F-3. GuardCredits 월간 한도 (guard_credits_per_month)
+### F-3. Platform replay credits 월간 한도 (platform_replay_credits_per_month)
 
-1. **전제**: free 플랜 계정. **이번 달** 이미 사용한 GuardCredits 합계가 `PLAN_LIMITS["free"]["guard_credits_per_month"]`(구현 시 설정값, 예: 10_000) 이상인 상태.  
+1. **전제**: free 플랜 계정. **이번 달** 이미 사용한 hosted replay credit 합계가 `PLAN_LIMITS["free"]["platform_replay_credits_per_month"]`(또는 legacy alias `guard_credits_per_month`) 이상인 상태.  
    - (실제 사용량을 쌓기 어려우면, 백엔드에서 해당 user/org의 이번 달 `Usage` 합계를 시드하거나, 한도를 매우 낮게 잡고 Replay 1~2회 실행 후 재시도.)
-2. **동작**: Release Gate에서 **Replay 실행** (플랫폼 제공 키 사용 시).  
+2. **동작**: Release Gate에서 **Replay 실행** (`model_source = platform`, 즉 플랫폼 제공 키 사용).  
    - 노드·데이터 선택 후 Run.
 3. **확인**:  
-   - 실행이 **거부**되고(403 또는 429 등, 구현에 따름), 메시지에 GuardCredit 한도 초과·“Connect your own API key” 또는 “try again next month” 등이 포함되는지 확인.  
-   - (구현 시) **BYO 키**로 실행하면 한도와 무관하게 허용되는지 확인.
+   - 실행이 **403**으로 거부되고, 메시지에 platform replay credit limit 도달 및 “Use your own provider key” 또는 upgrade 안내가 포함되는지 확인.  
+   - 같은 데이터/설정으로 `model_source = byo` 또는 사용자 provider key 연결 상태에서 다시 실행하면 허용되는지 확인.
 
 Expected:
-- 플랫폼 키 사용 시 한도 초과면 Replay가 **거부**되고, 영어 메시지가 반환·표시된다. BYO 키 시에는 (정책에 따라) 허용될 수 있다.
+- 플랫폼 키 사용 시 한도 초과면 Replay가 **거부**되고, 영어 메시지가 반환·표시된다. BYOK 실행은 계속 허용된다.
 
 ### F-4. 사용량·한도 노출 (Billing/Usage)
 
@@ -658,11 +762,12 @@ Expected:
 3. **확인**:  
    - “Free plan” 또는 동일 의미 문구가 보이는지.  
    - **이번 달 스냅샷 사용량**이 “X / 500”(또는 현재 free 한도 값) 형태로 표시되는지.  
-   - **이번 달 GuardCredits 사용량**이 “Y / 10,000”(또는 현재 free 한도 값) 형태로 표시되는지.  
+   - **이번 달 platform replay credits 사용량**이 “Y / 1,000”(또는 현재 free 한도 값) 형태로 표시되는지.  
+   - 보조 설명으로 “Hosted PluvianAI model usage spends these credits. BYOK runs do not.” 또는 동등한 문구가 보이는지.
    - 한도에 가까우면 경고 스타일, 초과 시 “Limit reached” 등 안내가 보이는지.
 
 Expected:
-- Free plan임이 명시되고, **snapshots** 및 **GuardCredits**에 대해 “사용량 / 한도”가 올바르게 표시된다. 한도 도달/초과 시 안내 문구가 노출된다.
+- Free plan임이 명시되고, **snapshots** 및 **platform replay credits**에 대해 “사용량 / 한도”가 올바르게 표시된다. 한도 도달/초과 시 안내 문구가 노출된다.
 
 ### F-5. (선택) 슈퍼유저/마스터 계정 한도 스킵
 
@@ -701,18 +806,24 @@ Expected:
 - [ ] **REC-5**: Saved datasets·Live View logs(Last N/개별 선택) 선택 시 baseline·Run·상세에서 정확히 반영되고, 상세에서 eval·payload·메타가 완전히 노출된다.
 - [ ] **REC-6**: Save/append/rename/run-block 관련 UI/토스트/오류 문구가 영어로만 노출된다.
 - [ ] **REC-7**: Release Gate run 결과에서 run 확장 시 Behavior change(한 줄 요약 "Tool call pattern changed by X%.", Stable/Minor/Major 라벨, sequence distance, tool divergence, Baseline/Run 시퀀스)가 표시된다.
-- [ ] **RG-5**: 여러 데이터 선택 + Repeat Runs(1x/3x/5x) 실행 시 결과 테이블(행 수·시도 패턴·PASS/FAIL/FLAKY)·요약·게이지·Export/Copy에 평가가 올바르게 표시된다.
+- [ ] **RG-5**: 여러 데이터 선택 + Repeat Runs(1x/10x/50x/100x) 실행 시 결과 테이블(행 수·시도 패턴·PASS/FAIL/FLAKY)·요약·게이지·Export/Copy에 평가가 올바르게 표시된다.
+- [ ] **RG-6**: Result UI — Gate Pass/Fail 상단, 케이스 행 k/N passed·chevron, 펼침 시 시도 목록(#·status·latency·behavior·eval), 시도 클릭 시 Attempt detail(eval·behavior diff·violations) 표시 및 100개 시도 스크롤 가능.
 - [ ] **OVR (Canonical 레이어)**: OVR-C1~C7(argument 파싱·_invalid 처리·provider 추론·id dedup·최소 llm_call·스키마·회귀) 검증 완료.
 - [ ] **OVR-S (보안)**: OVR-S1~S7(unknown FAIL·id 충돌·size 제한·multi-candidate·name 정규화·빈 이름·OpenAI 경로) 및 구현 시 실수 방지 체크리스트 A~D 확인.
 - [ ] **F-1**: Free 플랜 스냅샷 월간 한도 도달 시 새 스냅샷 생성이 403으로 거부되고, 명확한 영어 메시지가 반환·표시된다.
 - [ ] **F-2**: Free 플랜 프로젝트 수 한도 도달 시 새 프로젝트 생성이 403으로 거부되고, 명확한 메시지가 반환된다.
-- [ ] **F-3**: Free 플랜 GuardCredits 월간 한도 도달 시(플랫폼 키 사용) Replay 실행이 거부되고, 영어 메시지가 반환·표시된다. (BYO 키 예외는 정책에 따름.)
-- [ ] **F-4**: Billing/Usage 페이지에 Free plan 문구 및 이번 달 snapshots·GuardCredits "사용량 / 한도"가 올바르게 표시되고, 한도 도달/초과 시 안내가 노출된다.
+- [ ] **F-3**: Free 플랜 platform replay credits 월간 한도 도달 시(`model_source = platform`) Replay 실행이 403으로 거부되고, 영어 메시지가 반환·표시된다. 동일 조건의 BYOK 실행은 계속 허용된다.
+- [ ] **F-4**: Billing/Usage 페이지에 Free plan 문구 및 이번 달 snapshots·platform replay credits "사용량 / 한도"가 올바르게 표시되고, BYOK 예외 설명과 한도 도달/초과 안내가 노출된다.
 - [ ] **F-5 (선택)**: 슈퍼유저/마스터 계정은 한도 체크가 스킵되어 한도 초과 상태에서도 스냅샷·프로젝트·Replay가 성공한다.
 - [ ] **G-1**: 랜딩 Pricing 섹션의 Free CTA는 비로그인 시 회원가입/시작 플로우로, 로그인 시 `/organizations` 콘솔로 이동한다.
 - [ ] **G-2**: 랜딩 Pricing 섹션의 Pro/Enterprise 버튼은 비활성 상태이며, 클릭해도 업그레이드/결제 동작이 발생하지 않는다.
-- [ ] **G-3**: Billing/Usage 페이지에서 Free plan 배지와 snapshots/GuardCredits “사용량 / 한도” 바가 올바르게 표시된다.
-- [ ] **G-4**: Billing/Usage 페이지의 플랜 카드 중 Free만 “Current License”로 표시되고, Pro/Enterprise 카드는 “Coming soon” 등 읽기 전용 상태로 유지된다.
+- [ ] **G-3**: Billing/Usage 페이지에서 Free plan 배지와 snapshots/platform replay credits “사용량 / 한도” 바가 올바르게 표시된다.
+- [ ] **G-4**: Billing/Usage 페이지의 플랜 카드 중 Free만 “Current Plan”으로 표시되고, Pro/Enterprise 카드는 “Preview Only” 또는 “Coming soon” 상태로 유지된다.
+- [ ] **L-1**: Projects 페이지 검색창에 이름/설명 일부 입력 시 해당 프로젝트만 표시되고, 비우면 전체 복원된다.
+- [ ] **L-2**: 필터 아이콘 클릭 시 All / With alerts / No alerts 선택 가능하고, 선택 시 목록이 갱신되며 버튼에 활성 상태가 표시된다.
+- [ ] **L-3**: 검색과 필터를 동시에 적용 시 두 조건을 모두 만족하는 프로젝트만 표시된다.
+- [ ] **L-4**: 필터 드롭다운이 열린 상태에서 외부 클릭 시 드롭다운만 닫히고 선택된 필터는 유지된다.
+- [ ] **L-5**: 프로젝트 카드·리스트에서 알림 0개일 때 "0"이 아닌 "0 ALERTS"로 표시되고, 알림이 있을 때는 "{N} ALERTS"로 일관되게 표시된다.
 
 ---
 
@@ -757,10 +868,11 @@ Expected:
 3. **확인**:
    - 상단 또는 Plan Limits 영역에 “Free plan”(또는 동등한 문구) 배지가 보인다.
    - **이번 달 snapshots 사용량**이 “X / N”(N = free 스냅샷 한도) 형태로 바 차트와 함께 표시된다.
-   - **GuardCredits 사용량**이 “Y / M”(M = free GuardCredits 한도) 형태로 바 차트와 함께 표시된다.
+   - **Platform replay credits 사용량**이 “Y / M”(M = free hosted replay credit 한도) 형태로 바 차트와 함께 표시된다.
+   - BYOK runs do not spend these credits 라는 의미의 설명이 함께 표시된다.
 
 Expected:
-- 사용자는 현재가 free 플랜임을 명확히 인지하고, snapshots/GuardCredits에 대해 “이번 달 사용량 / 한도”를 시각적으로 확인할 수 있다.
+- 사용자는 현재가 free 플랜임을 명확히 인지하고, snapshots/platform replay credits에 대해 “이번 달 사용량 / 한도”를 시각적으로 확인할 수 있다.
 
 ### G-4. 조직 Billing/Usage — Paid 플랜 카드 읽기 전용
 
@@ -769,8 +881,8 @@ Expected:
    - Free 카드 상단의 상태 문구를 확인한다.
    - Pro / Enterprise 카드의 CTA 버튼을 클릭해 본다.
 3. **확인**:
-   - Free 카드에는 “Current License” 등 현재 플랜임을 나타내는 상태가 보인다.
-   - Pro / Enterprise 카드 버튼은 비활성(disabled) 상태이며, 텍스트는 “Coming soon” 또는 동등한 문구이고, 클릭해도 업그레이드/결제 동작이 발생하지 않는다.
+   - Free 카드에는 “Current Plan” 등 현재 플랜임을 나타내는 상태가 보인다.
+   - Pro / Enterprise 카드에는 preview badge가 보이고, 버튼은 비활성(disabled) 상태이며 클릭해도 업그레이드/결제 동작이 발생하지 않는다.
 
 Expected:
 - Billing 페이지는 **free 플랜만 실제로 활성화**되어 있고, 다른 플랜은 단순 미리보기(읽기 전용)로만 노출된다.
@@ -1005,6 +1117,77 @@ Expected:
 
 ---
 
+## L. Projects list (Search & Filter)
+
+Organization Projects page (`/organizations/{orgId}/projects`) provides client-side search and an alerts filter. Verify that both work and combine correctly.
+
+### L-1. Search by name or description
+
+1. **Precondition**: Organization has at least two projects with distinct names (and optionally descriptions).
+2. **Action**:
+   - Go to **Organizations** → select an org → **Projects** (or `/organizations/{orgId}/projects`).
+   - In the search bar, type part of one project’s name.
+3. **Verify**:
+   - List updates (after short debounce) to show only projects whose name or description contains the query (case-insensitive).
+   - Clearing the search restores the full list.
+
+Expected:
+- Search filters projects by name/description; empty query shows all.
+
+### L-2. Filter by alerts (dropdown)
+
+1. **Precondition**: Same Projects page; at least one project with open alerts and one without (if available).
+2. **Action**:
+   - Click the **filter icon** (funnel) to the right of the search bar.
+   - Confirm a dropdown opens with options: **All projects**, **With alerts**, **No alerts**.
+   - Select **With alerts**.
+3. **Verify**:
+   - Dropdown closes and the list shows only projects that have at least one open alert.
+   - The filter button shows an active state (e.g. green border or highlight).
+   - Select **No alerts** and confirm only projects with zero alerts are shown.
+   - Select **All projects** (or **Clear filters** when visible) and confirm the full list returns.
+
+Expected:
+- Filter options apply correctly; active filter is visible; Clear/All restores full list.
+
+### L-3. Search and filter combined
+
+1. **Precondition**: Multiple projects, some with alerts and some without.
+2. **Action**:
+   - Set filter to **With alerts**.
+   - Enter a search term that matches only one of the projects that have alerts.
+3. **Verify**:
+   - List shows only projects that satisfy both: (a) name/description matches search, and (b) have alerts.
+   - Changing search or filter updates the list accordingly.
+
+Expected:
+- Search and filter work together (AND logic).
+
+### L-4. Filter dropdown closes on outside click
+
+1. **Precondition**: Filter dropdown is open.
+2. **Action**: Click somewhere outside the dropdown (e.g. on the page background or another control).
+3. **Verify**: The dropdown closes without changing the current filter selection.
+
+Expected:
+- Click-outside closes the dropdown; selected filter remains in effect.
+
+### L-5. Alert count label (0 vs N ALERTS)
+
+1. **Precondition**: Organization has at least one project with zero open alerts (and optionally one with alerts > 0).
+2. **Action**:
+   - Open the Projects page (grid view). Find a project card that has no open alerts.
+   - Switch to list view (table) and find the same project’s row.
+3. **Verify**:
+   - **Grid card**: The card shows a badge with **"0 ALERTS"** (green/success style), not a bare "0".
+   - **List view**: In the "Active Alerts" column, the cell shows **"0 ALERTS"** (with green dot), not a standalone "0".
+   - If a project has open alerts, both card and list show **"{N} ALERTS"** (e.g. "3 ALERTS") in the appropriate style.
+
+Expected:
+- Zero-alert projects display "0 ALERTS" (not "0") in both grid and list. Alert count is always labeled as "ALERTS".
+
+---
+
 ## Evidence Capture Guide (버그 제출 시)
 
 - 화면 캡처
@@ -1020,11 +1203,12 @@ Expected:
   - **REC-6**: Save/append/rename/run-block 문구 영어 표기 검증 캡처
   - **REC-7**: Run 확장 시 Behavior change 블록(한 줄 요약, Stable/Minor/Major 라벨, 메트릭, Baseline/Run 시퀀스) 캡처
   - **RG-5**: 여러 스냅샷 선택 + 3x 실행 후 결과 테이블(행 수·시도 패턴·PASS/FAIL/FLAKY), 요약·게이지(fail_rate·flaky_rate·verdict), Export/Copy 내용
-  - **F (Free Tier Limits)**: F-1 스냅샷 한도 초과 시 403 응답·에러 메시지; F-2 프로젝트 한도 초과 시 403·메시지; F-3 GuardCredits 한도 초과 시 Replay 거부·메시지; F-4 Billing/Usage 페이지의 Free plan·snapshots/GuardCredits 사용량·한도 표시 및 한도 도달 안내
+  - **F (Free Tier Limits)**: F-1 스냅샷 한도 초과 시 403 응답·에러 메시지; F-2 프로젝트 한도 초과 시 403·메시지; F-3 platform replay credits 한도 초과 시 platform run 거부 + BYOK 허용 확인; F-4 Billing/Usage 페이지의 Free plan·snapshots/platform replay credits 사용량·한도 표시 및 BYOK 예외 안내
   - **H (Profile & Service API Keys)**: profile name update before/after refresh, password change result, one-time API key reveal, key rename persistence, key list masked prefix, key revoke result
   - **I (Login & Signup Flow)**: signup mode rendering, successful post-auth redirect, reauth message visibility, normalized URL after query handling
   - **J (Admin Access Boundary)**: non-superuser calls to `/admin/*` and `/internal/usage/*` return 403 for both read and mutation endpoints
   - **K (Project Role Boundary)**: member/viewer mutation attempts (project update/delete, team management, behavior dataset deletion, Live View mutations, project user API key mutations) return 403; non-superuser sample-data create flag returns 403
+  - **L (Projects list)**: search bar filters by name/description; filter dropdown (All / With alerts / No alerts) and combined search+filter; filter button active state; dropdown closes on outside click; alert count shows "0 ALERTS" / "{N} ALERTS" (not bare "0") in grid and list
 - 실행 메타
   - `project_id`, `agent_id`
   - 사용 데이터: dataset/live-view logs + snapshot_ids 개수

@@ -1,11 +1,11 @@
-# PluvianAI Python SDK (package: agentguard)
+# PluvianAI Python SDK
 
 Zero-config monitoring for LLM APIs. Automatically track all your OpenAI, Anthropic, and other LLM API calls without changing your code.
 
 ## Installation
 
 ```bash
-pip install agentguard
+pip install pluvianai
 ```
 
 ## Quick Start
@@ -13,10 +13,10 @@ pip install agentguard
 ### Zero-Config Setup (Recommended)
 
 ```python
-import agentguard
+import pluvianai
 
 # Initialize with environment variables
-agentguard.init()
+pluvianai.init()
 
 # That's it! All OpenAI calls are now automatically monitored
 from openai import OpenAI
@@ -33,18 +33,18 @@ response = client.chat.completions.create(
 Set these environment variables:
 
 ```bash
-export AGENTGUARD_API_KEY="your-api-key"
-export AGENTGUARD_PROJECT_ID="123"
-export AGENTGUARD_API_URL="https://api.agentguard.dev"  # Optional
-export AGENTGUARD_AGENT_NAME="my-agent"  # Optional
+export PLUVIANAI_API_KEY="your-api-key"
+export PLUVIANAI_PROJECT_ID="123"
+export PLUVIANAI_API_URL="https://api.pluvianai.com"  # Optional
+export PLUVIANAI_AGENT_NAME="my-agent"  # Optional
 ```
 
 ### Manual Initialization
 
 ```python
-import agentguard
+import pluvianai
 
-agentguard.init(
+pluvianai.init(
     api_key="your-api-key",
     project_id=123,
     agent_name="my-agent"
@@ -56,25 +56,25 @@ agentguard.init(
 To track a chain of API calls that belong to the same workflow:
 
 ```python
-import agentguard
+import pluvianai
 from openai import OpenAI
 
-agentguard.init()
+pluvianai.init()
 client = OpenAI()
 
 # Use context manager to group related calls into a chain
-with agentguard.chain("user-query-123", agent_name="data-collector"):
+with pluvianai.chain("user-query-123", agent_name="data-collector"):
     # All calls within this block will have the same chain_id
     response1 = client.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": "Collect data"}]
     )
-    
+
     response2 = client.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": "Analyze data"}]
     )
-    
+
     # Both calls will be grouped under chain_id="user-query-123"
     # You can view them in the Agent Chains page
 ```
@@ -84,14 +84,14 @@ with agentguard.chain("user-query-123", agent_name="data-collector"):
 If you prefer to track calls manually:
 
 ```python
-import agentguard
+import pluvianai
 import time
 
 start_time = time.time()
 # ... make your API call ...
 latency_ms = (time.time() - start_time) * 1000
 
-agentguard.track_call(
+pluvianai.track_call(
     request_data={"model": "gpt-4", "messages": [...]},
     response_data={"choices": [...]},
     latency_ms=latency_ms,

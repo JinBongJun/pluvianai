@@ -94,6 +94,7 @@
 }
 
 body {
+  @apply font-medium;
   color: rgb(var(--ag-text));
   background: rgb(var(--ag-bg));
   font-family:

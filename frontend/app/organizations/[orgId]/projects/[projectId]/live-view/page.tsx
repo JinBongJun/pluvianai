@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import useSWR from "swr";
 import { motion } from "framer-motion";
 import clsx from "clsx";
@@ -66,14 +67,16 @@ function LiveViewToolbar({
   const { zoomIn, zoomOut, fitView } = useReactFlow();
 
   const groupBase =
-    "flex flex-col bg-[#111115]/90 border border-white/[0.08] shadow-2xl rounded-xl overflow-hidden backdrop-blur-xl";
+    "flex flex-col bg-[#1a1a1e]/95 border border-white/[0.15] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] rounded-[20px] overflow-hidden backdrop-blur-3xl relative group transition-all duration-500 hover:border-white/30";
   const btnBase =
-    "flex items-center justify-center w-[46px] h-[46px] text-zinc-400 hover:text-white hover:bg-white/[0.04] transition-colors";
+    "flex items-center justify-center w-[52px] h-[52px] text-zinc-400 hover:text-emerald-400 hover:bg-white/[0.05] transition-all duration-300 relative z-10";
 
   return (
-    <div className="absolute left-6 top-6 z-50 flex flex-col gap-4">
+    <div className="absolute left-6 top-[180px] z-50 flex flex-col gap-4">
       {/* Auto Layout Button */}
       <div className={groupBase}>
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-60 z-10" />
+        <div className="absolute inset-0.5 rounded-[18px] bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none z-0" />
         <button className={btnBase} onClick={onAutoLayout} title="Auto Layout">
           <LayoutGrid className="w-[18px] h-[18px]" strokeWidth={1.5} />
         </button>
@@ -81,6 +84,8 @@ function LiveViewToolbar({
 
       {/* Zoom controls */}
       <div className={groupBase}>
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-60 z-10" />
+        <div className="absolute inset-0.5 rounded-[18px] bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none z-0" />
         <button className={btnBase} onClick={() => zoomIn({ duration: 300 })}>
           <Plus className="w-5 h-5" strokeWidth={1.5} />
         </button>
@@ -94,26 +99,159 @@ function LiveViewToolbar({
 
       {/* Undo / Redo */}
       <div className={groupBase}>
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-60 z-10" />
+        <div className="absolute inset-0.5 rounded-[18px] bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none z-0" />
         <button
-          className={clsx(
-            btnBase,
-            "disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
-          )}
+          className={clsx(btnBase, !canUndo && "opacity-20 pointer-events-none grayscale")}
           onClick={onUndo}
           disabled={!canUndo}
         >
           <Undo className="w-4 h-4" strokeWidth={1.5} />
         </button>
         <button
-          className={clsx(
-            btnBase,
-            "disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
-          )}
+          className={clsx(btnBase, !canRedo && "opacity-20 pointer-events-none grayscale")}
           onClick={onRedo}
           disabled={!canRedo}
         >
           <Redo className="w-4 h-4" strokeWidth={1.5} />
         </button>
+      </div>
+    </div>
+  );
+}
+
+// Premium Empty State: integration copy + quick start + link to Docs
+function LiveViewEmptyState({
+  project,
+  projectId,
+}: {
+  project?: { name: string };
+  projectId?: number;
+}) {
+  const [copied, setCopied] = useState(false);
+  const snippet =
+    projectId && !Number.isNaN(projectId)
+      ? `# Python\npip install pluvianai\npluvianai.init(api_key="YOUR_API_KEY", project_id=${projectId})\n\n# Node\nnpm install pluvianai\npluvianai.init({ apiKey: "YOUR_API_KEY", projectId: ${projectId} })`
+      : `# Python\npip install pluvianai\npluvianai.init(api_key="YOUR_API_KEY", project_id=YOUR_PROJECT_ID)\n\n# Node\nnpm install pluvianai\npluvianai.init({ apiKey: "YOUR_API_KEY", projectId: YOUR_PROJECT_ID })`;
+
+  const onCopy = useCallback(() => {
+    navigator.clipboard.writeText(snippet).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [snippet]);
+
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-start pt-10 pb-20 px-8 text-center bg-[#030303] z-50 overflow-y-auto custom-scrollbar">
+      {/* Premium Antigravity Background Layers (Ported from OrgLayout/Landing) */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        {/* Deep space radial gradient */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#101018,transparent_50%)] opacity-70" />
+
+        {/* 1. Global Diagonal Curtain Lights */}
+        <div className="absolute top-[-10%] right-[-10%] w-[120%] h-[500px] bg-gradient-to-r from-transparent via-cyan-500/15 to-transparent -rotate-[35deg] blur-[100px] mix-blend-screen" />
+        <div className="absolute top-[20%] left-[-20%] w-[150%] h-[600px] bg-gradient-to-r from-transparent via-emerald-500/15 to-transparent -rotate-[35deg] blur-[120px] mix-blend-screen" />
+
+        {/* 2. Geometric Light Beams */}
+        <div
+          className="absolute top-1/2 -left-[15%] w-[35%] h-[100%] -translate-y-1/2 rounded-[100%] opacity-40
+            border-r-[2px] border-cyan-400/30 
+            bg-gradient-to-l from-cyan-500/15 via-transparent to-transparent 
+            shadow-[inset_-20px_0_100px_rgba(34,211,238,0.2)] mix-blend-screen"
+        />
+        <div
+          className="absolute top-1/2 -right-[15%] w-[35%] h-[100%] -translate-y-1/2 rounded-[100%] opacity-30
+            border-l-[2px] border-emerald-400/30 
+            bg-gradient-to-r from-emerald-500/15 via-transparent to-transparent 
+            shadow-[inset_20px_0_100px_rgba(16,185,129,0.2)] mix-blend-screen"
+        />
+
+        {/* 3. Floating Particles */}
+        <div className="absolute top-[10%] left-[30%] w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.8)] animate-pulse" />
+        <div className="absolute bottom-[20%] left-[10%] w-1.5 h-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.6)]" />
+        <div className="absolute top-[40%] right-[15%] w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.8)] animate-bounce duration-[3000ms]" />
+        <div className="absolute bottom-[10%] right-[30%] w-2 h-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.6)]" />
+        <div className="absolute top-[15%] right-[40%] w-1 h-1 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]" />
+
+        {/* Dusty Layers (SVG Dust) */}
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iNDAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJub25lIi8+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjE1KSIvPjxjaXJjbGUgY3g9IjE4MCIgY3k9IjEyMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjIpIi8+PGNpcmNsZSBjeD0iMzIwIiBjeT0iODAiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4xKSIvPjxjaXJjbGUgY3g9IjI1MCIgY3k9IjMyMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjI1KSIvPjxjaXJjbGUgY3g9IjkwIiBjeT0iMjgwIiByPSIxIiBmaWxsPSJyZ2JhLDI1NSwyNTUsMjU1LDAuMTUpIi8+PGNpcmNsZSBjeD0iMzcwIiBjeT0iMjIwIiByPSIxIiBmaWxsPSJyZ2JhLDI1NSwyNTUsMjU1LDAuMikiLz48L3N2Zz4=')] bg-[size:300px_300px] opacity-30" />
+      </div>
+
+      <div className="text-center space-y-4 max-w-2xl px-6 relative z-10">
+        <div className="flex flex-col items-center gap-6 p-10 rounded-[40px] bg-[#121215]/60 border border-white/10 backdrop-blur-3xl shadow-2xl">
+          <motion.div
+            animate={{
+              scale: [1, 1.03, 1],
+              boxShadow: [
+                "0 0 40px rgba(0,0,0,0.3)",
+                "0 0 60px rgba(0,0,0,0.4)",
+                "0 0 40px rgba(0,0,0,0.3)",
+              ],
+            }}
+            transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+            className="p-6 rounded-[28px] bg-black/60 border border-white/10 backdrop-blur-2xl shadow-2xl inline-block"
+          >
+            <Activity
+              className="w-12 h-12 text-emerald-400 mx-auto filter drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]"
+              strokeWidth={1}
+            />
+          </motion.div>
+
+          <div className="space-y-3">
+            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.4em] animate-pulse">
+              Waiting for Live Traffic
+            </span>
+            <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)] leading-tight">
+              Add our integration in your app — traffic will show up here.
+            </h2>
+            <p className="text-sm text-slate-400 max-w-xl mx-auto font-medium">
+              Python, Node, n8n, MCP, LangChain. Pick your tool below.
+            </p>
+          </div>
+        </div>
+
+        <div className="w-full max-w-xl space-y-4 text-left p-1 rounded-[32px] bg-[#121215]/60 border border-white/10 backdrop-blur-3xl shadow-2xl overflow-hidden mx-auto">
+          <div className="px-6 pt-6 pb-2">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Quick start (Python or Node)
+            </p>
+            <p className="text-xs text-slate-400 mt-1 font-medium">
+              Copy the snippet, paste it where you call the LLM, then run once. Replace YOUR_API_KEY
+              in Project Settings.
+            </p>
+          </div>
+          <div className="relative mx-4 mb-4 rounded-[20px] bg-black/60 border border-white/5 p-5 font-mono text-xs text-emerald-300/90 whitespace-pre-wrap">
+            <button
+              type="button"
+              onClick={onCopy}
+              className="absolute top-3 right-3 p-2 rounded-xl bg-white/5 hover:bg-white/10 text-emerald-400 border border-white/10 transition-all active:scale-95"
+              title="Copy"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+            {copied && (
+              <span className="absolute top-3 right-12 text-[10px] font-bold text-emerald-400 uppercase">
+                Copied
+              </span>
+            )}
+            {snippet}
+          </div>
+          <p className="text-[11px] text-slate-500 px-6 pb-6 font-bold uppercase tracking-widest opacity-50">
+            Then make one LLM call — you should see it here.
+          </p>
+        </div>
+
+        <div className="pt-2 space-y-3 p-6 rounded-[32px] bg-[#121215]/60 border border-white/10 backdrop-blur-3xl shadow-2xl max-w-xl mx-auto">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            Using n8n, MCP, or LangChain?
+          </p>
+          <Link
+            href="/docs?section=integrations"
+            className="inline-flex items-center gap-2 rounded-[20px] bg-white/5 hover:bg-white/10 border border-emerald-500/30 px-6 py-3 text-sm font-bold text-emerald-400 transition-all shadow-[0_0_20px_rgba(16,185,129,0.1)] active:scale-95"
+          >
+            Open step-by-step guide (Docs)
+          </Link>
+        </div>
       </div>
     </div>
   );
@@ -247,7 +385,7 @@ function LiveViewContent() {
     setNodes(currentNodes => {
       const updatedNodes = (agentsData.agents || []).map((agent: any, idx: number) => {
         const existingNode = currentNodes.find(n => n.id === agent.agent_id);
-
+        const isSelected = agent.agent_id === selectedAgentId;
         return {
           id: agent.agent_id,
           type: agent.node_type || "agentCard",
@@ -260,6 +398,7 @@ function LiveViewContent() {
             isGhost: agent.is_ghost || false,
             driftStatus: agent.drift_status || "official",
             signals: agent.signals,
+            blur: !!selectedAgentId && !isSelected,
           },
           // Preserve existing position if node already exists, otherwise use grid
           position: existingNode?.position ||
@@ -277,62 +416,7 @@ function LiveViewContent() {
     });
 
     // setEdges([]) - Keep as is for now or handle edges similarly
-  }, [agentsData]); // Removed setNodes from dependency array to prevent loop
-
-  // Premium Empty State Component
-  const renderEmptyState = () => (
-    <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-[#13141c] z-50 overflow-hidden">
-      {/* Dynamic Scanning Grid Background */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.05)_0%,transparent_70%)]" />
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:100px_100px] [mask-image:radial-gradient(ellipse_at_center,black_20%,transparent_80%)]" />
-
-      {/* Scanning Line Effect */}
-      <motion.div
-        animate={{ translateY: ["0vh", "100vh"] }}
-        transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-        className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent z-10"
-      />
-
-      <div className="text-center space-y-10 max-w-2xl px-12 relative z-10">
-        <motion.div
-          animate={{ scale: [1, 1.05, 1], opacity: [0.5, 1, 0.5] }}
-          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-          className="p-6 rounded-full bg-emerald-600/10 border border-emerald-500/30 inline-block shadow-[0_0_50px_rgba(16,185,129,0.15)]"
-        >
-          <Activity className="w-16 h-16 text-emerald-400" strokeWidth={1.5} />
-        </motion.div>
-
-        <div className="space-y-4">
-          <h2 className="text-4xl font-black text-white tracking-[0.1em] uppercase italic leading-tight drop-shadow-2xl">
-            WAITING FOR <br /> <span className="text-emerald-500">LIVE TRAFFIC</span>
-          </h2>
-          <p className="text-[12px] font-black text-slate-500 uppercase tracking-[0.4em] leading-relaxed max-w-lg mx-auto italic opacity-80">
-            Send your first snapshot with SDK or proxy, select an agent, then validate the latest
-            trace.
-          </p>
-        </div>
-
-        <div className="flex flex-col items-center gap-4">
-          <div className="px-8 py-5 bg-white/[0.03] border border-white/5 rounded-[32px] backdrop-blur-xl shadow-2xl relative group hover:border-emerald-500/30 transition-all duration-500">
-            <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.5em] mb-4 text-center">
-              INGESTION EXAMPLE
-            </p>
-            <div className="flex items-center gap-4">
-              <code className="text-lg text-emerald-400 font-mono font-bold tracking-tight">
-                POST /api/v1/projects/{"{id}"}/snapshots
-              </code>
-              <button className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 transition-colors">
-                <Copy className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-          <p className="text-[9px] font-bold text-slate-700 uppercase tracking-widest">
-            SELECT AGENT {"->"} VALIDATE TRACE {"->"} OPEN BEHAVIOR HUB
-          </p>
-        </div>
-      </div>
-    </div>
-  );
+  }, [agentsData, selectedAgentId]);
 
   return (
     <CanvasPageLayout
@@ -342,6 +426,7 @@ function LiveViewContent() {
       orgName={org?.name}
       activeTab="live-view"
       showTelemetry={false}
+      navigationVariant="side"
       onAction={actionId => {
         console.log("Live HUD Action:", actionId);
       }}
@@ -361,25 +446,34 @@ function LiveViewContent() {
             { id: "settings", label: "Settings" },
           ]}
           activeTab={panelTab}
-          onTabChange={id => setPanelTab(id as any)}
+          onTabChange={id => setPanelTab(id as "logs" | "eval" | "data" | "settings")}
         >
-          {/* Keep all tabs mounted so SWR caches fill on first open; hide inactive with CSS for instant tab switch */}
-          <div className={panelTab === "logs" ? "h-full" : "hidden"} aria-hidden={panelTab !== "logs"}>
+          <div
+            className={panelTab === "logs" ? "h-full" : "hidden"}
+            aria-hidden={panelTab !== "logs"}
+          >
             <ClinicalLog projectId={projectId} agentId={selectedAgentId || ""} />
           </div>
-          <div className={panelTab === "eval" ? "h-full" : "hidden"} aria-hidden={panelTab !== "eval"}>
+          <div
+            className={panelTab === "eval" ? "h-full" : "hidden"}
+            aria-hidden={panelTab !== "eval"}
+          >
             <AgentEvaluationPanel projectId={projectId} agentId={selectedAgentId || ""} />
           </div>
-          <div className={panelTab === "data" ? "h-full" : "hidden"} aria-hidden={panelTab !== "data"}>
+          <div
+            className={panelTab === "data" ? "h-full" : "hidden"}
+            aria-hidden={panelTab !== "data"}
+          >
             <ClinicalLogDataSection projectId={projectId} agentId={selectedAgentId || ""} />
           </div>
-          <div className={panelTab === "settings" ? "h-full" : "hidden"} aria-hidden={panelTab !== "settings"}>
+          <div
+            className={panelTab === "settings" ? "h-full" : "hidden"}
+            aria-hidden={panelTab !== "settings"}
+          >
             <AgentSettingsPanel
               projectId={projectId}
               agentId={selectedAgentId || ""}
-              onAgentUpdated={() => {
-                void mutateAgents();
-              }}
+              onAgentUpdated={() => void mutateAgents()}
               onAgentDeleted={() => {
                 setSelectedAgentId(null);
                 setPanelTab("logs");
@@ -389,15 +483,76 @@ function LiveViewContent() {
         </RailwaySidePanel>
       }
     >
-      <div
-        className="flex-1 min-h-0 relative bg-[#13141c]"
-        style={{
-          backgroundImage: `radial-gradient(circle, rgba(255, 255, 255, 0.12) 1px, transparent 1px)`,
-          backgroundSize: "32px 32px",
-          backgroundPosition: "0 0",
-        }}
-      >
-        {!nodes.length && !agentsData?.agents?.length && renderEmptyState()}
+      <div className="flex-1 min-h-0 relative bg-[#1a1a24]">
+        {/* Background layer: grid + glow + antigravity — blurred when a node is selected */}
+        <div
+          className={clsx(
+            "absolute inset-0 pointer-events-none transition-[filter] duration-200",
+            selectedAgentId && "blur-sm"
+          )}
+          style={{
+            backgroundImage: `
+              radial-gradient(circle, rgba(255, 255, 255, 0.22) 1.5px, transparent 1.5px),
+              linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px)
+            `,
+            backgroundSize: "64px 64px, 100% 4px",
+            backgroundPosition: "0 0, 0 0",
+          }}
+        >
+          {/* Central Luminous Floor Glow */}
+          <div
+            className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[80%] pointer-events-none opacity-40 blur-[160px]"
+            style={{
+              background:
+                "radial-gradient(circle at center, rgba(16, 185, 129, 0.15) 0%, rgba(6, 182, 212, 0.08) 40%, transparent 70%)",
+            }}
+          />
+          {/* Antigravity Background Layers (Always Persistent) */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none group">
+            {/* Diagonal Curtain Lights */}
+            <div className="absolute -top-[20%] -left-[10%] w-[140%] h-[140%] opacity-60 group-focus-within:opacity-80 transition-all duration-1000">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/25 via-transparent to-transparent rotate-12 blur-[160px]" />
+              <div className="absolute inset-0 bg-gradient-to-tl from-cyan-500/18 via-transparent to-transparent -rotate-12 blur-[140px]" />
+            </div>
+
+            {/* Persistent Geometric Beams */}
+            <motion.div
+              animate={{ x: ["-100%", "300%"] }}
+              transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+              className="absolute top-0 bottom-0 w-[5px] bg-gradient-to-b from-transparent via-emerald-500/35 to-transparent rotate-[25deg] blur-md"
+            />
+            <motion.div
+              animate={{ x: ["300%", "-100%"] }}
+              transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
+              className="absolute top-0 bottom-0 w-[4px] bg-gradient-to-b from-transparent via-cyan-500/30 to-transparent rotate-[-15deg] blur-sm opacity-70"
+            />
+
+            {/* Subtle Ambient Particles */}
+            {Array.from({ length: 20 }).map((_, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: Math.random() * 1000 }}
+                animate={{
+                  opacity: [0, 0.3, 0],
+                  y: [null, Math.random() * -300],
+                  x: [null, (Math.random() - 0.5) * 150],
+                }}
+                transition={{
+                  duration: 8 + Math.random() * 8,
+                  repeat: Infinity,
+                  delay: Math.random() * 10,
+                }}
+                className="absolute w-[3px] h-[3px] bg-emerald-400/50 rounded-full blur-[1px]"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {!nodes.length && <LiveViewEmptyState project={project} projectId={projectId} />}
 
         {/* Clinical Monitoring Watermark */}
         <div className="absolute bottom-10 left-10 z-0 pointer-events-none select-none opacity-20">
@@ -463,7 +618,7 @@ function LiveViewContent() {
           nodesDraggable={true}
           nodesConnectable={false}
           elementsSelectable={true}
-          panOnDrag={true}
+          panOnDrag={!selectedAgentId}
         ></ReactFlow>
       </div>
     </CanvasPageLayout>

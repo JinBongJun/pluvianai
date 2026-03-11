@@ -9,7 +9,7 @@ from sqlalchemy import func, and_
 from app.models.user import User
 from app.models.subscription import Subscription
 from app.models.usage import Usage
-from app.core.subscription_limits import PLAN_LIMITS, PLAN_PRICING
+from app.core.subscription_limits import PLAN_LIMITS, PLAN_PRICING, normalize_plan_type
 from app.core.logging_config import logger
 
 
@@ -24,7 +24,7 @@ class SubscriptionService:
         subscription = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
 
         # Default to free plan if no subscription exists
-        plan_type = subscription.plan_type if subscription else "free"
+        plan_type = normalize_plan_type(subscription.plan_type if subscription else "free")
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
         return {
@@ -38,6 +38,9 @@ class SubscriptionService:
                 "data_retention_days": limits["data_retention_days"],
                 "snapshots_per_month": limits.get("snapshots_per_month"),
                 "guard_credits_per_month": limits.get("guard_credits_per_month"),
+                "platform_replay_credits_per_month": limits.get(
+                    "platform_replay_credits_per_month", limits.get("guard_credits_per_month")
+                ),
             },
             "features": limits["features"],
             "current_period_start": (
@@ -59,7 +62,7 @@ class SubscriptionService:
         Returns: (is_allowed, error_message)
         """
         plan_info = self.get_user_plan(user_id)
-        plan_type = plan_info["plan_type"]
+        plan_type = normalize_plan_type(plan_info["plan_type"])
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
         # Get current usage for this metric
