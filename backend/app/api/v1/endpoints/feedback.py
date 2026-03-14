@@ -147,7 +147,7 @@ async def _upload_feedback_file_to_slack(
     if not complete_data.get("ok"):
         logger.error("Slack completeUploadExternal error", extra={"error": complete_data.get("error"), "body": complete_data})
         return
-    logger.info("Feedback attachment uploaded to Slack", extra={"file_id": file_id, "filename": evidence_filename})
+    logger.info("Feedback attachment uploaded to Slack", extra={"file_id": file_id, "evidence_filename": evidence_filename})
 
 
 async def _send_feedback_slack(
@@ -219,7 +219,7 @@ async def _send_feedback_slack(
         except Exception as e:
             logger.exception(
                 "Slack attachment upload failed; feedback text was still sent",
-                extra={"user_id": current_user.id, "filename": evidence_filename},
+                extra={"user_id": current_user.id, "evidence_filename": evidence_filename},
             )
 
 
