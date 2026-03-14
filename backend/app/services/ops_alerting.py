@@ -56,6 +56,7 @@ class OpsAlertingService:
     ) -> None:
         now = time()
         window_s = int(getattr(settings, "OPS_LIVE_VIEW_WINDOW_SECONDS", 300))
+        min_samples = int(getattr(settings, "OPS_LIVE_VIEW_MIN_SAMPLES", 5))
         with self._lock:
             q = self._live_view_events[project_id]
             q.append((now, int(status_code), float(duration_ms)))
@@ -71,7 +72,7 @@ class OpsAlertingService:
 
         err_threshold = float(getattr(settings, "OPS_LIVE_VIEW_5XX_RATE_THRESHOLD", 0.05))
         p95_threshold = float(getattr(settings, "OPS_LIVE_VIEW_P95_MS_THRESHOLD", 3000))
-        is_degraded = error_rate > err_threshold or p95_ms > p95_threshold
+        is_degraded = total >= min_samples and (error_rate > err_threshold or p95_ms > p95_threshold)
         key = f"live_view_api_degraded:{project_id}"
         if is_degraded:
             self._emit_alert_if_needed(
@@ -92,7 +93,7 @@ class OpsAlertingService:
                 },
                 mark_active=True,
             )
-        else:
+        elif total >= min_samples:
             self._emit_recovery_if_needed(
                 dedup_key=key,
                 severity="info",
