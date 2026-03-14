@@ -2,14 +2,15 @@ from app.utils.secret_redaction import REDACTED_VALUE, redact_secrets
 
 
 def test_redact_secrets_masks_secret_keys_and_values():
+    # Use placeholders that trigger redaction but do not look like real secrets (avoids scanner false positives).
     payload = {
-        "api_key": "sk-test-abcdefghijklmnopqrstuvwxyz123456",
+        "api_key": "test-api-key-placeholder",
         "nested": {
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.aaa.bbb",
+            "Authorization": "Bearer fake-for-unit-test",
             "safe": "hello world",
         },
         "messages": [
-            {"role": "user", "content": "token=sk-ant-api03-abcdefghijklmnopqrstuvwxyz"},
+            {"role": "user", "content": "token=Bearer fake"},  # value pattern triggers in-content redaction
             {"role": "assistant", "content": "normal text"},
         ],
     }
