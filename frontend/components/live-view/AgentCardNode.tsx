@@ -31,11 +31,12 @@ export type AgentCardNodeData = {
   blur?: boolean;
 };
 
-export const AgentCardNode = memo(({ id, data, selected }: NodeProps<AgentCardNodeData>) => {
+export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<AgentCardNodeData>) => {
   const { label, model, theme = "liveView", blur: shouldBlur, rgDetails } = data;
   const isCritical = (data.worstCount || 0) > 0;
   const isRG = theme === "releaseGate";
-  const showRgDetail = isRG && selected && rgDetails;
+  const isActuallySelected = selected && !dragging;
+  const showRgDetail = isRG && isActuallySelected && rgDetails;
   const rgConfig = showRgDetail && rgDetails?.config ? rgDetails.config : null;
   const toolsCount =
     showRgDetail && typeof rgDetails?.toolsCount === "number"
@@ -91,6 +92,27 @@ export const AgentCardNode = memo(({ id, data, selected }: NodeProps<AgentCardNo
     rgConfig && typeof rgConfig.lastRunStatusLabel === "string"
       ? String(rgConfig.lastRunStatusLabel).trim()
       : "";
+  const promptPreview = String((rgDetails as any)?.prompt || "")
+    .trim()
+    .replace(/\s+/g, " ");
+  const modelLabel =
+    String((rgDetails as any)?.model || model || "")
+      .trim()
+      .toLowerCase() || "—";
+  const providerLabel =
+    String((rgDetails as any)?.provider || "").trim().toLowerCase() || (isRG ? "release-gate" : "live-view");
+  const samplingSummaryText =
+    rgConfig && typeof (rgConfig as any)?.samplingSummary === "string"
+      ? String((rgConfig as any).samplingSummary).trim()
+      : "";
+  const toolsSummaryText =
+    rgConfig && typeof (rgConfig as any)?.toolsSummary === "string"
+      ? String((rgConfig as any).toolsSummary).trim()
+      : "";
+  const overrideSummaryText =
+    rgConfig && typeof (rgConfig as any)?.overrideSummary === "string"
+      ? String((rgConfig as any).overrideSummary).trim()
+      : "";
   const evalListScrollRef = useRef<HTMLUListElement | null>(null);
 
   const handleEvalListWheel = useCallback((e: React.WheelEvent) => {
@@ -124,80 +146,63 @@ export const AgentCardNode = memo(({ id, data, selected }: NodeProps<AgentCardNo
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
-      animate={{
-        opacity: 1,
-        scale: selected ? 1.02 : 1,
-        rotateY: 0,
-      }}
+      animate={{ opacity: 1, scale: 1, rotateY: 0 }}
       transition={{ type: "spring", stiffness: 80, damping: 18, mass: 1.2 }}
       onWheel={showRgDetail ? e => e.stopPropagation() : undefined}
       className={clsx(
-        "rounded-[32px] border relative cursor-pointer group flex flex-col transition-[filter] duration-200",
-        showRgDetail ? "w-[900px] h-[640px] shrink-0" : "w-[340px]",
-        shouldBlur && "blur-[3px]",
-        selected
-          ? isRG
-            ? "bg-[#121319]/95 border-fuchsia-500/40 shadow-[0_40px_80px_-20px_rgba(217,70,239,0.25)] z-50 ring-1 ring-white/5"
-            : "bg-[#121319]/95 border-emerald-500/40 shadow-[0_40px_80px_-20px_rgba(16,185,129,0.25)] z-50 ring-1 ring-white/5"
-          : isCritical
-            ? "bg-[#241217]/90 border-rose-500/30 shadow-[0_20px_40px_-10px_rgba(244,63,94,0.1)]"
-            : "bg-[#121319]/95 border-white/[0.12] hover:border-white/25 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)]"
+        "rounded-[14px] border relative cursor-pointer group flex flex-col transition-all duration-200",
+        showRgDetail ? "w-[800px] h-[580px] shrink-0" : "w-[240px]",
+        shouldBlur && "blur-[3px] opacity-40",
+        isCritical
+          ? "bg-[#1C1C1E] border-rose-500/40 shadow-lg"
+          : "bg-[#1C1C1E] border-[#3A3A3C] shadow-lg"
       )}
+      data-testid={isRG ? `rg-node-${id}` : undefined}
       style={{ transformStyle: "preserve-3d", perspective: "1000px" }}
     >
       {/* Front Face */}
       <div
-        className="w-full h-full relative z-20 flex flex-col rounded-[32px] overflow-hidden bg-inherit"
+        className="w-full h-full relative z-20 flex flex-col rounded-[16px] overflow-hidden bg-inherit"
         style={{ backfaceVisibility: "hidden" }}
       >
-        {/* Top Rim Highlight */}
-        <div
-          className={clsx(
-            "absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent z-10 transition-opacity",
-            selected ? "opacity-100" : "opacity-60"
-          )}
-        />
-        <div className="absolute top-[1px] inset-x-10 h-24 bg-gradient-to-b from-white/[0.03] to-transparent pointer-events-none z-10" />
 
         <div
           className={clsx(
-            "flex flex-col relative z-20 w-full h-full p-8",
-            !showRgDetail && "min-h-[110px]"
+            "flex flex-col relative z-20 w-full h-full",
+            showRgDetail ? "p-5" : "p-4",
+            !showRgDetail && "min-h-[76px]"
           )}
         >
           {/* Header */}
           <div
             className={clsx(
-              "flex items-start justify-between shrink-0",
-              showRgDetail ? "border-b border-white/5 pb-6 mb-6" : ""
+              "flex items-start justify-between shrink-0 overflow-hidden",
+              showRgDetail ? "border-b border-white/[0.06] pb-5 mb-5" : ""
             )}
           >
-            <div className="flex items-start gap-5">
+            <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+              {/* Icon — sidebar button style */}
               <div
                 className={clsx(
-                  "w-[60px] h-[60px] rounded-[20px] border flex items-center justify-center shrink-0 transition-all duration-500 shadow-inner relative",
-                  selected
-                    ? isRG
-                      ? "bg-fuchsia-500/10 border-fuchsia-500/30"
-                      : "bg-emerald-500/10 border-emerald-500/30"
-                    : isCritical
-                      ? "bg-rose-500/10 border-rose-500/20"
-                      : "bg-white/[0.03] border-white/10 group-hover:border-white/20"
+                  "w-[38px] h-[38px] rounded-[12px] border flex items-center justify-center shrink-0 transition-all duration-200 relative",
+                  isCritical
+                    ? "bg-rose-500/[0.07] border-rose-500/15"
+                    : "bg-white/[0.04] border-white/[0.1] group-hover:bg-white/[0.06] group-hover:border-white/[0.16]"
                 )}
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-50 rounded-[20px]" />
+                <div className="absolute inset-0 rounded-[12px] bg-gradient-to-b from-white/[0.05] to-transparent" />
                 <svg
-                  width="28"
-                  height="28"
+                  width="17"
+                  height="17"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="2.5"
+                  strokeWidth="1.7"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   className={clsx(
-                    "relative z-10 filter drop-shadow-[0_0_10px_currentColor]",
-                    isCritical ? "text-rose-400" : isRG ? "text-fuchsia-400" : "text-emerald-400"
+                    "relative z-10",
+                    isCritical ? "text-rose-400/70" : isRG ? "text-fuchsia-400/70" : "text-emerald-400/70"
                   )}
                 >
                   {isRG ? (
@@ -211,43 +216,48 @@ export const AgentCardNode = memo(({ id, data, selected }: NodeProps<AgentCardNo
                 </svg>
               </div>
 
-              <div className="min-w-0 flex-1 pt-0.5">
-                <div className="flex items-center gap-2 mb-1.5 font-black uppercase tracking-[0.2em] text-[11px]">
-                  <span className={isCritical ? "text-rose-500" : "text-slate-500"}>
-                    AGENT PROTOCOL
+              {/* Text — strictly contained */}
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <div className="flex items-center gap-1 mb-[3px]">
+                  <span className={clsx(
+                    "text-[8.5px] font-medium uppercase tracking-[0.18em] shrink-0",
+                    isCritical ? "text-rose-500/60" : "text-slate-600"
+                  )}>
+                    Agent
                   </span>
-                  <span className="text-slate-700">•</span>
-                  <span className="text-slate-500">v1.2</span>
+                  <span className="text-slate-700/60 text-[8px] shrink-0">·</span>
                 </div>
-                <h3 className="text-xl font-bold text-white tracking-tight leading-none mb-3">
+                {/* Name: truncate with tooltip via title */}
+                <h3
+                  className="text-[12px] font-semibold text-white/85 tracking-tight leading-tight truncate w-full"
+                  title={label}
+                >
                   {label}
                 </h3>
 
                 {showRgDetail ? (
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/10">
-                      <Box className="w-3.5 h-3.5 text-slate-400" />
-                      <span className="text-xs font-medium text-slate-300">
-                        {rgDetails.model ? String(rgDetails.model) : model || "Unknown model"}
+                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.07]">
+                      <Box className="w-2.5 h-2.5 text-slate-500" />
+                      <span className="text-[9px] font-medium text-slate-400 truncate max-w-[80px]">
+                        {rgDetails.model ? String(rgDetails.model) : model || "—"}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/10">
-                      <Wrench className="w-3.5 h-3.5 text-slate-400" />
-                      <span className="text-xs font-medium text-slate-300">
-                        {toolsCount} tool{toolsCount !== 1 ? "s" : ""}
+                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.07]">
+                      <Wrench className="w-2.5 h-2.5 text-slate-500" />
+                      <span className="text-[9px] font-medium text-slate-400">
+                        {toolsCount}t
                       </span>
                     </div>
                     {rgConfig?.overrideSummary && rgConfig.overrideSummary !== "No overrides" && (
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-fuchsia-500/10 border border-fuchsia-500/20">
-                        <span className="text-xs font-medium text-fuchsia-300">
-                          Override active
-                        </span>
+                      <div className="px-1.5 py-0.5 rounded-md bg-fuchsia-500/[0.07] border border-fuchsia-500/15">
+                        <span className="text-[9px] font-medium text-fuchsia-400/70">Override</span>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-500 font-mono font-bold tracking-widest uppercase opacity-60">
-                    {model || "agent-production-env"}
+                  <p className="text-[10px] text-slate-600/80 mt-0.5 truncate w-full" title={model || ""}>
+                    {model || "—"}
                   </p>
                 )}
               </div>
@@ -332,11 +342,11 @@ export const AgentCardNode = memo(({ id, data, selected }: NodeProps<AgentCardNo
                 </div>
               </div>
 
-              {/* Right Column: JSON Editor */}
+              {/* Right Column: Config summary */}
               <div className="flex-1 flex flex-col min-h-0 min-w-0">
                 <div className="flex items-center justify-between mb-3 shrink-0">
                   <div className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                    JSON Payload
+                    Config Summary
                   </div>
                   {configSourceLabel ? (
                     <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium text-slate-300">
@@ -345,10 +355,55 @@ export const AgentCardNode = memo(({ id, data, selected }: NodeProps<AgentCardNo
                   ) : null}
                 </div>
 
-                <div className="flex-1 rounded-2xl border border-white/10 bg-[#0a0c10] shadow-inner overflow-hidden flex flex-col p-5">
-                  <pre className="flex-1 overflow-auto text-[13px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-words custom-scrollbar">
-                    {String(rgConfig.originalPayloadPreview || "{}")}
-                  </pre>
+                <div className="flex-1 rounded-2xl border border-white/10 bg-[#0a0c10] shadow-inner overflow-hidden flex flex-col p-4 gap-3">
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500">Model</div>
+                      <div className="mt-1 text-slate-200 truncate" title={modelLabel}>
+                        {modelLabel}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500">Provider</div>
+                      <div className="mt-1 text-slate-200 truncate" title={providerLabel}>
+                        {providerLabel}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500">
+                      System prompt
+                    </div>
+                    <p
+                      className="mt-1 text-[11px] text-slate-200 leading-relaxed line-clamp-2"
+                      title={promptPreview || "No system prompt configured."}
+                    >
+                      {promptPreview || "No system prompt configured."}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2 text-[11px]">
+                    <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-300">
+                      <span className="text-slate-500">Sampling:</span>{" "}
+                      {samplingSummaryText || "Using provider defaults"}
+                    </div>
+                    <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-300">
+                      <span className="text-slate-500">Tools:</span> {toolsSummaryText || "No tools configured"}
+                    </div>
+                    <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-300">
+                      <span className="text-slate-500">Override:</span> {overrideSummaryText || "Using detected model"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/8 bg-black/30 p-3 flex-1 min-h-0">
+                    <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500 mb-1">
+                      Payload (raw preview)
+                    </div>
+                    <pre className="h-full overflow-auto text-[11px] leading-relaxed text-slate-400 font-mono whitespace-pre-wrap break-words custom-scrollbar">
+                      {String(rgConfig.originalPayloadPreview || "{}")}
+                    </pre>
+                  </div>
                 </div>
               </div>
             </div>
@@ -409,6 +464,7 @@ export const AgentCardNode = memo(({ id, data, selected }: NodeProps<AgentCardNo
                       rgConfig.setRepeatDropdownOpen(!rgConfig.repeatDropdownOpen);
                     }}
                     disabled={!!rgConfig.isValidating}
+                    data-testid="rg-repeat-trigger"
                     className={clsx(
                       "inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-black uppercase transition",
                       rgConfig.isHeavyRepeat
@@ -440,6 +496,7 @@ export const AgentCardNode = memo(({ id, data, selected }: NodeProps<AgentCardNo
                               rgConfig.handleRepeatSelect(option);
                             }}
                             disabled={!!rgConfig.isValidating}
+                            data-testid={`rg-repeat-option-${option}`}
                             className={clsx(
                               "flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold transition",
                               isActive && "bg-fuchsia-500/20 text-fuchsia-100",
@@ -468,6 +525,7 @@ export const AgentCardNode = memo(({ id, data, selected }: NodeProps<AgentCardNo
                     type="button"
                     onClick={handleCancelClick}
                     disabled={Boolean((rgConfig as any)?.cancelRequested)}
+                    data-testid="rg-run-cancel-btn"
                     className={clsx(
                       "inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-2.5 text-sm font-bold uppercase tracking-wider text-white transition hover:bg-white/20",
                       Boolean((rgConfig as any)?.cancelRequested) && "opacity-50 cursor-not-allowed"
@@ -485,6 +543,7 @@ export const AgentCardNode = memo(({ id, data, selected }: NodeProps<AgentCardNo
                 <button
                   type="button"
                   onClick={handleStartClick}
+                  data-testid="rg-run-start-btn"
                   disabled={
                     !rgConfig.canRunValidate ||
                     rgConfig.isValidating ||
