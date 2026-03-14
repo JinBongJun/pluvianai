@@ -47,6 +47,7 @@ from app.core.metrics import (
     login_latency_seconds,
 )
 from app.core.analytics import analytics_service
+from app.utils.privacy import mask_email
 
 router = APIRouter()
 
@@ -95,7 +96,7 @@ async def register(
     audit_service = Depends(get_audit_service)
 ):
     """Register a new user"""
-    logger.info(f"User registration attempt: {user_data.email}")
+    logger.info(f"User registration attempt: {mask_email(user_data.email)}")
 
     # Enforce password policy
     policy_result = password_policy_service.validate(user_data.password)
@@ -143,7 +144,6 @@ async def register(
         try:
             analytics_service.track_user_registration(
                 user_id=user.id,
-                email=user.email,
                 plan="free",  # Default plan
             )
         except Exception as e:
@@ -167,7 +167,7 @@ async def register(
         
         return user
     except EntityAlreadyExistsError as e:
-        logger.warning(f"Registration failed: Email already exists - {user_data.email}")
+        logger.warning(f"Registration failed: Email already exists - {mask_email(user_data.email)}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
@@ -187,17 +187,18 @@ async def login(
     
     # Log to both logger and stderr for maximum visibility
     import sys
-    log_msg = f"🔴🔴🔴 LOGIN REQUEST RECEIVED: origin={origin}, email={form_data.username}, ip={ip}"
+    masked_email = mask_email(form_data.username)
+    log_msg = f"🔴🔴🔴 LOGIN REQUEST RECEIVED: origin={origin}, email={masked_email}, ip={ip}"
     logger.info(log_msg)
     print(log_msg, file=sys.stderr)
     
     logger.info(
-        f"LOGIN REQUEST RECEIVED: origin={origin}, email={form_data.username}, ip={ip}",
+        f"LOGIN REQUEST RECEIVED: origin={origin}, email={masked_email}, ip={ip}",
         extra={
             "endpoint": "/api/v1/auth/login",
             "method": "POST",
             "origin": origin,
-            "email": form_data.username,
+            "email": masked_email,
             "ip": ip,
             "user_agent": user_agent[:100] if user_agent else None,
         }
@@ -256,18 +257,19 @@ async def login(
         user = user_service.get_user_by_email(form_data.username)
 
         # Log user lookup result for debugging
+        password_valid = False
         if not user:
-            logger.warning(f"🔴 LOGIN FAILED: User not found for email: {form_data.username}")
-            print(f"🔴 LOGIN FAILED: User not found for email: {form_data.username}", file=sys.stderr)
+            logger.warning(f"🔴 LOGIN FAILED: User not found for email: {masked_email}")
+            print(f"🔴 LOGIN FAILED: User not found for email: {masked_email}", file=sys.stderr)
         else:
-            logger.info(f"✅ User found: id={user.id}, email={user.email}, is_active={user.is_active}")
-            print(f"✅ User found: id={user.id}, email={user.email}, is_active={user.is_active}", file=sys.stderr)
+            logger.info(f"✅ User found: id={user.id}, is_active={user.is_active}")
+            print(f"✅ User found: id={user.id}, is_active={user.is_active}", file=sys.stderr)
             # Check password
             password_valid = verify_password(form_data.password, user.hashed_password)
-            logger.info(f"🔐 Password verification result: {password_valid}")
-            print(f"🔐 Password verification result: {password_valid}", file=sys.stderr)
+            logger.info(f"🔐 Password verification completed for user_id={user.id}")
+            print(f"🔐 Password verification completed for user_id={user.id}", file=sys.stderr)
 
-        if not user or not verify_password(form_data.password, user.hashed_password):
+        if not user or not password_valid:
             result = brute_force_service.register_failure(form_data.username, ip)
             login_attempts_total.labels(outcome="failure", reason="invalid_credentials").inc()
             db.add(
@@ -281,14 +283,14 @@ async def login(
             )
             if not result.allowed:
                 brute_force_blocks_total.labels(reason=result.reason or "rate_limited").inc()
-                logger.warning(f"🔴 LOGIN BLOCKED: Too many attempts for {form_data.username}")
-                print(f"🔴 LOGIN BLOCKED: Too many attempts for {form_data.username}", file=sys.stderr)
+                logger.warning(f"🔴 LOGIN BLOCKED: Too many attempts for {masked_email}")
+                print(f"🔴 LOGIN BLOCKED: Too many attempts for {masked_email}", file=sys.stderr)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=f"Too many attempts. Try again in {result.wait_seconds} seconds.",
                 )
-            logger.warning(f"🔴 LOGIN FAILED: Invalid credentials for {form_data.username}")
-            print(f"🔴 LOGIN FAILED: Invalid credentials for {form_data.username}", file=sys.stderr)
+            logger.warning(f"🔴 LOGIN FAILED: Invalid credentials for {masked_email}")
+            print(f"🔴 LOGIN FAILED: Invalid credentials for {masked_email}", file=sys.stderr)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
@@ -296,8 +298,8 @@ async def login(
             )
 
         if not user.is_active:
-            logger.warning(f"🔴 LOGIN FAILED: User account is inactive for {user.email}")
-            print(f"🔴 LOGIN FAILED: User account is inactive for {user.email}", file=sys.stderr)
+            logger.warning(f"🔴 LOGIN FAILED: User account is inactive for user_id={user.id}")
+            print(f"🔴 LOGIN FAILED: User account is inactive for user_id={user.id}", file=sys.stderr)
             login_attempts_total.labels(outcome="failure", reason="inactive").inc()
             db.add(
                 LoginAttempt(
@@ -384,7 +386,7 @@ async def login(
             logger.warning(f"Failed to track analytics event (non-critical): {analytics_error}", exc_info=True)
 
         # Always return tokens even if auxiliary operations fail
-        logger.info(f"✅ LOGIN SUCCESS: user_id={user.id}, email={user.email}")
+        logger.info(f"✅ LOGIN SUCCESS: user_id={user.id}")
         return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
     
     except HTTPException:
@@ -395,25 +397,21 @@ async def login(
         import traceback
         error_traceback = traceback.format_exc()
         logger.error(
-            f"🔴🔴🔴 LOGIN ERROR: {type(e).__name__}: {str(e)}",
+            f"🔴🔴🔴 LOGIN ERROR: {type(e).__name__}",
             extra={
                 "endpoint": "/api/v1/auth/login",
                 "method": "POST",
                 "error_type": type(e).__name__,
-                "error_message": str(e),
                 "traceback": error_traceback,
             },
             exc_info=True,
         )
         # Also print to stderr for Railway logs
         import sys
-        print(f"🔴🔴🔴 LOGIN ERROR: {type(e).__name__}: {str(e)}", file=sys.stderr)
+        print(f"🔴🔴🔴 LOGIN ERROR: {type(e).__name__}", file=sys.stderr)
         print(error_traceback, file=sys.stderr)
         # Raise HTTPException for FastAPI to handle
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.post("/refresh", response_model=TokenResponse)

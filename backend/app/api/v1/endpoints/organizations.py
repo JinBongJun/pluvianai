@@ -4,9 +4,10 @@ Organization endpoints for org-first architecture.
 
 from typing import List, Optional
 from datetime import datetime, timedelta
+from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -14,7 +15,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.logging_config import logger
 from app.core.decorators import handle_errors
-from app.core.dependencies import get_organization_service, get_project_service
+from app.core.dependencies import get_organization_service, get_project_service, get_user_service
+from app.middleware.usage_middleware import check_organization_limit
 from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.models.user import User
 from app.models.organization import Organization, OrganizationMember
@@ -95,6 +97,87 @@ class OrgProjectSummary(BaseModel):
         from_attributes = True
 
 
+class OrganizationMemberRole(str, Enum):
+    OWNER = "owner"
+    ADMIN = "admin"
+    MEMBER = "member"
+    VIEWER = "viewer"
+
+
+class OrganizationMemberCreate(BaseModel):
+    email: EmailStr
+    role: OrganizationMemberRole = Field(..., description="Member role (admin, member, viewer)")
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v):
+        if v not in [
+            OrganizationMemberRole.ADMIN,
+            OrganizationMemberRole.MEMBER,
+            OrganizationMemberRole.VIEWER,
+        ]:
+            raise ValueError("Role must be one of: admin, member, viewer")
+        return v
+
+
+class OrganizationMemberResponse(BaseModel):
+    id: int
+    user_id: int
+    email: str
+    full_name: Optional[str] = None
+    role: str
+    joined_at: str
+
+
+def _get_org_role(db: Session, org_id: int, current_user: User, org: Optional[Organization] = None) -> Optional[str]:
+    if org and org.owner_id == current_user.id:
+        return OrganizationMemberRole.OWNER.value
+
+    membership = (
+        db.query(OrganizationMember)
+        .filter(
+            OrganizationMember.organization_id == org_id,
+            OrganizationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not membership:
+        return None
+    return str(membership.role)
+
+
+def _require_org_access(
+    db: Session,
+    org_id: int,
+    current_user: User,
+    org_service,
+    required_roles: Optional[List[str]] = None,
+) -> tuple[Organization, str]:
+    org = org_service.get_organization_by_id(org_id)
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+
+    current_role = _get_org_role(db, org_id, current_user, org)
+    if not current_role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this organization",
+        )
+
+    if required_roles and current_role not in required_roles:
+        required_label = " or ".join(required_roles)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"This action requires organization {required_label} role. "
+                f"Current role: {current_role}. "
+                "Ask the organization owner to update your role if needed."
+            ),
+        )
+
+    return org, current_role
+
+
 def _get_user_orgs(org_service, user: User) -> List[Organization]:
     """
     Get organizations where user is owner or member.
@@ -117,6 +200,13 @@ def create_organization(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Organization name is required",
+        )
+
+    can_create, error_msg = check_organization_limit(current_user.id, db)
+    if not can_create:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error_msg or "Organization limit reached for current plan",
         )
 
     try:
@@ -156,6 +246,7 @@ def list_organizations(
         .filter(
             Project.organization_id.in_(org_ids),
             Project.is_active.is_(True),
+            Project.is_deleted.is_(False),
         )
         .group_by(Project.organization_id)
         .all()
@@ -174,6 +265,7 @@ def list_organizations(
             .filter(
                 Project.organization_id.in_(org_ids),
                 Project.is_active.is_(True),
+                Project.is_deleted.is_(False),
             )
             .all()
         )
@@ -192,6 +284,7 @@ def list_organizations(
                 .filter(
                     Project.organization_id.in_(org_ids),
                     Project.is_active.is_(True),
+                    Project.is_deleted.is_(False),
                     APICall.created_at >= seven_days_ago,
                     APICall.created_at <= now,
                 )
@@ -207,6 +300,7 @@ def list_organizations(
             .filter(
                 Project.organization_id.in_(org_ids),
                 Project.is_active.is_(True),
+                Project.is_deleted.is_(False),
                 Alert.is_resolved.is_(False),
             )
             .group_by(Project.organization_id)
@@ -221,6 +315,7 @@ def list_organizations(
             .filter(
                 Project.organization_id.in_(org_ids),
                 Project.is_active.is_(True),
+                Project.is_deleted.is_(False),
                 Alert.alert_type == "drift",
                 Alert.is_resolved.is_(False),
             )
@@ -302,7 +397,15 @@ def get_organization(
         logger.info(f"📊 Calculating stats for org_id={org_id}")
 
         try:
-            projects = db.query(Project).filter(Project.organization_id == org_id).all()
+            projects = (
+                db.query(Project)
+                .filter(
+                    Project.organization_id == org_id,
+                    Project.is_active.is_(True),
+                    Project.is_deleted.is_(False),
+                )
+                .all()
+            )
             project_ids = [p.id for p in projects]
             logger.info(f"📁 Found {len(projects)} projects for org_id={org_id}")
         except Exception as e:
@@ -418,11 +521,8 @@ def get_organization(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"🔴🔴🔴 GET ORGANIZATION ERROR: {type(e).__name__}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
-        )
+        logger.error(f"🔴🔴🔴 GET ORGANIZATION ERROR: {type(e).__name__}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
         # Return basic org info without stats if response building fails
         plan_limits = {
             "free": {"calls": 1000, "cost": 10.0},
@@ -448,6 +548,146 @@ def get_organization(
                 "alerts": [],
             },
         }
+
+
+@router.get("/{org_id}/members", response_model=List[OrganizationMemberResponse])
+@handle_errors
+def list_organization_members(
+    org_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_service = Depends(get_organization_service),
+):
+    """List organization members (any organization member can view)."""
+    org, _ = _require_org_access(db, org_id, current_user, org_service)
+
+    memberships = (
+        db.query(OrganizationMember)
+        .filter(OrganizationMember.organization_id == org_id)
+        .order_by(OrganizationMember.created_at.asc(), OrganizationMember.id.asc())
+        .all()
+    )
+
+    result: List[OrganizationMemberResponse] = []
+    seen_user_ids = set()
+    for membership in memberships:
+        if not membership.user:
+            continue
+        if membership.user_id in seen_user_ids:
+            continue
+        seen_user_ids.add(membership.user_id)
+        result.append(
+            OrganizationMemberResponse(
+                id=membership.id,
+                user_id=membership.user_id,
+                email=membership.user.email,
+                full_name=membership.user.full_name,
+                role=str(membership.role),
+                joined_at=membership.created_at.isoformat(),
+            )
+        )
+
+    if org.owner_id not in seen_user_ids and org.owner:
+        result.insert(
+            0,
+            OrganizationMemberResponse(
+                id=0,
+                user_id=org.owner.id,
+                email=org.owner.email,
+                full_name=org.owner.full_name,
+                role=OrganizationMemberRole.OWNER.value,
+                joined_at=org.created_at.isoformat() if org.created_at else datetime.utcnow().isoformat(),
+            ),
+        )
+
+    return result
+
+
+@router.post("/{org_id}/members", response_model=OrganizationMemberResponse, status_code=status.HTTP_201_CREATED)
+@handle_errors
+def add_organization_member(
+    org_id: int,
+    member_data: OrganizationMemberCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_service = Depends(get_organization_service),
+    user_service = Depends(get_user_service),
+):
+    """Invite/add organization member (owner/admin only)."""
+    _require_org_access(
+        db,
+        org_id,
+        current_user,
+        org_service,
+        required_roles=[OrganizationMemberRole.OWNER.value, OrganizationMemberRole.ADMIN.value],
+    )
+
+    user = user_service.get_user_by_email(member_data.email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"User with email '{member_data.email}' not found. "
+                "The user must have an existing PluvianAI account with this email address."
+            ),
+        )
+
+    try:
+        member = org_service.add_member(
+            organization_id=org_id,
+            user_id=user.id,
+            role=member_data.role.value,
+        )
+    except EntityAlreadyExistsError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return OrganizationMemberResponse(
+        id=member.id,
+        user_id=member.user_id,
+        email=user.email,
+        full_name=user.full_name,
+        role=member.role,
+        joined_at=member.created_at.isoformat(),
+    )
+
+
+@router.delete("/{org_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
+@handle_errors
+def remove_organization_member(
+    org_id: int,
+    member_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    org_service = Depends(get_organization_service),
+):
+    """Remove organization member (owner/admin only, owner cannot be removed)."""
+    org, _ = _require_org_access(
+        db,
+        org_id,
+        current_user,
+        org_service,
+        required_roles=[OrganizationMemberRole.OWNER.value, OrganizationMemberRole.ADMIN.value],
+    )
+
+    member = (
+        db.query(OrganizationMember)
+        .filter(
+            OrganizationMember.organization_id == org_id,
+            OrganizationMember.id == member_id,
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+
+    if member.user_id == org.owner_id or str(member.role) == OrganizationMemberRole.OWNER.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove organization owner",
+        )
+
+    db.delete(member)
+    return None
 
 
 @router.get("/{org_id}/projects", response_model=List[OrgProjectSummary])
@@ -621,11 +861,8 @@ def list_org_projects(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"🔴🔴🔴 ORG PROJECTS ERROR: {type(e).__name__}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
-        )
+        logger.error(f"🔴🔴🔴 ORG PROJECTS ERROR: {type(e).__name__}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.patch("/{org_id}", response_model=OrganizationDetail)
@@ -649,7 +886,10 @@ def update_organization(
     if org.owner_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the organization owner can update settings"
+            detail=(
+                "This action requires organization owner role. "
+                "Ask the organization owner to update your role if needed."
+            ),
         )
     
     updated_org = org_service.update_organization(
@@ -668,7 +908,7 @@ def delete_organization(
     current_user: User = Depends(get_current_user),
     org_service = Depends(get_organization_service),
 ):
-    """Delete an organization and all its projects."""
+    """Soft-delete an organization and all its projects."""
     logger.info(f"🔵 DELETE ORGANIZATION: org_id={org_id}, user_id={current_user.id}")
     
     # Check if organization exists
@@ -680,7 +920,10 @@ def delete_organization(
     if org.owner_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the organization owner can delete the organization"
+            detail=(
+                "This action requires organization owner role. "
+                "Ask the organization owner to update your role if needed."
+            ),
         )
     
     success = org_service.delete_organization(org_id)

@@ -108,6 +108,15 @@ class APIKeyCreatedResponse(BaseModel):
     message: str
 
 
+def _generate_api_key_pair() -> tuple[str, str]:
+    """Return (raw_api_key, sha256_hash_for_storage)."""
+    key_prefix = "ag_live_"
+    random_part = secrets.token_urlsafe(32)
+    raw_api_key = f"{key_prefix}{random_part}"
+    key_hash = hashlib.sha256(raw_api_key.encode()).hexdigest()
+    return raw_api_key, key_hash
+
+
 @router.get("/profile", response_model=ProfileResponse)
 @handle_errors
 async def get_profile(
@@ -137,7 +146,8 @@ async def update_profile(
     if request.full_name is not None:
         current_user.full_name = request.full_name
     
-    # Note: get_db() dependency automatically commits, so db.commit() is not needed
+    # Flush pending mutation before refresh so updated fields are persisted in response.
+    db.flush()
     db.refresh(current_user)
     
     logger.info(f"Profile updated for user {current_user.id}")
@@ -273,12 +283,7 @@ async def create_api_key(
         )
     
     # Generate secure API key
-    key_prefix = "ag_live_"
-    random_part = secrets.token_urlsafe(32)
-    api_key_value = f"{key_prefix}{random_part}"
-    
-    # Hash the key for storage (SHA256)
-    key_hash = hashlib.sha256(api_key_value.encode()).hexdigest()
+    api_key_value, key_hash = _generate_api_key_pair()
     
     # Create API key record
     api_key = APIKey(
@@ -298,6 +303,59 @@ async def create_api_key(
         name=api_key.name,
         api_key=api_key_value,
         message="API key created successfully. Save this key now - it won't be shown again!"
+    )
+
+
+@router.post("/api-keys/{key_id}/rotate", response_model=APIKeyCreatedResponse)
+@handle_errors
+async def rotate_api_key(
+    key_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Rotate an API key.
+
+    Creates a brand new key and deactivates the old key in one operation.
+    Full key is returned only once.
+    """
+    logger.info(f"User {current_user.id} rotating API key: {key_id}")
+
+    old_key = db.query(APIKey).filter(
+        APIKey.id == key_id,
+        APIKey.user_id == current_user.id,
+        APIKey.is_active == True,
+    ).first()
+    if not old_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="API key not found",
+        )
+
+    raw_api_key, key_hash = _generate_api_key_pair()
+    new_key = APIKey(
+        user_id=current_user.id,
+        key_hash=key_hash,
+        name=(old_key.name or "Rotated key"),
+        is_active=True,
+    )
+    db.add(new_key)
+
+    # Deactivate old key as part of rotation.
+    old_key.is_active = False
+    old_key.last_used_at = datetime.utcnow()
+
+    db.flush()
+    db.refresh(new_key)
+
+    logger.info(
+        f"API key rotated for user {current_user.id}: old_key_id={old_key.id}, new_key_id={new_key.id}"
+    )
+    return APIKeyCreatedResponse(
+        id=new_key.id,
+        name=new_key.name,
+        api_key=raw_api_key,
+        message="API key rotated successfully. Save this key now - it won't be shown again!",
     )
 
 

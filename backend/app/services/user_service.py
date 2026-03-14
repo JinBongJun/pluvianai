@@ -74,7 +74,7 @@ class UserService:
         self.db.add(subscription)
         # Transaction is managed by get_db() dependency
         
-        logger.info(f"User created successfully: {user.email}")
+        logger.info(f"User created successfully: user_id={user.id}")
         return user
 
     def get_user_by_id(self, user_id: int) -> Optional[User]:

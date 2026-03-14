@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import useSWR from "swr";
@@ -67,16 +67,14 @@ function LiveViewToolbar({
   const { zoomIn, zoomOut, fitView } = useReactFlow();
 
   const groupBase =
-    "flex flex-col bg-[#1a1a1e]/95 border border-white/[0.15] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] rounded-[20px] overflow-hidden backdrop-blur-3xl relative group transition-all duration-500 hover:border-white/30";
+    "flex flex-col bg-[#1C1C1E] border border-[#3A3A3C] shadow-lg rounded-[18px] overflow-hidden relative group transition-all duration-300";
   const btnBase =
-    "flex items-center justify-center w-[52px] h-[52px] text-zinc-400 hover:text-emerald-400 hover:bg-white/[0.05] transition-all duration-300 relative z-10";
+    "flex items-center justify-center w-[46px] h-[46px] text-[#8E8E93] hover:text-white hover:bg-white/[0.05] transition-all duration-200 relative z-10";
 
   return (
-    <div className="absolute left-6 top-[180px] z-50 flex flex-col gap-4">
+    <div className="absolute left-6 top-[180px] z-50 flex flex-col gap-3.5">
       {/* Auto Layout Button */}
       <div className={groupBase}>
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-60 z-10" />
-        <div className="absolute inset-0.5 rounded-[18px] bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none z-0" />
         <button className={btnBase} onClick={onAutoLayout} title="Auto Layout">
           <LayoutGrid className="w-[18px] h-[18px]" strokeWidth={1.5} />
         </button>
@@ -84,36 +82,32 @@ function LiveViewToolbar({
 
       {/* Zoom controls */}
       <div className={groupBase}>
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-60 z-10" />
-        <div className="absolute inset-0.5 rounded-[18px] bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none z-0" />
         <button className={btnBase} onClick={() => zoomIn({ duration: 300 })}>
-          <Plus className="w-5 h-5" strokeWidth={1.5} />
+          <Plus className="w-[20px] h-[20px]" strokeWidth={1.5} />
         </button>
         <button className={btnBase} onClick={() => zoomOut({ duration: 300 })}>
-          <Minus className="w-5 h-5" strokeWidth={1.5} />
+          <Minus className="w-[20px] h-[20px]" strokeWidth={1.5} />
         </button>
         <button className={btnBase} onClick={() => fitView({ duration: 800 })}>
-          <Maximize className="w-4 h-4" strokeWidth={1.5} />
+          <Maximize className="w-[18px] h-[18px]" strokeWidth={1.5} />
         </button>
       </div>
 
       {/* Undo / Redo */}
       <div className={groupBase}>
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-60 z-10" />
-        <div className="absolute inset-0.5 rounded-[18px] bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none z-0" />
         <button
           className={clsx(btnBase, !canUndo && "opacity-20 pointer-events-none grayscale")}
           onClick={onUndo}
           disabled={!canUndo}
         >
-          <Undo className="w-4 h-4" strokeWidth={1.5} />
+          <Undo className="w-[18px] h-[18px]" strokeWidth={1.5} />
         </button>
         <button
           className={clsx(btnBase, !canRedo && "opacity-20 pointer-events-none grayscale")}
           onClick={onRedo}
           disabled={!canRedo}
         >
-          <Redo className="w-4 h-4" strokeWidth={1.5} />
+          <Redo className="w-[18px] h-[18px]" strokeWidth={1.5} />
         </button>
       </div>
     </div>
@@ -131,8 +125,8 @@ function LiveViewEmptyState({
   const [copied, setCopied] = useState(false);
   const snippet =
     projectId && !Number.isNaN(projectId)
-      ? `# Python\npip install pluvianai\npluvianai.init(api_key="YOUR_API_KEY", project_id=${projectId})\n\n# Node\nnpm install pluvianai\npluvianai.init({ apiKey: "YOUR_API_KEY", projectId: ${projectId} })`
-      : `# Python\npip install pluvianai\npluvianai.init(api_key="YOUR_API_KEY", project_id=YOUR_PROJECT_ID)\n\n# Node\nnpm install pluvianai\npluvianai.init({ apiKey: "YOUR_API_KEY", projectId: YOUR_PROJECT_ID })`;
+      ? `# Python (backend)\nimport requests\n\nrequests.post(\n  "https://api.pluvianai.com/api/v1/projects/${projectId}/api-calls",\n  headers={\"Authorization\": \"Bearer YOUR_API_KEY\"},\n  json={\"provider\": \"openai\", \"model\": \"gpt-4\", \"request_data\": {\"input\": \"hello\"}, \"response_data\": {\"text\": \"hello\"}, \"status_code\": 200},\n)\n\n# Node (backend)\nawait fetch(\"https://api.pluvianai.com/api/v1/projects/${projectId}/api-calls\", {\n  method: \"POST\",\n  headers: {\n    Authorization: \"Bearer YOUR_API_KEY\",\n    \"Content-Type\": \"application/json\",\n  },\n  body: JSON.stringify({ provider: \"openai\", model: \"gpt-4\", request_data: { input: \"hello\" }, response_data: { text: \"hello\" }, status_code: 200 }),\n});`
+      : `# Python (backend)\nimport requests\n\nrequests.post(\n  \"https://api.pluvianai.com/api/v1/projects/YOUR_PROJECT_ID/api-calls\",\n  headers={\"Authorization\": \"Bearer YOUR_API_KEY\"},\n  json={\"provider\": \"openai\", \"model\": \"gpt-4\", \"request_data\": {\"input\": \"hello\"}, \"response_data\": {\"text\": \"hello\"}, \"status_code\": 200},\n)\n\n# Node (backend)\nawait fetch(\"https://api.pluvianai.com/api/v1/projects/YOUR_PROJECT_ID/api-calls\", {\n  method: \"POST\",\n  headers: {\n    Authorization: \"Bearer YOUR_API_KEY\",\n    \"Content-Type\": \"application/json\",\n  },\n  body: JSON.stringify({ provider: \"openai\", model: \"gpt-4\", request_data: { input: \"hello\" }, response_data: { text: \"hello\" }, status_code: 200 }),\n});`;
 
   const onCopy = useCallback(() => {
     navigator.clipboard.writeText(snippet).then(() => {
@@ -202,10 +196,34 @@ function LiveViewEmptyState({
               Waiting for Live Traffic
             </span>
             <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)] leading-tight">
-              Add our integration in your app — traffic will show up here.
+              Connect your LLM calls — agents will show up here in real time.
             </h2>
             <p className="text-sm text-slate-400 max-w-xl mx-auto font-medium">
-              Python, Node, n8n, MCP, LangChain. Pick your tool below.
+              Take your existing backend where you call the LLM, send us a copy of each request and response, and this map will light up automatically.
+            </p>
+          </div>
+        </div>
+
+        <div className="w-full max-w-5xl grid gap-3 text-left md:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-[#121215]/70 px-5 py-4 shadow-xl">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-400">Step 1</p>
+            <p className="mt-2 text-sm font-semibold text-white">Copy project credentials</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-400">
+              Open Project Settings and copy your Project ID and server API key.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-[#121215]/70 px-5 py-4 shadow-xl">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-400">Step 2</p>
+            <p className="mt-2 text-sm font-semibold text-white">Paste the snippet in your backend</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-400">
+              Use the exact place where your app calls an LLM. Keep this server-side.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-[#121215]/70 px-5 py-4 shadow-xl">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-400">Step 3</p>
+            <p className="mt-2 text-sm font-semibold text-white">Run one request</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-400">
+              Trigger one test call and return here. Your first agent node should appear in seconds.
             </p>
           </div>
         </div>
@@ -216,8 +234,7 @@ function LiveViewEmptyState({
               Quick start (Python or Node)
             </p>
             <p className="text-xs text-slate-400 mt-1 font-medium">
-              Copy the snippet, paste it where you call the LLM, then run once. Replace YOUR_API_KEY
-              in Project Settings.
+              Copy this snippet into the place where you call your LLM (backend or worker), then run one test request. Replace YOUR_PROJECT_ID and YOUR_API_KEY from Project Settings.
             </p>
           </div>
           <div className="relative mx-4 mb-4 rounded-[20px] bg-black/60 border border-white/5 p-5 font-mono text-xs text-emerald-300/90 whitespace-pre-wrap">
@@ -237,8 +254,19 @@ function LiveViewEmptyState({
             {snippet}
           </div>
           <p className="text-[11px] text-slate-500 px-6 pb-6 font-bold uppercase tracking-widest opacity-50">
-            Then make one LLM call — you should see it here.
+            Make one LLM call — you should see your first agent node here within a few seconds.
           </p>
+        </div>
+
+        <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-black/30 px-5 py-4 text-left">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+            Troubleshooting
+          </p>
+          <ul className="mt-2 space-y-1 text-xs leading-relaxed text-slate-300">
+            <li>401/403: verify Project ID and API key match the same project.</li>
+            <li>No nodes after 1-2 minutes: verify requests hit your backend and `/api/v1/api-calls`.</li>
+            <li>Still empty: open browser Network tab and confirm `live-view/agents` returns at least one agent.</li>
+          </ul>
         </div>
 
         <div className="pt-2 space-y-3 p-6 rounded-[32px] bg-[#121215]/60 border border-white/10 backdrop-blur-3xl shadow-2xl max-w-xl mx-auto">
@@ -255,6 +283,74 @@ function LiveViewEmptyState({
       </div>
     </div>
   );
+}
+
+function LiveViewLoadingState() {
+  return (
+    <div className="absolute inset-0 z-40 flex items-center justify-center bg-[#030303]/70 backdrop-blur-sm">
+      <div className="rounded-2xl border border-white/10 bg-[#121215]/80 px-6 py-5 text-center shadow-2xl">
+        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-400">
+          Loading Live View
+        </p>
+        <p className="mt-2 text-sm text-slate-300">
+          Fetching agents and snapshots for this project...
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function LiveViewErrorState({
+  title,
+  description,
+  onRetry,
+}: {
+  title: string;
+  description: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="absolute inset-0 z-40 flex items-center justify-center bg-[#030303]/70 backdrop-blur-sm px-6">
+      <div className="w-full max-w-xl rounded-2xl border border-rose-500/30 bg-[#141016]/90 p-6 text-center shadow-2xl">
+        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-rose-300">{title}</p>
+        <p className="mt-3 text-sm leading-relaxed text-slate-200">{description}</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-5 inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const LV_GRID_SPACING_X = 300;
+const LV_GRID_SPACING_Y = 200;
+const LV_GRID_COLS = 3;
+
+function getLvStorageKey(projectId: number) {
+  return `lv-node-positions-${projectId}`;
+}
+
+function loadLvPositions(projectId: number): Record<string, { x: number; y: number }> {
+  try {
+    const raw = localStorage.getItem(getLvStorageKey(projectId));
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveLvPositions(nodes: Node[], projectId: number) {
+  try {
+    const map: Record<string, { x: number; y: number }> = {};
+    nodes.forEach(n => {
+      map[n.id] = { x: n.position.x, y: n.position.y };
+    });
+    localStorage.setItem(getLvStorageKey(projectId), JSON.stringify(map));
+  } catch {}
 }
 
 function LiveViewContent() {
@@ -275,7 +371,12 @@ function LiveViewContent() {
     organizationsAPI.get(orgId)
   );
 
-  const { data: agentsData, mutate: mutateAgents } = useSWR(
+  const {
+    data: agentsData,
+    mutate: mutateAgents,
+    isLoading: agentsLoading,
+    error: agentsError,
+  } = useSWR(
     projectId && !isNaN(projectId) && projectId > 0 ? ["live-view-agents", projectId] : null,
     () => liveViewAPI.getAgents(projectId)
   );
@@ -287,6 +388,10 @@ function LiveViewContent() {
   // Undo / Redo History State for Node Positions
   const [history, setHistory] = useState<Node[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+
+  const isDraggingRef = useRef(false);
+  const didActuallyDragRef = useRef(false);
+  const [dragEndCounter, setDragEndCounter] = useState(0);
 
   // Helper to commit current nodes position to history
   const commitHistory = (newNodes: Node[]) => {
@@ -301,22 +406,19 @@ function LiveViewContent() {
 
   const onAutoLayout = () => {
     setNodes(currentNodes => {
-      const spacingX = 400;
-      const spacingY = 420;
       const cols = Math.max(1, Math.ceil(Math.sqrt(currentNodes.length)));
 
       const newNodes = currentNodes.map((n, idx) => ({
         ...n,
         position: {
-          x: spacingX * (idx % cols),
-          y: spacingY * Math.floor(idx / cols),
+          x: LV_GRID_SPACING_X * (idx % cols),
+          y: LV_GRID_SPACING_Y * Math.floor(idx / cols),
         },
       }));
 
-      // Commit history via timeout since state batching
       setTimeout(() => {
         commitHistory(newNodes);
-        // Automatically fit view to the new layout
+        saveLvPositions(newNodes, projectId);
         setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 50);
       }, 0);
 
@@ -329,9 +431,14 @@ function LiveViewContent() {
 
   // Calculate Real Telemetry Stats from backend data
   const telemetryStats = useMemo(() => {
-    if (!agentsData?.agents) return undefined;
+    const telemetryAgents = Array.isArray(agentsData?.agents)
+      ? agentsData.agents
+      : Array.isArray((agentsData as any)?.data?.agents)
+        ? (agentsData as any).data.agents
+        : [];
+    if (!telemetryAgents.length) return undefined;
 
-    const agents = agentsData.agents;
+    const agents = telemetryAgents;
     const totalAgents = agents.length;
     let totalWorstCount = 0;
     let totalSnapshots = 0;
@@ -378,17 +485,36 @@ function LiveViewContent() {
     ];
   }, [agentsData]);
 
-  // Sync Data to React Flow
+  // Sync Data to React Flow (support both { agents } and { data: { agents } } from API)
+  const agentsList = useMemo(
+    () =>
+      Array.isArray(agentsData?.agents)
+        ? agentsData.agents
+        : Array.isArray((agentsData as any)?.data?.agents)
+          ? (agentsData as any).data.agents
+          : [],
+    [agentsData]
+  );
+
   useEffect(() => {
-    if (!agentsData?.agents) return;
+    if (typeof agentsData === "undefined") return;
+
+    const saved = loadLvPositions(projectId);
 
     setNodes(currentNodes => {
-      const updatedNodes = (agentsData.agents || []).map((agent: any, idx: number) => {
+      const updatedNodes = agentsList.map((agent: any, idx: number) => {
         const existingNode = currentNodes.find(n => n.id === agent.agent_id);
         const isSelected = agent.agent_id === selectedAgentId;
+        const savedPos = saved[agent.agent_id];
+        const defaultPos = {
+          x: LV_GRID_SPACING_X * (idx % LV_GRID_COLS),
+          y: LV_GRID_SPACING_Y * Math.floor(idx / LV_GRID_COLS),
+        };
+
         return {
           id: agent.agent_id,
           type: agent.node_type || "agentCard",
+          selected: isSelected,
           data: {
             label: agent.display_name || agent.agent_id,
             model: agent.model,
@@ -400,13 +526,10 @@ function LiveViewContent() {
             signals: agent.signals,
             blur: !!selectedAgentId && !isSelected,
           },
-          // Preserve existing position if node already exists, otherwise use grid
-          position: existingNode?.position ||
-            agent.position || { x: 385 * (idx % 3), y: 400 * Math.floor(idx / 3) },
+          position: existingNode?.position || savedPos || defaultPos,
         };
       });
 
-      // Initialize history on first load if empty
       if (history.length === 0 && updatedNodes.length > 0) {
         setHistory([updatedNodes.map((n: any) => ({ ...n, position: { ...n.position } }))]);
         setHistoryIndex(0);
@@ -414,9 +537,32 @@ function LiveViewContent() {
 
       return updatedNodes;
     });
+  }, [agentsData, agentsList, selectedAgentId, projectId]);
 
-    // setEdges([]) - Keep as is for now or handle edges similarly
-  }, [agentsData, selectedAgentId]);
+  // Reset node selected/blur state after drag ends or selection changes
+  useEffect(() => {
+    if (isDraggingRef.current) return;
+    setNodes(current =>
+      current.map(n => ({
+        ...n,
+        selected: n.id === selectedAgentId,
+        data: {
+          ...n.data,
+          blur: !!selectedAgentId && n.id !== selectedAgentId,
+        },
+      }))
+    );
+  }, [selectedAgentId, setNodes, dragEndCounter]);
+
+  const agentsErrorStatus = Number((agentsError as any)?.response?.status ?? 0);
+  const showLoadingOverlay = agentsLoading && typeof agentsData === "undefined";
+  const showAccessDeniedOverlay = !!agentsError && (agentsErrorStatus === 401 || agentsErrorStatus === 403);
+  const showApiErrorOverlay = !!agentsError && !showAccessDeniedOverlay;
+  const showEmptyOverlay =
+    !showLoadingOverlay &&
+    !showAccessDeniedOverlay &&
+    !showApiErrorOverlay &&
+    agentsList.length === 0;
 
   return (
     <CanvasPageLayout
@@ -435,6 +581,7 @@ function LiveViewContent() {
         <RailwaySidePanel
           title={selectedAgentId || "Agent Diagnostics"}
           isOpen={!!selectedAgentId}
+          width={760}
           onClose={() => {
             setSelectedAgentId(null);
             setPanelTab("logs");
@@ -483,76 +630,30 @@ function LiveViewContent() {
         </RailwaySidePanel>
       }
     >
-      <div className="flex-1 min-h-0 relative bg-[#1a1a24]">
-        {/* Background layer: grid + glow + antigravity — blurred when a node is selected */}
-        <div
-          className={clsx(
-            "absolute inset-0 pointer-events-none transition-[filter] duration-200",
-            selectedAgentId && "blur-sm"
-          )}
-          style={{
-            backgroundImage: `
-              radial-gradient(circle, rgba(255, 255, 255, 0.22) 1.5px, transparent 1.5px),
-              linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px)
-            `,
-            backgroundSize: "64px 64px, 100% 4px",
-            backgroundPosition: "0 0, 0 0",
-          }}
-        >
-          {/* Central Luminous Floor Glow */}
-          <div
-            className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[80%] pointer-events-none opacity-40 blur-[160px]"
-            style={{
-              background:
-                "radial-gradient(circle at center, rgba(16, 185, 129, 0.15) 0%, rgba(6, 182, 212, 0.08) 40%, transparent 70%)",
-            }}
-          />
-          {/* Antigravity Background Layers (Always Persistent) */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none group">
-            {/* Diagonal Curtain Lights */}
-            <div className="absolute -top-[20%] -left-[10%] w-[140%] h-[140%] opacity-60 group-focus-within:opacity-80 transition-all duration-1000">
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/25 via-transparent to-transparent rotate-12 blur-[160px]" />
-              <div className="absolute inset-0 bg-gradient-to-tl from-cyan-500/18 via-transparent to-transparent -rotate-12 blur-[140px]" />
-            </div>
-
-            {/* Persistent Geometric Beams */}
-            <motion.div
-              animate={{ x: ["-100%", "300%"] }}
-              transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-              className="absolute top-0 bottom-0 w-[5px] bg-gradient-to-b from-transparent via-emerald-500/35 to-transparent rotate-[25deg] blur-md"
-            />
-            <motion.div
-              animate={{ x: ["300%", "-100%"] }}
-              transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-              className="absolute top-0 bottom-0 w-[4px] bg-gradient-to-b from-transparent via-cyan-500/30 to-transparent rotate-[-15deg] blur-sm opacity-70"
-            />
-
-            {/* Subtle Ambient Particles */}
-            {Array.from({ length: 20 }).map((_, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: Math.random() * 1000 }}
-                animate={{
-                  opacity: [0, 0.3, 0],
-                  y: [null, Math.random() * -300],
-                  x: [null, (Math.random() - 0.5) * 150],
-                }}
-                transition={{
-                  duration: 8 + Math.random() * 8,
-                  repeat: Infinity,
-                  delay: Math.random() * 10,
-                }}
-                className="absolute w-[3px] h-[3px] bg-emerald-400/50 rounded-full blur-[1px]"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  top: `${Math.random() * 100}%`,
-                }}
-              />
-            ))}
-          </div>
+      <div className="flex-1 min-h-0 relative bg-[#050B08] overflow-hidden">
+        {/* Ambient emerald background, inspired by landing hero */}
+        <div className="absolute inset-0 pointer-events-none z-0">
+          <div className="absolute -left-[25%] top-1/2 -translate-y-1/2 w-[70%] h-[140%] bg-emerald-500/14 rounded-full blur-[180px]" />
+          <div className="absolute -right-[25%] top-1/2 -translate-y-1/2 w-[70%] h-[140%] bg-teal-400/10 rounded-full blur-[180px]" />
+          <div className="absolute inset-x-0 bottom-[-40%] h-[80%] bg-emerald-500/12 rounded-full blur-[170px]" />
         </div>
 
-        {!nodes.length && <LiveViewEmptyState project={project} projectId={projectId} />}
+        {showLoadingOverlay && <LiveViewLoadingState />}
+        {showAccessDeniedOverlay && (
+          <LiveViewErrorState
+            title="Access Denied"
+            description="You do not have access to this project. Ask a project owner or admin to update your role."
+            onRetry={() => void mutateAgents()}
+          />
+        )}
+        {showApiErrorOverlay && (
+          <LiveViewErrorState
+            title="Unable to Load Agents"
+            description="We could not reach the Live View API right now. Please retry in a few seconds. If the problem continues, check backend health and network connectivity."
+            onRetry={() => void mutateAgents()}
+          />
+        )}
+        {showEmptyOverlay && <LiveViewEmptyState project={project} projectId={projectId} />}
 
         {/* Clinical Monitoring Watermark */}
         <div className="absolute bottom-10 left-10 z-0 pointer-events-none select-none opacity-20">
@@ -593,16 +694,23 @@ function LiveViewContent() {
           nodes={nodes}
           edges={edges}
           onNodesChange={changes => {
-            onNodesChange(changes);
+            const dragging = changes.some(c => c.type === "position" && (c as any).dragging);
+            if (dragging) {
+              isDraggingRef.current = true;
+              didActuallyDragRef.current = true;
+            }
+            const filtered = changes.filter(c => {
+              if (c.type === "select" && isDraggingRef.current) return false;
+              return true;
+            });
+            onNodesChange(filtered);
 
-            // If the change is a position drag end, commit to history
-            const hasPositionChange = changes.some(c => c.type === "position" && !c.dragging);
+            const hasPositionChange = changes.some(c => c.type === "position" && !(c as any).dragging);
             if (hasPositionChange) {
-              // We need the latest nodes state, which might not be synchronously ready here from onNodesChange,
-              // but since React states batch, we'll queue a timeout to grab the state or use setNodes callback
               setTimeout(() => {
                 setNodes(currentNodes => {
                   commitHistory(currentNodes);
+                  saveLvPositions(currentNodes, projectId);
                   return currentNodes;
                 });
               }, 0);
@@ -611,7 +719,20 @@ function LiveViewContent() {
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          onNodeClick={(_, node) => setSelectedAgentId(String(node.id))}
+          onNodeDragStart={() => {
+            isDraggingRef.current = true;
+          }}
+          onNodeDragStop={() => {
+            setTimeout(() => {
+              isDraggingRef.current = false;
+              didActuallyDragRef.current = false;
+              setDragEndCounter(c => c + 1);
+            }, 0);
+          }}
+          onNodeClick={(_, node) => {
+            if (didActuallyDragRef.current) return;
+            setSelectedAgentId(String(node.id));
+          }}
           connectionMode={ConnectionMode.Loose}
           fitView
           fitViewOptions={{ padding: 0.2 }}
@@ -619,7 +740,15 @@ function LiveViewContent() {
           nodesConnectable={false}
           elementsSelectable={true}
           panOnDrag={!selectedAgentId}
-        ></ReactFlow>
+          zoomOnDoubleClick={false}
+        >
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={24}
+            size={1.5}
+            color="rgba(110, 231, 183, 0.55)"
+          />
+        </ReactFlow>
       </div>
     </CanvasPageLayout>
   );

@@ -10,9 +10,11 @@ from app.models.behavior_report import BehaviorReport
 from app.models.snapshot import Snapshot
 from app.models.trace import Trace
 from app.models.project import Project
+from app.models.organization import Organization
 from app.models.user import User
 from app.models.subscription import Subscription
 from app.core.subscription_limits import PLAN_LIMITS
+from app.core.config import settings
 from app.core.logging_config import logger
 
 
@@ -227,6 +229,59 @@ class DataLifecycleService:
             "expired_release_gate_reports_count": release_gate_cleanup["expired_count"],
             "deleted_release_gate_reports_count": release_gate_cleanup["deleted_count"],
             "message": "Cleaned up " + " and ".join(message_parts),
+        }
+
+    def purge_soft_deleted_entities(self, grace_days: Optional[int] = None) -> Dict[str, int]:
+        """
+        Hard-delete projects/organizations that have been soft-deleted
+        longer than the grace window.
+        """
+        grace_window_days = grace_days if grace_days is not None else settings.SOFT_DELETE_GRACE_DAYS
+        cutoff = datetime.utcnow() - timedelta(days=grace_window_days)
+
+        expired_projects = (
+            self.db.query(Project)
+            .filter(
+                Project.is_deleted.is_(True),
+                Project.deleted_at.isnot(None),
+                Project.deleted_at < cutoff,
+            )
+            .all()
+        )
+        expired_orgs = (
+            self.db.query(Organization)
+            .filter(
+                Organization.is_deleted.is_(True),
+                Organization.deleted_at.isnot(None),
+                Organization.deleted_at < cutoff,
+            )
+            .all()
+        )
+
+        purged_projects = 0
+        purged_orgs = 0
+
+        for project in expired_projects:
+            self.db.delete(project)
+            purged_projects += 1
+
+        for org in expired_orgs:
+            self.db.delete(org)
+            purged_orgs += 1
+
+        if purged_projects or purged_orgs:
+            self.db.commit()
+            logger.info(
+                "Purged soft-deleted entities: %s projects, %s organizations (grace_days=%s)",
+                purged_projects,
+                purged_orgs,
+                grace_window_days,
+            )
+
+        return {
+            "grace_days": grace_window_days,
+            "purged_projects_count": purged_projects,
+            "purged_organizations_count": purged_orgs,
         }
 
     def archive_to_s3(self, snapshot_ids: List[int], project_id: Optional[int] = None) -> Dict[str, Any]:

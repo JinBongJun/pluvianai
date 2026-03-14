@@ -36,7 +36,7 @@ def get_user_project_role(project_id: int, user_id: int, db: Session) -> Optiona
     """
     # Check if user is project owner
     project = db.query(Project).filter(Project.id == project_id).first()
-    if project and project.owner_id == user_id:
+    if project and project.is_active and (not project.is_deleted) and project.owner_id == user_id:
         return ProjectRole.OWNER
 
     # Check ProjectMember
@@ -69,6 +69,8 @@ def check_project_access(
 
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if not project.is_active or project.is_deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
     # Check if user is owner
     if project.owner_id == user.id:
@@ -85,9 +87,14 @@ def check_project_access(
     # Check role permissions if required
     if required_roles:
         if member.role not in required_roles:
+            required_roles_text = ", ".join(sorted(set(required_roles)))
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Required role: {', '.join(required_roles)}. Your role: {member.role}",
+                detail=(
+                    f"This action requires one of: {required_roles_text}. "
+                    f"Your role is '{member.role}'. "
+                    "Ask a project owner or admin to update your role if needed."
+                ),
             )
 
     return project

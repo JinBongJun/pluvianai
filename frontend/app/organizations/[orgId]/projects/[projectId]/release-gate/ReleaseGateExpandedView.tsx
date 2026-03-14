@@ -19,6 +19,19 @@ import { ClientPortal } from "@/components/shared/ClientPortal";
 
 type GateTab = "validate" | "history";
 type ThresholdPreset = "strict" | "default" | "lenient" | "custom";
+type ResultCaseFilter = "all" | "failed";
+type FixHint = {
+  key: string;
+  label: string;
+  count: number;
+  severity?: string;
+  hint: string;
+  sample?: string;
+};
+type VisibleResultCase = {
+  run: any;
+  caseIndex: number;
+};
 
 const EVAL_CHECK_LABELS: Record<string, string> = {
   empty: "Empty / Short Answers",
@@ -34,6 +47,148 @@ const EVAL_CHECK_LABELS: Record<string, string> = {
   tool: "Tool Use Policy",
   tool_use_policy: "Tool Use Policy",
 };
+
+const RULE_FIX_HINTS: Record<string, string> = {
+  empty: "Increase answer completeness with clearer expected output and stronger baseline examples.",
+  latency: "Reduce slow tool/model paths or raise latency thresholds if this workload is expected to run slower.",
+  status_code:
+    "Investigate provider/API errors first (keys, rate limits, retries) to remove non-success status responses.",
+  refusal: "Adjust system prompt and safety boundaries so expected user requests are not refused.",
+  json: "Force strict JSON format in prompt and validate schema-compatible output.",
+  length: "Constrain output length and sections so responses stay close to baseline shape.",
+  repetition: "Add anti-loop instructions and cap repeated lines/tokens in the response policy.",
+  required: "Make required keywords/fields explicit in prompt and verify them in evaluation rules.",
+  format: "Pin output structure with an exact template and example.",
+  leakage: "Tighten redaction/policy checks to prevent sensitive information leakage.",
+  tool_use_policy:
+    "Review tool-call allowlist/order and tighten tool arguments so behavior matches baseline.",
+};
+
+function normalizeViolationRuleId(value: unknown): string {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (!raw) return "";
+  if (raw === "tool") return "tool_use_policy";
+  return raw;
+}
+
+function severityScore(value: unknown): number {
+  switch (String(value ?? "").trim().toLowerCase()) {
+    case "critical":
+      return 4;
+    case "high":
+      return 3;
+    case "medium":
+      return 2;
+    case "low":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function toHumanRuleLabel(ruleId: string, fallback = ""): string {
+  if (!ruleId) return fallback || "Behavior check";
+  return (
+    EVAL_CHECK_LABELS[ruleId] ??
+    fallback ??
+    ruleId.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase())
+  );
+}
+
+function isCasePassing(run: any): boolean {
+  const status = String(run?.case_status ?? "")
+    .trim()
+    .toLowerCase();
+  if (status === "pass") return true;
+  if (status === "fail" || status === "flaky") return false;
+  return Boolean(run?.pass);
+}
+
+function buildWhatToFixHints(result: any, cases: any[]): FixHint[] {
+  const byRule = new Map<
+    string,
+    {
+      label: string;
+      count: number;
+      severity: string;
+      severityRank: number;
+      sample: string;
+    }
+  >();
+
+  for (const run of Array.isArray(cases) ? cases : []) {
+    if (isCasePassing(run)) continue;
+    const violations = Array.isArray(run?.violations) ? run.violations : [];
+    for (const violation of violations) {
+      const normalizedRuleId =
+        normalizeViolationRuleId(violation?.rule_id) ||
+        normalizeViolationRuleId(violation?.rule_name);
+      const key = normalizedRuleId || "general";
+      const fallbackName = String(violation?.rule_name ?? "").trim();
+      const label = toHumanRuleLabel(key, fallbackName || "Behavior check");
+      const severity = String(violation?.severity ?? "")
+        .trim()
+        .toLowerCase();
+      const score = severityScore(severity);
+      const sample = String(violation?.message ?? "").trim();
+
+      const prev = byRule.get(key);
+      if (!prev) {
+        byRule.set(key, {
+          label,
+          count: 1,
+          severity,
+          severityRank: score,
+          sample,
+        });
+        continue;
+      }
+
+      byRule.set(key, {
+        label: prev.label || label,
+        count: prev.count + 1,
+        severity: score > prev.severityRank ? severity : prev.severity,
+        severityRank: Math.max(prev.severityRank, score),
+        sample: prev.sample || sample,
+      });
+    }
+  }
+
+  const sorted = Array.from(byRule.entries())
+    .sort((a, b) => {
+      if (b[1].count !== a[1].count) return b[1].count - a[1].count;
+      return b[1].severityRank - a[1].severityRank;
+    })
+    .slice(0, 4)
+    .map(([key, value]) => {
+      const hint = RULE_FIX_HINTS[key];
+      return {
+        key,
+        label: value.label,
+        count: value.count,
+        severity: value.severity || undefined,
+        hint: hint || "Inspect violation examples and tighten prompt/tool policy for this check.",
+        sample: hint ? undefined : value.sample || undefined,
+      } satisfies FixHint;
+    });
+
+  if (sorted.length > 0) return sorted;
+
+  const reasons = Array.isArray(result?.failure_reasons)
+    ? (result.failure_reasons as unknown[])
+        .map(v => String(v ?? "").trim())
+        .filter(Boolean)
+    : [];
+
+  return reasons.slice(0, 3).map((reason, idx) => ({
+    key: `reason-${idx}`,
+    label: "Run-level signal",
+    count: 1,
+    hint: reason,
+  }));
+}
 
 function getEvalCheckParams(id: string, config: Record<string, unknown> | undefined): string {
   if (!config || typeof config !== "object") return "";
@@ -102,11 +257,25 @@ function percentFromRate(value: unknown): string {
 function formatDurationMs(value: unknown): string {
   const ms = Number(value);
   if (!Number.isFinite(ms) || ms < 0) return "—";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
   const totalSec = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSec / 60);
   const seconds = totalSec % 60;
   if (minutes <= 0) return `${seconds}s`;
   return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+}
+
+function extractErrorMessage(error: unknown, fallback: string): string {
+  const anyErr = error as any;
+  const detail = anyErr?.response?.data?.detail;
+  if (typeof detail === "string" && detail.trim()) return detail.trim();
+  if (detail && typeof detail === "object" && typeof detail.message === "string") {
+    const msg = detail.message.trim();
+    if (msg) return msg;
+  }
+  const msg = String(anyErr?.message ?? "").trim();
+  if (msg) return msg;
+  return fallback;
 }
 
 function MetricTile({
@@ -131,6 +300,303 @@ function MetricTile({
         {label}
       </div>
       <div className="mt-1 text-lg font-black text-white">{value}</div>
+    </div>
+  );
+}
+
+function AttemptDetailOverlay({
+  open,
+  onClose,
+  inputIndex,
+  attemptIndex,
+  attempt,
+  baselineSnapshot,
+  evalChecks,
+}: {
+  open: boolean;
+  onClose: () => void;
+  inputIndex: number;
+  attemptIndex: number;
+  attempt: any;
+  baselineSnapshot: Record<string, unknown> | null;
+  evalChecks: Array<{ name: string }>;
+}) {
+  if (!open) return null;
+
+  const baselineInput = String(
+    baselineSnapshot?.user_message ?? baselineSnapshot?.request_prompt ?? "No input text captured."
+  ).trim();
+  const baselineModel = String(baselineSnapshot?.model ?? "—").trim() || "—";
+  const baselinePayload = baselineSnapshot?.payload;
+  const baselinePayloadPreview = (() => {
+    const clean = sanitizePayloadForPreview(
+      baselinePayload && typeof baselinePayload === "object" && !Array.isArray(baselinePayload)
+        ? (baselinePayload as Record<string, unknown>)
+        : null
+    );
+    try {
+      return JSON.stringify(clean, null, 2);
+    } catch {
+      return "{}";
+    }
+  })();
+
+  const failedRuleIds = new Set(
+    (Array.isArray(attempt?.violations) ? attempt.violations : [])
+      .map((v: any) => String(v?.rule_id || "").trim())
+      .filter(Boolean)
+  );
+  const evalRows = evalChecks.map(check => {
+    const id = String(check?.name || "").trim();
+    const normalizedId = id === "tool" ? "tool_use_policy" : id;
+    const failed = failedRuleIds.has(id) || failedRuleIds.has(normalizedId);
+    return {
+      id: normalizedId || id || "unknown",
+      label:
+        EVAL_CHECK_LABELS[normalizedId || id] ??
+        (normalizedId || id || "unknown")
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (l: string) => l.toUpperCase()),
+      pass: !failed,
+    };
+  });
+
+  const candidatePayloadPreview = (() => {
+    if (attempt?.replay?.provider_error?.response_preview) {
+      return String(attempt.replay.provider_error.response_preview);
+    }
+    try {
+      return JSON.stringify(
+        {
+          summary: attempt?.summary ?? {},
+          replay: attempt?.replay ?? {},
+          behavior_diff: attempt?.behavior_diff ?? {},
+          failure_reasons: attempt?.failure_reasons ?? [],
+        },
+        null,
+        2
+      );
+    } catch {
+      return "{}";
+    }
+  })();
+  const candidateSnapshot =
+    attempt?.candidate_snapshot &&
+    typeof attempt.candidate_snapshot === "object" &&
+    !Array.isArray(attempt.candidate_snapshot)
+      ? (attempt.candidate_snapshot as Record<string, unknown>)
+      : null;
+  const candidateModel = String(
+    candidateSnapshot?.model ??
+      (attempt?.summary?.target && typeof attempt.summary.target === "object"
+        ? (attempt.summary.target as Record<string, unknown>).model
+        : undefined) ??
+      "—"
+  ).trim() || "—";
+  const candidateProvider = String(candidateSnapshot?.provider ?? "—").trim() || "—";
+  const candidateInput = String(candidateSnapshot?.input_text ?? baselineInput ?? "—").trim() || "—";
+  const candidateResponse = String(
+    candidateSnapshot?.response_preview ??
+      attempt?.replay?.provider_error?.response_preview ??
+      ""
+  ).trim();
+
+  const pass = Boolean(attempt?.pass);
+
+  return (
+    <div className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/70 backdrop-blur-md p-6">
+      <div className="w-full max-w-[1400px] h-[86vh] rounded-[28px] border border-white/10 bg-[#0d0f14] shadow-2xl overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between gap-3 border-b border-white/8 px-6 py-4">
+          <div className="min-w-0">
+            <div className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
+              Unit diagnostics
+            </div>
+            <div className="mt-1 flex items-center gap-3">
+              <h2 className="text-base font-semibold text-white">
+                Input {inputIndex + 1} · Attempt {attemptIndex + 1}
+              </h2>
+              <span
+                className={clsx(
+                  "rounded-full border px-2.5 py-1 text-[10px] font-black uppercase",
+                  pass
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                    : "border-rose-500/30 bg-rose-500/10 text-rose-300"
+                )}
+              >
+                {pass ? "PASS" : "FAIL"}
+              </span>
+              <span className="text-[11px] text-slate-400">
+                {formatDurationMs((attempt?.replay ?? {}).avg_latency_ms)}
+              </span>
+              <span className="text-[11px] text-slate-500 truncate max-w-[360px]">
+                {baselineModel} → {candidateModel}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/10 px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-white/5"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="flex flex-1 min-h-0">
+          <div className="flex-[1.6] min-w-0 border-r border-white/8 p-5">
+            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+              Original snapshot
+            </div>
+            <div className="mt-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                Input
+              </div>
+              <p className="mt-2 max-h-28 overflow-auto custom-scrollbar whitespace-pre-wrap break-words text-sm text-slate-200">
+                {baselineInput}
+              </p>
+            </div>
+            <div className="mt-3 rounded-2xl border border-white/8 bg-black/40 p-3 h-[calc(100%-122px)]">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-2">
+                Baseline payload
+              </div>
+              <pre className="h-[calc(100%-22px)] overflow-auto custom-scrollbar text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-words">
+                {baselinePayloadPreview}
+              </pre>
+            </div>
+          </div>
+
+          <div className="flex-[1.6] min-w-0 border-r border-white/8 p-5">
+            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+              Tested snapshot
+            </div>
+            <div className="mt-3 rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.04] p-3 h-[calc(100%-24px)]">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                  Tested payload
+                </div>
+                {attempt?.trace_id && (
+                  <div className="truncate text-[11px] text-slate-500 max-w-[220px]">
+                    {String(attempt.trace_id)}
+                  </div>
+                )}
+              </div>
+              <pre className="mt-2 h-[calc(100%-22px)] overflow-auto custom-scrollbar text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-words">
+                {candidatePayloadPreview}
+              </pre>
+            </div>
+          </div>
+
+          <div className="w-[330px] min-w-[330px] p-5 space-y-3 overflow-y-auto custom-scrollbar">
+            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                Replay meta
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Model</div>
+                  <div className="mt-1 truncate">{candidateModel}</div>
+                </div>
+                <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Provider</div>
+                  <div className="mt-1 truncate">{candidateProvider}</div>
+                </div>
+                <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Status code</div>
+                  <div className="mt-1">{String(candidateSnapshot?.status_code ?? "—")}</div>
+                </div>
+                <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Latency</div>
+                  <div className="mt-1">{formatDurationMs((attempt?.replay ?? {}).avg_latency_ms)}</div>
+                </div>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <MetricTile label="Attempted" value={Number((attempt?.replay ?? {}).attempted ?? 0)} />
+                <MetricTile
+                  label="Succeeded"
+                  value={Number((attempt?.replay ?? {}).succeeded ?? 0)}
+                  tone="success"
+                />
+                <MetricTile
+                  label="Failed"
+                  value={Number((attempt?.replay ?? {}).failed ?? 0)}
+                  tone={Number((attempt?.replay ?? {}).failed ?? 0) > 0 ? "danger" : "default"}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                Input used
+              </div>
+              <p className="mt-2 max-h-20 overflow-auto custom-scrollbar text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
+                {candidateInput}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                Response preview
+              </div>
+              <p className="mt-2 max-h-28 overflow-auto custom-scrollbar text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
+                {candidateResponse || "No response preview captured for this attempt."}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                Eval checks
+              </div>
+              <div className="mt-1 text-[11px] text-slate-400">
+                {evalRows.filter(row => row.pass).length}/{evalRows.length || 0} checks passed
+              </div>
+              <div className="mt-2 space-y-2">
+                {evalRows.length === 0 ? (
+                  <div className="text-xs text-slate-500">No eval checks detected.</div>
+                ) : (
+                  evalRows.map(row => (
+                    <div
+                      key={row.id}
+                      className={clsx(
+                        "flex items-center justify-between rounded-xl border px-2.5 py-2 text-xs",
+                        row.pass
+                          ? "border-emerald-500/20 bg-emerald-500/8 text-emerald-200"
+                          : "border-rose-500/20 bg-rose-500/8 text-rose-200"
+                      )}
+                    >
+                      <span className="truncate pr-3">{row.label}</span>
+                      <span className="font-black">{row.pass ? "PASS" : "FAIL"}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                Tool behavior
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                  Sequence edits {Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0)}
+                </div>
+                <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                  Tool divergence{" "}
+                  {percentFromRate(Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0) / 100)}
+                </div>
+              </div>
+              {Array.isArray(attempt?.failure_reasons) && attempt.failure_reasons.length > 0 && (
+                <div className="mt-3 space-y-1.5">
+                  {attempt.failure_reasons.slice(0, 4).map((r: string, i: number) => (
+                    <div key={`${r}-${i}`} className="rounded-lg bg-rose-500/10 px-2.5 py-2 text-xs text-rose-200">
+                      {r}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -340,6 +806,9 @@ export function ReleaseGateExpandedView() {
   const nodeBasePayload = (ctx.nodeBasePayload as Record<string, unknown> | null) ?? null;
   const configSourceLabel = (ctx.configSourceLabel as string) || "";
   const recentSnapshots = ctx.recentSnapshots as any[];
+  const recentSnapshotsLoading = Boolean(ctx.recentSnapshotsLoading);
+  const recentSnapshotsError = ctx.recentSnapshotsError as unknown;
+  const mutateRecentSnapshots = ctx.mutateRecentSnapshots as (() => unknown) | undefined;
   const baselineSnapshotsById = ctx.baselineSnapshotsById as Map<string, Record<string, unknown>>;
   const runSnapshotIds = ctx.runSnapshotIds as string[];
   const setDataSource = ctx.setDataSource as (s: "recent" | "datasets") => void;
@@ -355,9 +824,22 @@ export function ReleaseGateExpandedView() {
     snapshot_count?: number;
     snapshot_ids?: unknown[];
   }[];
+  const datasetsLoading = Boolean(ctx.datasetsLoading);
+  const datasetsError = ctx.datasetsError as unknown;
+  const mutateDatasets = ctx.mutateDatasets as (() => unknown) | undefined;
   const runDatasetIds = ctx.runDatasetIds as string[];
   const expandedDatasetId = ctx.expandedDatasetId as string | null;
   const expandedDatasetSnapshots = ctx.expandedDatasetSnapshots as Record<string, unknown>[];
+  const datasetSnapshotsLoading = Boolean(ctx.datasetSnapshotsLoading);
+  const datasetSnapshotsError = ctx.datasetSnapshotsError as unknown;
+  const datasetSnapshots404 = Boolean(ctx.datasetSnapshots404);
+  const mutateDatasetSnapshots = ctx.mutateDatasetSnapshots as (() => unknown) | undefined;
+  const expandedDatasetSnapshotsLoading = Boolean(ctx.expandedDatasetSnapshotsLoading);
+  const expandedDatasetSnapshotsError = ctx.expandedDatasetSnapshotsError as unknown;
+  const expandedDatasetSnapshots404 = Boolean(ctx.expandedDatasetSnapshots404);
+  const mutateExpandedDatasetSnapshots = ctx.mutateExpandedDatasetSnapshots as
+    | (() => unknown)
+    | undefined;
   const selectedBaselineCount = ctx.selectedBaselineCount as number;
   const selectedDataSummary = ctx.selectedDataSummary as string;
   const thresholdPreset = ctx.thresholdPreset as ThresholdPreset;
@@ -441,6 +923,13 @@ export function ReleaseGateExpandedView() {
   const [dataPanelTab, setDataPanelTab] = useState<"logs" | "datasets">("logs");
   const [rightPanelTab, setRightPanelTab] = useState<"results" | "history">("results");
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const [resultCaseFilter, setResultCaseFilter] = useState<ResultCaseFilter>("all");
+  const [detailAttemptView, setDetailAttemptView] = useState<{
+    attempt: any;
+    caseIndex: number;
+    attemptIndex: number;
+    baselineSnapshot: Record<string, unknown> | null;
+  } | null>(null);
   const requestTools = useMemo(
     () => (Array.isArray(requestBody.tools) ? requestBody.tools : []),
     [requestBody]
@@ -450,6 +939,18 @@ export function ReleaseGateExpandedView() {
     if (Array.isArray(result?.case_results)) return result.case_results;
     return [];
   }, [result]);
+  const failedCaseCount = useMemo(
+    () => resultCases.filter((run: any) => !isCasePassing(run)).length,
+    [resultCases]
+  );
+  const visibleResultCases = useMemo(
+    () =>
+      resultCases
+        .map((run: any, caseIndex: number) => ({ run, caseIndex }))
+        .filter(({ run }: VisibleResultCase) => (resultCaseFilter === "all" ? true : !isCasePassing(run))),
+    [resultCases, resultCaseFilter]
+  );
+  const whatToFixHints = useMemo(() => buildWhatToFixHints(result, resultCases), [result, resultCases]);
   const nodeHistoryItems = useMemo(
     () =>
       historyItems.filter(item => {
@@ -462,16 +963,69 @@ export function ReleaseGateExpandedView() {
     () => historyItems.find(item => item.id === selectedRunId) ?? null,
     [historyItems, selectedRunId]
   );
+  const recentSnapshotsErrorMessage = useMemo(
+    () =>
+      recentSnapshotsError
+        ? extractErrorMessage(
+            recentSnapshotsError,
+            "Unable to load recent snapshots right now. Retry in a few seconds."
+          )
+        : "",
+    [recentSnapshotsError]
+  );
+  const datasetsErrorMessage = useMemo(
+    () =>
+      datasetsError
+        ? extractErrorMessage(datasetsError, "Unable to load saved datasets right now. Please retry.")
+        : "",
+    [datasetsError]
+  );
+  const expandedDatasetErrorMessage = useMemo(() => {
+    if (expandedDatasetSnapshots404 || datasetSnapshots404) {
+      return "This dataset is no longer available (it may have been deleted).";
+    }
+    if (expandedDatasetSnapshotsError) {
+      return extractErrorMessage(
+        expandedDatasetSnapshotsError,
+        "Unable to load snapshots in this dataset right now. Please retry."
+      );
+    }
+    if (datasetSnapshotsError) {
+      return extractErrorMessage(
+        datasetSnapshotsError,
+        "Unable to resolve dataset snapshots for this run. Please retry."
+      );
+    }
+    return "";
+  }, [
+    expandedDatasetSnapshots404,
+    datasetSnapshots404,
+    expandedDatasetSnapshotsError,
+    datasetSnapshotsError,
+  ]);
 
   useEffect(() => {
     setDataPanelTab("logs");
     setRightPanelTab("results");
+    setResultCaseFilter("all");
     setSettingsPanelOpen(false);
+    setDetailAttemptView(null);
     setExpandedCaseIndex(null);
     setSelectedAttempt(null);
     setSelectedRunId(null);
     setRepeatDropdownOpen(false);
-  }, [agentId, setExpandedCaseIndex, setRepeatDropdownOpen, setSelectedAttempt, setSelectedRunId]);
+  }, [
+    agentId,
+    setExpandedCaseIndex,
+    setRepeatDropdownOpen,
+    setSelectedAttempt,
+    setSelectedRunId,
+  ]);
+
+  useEffect(() => {
+    setResultCaseFilter("all");
+    setDetailAttemptView(null);
+  }, [result?.report_id]);
 
   const handleBack = () => {
     setViewMode("map");
@@ -482,6 +1036,7 @@ export function ReleaseGateExpandedView() {
     setRunSnapshotIds([]);
     setRunDatasetIds([]);
     setExpandedDatasetId(null);
+    setDetailAttemptView(null);
     setExpandedCaseIndex(null);
     setSelectedAttempt(null);
     setSelectedRunId(null);
@@ -638,6 +1193,7 @@ export function ReleaseGateExpandedView() {
           <div className="mt-[70px] flex rounded-2xl border border-white/10 bg-[#1a1a1e]/90 p-1.5 shadow-2xl pointer-events-auto">
             <button
               onClick={() => setTab("validate")}
+              data-testid="rg-main-tab-validate"
               className={clsx(
                 "px-6 py-2 text-xs font-bold rounded-xl transition-all duration-300",
                 tab === "validate"
@@ -649,6 +1205,7 @@ export function ReleaseGateExpandedView() {
             </button>
             <button
               onClick={() => setTab("history")}
+              data-testid="rg-main-tab-history"
               className={clsx(
                 "px-6 py-2 text-xs font-bold rounded-xl transition-all duration-300",
                 tab === "history"
@@ -668,21 +1225,45 @@ export function ReleaseGateExpandedView() {
               isOpen={true}
               onClose={handleBack}
               side="left"
-              width={420}
+              width={320}
               showCloseButton={false}
               className="pointer-events-auto"
               tabs={[
                 { id: "logs", label: "Live Logs" },
                 { id: "datasets", label: "Saved Data" },
               ]}
+              tabTestIdPrefix="rg-data-tab"
               activeTab={dataPanelTab}
               onTabChange={id => setDataPanelTab(id as "logs" | "datasets")}
             >
               <div className="flex h-full flex-col">
                 {dataPanelTab === "logs" && (
-                  <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    {!recentSnapshots?.length ? (
-                      <div className="p-8 text-center">
+                  <div className="flex-1 overflow-y-auto custom-scrollbar" data-testid="rg-data-panel-logs">
+                    {recentSnapshotsError ? (
+                      <div className="p-8 text-center" data-testid="rg-logs-state-error">
+                        <div className="text-xs font-medium uppercase tracking-widest text-rose-400">
+                          Unable to load recent snapshots
+                        </div>
+                        <div className="mt-2 text-[11px] text-slate-400">{recentSnapshotsErrorMessage}</div>
+                        <button
+                          type="button"
+                          onClick={() => void mutateRecentSnapshots?.()}
+                          className="mt-4 inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10 transition-colors"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : recentSnapshotsLoading && !recentSnapshots?.length ? (
+                      <div className="p-8 text-center" data-testid="rg-logs-state-loading">
+                        <div className="text-xs font-medium uppercase tracking-widest text-slate-500">
+                          Loading recent snapshots
+                        </div>
+                        <div className="mt-2 text-[11px] text-slate-500">
+                          Fetching baseline logs for this node...
+                        </div>
+                      </div>
+                    ) : !recentSnapshots?.length ? (
+                      <div className="p-8 text-center" data-testid="rg-logs-state-empty">
                         <div className="text-xs font-medium uppercase tracking-widest text-slate-500">
                           No recent snapshots
                         </div>
@@ -691,7 +1272,7 @@ export function ReleaseGateExpandedView() {
                         </div>
                       </div>
                     ) : (
-                      <div className="divide-y divide-white/[0.03]">
+                      <div className="divide-y divide-white/[0.03]" data-testid="rg-logs-state-list">
                         {recentSnapshots.map(
                           (skinny: { id: string; trace_id?: string; created_at?: string }) => {
                             const full = baselineSnapshotsById.get(String(skinny.id)) as
@@ -703,6 +1284,7 @@ export function ReleaseGateExpandedView() {
                             return (
                               <div
                                 key={skinny.id}
+                                data-testid={`rg-live-log-row-${skinny.id}`}
                                 className={clsx(
                                   "group transition-colors",
                                   checked ? "bg-fuchsia-500/5" : "hover:bg-white/[0.02]"
@@ -719,6 +1301,7 @@ export function ReleaseGateExpandedView() {
                                       type="checkbox"
                                       checked={checked}
                                       disabled={runLocked}
+                                      data-testid={`rg-live-log-checkbox-${skinny.id}`}
                                       onChange={() => {
                                         if (runLocked) return;
                                         const id = String(skinny.id);
@@ -773,9 +1356,39 @@ export function ReleaseGateExpandedView() {
                 )}
 
                 {dataPanelTab === "datasets" && (
-                  <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
-                    {!datasets?.length ? (
-                      <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-[12px] text-slate-500">
+                  <div
+                    className="flex-1 overflow-y-auto custom-scrollbar p-4"
+                    data-testid="rg-data-panel-datasets"
+                  >
+                    {datasetsError ? (
+                      <div
+                        className="rounded-2xl border border-dashed border-rose-500/25 bg-rose-500/[0.06] p-8 text-center text-[12px] text-rose-100/90"
+                        data-testid="rg-datasets-state-error"
+                      >
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-rose-300">
+                          Unable to load saved datasets
+                        </div>
+                        <div className="mt-2 text-[12px] text-slate-200">{datasetsErrorMessage}</div>
+                        <button
+                          type="button"
+                          onClick={() => void mutateDatasets?.()}
+                          className="mt-4 inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10 transition-colors"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : datasetsLoading && !datasets?.length ? (
+                      <div
+                        className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-[12px] text-slate-500"
+                        data-testid="rg-datasets-state-loading"
+                      >
+                        Loading saved datasets...
+                      </div>
+                    ) : !datasets?.length ? (
+                      <div
+                        className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-[12px] text-slate-500"
+                        data-testid="rg-datasets-state-empty"
+                      >
                         No saved datasets.
                         <div className="mt-2">
                           <Link
@@ -787,7 +1400,7 @@ export function ReleaseGateExpandedView() {
                         </div>
                       </div>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="space-y-3" data-testid="rg-datasets-state-list">
                         {datasets.map(
                           (dataset: {
                             id: string;
@@ -866,7 +1479,28 @@ export function ReleaseGateExpandedView() {
                                 {isExpanded && (
                                   <div className="px-4 pb-4">
                                     <div className="overflow-hidden rounded-2xl border border-white/8 bg-white/[0.04]">
-                                      {expandedDatasetSnapshots.length === 0 ? (
+                                      {(expandedDatasetSnapshotsLoading || datasetSnapshotsLoading) &&
+                                      expandedDatasetId === id ? (
+                                        <div className="px-4 py-4 text-sm text-slate-500">
+                                          Loading snapshots...
+                                        </div>
+                                      ) : expandedDatasetErrorMessage ? (
+                                        <div className="px-4 py-4 text-sm text-rose-200">
+                                          <div>{expandedDatasetErrorMessage}</div>
+                                          {!(expandedDatasetSnapshots404 || datasetSnapshots404) && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                void mutateExpandedDatasetSnapshots?.();
+                                                void mutateDatasetSnapshots?.();
+                                              }}
+                                              className="mt-3 inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10 transition-colors"
+                                            >
+                                              Retry
+                                            </button>
+                                          )}
+                                        </div>
+                                      ) : expandedDatasetSnapshots.length === 0 ? (
                                         <div className="px-4 py-4 text-sm text-slate-500">
                                           No snapshots stored in this dataset.
                                         </div>
@@ -922,13 +1556,14 @@ export function ReleaseGateExpandedView() {
               isOpen={true}
               onClose={handleBack}
               side="right"
-              width={420}
+              width={320}
               showCloseButton={true}
               className="pointer-events-auto"
               tabs={[
                 { id: "results", label: "Results" },
                 { id: "history", label: "History" },
               ]}
+              tabTestIdPrefix="rg-right-tab"
               activeTab={rightPanelTab}
               onTabChange={id => {
                 const next = id as "results" | "history";
@@ -1025,51 +1660,156 @@ export function ReleaseGateExpandedView() {
                             </div>
                           )}
 
+                        {!result.pass && whatToFixHints.length > 0 && (
+                          <div className="rounded-[24px] border border-amber-500/25 bg-amber-500/10 p-4">
+                            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200">
+                              What to fix first
+                            </div>
+                            <p className="mt-1 text-[11px] text-amber-100/80">
+                              Top recurring issues across failed or flaky inputs in this run.
+                            </p>
+                            <div className="mt-3 space-y-2">
+                              {whatToFixHints.map((hint, idx) => (
+                                <div
+                                  key={hint.key}
+                                  className="rounded-2xl border border-amber-500/20 bg-black/20 px-3 py-2.5"
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0 text-sm font-semibold text-amber-50">
+                                      {idx + 1}. {hint.label}
+                                    </div>
+                                    <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-black uppercase text-amber-200">
+                                      {hint.count}x
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 text-xs leading-relaxed text-amber-100/85">
+                                    {hint.hint}
+                                  </p>
+                                  {hint.sample && (
+                                    <p className="mt-1 line-clamp-2 text-[11px] text-amber-100/65">
+                                      Example: {hint.sample}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="space-y-3">
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-start justify-between gap-3">
                             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
                               Per-input breakdown
                             </div>
-                            {nodeHistoryItems.length > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setRightPanelTab("history");
-                                  if (!selectedRunId && nodeHistoryItems[0]?.id) {
-                                    selectHistoryRun(String(nodeHistoryItems[0].id));
-                                  }
-                                }}
-                                className="text-[11px] font-semibold text-slate-300 hover:text-white"
-                              >
-                                View history
-                              </button>
-                            )}
+                            <div className="flex items-center gap-2">
+                              <div className="inline-flex rounded-xl border border-white/10 bg-black/30 p-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setResultCaseFilter("all")}
+                                  className={clsx(
+                                    "rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] transition",
+                                    resultCaseFilter === "all"
+                                      ? "bg-white/10 text-white"
+                                      : "text-slate-400 hover:text-slate-200"
+                                  )}
+                                >
+                                  All {resultCases.length}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setResultCaseFilter("failed")}
+                                  className={clsx(
+                                    "rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] transition",
+                                    resultCaseFilter === "failed"
+                                      ? "bg-rose-500/20 text-rose-200"
+                                      : "text-slate-400 hover:text-slate-200"
+                                  )}
+                                >
+                                  Failed only {failedCaseCount}
+                                </button>
+                              </div>
+                              {nodeHistoryItems.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRightPanelTab("history");
+                                    if (!selectedRunId && nodeHistoryItems[0]?.id) {
+                                      selectHistoryRun(String(nodeHistoryItems[0].id));
+                                    }
+                                  }}
+                                  data-testid="rg-view-history-btn"
+                                  className="text-[11px] font-semibold text-slate-300 hover:text-white"
+                                >
+                                  View history
+                                </button>
+                              )}
+                            </div>
                           </div>
 
-                          {resultCases.map((run: any, idx: number) => {
+                          {visibleResultCases.length === 0 ? (
+                            <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-4 text-sm text-slate-500">
+                              {resultCaseFilter === "failed"
+                                ? "No failed or flaky inputs in this run."
+                                : "No per-input result rows returned for this run."}
+                            </div>
+                          ) : (
+                            visibleResultCases.map(({ run, caseIndex: idx }: VisibleResultCase) => {
                             const attempts = Array.isArray(run?.attempts) ? run.attempts : [];
-                            const passedAttempts = attempts.filter((attempt: any) =>
-                              Boolean(attempt?.pass)
-                            ).length;
+                            const baselineSnapshotForRun =
+                              (baselineSnapshotsById.get(String(run?.snapshot_id ?? "")) as
+                                | Record<string, unknown>
+                                | undefined) ??
+                              (recentSnapshots.find(
+                                s => String((s as Record<string, unknown>)?.id ?? "") === String(run?.snapshot_id ?? "")
+                              ) as Record<string, unknown> | undefined) ??
+                              null;
+                            const caseStatusRaw = String(
+                              run?.case_status ?? (run?.pass ? "pass" : "fail")
+                            )
+                              .trim()
+                              .toLowerCase();
+                            const caseIsPass =
+                              caseStatusRaw === "pass" ||
+                              (caseStatusRaw !== "fail" &&
+                                caseStatusRaw !== "flaky" &&
+                                Boolean(run?.pass));
+                            const caseIsFlaky = caseStatusRaw === "flaky";
                             const totalAttempts =
                               attempts.length || Number(result.repeat_runs ?? repeatRuns) || 1;
-                            const caseStatus = String(
-                              run?.case_status ?? (run?.pass ? "pass" : "fail")
-                            ).toUpperCase();
+                            const passRatioFallback = Number((run?.summary as any)?.pass_ratio);
+                            const passedAttempts = attempts.length
+                              ? attempts.filter((attempt: any) => Boolean(attempt?.pass)).length
+                              : Number.isFinite(passRatioFallback)
+                                ? Math.max(
+                                    0,
+                                    Math.min(totalAttempts, Math.round(passRatioFallback * totalAttempts))
+                                  )
+                                : caseIsPass
+                                  ? totalAttempts
+                                  : 0;
+                            const caseStatus = caseIsPass
+                              ? "PASS"
+                              : caseIsFlaky
+                                ? "FLAKY"
+                                : "FAIL";
                             const isExpanded = expandedCaseIndex === idx;
+                            const selectedAttemptIndex =
+                              selectedAttempt?.caseIndex === idx ? selectedAttempt.attemptIndex : null;
                             const activeAttempt =
-                              selectedAttempt?.caseIndex === idx &&
-                              typeof selectedAttempt.attemptIndex === "number"
-                                ? attempts[selectedAttempt.attemptIndex]
+                              typeof selectedAttemptIndex === "number"
+                                ? attempts[selectedAttemptIndex]
                                 : null;
 
                             return (
                               <div
                                 key={idx}
+                                data-testid={`rg-result-case-${idx}`}
                                 className={clsx(
                                   "overflow-hidden rounded-[24px] border",
-                                  run?.pass
+                                  caseIsPass
                                     ? "border-emerald-500/20 bg-emerald-500/5"
+                                    : caseIsFlaky
+                                      ? "border-amber-500/25 bg-amber-500/7"
                                     : "border-rose-500/20 bg-rose-500/5"
                                 )}
                               >
@@ -1079,22 +1819,30 @@ export function ReleaseGateExpandedView() {
                                     setExpandedCaseIndex(isExpanded ? null : idx);
                                     setSelectedAttempt(null);
                                   }}
+                                  data-testid={`rg-result-case-toggle-${idx}`}
                                   className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
                                 >
                                   <div className="min-w-0">
                                     <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
                                       Input {idx + 1}
                                     </div>
-                                    <div className="mt-1 text-sm font-semibold text-white">
+                                    <div
+                                      className="mt-1 text-sm font-semibold text-white"
+                                      data-testid={`rg-result-case-ratio-${idx}`}
+                                    >
                                       {passedAttempts}/{totalAttempts} passed
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-3">
                                     <span
+                                      data-testid={`rg-result-case-status-${idx}`}
+                                      data-case-status={caseStatus}
                                       className={clsx(
                                         "rounded-full border px-2.5 py-1 text-[10px] font-black uppercase",
-                                        run?.pass
+                                        caseIsPass
                                           ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+                                          : caseIsFlaky
+                                            ? "border-amber-500/30 bg-amber-500/15 text-amber-200"
                                           : "border-rose-500/25 bg-rose-500/10 text-rose-300"
                                       )}
                                     >
@@ -1146,13 +1894,22 @@ export function ReleaseGateExpandedView() {
                                             <button
                                               key={attemptIdx}
                                               type="button"
-                                              onClick={() =>
-                                                setSelectedAttempt(
-                                                  isActive
-                                                    ? null
-                                                    : { caseIndex: idx, attemptIndex: attemptIdx }
-                                                )
-                                              }
+                                              onClick={() => {
+                                                const next = isActive
+                                                  ? null
+                                                  : { caseIndex: idx, attemptIndex: attemptIdx };
+                                                setSelectedAttempt(next);
+                                                if (next) {
+                                                  setDetailAttemptView({
+                                                    attempt,
+                                                    caseIndex: idx,
+                                                    attemptIndex: attemptIdx,
+                                                    baselineSnapshot: baselineSnapshotForRun,
+                                                  });
+                                                } else {
+                                                  setDetailAttemptView(null);
+                                                }
+                                              }}
                                               className={clsx(
                                                 "flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left transition",
                                                 isActive
@@ -1200,145 +1957,32 @@ export function ReleaseGateExpandedView() {
                                             </div>
                                           )}
                                         </div>
-
-                                        {Array.isArray(activeAttempt.failure_reasons) &&
-                                          activeAttempt.failure_reasons.length > 0 && (
-                                            <div className="space-y-2">
-                                              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                                                Failure reasons
-                                              </div>
-                                              {activeAttempt.failure_reasons
-                                                .slice(0, 5)
-                                                .map((reason: string, reasonIdx: number) => (
-                                                  <div
-                                                    key={`${reason}-${reasonIdx}`}
-                                                    className="text-sm leading-relaxed text-slate-200"
-                                                  >
-                                                    {reason}
-                                                  </div>
-                                                ))}
-                                            </div>
-                                          )}
-
-                                        {activeAttempt.replay && (
-                                          <div className="grid grid-cols-3 gap-2">
-                                            <MetricTile
-                                              label="Attempted"
-                                              value={Number(activeAttempt.replay.attempted ?? 0)}
-                                            />
-                                            <MetricTile
-                                              label="Succeeded"
-                                              value={Number(activeAttempt.replay.succeeded ?? 0)}
-                                              tone="success"
-                                            />
-                                            <MetricTile
-                                              label="Failed"
-                                              value={Number(activeAttempt.replay.failed ?? 0)}
-                                              tone={
-                                                Number(activeAttempt.replay.failed ?? 0) > 0
-                                                  ? "danger"
-                                                  : "default"
-                                              }
-                                            />
-                                          </div>
-                                        )}
-
-                                        {activeAttempt.replay?.provider_error && (
-                                          <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-                                            <div className="flex items-center justify-between gap-3">
-                                              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                                                Provider error (raw)
-                                              </div>
-                                              <div className="text-[11px] text-slate-400">
-                                                {String(
-                                                  activeAttempt.replay.provider_error.provider ??
-                                                    "provider"
-                                                )}
-                                                {typeof activeAttempt.replay.provider_error
-                                                  .status_code === "number"
-                                                  ? ` · ${activeAttempt.replay.provider_error.status_code}`
-                                                  : ""}
-                                              </div>
-                                            </div>
-                                            <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-300">
-                                              <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2">
-                                                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                                                  Type
-                                                </div>
-                                                <div className="mt-1">
-                                                  {String(
-                                                    activeAttempt.replay.provider_error
-                                                      .error_type ?? "—"
-                                                  )}
-                                                </div>
-                                              </div>
-                                              <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2">
-                                                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                                                  Code
-                                                </div>
-                                                <div className="mt-1">
-                                                  {String(
-                                                    activeAttempt.replay.provider_error
-                                                      .error_code ?? "—"
-                                                  )}
-                                                </div>
-                                              </div>
-                                            </div>
-                                            {activeAttempt.replay.provider_error.message ? (
-                                              <div className="mt-2 text-sm leading-relaxed text-slate-200">
-                                                {String(
-                                                  activeAttempt.replay.provider_error.message
-                                                )}
-                                              </div>
-                                            ) : null}
-                                            {activeAttempt.replay.provider_error
-                                              .response_preview ? (
-                                              <pre className="mt-3 max-h-[240px] overflow-auto rounded-xl border border-white/8 bg-black/30 p-3 text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-words custom-scrollbar">
-                                                {String(
-                                                  activeAttempt.replay.provider_error
-                                                    .response_preview
-                                                )}
-                                              </pre>
-                                            ) : (
-                                              <div className="mt-3 text-[11px] text-slate-500">
-                                                No provider response body captured.
-                                              </div>
-                                            )}
-                                          </div>
-                                        )}
-
-                                        {activeAttempt.behavior_diff && (
-                                          <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-                                            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                                              Behavior diff
-                                            </div>
-                                            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                                              <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                                                Sequence edits{" "}
-                                                {Number(
-                                                  activeAttempt.behavior_diff
-                                                    .sequence_edit_distance ?? 0
-                                                )}
-                                              </div>
-                                              <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                                                Tool divergence{" "}
-                                                {percentFromRate(
-                                                  Number(
-                                                    activeAttempt.behavior_diff
-                                                      .tool_divergence_pct ?? 0
-                                                  ) / 100
-                                                )}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        )}
+                                        <p className="text-sm text-slate-300">
+                                          Open a larger comparison view for baseline vs replay snapshot,
+                                          eval checks, and tool-call diagnostics.
+                                        </p>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setDetailAttemptView({
+                                              attempt: activeAttempt,
+                                              caseIndex: idx,
+                                              attemptIndex: selectedAttempt?.attemptIndex ?? 0,
+                                              baselineSnapshot: baselineSnapshotForRun,
+                                            })
+                                          }
+                                          className="inline-flex items-center gap-2 rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-fuchsia-200 hover:bg-fuchsia-500/15"
+                                        >
+                                          Open detailed comparison
+                                        </button>
                                       </div>
                                     )}
                                   </div>
                                 )}
                               </div>
                             );
-                          })}
+                            })
+                          )}
                         </div>
                       </>
                     )}
@@ -1389,6 +2033,8 @@ export function ReleaseGateExpandedView() {
                             key={item.id}
                             type="button"
                             onClick={() => selectHistoryRun(String(item.id))}
+                            data-testid={`rg-node-history-row-${item.id}`}
+                            data-run-status={String(item.status || "").toLowerCase()}
                             className={clsx(
                               "flex w-full items-center justify-between gap-3 rounded-[22px] border px-4 py-3 text-left transition",
                               selectedRunId === item.id
@@ -1440,6 +2086,20 @@ export function ReleaseGateExpandedView() {
                 )}
               </div>
             </RailwaySidePanel>
+          </ClientPortal>
+        )}
+
+        {detailAttemptView && (
+          <ClientPortal>
+            <AttemptDetailOverlay
+              open={Boolean(detailAttemptView)}
+              onClose={() => setDetailAttemptView(null)}
+              inputIndex={detailAttemptView.caseIndex}
+              attemptIndex={detailAttemptView.attemptIndex}
+              attempt={detailAttemptView.attempt}
+              baselineSnapshot={detailAttemptView.baselineSnapshot}
+              evalChecks={runEvalElements}
+            />
           </ClientPortal>
         )}
 
@@ -1501,6 +2161,8 @@ export function ReleaseGateExpandedView() {
                       key={item.id}
                       type="button"
                       onClick={() => selectHistoryRun(String(item.id))}
+                      data-testid={`rg-main-history-row-${item.id}`}
+                      data-run-status={String(item.status || "").toLowerCase()}
                       className={clsx(
                         "flex w-full flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-left",
                         selectedRunId === item.id

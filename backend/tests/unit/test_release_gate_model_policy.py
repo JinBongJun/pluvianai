@@ -77,3 +77,115 @@ class TestReleaseGateProviderModelMismatch:
         # Missing provider -> skip
         rg._assert_provider_matches_model("", "gemini-2.0-flash")
 
+
+@pytest.mark.unit
+class TestReleaseGateOverrideSanitizer:
+    def test_sanitize_replay_overrides_removes_disallowed_content_keys(self):
+        from app.api.v1.endpoints import release_gate as rg
+
+        raw = {
+            "messages": [{"role": "user", "content": "hack"}],
+            "response": "override response",
+            "trace_id": "bad-trace",
+            "agent_id": "agent-b",
+            "temperature": 0.2,
+            "tools": [{"type": "function", "function": {"name": "search"}}],
+            "top_p": 0.8,
+        }
+        cleaned = rg._sanitize_replay_overrides(raw)
+        assert isinstance(cleaned, dict)
+        assert "messages" not in cleaned
+        assert "response" not in cleaned
+        assert "trace_id" not in cleaned
+        assert "agent_id" not in cleaned
+        assert cleaned.get("temperature") == 0.2
+        assert cleaned.get("top_p") == 0.8
+        assert "tools" in cleaned
+
+    def test_sanitize_replay_overrides_returns_none_when_only_disallowed(self):
+        from app.api.v1.endpoints import release_gate as rg
+
+        raw = {
+            "messages": [{"role": "user", "content": "x"}],
+            "response": "x",
+            "trace_id": "x",
+            "agent_name": "x",
+        }
+        assert rg._sanitize_replay_overrides(raw) is None
+
+    def test_normalize_and_infer_provider_helpers(self):
+        from app.api.v1.endpoints import release_gate as rg
+
+        assert rg._normalize_provider(" OpenAI ") == "openai"
+        assert rg._normalize_provider("anthropic") == "anthropic"
+        assert rg._normalize_provider("google") == "google"
+        assert rg._normalize_provider("something-else") is None
+
+        assert rg._infer_provider_from_model("claude-sonnet-4-20250514") == "anthropic"
+        assert rg._infer_provider_from_model("gemini-2.0-flash") == "google"
+        assert rg._infer_provider_from_model("gpt-4.1-mini") == "openai"
+
+
+@pytest.mark.unit
+class TestReleaseGatePlatformCreditGate:
+    def _make_user(self, user_id: int = 1, is_superuser: bool = False):
+        class DummyUser:
+            def __init__(self):
+                self.id = user_id
+                self.is_superuser = is_superuser
+
+        return DummyUser()
+
+    def test_enforce_platform_credit_limit_allows_when_not_platform_mode(self, monkeypatch):
+        from app.api.v1.endpoints import release_gate as rg
+
+        payload = rg.ReleaseGateValidateRequest(model_source="detected")
+        user = self._make_user()
+
+        # Should not even consult guard credit checker when not in platform mode.
+        called = {"v": False}
+
+        def _fake_check(*args, **kwargs):
+            called["v"] = True
+            return (False, "blocked")
+
+        monkeypatch.setattr(rg, "check_guard_credits_limit", _fake_check, raising=True)
+        rg._enforce_platform_replay_credit_limit(payload, db=None, current_user=user)
+        assert called["v"] is False
+
+    def test_enforce_platform_credit_limit_allows_when_quota_available(self, monkeypatch):
+        from app.api.v1.endpoints import release_gate as rg
+
+        payload = rg.ReleaseGateValidateRequest(model_source="platform", replay_provider="openai")
+        user = self._make_user()
+
+        monkeypatch.setattr(
+            rg,
+            "check_guard_credits_limit",
+            lambda db, uid, is_super: (True, None),
+            raising=True,
+        )
+        # No exception when allowed
+        rg._enforce_platform_replay_credit_limit(payload, db=None, current_user=user)
+
+    def test_enforce_platform_credit_limit_blocks_with_expected_error_code(self, monkeypatch):
+        from app.api.v1.endpoints import release_gate as rg
+        from fastapi import HTTPException
+
+        payload = rg.ReleaseGateValidateRequest(model_source="platform", replay_provider="openai")
+        user = self._make_user()
+
+        monkeypatch.setattr(
+            rg,
+            "check_guard_credits_limit",
+            lambda db, uid, is_super: (False, "Hosted replay credit limit reached."),
+            raising=True,
+        )
+
+        with pytest.raises(HTTPException) as e:
+            rg._enforce_platform_replay_credit_limit(payload, db=None, current_user=user)
+
+        assert e.value.status_code == 403
+        assert isinstance(e.value.detail, dict)
+        assert e.value.detail.get("code") == "LIMIT_PLATFORM_REPLAY_CREDITS"
+

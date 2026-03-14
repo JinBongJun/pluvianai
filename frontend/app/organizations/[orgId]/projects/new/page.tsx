@@ -5,8 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
 import { projectsAPI, organizationsAPI } from "@/lib/api";
+import { analytics } from "@/lib/analytics";
 import { useToast } from "@/components/ToastContainer";
-import posthog from "posthog-js";
 
 type UsageMode = "full" | "test_only";
 
@@ -43,7 +43,7 @@ export default function NewProjectPage() {
       });
 
       // Track project creation event
-      posthog.capture("project_created", {
+      analytics.capture("project_created", {
         project_id: project.id,
         organization_id: Number(orgId),
         has_description: !!description.trim(),

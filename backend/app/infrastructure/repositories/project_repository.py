@@ -14,7 +14,13 @@ class ProjectRepository(SQLAlchemyRepository[Project]):
         """Find all projects owned by user"""
         return (
             self.db.query(Project)
-            .filter(and_(Project.owner_id == user_id, Project.is_active.is_(True)))
+            .filter(
+                and_(
+                    Project.owner_id == user_id,
+                    Project.is_active.is_(True),
+                    Project.is_deleted.is_(False),
+                )
+            )
             .all()
         )
     
@@ -26,7 +32,8 @@ class ProjectRepository(SQLAlchemyRepository[Project]):
                 and_(
                     Project.name == name,
                     Project.owner_id == owner_id,
-                    Project.is_active.is_(True)
+                    Project.is_active.is_(True),
+                    Project.is_deleted.is_(False),
                 )
             )
             .first()
@@ -39,7 +46,8 @@ class ProjectRepository(SQLAlchemyRepository[Project]):
             .filter(
                 and_(
                     Project.organization_id == organization_id,
-                    Project.is_active.is_(True)
+                    Project.is_active.is_(True),
+                    Project.is_deleted.is_(False),
                 )
             )
             .all()

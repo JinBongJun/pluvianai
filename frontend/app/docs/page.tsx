@@ -1155,7 +1155,7 @@ Content-Type: application/json
         <div className="space-y-8">
           <p className="text-xl text-slate-400 leading-relaxed max-w-4xl">
             Snapshots and evaluation results are stored for your data retention window (for example,
-            7 days on the free plan). Replay past traces in Release Gate to compare behavior under
+            30 days on the free plan). Replay past traces in Release Gate to compare behavior under
             new models and prompts.
           </p>
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-6 max-w-4xl">

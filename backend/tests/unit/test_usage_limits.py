@@ -1,6 +1,7 @@
 import pytest
 
 from app.core.usage_limits import (
+    check_snapshot_limit,
     check_platform_replay_credits_limit,
     get_platform_replay_credits_this_month,
 )
@@ -52,3 +53,28 @@ class TestUsageLimits:
         assert message is not None
         assert "own provider key" in message.lower()
         assert "release gate" in message.lower()
+
+    def test_superuser_skips_platform_replay_credit_limit(self, db, test_user, test_project):
+        db.add(Subscription(user_id=test_user.id, plan_type="free", status="active"))
+        db.add(
+            Usage(
+                user_id=test_user.id,
+                project_id=test_project.id,
+                metric_name="guard_credits_replay",
+                quantity=9999,
+                unit="credits",
+            )
+        )
+        db.commit()
+
+        allowed, message = check_platform_replay_credits_limit(db, test_user.id, is_superuser=True)
+        assert allowed is True
+        assert message is None
+
+    def test_superuser_skips_snapshot_limit(self, db, test_user):
+        db.add(Subscription(user_id=test_user.id, plan_type="free", status="active"))
+        db.commit()
+
+        allowed, message = check_snapshot_limit(db, test_user.id, is_superuser=True)
+        assert allowed is True
+        assert message is None

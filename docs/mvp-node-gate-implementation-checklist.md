@@ -81,7 +81,7 @@
 - [x] `backend/app/services/scheduler_service.py`
   - daily lifecycle cleanup job에서 snapshot cleanup + release-gate history purge를 함께 실행한다.
 - [x] 완료 기준
-  - Free/Pro/Enterprise retention(7/30/365일)에 따라 오래된 release-gate history가 조회되지 않는다.
+  - 현재 Beta Free 플랜의 retention(예: 30일)에 따라 오래된 release-gate history가 조회되지 않는다.
   - 스케줄러 실행 후 retention 밖 release-gate history row는 DB에서 실제로 삭제된다.
   - 일반 behavior report는 retention purge 대상에서 제외된다.
 
@@ -182,6 +182,11 @@
 ### G. 테스트/안정성 체크(수동 QA)
 
 - [x] `docs/manual-test-scenarios-mvp-replay-test.md`에 Replay Test 기반으로 시나리오 정리(모드 통합 반영)
+- [x] `backend/scripts/release_gate_repeat_matrix_test.py` 추가
+  - RG-2/RG-3 자동 검증: `repeat_runs` 1/10/50/100, PASS/FAIL/FLAKY 분류 불변식, fail/flaky rate 정합성, export summary 정합성
+- [x] `backend/scripts/release_gate_flaky_profile.ps1` 추가
+  - one-click 실행: flaky 유도용 snapshot + 임시 rule 생성 → `--require-flaky` matrix 실행 → 임시 rule cleanup
+  - CI 경량 로그 모드: `-CiQuiet`로 성공 시 압축 요약만 출력, 실패 시에만 matrix 로그 전체 노출
 - [x] 최소 시나리오
   - Recommended set 40개가 정상 로드되는지
   - repeat_runs 1/10/50/100에서 PASS/FAIL/FLAKY 분류가 정확한지
@@ -360,4 +365,22 @@
   - non-superuser의 `generate_sample_data=true` 요청은 명시적 403로 변경 (`G-6`)
   - RBAC 통합 테스트 baseline 추가 (`G-5`)
     - `backend/tests/integration/test_api_rbac_boundaries.py`
+
+---
+
+### P. Operational Alerting Baseline (MVP)
+
+- [x] Phase 1 operational alert rules documented
+  - `docs/mvp-ops-alerting-minimum-plan.md`
+  - Includes: Live View API degradation, Release Gate failure burst, DB error burst, high snapshot error-rate anomaly
+- [x] Alert anti-noise guardrails documented
+  - cooldown, dedup key, recovery notification
+- [x] Manual verification IDs defined
+  - `OPS-T1` ~ `OPS-T6` in alerting plan
+- [x] Phase 2 notifier hook implementation
+  - Introduce non-blocking notifier abstraction (`notify_ops_alert`)
+  - Wire metrics/events from middleware + release gate + DB exception boundary
+- [x] Slack webhook channel wiring + environment config
+  - Example env: `OPS_ALERT_WEBHOOK_URL`
+  - Ensure secrets never appear in logs
 

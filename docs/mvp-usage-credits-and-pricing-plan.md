@@ -94,6 +94,10 @@
 
 **사용량 한도(Soft/Hard Cap)**
 
+> Note: 아래 크레딧 수치는 정식 출시(Pro/Team 플랜) 상정값 예시입니다.
+> 현재 Beta Free 플랜의 포함 한도(예: 월 50회 hosted Release Gate run)는
+> 별도의 PLAN_LIMITS 설정과 Billing/Usage UI 기준을 따르며, 여기 숫자와 다를 수 있습니다.
+
 - 조직(org) 기준:
   - **Free included hosted budget**: 월 `1,000 platform replay credits`
   - **Hard block**: Free budget 초과 시 해당 월 더 이상 **플랫폼 키 기반 Release Gate run 불가**

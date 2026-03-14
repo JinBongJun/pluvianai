@@ -36,7 +36,7 @@ async def get_admin_stats(
     # Get active projects
     active_projects = (
         db.query(func.count(Project.id))
-        .filter(Project.is_active == True)
+        .filter(Project.is_active == True, Project.is_deleted == False)
         .scalar() or 0
     )
 

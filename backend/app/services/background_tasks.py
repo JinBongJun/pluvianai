@@ -13,6 +13,7 @@ from app.models.snapshot import Snapshot
 from app.services.data_normalizer import DataNormalizer
 from app.utils.compression import optimize_api_call_data, compress_json
 from app.utils.tool_calls import extract_tool_calls_summary
+from app.utils.secret_redaction import redact_secrets
 from app.core.logging_config import logger
 
 
@@ -69,6 +70,9 @@ class BackgroundTaskService:
         """Synchronous version for executor - returns API call ID"""
         db: Session = SessionLocal()
         try:
+            request_data = redact_secrets(request_data or {})
+            response_data = redact_secrets(response_data or {})
+
             # Optimize data before saving
             optimized_data = optimize_api_call_data(request_data, response_data)
 
@@ -85,20 +89,28 @@ class BackgroundTaskService:
             if response_text and len(response_text) > 10000:
                 response_text = response_text[:10000] + "...[truncated]"
 
+            request_tokens = int(normalized.get("request_tokens") or 0)
+            response_tokens = int(normalized.get("response_tokens") or 0)
+            total_tokens = request_tokens + response_tokens if (request_tokens or response_tokens) else None
+
+            request_content = request_prompt or (
+                request_data_compressed if request_data_compressed else str(request_data)[:5000]
+            )
+            response_content = response_text or (
+                response_data_compressed if response_data_compressed else str(response_data)[:10000]
+            )
+
             api_call = APICall(
                 project_id=project_id,
                 provider=normalized.get("provider", "unknown"),
                 model=normalized.get("model", "unknown"),
-                request_data={"compressed": request_data_compressed} if request_data_compressed else {},
-                request_prompt=request_prompt,
-                request_tokens=normalized.get("request_tokens"),
-                response_data={"compressed": response_data_compressed} if response_data_compressed else {},
-                response_text=response_text,
-                response_tokens=normalized.get("response_tokens"),
-                latency_ms=latency_ms,
+                request_content=request_content,
+                response_content=response_content,
+                total_tokens=total_tokens,
+                cost=float(normalized.get("cost") or 0),
+                latency_ms=int(latency_ms) if latency_ms is not None else None,
                 status_code=status_code,
                 agent_name=agent_name,
-                chain_id=chain_id,
             )
             db.add(api_call)
             db.flush()  # Flush to get api_call.id if needed
@@ -163,7 +175,7 @@ class BackgroundTaskService:
                     )
             except Exception as e:
                 # Log error but don't fail the API call save
-                print(f"Error tracking usage: {e}")
+                logger.warning(f"Error tracking usage: {e}")
 
             db.commit()
             db.refresh(api_call)

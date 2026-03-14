@@ -5,12 +5,18 @@ Integrates with PostHog for product analytics
 
 import asyncio
 import httpx
+import re
 from typing import Dict, Any, Optional
 from app.core.config import settings
 from app.core.logging_config import logger
 
 # PostHog API endpoint
 POSTHOG_API_URL = "https://app.posthog.com/capture/"
+SENSITIVE_KEY_PATTERN = re.compile(
+    r"(email|token|secret|password|authorization|cookie|api[_-]?key|refresh_token|access_token)",
+    re.IGNORECASE,
+)
+EMAIL_VALUE_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class AnalyticsService:
@@ -19,6 +25,32 @@ class AnalyticsService:
     def __init__(self):
         self.posthog_api_key = settings.NEXT_PUBLIC_POSTHOG_KEY
         self.enabled = bool(self.posthog_api_key)
+
+    def _sanitize_value(self, key: str, value: Any) -> Any:
+        if SENSITIVE_KEY_PATTERN.search(key):
+            return "[REDACTED]"
+
+        if isinstance(value, dict):
+            return self._sanitize_properties(value)
+
+        if isinstance(value, list):
+            return [self._sanitize_value(key, item) for item in value[:20]]
+
+        if isinstance(value, str):
+            stripped = value.strip()
+            if EMAIL_VALUE_PATTERN.match(stripped):
+                return "[REDACTED]"
+            if len(stripped) > 200:
+                return stripped[:200]
+            return stripped
+
+        return value
+
+    def _sanitize_properties(self, properties: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        out: Dict[str, Any] = {}
+        for key, value in (properties or {}).items():
+            out[key] = self._sanitize_value(key, value)
+        return out
 
     async def capture(
         self,
@@ -43,10 +75,11 @@ class AnalyticsService:
             return False
 
         try:
+            sanitized_properties = self._sanitize_properties(properties)
             payload = {
                 "api_key": self.posthog_api_key,
                 "event": event,
-                "properties": properties or {},
+                "properties": sanitized_properties,
                 "distinct_id": distinct_id or (f"user_{user_id}" if user_id else "anonymous"),
             }
 
@@ -97,12 +130,12 @@ class AnalyticsService:
             logger.warning(f"Failed to identify user: {str(e)}")
             return False
 
-    def track_user_registration(self, user_id: int, email: str, plan: str = "free") -> None:
+    def track_user_registration(self, user_id: int, plan: str = "free") -> None:
         """Track user registration event"""
         asyncio.create_task(
             self.capture(
                 event="user_registered",
-                properties={"email": email, "plan": plan},
+                properties={"plan": plan},
                 user_id=user_id,
             )
         )
@@ -185,8 +218,8 @@ class AnalyticsService:
                 event="error_occurred",
                 properties={
                     "error_type": error_type,
-                    "error_message": error_message,
                     "project_id": project_id,
+                    "error_message": self._sanitize_value("error_message", error_message),
                 },
                 user_id=user_id,
             )

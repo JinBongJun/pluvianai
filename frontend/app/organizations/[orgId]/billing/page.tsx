@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
@@ -9,6 +10,11 @@ import { Zap, Activity, Database, ShieldCheck, CheckCircle2, BarChart3 } from "l
 export default function BillingPage() {
   const params = useParams();
   const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
+  const [fallbackUsage, setFallbackUsage] = useState<{
+    plan_type?: string;
+    limits?: Record<string, number>;
+    usage_this_month?: Record<string, number>;
+  } | null>(null);
 
   const { data: org, isValidating } = useSWR(orgId ? ["organization", orgId] : null, () =>
     organizationsAPI.get(orgId, { includeStats: true })
@@ -17,6 +23,30 @@ export default function BillingPage() {
   const { data: myUsage } = useSWR("my-usage", () => authAPI.getMyUsage(), {
     revalidateOnFocus: false,
   });
+  useEffect(() => {
+    if (myUsage) return;
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    if (!token) return;
+
+    const backendBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    fetch(`${backendBase}/api/v1/auth/me/usage`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async res => {
+        if (!res.ok) return null;
+        return res.json();
+      })
+      .then(payload => {
+        if (payload && typeof payload === "object") {
+          setFallbackUsage(payload);
+        }
+      })
+      .catch(() => {
+        // keep existing UI fallback behavior when usage API is unavailable
+      });
+  }, [myUsage]);
+
+  const effectiveUsage = myUsage || fallbackUsage;
 
   const currentPlanId = org?.plan || "free";
 
@@ -32,13 +62,16 @@ export default function BillingPage() {
   const callsUsed = org?.calls7d || 0; // Ideally backend should provide monthly usage, defaulting to 7d for demo
   const projectsUsed = org?.projects || 0;
   const platformReplayCreditsUsed =
-    myUsage?.usage_this_month?.platform_replay_credits ??
-    myUsage?.usage_this_month?.guard_credits ??
+    effectiveUsage?.usage_this_month?.platform_replay_credits ??
+    effectiveUsage?.usage_this_month?.guard_credits ??
     0;
   const platformReplayCreditsLimit =
-    (myUsage?.limits?.platform_replay_credits_per_month as number | undefined) ??
-    (myUsage?.limits?.guard_credits_per_month as number | undefined) ??
+    (effectiveUsage?.limits?.platform_replay_credits_per_month as number | undefined) ??
+    (effectiveUsage?.limits?.guard_credits_per_month as number | undefined) ??
     limitData.platformReplayCredits;
+  const snapshotsUsed = effectiveUsage?.usage_this_month?.snapshots ?? 0;
+  const snapshotsLimit =
+    (effectiveUsage?.limits?.snapshots_per_month as number | undefined) ?? limitData.calls;
 
   const callsPercent = limitData.calls > 0 ? Math.min(100, (callsUsed / limitData.calls) * 100) : 0;
   const projectsPercent =
@@ -56,11 +89,11 @@ export default function BillingPage() {
       period: "/month",
       desc: "For teams getting started with Live View and Release Gate during the MVP.",
       features: [
-        "Up to 3 Active Projects",
-        "500 snapshots per month",
-        "1,000 platform replay credits per month",
+        "1 active project",
+        "10,000 snapshots per month",
+        "50 Release Gate runs per month",
         "Use your own provider keys anytime",
-        "7-day trace retention",
+        "30-day trace retention",
       ],
       current: currentPlanId === "free",
     },
@@ -279,21 +312,19 @@ export default function BillingPage() {
         <div className="mb-16 rounded-xl border border-white/10 bg-white/5 p-6">
           <div className="flex items-center gap-3 mb-6">
             <h2 className="text-lg font-semibold text-white">Plan Limits</h2>
-            {myUsage?.plan_type === "free" && (
+            {effectiveUsage?.plan_type === "free" && (
               <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-full">
                 Free plan
               </span>
             )}
           </div>
           <div className="space-y-6">
-            {typeof myUsage?.usage_this_month?.snapshots === "number" &&
-              myUsage?.limits?.snapshots_per_month != null &&
-              myUsage.limits.snapshots_per_month > 0 && (
+            {snapshotsLimit != null && snapshotsLimit > 0 && (
                 <div>
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-slate-400">Snapshots this month</span>
                     <span className="text-white">
-                      {myUsage.usage_this_month.snapshots} / {myUsage.limits.snapshots_per_month}
+                      {snapshotsUsed} / {snapshotsLimit}
                     </span>
                   </div>
                   <div className="h-2 bg-white/10 rounded-full overflow-hidden">
@@ -302,9 +333,7 @@ export default function BillingPage() {
                       style={{
                         width: `${Math.min(
                           100,
-                          (myUsage.usage_this_month.snapshots /
-                            myUsage.limits.snapshots_per_month) *
-                            100
+                          (snapshotsUsed / snapshotsLimit) * 100
                         )}%`,
                       }}
                     />

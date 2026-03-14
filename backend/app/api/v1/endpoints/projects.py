@@ -84,7 +84,11 @@ async def create_project(
     logger.info(f"Creating project: {project_data.name}", extra={"user_id": current_user.id})
 
     # Check project limit
-    can_create, error_msg = check_project_limit(current_user.id, db)
+    can_create, error_msg = check_project_limit(
+        current_user.id,
+        db,
+        is_superuser=bool(getattr(current_user, "is_superuser", False)),
+    )
     if not can_create:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
