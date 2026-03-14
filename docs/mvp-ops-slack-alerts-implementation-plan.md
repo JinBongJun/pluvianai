@@ -244,3 +244,13 @@ Result:
 - Grafana/Datadog 대시보드에 동일 지표를 시각화해 Slack-only 운영 리스크를 줄일 것
 - Alert message에 runbook URL/owner 핸들 표준 필드를 추가할 것
 - DB pool utilization 전용 계측(활성/대기/타임아웃)을 다음 스프린트에서 별도 훅으로 추가할 것
+
+## Troubleshooting: Railway deploy
+
+### `Can't locate revision identified by '20260309_soft_delete_org_project'`
+
+- **원인**: 배포되는 코드(빌드)에 해당 마이그레이션 파일이 없을 때 발생. DB의 `alembic_version`에는 이미 이 리비전이 적용된 상태인데, 새 이미지에는 `backend/alembic/versions/20260309_add_soft_delete_to_org_and_project.py`가 없으면 Alembic이 리비전을 찾지 못함.
+- **조치**:
+  1. Railway가 빌드하는 브랜치(보통 `main`)에 `backend/alembic/versions/20260309_add_soft_delete_to_org_and_project.py`가 포함되는지 확인.
+  2. 해당 파일이 있는 커밋으로 머지/푸시 후 재배포.
+  3. 이미 DB만 이 리비전으로 올라가 있고 코드는 예전 커밋이라면, 배포 브랜치를 최신(이 파일 포함)으로 맞춘 뒤 재배포.
