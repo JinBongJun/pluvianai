@@ -9,6 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.core.logging_config import logger
+from app.services.ops_alerting import ops_alerting
 
 
 class PluvianAIException(Exception):
@@ -163,6 +164,7 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     logger.error(
         f"Database error: {str(exc)}", extra={"path": request.url.path, "method": request.method}, exc_info=True
     )
+    ops_alerting.observe_db_error(type(exc).__name__)
 
     from app.core.responses import error_response
 

@@ -26,6 +26,8 @@ interface RailwaySidePanelProps {
   showCloseButton?: boolean;
   /** Which side the panel is on (for slide animation direction). */
   side?: "left" | "right";
+  /** Optional test id prefix for tab buttons (e.g. "rg-data-tab"). */
+  tabTestIdPrefix?: string;
 }
 
 const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
@@ -41,6 +43,7 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
   width = 1100,
   showCloseButton = true,
   side = "right",
+  tabTestIdPrefix,
 }) => {
   const isLeft = side === "left";
   const slideFrom = isLeft ? "-100%" : "100%";
@@ -55,29 +58,31 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
           exit={{ x: slideExit, opacity: 0 }}
           transition={{ type: "spring", damping: 25, stiffness: 200 }}
           className={clsx(
-            "fixed top-6 bottom-6 bg-[#0d0d0f]/90 backdrop-blur-3xl border border-white/10 shadow-[0_30px_90px_rgba(0,0,0,0.9)] rounded-[48px] z-[9999] overflow-hidden flex flex-col",
+            "fixed top-6 bottom-6 bg-[#0c0c0f]/95 backdrop-blur-3xl border border-white/[0.08] shadow-[0_20px_60px_rgba(0,0,0,0.85)] rounded-[28px] z-[9999] overflow-hidden flex flex-col",
             isLeft ? "left-6" : "right-6",
             className
           )}
           style={{ width: width }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-6 border-b border-white/5 bg-black/40">
-            <div className="space-y-1 min-w-0">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06] bg-black/30">
+            <div className="flex-1 min-w-0">
+              <span className="text-[9px] font-semibold text-slate-600 uppercase tracking-[0.22em] block">
                 Unit Diagnostics
               </span>
-              <h2 className="text-xl font-black text-white tracking-tighter truncate">{title}</h2>
+              {title && (
+                <h2 className="text-[13px] font-semibold text-white/85 tracking-tight truncate mt-0.5">{title}</h2>
+              )}
             </div>
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               {headerActions}
               {showCloseButton && (
                 <button
                   onClick={onClose}
-                  className="p-2.5 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all active:scale-90 border border-white/10"
-                  title="Close and reset view"
+                  className="p-1.5 rounded-lg hover:bg-white/[0.07] text-slate-500 hover:text-slate-300 transition-all active:scale-90"
+                  title="Close"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
@@ -85,20 +90,21 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
 
           {/* Navigation Tabs (Optional) */}
           {tabs && tabs.length > 0 && (
-            <div className="border-b border-white/5 bg-black/20 pt-4">
-              <nav className="flex gap-12 px-10">
+            <div className="border-b border-white/[0.06] bg-black/10">
+              <nav className="flex">
                 {tabs.map(tab => (
                   <button
                     key={tab.id}
+                    data-testid={tabTestIdPrefix ? `${tabTestIdPrefix}-${tab.id}` : undefined}
                     onClick={() => {
                       tab.onClick?.();
                       onTabChange?.(tab.id);
                     }}
                     className={clsx(
-                      "px-8 py-6 text-[15px] font-black uppercase tracking-[0.2em] border-b-[4px] transition-all relative outline-none",
+                      "flex-1 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] border-b-2 transition-all outline-none",
                       activeTab === tab.id
-                        ? "text-white border-white"
-                        : "text-slate-500 hover:text-slate-300 border-transparent hover:border-slate-700/50"
+                        ? "text-white/90 border-white/60"
+                        : "text-slate-500 hover:text-slate-400 border-transparent"
                     )}
                   >
                     {tab.label}
@@ -112,10 +118,10 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
           <div className="flex-1 overflow-y-auto custom-scrollbar p-0">{children}</div>
 
           {/* Functional Footer */}
-          <div className="p-6 px-10 border-t border-white/5 bg-black/40 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-pluvian-bio-500 animate-pulse" />
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+          <div className="px-5 py-2.5 border-t border-white/[0.06] bg-black/30 flex items-center">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-pluvian-bio-500 animate-pulse" />
+              <span className="text-[9px] font-medium text-slate-600 uppercase tracking-widest">
                 Clinical System Active
               </span>
             </div>

@@ -23,6 +23,7 @@ from app.core.database import SessionLocal
 from app.core.logging_config import logger
 from app.models.release_gate_job import ReleaseGateJob
 from app.models.user import User
+from app.services.ops_alerting import ops_alerting
 
 
 def _utcnow() -> datetime:
@@ -214,6 +215,20 @@ class ReleaseGateJobRunner:
             finished = _utcnow()
             result_json = result if isinstance(result, dict) else {"result": result}
             rid = result.get("report_id") if isinstance(result, dict) else None
+            if isinstance(result, dict):
+                passed = bool(result.get("pass"))
+                reason = ""
+                if not passed:
+                    reasons = result.get("failure_reasons") or []
+                    if isinstance(reasons, list) and reasons:
+                        reason = str(reasons[0])
+                    else:
+                        reason = str(result.get("summary") or "release gate failed")
+                ops_alerting.observe_release_gate_result(
+                    project_id=int(job.project_id),
+                    success=passed,
+                    error_summary=reason,
+                )
             updated = (
                 db.query(ReleaseGateJob)
                 .filter(
@@ -256,6 +271,13 @@ class ReleaseGateJobRunner:
                     db.add(job2)
                     db.commit()
         except Exception as e:
+            project_id = int(getattr(job, "project_id", 0) or 0)
+            if project_id > 0:
+                ops_alerting.observe_release_gate_result(
+                    project_id=project_id,
+                    success=False,
+                    error_summary=f"exception:{type(e).__name__}",
+                )
             try:
                 job = db.query(ReleaseGateJob).filter(ReleaseGateJob.id == job_id).first()
                 if job and str(job.status) != "canceled" and getattr(job, "cancel_requested_at", None) is None:

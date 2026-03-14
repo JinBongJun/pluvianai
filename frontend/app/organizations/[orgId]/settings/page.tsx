@@ -1,12 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
 import { organizationsAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
-import { Settings, Trash2, AlertTriangle, Save, Fingerprint } from "lucide-react";
+import {
+  Settings,
+  Trash2,
+  AlertTriangle,
+  Save,
+  Fingerprint,
+  Users,
+  Shield,
+  Scale,
+  FileText,
+  ChevronDown,
+} from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
   Card,
@@ -28,6 +40,7 @@ export default function OrgSettingsPage() {
 
   const [orgName, setOrgName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [isLegalOpen, setIsLegalOpen] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
@@ -66,7 +79,10 @@ export default function OrgSettingsPage() {
 
     try {
       await organizationsAPI.delete(orgId);
-      toast.showToast("Environment permanently decommissioned.", "success");
+      toast.showToast(
+        "Environment archived. Permanent deletion is scheduled after the safety grace period.",
+        "success"
+      );
       router.push("/organizations");
     } catch (error: any) {
       toast.showToast(
@@ -136,6 +152,97 @@ export default function OrgSettingsPage() {
           </CardFooter>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-emerald-500" />
+              Team & Access
+            </CardTitle>
+            <CardDescription>
+              Invite members, review role capabilities, and manage organization access boundaries.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link
+              href={`/organizations/${orgId}/team`}
+              className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 transition-colors hover:bg-white/[0.05]"
+            >
+              <div className="flex items-center gap-3">
+                <Users className="h-4 w-4 text-slate-400" />
+                <span className="text-sm font-semibold text-slate-200">Open Team & Access page</span>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Open</span>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-4">
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-emerald-500" />
+                Legal & Security
+              </CardTitle>
+              <button
+                type="button"
+                onClick={() => setIsLegalOpen(prev => !prev)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400 transition-colors hover:bg-white/[0.04] hover:text-slate-200"
+              >
+                {isLegalOpen ? "Close" : "Open"}
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform ${isLegalOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+            </div>
+            <CardDescription>
+              Review terms, privacy policy, and data retention/security details before inviting your
+              full team.
+            </CardDescription>
+          </CardHeader>
+          {isLegalOpen && (
+            <CardContent className="space-y-3">
+              <Link
+                href="/terms"
+                className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 transition-colors hover:bg-white/[0.05]"
+              >
+                <div className="flex items-center gap-3">
+                  <Scale className="h-4 w-4 text-slate-400" />
+                  <span className="text-sm font-semibold text-slate-200">Terms of Service</span>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Open
+                </span>
+              </Link>
+              <Link
+                href="/privacy"
+                className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 transition-colors hover:bg-white/[0.05]"
+              >
+                <div className="flex items-center gap-3">
+                  <FileText className="h-4 w-4 text-slate-400" />
+                  <span className="text-sm font-semibold text-slate-200">Privacy Policy</span>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Open
+                </span>
+              </Link>
+              <Link
+                href="/security"
+                className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 transition-colors hover:bg-white/[0.05]"
+              >
+                <div className="flex items-center gap-3">
+                  <Shield className="h-4 w-4 text-slate-400" />
+                  <span className="text-sm font-semibold text-slate-200">
+                    Security & Data Retention
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Open
+                </span>
+              </Link>
+            </CardContent>
+          )}
+        </Card>
+
         <Card className="border-rose-500/30 bg-rose-500/[0.02]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-rose-400">
@@ -143,8 +250,8 @@ export default function OrgSettingsPage() {
               Critical Override
             </CardTitle>
             <CardDescription className="text-rose-300/70">
-              Deleting this organization will permanently remove all projects and data. This cannot
-              be undone.
+              Deleting this organization archives it immediately and schedules permanent deletion
+              after a safety grace period.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -156,7 +263,7 @@ export default function OrgSettingsPage() {
             ) : (
               <div className="space-y-4 p-4 rounded-lg bg-black/40 border border-rose-500/30 max-w-2xl">
                 <Label className="text-rose-300">
-                  To confirm permanent deletion, type the organization name: <br />
+                  To confirm decommission, type the organization name: <br />
                   <strong className="text-white select-all mt-1 inline-block">{org?.name}</strong>
                 </Label>
                 <Input
@@ -181,7 +288,7 @@ export default function OrgSettingsPage() {
                     onClick={handleDelete}
                     disabled={deleteConfirmText !== org?.name}
                   >
-                    Confirm Permanent Deletion
+                    Confirm Decommission
                   </Button>
                 </div>
               </div>

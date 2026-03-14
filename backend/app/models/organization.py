@@ -2,7 +2,7 @@
 Organization and OrganizationMember models
 """
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -22,6 +22,8 @@ class Organization(Base):
     paddle_customer_id = Column(String(255), nullable=True, index=True)
     paddle_subscription_id = Column(String(255), nullable=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    is_deleted = Column(Boolean, nullable=False, default=False, server_default="false")
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

@@ -8,6 +8,7 @@ from app.models.behavior_report import BehaviorReport
 from app.models.snapshot import Snapshot
 from app.models.trace import Trace
 from app.models.project import Project
+from app.models.organization import Organization
 from app.models.user import User
 from app.models.subscription import Subscription
 
@@ -338,6 +339,36 @@ class TestDataLifecycleService:
         assert result["deleted_release_gate_reports_count"] == 1
         assert db.query(Snapshot).filter(Snapshot.id == expired_snapshot_id).first() is None
         assert db.query(BehaviorReport).filter(BehaviorReport.id == expired_report_id).first() is None
+
+    def test_purge_soft_deleted_entities_hard_deletes_expired_rows(self, db, test_user, service):
+        """Soft-deleted entities older than grace window are hard-deleted."""
+        org = Organization(
+            name="Deleted Org",
+            owner_id=test_user.id,
+            plan_type="free",
+            is_deleted=True,
+            deleted_at=datetime.utcnow() - timedelta(days=31),
+        )
+        db.add(org)
+        db.flush()
+
+        project = Project(
+            name="Deleted Project",
+            owner_id=test_user.id,
+            organization_id=org.id,
+            is_active=False,
+            is_deleted=True,
+            deleted_at=datetime.utcnow() - timedelta(days=31),
+        )
+        db.add(project)
+        db.commit()
+
+        result = service.purge_soft_deleted_entities(grace_days=30)
+
+        assert result["purged_projects_count"] >= 1
+        assert result["purged_organizations_count"] >= 1
+        assert db.query(Project).filter(Project.id == project.id).first() is None
+        assert db.query(Organization).filter(Organization.id == org.id).first() is None
 
     def test_auto_archive_success(self, db, test_user, test_project, service):
         """Test auto-archiving snapshots"""

@@ -15,9 +15,37 @@ LOG_DIR.mkdir(exist_ok=True)
 logger = logging.getLogger("pluvianai")
 logger.setLevel(logging.DEBUG if settings.DEBUG else logging.INFO)
 logger.handlers.clear()
+STANDARD_LOG_RECORD_ATTRS = frozenset(logging.makeLogRecord({}).__dict__.keys())
+SENSITIVE_EXTRA_KEYS = {
+    "password",
+    "token",
+    "authorization",
+    "secret",
+    "api_key",
+    "access_token",
+    "refresh_token",
+    "email",
+    "cookie",
+}
 
 
 class JsonFormatter(logging.Formatter):
+    def _extract_extra(self, record: logging.LogRecord) -> dict:
+        return {
+            key: value
+            for key, value in record.__dict__.items()
+            if key not in STANDARD_LOG_RECORD_ATTRS and not key.startswith("_")
+        }
+
+    def _mask_extra(self, extra: dict) -> dict:
+        masked = {}
+        for key, value in extra.items():
+            if key.lower() in SENSITIVE_EXTRA_KEYS:
+                masked[key] = "[MASKED]"
+            else:
+                masked[key] = value
+        return masked
+
     def format(self, record: logging.LogRecord) -> str:
         payload = {
             "timestamp": self.formatTime(record, self.datefmt),
@@ -30,16 +58,9 @@ class JsonFormatter(logging.Formatter):
         }
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
-        # Mask obvious sensitive fields if present in extra
-        if hasattr(record, "extra"):
-            extra = getattr(record, "extra") or {}
-            masked = {}
-            for k, v in extra.items():
-                if k.lower() in {"password", "token", "authorization", "secret", "api_key"}:
-                    masked[k] = "[MASKED]"
-                else:
-                    masked[k] = v
-            payload["extra"] = masked
+        extra = self._extract_extra(record)
+        if extra:
+            payload["extra"] = self._mask_extra(extra)
         return json.dumps(payload)
 
 

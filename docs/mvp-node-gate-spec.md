@@ -303,10 +303,8 @@ Each case must provide at least:
 #### Release Gate history retention (MVP)
 
 - Release Gate history is stored as `BehaviorReport` rows marked with `summary_json.release_gate`.
-- Release Gate history follows the **same plan-based retention window as raw snapshots**:
-  - Free: **7 days**
-  - Pro: **30 days**
-  - Enterprise: **365 days**
+- During the MVP beta, Release Gate history follows a **single plan-based retention window**, matching raw snapshots:
+  - Beta Free plan: **30 days**
 - `GET /projects/{project_id}/release-gate/history` returns only rows within the active retention window and may include `retention_days` for UI copy.
 - Expired Release Gate history is **hard-deleted** by the scheduled data lifecycle cleanup job.
 - **Safety rule**: Only rows marked as release-gate history are deleted. General Behavior reports remain untouched.

@@ -7,10 +7,43 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from app.core.logging_config import logger
+from app.services.ops_alerting import ops_alerting
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     """Middleware to log all requests and responses"""
+
+    @staticmethod
+    def _extract_project_api_scope(path: str) -> tuple[int, str] | None:
+        # Expected shape: /api/v1/projects/{project_id}/{endpoint_group}/...
+        parts = [p for p in (path or "").split("/") if p]
+        if len(parts) < 5:
+            return None
+        if parts[:3] != ["api", "v1", "projects"]:
+            return None
+        try:
+            project_id = int(parts[3])
+        except Exception:
+            return None
+        endpoint_group = str(parts[4] or "").strip().lower()
+        if endpoint_group not in {"live-view", "release-gate"}:
+            return None
+        return project_id, endpoint_group.replace("-", "_")
+
+    @staticmethod
+    def _extract_live_view_project_id(path: str) -> int | None:
+        # Expected shape: /api/v1/projects/{project_id}/live-view/agents
+        parts = [p for p in (path or "").split("/") if p]
+        if len(parts) < 6:
+            return None
+        if parts[:3] != ["api", "v1", "projects"]:
+            return None
+        if parts[4:6] != ["live-view", "agents"]:
+            return None
+        try:
+            return int(parts[3])
+        except Exception:
+            return None
 
     async def dispatch(self, request: Request, call_next):
         # Log ALL requests immediately - even before processing
@@ -71,6 +104,24 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                     "duration": duration,
                 },
             )
+
+            # MVP ops alert: observe live-view agents endpoint degradation.
+            project_id = self._extract_live_view_project_id(request.url.path)
+            if project_id is not None:
+                ops_alerting.observe_live_view_agents_request(
+                    project_id=project_id,
+                    status_code=int(response.status_code),
+                    duration_ms=float(duration * 1000.0),
+                )
+            project_scope = self._extract_project_api_scope(request.url.path)
+            if project_scope is not None:
+                scoped_project_id, endpoint_group = project_scope
+                ops_alerting.observe_project_api_request(
+                    project_id=scoped_project_id,
+                    endpoint_group=endpoint_group,
+                    status_code=int(response.status_code),
+                    duration_ms=float(duration * 1000.0),
+                )
 
             # CRITICAL: Debug log headers for any 401 response
             if response.status_code == 401:

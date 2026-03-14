@@ -5,7 +5,7 @@ Subscription service for managing user plans, limits, and usage
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func
 from app.models.user import User
 from app.models.subscription import Subscription
 from app.models.usage import Usage
@@ -18,6 +18,26 @@ class SubscriptionService:
 
     def __init__(self, db: Session):
         self.db = db
+
+    def _period_bounds(self, now: datetime) -> tuple[datetime, datetime]:
+        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if now.month == 12:
+            period_end = period_start.replace(year=now.year + 1, month=1)
+        else:
+            period_end = period_start.replace(month=now.month + 1)
+        return period_start, period_end
+
+    def _usage_metric_name(self, metric_type: str) -> str:
+        normalized = str(metric_type or "").strip().lower()
+        # Keep compatibility with existing metric names already used elsewhere.
+        mapping = {
+            "api_calls": "api_calls",
+            "snapshots": "snapshots",
+            "judge_calls": "judge_calls",
+            "guard_credits": "guard_credits_replay",
+            "platform_replay_credits": "guard_credits_replay",
+        }
+        return mapping.get(normalized, normalized)
 
     def get_user_plan(self, user_id: int) -> Dict[str, Any]:
         """Get user's current plan details, limits, and enabled features"""
@@ -65,27 +85,25 @@ class SubscriptionService:
         plan_type = normalize_plan_type(plan_info["plan_type"])
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
-        # Get current usage for this metric
         now = datetime.utcnow()
-        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        if now.month == 12:
-            period_end = period_start.replace(year=now.year + 1, month=1)
-        else:
-            period_end = period_start.replace(month=now.month + 1)
-
-        usage = (
-            self.db.query(Usage)
+        period_start, period_end = self._period_bounds(now)
+        metric_name = self._usage_metric_name(metric_type)
+        current_usage = (
+            self.db.query(func.coalesce(func.sum(Usage.quantity), 0))
             .filter(
-                and_(Usage.user_id == user_id, Usage.metric_type == metric_type, Usage.period_start == period_start)
+                Usage.user_id == user_id,
+                Usage.metric_name == metric_name,
+                Usage.timestamp >= period_start,
+                Usage.timestamp < period_end,
             )
-            .first()
+            .scalar()
+            or 0
         )
-
-        current_usage = usage.current_usage if usage else 0
+        current_usage = int(current_usage)
         limit = limits.get(f"{metric_type}_per_month")
 
         # Handle unlimited (-1)
-        if limit == -1:
+        if limit is None or limit == -1:
             return (True, None)
 
         # Check if adding amount would exceed limit
@@ -116,46 +134,15 @@ class SubscriptionService:
         self, user_id: int, metric_type: str, amount: int = 1, project_id: Optional[int] = None
     ) -> None:
         """Increment usage counter for a metric"""
-        now = datetime.utcnow()
-        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        if now.month == 12:
-            period_end = period_start.replace(year=now.year + 1, month=1)
-        else:
-            period_end = period_start.replace(month=now.month + 1)
-
-        usage = (
-            self.db.query(Usage)
-            .filter(
-                and_(
-                    Usage.user_id == user_id,
-                    Usage.metric_type == metric_type,
-                    Usage.period_start == period_start,
-                    Usage.project_id == project_id,
-                )
-            )
-            .first()
+        metric_name = self._usage_metric_name(metric_type)
+        usage = Usage(
+            user_id=user_id,
+            project_id=project_id,
+            metric_name=metric_name,
+            quantity=int(amount),
+            unit="count",
         )
-
-        if usage:
-            usage.current_usage += amount
-            usage.updated_at = now
-        else:
-            # Get limit from plan
-            plan_info = self.get_user_plan(user_id)
-            plan_type = plan_info["plan_type"]
-            limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
-            limit = limits.get(f"{metric_type}_per_month", -1)
-
-            usage = Usage(
-                user_id=user_id,
-                project_id=project_id,
-                metric_type=metric_type,
-                current_usage=amount,
-                limit=limit,
-                period_start=period_start,
-                period_end=period_end,
-            )
-            self.db.add(usage)
+        self.db.add(usage)
 
         self.db.commit()
 
@@ -166,23 +153,22 @@ class SubscriptionService:
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
         now = datetime.utcnow()
-        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        if now.month == 12:
-            period_end = period_start.replace(year=now.year + 1, month=1)
-        else:
-            period_end = period_start.replace(month=now.month + 1)
+        period_start, period_end = self._period_bounds(now)
 
-        # Get all usage records for current period
-        usage_records = (
-            self.db.query(Usage).filter(and_(Usage.user_id == user_id, Usage.period_start == period_start)).all()
-        )
-
-        # Aggregate usage by metric type
+        # Aggregate usage by metric_name for the current month.
         usage_by_metric: Dict[str, int] = {}
-        for record in usage_records:
-            if record.metric_type not in usage_by_metric:
-                usage_by_metric[record.metric_type] = 0
-            usage_by_metric[record.metric_type] += record.current_usage
+        usage_rows = (
+            self.db.query(Usage.metric_name, func.coalesce(func.sum(Usage.quantity), 0).label("total"))
+            .filter(
+                Usage.user_id == user_id,
+                Usage.timestamp >= period_start,
+                Usage.timestamp < period_end,
+            )
+            .group_by(Usage.metric_name)
+            .all()
+        )
+        for metric_name, total in usage_rows:
+            usage_by_metric[str(metric_name)] = int(total or 0)
 
         # Build summary
         summary = {"period_start": period_start.isoformat(), "period_end": period_end.isoformat(), "metrics": {}}
@@ -191,7 +177,7 @@ class SubscriptionService:
         for key, limit in limits.items():
             if key.endswith("_per_month"):
                 metric_type = key.replace("_per_month", "")
-                current = usage_by_metric.get(metric_type, 0)
+                current = usage_by_metric.get(self._usage_metric_name(metric_type), 0)
                 summary["metrics"][metric_type] = {
                     "current": current,
                     "limit": limit,

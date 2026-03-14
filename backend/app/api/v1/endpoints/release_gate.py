@@ -54,6 +54,7 @@ from app.models.snapshot import Snapshot
 from app.models.user import User
 from app.models.validation_dataset import ValidationDataset
 from app.services.data_lifecycle_service import DataLifecycleService
+from app.services.ops_alerting import ops_alerting
 from app.services.replay_service import replay_service
 from app.services.user_api_key_service import UserApiKeyService
 
@@ -873,6 +874,13 @@ async def _run_release_gate(
                 continue
 
     if unresolved_snapshot_ids:
+        unresolved_provider = explicit_provider or _resolve_snapshot_provider(snapshots[0]) or "unknown"
+        ops_alerting.observe_provider_error(
+            project_id=project_id,
+            provider=unresolved_provider,
+            error_code="provider_resolution_failed",
+            error_summary=f"unresolved_snapshot_ids={len(unresolved_snapshot_ids)}",
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
@@ -922,6 +930,13 @@ async def _run_release_gate(
 
         missing_provider_keys = sorted(missing_provider_keys_set)
         if missing_provider_keys:
+            for provider in missing_provider_keys:
+                ops_alerting.observe_provider_error(
+                    project_id=project_id,
+                    provider=provider,
+                    error_code="missing_provider_keys",
+                    error_summary="Missing API keys for required providers.",
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
@@ -1014,6 +1029,24 @@ async def _run_release_gate(
                 snapshot = snapshot_by_id.get(res.get("snapshot_id"))
                 if not snapshot:
                     continue
+                snapshot_payload = (
+                    snapshot.payload
+                    if isinstance(getattr(snapshot, "payload", None), dict)
+                    else {}
+                )
+                baseline_input_text = str(
+                    getattr(snapshot, "user_message", None)
+                    or snapshot_payload.get("prompt")
+                    or snapshot_payload.get("input")
+                    or snapshot_payload.get("user_message")
+                    or ""
+                ).strip()
+                try:
+                    candidate_response_preview = normalizer._extract_response_text(
+                        res.get("response_data")
+                    )
+                except Exception:
+                    candidate_response_preview = ""
 
                 run_tool_summary = response_to_canonical_tool_calls_summary(
                     res.get("response_data") or {}, res.get("replay_provider")
@@ -1027,6 +1060,13 @@ async def _run_release_gate(
                     reasons = replay_error_msgs or ["Replay request failed."]
                     replay_error_code = str(res.get("error_code") or "").strip() or None
                     replay_provider = str(res.get("replay_provider") or "").strip() or None
+                    if replay_error_code:
+                        ops_alerting.observe_provider_error(
+                            project_id=project_id,
+                            provider=replay_provider or _resolve_snapshot_provider(snapshot) or "unknown",
+                            error_code=replay_error_code,
+                            error_summary=str(res.get("error") or "").strip()[:180],
+                        )
                     provider_error_preview = _safe_preview_json(res.get("response_data"))
                     provider_error_obj = {
                         "provider": replay_provider,
@@ -1060,6 +1100,15 @@ async def _run_release_gate(
                                 ),
                             },
                             "behavior_diff": behavior_diff,
+                            "candidate_snapshot": {
+                                "provider": replay_provider,
+                                "model": str(res.get("replay_model") or snapshot.model or "").strip()
+                                or None,
+                                "status_code": res.get("status_code"),
+                                "input_text": baseline_input_text,
+                                "response_preview": candidate_response_preview
+                                or str(res.get("error") or "").strip(),
+                            },
                         }
                     )
                     all_reasons.extend(reasons)
@@ -1101,6 +1150,14 @@ async def _run_release_gate(
                                 "missing_provider_keys": [],
                             },
                             "behavior_diff": behavior_diff,
+                            "candidate_snapshot": {
+                                "provider": str(res.get("replay_provider") or "").strip() or None,
+                                "model": str(res.get("replay_model") or snapshot.model or "").strip()
+                                or None,
+                                "status_code": res.get("status_code"),
+                                "input_text": baseline_input_text,
+                                "response_preview": candidate_response_preview or reason,
+                            },
                         }
                     )
                     all_reasons.append(reason)
@@ -1151,6 +1208,14 @@ async def _run_release_gate(
                             "missing_provider_keys": [],
                         },
                         "behavior_diff": behavior_diff,
+                        "candidate_snapshot": {
+                            "provider": str(res.get("replay_provider") or "").strip() or None,
+                            "model": str(res.get("replay_model") or snapshot.model or "").strip()
+                            or None,
+                            "status_code": res.get("status_code"),
+                            "input_text": baseline_input_text,
+                            "response_preview": candidate_response_preview,
+                        },
                     }
                 )
 
@@ -1526,7 +1591,28 @@ async def validate_release_gate(
             detail="agent_id is required when use_recent_snapshots is True",
         )
     _enforce_platform_replay_credit_limit(payload, db, current_user)
-    return await _run_release_gate(project_id, payload, db, current_user)
+    try:
+        result = await _run_release_gate(project_id, payload, db, current_user)
+        passed = bool((result or {}).get("pass"))
+        reason = ""
+        if not passed:
+            reasons = (result or {}).get("failure_reasons") or []
+            if isinstance(reasons, list) and reasons:
+                reason = str(reasons[0])
+            else:
+                reason = str((result or {}).get("summary") or "release gate failed")
+        ops_alerting.observe_release_gate_result(project_id=project_id, success=passed, error_summary=reason)
+        return result
+    except HTTPException:
+        # Client/business errors are expected in some workflows, so no ops alert here.
+        raise
+    except Exception as exc:
+        ops_alerting.observe_release_gate_result(
+            project_id=project_id,
+            success=False,
+            error_summary=f"exception:{type(exc).__name__}",
+        )
+        raise
 
 
 @router.post(
@@ -1634,7 +1720,27 @@ async def release_gate_webhook(
 ):
     check_project_access(project_id, current_user, db)
     _enforce_platform_replay_credit_limit(payload, db, current_user)
-    return await _run_release_gate(project_id, payload, db, current_user)
+    try:
+        result = await _run_release_gate(project_id, payload, db, current_user)
+        passed = bool((result or {}).get("pass"))
+        reason = ""
+        if not passed:
+            reasons = (result or {}).get("failure_reasons") or []
+            if isinstance(reasons, list) and reasons:
+                reason = str(reasons[0])
+            else:
+                reason = str((result or {}).get("summary") or "release gate failed")
+        ops_alerting.observe_release_gate_result(project_id=project_id, success=passed, error_summary=reason)
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        ops_alerting.observe_release_gate_result(
+            project_id=project_id,
+            success=False,
+            error_summary=f"exception:{type(exc).__name__}",
+        )
+        raise
 
 
 @router.get("/projects/{project_id}/release-gate/suggest-baseline")

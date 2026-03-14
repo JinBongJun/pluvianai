@@ -6,6 +6,7 @@ import {
   ShieldCheck,
   Key,
   Activity,
+  Users,
   BookOpen,
   Beaker,
   LayoutDashboard,
@@ -71,6 +72,12 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
       desc: "Agent & model configuration",
       href: `/organizations/${resolvedOrgId}/settings`,
       icon: Settings,
+    },
+    {
+      label: "Team & Access",
+      desc: "Members & roles",
+      href: `/organizations/${resolvedOrgId}/team`,
+      icon: Users,
     },
     {
       label: "Usage & Billing",

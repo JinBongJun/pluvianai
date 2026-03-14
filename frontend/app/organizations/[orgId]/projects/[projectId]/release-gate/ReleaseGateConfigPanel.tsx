@@ -123,7 +123,8 @@ export function ReleaseGateConfigPanel({
   const baselinePayload = (ctx?.baselinePayload as Record<string, unknown> | null) ?? null;
   const selectedBaselineCount = Number(ctx?.selectedBaselineCount ?? 0);
   const selectedDataSummary =
-    (ctx?.selectedDataSummary as string) ?? "Choose baseline data from Live Logs or Saved Data.";
+    (ctx?.selectedDataSummary as string) ??
+    "No baseline data yet. Select representative \"good\" snapshots from Live Logs or Saved Data.";
   const runLocked = Boolean(ctx?.isValidating) || Boolean(ctx?.activeJobId);
 
   useEffect(() => {
@@ -269,8 +270,8 @@ export function ReleaseGateConfigPanel({
                   <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-200/90 font-medium flex items-center gap-3">
                     <SearchCode className="w-5 h-5 text-amber-400 shrink-0" />
                     <span>
-                      No baseline data selected. Close this panel and select data from Live Logs or
-                      Saved Data.
+                      No baseline data selected. First, send traffic to Live View, then choose
+                      baseline snapshots from Live Logs or Saved Data before running a Release Gate.
                     </span>
                   </div>
                 )}

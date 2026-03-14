@@ -18,6 +18,25 @@ interface Member {
   joined_at: string;
 }
 
+const ROLE_EXPLAINER: Record<Member["role"], { title: string; description: string }> = {
+  owner: {
+    title: "Owner",
+    description: "Full control over organization settings, billing, and member access.",
+  },
+  admin: {
+    title: "Admin",
+    description: "Can manage members and day-to-day project operations.",
+  },
+  member: {
+    title: "Member",
+    description: "Can work with project flows and collaborate with the team.",
+  },
+  viewer: {
+    title: "Viewer",
+    description: "Read-only access for monitoring and review.",
+  },
+};
+
 export default function TeamPage() {
   const router = useRouter();
   const params = useParams();
@@ -168,6 +187,24 @@ export default function TeamPage() {
           </p>
         </div>
 
+        <div className="mb-10 rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-4">
+          <div className="mb-3 text-[10px] font-black text-slate-500 uppercase tracking-[0.22em]">
+            Role Access Guide
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {(Object.keys(ROLE_EXPLAINER) as Member["role"][]).map(role => (
+              <div key={role} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
+                <div className="mb-1 flex items-center gap-2">
+                  {getRoleBadge(role)}
+                </div>
+                <p className="text-[11px] font-semibold text-slate-400 leading-relaxed">
+                  {ROLE_EXPLAINER[role].description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Invite Form */}
         <div className="rounded-[32px] border border-white/10 bg-white/[0.02] backdrop-blur-xl p-8 mb-12 relative overflow-hidden group">
           <div className="absolute inset-0 bg-flowing-lines opacity-[0.03] pointer-events-none" />
@@ -224,6 +261,9 @@ export default function TeamPage() {
                     <path d="m6 9 6 6 6-6" />
                   </svg>
                 </div>
+                <p className="mt-2 ml-1 text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                  Tip: Use Viewer for monitoring-only access.
+                </p>
               </div>
 
               <button

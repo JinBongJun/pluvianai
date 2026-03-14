@@ -13,8 +13,8 @@ const tiers = [
     description: "For teams getting started with Live View and Release Gate.",
     features: [
       "Live View & Release Gate",
-      "500 snapshots per month",
-      "1,000 platform replay credits per month",
+      "Up to 10,000 snapshots per month",
+      "Up to 50 Release Gate runs per month",
       "Bring your own provider key anytime",
       "No credit card required",
     ],
