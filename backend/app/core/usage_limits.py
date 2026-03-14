@@ -83,7 +83,7 @@ def check_snapshot_limit(db: Session, user_id: int, is_superuser: bool = False) 
     if is_superuser:
         return (True, None)
     limits = _get_user_plan_limits(db, user_id)
-    cap = limits.get("snapshots_per_month", 500)
+    cap = limits.get("snapshots_per_month", 10_000)
     if cap == -1:
         return (True, None)
     current = get_snapshots_count_this_month(db, user_id)

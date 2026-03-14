@@ -232,7 +232,7 @@ def list_agents(
         logger.exception(f"ERROR in list_agents for project {project_id}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list agents: {str(e)}",
+            detail="Failed to list agents",
         )
 
 

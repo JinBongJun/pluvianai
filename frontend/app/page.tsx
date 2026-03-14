@@ -264,24 +264,24 @@ export default function Home() {
             <h4 className="font-bold text-emerald-500 mb-6">Help</h4>
             <ul className="space-y-4">
               <li>
-                <a href="#" className="hover:text-emerald-400 transition-colors">
+                <Link href="/docs" className="hover:text-emerald-400 transition-colors">
                   Customer Support
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:text-emerald-400 transition-colors">
+                <Link href="/terms" className="hover:text-emerald-400 transition-colors">
                   Terms & Conditions
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:text-emerald-400 transition-colors">
+                <Link href="/privacy" className="hover:text-emerald-400 transition-colors">
                   Privacy Policy
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:text-emerald-400 transition-colors">
-                  Contact Us
-                </a>
+                <Link href="/security" className="hover:text-emerald-400 transition-colors">
+                  Security & Retention
+                </Link>
               </li>
             </ul>
           </div>
@@ -316,6 +316,17 @@ export default function Home() {
 
         <div className="w-full max-w-7xl mx-auto px-6 md:px-12 mt-[-20px] md:mt-[-40px] pt-8 border-t border-emerald-500/10 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500 relative z-20">
           <div>© 2026 All Right Reserved.</div>
+          <div className="flex items-center gap-4 uppercase tracking-wider">
+            <Link href="/terms" className="hover:text-emerald-400 transition-colors">
+              Terms
+            </Link>
+            <Link href="/privacy" className="hover:text-emerald-400 transition-colors">
+              Privacy
+            </Link>
+            <Link href="/security" className="hover:text-emerald-400 transition-colors">
+              Security
+            </Link>
+          </div>
         </div>
       </div>
     </div>

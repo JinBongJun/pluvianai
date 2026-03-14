@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useFormState, useFormStatus } from "react-dom";
 import { registerAction } from "@/actions/auth-actions";
 import { authAPI } from "@/lib/api";
+import { analytics } from "@/lib/analytics";
 import { getAuthErrorMessage } from "@/lib/auth-messages";
-import posthog from "posthog-js";
 import { passwordStrength } from "@/lib/validation";
 import { Lock, Mail, User, Eye, EyeOff, ArrowLeft, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
@@ -156,7 +156,7 @@ export default function LoginPage() {
         }
       }
 
-      posthog.capture("user_register", { method: "password" });
+      analytics.capture("user_register", { method: "password" });
 
       setTimeout(() => {
         window.location.href = postAuthRedirect;
@@ -164,7 +164,7 @@ export default function LoginPage() {
     } else if (registerState?.success) {
       // Success but no token (manual login required)
       start();
-      posthog.capture("user_register", { method: "password" });
+      analytics.capture("user_register", { method: "password" });
       setTimeout(() => {
         router.push("/login?registered=1");
       }, 800);
@@ -190,7 +190,7 @@ export default function LoginPage() {
     }
     try {
       await authAPI.login(email, password);
-      posthog.capture("user_login", { method: "password" });
+      analytics.capture("user_login", { method: "password" });
       start();
       setTimeout(() => {
         window.location.href = postAuthRedirect;

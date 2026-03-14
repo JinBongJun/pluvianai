@@ -25,14 +25,12 @@ def handle_errors(func):
         except Exception as e:
             # Log unexpected errors
             logger.error(
-                f"Unexpected error in {func.__name__}: {str(e)}",
-                extra={"function": func.__name__, "func_args": str(args)[:200], "func_kwargs": str(kwargs)[:200]},  # Limit length
+                f"Unexpected error in {func.__name__}: {type(e).__name__}",
+                extra={"function": func.__name__},
                 exc_info=True,
             )
             # Raise HTTPException for FastAPI to handle
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}"
-            )
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
     @wraps(func)
     def sync_wrapper(*args, **kwargs):
@@ -42,13 +40,11 @@ def handle_errors(func):
             raise
         except Exception as e:
             logger.error(
-                f"Unexpected error in {func.__name__}: {str(e)}",
-                extra={"function": func.__name__, "func_args": str(args)[:200], "func_kwargs": str(kwargs)[:200]},
+                f"Unexpected error in {func.__name__}: {type(e).__name__}",
+                extra={"function": func.__name__},
                 exc_info=True,
             )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}"
-            )
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
     # Return appropriate wrapper based on function type
     import inspect

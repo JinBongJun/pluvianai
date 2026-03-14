@@ -19,6 +19,8 @@ class Project(Base):
     description = Column(Text, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     is_active = Column(Boolean, default=True)
+    is_deleted = Column(Boolean, default=False, nullable=False, server_default="false")
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     is_panic_mode = Column(Boolean, default=False)  # Panic Mode (Global Block) - stored in DB and synced to Redis
     usage_mode = Column(String(32), default="full", nullable=False)  # "full" | "test_only" (Design 5.1.5)
     canvas_nodes = Column(JSON, nullable=True)  # Official live configuration from Test Lab

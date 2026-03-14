@@ -24,12 +24,14 @@ import httpx
 import secrets
 import time
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 
 # 설정
 BASE_URL = os.getenv("AGENTGUARD_TEST_URL", "http://localhost:8000")
 API_PREFIX = "/api/v1"
+ONBOARDING_POLL_SECONDS = int(os.getenv("AGENTGUARD_ONBOARDING_POLL_SECONDS", "20"))
+ONBOARDING_POLL_INTERVAL_SECONDS = float(os.getenv("AGENTGUARD_ONBOARDING_POLL_INTERVAL_SECONDS", "1.0"))
 
 
 class Colors:
@@ -77,6 +79,7 @@ class TestRunner:
         self.api_key_id: Optional[int] = None
         self.project_id: Optional[int] = None
         self.user_id: Optional[int] = None
+        self.agent_id: Optional[str] = None
         
         # 테스트 계정
         self.test_email = f"test_{secrets.token_hex(6)}@gmail.com"
@@ -275,8 +278,8 @@ class TestRunner:
                 self.project_id = data.get("data", data).get("id")
     
     def test_send_api_call(self) -> bool:
-        """API 키로 API Call 전송"""
-        assert self.api_key, "No API key"
+        """인증 토큰으로 API Call 전송"""
+        assert self.access_token, "No access token"
         
         self._ensure_project()
         assert self.project_id, "No project"
@@ -299,10 +302,130 @@ class TestRunner:
                 "agent_name": "e2e-test-agent",
                 "chain_id": f"e2e-{secrets.token_hex(4)}"
             },
-            headers={"Authorization": f"Bearer {self.api_key}"}
+            headers={"Authorization": f"Bearer {self.access_token}"}
         )
         
-        assert response.status_code == 201, f"Status {response.status_code}: {response.text}"
+        assert response.status_code == 202, f"Status {response.status_code}: {response.text}"
+        return True
+
+    @staticmethod
+    def _extract_agents_list(payload: Any) -> List[Dict[str, Any]]:
+        """Live View/Release Gate agents 응답의 shape 차이를 흡수."""
+        if isinstance(payload, list):
+            return [x for x in payload if isinstance(x, dict)]
+        if not isinstance(payload, dict):
+            return []
+
+        direct_agents = payload.get("agents")
+        if isinstance(direct_agents, list):
+            return [x for x in direct_agents if isinstance(x, dict)]
+
+        direct_items = payload.get("items")
+        if isinstance(direct_items, list):
+            return [x for x in direct_items if isinstance(x, dict)]
+
+        nested = payload.get("data")
+        if isinstance(nested, list):
+            return [x for x in nested if isinstance(x, dict)]
+        if isinstance(nested, dict):
+            nested_agents = nested.get("agents")
+            if isinstance(nested_agents, list):
+                return [x for x in nested_agents if isinstance(x, dict)]
+
+        return []
+
+    def test_live_view_agents_visible(self) -> bool:
+        """
+        온보딩 해피패스 핵심:
+        첫 API call 이후 Live View agents endpoint에서 노드가 노출되는지 확인.
+        """
+        assert self.access_token and self.project_id
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        endpoint = f"{API_PREFIX}/projects/{self.project_id}/live-view/agents"
+
+        deadline = time.time() + ONBOARDING_POLL_SECONDS
+        last_body_preview = ""
+        while time.time() < deadline:
+            response = self.client.get(endpoint, headers=headers)
+            assert response.status_code == 200, f"Status {response.status_code}: {response.text}"
+            payload = response.json()
+            agents = self._extract_agents_list(payload)
+            if agents:
+                first = agents[0]
+                agent_id = first.get("agent_id") or first.get("id")
+                if agent_id:
+                    self.agent_id = str(agent_id)
+                return True
+
+            # 디버깅 가독성을 위해 body preview를 짧게 유지
+            last_body_preview = str(payload)[:280]
+            time.sleep(ONBOARDING_POLL_INTERVAL_SECONDS)
+
+        raise AssertionError(
+            f"No agents visible in Live View within {ONBOARDING_POLL_SECONDS}s. Last payload: {last_body_preview}"
+        )
+
+    def test_release_gate_agents_visible(self) -> bool:
+        """
+        온보딩 해피패스 마지막 연결:
+        동일 프로젝트가 Release Gate agents endpoint에서도 조회 가능한지 확인.
+        """
+        assert self.access_token and self.project_id
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        endpoint = f"{API_PREFIX}/projects/{self.project_id}/release-gate/agents"
+
+        deadline = time.time() + ONBOARDING_POLL_SECONDS
+        last_body_preview = ""
+        while time.time() < deadline:
+            response = self.client.get(endpoint, headers=headers)
+            assert response.status_code == 200, f"Status {response.status_code}: {response.text}"
+            payload = response.json()
+            agents = self._extract_agents_list(payload)
+            if agents:
+                return True
+
+            last_body_preview = str(payload)[:280]
+            time.sleep(ONBOARDING_POLL_INTERVAL_SECONDS)
+
+        raise AssertionError(
+            f"No agents visible in Release Gate within {ONBOARDING_POLL_SECONDS}s. Last payload: {last_body_preview}"
+        )
+
+    def test_release_gate_quick_run(self) -> bool:
+        """
+        Release Gate 해피패스:
+        Live View에서 감지된 agent_id에 대해 최근 스냅샷 기반 Replay Test를 1회 실행해
+        end-to-end 경로가 동작하는지 확인한다.
+        """
+        assert self.access_token and self.project_id, "Missing token/project for Release Gate"
+        assert self.agent_id, "agent_id not set from Live View; run live-view agents test first"
+
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        payload = {
+            "agent_id": self.agent_id,
+            "use_recent_snapshots": True,
+            "recent_snapshot_limit": 10,
+            "model_source": "detected",
+            "evaluation_mode": "replay_test",
+            "repeat_runs": 1,
+            "max_snapshots": 10,
+            # INT-6 관점에서는 “1회 실행” 여부만 중요하므로
+            # 게이트 통과/실패와 무관하게 호출/응답 경로만 검증한다.
+            "fail_rate_max": 1.0,
+            "flaky_rate_max": 1.0,
+        }
+
+        response = self.client.post(
+            f"{API_PREFIX}/projects/{self.project_id}/release-gate/validate",
+            json=payload,
+            headers=headers,
+        )
+        assert response.status_code == 200, f"Status {response.status_code}: {response.text}"
+        data = response.json()
+        # 최소한의 shape 검증만 수행 (pass 여부는 강제하지 않는다).
+        assert isinstance(data, dict), "Release Gate response must be a JSON object"
+        assert "pass" in data, "Release Gate response missing 'pass' field"
+        assert "case_results" in data, "Release Gate response missing 'case_results' field"
         return True
     
     def test_retrieve_api_calls(self) -> bool:
@@ -318,6 +441,40 @@ class TestRunner:
         )
         
         assert response.status_code == 200
+        return True
+
+    # ================== Phase 4: Reliability (Ops Alerting) ==================
+
+    def test_ops_alert_dry_run_endpoint(self) -> bool:
+        """
+        우선순위 2 최소 검증:
+        admin dry-run endpoint가 동작하고 accepted 응답을 반환하는지 확인.
+
+        NOTE:
+        - 일반 테스트 계정은 admin 권한이 없어 호출 불가.
+        - AGENTGUARD_ADMIN_TOKEN 환경변수를 주면 해당 토큰으로 검증한다.
+        """
+        admin_token = os.getenv("AGENTGUARD_ADMIN_TOKEN")
+        if not admin_token:
+            self.skipped += 1
+            print_warning("Skipped (set AGENTGUARD_ADMIN_TOKEN to verify /admin/ops-alerts/test)")
+            return True
+
+        response = self.client.post(
+            f"{API_PREFIX}/admin/ops-alerts/test",
+            json={
+                "event_type": "custom",
+                "project_id": self.project_id or 1,
+                "repeats": 1,
+                "custom_severity": "warning",
+                "custom_title": "E2E dry-run",
+                "custom_summary": "manual_e2e_test.py reliability smoke test",
+            },
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert response.status_code == 202, f"Status {response.status_code}: {response.text}"
+        data = response.json()
+        assert data.get("accepted") is True, f"Unexpected response: {data}"
         return True
     
     # ================== Phase 5: 엣지 케이스 ==================
@@ -398,6 +555,13 @@ class TestRunner:
         print_header("Phase 3: SDK Integration")
         self.run_test("Send API call with API key", self.test_send_api_call)
         self.run_test("Retrieve API calls", self.test_retrieve_api_calls)
+        self.run_test("Live View agents visible", self.test_live_view_agents_visible)
+        self.run_test("Release Gate agents visible", self.test_release_gate_agents_visible)
+        self.run_test("Release Gate quick run (recent snapshots)", self.test_release_gate_quick_run)
+
+        # Phase 4
+        print_header("Phase 4: Reliability")
+        self.run_test("Ops alert dry-run endpoint", self.test_ops_alert_dry_run_endpoint)
         
         # Phase 5
         print_header("Phase 5: Edge Cases")

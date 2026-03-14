@@ -15,6 +15,14 @@
 .react-flow__handle {
 }
 
+/* Remove ReactFlow's default selected node outline/border */
+.react-flow__node.selected,
+.react-flow__node.selected:focus,
+.react-flow__node.selected:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 .react-flow__edgeinteraction,
 .react-flow__edge,
 .react-flow__connection-line,
@@ -29,6 +37,11 @@
 
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+html {
+  /* Scale down the entire UI to match the 75% zoom design intent */
+  font-size: 11.7px;
+}
 
 :root {
   --foreground-rgb: 231, 231, 226;
