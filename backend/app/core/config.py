@@ -79,9 +79,38 @@ class Settings(BaseSettings):
     EMAIL_FROM: Optional[str] = None  # e.g., "onboarding@resend.dev" or verified domain
     EMAIL_FROM_NAME: str = "PluvianAI"
     FEEDBACK_TO_EMAIL: Optional[str] = None  # If unset, defaults to EMAIL_FROM
+    FEEDBACK_SLACK_WEBHOOK_URL: Optional[str] = None  # If set, feedback is sent to Slack instead of Resend
+    # For uploading feedback attachments to Slack (optional; requires Bot Token with files:write)
+    FEEDBACK_SLACK_BOT_TOKEN: Optional[str] = None
+    FEEDBACK_SLACK_CHANNEL_ID: Optional[str] = None  # Channel ID where file will be posted (e.g. C01234567)
 
     # Slack configuration
     SLACK_WEBHOOK_URL: Optional[str] = None  # Slack webhook URL for notifications
+    OPS_ALERT_WEBHOOK_URL: Optional[str] = None  # MVP ops alert webhook (Slack incoming webhook)
+    OPS_ALERT_COOLDOWN_SECONDS: int = 600
+    OPS_LIVE_VIEW_WINDOW_SECONDS: int = 300
+    OPS_LIVE_VIEW_MIN_SAMPLES: int = 5  # require N requests in window before alerting (avoids 1 slow request = alert)
+    OPS_LIVE_VIEW_5XX_RATE_THRESHOLD: float = 0.05
+    OPS_LIVE_VIEW_P95_MS_THRESHOLD: int = 3000
+    OPS_PROJECT_API_WINDOW_SECONDS: int = 300
+    OPS_PROJECT_API_MIN_SAMPLES: int = 20
+    OPS_PROJECT_API_5XX_RATE_THRESHOLD: float = 0.05
+    OPS_PROJECT_API_P95_MS_THRESHOLD: int = 3000
+    OPS_RELEASE_GATE_WINDOW_SECONDS: int = 600
+    OPS_RELEASE_GATE_FAILURE_BURST_COUNT: int = 3
+    OPS_RELEASE_GATE_RATIO_WINDOW_SECONDS: int = 3600
+    OPS_RELEASE_GATE_RATIO_MIN_SAMPLES: int = 10
+    OPS_RELEASE_GATE_FAIL_RATIO_THRESHOLD: float = 0.15
+    OPS_PROVIDER_ERROR_WINDOW_SECONDS: int = 600
+    OPS_PROVIDER_ERROR_BURST_COUNT: int = 5
+    OPS_ALERT_META_WINDOW_SECONDS: int = 3600
+    OPS_ALERT_META_FREQUENCY_THRESHOLD: int = 20
+    OPS_DB_ERROR_WINDOW_SECONDS: int = 300
+    OPS_DB_ERROR_BURST_COUNT: int = 10
+    OPS_SNAPSHOT_WINDOW_SECONDS: int = 600
+    OPS_SNAPSHOT_5XX_RATIO_THRESHOLD: float = 0.20
+    OPS_SNAPSHOT_ERROR_MIN_SAMPLES: int = 20
+    SOFT_DELETE_GRACE_DAYS: int = 30
 
     # Encryption for user API keys
     ENCRYPTION_KEY: Optional[str] = None  # Fernet key for encrypting user API keys (32-byte base64)
