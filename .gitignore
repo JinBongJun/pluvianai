@@ -59,6 +59,9 @@ backend/logs/
 backend/tmp/
 tmp-round1-evidence/
 frontend/scripts/artifacts/
+*.bak
+frontend/temp_layout.txt
+frontend/tsc_output.txt
 
 # Local tool/runtime files
 anthropic.json
