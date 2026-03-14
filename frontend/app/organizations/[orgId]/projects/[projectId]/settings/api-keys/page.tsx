@@ -120,6 +120,11 @@ export default function ProjectApiKeysPage() {
         title="API Keys"
         description="LLM API keys for this project. Used by Policy validation and replay-style checks (OpenAI, Anthropic, Google). Custom models (model_id, base_url) can be added here and selected per evaluation flow."
       >
+        <p className="mb-6 text-slate-400 text-sm">
+          For SDK or demos: use the <strong className="text-slate-300">Project ID</strong> shown above in your{" "}
+          <code className="px-1.5 py-0.5 rounded bg-white/10 text-emerald-300 text-xs">.env</code> as{" "}
+          <code className="px-1.5 py-0.5 rounded bg-white/10 text-emerald-300 text-xs">PLUVIANAI_PROJECT_ID</code>.
+        </p>
         {/* Add key form */}
         <div className="rounded-lg border border-white/10 bg-white/5 p-4 mb-6">
           <h2 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">

@@ -60,16 +60,10 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
     loadUser();
   }, [hasToken]);
 
-  const navItems = [
+  const orgNavItems = [
     {
-      label: "Projects",
-      desc: "Agent workspaces",
-      href: `/organizations/${resolvedOrgId}/projects`,
-      icon: LayoutDashboard,
-    },
-    {
-      label: "Project Settings",
-      desc: "Agent & model configuration",
+      label: "Organization Settings",
+      desc: "Org & model configuration",
       href: `/organizations/${resolvedOrgId}/settings`,
       icon: Settings,
     },
@@ -85,6 +79,16 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
       href: `/organizations/${resolvedOrgId}/billing`,
       icon: Activity,
     },
+  ];
+
+  const navItems = [
+    {
+      label: "Projects",
+      desc: "Agent workspaces",
+      href: `/organizations/${resolvedOrgId}/projects`,
+      icon: LayoutDashboard,
+    },
+    ...orgNavItems,
   ];
 
   return (
@@ -160,16 +164,22 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
           </div>
 
           <nav className="flex-1 space-y-4">
-            {navItems.map(item => {
+            {navItems.map((item, index) => {
               const Icon = item.icon;
               const isActive =
                 pathname === item.href || (item.href !== "/docs" && pathname.startsWith(item.href));
+              const isOrgSectionStart = index === 1;
 
               return (
-                <button
-                  key={item.href}
-                  onClick={() => router.push(item.href)}
-                  className={clsx(
+                <div key={item.href} className={isOrgSectionStart ? "mt-6" : ""}>
+                  {isOrgSectionStart && (
+                    <p className="mb-2 px-3 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Organization
+                    </p>
+                  )}
+                  <button
+                    onClick={() => router.push(item.href)}
+                    className={clsx(
                     "w-full flex items-center gap-5 p-5 rounded-[24px] transition-all group border border-transparent backdrop-blur-md",
                     isActive
                       ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[0_0_40px_-10px_rgba(16,185,129,0.2)]"
@@ -194,6 +204,7 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
                   </div>
                   {isActive && <ChevronRight className="w-5 h-5 text-emerald-400" />}
                 </button>
+                </div>
               );
             })}
           </nav>
