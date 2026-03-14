@@ -574,3 +574,46 @@ Status: **COMPLETED (OVR/OVR-S + WARN matrix + export consistency)**
   - Closed: WARN matrix (`WARN-1~WARN-9`) with backend + browser split coverage
   - Closed: Copy/Export consistency
   - Closed: OVR / OVR-S blocks
+
+---
+
+## 16) Ops Slack Alerting Progress Update — 5-item baseline implementation
+
+Status: **COMPLETED (implemented + tested)**
+
+- Implemented backend alert extensions in `backend/app/services/ops_alerting.py`:
+  - `project_api_degraded` / `project_api_recovered` (project + endpoint-group 5xx/p95)
+  - `release_gate_fail_ratio_high` / `release_gate_fail_ratio_recovered`
+  - `provider_error_burst` / `provider_error_recovered`
+  - `ops_alert_frequency_high` (meta alert for noisy repeated alert type)
+  - existing `db_error_burst` / `snapshot_error_ratio_high` 유지
+
+- Wired observation hooks:
+  - `backend/app/middleware/logging_middleware.py`
+    - project API scope 추출 후 `observe_project_api_request(...)` 호출
+  - `backend/app/api/v1/endpoints/release_gate.py`
+    - preflight (`provider_resolution_failed`, `missing_provider_keys`) + replay 실패 `error_code`를 provider burst로 집계
+
+- Expanded dry-run endpoint support:
+  - `backend/app/api/v1/endpoints/admin/ops_alerts.py`
+  - `backend/app/api/v1/endpoints/admin.py`
+  - 신규 dry-run 타입: `project_api_degraded`, `release_gate_fail_ratio_high`, `provider_error_burst`
+
+- Added config knobs (`backend/app/core/config.py`):
+  - project API thresholds/window/min samples
+  - release gate fail-ratio thresholds/window/min samples
+  - provider error burst thresholds/window
+  - alert meta-frequency thresholds/window
+
+- Verification:
+  - `python -m pytest -q backend/tests/unit/test_ops_alerting_service.py backend/tests/integration/test_admin_ops_alerts_dry_run.py backend/tests/integration/test_release_gate_overrides_and_export.py`
+  - Result: **16 passed**
+
+- Documentation:
+  - Added implementation doc: `docs/mvp-ops-slack-alerts-implementation-plan.md`
+  - Added `~1,000 paid users` recommended `OPS_*` baseline profile + safe rollout order
+  - Reflected same baseline values in `.env.example` for direct deployment handoff
+  - Added production handoff appendix:
+    - copy-ready `.env` diff draft
+    - PowerShell dry-run commands for 3 critical events
+    - Slack done-criteria checklist
