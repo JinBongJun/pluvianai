@@ -66,6 +66,12 @@ frontend/tsc_output.txt
 # Local tool/runtime files
 anthropic.json
 
+# Third-party / reference template pack (do not re-add)
+vive-md-main/
+
+# Repo root media (use frontend/public or CDN)
+/*.mp4
+
 # Cursor local workspace state
 .cursor/*
 !.cursor/rules/
