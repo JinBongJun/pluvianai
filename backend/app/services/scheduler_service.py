@@ -123,7 +123,11 @@ class SchedulerService:
         db: Session = SessionLocal()
         try:
             # Get all active projects
-            projects = db.query(Project).filter(Project.is_active.is_(True)).all()
+            projects = (
+                db.query(Project)
+                .filter(Project.is_active.is_(True), Project.is_deleted.is_(False))
+                .all()
+            )
             logger.info(f"Found {len(projects)} active projects")
 
             total_detections = 0
@@ -188,7 +192,11 @@ class SchedulerService:
         db: Session = SessionLocal()
         try:
             # Get all active projects
-            projects = db.query(Project).filter(Project.is_active.is_(True)).all()
+            projects = (
+                db.query(Project)
+                .filter(Project.is_active.is_(True), Project.is_deleted.is_(False))
+                .all()
+            )
             logger.info(f"Found {len(projects)} active projects")
 
             total_alerts = 0
@@ -249,7 +257,11 @@ class SchedulerService:
             from app.models.project import Project
 
             # Get all active projects
-            projects = db.query(Project).filter(Project.is_active.is_(True)).all()
+            projects = (
+                db.query(Project)
+                .filter(Project.is_active.is_(True), Project.is_deleted.is_(False))
+                .all()
+            )
             logger.info(f"Found {len(projects)} active projects")
 
             for project in projects:
@@ -280,7 +292,11 @@ class SchedulerService:
             from app.services.data_lifecycle_service import DataLifecycleService
 
             # Get all active projects
-            projects = db.query(Project).filter(Project.is_active.is_(True)).all()
+            projects = (
+                db.query(Project)
+                .filter(Project.is_active.is_(True), Project.is_deleted.is_(False))
+                .all()
+            )
             logger.info(f"Found {len(projects)} active projects")
 
             total_snapshots_cleaned = 0
@@ -306,10 +322,17 @@ class SchedulerService:
                     logger.error(f"Error cleaning up data for project {project.id}: {str(e)}")
                     continue
 
+            soft_delete_purge = lifecycle_service.purge_soft_deleted_entities()
             logger.info(
-                "Scheduled data lifecycle cleanup completed: %s snapshots cleaned, %s release-gate history records purged",
+                (
+                    "Scheduled data lifecycle cleanup completed: %s snapshots cleaned, "
+                    "%s release-gate history records purged, %s soft-deleted projects hard-deleted, "
+                    "%s soft-deleted organizations hard-deleted"
+                ),
                 total_snapshots_cleaned,
                 total_release_gate_reports_cleaned,
+                soft_delete_purge.get("purged_projects_count", 0),
+                soft_delete_purge.get("purged_organizations_count", 0),
             )
         except Exception as e:
             logger.error(f"Error in scheduled data lifecycle cleanup: {str(e)}")
@@ -363,7 +386,11 @@ class SchedulerService:
                     from app.models.project import Project
                     
                     # Find first active project to associate alert with
-                    project = db.query(Project).filter(Project.is_active.is_(True)).first()
+                    project = (
+                        db.query(Project)
+                        .filter(Project.is_active.is_(True), Project.is_deleted.is_(False))
+                        .first()
+                    )
                     if project:
                         alert = Alert(
                             project_id=project.id,

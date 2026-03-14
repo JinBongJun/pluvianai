@@ -1,4 +1,5 @@
 from typing import List, Optional
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from app.models.project import Project
 from app.models.organization import Organization, OrganizationMember
@@ -53,7 +54,7 @@ class ProjectService:
         # Verify organization access if organization_id is provided
         if organization_id:
             org = self.org_repo.find_by_id(organization_id)
-            if not org:
+            if not org or org.is_deleted:
                 raise ValueError("Organization not found")
             
             # Check if user is owner or member
@@ -86,7 +87,10 @@ class ProjectService:
 
     def get_project_by_id(self, project_id: int) -> Optional[Project]:
         """Get project by ID"""
-        return self.project_repo.find_by_id(project_id)
+        project = self.project_repo.find_by_id(project_id)
+        if not project or not project.is_active or project.is_deleted:
+            return None
+        return project
 
     def get_projects_by_user_id(self, user_id: int) -> List[Project]:
         """Get all projects owned by user"""
@@ -165,7 +169,7 @@ class ProjectService:
             Updated Project entity or None if not found
         """
         project = self.project_repo.find_by_id(project_id)
-        if not project:
+        if not project or not project.is_active or project.is_deleted:
             return None
 
         if name is not None:
@@ -188,7 +192,7 @@ class ProjectService:
 
     def delete_project(self, project_id: int) -> bool:
         """
-        Soft delete project (set is_active=False)
+        Soft delete project.
         
         Args:
             project_id: Project ID
@@ -197,10 +201,12 @@ class ProjectService:
             True if deleted, False if not found
         """
         project = self.project_repo.find_by_id(project_id)
-        if not project:
+        if not project or project.is_deleted:
             return False
         
         project.is_active = False
+        project.is_deleted = True
+        project.deleted_at = datetime.now(timezone.utc)
         # Transaction is managed by get_db() dependency
         self.project_repo.save(project)
         return True

@@ -1,6 +1,7 @@
 """
 Integration tests for Authentication API
 """
+import json
 import pytest
 from fastapi import status
 from app.models.subscription import Subscription
@@ -19,7 +20,8 @@ class TestAuthAPI:
             json={
                 "email": "newuser@example.com",
                 "password": "securepassword123",
-                "full_name": "New User"
+                "full_name": "New User",
+                "liability_agreement_accepted": True,
             }
         )
         
@@ -36,11 +38,13 @@ class TestAuthAPI:
             json={
                 "email": test_user.email,
                 "password": "password123",
-                "full_name": "Duplicate User"
+                "full_name": "Duplicate User",
+                "liability_agreement_accepted": True,
             }
         )
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json()["error"]["message"] == "Email already registered"
     
     async def test_register_invalid_email(self, async_client):
         """Test registering with invalid email"""
@@ -61,17 +65,38 @@ class TestAuthAPI:
             "/api/v1/auth/register",
             json={
                 "email": "user@example.com",
-                "password": "123",  # Too short
-                "full_name": "User"
+                "password": "password",
+                "full_name": "User",
+                "liability_agreement_accepted": True,
             }
         )
         
-        # Should either reject or accept (depends on validation)
-        assert response.status_code in [
-            status.HTTP_201_CREATED,
-            status.HTTP_400_BAD_REQUEST,
-            status.HTTP_422_UNPROCESSABLE_ENTITY
-        ]
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        data = response.json()
+        assert data["error"]["message"] == "Password policy violation"
+        assert "Password is too common." in data["error"]["details"]["reasons"]
+
+    async def test_login_internal_error_returns_generic_500(self, async_client, test_user, monkeypatch):
+        """Unexpected login errors should not leak internal exception details."""
+        import app.api.v1.endpoints.auth as auth_endpoint
+
+        def _boom(*args, **kwargs):
+            raise RuntimeError("sensitive internal failure text")
+
+        monkeypatch.setattr(auth_endpoint, "verify_password", _boom)
+
+        response = await async_client.post(
+            "/api/v1/auth/login",
+            data={
+                "username": test_user.email,
+                "password": "testpassword123"
+            }
+        )
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        data = response.json()
+        assert data["error"]["message"] == "Internal server error"
+        assert "sensitive internal failure text" not in json.dumps(data)
     
     async def test_login_success(self, async_client, test_user):
         """Test user login"""
@@ -151,7 +176,7 @@ class TestAuthAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["plan_type"] == "free"
-        assert data["limits"]["platform_replay_credits_per_month"] == 1000
-        assert data["limits"]["guard_credits_per_month"] == 1000
+        assert data["limits"]["platform_replay_credits_per_month"] == 50
+        assert data["limits"]["guard_credits_per_month"] == 10000
         assert data["usage_this_month"]["platform_replay_credits"] == 125
         assert data["usage_this_month"]["guard_credits"] == 125

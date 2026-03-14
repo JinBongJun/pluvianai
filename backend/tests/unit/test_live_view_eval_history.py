@@ -19,7 +19,7 @@ def test_update_agent_settings_create_records_eval_history():
     db = _mock_db_with_setting(None)
     current_user = MagicMock()
 
-    with patch.object(live_view, "_ensure_project", return_value=MagicMock()):
+    with patch.object(live_view, "_ensure_project_admin", return_value=MagicMock()):
         live_view.update_agent_settings(
             project_id=1,
             agent_id="agent-create",
@@ -50,7 +50,7 @@ def test_update_agent_settings_update_records_eval_history():
     db = _mock_db_with_setting(existing)
     current_user = MagicMock()
 
-    with patch.object(live_view, "_ensure_project", return_value=MagicMock()):
+    with patch.object(live_view, "_ensure_project_admin", return_value=MagicMock()):
         live_view.update_agent_settings(
             project_id=1,
             agent_id="agent-update",
@@ -72,7 +72,7 @@ def test_update_agent_settings_rejects_non_object_diagnostic_config():
     db = _mock_db_with_setting(None)
     current_user = MagicMock()
 
-    with patch.object(live_view, "_ensure_project", return_value=MagicMock()):
+    with patch.object(live_view, "_ensure_project_admin", return_value=MagicMock()):
         with pytest.raises(HTTPException) as exc:
             live_view.update_agent_settings(
                 project_id=1,

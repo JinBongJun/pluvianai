@@ -239,8 +239,12 @@ async def update_business_metrics_periodically():
                 user_count = db.query(User).filter(User.is_active.is_(True)).count()
                 active_users.set(user_count)
 
-                # Count active projects (projects with is_active=True)
-                project_count = db.query(Project).filter(Project.is_active.is_(True)).count()
+                # Count active projects (projects with is_active=True and not soft-deleted)
+                project_count = (
+                    db.query(Project)
+                    .filter(Project.is_active.is_(True), Project.is_deleted.is_(False))
+                    .count()
+                )
                 active_projects.set(project_count)
 
                 logger.debug(f"Updated metrics: {user_count} active users, {project_count} active projects")

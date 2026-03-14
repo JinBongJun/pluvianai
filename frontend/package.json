@@ -12,7 +12,12 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "type-check": "tsc --noEmit --skipLibCheck",
     "generate-types": "npx openapi-typescript http://localhost:8000/openapi.json -o lib/api-types.ts",
-    "validate-types": "npm run generate-types && npm run type-check"
+    "validate-types": "npm run generate-types && npm run type-check",
+    "qa:g-billing-ui": "node scripts/pricing_billing_ui_assert.js",
+    "qa:i-login-flow": "node scripts/login_query_flow_assert.js",
+    "qa:n1-reauth-matrix": "node scripts/session_reauth_matrix_assert.js",
+    "qa:l-m-legal-ux": "node scripts/projects_legal_ux_assert.js",
+    "qa:rg-warn-ui": "node scripts/release_gate_warn_ui_assert.js"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.32.1",
@@ -22,6 +27,7 @@
     "framer-motion": "^12.33.0",
     "lucide-react": "^0.562.0",
     "next": "14.0.3",
+    "playwright": "^1.58.2",
     "postcss": "^8.4.32",
     "posthog-js": "^1.328.0",
     "react": "^18.2.0",

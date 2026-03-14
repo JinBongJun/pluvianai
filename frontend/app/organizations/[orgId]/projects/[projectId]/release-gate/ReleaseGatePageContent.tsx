@@ -225,6 +225,55 @@ function describeMissingProviderKeys(missingProviders: ReplayProvider[]): string
   return `Run blocked: ${labels} API key is not registered for the selected node (or project default). Open Live View, click the node, then register the key in the Settings tab.`;
 }
 
+function ReleaseGateStatusPanel({
+  title,
+  description,
+  tone = "neutral",
+  primaryActionLabel,
+  onPrimaryAction,
+  primaryHref,
+}: {
+  title: string;
+  description: React.ReactNode;
+  tone?: "neutral" | "warning" | "danger";
+  primaryActionLabel?: string;
+  onPrimaryAction?: () => void;
+  primaryHref?: string;
+}) {
+  const toneClasses =
+    tone === "danger"
+      ? "border-rose-500/30 bg-[#140f15]"
+      : tone === "warning"
+        ? "border-amber-500/30 bg-[#15130f]"
+        : "border-white/10 bg-[#0f1219]";
+
+  return (
+    <div className="flex h-full min-h-[420px] items-center justify-center px-6 py-10">
+      <div className={clsx("w-full max-w-2xl rounded-2xl border p-7 shadow-2xl", toneClasses)}>
+        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-300">{title}</p>
+        <div className="mt-3 text-sm leading-relaxed text-slate-200">{description}</div>
+        {primaryActionLabel && primaryHref ? (
+          <Link
+            href={primaryHref}
+            className="mt-6 inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
+          >
+            {primaryActionLabel}
+          </Link>
+        ) : null}
+        {primaryActionLabel && onPrimaryAction ? (
+          <button
+            type="button"
+            onClick={onPrimaryAction}
+            className="mt-6 inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
+          >
+            {primaryActionLabel}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function extractToolsFromPayload(payload: Record<string, unknown> | null): EditableTool[] {
   if (!payload) return [];
   const rawTools = payload.tools;
@@ -664,7 +713,12 @@ export default function ReleaseGatePageContent() {
   }, [result?.report_id]);
 
   const agentsKey = projectId && !isNaN(projectId) ? ["release-gate-agents", projectId] : null;
-  const { data: agentsData, isLoading: agentsLoading } = useSWR(
+  const {
+    data: agentsData,
+    isLoading: agentsLoading,
+    error: agentsError,
+    mutate: mutateAgents,
+  } = useSWR(
     agentsKey,
     () => releaseGateAPI.getAgents(projectId, 50),
     { isPaused: () => runLocked }
@@ -703,7 +757,12 @@ export default function ReleaseGatePageContent() {
     projectId && !isNaN(projectId) && agentId?.trim()
       ? ["behavior-datasets", projectId, agentId.trim()]
       : null;
-  const { data: datasetsData, isLoading: datasetsLoading } = useSWR(
+  const {
+    data: datasetsData,
+    isLoading: datasetsLoading,
+    error: datasetsError,
+    mutate: mutateDatasets,
+  } = useSWR(
     datasetsKey,
     () => behaviorAPI.listDatasets(projectId, { agent_id: agentId.trim(), limit: 50 }),
     { isPaused: () => runLocked }
@@ -721,6 +780,7 @@ export default function ReleaseGatePageContent() {
     data: datasetSnapshotsData,
     isLoading: datasetSnapshotsLoading,
     error: datasetSnapshotsError,
+    mutate: mutateDatasetSnapshots,
   } = useSWR(
     datasetSnapshotsKey,
     async () => {
@@ -743,18 +803,30 @@ export default function ReleaseGatePageContent() {
     projectId && !isNaN(projectId) && expandedDatasetId
       ? ["dataset-snapshots-expanded", projectId, expandedDatasetId]
       : null;
-  const { data: expandedDatasetSnapshotsData } = useSWR(
+  const {
+    data: expandedDatasetSnapshotsData,
+    isLoading: expandedDatasetSnapshotsLoading,
+    error: expandedDatasetSnapshotsError,
+    mutate: mutateExpandedDatasetSnapshots,
+  } = useSWR(
     expandedDatasetSnapshotsKey,
     async () => {
       try {
         return await behaviorAPI.getDatasetSnapshots(projectId!, expandedDatasetId!);
-      } catch {
-        return { items: [], total: 0 };
+      } catch (e: unknown) {
+        const status = (e as { response?: { status?: number } })?.response?.status;
+        if (status === 404) {
+          return { items: [], total: 0, _404: true };
+        }
+        throw e;
       }
     },
     { isPaused: () => runLocked }
   );
   const expandedDatasetSnapshots = expandedDatasetSnapshotsData?.items ?? [];
+  const expandedDatasetSnapshots404 = !!(
+    expandedDatasetSnapshotsData as { _404?: boolean } | undefined
+  )?._404;
 
   const selectedDatasetSnapshotCount = useMemo(
     () =>
@@ -927,7 +999,12 @@ export default function ReleaseGatePageContent() {
     projectId && !isNaN(projectId) && agentId?.trim()
       ? ["release-gate-recent-snapshots", projectId, agentId.trim(), RECENT_SNAPSHOT_LIMIT]
       : null;
-  const { data: recentSnapshotsData } = useSWR(
+  const {
+    data: recentSnapshotsData,
+    isLoading: recentSnapshotsLoading,
+    error: recentSnapshotsError,
+    mutate: mutateRecentSnapshots,
+  } = useSWR(
     recentSnapshotsKey,
     () => releaseGateAPI.getRecentSnapshots(projectId, agentId!.trim(), RECENT_SNAPSHOT_LIMIT),
     { isPaused: () => runLocked }
@@ -1689,6 +1766,18 @@ export default function ReleaseGatePageContent() {
     if (agent) onAgentSelect(agent);
   };
 
+  const agentsErrorStatus = Number((agentsError as any)?.response?.status ?? 0);
+  const showGateLoadingState = agentsLoading && typeof agentsData === "undefined";
+  const showGateAccessDeniedState =
+    !!agentsError && (agentsErrorStatus === 401 || agentsErrorStatus === 403);
+  const showGateApiErrorState = !!agentsError && !showGateAccessDeniedState;
+  const showGateEmptyState =
+    !showGateLoadingState &&
+    !showGateAccessDeniedState &&
+    !showGateApiErrorState &&
+    agentsLoaded &&
+    agents.length === 0;
+
   const contextValue: Record<string, unknown> = {
     orgId,
     projectId,
@@ -1709,15 +1798,29 @@ export default function ReleaseGatePageContent() {
     onMapSelectAgent,
     requestSystemPrompt,
     recentSnapshots,
+    recentSnapshotsLoading,
+    recentSnapshotsError,
+    mutateRecentSnapshots,
     baselineSnapshotsById,
     runSnapshotIds,
     setDataSource,
     snapshotEvalFailed,
     setBaselineDetailSnapshot,
     datasets,
+    datasetsLoading,
+    datasetsError,
+    mutateDatasets,
     runDatasetIds,
     expandedDatasetId,
     expandedDatasetSnapshots,
+    datasetSnapshotsLoading,
+    datasetSnapshotsError,
+    datasetSnapshots404,
+    mutateDatasetSnapshots,
+    expandedDatasetSnapshotsLoading,
+    expandedDatasetSnapshotsError,
+    expandedDatasetSnapshots404,
+    mutateExpandedDatasetSnapshots,
     baselineSeedSnapshot,
     baselinePayload,
     nodeBasePayload,
@@ -1793,15 +1896,68 @@ export default function ReleaseGatePageContent() {
     runDataModel,
     runDataPrompt,
   };
-  const layoutChildren =
-    viewMode === "map"
-      ? React.createElement(ReleaseGateMap, {
-          agents,
-          agentsLoaded,
-          onSelectAgent: onMapSelectAgent,
-          projectName: project?.name,
+  const liveViewHref =
+    orgId && projectId && !isNaN(projectId)
+      ? `/organizations/${encodeURIComponent(orgId)}/projects/${projectId}/live-view`
+      : "/organizations";
+  const layoutChildren = showGateLoadingState
+    ? React.createElement(ReleaseGateStatusPanel, {
+        title: "Loading Release Gate",
+        description: "Fetching agents and release history for this project...",
+      })
+    : showGateAccessDeniedState
+      ? React.createElement(ReleaseGateStatusPanel, {
+          title: "Access Denied",
+          description:
+            "You do not have access to this project. Ask a project owner or admin to update your role before using Release Gate.",
+          tone: "warning",
+          primaryActionLabel: "Retry",
+          onPrimaryAction: () => void mutateAgents(),
         })
-      : React.createElement(ReleaseGateExpandedView);
+      : showGateApiErrorState
+        ? React.createElement(ReleaseGateStatusPanel, {
+            title: "Unable to Load Release Gate",
+            description:
+              "We could not reach the Release Gate API right now. Retry in a few seconds. If this keeps happening, check backend health and network connectivity.",
+            tone: "danger",
+            primaryActionLabel: "Retry",
+            onPrimaryAction: () => void mutateAgents(),
+          })
+        : showGateEmptyState
+          ? React.createElement(ReleaseGateStatusPanel, {
+              title: "No Baseline Data Yet",
+              description: React.createElement(
+                "div",
+                { className: "space-y-2" },
+                React.createElement(
+                  "p",
+                  null,
+                  "Release Gate needs baseline snapshots before it can compare a candidate model."
+                ),
+                React.createElement(
+                  "ol",
+                  { className: "list-decimal list-inside space-y-1 text-slate-300" },
+                  React.createElement("li", null, "Open Live View and send at least one real or test request."),
+                  React.createElement("li", null, "Select baseline snapshots from Live Logs or Saved Data."),
+                  React.createElement(
+                    "li",
+                    null,
+                    "Return here to configure candidate overrides and run validation."
+                  )
+                )
+              ),
+              tone: "warning",
+              primaryActionLabel: "Go to Live View",
+              primaryHref: liveViewHref,
+            })
+          : viewMode === "map"
+            ? React.createElement(ReleaseGateMap, {
+                agents,
+                agentsLoaded,
+                onSelectAgent: onMapSelectAgent,
+                projectName: project?.name,
+              })
+            : React.createElement(ReleaseGateExpandedView);
   return React.createElement(
     ReleaseGatePageContext.Provider,
     { value: contextValue },

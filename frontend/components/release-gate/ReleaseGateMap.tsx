@@ -7,12 +7,13 @@ import ReactFlow, {
   ConnectionMode,
   useNodesState,
   useEdgesState,
+  Background,
+  BackgroundVariant,
   type Node,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { AgentCardNode } from "@/components/live-view/AgentCardNode";
 import DrawIOEdge from "@/components/shared/DrawIOEdge";
-import { motion } from "framer-motion";
 import { Plus, Minus, Maximize, LayoutGrid, Undo, Redo } from "lucide-react";
 import clsx from "clsx";
 
@@ -20,7 +21,7 @@ const NODE_TYPES = { agentCard: AgentCardNode };
 const EDGE_TYPES = { default: DrawIOEdge };
 
 /** Zoom when a node is selected and centered. */
-const FOCUS_ZOOM = 1.2;
+const FOCUS_ZOOM = 0.95;
 const FOCUS_DURATION_MS = 800;
 /** Offset in graph coords: positive = node ends up higher on screen. Reduced so node sits below navbar. */
 /** Negative = center view above node so node appears lower on screen */
@@ -42,16 +43,14 @@ function RGMapToolbar({
   const { zoomIn, zoomOut, fitView } = useReactFlow();
 
   const groupBase =
-    "flex flex-col bg-[#1a1a1e]/95 border border-white/[0.15] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] rounded-[20px] overflow-hidden backdrop-blur-3xl relative group transition-all duration-500 hover:border-white/30";
+    "flex flex-col bg-[#1C1C1E] border border-[#3A3A3C] shadow-lg rounded-[14px] overflow-hidden relative group transition-all duration-300";
   const btnBase =
-    "flex items-center justify-center w-[52px] h-[52px] text-zinc-400 hover:text-fuchsia-400 hover:bg-white/[0.05] transition-all duration-300 relative z-10";
+    "flex items-center justify-center w-[40px] h-[40px] text-[#8E8E93] hover:text-white hover:bg-white/[0.05] transition-all duration-200 relative z-10";
 
   return (
-    <div className="absolute left-6 top-[180px] z-50 flex flex-col gap-4">
+    <div className="absolute left-6 top-[180px] z-50 flex flex-col gap-3">
       {/* Auto Layout Button */}
       <div className={groupBase}>
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-60 z-10" />
-        <div className="absolute inset-0.5 rounded-[18px] bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none z-0" />
         <button className={btnBase} onClick={onAutoLayout} title="Auto Layout">
           <LayoutGrid className="w-[18px] h-[18px]" strokeWidth={1.5} />
         </button>
@@ -59,30 +58,26 @@ function RGMapToolbar({
 
       {/* Zoom controls */}
       <div className={groupBase}>
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-60 z-10" />
-        <div className="absolute inset-0.5 rounded-[18px] bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none z-0" />
         <button className={btnBase} onClick={() => zoomIn({ duration: 300 })}>
-          <Plus className="w-5 h-5" strokeWidth={1.5} />
+          <Plus className="w-[19px] h-[19px]" strokeWidth={1.5} />
         </button>
         <button className={btnBase} onClick={() => zoomOut({ duration: 300 })}>
-          <Minus className="w-5 h-5" strokeWidth={1.5} />
+          <Minus className="w-[20px] h-[20px]" strokeWidth={1.5} />
         </button>
         <button className={btnBase} onClick={() => fitView({ duration: 800 })}>
-          <Maximize className="w-4 h-4" strokeWidth={1.5} />
+          <Maximize className="w-[18px] h-[18px]" strokeWidth={1.5} />
         </button>
       </div>
 
       {/* Undo / Redo */}
       <div className={groupBase}>
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-60 z-10" />
-        <div className="absolute inset-0.5 rounded-[18px] bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none z-0" />
         <button
           className={clsx(btnBase, !canUndo && "opacity-20 pointer-events-none grayscale")}
           onClick={onUndo}
           disabled={!canUndo}
           title="Undo"
         >
-          <Undo className="w-4 h-4" strokeWidth={1.5} />
+          <Undo className="w-[18px] h-[18px]" strokeWidth={1.5} />
         </button>
         <button
           className={clsx(btnBase, !canRedo && "opacity-20 pointer-events-none grayscale")}
@@ -90,11 +85,38 @@ function RGMapToolbar({
           disabled={!canRedo}
           title="Redo"
         >
-          <Redo className="w-4 h-4" strokeWidth={1.5} />
+          <Redo className="w-[18px] h-[18px]" strokeWidth={1.5} />
         </button>
       </div>
     </div>
   );
+}
+
+const GRID_SPACING_X = 300;
+const GRID_SPACING_Y = 200;
+const GRID_COLS = 3;
+
+function getStorageKey(projectName?: string) {
+  return `rg-node-positions-${projectName || "default"}`;
+}
+
+function loadSavedPositions(projectName?: string): Record<string, { x: number; y: number }> {
+  try {
+    const raw = localStorage.getItem(getStorageKey(projectName));
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function savePositions(nodes: Node[], projectName?: string) {
+  try {
+    const map: Record<string, { x: number; y: number }> = {};
+    nodes.forEach(n => {
+      map[n.id] = { x: n.position.x, y: n.position.y };
+    });
+    localStorage.setItem(getStorageKey(projectName), JSON.stringify(map));
+  } catch {}
 }
 
 export function ReleaseGateMapContent({
@@ -132,20 +154,19 @@ export function ReleaseGateMapContent({
 
   const onAutoLayout = () => {
     setNodes(currentNodes => {
-      const spacingX = 400;
-      const spacingY = 420;
       const cols = Math.max(1, Math.ceil(Math.sqrt(currentNodes.length)));
 
       const newNodes = currentNodes.map((n, idx) => ({
         ...n,
         position: {
-          x: spacingX * (idx % cols),
-          y: spacingY * Math.floor(idx / cols),
+          x: GRID_SPACING_X * (idx % cols),
+          y: GRID_SPACING_Y * Math.floor(idx / cols),
         },
       }));
 
       setTimeout(() => {
         commitHistory(newNodes);
+        savePositions(newNodes, projectName);
         setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 50);
       }, 0);
 
@@ -155,17 +176,22 @@ export function ReleaseGateMapContent({
 
   const agentsKey = agents?.length ? agents.map((a: any) => a.agent_id).join(",") : "";
   useEffect(() => {
-    if (!agents || agents.length === 0) {
-      // Avoid clearing the map during transient "no data yet" states (loading/paused).
-      // Only clear nodes when we know the agents list was successfully loaded and is truly empty.
+    if (!Array.isArray(agents) || agents.length === 0) {
       if (agentsLoaded) setNodes([]);
       return;
     }
+
+    const saved = loadSavedPositions(projectName);
 
     setNodes(currentNodes => {
       const updatedNodes = agents.map((agent: any, idx: number) => {
         const existingNode = currentNodes.find(n => n.id === agent.agent_id);
         const isSelected = agent.agent_id === selectedNodeId;
+        const savedPos = saved[agent.agent_id];
+        const defaultPos = {
+          x: GRID_SPACING_X * (idx % GRID_COLS),
+          y: GRID_SPACING_Y * Math.floor(idx / GRID_COLS),
+        };
 
         return {
           id: agent.agent_id,
@@ -183,14 +209,14 @@ export function ReleaseGateMapContent({
             rgDetails: isSelected ? rgDetails : undefined,
             blur: !!selectedNodeId && !isSelected,
           },
-          position: existingNode?.position || { x: 385 * (idx % 3), y: 400 * Math.floor(idx / 3) },
+          position: existingNode?.position || savedPos || defaultPos,
           selected: isSelected,
         };
       });
 
       return updatedNodes;
     });
-  }, [agentsKey, selectedNodeId, setNodes]);
+  }, [agentsKey, agents, selectedNodeId, setNodes, projectName]);
 
   // Keep node.selected, rgDetails, and blur in sync when selectedNodeId changes (skip during drag to avoid node jump)
   useEffect(() => {
@@ -250,12 +276,18 @@ export function ReleaseGateMapContent({
       isDraggingRef.current = true;
       didActuallyDragRef.current = true;
     }
-    onNodesChange(changes);
+    // Filter out ReactFlow's auto-select on drag to prevent color changes
+    const filtered = changes.filter(c => {
+      if (c.type === "select" && isDraggingRef.current) return false;
+      return true;
+    });
+    onNodesChange(filtered);
     const hasPositionChange = changes.some(c => c.type === "position" && !(c as any).dragging);
     if (hasPositionChange) {
       setTimeout(() => {
         setNodes((currentNodes: Node[]) => {
           commitHistory(currentNodes);
+          savePositions(currentNodes, projectName);
           return currentNodes;
         });
       }, 0);
@@ -263,70 +295,12 @@ export function ReleaseGateMapContent({
   };
 
   return (
-    <div className="flex-1 min-h-0 relative bg-[#1a1a24] w-full h-full">
-      {/* Background layer: grid + glow + antigravity — blurred when a node is selected */}
-      <div
-        className={clsx(
-          "absolute inset-0 pointer-events-none transition-[filter] duration-200",
-          selectedNodeId && "blur-sm"
-        )}
-        style={{
-          backgroundImage: `
-            radial-gradient(circle, rgba(255, 255, 255, 0.22) 1.5px, transparent 1.5px),
-            linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px)
-          `,
-          backgroundSize: "64px 64px, 100% 4px",
-          backgroundPosition: "0 0, 0 0",
-        }}
-      >
-        {/* Central Luminous Floor Glow (Fuchsia/Purple theme) */}
-        <div
-          className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[80%] pointer-events-none opacity-40 blur-[160px]"
-          style={{
-            background:
-              "radial-gradient(circle at center, rgba(217, 70, 239, 0.15) 0%, rgba(168, 85, 247, 0.08) 40%, transparent 70%)",
-          }}
-        />
-        {/* Antigravity Background Layers */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none group">
-          <div className="absolute -top-[20%] -left-[10%] w-[140%] h-[140%] opacity-60 group-focus-within:opacity-80 transition-all duration-1000">
-            <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-500/25 via-transparent to-transparent rotate-12 blur-[160px]" />
-            <div className="absolute inset-0 bg-gradient-to-tl from-purple-500/18 via-transparent to-transparent -rotate-12 blur-[140px]" />
-          </div>
-
-          <motion.div
-            animate={{ x: ["-100%", "300%"] }}
-            transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-            className="absolute top-0 bottom-0 w-[5px] bg-gradient-to-b from-transparent via-fuchsia-500/35 to-transparent rotate-[25deg] blur-md"
-          />
-          <motion.div
-            animate={{ x: ["300%", "-100%"] }}
-            transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-            className="absolute top-0 bottom-0 w-[4px] bg-gradient-to-b from-transparent via-purple-500/30 to-transparent rotate-[-15deg] blur-sm opacity-70"
-          />
-
-          {Array.from({ length: 20 }).map((_, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: Math.random() * 1000 }}
-              animate={{
-                opacity: [0, 0.3, 0],
-                y: [null, Math.random() * -300],
-                x: [null, (Math.random() - 0.5) * 150],
-              }}
-              transition={{
-                duration: 8 + Math.random() * 8,
-                repeat: Infinity,
-                delay: Math.random() * 10,
-              }}
-              className="absolute w-[3px] h-[3px] bg-fuchsia-400/50 rounded-full blur-[1px]"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-              }}
-            />
-          ))}
-        </div>
+    <div className="flex-1 min-h-0 relative bg-[#090812] w-full h-full overflow-hidden">
+      {/* Ambient fuchsia / purple background, mirrored from Live View */}
+      <div className="absolute inset-0 pointer-events-none z-0">
+        <div className="absolute -left-[25%] top-1/2 -translate-y-1/2 w-[70%] h-[140%] bg-fuchsia-500/14 rounded-full blur-[180px]" />
+        <div className="absolute -right-[25%] top-1/2 -translate-y-1/2 w-[70%] h-[140%] bg-purple-500/12 rounded-full blur-[180px]" />
+        <div className="absolute inset-x-0 bottom-[-40%] h-[80%] bg-fuchsia-500/10 rounded-full blur-[170px]" />
       </div>
 
       {!agents.length && agentsLoaded && (
@@ -399,7 +373,14 @@ export function ReleaseGateMapContent({
         panOnDrag={!selectedNodeId}
         zoomOnScroll={!selectedNodeId}
         zoomOnDoubleClick={false}
-      />
+      >
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={24}
+          size={1.5}
+          color="rgba(244, 114, 182, 0.55)"
+        />
+      </ReactFlow>
     </div>
   );
 }

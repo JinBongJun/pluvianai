@@ -12,6 +12,7 @@ from app.models.user import User
 from app.core.permissions import check_project_access
 from app.services.data_normalizer import DataNormalizer
 from app.services.background_tasks import background_task_service
+from app.services.ops_alerting import ops_alerting
 
 router = APIRouter()
 
@@ -98,6 +99,7 @@ async def ingest_api_call(
             api_key=None,
         )
     )
+    ops_alerting.observe_snapshot_status(project_id=body.project_id, status_code=int(body.status_code))
     return {"accepted": True}
 
 

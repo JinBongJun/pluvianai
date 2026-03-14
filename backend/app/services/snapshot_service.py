@@ -8,6 +8,7 @@ from app.services.pii_sanitizer import PIISanitizer
 from app.core.logging_config import logger
 from app.infrastructure.repositories.trace_repository import TraceRepository
 from app.infrastructure.repositories.snapshot_repository import SnapshotRepository
+from app.utils.secret_redaction import redact_secrets
 
 
 from app.core.diagnostics import calculate_diagnostic_scores
@@ -131,8 +132,9 @@ class SnapshotService:
         from app.core.logging_config import logger
         import json
         
-        # Sanitize payload before saving
-        sanitized_payload = self.sanitizer.sanitize_payload(payload)
+        # Redact secrets first, then run PII sanitization.
+        redacted_payload = redact_secrets(payload)
+        sanitized_payload = self.sanitizer.sanitize_payload(redacted_payload)
         is_sanitized = True  # Currently always sanitized by the service
         prompt_fields = _extract_prompt_fields(sanitized_payload)
         agent_id = _extract_agent_id(sanitized_payload)
