@@ -19,9 +19,17 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://pluvianai.com"),
   title: "PluvianAI — Validation & Release Gates for AI Agents",
   description:
     "Validate and ship AI agents with confidence. Live view, release gates, and behavior checks.",
+  openGraph: {
+    title: "PluvianAI — Validation & Release Gates for AI Agents",
+    description:
+      "Validate and ship AI agents with confidence. Live view, release gates, and behavior checks.",
+    url: "https://pluvianai.com",
+    siteName: "PluvianAI",
+  },
   icons: {
     icon: "/icon.svg",
   },
