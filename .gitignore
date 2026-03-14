@@ -45,10 +45,28 @@ Thumbs.db
 
 # Docker
 *.log
+*.log.*
 
 # Database
 *.db
 *.sqlite
+
+# Coverage and test reports
+coverage.xml
+
+# Runtime/local artifacts
+backend/logs/
+backend/tmp/
+tmp-round1-evidence/
+frontend/scripts/artifacts/
+
+# Local tool/runtime files
+anthropic.json
+
+# Cursor local workspace state
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 
 
 
