@@ -3,6 +3,7 @@ Background tasks for async processing
 """
 
 import asyncio
+import json
 import uuid
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
@@ -129,6 +130,12 @@ class BackgroundTaskService:
             try:
                 from app.models.project import Project as ProjectModel
                 from app.core.usage_limits import check_snapshot_limit
+                from app.models.agent_display_setting import AgentDisplaySetting
+                from app.services.live_eval_service import (
+                    evaluate_one_snapshot_at_save,
+                    eval_config_version_hash,
+                    normalize_eval_config,
+                )
 
                 project_obj = db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
                 snapshot_allowed = True
@@ -144,6 +151,57 @@ class BackgroundTaskService:
                         trace = Trace(id=trace_id, project_id=project_id)
                         db.add(trace)
                         db.flush()
+
+                    # Load eval config (project + agent) so SDK snapshots get eval_checks_result like proxy path
+                    diagnostic_config = {}
+                    if project_obj and project_obj.diagnostic_config:
+                        diagnostic_config = (
+                            project_obj.diagnostic_config
+                            if isinstance(project_obj.diagnostic_config, dict)
+                            else json.loads(project_obj.diagnostic_config)
+                        )
+                    if agent_id:
+                        agent_settings = (
+                            db.query(AgentDisplaySetting)
+                            .filter(
+                                AgentDisplaySetting.project_id == project_id,
+                                AgentDisplaySetting.system_prompt_hash == agent_id,
+                            )
+                            .first()
+                        )
+                        if agent_settings and agent_settings.diagnostic_config:
+                            agent_config = (
+                                agent_settings.diagnostic_config
+                                if isinstance(agent_settings.diagnostic_config, dict)
+                                else json.loads(agent_settings.diagnostic_config)
+                            )
+                            if "eval" in agent_config and agent_config["eval"]:
+                                diagnostic_config = dict(diagnostic_config) if diagnostic_config else {}
+                                diagnostic_config["eval"] = agent_config["eval"]
+                    eval_config = (diagnostic_config or {}).get("eval") if isinstance(diagnostic_config, dict) else {}
+                    if not isinstance(eval_config, dict):
+                        eval_config = {}
+                    eval_config = normalize_eval_config(eval_config)
+
+                    eval_checks_result = {}
+                    eval_config_version = None
+                    try:
+                        eval_checks_result = evaluate_one_snapshot_at_save(
+                            response_text=response_text or "",
+                            latency_ms=int(latency_ms) if latency_ms is not None else None,
+                            status_code=status_code,
+                            tokens_used=None,
+                            cost=None,
+                            eval_config=eval_config,
+                            payload=payload_for_snapshot,
+                            project_id=project_id,
+                            agent_id=agent_id,
+                            db=db,
+                        )
+                        eval_config_version = eval_config_version_hash(eval_config)
+                    except Exception as eval_err:
+                        logger.warning(f"Failed to compute eval_checks_result for SDK snapshot (non-fatal): {eval_err}")
+
                     snapshot = Snapshot(
                         trace_id=trace_id,
                         project_id=project_id,
@@ -157,6 +215,8 @@ class BackgroundTaskService:
                         tool_calls_summary=tool_calls_summary if tool_calls_summary else None,
                         latency_ms=int(latency_ms) if latency_ms is not None else None,
                         status_code=status_code,
+                        eval_checks_result=eval_checks_result,
+                        eval_config_version=eval_config_version,
                     )
                     db.add(snapshot)
             except Exception as snap_err:
