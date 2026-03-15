@@ -202,8 +202,8 @@ export function AgentSettingsPanel({
         agent_id: agentId.trim() || undefined,
       });
       setApiKeyDraft("");
-      await mutateKeys();
-      toast.showToast(`${PROVIDER_LABEL[targetProvider]} key saved.`, "success");
+      await mutateKeys(undefined, true);
+      toast.showToast(`${PROVIDER_LABEL[targetProvider]} key saved. Check the identifier below.`, "success");
       onAgentUpdated?.();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
@@ -220,7 +220,7 @@ export function AgentSettingsPanel({
     setDeletingKeyProvider(provider);
     try {
       await projectUserApiKeysAPI.delete(projectId, item.id);
-      await mutateKeys();
+      await mutateKeys(undefined, true);
       toast.showToast(`${PROVIDER_LABEL[provider]} key removed.`, "success");
       onAgentUpdated?.();
     } catch (err: unknown) {
@@ -324,6 +324,11 @@ export function AgentSettingsPanel({
               {targetHasKey && targetKey?.key_hint && (
                 <span className="text-[11px] font-mono text-slate-400" title="Key identifier (masked)">
                   {targetKey.key_hint}
+                </span>
+              )}
+              {targetHasKey && !targetKey?.key_hint && (
+                <span className="text-[10px] text-slate-500" title="Key was saved before identifier was added">
+                  Re-save key to show identifier
                 </span>
               )}
             </div>
