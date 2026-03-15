@@ -1855,8 +1855,10 @@ async def ci_gate_behavior(
     db.commit()
     db.refresh(report)
 
-    # Construct report URL (assuming frontend route)
-    report_url = f"/organizations/{project_id}/projects/{project_id}/behavior?report_id={report.id}"
+    # Construct report URL using the project's real organization scope.
+    project = db.query(Project).filter(Project.id == project_id).first()
+    org_id = project.organization_id if project else project_id
+    report_url = f"/organizations/{org_id}/projects/{project_id}/behavior?report_id={report.id}"
 
     return {
         "pass": pass_gate,

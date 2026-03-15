@@ -50,7 +50,7 @@ class PluvianAIUser(HttpUser):
         """Get quality scores"""
         if self.project_id:
             self.client.get(
-                f"/api/v1/quality/scores?project_id={self.project_id}&limit=10"
+                f"/api/v1/projects/{self.project_id}/quality/scores?limit=10"
             )
     
     @task(2)

@@ -3,8 +3,7 @@ Integration tests for Quality API
 """
 import pytest
 from fastapi import status
-from datetime import datetime, timedelta
-from app.models.api_call import APICall
+from app.models.quality_score import QualityScore
 
 
 @pytest.mark.integration
@@ -14,32 +13,17 @@ class TestQualityAPI:
     
     async def test_list_quality_scores(self, async_client, auth_headers, test_project, db):
         """Test listing quality scores"""
-        from app.models.api_call import APICall
-        from app.models.quality_score import QualityScore
-        from app.services.quality_evaluator import QualityEvaluator
-        
-        api_call = APICall(
+        score = QualityScore(
             project_id=test_project.id,
-            provider="openai",
-            model="gpt-4",
-            request_data={"messages": [{"role": "user", "content": "Test"}]},
-            response_data={"choices": [{"message": {"content": "Response"}}]},
-            response_text="Response",
-            status_code=200
+            score=88.5,
+            metric_name="rule_based",
         )
-        db.add(api_call)
-        db.commit()
-        db.refresh(api_call)
-        
-        evaluator = QualityEvaluator()
-        score = evaluator.evaluate(api_call)
         db.add(score)
         db.commit()
         db.refresh(score)
         
         response = await async_client.get(
-            "/api/v1/quality/scores",
-            params={"project_id": test_project.id},
+            f"/api/v1/projects/{test_project.id}/quality/scores",
             headers=auth_headers
         )
         
@@ -51,8 +35,8 @@ class TestQualityAPI:
     async def test_get_quality_stats(self, async_client, auth_headers, test_project, db):
         """Test getting quality statistics"""
         response = await async_client.get(
-            "/api/v1/quality/stats",
-            params={"project_id": test_project.id, "days": 7},
+            f"/api/v1/projects/{test_project.id}/quality/stats",
+            params={"days": 7},
             headers=auth_headers
         )
         
