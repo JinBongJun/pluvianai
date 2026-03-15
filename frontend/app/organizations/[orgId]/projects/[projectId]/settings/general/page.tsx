@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSWRConfig } from "swr";
 import { useParams, useRouter } from "next/navigation";
 import ProjectSettingsShell from "@/components/layout/ProjectSettingsShell";
 import { projectsAPI } from "@/lib/api";
@@ -16,6 +17,7 @@ export default function ProjectGeneralSettingsPage() {
   const router = useRouter();
   const toast = useToast();
   const hasToken = useRequireAuth();
+  const { mutate } = useSWRConfig();
 
   const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
   const projectId = Number(
@@ -76,6 +78,8 @@ export default function ProjectGeneralSettingsPage() {
     try {
       await projectsAPI.delete(projectId);
       toast.showToast("Project deleted", "success");
+      mutate(["project", projectId], undefined);
+      mutate(["organization-projects-list", orgId], undefined);
       router.push(`/organizations/${orgId}/projects`);
     } catch (err: any) {
       toast.showToast(err?.response?.data?.detail ?? "Failed to delete project", "error");
