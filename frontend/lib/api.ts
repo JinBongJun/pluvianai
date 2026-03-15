@@ -541,58 +541,49 @@ export const projectMembersAPI = {
   },
 };
 
-// API Calls API
+// API Calls API (project-scoped: /projects/{project_id}/api-calls)
 export const apiCallsAPI = {
   list: async (projectId: number, params?: any) => {
-    // Validate projectId
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       throw new Error(`Invalid project ID: ${projectId}`);
     }
-    // Ensure limit doesn't exceed backend max (1000)
     const validatedParams = {
       ...params,
       limit: params?.limit ? Math.min(params.limit, 1000) : 100,
     };
-    const response = await apiClient.get("/api-calls", {
-      params: { project_id: Number(projectId), ...validatedParams },
+    const response = await apiClient.get(`/projects/${Number(projectId)}/api-calls`, {
+      params: validatedParams,
     });
-    // Validate array response - use item schema, not array schema
     return validateArrayResponse(APICallSchema, response.data, "/api-calls");
   },
 
-  get: async (id: number) => {
-    const response = await apiClient.get(`/api-calls/by-id/${id}`);
-    // Validate single item response
+  get: async (projectId: number, id: number) => {
+    const response = await apiClient.get(`/projects/${Number(projectId)}/api-calls/${id}`);
     try {
       return APICallSchema.parse(response.data);
     } catch (error) {
       logWarn(`[API Validation] API call ${id} schema mismatch`, { error });
-      return response.data; // Return raw data on validation failure
+      return response.data;
     }
   },
 
   getStats: async (projectId: number, days: number = 7) => {
-    // Validate projectId
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       throw new Error(`Invalid project ID: ${projectId}`);
     }
-    // Validate days
-    if (days < 1 || days > 30) {
-      days = 7; // Default to 7 if invalid
-    }
-    const response = await apiClient.get("/api-calls/stats", {
-      params: { project_id: Number(projectId), days: Number(days) },
+    if (days < 1 || days > 30) days = 7;
+    const response = await apiClient.get(`/projects/${Number(projectId)}/api-calls/stats`, {
+      params: { days: Number(days) },
     });
     return response.data;
   },
 
-  /** For Streaming UI: recent items + last-1m/5m counts. Poll every 2–3s. */
   streamRecent: async (projectId: number, limit: number = 25) => {
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       throw new Error(`Invalid project ID: ${projectId}`);
     }
-    const response = await apiClient.get("/api-calls/stream/recent", {
-      params: { project_id: Number(projectId), limit },
+    const response = await apiClient.get(`/projects/${Number(projectId)}/api-calls/stream/recent`, {
+      params: { limit },
     });
     return response.data;
   },
@@ -668,43 +659,39 @@ export const driftAPI = {
   },
 };
 
-// Alerts API
+// Alerts API (project-scoped URLs: /projects/{project_id}/alerts)
 export const alertsAPI = {
   list: async (projectId: number, params?: any) => {
-    // Validate projectId
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       throw new Error(`Invalid project ID: ${projectId}`);
     }
-    // Ensure limit doesn't exceed backend max (1000)
     const validatedParams = {
       ...params,
       limit: params?.limit ? Math.min(params.limit, 1000) : 100,
     };
-    const response = await apiClient.get("/alerts", {
-      params: { project_id: Number(projectId), ...validatedParams },
+    const response = await apiClient.get(`/projects/${Number(projectId)}/alerts`, {
+      params: validatedParams,
     });
-    // Validate array response - return empty array on validation failure (graceful degradation)
     return validateArrayResponse(AlertSchema, response.data, "/alerts");
   },
 
-  get: async (id: number) => {
-    const response = await apiClient.get(`/alerts/${id}`);
-    // Validate single item response
+  get: async (projectId: number, id: number) => {
+    const response = await apiClient.get(`/projects/${Number(projectId)}/alerts/${id}`);
     try {
       return AlertSchema.parse(response.data);
     } catch (error) {
       logWarn(`[API Validation] Alert ${id} schema mismatch`, { error });
-      return response.data; // Return raw data on validation failure
+      return response.data;
     }
   },
 
-  resolve: async (id: number) => {
-    const response = await apiClient.post(`/alerts/${id}/resolve`);
+  resolve: async (projectId: number, id: number) => {
+    const response = await apiClient.post(`/projects/${Number(projectId)}/alerts/${id}/resolve`);
     return response.data;
   },
 
-  send: async (id: number, channels?: string[]) => {
-    const response = await apiClient.post(`/alerts/${id}/send`, { channels });
+  send: async (projectId: number, id: number, channels?: string[]) => {
+    const response = await apiClient.post(`/projects/${Number(projectId)}/alerts/${id}/send`, { channels });
     return response.data;
   },
 };

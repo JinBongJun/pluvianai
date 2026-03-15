@@ -23,3 +23,8 @@ class Alert(Base):
 
     # Relationships
     project = relationship("Project", back_populates="alerts")
+
+    @property
+    def message(self) -> str:
+        """API contract: expose description as message for responses."""
+        return self.description or ""

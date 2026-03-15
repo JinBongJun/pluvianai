@@ -246,7 +246,7 @@ export default function AlertsPage() {
 
   const handleResolve = async (alertId: number) => {
     try {
-      await alertsAPI.resolve(alertId);
+      await alertsAPI.resolve(projectId, alertId);
       toast.showToast("Alert resolved successfully", "success");
       loadAlerts();
     } catch (error: any) {
@@ -257,7 +257,7 @@ export default function AlertsPage() {
 
   const handleSend = async (alertId: number) => {
     try {
-      await alertsAPI.send(alertId);
+      await alertsAPI.send(projectId, alertId);
       toast.showToast("Alert sent successfully", "success");
       loadAlerts();
     } catch (error: any) {
