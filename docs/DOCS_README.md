@@ -28,6 +28,7 @@
 | [audit-live-view-soft-delete-and-related.md](./audit-live-view-soft-delete-and-related.md) | Live View·소프트삭제·멀티테넌트 관련 감사 요약 |
 | [rate-limit-heavy-endpoints-design.md](./rate-limit-heavy-endpoints-design.md) | 엔드포인트별 rate limit 설계 (무거운 경로 한도) |
 | [security-roadmap-per-user-rate-limit-and-api-key-scope.md](./security-roadmap-per-user-rate-limit-and-api-key-scope.md) | 단기·중기 보완: per-user rate limit, API key scope 로드맵 |
+| [frontend-api-split-design.md](./frontend-api-split-design.md) | frontend `lib/api.ts` 도메인별 분리 설계 (폴더 구조, re-export, 마이그레이션 순서) |
 
 ---
 

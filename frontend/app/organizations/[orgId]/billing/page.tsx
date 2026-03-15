@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { organizationsAPI, authAPI } from "@/lib/api";
 import { Zap, Activity, Database, ShieldCheck, CheckCircle2, BarChart3 } from "lucide-react";
 
 export default function BillingPage() {
-  const params = useParams();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
+  const { orgId } = useOrgProjectParams();
   const [fallbackUsage, setFallbackUsage] = useState<{
     plan_type?: string;
     limits?: Record<string, number>;

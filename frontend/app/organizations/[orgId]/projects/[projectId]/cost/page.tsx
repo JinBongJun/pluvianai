@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import ProjectLayout from "@/components/layout/ProjectLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import ProjectTabs from "@/components/ProjectTabs";
 import CostChart from "@/components/CostChart";
 import { Button } from "@/components/ui/Button";
@@ -18,11 +19,7 @@ interface CostData {
 
 export default function CostPage() {
   const router = useRouter();
-  const params = useParams();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Number(
-    Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId
-  );
+  const { orgId, projectId } = useOrgProjectParams();
 
   const [data, setData] = useState<CostData | null>(null);
   const [loading, setLoading] = useState(true);

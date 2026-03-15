@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSWRConfig } from "swr";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import ProjectSettingsShell from "@/components/layout/ProjectSettingsShell";
 import { projectsAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
@@ -10,19 +10,15 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export default function ProjectGeneralSettingsPage() {
-  const params = useParams();
   const router = useRouter();
   const toast = useToast();
   const hasToken = useRequireAuth();
   const { mutate } = useSWRConfig();
-
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Number(
-    Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId
-  );
+  const { orgId, projectId } = useOrgProjectParams();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");

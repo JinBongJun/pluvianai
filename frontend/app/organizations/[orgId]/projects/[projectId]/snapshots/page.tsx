@@ -1,16 +1,15 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 
 /**
  * Snapshots page has been removed. Redirect to Live View where snapshots are shown per agent.
  */
 export default function SnapshotsRedirectPage() {
-  const params = useParams();
   const router = useRouter();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId;
+  const { orgId, projectId } = useOrgProjectParams();
 
   useEffect(() => {
     if (orgId && projectId) {

@@ -1,16 +1,12 @@
 "use client";
 
-import { useParams } from "next/navigation";
 import NotificationSettings from "@/components/notifications/NotificationSettings";
 import ProjectSettingsShell from "@/components/layout/ProjectSettingsShell";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export default function NotificationSettingsPage() {
-  const params = useParams();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Number(
-    Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId
-  );
+  const { orgId, projectId } = useOrgProjectParams();
 
   useRequireAuth();
 
