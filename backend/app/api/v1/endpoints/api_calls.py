@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_current_user_or_api_key
 from app.core.dependencies import get_api_call_service
 from app.models.user import User
 from app.core.permissions import check_project_access
@@ -71,13 +71,13 @@ def list_api_calls(
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_api_call(
     body: APICallIngestBody = Body(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: Session = Depends(get_db),
 ):
     """
     Ingest a single API call from the SDK (no proxy).
     Creates APICall + Snapshot so Live View shows the run.
-    Auth: Bearer token; project_id must be accessible by current user.
+    Auth: JWT session token OR SDK API key; project_id must be accessible by resolved user.
     """
     check_project_access(body.project_id, current_user, db)
     normalizer = DataNormalizer()
