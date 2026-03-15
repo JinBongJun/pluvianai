@@ -24,6 +24,7 @@ type ProjectUserApiKeyItem = {
   name?: string | null;
   is_active: boolean;
   created_at?: string | null;
+  key_hint?: string | null;
 };
 
 function normalizeProvider(value: unknown): ReplayProvider | null {
@@ -310,15 +311,22 @@ export function AgentSettingsPanel({
             </div>
           </div>
           {latestProvider && (
-            <span
-              className={
-                targetHasKey
-                  ? "shrink-0 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-200"
-                  : "shrink-0 rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[11px] font-medium text-rose-200"
-              }
-            >
-              {targetHasKey ? "Registered" : "Not registered"}
-            </span>
+            <div className="shrink-0 flex flex-col items-end gap-1">
+              <span
+                className={
+                  targetHasKey
+                    ? "rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-sm font-semibold text-emerald-200"
+                    : "rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-sm font-semibold text-rose-200"
+                }
+              >
+                {targetHasKey ? "Registered" : "Not registered"}
+              </span>
+              {targetHasKey && targetKey?.key_hint && (
+                <span className="text-[11px] font-mono text-slate-400" title="Key identifier (masked)">
+                  {targetKey.key_hint}
+                </span>
+              )}
+            </div>
           )}
         </div>
 
