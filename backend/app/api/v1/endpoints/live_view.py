@@ -23,6 +23,7 @@ from app.utils.tool_calls import extract_tool_calls_summary
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.agent_eval_config_history import AgentEvalConfigHistory
 from app.models.project import Project
+from app.domain.live_view_release_gate import build_agent_visibility_context, is_agent_deleted
 from app.services.live_eval_service import (
     evaluate_recent_snapshots,
     normalize_eval_config,
@@ -121,31 +122,19 @@ def list_agents(
                 logger.debug("_aggregate_signals: aggregation failed", extra={"error": str(e)})
             return {}
 
-        # Fetch display settings (need project + sentinel for full agent id set)
+        # Build shared visibility context used across Live View and Release Gate.
         project = _ensure_project(project_id, current_user, db)
-        blueprint_nodes = project.canvas_nodes or []
-        blueprint_map = {n.get("id"): n for n in blueprint_nodes if n.get("id")}
-        from app.services.cache_service import cache_service
-        sentinel_agents = []
-        has_drift = False
-        if cache_service.enabled:
-            report_key = f"project:{project_id}:sentinel:latest"
-            cached_report = cache_service.redis_client.get(report_key)
-            if cached_report:
-                report_data = json.loads(cached_report)
-                sentinel_agents = report_data.get("nodes", [])
-                has_drift = report_data.get("has_drift", False)
         agent_ids = [r.agent_id or "unknown" for r in rows]
-        all_agent_ids = set(agent_ids) | set(blueprint_map.keys()) | {n.get("id") for n in sentinel_agents if n.get("id")}
-        if all_agent_ids:
-            settings = (
-                db.query(AgentDisplaySetting)
-                .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash.in_(all_agent_ids))
-                .all()
-            )
-            settings_map = {s.system_prompt_hash: s for s in settings}
-        else:
-            settings_map = {}
+        visibility = build_agent_visibility_context(
+            project_id=project_id,
+            db=db,
+            seed_agent_ids=agent_ids,
+            project=project,
+        )
+        blueprint_map = visibility.blueprint_map
+        sentinel_agents = visibility.sentinel_agents
+        has_drift = visibility.has_drift
+        settings_map = visibility.settings_map
 
         def serialize(row):
             agent_id = row.agent_id or "unknown"
@@ -167,8 +156,7 @@ def list_agents(
         processed_ids = set()
 
         def _is_deleted(agent_id: str) -> bool:
-            s = settings_map.get(agent_id)
-            return s is not None and s.is_deleted
+            return is_agent_deleted(settings_map, agent_id)
 
         # 1. Start with Blueprint Nodes (Official)
         for node_id, node in blueprint_map.items():

@@ -54,6 +54,7 @@ from app.models.snapshot import Snapshot
 from app.models.user import User
 from app.models.validation_dataset import ValidationDataset
 from app.services.data_lifecycle_service import DataLifecycleService
+from app.domain.live_view_release_gate import build_agent_visibility_context, is_agent_deleted
 from app.services.ops_alerting import ops_alerting
 from app.services.replay_service import replay_service
 from app.services.user_api_key_service import UserApiKeyService
@@ -1482,7 +1483,7 @@ def list_release_gate_agents(
     current_user: User = Depends(get_current_user),
 ):
     """List agents (nodes) for Release Gate dropdown: agent_id and display_name."""
-    check_project_access(project_id, current_user, db)
+    project = check_project_access(project_id, current_user, db)
     rows = (
         db.query(Snapshot.agent_id, func.max(Snapshot.created_at).label("last_seen"))
         .filter(Snapshot.project_id == project_id, Snapshot.agent_id.isnot(None))
@@ -1491,23 +1492,41 @@ def list_release_gate_agents(
         .limit(limit)
         .all()
     )
-    agent_ids = [r.agent_id for r in rows if r.agent_id]
-    if not agent_ids:
-        return {"items": []}
-    settings = (
-        db.query(AgentDisplaySetting)
-        .filter(
-            AgentDisplaySetting.project_id == project_id,
-            AgentDisplaySetting.system_prompt_hash.in_(agent_ids),
-        )
-        .all()
+    snapshot_agent_ids = [r.agent_id for r in rows if r.agent_id]
+    visibility = build_agent_visibility_context(
+        project_id=project_id,
+        db=db,
+        seed_agent_ids=snapshot_agent_ids,
+        project=project,
     )
-    settings_map = {s.system_prompt_hash: s for s in settings}
+
+    ordered_agent_ids: List[str] = list(snapshot_agent_ids)
+    seen = set(ordered_agent_ids)
+    for aid in visibility.blueprint_map.keys():
+        if aid not in seen:
+            ordered_agent_ids.append(aid)
+            seen.add(aid)
+    for node in visibility.sentinel_agents:
+        sid = str(node.get("id") or "").strip() if isinstance(node, dict) else ""
+        if sid and sid not in seen:
+            ordered_agent_ids.append(sid)
+            seen.add(sid)
+
     items = []
-    for aid in agent_ids:
-        s = settings_map.get(aid)
-        display_name = (s.display_name if s and s.display_name else (aid or "Agent"))
+    for aid in ordered_agent_ids:
+        if is_agent_deleted(visibility.settings_map, aid):
+            continue
+        s = visibility.settings_map.get(aid)
+        blueprint_node = visibility.blueprint_map.get(aid)
+        blueprint_label = (
+            blueprint_node.get("data", {}).get("label")
+            if isinstance(blueprint_node, dict)
+            else None
+        )
+        display_name = blueprint_label or (s.display_name if s and s.display_name else (aid or "Agent"))
         items.append({"agent_id": aid, "display_name": display_name})
+        if len(items) >= limit:
+            break
     return {"items": items}
 
 
