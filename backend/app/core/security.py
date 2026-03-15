@@ -254,6 +254,46 @@ async def get_user_from_api_key(authorization: Optional[str] = Header(None), db:
     return user
 
 
+async def get_current_user_or_api_key(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> User:
+    """
+    Resolve authenticated user from either JWT session token or SDK API key.
+
+    Priority:
+    1) If Authorization clearly contains an SDK key (ag_live_/ag_test_), validate as API key.
+    2) Otherwise, try regular JWT auth (header/cookie).
+    3) If JWT fails but Authorization exists, retry as API key.
+    """
+    normalized_auth = (authorization or "").strip()
+
+    def _extract_bearer_value(raw: str) -> str:
+        if raw.startswith("Bearer "):
+            return raw.replace("Bearer ", "", 1).strip()
+        if raw.startswith("Api-Key "):
+            return raw.replace("Api-Key ", "", 1).strip()
+        return raw
+
+    auth_value = _extract_bearer_value(normalized_auth) if normalized_auth else ""
+    is_sdk_api_key = auth_value.startswith("ag_live_") or auth_value.startswith("ag_test_")
+
+    if is_sdk_api_key:
+        return await get_user_from_api_key(authorization=normalized_auth, db=db)
+
+    try:
+        return await get_current_user(request=request, token=token, db=db)
+    except HTTPException as jwt_error:
+        if normalized_auth:
+            try:
+                return await get_user_from_api_key(authorization=normalized_auth, db=db)
+            except HTTPException:
+                pass
+        raise jwt_error
+
+
 def rotate_refresh_token(
     old_refresh_token: str,
     user_id: int,
