@@ -38,9 +38,9 @@
 | 파일 | 용도 |
 |------|------|
 | **README.md** | 목적, 사전 조건(백엔드 실행, 프로젝트 생성), 환경변수, 실행 순서, 스크린샷 찍을 단계. |
-| **.env.example** | `PLUVIAN_BASE_URL`, `PLUVIAN_PROJECT_ID`, `OPENAI_API_KEY` (또는 “서버 기본 키 사용” 안내). |
+| **.env.example** | `PLUVIAN_BASE_URL`, `PLUVIAN_PROJECT_ID`, `OPENAI_API_KEY` (또는 "서버 기본 키 사용" 안내). |
 | **questions.json** | Worst 10~20개 + 정상 10~20개 질문. 예: `[{"id":"w1","text":"환불 처리 부탁해요","category":"worst"}, ...]`. |
-| **run_demo.py** | `questions.json`을 읽어서 각 질문마다 위 프록시 URL로 POST 한 번씩 보냄. 시스템 프롬프트는 고정(예: “고객지원 봇” 한 줄). |
+| **run_demo.py** | `questions.json`을 읽어서 각 질문마다 위 프록시 URL로 POST 한 번씩 보냄. 시스템 프롬프트는 고정(예: "고객지원 봇" 한 줄). |
 | **(선택) requirements.txt** | `httpx` 등만 명시. |
 
 ---
@@ -57,9 +57,9 @@
 3. **스냅샷 확인**
    - Live View에서 해당 프로젝트·에이전트 선택 → 트레이스/스냅샷 생성 여부 확인.
 4. **회귀 시나리오**
-   - 시스템 프롬프트를 일부러 “깨지기 쉬운” 문장으로 바꾸거나, 모델을 한 단계 바꿔서 같은 스냅샷으로 Release Gate 재생 → PASS/FAIL·Behavior Diff 확인.
+   - 시스템 프롬프트를 일부러 "깨지기 쉬운" 문장으로 바꾸거나, 모델을 한 단계 바꿔서 같은 스냅샷으로 Release Gate 재생 → PASS/FAIL·Behavior Diff 확인.
 5. **콘텐츠용 산출물**
-   - 스크린샷 3장: (1) “문제가 된” 질문/답 비교, (2) Release Gate 실행 화면, (3) 결과(FAIL + Diff).
+   - 스크린샷 3장: (1) "문제가 된" 질문/답 비교, (2) Release Gate 실행 화면, (3) 결과(FAIL + Diff).
 
 ---
 
@@ -71,7 +71,7 @@
 
 ---
 
-## 6. “간이 서비스” 범위
+## 6. "간이 서비스" 범위
 
 - **포함**: 프록시 호출만 하는 클라이언트(스크립트) + 질문 데이터 + 실행/스크린샷 가이드. **별도 웹 서버·DB·인증 없음.**
 - **제외**: 실제 사용자 로그인, 대시보드, n8n 연동 등. 나중에 A2·n8n 데모는 `demos/` 아래 다른 폴더로 확장.
@@ -83,7 +83,7 @@
 1. `demos/` (또는 `demos/support-bot-a1/`) 생성.
 2. 위 구조대로 `README.md`, `.env.example`, `questions.json`, `run_demo.py` 초안 작성.
 3. 로컬에서 한 번 돌려서 스냅샷 쌓임 확인.
-4. [content-and-demo-execution-plan.md](./content-and-demo-execution-plan.md)의 A1 체크리스트에 “demos/support-bot-a1 실행 및 스냅샷 20~40개 수집” 항목 반영.
+4. [content-and-demo-execution-plan.md](./content-and-demo-execution-plan.md)의 A1 체크리스트에 "demos/support-bot-a1 실행 및 스냅샷 20~40개 수집" 항목 반영.
 
 ---
 
