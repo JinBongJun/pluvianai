@@ -123,3 +123,22 @@ class TestScopeIsolationGuards:
             headers=auth_headers,
         )
         assert update_response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_activity_list_with_project_id_requires_project_access(self, client, db, auth_headers, test_user, test_project):
+        """Filtering activity by project_id must enforce project access; no access -> 403."""
+        other_owner = _create_user(db, "activity-other-owner@example.com")
+        other_project = _create_project(db, other_owner.id, "Other Project")
+
+        _override_current_user(test_user)
+
+        response = client.get(
+            f"/api/v1/activity?project_id={other_project.id}",
+            headers=auth_headers,
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+        response_own = client.get(
+            f"/api/v1/activity?project_id={test_project.id}",
+            headers=auth_headers,
+        )
+        assert response_own.status_code == 200
