@@ -46,7 +46,7 @@ api_router.include_router(self_hosted.router, prefix="/infrastructure", tags=["i
 # api_router.include_router(replay.router, prefix="/replay", tags=["replay"])
 api_router.include_router(project_members.router, prefix="", tags=["project-members"])
 api_router.include_router(api_calls.router, prefix="/projects", tags=["api-calls"])
-api_router.include_router(quality.router, prefix="/quality", tags=["quality"])
+api_router.include_router(quality.router, prefix="/projects", tags=["quality"])
 api_router.include_router(alerts.router, prefix="/projects", tags=["alerts"])
 api_router.include_router(proxy.router, prefix="/proxy", tags=["proxy"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])

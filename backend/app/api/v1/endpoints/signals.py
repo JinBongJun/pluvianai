@@ -127,30 +127,31 @@ async def create_signal_config(
     return config
 
 
-@router.put("/signals/configs/{config_id}", response_model=SignalConfigResponse)
+@router.put("/projects/{project_id}/signals/configs/{config_id}", response_model=SignalConfigResponse)
 async def update_signal_config(
+    project_id: int,
     config_id: str,
     config_data: SignalConfigUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Update a signal configuration"""
-    service = SignalDetectionService(db)
-    config = service.get_signal_config_by_id(config_id)
-    if not config:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Signal configuration not found"
-        )
     check_project_access(
-        config.project_id,
+        project_id,
         current_user,
         db,
         required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN],
     )
+    service = SignalDetectionService(db)
+    config = service.get_signal_config_by_id(config_id)
+    if not config or config.project_id != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Signal configuration not found"
+        )
 
     update_data = config_data.model_dump(exclude_unset=True)
-    config = service.update_signal_config(config_id, project_id=config.project_id, **update_data)
+    config = service.update_signal_config(config_id, project_id=project_id, **update_data)
     
     if not config:
         raise HTTPException(
@@ -161,28 +162,29 @@ async def update_signal_config(
     return config
 
 
-@router.delete("/signals/configs/{config_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/projects/{project_id}/signals/configs/{config_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_signal_config(
+    project_id: int,
     config_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Delete a signal configuration"""
-    service = SignalDetectionService(db)
-    config = service.get_signal_config_by_id(config_id)
-    if not config:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Signal configuration not found"
-        )
     check_project_access(
-        config.project_id,
+        project_id,
         current_user,
         db,
         required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN],
     )
+    service = SignalDetectionService(db)
+    config = service.get_signal_config_by_id(config_id)
+    if not config or config.project_id != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Signal configuration not found"
+        )
     
-    success = service.delete_signal_config(config_id, project_id=config.project_id)
+    success = service.delete_signal_config(config_id, project_id=project_id)
     
     if not success:
         raise HTTPException(

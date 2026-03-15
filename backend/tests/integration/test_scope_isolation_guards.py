@@ -42,7 +42,7 @@ def _add_project_member(db, project_id: int, user_id: int, role: str = "member")
 
 @pytest.mark.integration
 class TestScopeIsolationGuards:
-    def test_signal_config_update_delete_blocked_cross_project(self, client, db, auth_headers, test_user):
+    def test_signal_config_update_delete_blocked_cross_project(self, client, db, auth_headers, test_user, test_project):
         owner_b = _create_user(db, "scope-owner-b@example.com")
         project_b = _create_project(db, owner_b.id, "Project B")
         config_b = SignalConfig(
@@ -60,17 +60,17 @@ class TestScopeIsolationGuards:
         _override_current_user(test_user)
 
         update_response = client.put(
-            f"/api/v1/signals/configs/{config_b.id}",
+            f"/api/v1/projects/{test_project.id}/signals/configs/{config_b.id}",
             json={"name": "hacked"},
             headers=auth_headers,
         )
-        assert update_response.status_code == status.HTTP_403_FORBIDDEN
+        assert update_response.status_code == status.HTTP_404_NOT_FOUND
 
         delete_response = client.delete(
-            f"/api/v1/signals/configs/{config_b.id}",
+            f"/api/v1/projects/{test_project.id}/signals/configs/{config_b.id}",
             headers=auth_headers,
         )
-        assert delete_response.status_code == status.HTTP_403_FORBIDDEN
+        assert delete_response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_user_api_key_delete_requires_same_project_scope(self, client, db, auth_headers, test_user, test_project):
         project_b = _create_project(db, test_user.id, "Project B for Keys")
@@ -118,7 +118,7 @@ class TestScopeIsolationGuards:
         _override_current_user(member)
 
         update_response = client.put(
-            f"/api/v1/signals/configs/{config.id}",
+            f"/api/v1/projects/{owner_project.id}/signals/configs/{config.id}",
             json={"name": "member-update"},
             headers=auth_headers,
         )
