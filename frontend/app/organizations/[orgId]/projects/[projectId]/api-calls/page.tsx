@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import ProjectLayout from "@/components/layout/ProjectLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import FilterPanel, { FilterState } from "@/components/filters/FilterPanel";
 import Pagination from "@/components/ui/Pagination";
 import Badge from "@/components/ui/Badge";
@@ -23,12 +24,8 @@ type SortDirection = "asc" | "desc";
 
 export default function APICallsListPage() {
   const router = useRouter();
-  const params = useParams();
   const toast = useToast();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Number(
-    Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId
-  );
+  const { orgId, projectId } = useOrgProjectParams();
 
   const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
     organizationsAPI.get(orgId, { includeStats: false })

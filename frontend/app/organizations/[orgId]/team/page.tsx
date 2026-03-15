@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { ConfirmModal } from "@/components/shared/ConfirmModal";
 import { organizationsAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
@@ -39,9 +40,8 @@ const ROLE_EXPLAINER: Record<Member["role"], { title: string; description: strin
 
 export default function TeamPage() {
   const router = useRouter();
-  const params = useParams();
   const toast = useToast();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
+  const { orgId } = useOrgProjectParams();
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member" | "viewer">("member");

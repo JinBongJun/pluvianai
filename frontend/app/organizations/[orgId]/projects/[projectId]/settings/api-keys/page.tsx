@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import ProjectSettingsShell from "@/components/layout/ProjectSettingsShell";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { ConfirmModal } from "@/components/shared/ConfirmModal";
 import { projectUserApiKeysAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
@@ -27,14 +27,9 @@ const PROVIDER_LABELS: Record<string, string> = {
 };
 
 export default function ProjectApiKeysPage() {
-  const params = useParams();
   const toast = useToast();
   const hasToken = useRequireAuth();
-
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Number(
-    Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId
-  );
+  const { orgId, projectId } = useOrgProjectParams();
 
   const [keys, setKeys] = useState<UserApiKeyItem[]>([]);
   const [loading, setLoading] = useState(true);

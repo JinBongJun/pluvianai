@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import ProjectLayout from "@/components/layout/ProjectLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import Pagination from "@/components/ui/Pagination";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -59,12 +60,8 @@ const DEFAULT_ALERT_TYPES = [
 
 export default function AlertsPage() {
   const router = useRouter();
-  const params = useParams();
   const toast = useToast();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Number(
-    Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId
-  );
+  const { orgId, projectId } = useOrgProjectParams();
 
   const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
     organizationsAPI.get(orgId, { includeStats: false })
