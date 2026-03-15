@@ -74,8 +74,13 @@ export default function ProjectGeneralSettingsPage() {
     try {
       await projectsAPI.delete(projectId);
       toast.showToast("Project deleted", "success");
-      mutate(["project", projectId], undefined);
-      mutate(["organization-projects-list", orgId], undefined);
+      // Prevent SWR from revalidating deleted project (avoids 404 in Network tab)
+      mutate(["project", projectId], undefined, { revalidate: false });
+      mutate(
+        (k) => Array.isArray(k) && k[0] === "organization-projects-list" && k[1] === orgId,
+        undefined,
+        { revalidate: false }
+      );
       router.push(`/organizations/${orgId}/projects`);
     } catch (err: any) {
       toast.showToast(err?.response?.data?.detail ?? "Failed to delete project", "error");

@@ -85,8 +85,13 @@ export default function OrgSettingsPage() {
         "Environment archived. Permanent deletion is scheduled after the safety grace period.",
         "success"
       );
-      mutate(["organization", orgId], undefined);
-      mutate(["organization-projects-list", orgId], undefined);
+      // Prevent SWR from revalidating deleted org (avoids 404 in Network tab)
+      mutate(["organization", orgId], undefined, { revalidate: false });
+      mutate(
+        (k) => Array.isArray(k) && k[0] === "organization-projects-list" && k[1] === orgId,
+        undefined,
+        { revalidate: false }
+      );
       router.push("/organizations");
     } catch (error: any) {
       toast.showToast(
