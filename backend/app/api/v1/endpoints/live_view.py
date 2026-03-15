@@ -106,8 +106,8 @@ def list_agents(
                 if not signals_list and json_signals_list:
                     try:
                         signals_list = json.loads(json_signals_list)
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.debug("_aggregate_signals: json.loads failed for signals_list", extra={"error": str(e)})
                 
                 for sig in signals_list:
                     if not sig: continue
@@ -117,8 +117,8 @@ def list_agents(
                 
                 if count > 0:
                     return {k: round(v / count, 4) for k, v in agg.items()}
-            except:
-                pass
+            except Exception as e:
+                logger.debug("_aggregate_signals: aggregation failed", extra={"error": str(e)})
             return {}
 
         # Fetch display settings (need project + sentinel for full agent id set)
@@ -137,12 +137,15 @@ def list_agents(
                 has_drift = report_data.get("has_drift", False)
         agent_ids = [r.agent_id or "unknown" for r in rows]
         all_agent_ids = set(agent_ids) | set(blueprint_map.keys()) | {n.get("id") for n in sentinel_agents if n.get("id")}
-        settings = (
-            db.query(AgentDisplaySetting)
-            .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash.in_(all_agent_ids))
-            .all()
-        )
-        settings_map = {s.system_prompt_hash: s for s in settings}
+        if all_agent_ids:
+            settings = (
+                db.query(AgentDisplaySetting)
+                .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash.in_(all_agent_ids))
+                .all()
+            )
+            settings_map = {s.system_prompt_hash: s for s in settings}
+        else:
+            settings_map = {}
 
         def serialize(row):
             agent_id = row.agent_id or "unknown"

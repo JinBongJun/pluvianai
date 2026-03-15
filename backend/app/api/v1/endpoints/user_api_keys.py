@@ -168,8 +168,13 @@ async def delete_user_api_key(
     # Get key info before deletion for audit log
     keys = service.list_user_api_keys(project_id)
     key_to_delete = next((k for k in keys if k.id == key_id), None)
+    if key_to_delete is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User API key not found"
+        )
     
-    deleted = service.delete_user_api_key(key_id, current_user.id)
+    deleted = service.delete_user_api_key(key_id, current_user.id, project_id=project_id)
 
     if not deleted:
         raise HTTPException(

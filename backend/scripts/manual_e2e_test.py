@@ -285,7 +285,7 @@ class TestRunner:
         assert self.project_id, "No project"
         
         response = self.client.post(
-            f"{API_PREFIX}/api-calls",
+            f"{API_PREFIX}/projects/{self.project_id}/api-calls",
             json={
                 "project_id": self.project_id,
                 "request_data": {
@@ -435,8 +435,8 @@ class TestRunner:
         time.sleep(1)  # 데이터 처리 대기
         
         response = self.client.get(
-            f"{API_PREFIX}/api-calls",
-            params={"project_id": self.project_id, "limit": 5},
+            f"{API_PREFIX}/projects/{self.project_id}/api-calls",
+            params={"limit": 5},
             headers={"Authorization": f"Bearer {self.access_token}"}
         )
         
@@ -482,9 +482,8 @@ class TestRunner:
     def test_invalid_api_key(self) -> bool:
         """잘못된 API 키"""
         response = self.client.post(
-            f"{API_PREFIX}/api-calls",
+            f"{API_PREFIX}/projects/1/api-calls",
             json={
-                "project_id": 1,
                 "request_data": {},
                 "response_data": {},
                 "latency_ms": 100,
@@ -499,9 +498,8 @@ class TestRunner:
     def test_missing_auth(self) -> bool:
         """인증 누락"""
         response = self.client.post(
-            f"{API_PREFIX}/api-calls",
+            f"{API_PREFIX}/projects/1/api-calls",
             json={
-                "project_id": 1,
                 "request_data": {},
                 "response_data": {},
                 "latency_ms": 100,

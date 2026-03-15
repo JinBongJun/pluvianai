@@ -235,6 +235,7 @@ class UserApiKeyService:
         self,
         key_id: int,
         user_id: int,
+        project_id: Optional[int] = None,
     ) -> bool:
         """
         Delete (deactivate) a user API key
@@ -242,15 +243,15 @@ class UserApiKeyService:
         Args:
             key_id: Key ID
             user_id: User ID (for verification)
+            project_id: Optional project scope for defense-in-depth
         
         Returns:
             True if deleted, False if not found
         """
-        user_key = (
-            self.db.query(UserApiKey)
-            .filter(UserApiKey.id == key_id, UserApiKey.user_id == user_id)
-            .first()
-        )
+        query = self.db.query(UserApiKey).filter(UserApiKey.id == key_id, UserApiKey.user_id == user_id)
+        if project_id is not None:
+            query = query.filter(UserApiKey.project_id == project_id)
+        user_key = query.first()
 
         if not user_key:
             return False

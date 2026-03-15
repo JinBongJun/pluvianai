@@ -9,7 +9,11 @@ class AgentDisplaySetting(Base):
 
     __tablename__ = "agent_display_settings"
     __table_args__ = (
-        UniqueConstraint("system_prompt_hash", name="uq_agent_display_settings_system_prompt_hash"),
+        UniqueConstraint(
+            "project_id",
+            "system_prompt_hash",
+            name="uq_agent_display_settings_project_system_prompt_hash",
+        ),
     )
 
     id = Column(String(255), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))

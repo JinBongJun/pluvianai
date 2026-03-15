@@ -19,6 +19,14 @@
 | [TEST_PLAN.md](./TEST_PLAN.md) | 통합 테스트 계획 |
 | [PLUVIANAI_LANDING_IMPLEMENTATION.md](./PLUVIANAI_LANDING_IMPLEMENTATION.md) | 랜딩 페이지 구현 가이드 |
 
+### docs/ 폴더 (권한·엔드포인트·감사)
+
+| 문서 | 용도 |
+|------|------|
+| [authorization-and-scoping.md](./authorization-and-scoping.md) | 프로젝트 스코프 URL 규칙, RBAC, 스키마/유일 제약 체크리스트 |
+| [mvp-endpoint-access-matrix.md](./mvp-endpoint-access-matrix.md) | 엔드포인트별 접근 권한 (역할·메서드) |
+| [audit-live-view-soft-delete-and-related.md](./audit-live-view-soft-delete-and-related.md) | Live View·소프트삭제·멀티테넌트 관련 감사 요약 |
+
 ---
 
 ## 주의
