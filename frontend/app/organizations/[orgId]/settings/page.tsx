@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSWRConfig } from "swr";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
@@ -37,6 +38,7 @@ export default function OrgSettingsPage() {
   const params = useParams();
   const toast = useToast();
   const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
+  const { mutate } = useSWRConfig();
 
   const [orgName, setOrgName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -83,6 +85,8 @@ export default function OrgSettingsPage() {
         "Environment archived. Permanent deletion is scheduled after the safety grace period.",
         "success"
       );
+      mutate(["organization", orgId], undefined);
+      mutate(["organization-projects-list", orgId], undefined);
       router.push("/organizations");
     } catch (error: any) {
       toast.showToast(
