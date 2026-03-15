@@ -14,7 +14,7 @@ redis==5.0.1
 httpx==0.28.1
 reportlab==4.0.7
 resend==2.1.0
-apscheduler==3.10.4
+apscheduler==3.11.2
 sentry-sdk[fastapi]==1.38.0
 prometheus-client==0.19.0
 
