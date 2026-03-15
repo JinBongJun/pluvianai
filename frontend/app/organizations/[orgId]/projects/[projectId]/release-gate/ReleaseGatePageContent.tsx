@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import clsx from "clsx";
 import useSWR from "swr";
 import { AnimatePresence, motion } from "framer-motion";
@@ -533,6 +533,7 @@ const LIVE_VIEW_CHECK_LABELS: Record<string, string> = {
 export default function ReleaseGatePageContent() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const orgId = params?.orgId as string;
   const rawProjectId = params?.projectId;
   const projectIdStr = Array.isArray(rawProjectId) ? rawProjectId[0] : rawProjectId;
@@ -540,7 +541,19 @@ export default function ReleaseGatePageContent() {
 
   const { data: project } = useSWR(
     projectId && !isNaN(projectId) ? ["project", projectId] : null,
-    () => projectsAPI.get(projectId)
+    async () => {
+      try {
+        return await projectsAPI.get(projectId);
+      } catch (e: any) {
+        const status = e?.response?.status;
+        const msg = e?.response?.data?.detail ?? e?.response?.data?.error?.message ?? "";
+        if (status === 404 && (msg === "Project not found" || msg === "Not Found")) {
+          router.replace(orgId ? `/organizations/${orgId}/projects` : "/organizations");
+          return undefined;
+        }
+        throw e;
+      }
+    }
   );
   const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
     organizationsAPI.get(orgId)
