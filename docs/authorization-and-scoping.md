@@ -13,6 +13,7 @@
   - Firewall: `GET/POST /api/v1/projects/{project_id}/firewall/rules`, `PATCH/DELETE .../firewall/rules/{rule_id}`, `POST .../firewall/rules/{rule_id}/toggle`
   - User API keys: `GET/POST/DELETE /api/v1/projects/{project_id}/user-api-keys/...`
   - Live View / Release Gate / Signals: under project context; list/mutate always filtered by `project_id`.
+  - Activity: `GET /api/v1/activity?project_id=...` — when `project_id` is provided, project access is enforced via `check_project_access` (no access → 403).
 - **Avoid:** Top-level resource-by-id URLs that do not include `project_id` (e.g. `POST /alerts/{id}/resolve`). They force the backend to load the resource first to know the project and are easier to misuse; prefer `POST /projects/{project_id}/alerts/{id}/resolve` and validate `resource.project_id == project_id`.
 
 ---
