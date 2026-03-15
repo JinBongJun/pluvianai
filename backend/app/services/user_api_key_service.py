@@ -14,6 +14,20 @@ from app.core.logging_config import logger
 from app.models.user_api_key import UserApiKey
 
 
+def _key_hint_from_plain(api_key: str) -> str:
+    """Build a safe display hint from plain key (e.g. sk-...xyz). Max 32 chars."""
+    key = (api_key or "").strip()
+    if len(key) < 4:
+        return "••••"
+    suffix = key[-4:]
+    if key.startswith("sk-") or key.startswith("sk_"):
+        prefix = key[:4] if len(key) >= 4 else key[:3]
+        return f"{prefix}...{suffix}"[:32]
+    if key.startswith("anthropic-") or key.startswith("xai-"):
+        return f"{key[:6]}...{suffix}"[:32]
+    return f"••••{suffix}"[:32]
+
+
 def _get_fernet_key() -> Fernet:
     """Get or generate Fernet encryption key"""
     encryption_key = settings.ENCRYPTION_KEY
@@ -85,8 +99,9 @@ class UserApiKeyService:
         Returns:
             Created UserApiKey
         """
-        # Encrypt the key
+        # Encrypt the key and build display hint (set only at save time)
         encrypted = self.encrypt_key(api_key)
+        key_hint = _key_hint_from_plain(api_key)
 
         normalized_agent_id = (agent_id or "").strip() or None
 
@@ -114,6 +129,7 @@ class UserApiKeyService:
             agent_id=normalized_agent_id,
             provider=provider,
             encrypted_key=encrypted,
+            key_hint=key_hint,
             name=name or f"{provider} API key",
             is_active=True,
         )

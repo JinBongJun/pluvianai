@@ -37,6 +37,7 @@ class UserApiKeyResponse(BaseModel):
     name: Optional[str]
     is_active: bool
     created_at: str
+    key_hint: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -105,6 +106,7 @@ async def create_user_api_key(
             "name": user_key.name,
             "is_active": user_key.is_active,
             "created_at": user_key.created_at.isoformat() if user_key.created_at else None,
+            "key_hint": getattr(user_key, "key_hint", None),
         })
     except Exception as e:
         logger.error(f"Failed to create user API key: {str(e)}", exc_info=True)
@@ -139,6 +141,7 @@ async def list_user_api_keys(
             name=k.name,
             is_active=k.is_active,
             created_at=k.created_at.isoformat() if k.created_at else "",
+            key_hint=getattr(k, "key_hint", None),
         )
         for k in keys
     ]
