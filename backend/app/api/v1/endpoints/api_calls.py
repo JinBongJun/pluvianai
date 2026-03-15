@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import get_current_user, get_current_user_or_api_key
+from app.core.security import get_current_user, get_current_user_or_api_key, RequireScope
 from app.core.dependencies import get_api_call_service
 from app.models.user import User
 from app.core.permissions import check_project_access
@@ -133,11 +133,12 @@ async def ingest_api_call(
     project_id: int,
     body: APICallIngestBody = Body(...),
     current_user: User = Depends(get_current_user_or_api_key),
+    _scope: None = Depends(RequireScope("ingest")),
     db: Session = Depends(get_db),
 ):
     """
     Ingest a single API call from the SDK. Creates APICall + Snapshot.
-    Auth: JWT or SDK API key; project_id in path must be accessible.
+    Auth: JWT or SDK API key (key must have scope 'ingest' or '*'); project_id in path must be accessible.
     """
     if body.project_id is not None and body.project_id != project_id:
         raise HTTPException(status_code=400, detail="project_id in body must match path")

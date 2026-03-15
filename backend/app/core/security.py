@@ -3,7 +3,7 @@ Security utilities for JWT authentication
 """
 
 from datetime import datetime, timedelta
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Tuple
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status, Header, Request
@@ -136,6 +136,10 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if hasattr(request, "state"):
+        request.state.auth_method = "jwt"
+        request.state.api_key_scope = None  # JWT = full access
+
     return user
 
 
@@ -177,19 +181,21 @@ async def get_current_user_optional(
         return None
 
 
-async def get_user_from_api_key(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)):
+async def get_user_from_api_key(
+    authorization: Optional[str] = Header(None), db: Session = Depends(get_db)
+) -> Tuple[User, List[str]]:
     """
-    Get user from API Key (for SDK authentication)
+    Get user and scope list from API Key (for SDK authentication).
 
     SDK에서 Authorization: Bearer ag_live_xxxxx 형식으로 요청을 보내면
-    API Key를 검증하고 해당 User를 반환합니다.
+    API Key를 검증하고 해당 User와 scope 목록을 반환합니다.
 
     Args:
         authorization: Authorization header (Bearer {api_key} 형식)
         db: Database session
 
     Returns:
-        User object
+        Tuple of (User, scope list e.g. ["*"] or ["ingest","read"])
 
     Raises:
         HTTPException: If API key is invalid or expired
@@ -251,7 +257,21 @@ async def get_user_from_api_key(authorization: Optional[str] = Header(None), db:
     api_key_record.last_used_at = datetime.utcnow()
     db.commit()
 
-    return user
+    # Parse scope: "*", "ingest,read", or JSON ["ingest","read"]. Default ["*"] for backward compatibility.
+    scope_raw = (api_key_record.scope or "").strip() or "*"
+    if scope_raw == "*":
+        scope_list = ["*"]
+    else:
+        try:
+            import json
+            parsed = json.loads(scope_raw)
+            scope_list = list(parsed) if isinstance(parsed, list) else [str(parsed)]
+        except Exception:
+            scope_list = [s.strip() for s in scope_raw.split(",") if s.strip()]
+        if not scope_list:
+            scope_list = ["*"]
+
+    return user, scope_list
 
 
 async def get_current_user_or_api_key(
@@ -281,17 +301,48 @@ async def get_current_user_or_api_key(
     is_sdk_api_key = auth_value.startswith("ag_live_") or auth_value.startswith("ag_test_")
 
     if is_sdk_api_key:
-        return await get_user_from_api_key(authorization=normalized_auth, db=db)
+        user, scope_list = await get_user_from_api_key(authorization=normalized_auth, db=db)
+        if hasattr(request, "state"):
+            request.state.auth_method = "api_key"
+            request.state.api_key_scope = scope_list
+        return user
 
     try:
-        return await get_current_user(request=request, token=token, db=db)
+        user = await get_current_user(request=request, token=token, db=db)
+        return user
     except HTTPException as jwt_error:
         if normalized_auth:
             try:
-                return await get_user_from_api_key(authorization=normalized_auth, db=db)
+                user, scope_list = await get_user_from_api_key(authorization=normalized_auth, db=db)
+                if hasattr(request, "state"):
+                    request.state.auth_method = "api_key"
+                    request.state.api_key_scope = scope_list
+                return user
             except HTTPException:
                 pass
         raise jwt_error
+
+
+class RequireScope:
+    """
+    Dependency that checks API key scope. Use after get_current_user_or_api_key.
+    JWT auth is always allowed. API key auth requires the key to have the required scope or "*".
+    """
+
+    def __init__(self, required: str):
+        self.required = required
+
+    async def __call__(self, request: Request) -> None:
+        auth_method = getattr(request.state, "auth_method", None)
+        if auth_method != "api_key":
+            return None
+        scopes = getattr(request.state, "api_key_scope", None) or []
+        if not scopes or "*" in scopes or self.required in scopes:
+            return None
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Insufficient API key scope. This endpoint requires scope: {self.required}",
+        )
 
 
 def rotate_refresh_token(
@@ -426,11 +477,12 @@ def rotate_api_key(
     new_api_key = f"{key_prefix}{random_part}"
     key_hash = hashlib.sha256(new_api_key.encode()).hexdigest()
     
-    # Create new API key record
+    # Create new API key record (scope defaults to full access)
     new_key_record = APIKey(
         user_id=user_id,
         key_hash=key_hash,
         name="Rotated key",
+        scope="*",
         is_active=True,
     )
     db.add(new_key_record)
