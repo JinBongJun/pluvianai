@@ -216,7 +216,7 @@ class ReleaseGateRepeatMatrixVerifier:
             "chain_id": f"rg-matrix-{secrets.token_hex(4)}-{idx}",
         }
         res = self._request(
-            "POST", f"{API_PREFIX}/api-calls", headers=self._headers(), json=payload
+            "POST", f"{API_PREFIX}/projects/{project_id}/api-calls", headers=self._headers(), json=payload
         )
         if res.status_code != 202:
             raise ScriptError(f"Seed api-call failed ({res.status_code}): {res.text}")
@@ -587,7 +587,7 @@ def main() -> int:
                     "chain_id": f"rg-matrix-{secrets.token_hex(4)}-{idx}",
                 }
                 res = verifier._request(
-                    "POST", f"{API_PREFIX}/api-calls", headers=verifier._headers(), json=payload
+                    "POST", f"{API_PREFIX}/projects/{project_id}/api-calls", headers=verifier._headers(), json=payload
                 )
                 if res.status_code != 202:
                     raise ScriptError(f"Seed api-call failed ({res.status_code}): {res.text}")

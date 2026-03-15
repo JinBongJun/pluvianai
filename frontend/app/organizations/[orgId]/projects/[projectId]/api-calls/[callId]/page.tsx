@@ -31,7 +31,7 @@ export default function APICallDetailPage() {
   const loadAPICall = useCallback(async () => {
     try {
       const [callData, callsList] = await Promise.all([
-        apiCallsAPI.get(callId),
+        apiCallsAPI.get(projectId, callId),
         apiCallsAPI.list(projectId, { limit: 1000 }),
       ]);
 
