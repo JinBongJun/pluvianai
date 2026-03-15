@@ -429,16 +429,21 @@ function LiveViewContent() {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [panelTab, setPanelTab] = useState<"logs" | "eval" | "data" | "settings">("logs");
 
-  // Calculate Real Telemetry Stats from backend data
-  const telemetryStats = useMemo(() => {
-    const telemetryAgents = Array.isArray(agentsData?.agents)
+  // Sync Data to React Flow (exclude soft-deleted nodes)
+  const agentsList = useMemo(() => {
+    const raw = Array.isArray(agentsData?.agents)
       ? agentsData.agents
       : Array.isArray((agentsData as any)?.data?.agents)
         ? (agentsData as any).data.agents
         : [];
-    if (!telemetryAgents.length) return undefined;
+    return raw.filter((a: { is_deleted?: boolean }) => !a.is_deleted);
+  }, [agentsData]);
 
-    const agents = telemetryAgents;
+  // Calculate Real Telemetry Stats from backend data (exclude soft-deleted)
+  const telemetryStats = useMemo(() => {
+    if (!agentsList.length) return undefined;
+
+    const agents = agentsList;
     const totalAgents = agents.length;
     let totalWorstCount = 0;
     let totalSnapshots = 0;
@@ -483,18 +488,7 @@ function LiveViewContent() {
         glow: "shadow-[0_0_20px_rgba(148,163,184,0.1)]",
       },
     ];
-  }, [agentsData]);
-
-  // Sync Data to React Flow (support both { agents } and { data: { agents } } from API)
-  const agentsList = useMemo(
-    () =>
-      Array.isArray(agentsData?.agents)
-        ? agentsData.agents
-        : Array.isArray((agentsData as any)?.data?.agents)
-          ? (agentsData as any).data.agents
-          : [],
-    [agentsData]
-  );
+  }, [agentsData, agentsList]);
 
   useEffect(() => {
     if (typeof agentsData === "undefined") return;

@@ -279,7 +279,7 @@ class TestPhase3SDKIntegration:
         with httpx.Client(base_url=BASE_URL, timeout=10.0) as client:
             # SDK가 보내는 것과 동일한 형식으로 API Call 전송
             response = client.post(
-                f"{API_PREFIX}/api-calls",
+                f"{API_PREFIX}/projects/{ctx.project_id}/api-calls",
                 json={
                     "project_id": ctx.project_id,
                     "request_data": {
@@ -316,7 +316,7 @@ class TestPhase3SDKIntegration:
                 }
             )
             
-            assert response.status_code == 201, f"Send API call failed: {response.text}"
+            assert response.status_code == 202, f"Send API call failed: {response.text}"
             print(f"✅ API call sent successfully via API key")
     
     def test_02_send_multiple_api_calls(self):
@@ -330,7 +330,7 @@ class TestPhase3SDKIntegration:
             
             for i, (model, agent) in enumerate(zip(models, agents)):
                 response = client.post(
-                    f"{API_PREFIX}/api-calls",
+                    f"{API_PREFIX}/projects/{ctx.project_id}/api-calls",
                     json={
                         "project_id": ctx.project_id,
                         "request_data": {
@@ -350,7 +350,7 @@ class TestPhase3SDKIntegration:
                     headers={"Authorization": f"Bearer {ctx.api_key}"}
                 )
                 
-                assert response.status_code == 201, f"Failed to send API call {i+1}"
+                assert response.status_code == 202, f"Failed to send API call {i+1}"
             
             print(f"✅ Sent {len(models)} API calls with different models/agents")
     
@@ -364,8 +364,8 @@ class TestPhase3SDKIntegration:
         
         with httpx.Client(base_url=BASE_URL, timeout=10.0) as client:
             response = client.get(
-                f"{API_PREFIX}/api-calls",
-                params={"project_id": ctx.project_id, "limit": 10},
+                f"{API_PREFIX}/projects/{ctx.project_id}/api-calls",
+                params={"limit": 10},
                 headers={"Authorization": f"Bearer {ctx.access_token}"}
             )
             
@@ -398,11 +398,8 @@ class TestPhase4DataRetrieval:
         
         with httpx.Client(base_url=BASE_URL, timeout=10.0) as client:
             response = client.get(
-                f"{API_PREFIX}/api-calls",
-                params={
-                    "project_id": ctx.project_id,
-                    "model": "gpt-4"
-                },
+                f"{API_PREFIX}/projects/{ctx.project_id}/api-calls",
+                params={"model": "gpt-4"},
                 headers={"Authorization": f"Bearer {ctx.access_token}"}
             )
             
@@ -415,11 +412,8 @@ class TestPhase4DataRetrieval:
         
         with httpx.Client(base_url=BASE_URL, timeout=10.0) as client:
             response = client.get(
-                f"{API_PREFIX}/api-calls",
-                params={
-                    "project_id": ctx.project_id,
-                    "agent_name": "test-agent"
-                },
+                f"{API_PREFIX}/projects/{ctx.project_id}/api-calls",
+                params={"agent_name": "test-agent"},
                 headers={"Authorization": f"Bearer {ctx.access_token}"}
             )
             
@@ -433,15 +427,15 @@ class TestPhase4DataRetrieval:
         with httpx.Client(base_url=BASE_URL, timeout=10.0) as client:
             # First page
             response1 = client.get(
-                f"{API_PREFIX}/api-calls",
-                params={"project_id": ctx.project_id, "limit": 2, "offset": 0},
+                f"{API_PREFIX}/projects/{ctx.project_id}/api-calls",
+                params={"limit": 2, "offset": 0},
                 headers={"Authorization": f"Bearer {ctx.access_token}"}
             )
             
             # Second page
             response2 = client.get(
-                f"{API_PREFIX}/api-calls",
-                params={"project_id": ctx.project_id, "limit": 2, "offset": 2},
+                f"{API_PREFIX}/projects/{ctx.project_id}/api-calls",
+                params={"limit": 2, "offset": 2},
                 headers={"Authorization": f"Bearer {ctx.access_token}"}
             )
             
@@ -461,9 +455,8 @@ class TestPhase5EdgeCases:
         """잘못된 API 키 테스트"""
         with httpx.Client(base_url=BASE_URL, timeout=10.0) as client:
             response = client.post(
-                f"{API_PREFIX}/api-calls",
+                f"{API_PREFIX}/projects/1/api-calls",
                 json={
-                    "project_id": 1,
                     "request_data": {},
                     "response_data": {},
                     "latency_ms": 100,
@@ -479,9 +472,8 @@ class TestPhase5EdgeCases:
         """잘못된 API 키 형식 테스트"""
         with httpx.Client(base_url=BASE_URL, timeout=10.0) as client:
             response = client.post(
-                f"{API_PREFIX}/api-calls",
+                f"{API_PREFIX}/projects/1/api-calls",
                 json={
-                    "project_id": 1,
                     "request_data": {},
                     "response_data": {},
                     "latency_ms": 100,
@@ -497,9 +489,8 @@ class TestPhase5EdgeCases:
         """인증 헤더 누락 테스트"""
         with httpx.Client(base_url=BASE_URL, timeout=10.0) as client:
             response = client.post(
-                f"{API_PREFIX}/api-calls",
+                f"{API_PREFIX}/projects/1/api-calls",
                 json={
-                    "project_id": 1,
                     "request_data": {},
                     "response_data": {},
                     "latency_ms": 100,

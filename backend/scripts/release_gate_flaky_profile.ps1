@@ -152,7 +152,7 @@ $seedBody = @{
 
 $seedResp = Invoke-RestMethod `
     -Method Post `
-    -Uri "$BackendUrl/api/v1/api-calls" `
+    -Uri "$BackendUrl/api/v1/projects/$ProjectId/api-calls" `
     -Headers $headers `
     -ContentType "application/json" `
     -Body $seedBody

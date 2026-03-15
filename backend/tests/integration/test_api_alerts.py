@@ -18,15 +18,14 @@ class TestAlertsAPI:
             alert_type="drift",
             severity="high",
             title="Test Alert",
-            message="Test message"
+            description="Test message",
         )
         db.add(alert)
         db.commit()
         db.refresh(alert)
         
         response = await async_client.get(
-            "/api/v1/alerts",
-            params={"project_id": test_project.id},
+            f"/api/v1/projects/{test_project.id}/alerts",
             headers=auth_headers
         )
         
@@ -42,14 +41,14 @@ class TestAlertsAPI:
             alert_type="drift",
             severity="high",
             title="Test Alert",
-            message="Test message"
+            description="Test message",
         )
         db.add(alert)
         db.commit()
         db.refresh(alert)
         
         response = await async_client.get(
-            f"/api/v1/alerts/{alert.id}",
+            f"/api/v1/projects/{test_project.id}/alerts/{alert.id}",
             headers=auth_headers
         )
         

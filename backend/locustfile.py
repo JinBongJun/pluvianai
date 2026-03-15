@@ -42,7 +42,7 @@ class PluvianAIUser(HttpUser):
         """Get API calls for a project"""
         if self.project_id:
             self.client.get(
-                f"/api/v1/api-calls?project_id={self.project_id}&limit=10"
+                f"/api/v1/projects/{self.project_id}/api-calls?limit=10"
             )
     
     @task(3)
@@ -79,5 +79,5 @@ class PluvianAIUser(HttpUser):
         """Get alerts"""
         if self.project_id:
             self.client.get(
-                f"/api/v1/alerts?project_id={self.project_id}&limit=10"
+                f"/api/v1/projects/{self.project_id}/alerts?limit=10"
             )

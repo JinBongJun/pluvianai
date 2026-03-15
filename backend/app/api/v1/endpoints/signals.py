@@ -136,9 +136,21 @@ async def update_signal_config(
 ):
     """Update a signal configuration"""
     service = SignalDetectionService(db)
+    config = service.get_signal_config_by_id(config_id)
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Signal configuration not found"
+        )
+    check_project_access(
+        config.project_id,
+        current_user,
+        db,
+        required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN],
+    )
 
     update_data = config_data.model_dump(exclude_unset=True)
-    config = service.update_signal_config(config_id, **update_data)
+    config = service.update_signal_config(config_id, project_id=config.project_id, **update_data)
     
     if not config:
         raise HTTPException(
@@ -157,8 +169,20 @@ async def delete_signal_config(
 ):
     """Delete a signal configuration"""
     service = SignalDetectionService(db)
+    config = service.get_signal_config_by_id(config_id)
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Signal configuration not found"
+        )
+    check_project_access(
+        config.project_id,
+        current_user,
+        db,
+        required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN],
+    )
     
-    success = service.delete_signal_config(config_id)
+    success = service.delete_signal_config(config_id, project_id=config.project_id)
     
     if not success:
         raise HTTPException(

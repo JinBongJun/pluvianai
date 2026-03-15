@@ -106,8 +106,8 @@ def list_agents(
                 if not signals_list and json_signals_list:
                     try:
                         signals_list = json.loads(json_signals_list)
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.debug("_aggregate_signals: json.loads failed for signals_list", extra={"error": str(e)})
                 
                 for sig in signals_list:
                     if not sig: continue
@@ -117,18 +117,35 @@ def list_agents(
                 
                 if count > 0:
                     return {k: round(v / count, 4) for k, v in agg.items()}
-            except:
-                pass
+            except Exception as e:
+                logger.debug("_aggregate_signals: aggregation failed", extra={"error": str(e)})
             return {}
 
-        # Fetch display settings
+        # Fetch display settings (need project + sentinel for full agent id set)
+        project = _ensure_project(project_id, current_user, db)
+        blueprint_nodes = project.canvas_nodes or []
+        blueprint_map = {n.get("id"): n for n in blueprint_nodes if n.get("id")}
+        from app.services.cache_service import cache_service
+        sentinel_agents = []
+        has_drift = False
+        if cache_service.enabled:
+            report_key = f"project:{project_id}:sentinel:latest"
+            cached_report = cache_service.redis_client.get(report_key)
+            if cached_report:
+                report_data = json.loads(cached_report)
+                sentinel_agents = report_data.get("nodes", [])
+                has_drift = report_data.get("has_drift", False)
         agent_ids = [r.agent_id or "unknown" for r in rows]
-        settings = (
-            db.query(AgentDisplaySetting)
-            .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash.in_(agent_ids))
-            .all()
-        )
-        settings_map = {s.system_prompt_hash: s for s in settings}
+        all_agent_ids = set(agent_ids) | set(blueprint_map.keys()) | {n.get("id") for n in sentinel_agents if n.get("id")}
+        if all_agent_ids:
+            settings = (
+                db.query(AgentDisplaySetting)
+                .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash.in_(all_agent_ids))
+                .all()
+            )
+            settings_map = {s.system_prompt_hash: s for s in settings}
+        else:
+            settings_map = {}
 
         def serialize(row):
             agent_id = row.agent_id or "unknown"
@@ -146,31 +163,20 @@ def list_agents(
                 "is_deleted": setting.is_deleted if setting else False,
             }
 
-        # Integrate Sentinel Data (Real-time Drift Analysis)
-        sentinel_agents = []
-        has_drift = False
-        
-        from app.services.cache_service import cache_service
-        if cache_service.enabled:
-            report_key = f"project:{project_id}:sentinel:latest"
-            cached_report = cache_service.redis_client.get(report_key)
-            if cached_report:
-                report_data = json.loads(cached_report)
-                sentinel_agents = report_data.get("nodes", [])
-                has_drift = report_data.get("has_drift", False)
-
-        project = _ensure_project(project_id, current_user, db)
-        blueprint_nodes = project.canvas_nodes or []
-        blueprint_map = {n.get("id"): n for n in blueprint_nodes if n.get("id")}
-        
         final_agents = []
         processed_ids = set()
+
+        def _is_deleted(agent_id: str) -> bool:
+            s = settings_map.get(agent_id)
+            return s is not None and s.is_deleted
 
         # 1. Start with Blueprint Nodes (Official)
         for node_id, node in blueprint_map.items():
             if node.get('type') != 'agentCard':
                 continue
-            
+            if _is_deleted(node_id):
+                continue
+
             # Match snapshots
             stat = next((r for r in rows if r.agent_id == node_id), None)
             
@@ -198,7 +204,9 @@ def list_agents(
             s_id = s_node.get("id")
             if s_id in processed_ids:
                 continue
-            
+            if _is_deleted(s_id):
+                continue
+
             stat = next((r for r in rows if r.agent_id == s_id), None)
             
             final_agents.append({
@@ -219,6 +227,8 @@ def list_agents(
         # 3. Add any other detected snapshots (Probabilistic fallback)
         for row in rows:
             if row.agent_id not in processed_ids:
+                if _is_deleted(row.agent_id or "unknown"):
+                    continue
                 final_agents.append(serialize(row))
 
         return {
@@ -422,7 +432,16 @@ def delete_agent(
     )
     if setting:
         setting.is_deleted = True
-        db.commit()
+    else:
+        # So list_agents can exclude this agent via settings_map
+        setting = AgentDisplaySetting(
+            id=str(uuid.uuid4()),
+            project_id=project_id,
+            system_prompt_hash=agent_id,
+            is_deleted=True,
+        )
+        db.add(setting)
+    db.commit()
     return None
 
 

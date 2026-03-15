@@ -85,6 +85,39 @@ Notes:
 | Project user API keys list (`GET /projects/{project_id}/user-api-keys`) | project member |
 | Project user API keys create/delete (`POST/DELETE /projects/{project_id}/user-api-keys...`) | project admin (`owner` or `admin`) |
 
+## Alerts (project-scoped)
+
+| Endpoint | Method | Access |
+|---|---|---|
+| `/api/v1/projects/{project_id}/alerts` | `GET` | project member |
+| `/api/v1/projects/{project_id}/alerts/stats` | `GET` | project member |
+| `/api/v1/projects/{project_id}/alerts/{alert_id}` | `GET` | project member |
+| `/api/v1/projects/{project_id}/alerts/{alert_id}/resolve` | `POST` | project member |
+
+All alert operations require the resource to belong to `project_id`; cross-project access returns 404.
+
+## API Calls (project-scoped)
+
+| Endpoint | Method | Access |
+|---|---|---|
+| `/api/v1/projects/{project_id}/api-calls` | `GET` | project member |
+| `/api/v1/projects/{project_id}/api-calls` | `POST` | project member (ingest; 202 Accepted) |
+| `/api/v1/projects/{project_id}/api-calls/stats` | `GET` | project member |
+| `/api/v1/projects/{project_id}/api-calls/stream/recent` | `GET` | project member |
+| `/api/v1/projects/{project_id}/api-calls/{call_id}` | `GET` | project member |
+
+## Firewall (project-scoped)
+
+| Endpoint | Method | Access |
+|---|---|---|
+| `/api/v1/projects/{project_id}/firewall/rules` | `GET` | project member |
+| `/api/v1/projects/{project_id}/firewall/rules` | `POST` | project member |
+| `/api/v1/projects/{project_id}/firewall/rules/{rule_id}` | `PATCH` | project member |
+| `/api/v1/projects/{project_id}/firewall/rules/{rule_id}` | `DELETE` | project member |
+| `/api/v1/projects/{project_id}/firewall/rules/{rule_id}/toggle` | `POST` | project member |
+
+Cross-project access (e.g. wrong project_id for a resource) returns 404.
+
 ## Admin and Internal Endpoints
 
 | Endpoint | Method | Access |
