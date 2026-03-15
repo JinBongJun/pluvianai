@@ -624,6 +624,7 @@ function LiveViewContent() {
               onAgentDeleted={() => {
                 setSelectedAgentId(null);
                 setPanelTab("logs");
+                void mutateAgents(undefined, true);
               }}
             />
           </div>
