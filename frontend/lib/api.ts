@@ -605,15 +605,13 @@ export const internalUsageAPI = {
 // Quality API
 export const qualityAPI = {
   evaluate: async (projectId: number, request: any) => {
-    const response = await apiClient.post("/quality/evaluate", request, {
-      params: { project_id: projectId },
-    });
+    const response = await apiClient.post(`/projects/${projectId}/quality/evaluate`, request);
     return response.data;
   },
 
   getScores: async (projectId: number, params?: any) => {
-    const response = await apiClient.get("/quality/scores", {
-      params: { project_id: projectId, ...params },
+    const response = await apiClient.get(`/projects/${projectId}/quality/scores`, {
+      params: { ...params },
     });
     // Backend returns paginated_response format: {data: [...], meta: {...}}
     // Extract data array from response
@@ -623,8 +621,8 @@ export const qualityAPI = {
   },
 
   getStats: async (projectId: number, days: number = 7) => {
-    const response = await apiClient.get("/quality/stats", {
-      params: { project_id: projectId, days },
+    const response = await apiClient.get(`/projects/${projectId}/quality/stats`, {
+      params: { days },
     });
     return response.data;
   },

@@ -50,3 +50,11 @@
 - [mvp-endpoint-access-matrix](./mvp-endpoint-access-matrix.md) — which roles can call which endpoints.
 - [audit-live-view-soft-delete-and-related](./audit-live-view-soft-delete-and-related.md) — past fixes for soft-delete and multi-tenant schema.
 - [role-action-matrix](./role-action-matrix.md) — role vs action matrix.
+
+---
+
+## 6. Live View + Release Gate domain coupling
+
+- Live View and Release Gate must share the same "visible agents" rule.
+- Shared domain module: `backend/app/domain/live_view_release_gate/agent_visibility.py`.
+- Backward-compatible shim remains at `backend/app/services/agent_visibility_service.py` to avoid breaking imports while migrating.
