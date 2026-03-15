@@ -81,9 +81,11 @@ class UpdateNotificationSettingsRequest(BaseModel):
 
 
 # API Key Models
+# Scope: "*" = all, or comma-separated e.g. "ingest,read". "ingest" = POST api-calls only.
 class CreateAPIKeyRequest(BaseModel):
     """Create API key request"""
     name: str
+    scope: Optional[str] = None  # Default "*"; use "ingest" for SDK-only keys
 
 
 class APIKeyResponse(BaseModel):
@@ -285,11 +287,13 @@ async def create_api_key(
     # Generate secure API key
     api_key_value, key_hash = _generate_api_key_pair()
     
-    # Create API key record
+    # Create API key record (scope: "*" = full access, "ingest" = ingest-only, etc.)
+    scope_value = (request.scope or "*").strip() or "*"
     api_key = APIKey(
         user_id=current_user.id,
         key_hash=key_hash,
         name=request.name.strip(),
+        scope=scope_value,
         is_active=True,
     )
     db.add(api_key)
@@ -337,6 +341,7 @@ async def rotate_api_key(
         user_id=current_user.id,
         key_hash=key_hash,
         name=(old_key.name or "Rotated key"),
+        scope=old_key.scope or "*",
         is_active=True,
     )
     db.add(new_key)
