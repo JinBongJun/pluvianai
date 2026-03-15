@@ -32,12 +32,18 @@ export default function ProjectGeneralSettingsPage() {
       const p = await projectsAPI.get(projectId);
       setName(p.name ?? "");
       setDescription(p.description ?? "");
-    } catch (e) {
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const msg = e?.response?.data?.detail ?? e?.response?.data?.error?.message ?? "";
+      if (status === 404 && (msg === "Project not found" || msg === "Not Found")) {
+        router.replace(orgId ? `/organizations/${orgId}/projects` : "/organizations");
+        return;
+      }
       toast.showToast("Failed to load project", "error");
     } finally {
       setLoading(false);
     }
-  }, [projectId, toast]);
+  }, [projectId, orgId, router, toast]);
 
   useEffect(() => {
     if (!hasToken) return;
