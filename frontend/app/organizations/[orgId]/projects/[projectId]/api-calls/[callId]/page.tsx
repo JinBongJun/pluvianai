@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import ProjectLayout from "@/components/layout/ProjectLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import JSONViewer from "@/components/ui/JSONViewer";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -16,9 +17,10 @@ export default function APICallDetailPage() {
   const router = useRouter();
   const params = useParams();
   const toast = useToast();
-  const orgId = params.orgId as string;
-  const projectId = Number(params.projectId);
-  const callId = Number(params.callId);
+  const { orgId, projectId } = useOrgProjectParams();
+  const callId = Number(
+    Array.isArray(params?.callId) ? params.callId[0] : params?.callId
+  );
 
   const [apiCall, setApiCall] = useState<any>(null);
   const [qualityScore, setQualityScore] = useState<any>(null);

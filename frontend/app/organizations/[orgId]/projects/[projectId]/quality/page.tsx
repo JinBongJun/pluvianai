@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import ProjectLayout from "@/components/layout/ProjectLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import ProjectTabs from "@/components/ProjectTabs";
 import QualityChart from "@/components/QualityChart";
 import { Button } from "@/components/ui/Button";
@@ -19,11 +20,7 @@ interface QualityData {
 
 export default function QualityPage() {
   const router = useRouter();
-  const params = useParams();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Number(
-    Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId
-  );
+  const { orgId, projectId } = useOrgProjectParams();
 
   const [days, setDays] = useState<7 | 30 | 90>(30);
 
