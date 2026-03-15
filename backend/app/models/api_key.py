@@ -17,6 +17,8 @@ class APIKey(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     key_hash = Column(String(255), unique=True, index=True, nullable=False)  # Hashed API key
     name = Column(String(255), nullable=True)  # Optional name for the key
+    # Comma-separated or JSON list of allowed scopes, e.g. "ingest" or "ingest,read". "*" = all.
+    scope = Column(Text, nullable=True, default="*")
     is_active = Column(Boolean, default=True)
     last_used_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

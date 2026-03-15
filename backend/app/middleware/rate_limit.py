@@ -2,6 +2,7 @@
 Rate limiting middleware.
 Uses Redis when available; falls back to in-memory per-process limits when Redis is disabled.
 Global limit applies to all requests; heavy endpoints have an additional per-endpoint limit.
+Per-user limit applies when JWT is present (avoids NAT/shared-IP throttling).
 """
 
 import time
@@ -13,7 +14,11 @@ from app.services.cache_service import cache_service
 # In-memory fallback when Redis is unavailable: client_id -> (count, window_end_ts)
 _memory_rate: Dict[str, Tuple[int, float]] = {}
 _memory_heavy: Dict[str, Tuple[int, float]] = {}
+_memory_user: Dict[str, Tuple[int, float]] = {}
 _MEMORY_WINDOW_SEC = 60
+
+# Per-user rate limit (same as global per minute when applied)
+RATE_LIMIT_USER_PER_MINUTE = 60
 
 # Heavy endpoints: (path_substring, method, limit_per_min, path_key). Longest path first.
 HEAVY_ENDPOINTS: Tuple[Tuple[str, str, int, str], ...] = (
@@ -115,6 +120,79 @@ def check_endpoint_rate_limit(
     return _check_rate_limit_memory_heavy(heavy_key, limit_per_minute)
 
 
+def _extract_user_id_from_request(request: Request) -> Optional[str]:
+    """
+    Extract user_id (sub) from JWT if present and valid. No DB access.
+    Returns None if no token, SDK key (ag_live_/ag_test_), or invalid JWT.
+    """
+    auth = (request.headers.get("Authorization") or "").strip()
+    token = None
+    if auth.startswith("Bearer "):
+        token = auth.replace("Bearer ", "", 1).strip()
+    if not token and getattr(request, "cookies", None):
+        token = request.cookies.get("access_token") or None
+    if not token or token.startswith("ag_live_") or token.startswith("ag_test_"):
+        return None
+    try:
+        from jose import jwt, JWTError
+        from app.core.config import settings
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+            options={"verify_aud": False, "leeway": 60},
+        )
+        if payload.get("type") != "access":
+            return None
+        sub = payload.get("sub")
+        return str(sub) if sub is not None else None
+    except Exception:
+        return None
+
+
+def _prune_memory_user() -> None:
+    """Remove expired entries from in-memory user rate store."""
+    now = time.time()
+    expired = [k for k, (_, end) in _memory_user.items() if end <= now]
+    for k in expired:
+        del _memory_user[k]
+
+
+def _check_rate_limit_memory_user(user_key: str, limit: int) -> bool:
+    """Rate limit per user using in-memory store."""
+    _prune_memory_user()
+    now = time.time()
+    if user_key not in _memory_user:
+        _memory_user[user_key] = (1, now + _MEMORY_WINDOW_SEC)
+        return True
+    count, window_end = _memory_user[user_key]
+    if window_end <= now:
+        _memory_user[user_key] = (1, now + _MEMORY_WINDOW_SEC)
+        return True
+    if count >= limit:
+        return False
+    _memory_user[user_key] = (count + 1, window_end)
+    return True
+
+
+def check_user_rate_limit(user_id: str, limit_per_minute: int, window_sec: int = 60) -> bool:
+    """
+    Returns True if user is under limit (and increments). False if over limit.
+    Uses Redis when enabled, else in-memory _memory_user.
+    """
+    user_key = f"rate_limit:user:{user_id}"
+    if cache_service.enabled:
+        current = cache_service.get(user_key)
+        if current is None:
+            cache_service.set(user_key, 1, ttl=window_sec)
+            return True
+        if current >= limit_per_minute:
+            return False
+        cache_service.set(user_key, current + 1, ttl=window_sec)
+        return True
+    return _check_rate_limit_memory_user(user_key, limit_per_minute)
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Middleware for rate limiting API requests"""
 
@@ -135,6 +213,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"Rate limit exceeded. Maximum {self.requests_per_minute} requests per minute.",
+            )
+
+        # Per-user rate limit (when JWT present; avoids NAT/shared-IP throttling)
+        user_id = _extract_user_id_from_request(request)
+        if user_id and not check_user_rate_limit(user_id, RATE_LIMIT_USER_PER_MINUTE):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Rate limit exceeded per user. Maximum {RATE_LIMIT_USER_PER_MINUTE} requests per minute. Try again later.",
             )
 
         # Heavy-endpoint rate limit (stricter per-endpoint limit)
