@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { projectsAPI, organizationsAPI } from "@/lib/api";
 import { analytics } from "@/lib/analytics";
 import { useToast } from "@/components/ToastContainer";
@@ -12,8 +13,7 @@ type UsageMode = "full" | "test_only";
 
 export default function NewProjectPage() {
   const router = useRouter();
-  const params = useParams();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
+  const { orgId } = useOrgProjectParams();
   const toast = useToast();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");

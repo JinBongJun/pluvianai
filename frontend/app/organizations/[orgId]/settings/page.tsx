@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useSWRConfig } from "swr";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
 import { organizationsAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import {
   Settings,
   Trash2,
@@ -35,9 +36,8 @@ import { H1, Text } from "@/components/ui/Typography";
 
 export default function OrgSettingsPage() {
   const router = useRouter();
-  const params = useParams();
   const toast = useToast();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
+  const { orgId } = useOrgProjectParams();
   const { mutate } = useSWRConfig();
 
   const [orgName, setOrgName] = useState("");

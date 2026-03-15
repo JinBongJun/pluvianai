@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState, useRef, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import Button from "@/components/ui/Button";
 import { clsx } from "clsx";
 import { OrganizationDetail, OrganizationProject, organizationsAPI } from "@/lib/api";
@@ -25,8 +26,7 @@ export type AlertFilter = "all" | "with_alerts" | "no_alerts";
 
 export default function OrgProjectsPage() {
   const router = useRouter();
-  const params = useParams();
-  const orgId = Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId;
+  const { orgId } = useOrgProjectParams();
   const [projectQuery, setProjectQuery] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [filterAlerts, setFilterAlerts] = useState<AlertFilter>("all");

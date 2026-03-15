@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { useParams } from "next/navigation";
 import useSWR from "swr";
 import ProjectLayout from "@/components/layout/ProjectLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { projectsAPI, organizationsAPI } from "@/lib/api";
 import {
   Zap,
@@ -23,9 +23,7 @@ import clsx from "clsx";
 import Button from "@/components/ui/Button";
 
 export default function InfrastructureHubPage() {
-  const params = useParams();
-  const orgId = params?.orgId as string;
-  const projectId = Number(params?.projectId);
+  const { orgId, projectId } = useOrgProjectParams();
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
   const { data: project } = useSWR(projectId ? ["project", projectId] : null, () =>
