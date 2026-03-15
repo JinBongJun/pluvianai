@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import useSWR from "swr";
 import { motion } from "framer-motion";
@@ -355,6 +355,7 @@ function saveLvPositions(nodes: Node[], projectId: number) {
 
 function LiveViewContent() {
   const params = useParams();
+  const router = useRouter();
   const nodeTypes = useMemo(() => NODE_TYPES, []);
   const edgeTypes = useMemo(() => EDGE_TYPES, []);
   const orgId = params?.orgId as string;
@@ -365,7 +366,19 @@ function LiveViewContent() {
 
   const { data: project } = useSWR(
     projectId && !isNaN(projectId) ? ["project", projectId] : null,
-    () => projectsAPI.get(projectId)
+    async () => {
+      try {
+        return await projectsAPI.get(projectId);
+      } catch (e: any) {
+        const status = e?.response?.status;
+        const msg = e?.response?.data?.detail ?? e?.response?.data?.error?.message ?? "";
+        if (status === 404 && (msg === "Project not found" || msg === "Not Found")) {
+          router.replace(orgId ? `/organizations/${orgId}/projects` : "/organizations");
+          return undefined;
+        }
+        throw e;
+      }
+    }
   );
   const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
     organizationsAPI.get(orgId)
