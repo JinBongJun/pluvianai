@@ -85,10 +85,17 @@ export default function OrgSettingsPage() {
         "Environment archived. Permanent deletion is scheduled after the safety grace period.",
         "success"
       );
-      // Prevent SWR from revalidating deleted org (avoids 404 in Network tab)
-      mutate(["organization", orgId], undefined, { revalidate: false });
+      // Prevent SWR from revalidating deleted org (avoids 404 noise after delete)
       mutate(
-        (k) => Array.isArray(k) && k[0] === "organization-projects-list" && k[1] === orgId,
+        key =>
+          Array.isArray(key) &&
+          key.some(part => part === orgId || part === String(orgId)),
+        undefined,
+        { revalidate: false }
+      );
+      // Also clear organization project lists for this org
+      mutate(
+        key => Array.isArray(key) && key[0] === "organization-projects-list" && key[1] === orgId,
         undefined,
         { revalidate: false }
       );
