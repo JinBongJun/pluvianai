@@ -5,6 +5,7 @@ Security utilities for JWT authentication
 from datetime import datetime, timedelta
 from typing import Optional, List, Any, Tuple
 from jose import JWTError, jwt
+from jose.exceptions import ExpiredSignatureError
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status, Header, Request
 from fastapi.security import OAuth2PasswordBearer
@@ -19,6 +20,22 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds
 
 # OAuth2 scheme; auto_error=False so get_current_user can fall back to cookies
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login", auto_error=False)
+
+
+class TokenValidationError(Exception):
+    """Structured JWT validation error for user-facing auth responses."""
+
+    def __init__(self, code: str, message: str, log_reason: Optional[str] = None):
+        self.code = code
+        self.message = message
+        self.log_reason = log_reason or message
+        super().__init__(self.message)
+
+
+def auth_error_detail(code: str, message: str, **extra: Any) -> dict:
+    detail = {"code": code, "message": message}
+    detail.update({k: v for k, v in extra.items() if v is not None})
+    return detail
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -59,8 +76,8 @@ def decode_token(token: str) -> Optional[dict]:
     from app.core.logging_config import logger
     try:
         payload = jwt.decode(
-            token, 
-            settings.SECRET_KEY, 
+            token,
+            settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM],
             options={"leeway": 300}  # Increase leeway to 5 minutes
         )
@@ -74,6 +91,45 @@ def decode_token(token: str) -> Optional[dict]:
         elif "signature" in error_msg.lower():
             logger.error(f"🔑 [decode_token] Signature mismatch. Possible SECRET_KEY issue.")
         return None
+
+
+def decode_token_or_raise(token: str, *, expected_type: Optional[str] = None) -> dict:
+    """Decode a JWT and raise a structured exception on expected auth failures."""
+    from app.core.logging_config import logger
+
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+            options={"leeway": 300},
+        )
+    except ExpiredSignatureError as exc:
+        code = f"{expected_type}_token_expired" if expected_type else "auth_token_expired"
+        raise TokenValidationError(
+            code=code,
+            message="Your session has expired. Please sign in again.",
+            log_reason=str(exc),
+        ) from exc
+    except JWTError as exc:
+        code = f"{expected_type}_token_invalid" if expected_type else "auth_token_invalid"
+        raise TokenValidationError(
+            code=code,
+            message="Your login session is no longer valid. Please sign in again.",
+            log_reason=str(exc),
+        ) from exc
+
+    if expected_type and payload.get("type") != expected_type:
+        logger.warning(
+            "JWT token type mismatch",
+            extra={"expected_type": expected_type, "actual_type": payload.get("type")},
+        )
+        raise TokenValidationError(
+            code=f"{expected_type}_token_invalid",
+            message="Your login session is no longer valid. Please sign in again.",
+            log_reason=f"Token type mismatch: expected {expected_type}, got {payload.get('type')}",
+        )
+    return payload
 
 
 async def get_current_user(
@@ -102,16 +158,17 @@ async def get_current_user(
         logger.warning(f"🟡 [get_current_user] 401 Unauthorized: No token provided via Header or Cookie. PATH: {request.url.path}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="NOT_AUTHENTICATED",
+            detail=auth_error_detail("no_token", "You need to sign in to access this page."),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     logger.debug(f"🔍 [get_current_user] Token source: {source}, Token length: {len(final_token)}")
-    payload = decode_token(final_token)
-    if payload is None:
+    try:
+        payload = decode_token_or_raise(final_token, expected_type="access")
+    except TokenValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expired or invalid",
+            detail=auth_error_detail(exc.code, exc.message),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -119,14 +176,21 @@ async def get_current_user(
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token claims",
+            detail=auth_error_detail(
+                "access_token_invalid",
+                "Your login session is no longer valid. Please sign in again.",
+            ),
         )
 
     user = db.query(User).filter(User.id == int(user_id)).first()
     if user is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=auth_error_detail(
+                "access_token_invalid",
+                "Your login session is no longer valid. Please sign in again.",
+            ),
+            headers={"WWW-Authenticate": "Bearer"},
         )
     
     if not user.is_active:
@@ -207,7 +271,7 @@ async def get_user_from_api_key(
     if not authorization:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing API key",
+            detail=auth_error_detail("api_key_missing", "API key is required for this request."),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -223,7 +287,7 @@ async def get_user_from_api_key(
     if not api_key.startswith("ag_live_") and not api_key.startswith("ag_test_"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key format",
+            detail=auth_error_detail("api_key_invalid_format", "API key format is invalid."),
         )
 
     # Hash the API key for lookup
@@ -235,14 +299,14 @@ async def get_user_from_api_key(
     if not api_key_record:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
+            detail=auth_error_detail("api_key_invalid", "API key is invalid."),
         )
 
     # Check if API key is expired
     if api_key_record.expires_at and api_key_record.expires_at < datetime.utcnow():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key expired",
+            detail=auth_error_detail("api_key_expired", "API key has expired."),
         )
 
     # Get user
@@ -250,7 +314,7 @@ async def get_user_from_api_key(
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid user",
+            detail=auth_error_detail("api_key_user_invalid", "API key is no longer associated with an active user."),
         )
 
     # Update last_used_at
@@ -366,11 +430,12 @@ def rotate_refresh_token(
     from app.models.refresh_token import RefreshToken
     
     # Verify old refresh token
-    payload = decode_token(old_refresh_token)
-    if payload is None or payload.get("type") != "refresh":
+    try:
+        payload = decode_token_or_raise(old_refresh_token, expected_type="refresh")
+    except TokenValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token"
+            detail=auth_error_detail(exc.code, exc.message),
         )
     
     # Verify user
@@ -378,7 +443,10 @@ def rotate_refresh_token(
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid user"
+            detail=auth_error_detail(
+                "refresh_token_invalid",
+                "Your login session is no longer valid. Please sign in again.",
+            ),
         )
     
     # Calculate hash of old refresh token
@@ -398,21 +466,30 @@ def rotate_refresh_token(
     if not refresh_token_record:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token not found"
+            detail=auth_error_detail(
+                "refresh_token_not_found",
+                "Your login session is no longer valid. Please sign in again.",
+            ),
         )
     
     # Check if token is already revoked
     if refresh_token_record.is_revoked:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token has been revoked"
+            detail=auth_error_detail(
+                "refresh_token_revoked",
+                "This login session has already been replaced. Please sign in again.",
+            ),
         )
     
     # Check if token is expired
     if refresh_token_record.expires_at < datetime.utcnow():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token has expired"
+            detail=auth_error_detail(
+                "refresh_token_expired",
+                "Your session has expired. Please sign in again.",
+            ),
         )
     
     # Revoke old refresh token

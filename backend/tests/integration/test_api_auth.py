@@ -12,6 +12,10 @@ from app.models.usage import Usage
 @pytest.mark.asyncio
 class TestAuthAPI:
     """Test Authentication API endpoints using async client"""
+
+    @staticmethod
+    def _extract_error(data: dict) -> dict:
+        return data.get("error") or {}
     
     async def test_register_success(self, async_client, db):
         """Test user registration"""
@@ -125,6 +129,9 @@ class TestAuthAPI:
         )
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        error = self._extract_error(response.json())
+        assert error["code"] == "invalid_credentials"
+        assert error["message"] == "Email or password is incorrect."
     
     async def test_login_nonexistent_user(self, async_client):
         """Test login with non-existent user"""
@@ -137,6 +144,9 @@ class TestAuthAPI:
         )
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        error = self._extract_error(response.json())
+        assert error["code"] == "invalid_credentials"
+        assert error["message"] == "Email or password is incorrect."
     
     async def test_get_current_user(self, async_client, auth_headers, test_user):
         """Test getting current user info"""
@@ -155,6 +165,20 @@ class TestAuthAPI:
         response = await async_client.get("/api/v1/auth/me")
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        error = self._extract_error(response.json())
+        assert error["code"] == "no_token"
+        assert error["message"] == "You need to sign in to access this page."
+
+    async def test_refresh_with_invalid_token_returns_structured_401(self, async_client):
+        response = await async_client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": "definitely-not-a-valid-token"},
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        error = self._extract_error(response.json())
+        assert error["code"] == "refresh_token_invalid"
+        assert error["message"] == "Your login session is no longer valid. Please sign in again."
 
     async def test_get_my_usage_includes_platform_replay_credit_fields(
         self, async_client, auth_headers, db, test_user, test_project
