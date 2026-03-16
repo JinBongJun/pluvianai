@@ -391,7 +391,8 @@ function LiveViewContent() {
     error: agentsError,
   } = useSWR(
     projectId && !isNaN(projectId) && projectId > 0 ? ["live-view-agents", projectId] : null,
-    () => liveViewAPI.getAgents(projectId)
+    () => liveViewAPI.getAgents(projectId),
+    { refreshInterval: 2000 }
   );
 
   const { fitView } = useReactFlow();

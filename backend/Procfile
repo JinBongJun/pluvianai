@@ -1,3 +1,2 @@
 web: python start.py
-
-
+worker: python -m app.workers.ingest_worker
