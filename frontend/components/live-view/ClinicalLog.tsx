@@ -929,7 +929,12 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
       )}
 
       {/* Scrollable Data Grid */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar relative flex flex-col p-4 md:p-6 lg:p-8 shrink-0">
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar relative flex flex-col p-4 md:p-6 lg:p-8"
+        onWheelCapture={event => {
+          event.stopPropagation();
+        }}
+      >
         <div className="flex flex-col border border-white/[0.06] rounded-[20px] overflow-hidden bg-[#18191e] shadow-2xl mb-12">
           {/* Fixed Data Grid Header */}
           <div className="bg-[#18191e] flex items-center justify-between text-[13px] font-bold text-slate-400 border-b border-white/[0.06] py-3.5 px-6 shrink-0">

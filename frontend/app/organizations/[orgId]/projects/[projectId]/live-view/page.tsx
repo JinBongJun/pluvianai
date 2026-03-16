@@ -613,6 +613,7 @@ function LiveViewContent() {
           isOpen={!!selectedAgentId}
           width={760}
           contentClassName="min-h-0 overflow-hidden"
+          contentScrollable={false}
           onClose={() => {
             setSelectedAgentId(null);
             setPanelTab("logs");
