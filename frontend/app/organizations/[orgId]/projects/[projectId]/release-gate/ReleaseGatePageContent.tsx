@@ -50,6 +50,7 @@ import {
   type ReleaseGateHistoryResponse,
   type ReleaseGateResult,
 } from "@/lib/api";
+import { getApiErrorCode, getApiErrorMessage, redirectToLogin } from "@/lib/api/client";
 
 type GateTab = "validate" | "history";
 type EditableTool = { id: string; name: string; description: string; parameters: string };
@@ -972,8 +973,18 @@ export default function ReleaseGatePageContent() {
           if (cancelled) return;
           consecutiveErrors += 1;
           const statusCode = e?.response?.status;
-          if (statusCode === 401 || statusCode === 403) {
+          if (statusCode === 401) {
+            redirectToLogin({
+              code: getApiErrorCode(e),
+              message: getApiErrorMessage(e),
+            });
             setError("Session expired. Please log in again.");
+            setActiveJobId(null);
+            setIsValidating(false);
+            return;
+          }
+          if (statusCode === 403) {
+            setError("You do not have access to this project.");
             setActiveJobId(null);
             setIsValidating(false);
             return;
@@ -1780,16 +1791,25 @@ export default function ReleaseGatePageContent() {
   };
 
   const agentsErrorStatus = Number((agentsError as any)?.response?.status ?? 0);
+  const agentsErrorCode = getApiErrorCode(agentsError);
   const showGateLoadingState = agentsLoading && typeof agentsData === "undefined";
-  const showGateAccessDeniedState =
-    !!agentsError && (agentsErrorStatus === 401 || agentsErrorStatus === 403);
-  const showGateApiErrorState = !!agentsError && !showGateAccessDeniedState;
+  const showGateAccessDeniedState = !!agentsError && agentsErrorStatus === 403;
+  const showGateApiErrorState =
+    !!agentsError && agentsErrorStatus !== 401 && !showGateAccessDeniedState;
   const showGateEmptyState =
     !showGateLoadingState &&
     !showGateAccessDeniedState &&
     !showGateApiErrorState &&
     agentsLoaded &&
     agents.length === 0;
+
+  useEffect(() => {
+    if (agentsErrorStatus !== 401) return;
+    redirectToLogin({
+      code: agentsErrorCode,
+      message: getApiErrorMessage(agentsError),
+    });
+  }, [agentsError, agentsErrorCode, agentsErrorStatus]);
 
   const contextValue: Record<string, unknown> = {
     orgId,
