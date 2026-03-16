@@ -1,4 +1,5 @@
 import asyncio
+import json
 from typing import List, Optional, Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from pydantic import BaseModel, Field
@@ -6,6 +7,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.security import get_current_user, get_current_user_or_api_key, RequireScope
 from app.core.dependencies import get_api_call_service
 from app.models.user import User
@@ -13,6 +15,7 @@ from app.core.permissions import check_project_access
 from app.services.data_normalizer import DataNormalizer
 from app.services.background_tasks import background_task_service
 from app.services.ops_alerting import ops_alerting
+from app.services.cache_service import cache_service
 
 router = APIRouter()
 
@@ -138,6 +141,8 @@ async def ingest_api_call(
 ):
     """
     Ingest a single API call from the SDK. Creates APICall + Snapshot.
+    When Redis is enabled, payload is pushed to ingest queue and a worker persists it (202 immediately).
+    Otherwise, processing runs in-process (asyncio task).
     Auth: JWT or SDK API key (key must have scope 'ingest' or '*'); project_id in path must be accessible.
     """
     if body.project_id is not None and body.project_id != project_id:
@@ -149,18 +154,51 @@ async def ingest_api_call(
         response_data=body.response_data or {},
         url="",
     )
-    asyncio.create_task(
-        background_task_service.save_api_call_async(
-            project_id=project_id,
-            request_data=body.request_data or {},
-            response_data=body.response_data or {},
-            normalized=normalized,
-            latency_ms=body.latency_ms,
-            status_code=body.status_code,
-            agent_name=body.agent_name,
-            chain_id=body.chain_id,
-            api_key=None,
+    if cache_service.enabled:
+        payload = {
+            "project_id": project_id,
+            "request_data": body.request_data or {},
+            "response_data": body.response_data or {},
+            "normalized": normalized,
+            "latency_ms": body.latency_ms,
+            "status_code": body.status_code,
+            "agent_name": body.agent_name,
+            "chain_id": body.chain_id,
+        }
+        try:
+            cache_service.redis_client.lpush(
+                settings.INGEST_QUEUE_KEY,
+                json.dumps(payload, default=str),
+            )
+        except Exception:
+            # Fallback: process in-process if queue push fails
+            asyncio.create_task(
+                background_task_service.save_api_call_async(
+                    project_id=project_id,
+                    request_data=body.request_data or {},
+                    response_data=body.response_data or {},
+                    normalized=normalized,
+                    latency_ms=body.latency_ms,
+                    status_code=body.status_code,
+                    agent_name=body.agent_name,
+                    chain_id=body.chain_id,
+                    api_key=None,
+                )
+            )
+            ops_alerting.observe_snapshot_status(project_id=project_id, status_code=int(body.status_code))
+    else:
+        asyncio.create_task(
+            background_task_service.save_api_call_async(
+                project_id=project_id,
+                request_data=body.request_data or {},
+                response_data=body.response_data or {},
+                normalized=normalized,
+                latency_ms=body.latency_ms,
+                status_code=body.status_code,
+                agent_name=body.agent_name,
+                chain_id=body.chain_id,
+                api_key=None,
+            )
         )
-    )
-    ops_alerting.observe_snapshot_status(project_id=project_id, status_code=int(body.status_code))
+        ops_alerting.observe_snapshot_status(project_id=project_id, status_code=int(body.status_code))
     return {"accepted": True}

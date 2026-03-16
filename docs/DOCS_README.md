@@ -29,6 +29,7 @@
 | [rate-limit-heavy-endpoints-design.md](./rate-limit-heavy-endpoints-design.md) | 엔드포인트별 rate limit 설계 (무거운 경로 한도) |
 | [security-roadmap-per-user-rate-limit-and-api-key-scope.md](./security-roadmap-per-user-rate-limit-and-api-key-scope.md) | 단기·중기 보완: per-user rate limit, API key scope 로드맵 |
 | [frontend-api-split-design.md](./frontend-api-split-design.md) | frontend `lib/api.ts` 도메인별 분리 설계 (폴더 구조, re-export, 마이그레이션 순서) |
+| [mvp-realtime-pipeline-implementation-plan.md](./mvp-realtime-pipeline-implementation-plan.md) | 실시간 파이프라인 (SDK 큐/배치, 백엔드 ingest 큐+워커, Live View 폴링) 구현·안정화 계획 및 **운영 가이드 (Redis / worker 실행)** |
 
 ---
 

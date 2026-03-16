@@ -79,6 +79,25 @@ with pluvianai.chain("user-query-123", agent_name="data-collector"):
     # You can view them in the Agent Chains page
 ```
 
+### Queuing and batching
+
+Events are queued and sent in the background to avoid blocking your application. You can tune batching:
+
+- **`flush_at`** / `PLUVIANAI_FLUSH_AT`: Max number of events to batch before sending (default: 10).
+- **`flush_interval`** / `PLUVIANAI_FLUSH_INTERVAL`: Max seconds to wait before sending a batch (default: 5.0).
+
+In short-lived environments (e.g. serverless, scripts), call **`flush()`** or **`shutdown()`** before process exit so pending events are sent:
+
+```python
+import pluvianai
+pluvianai.init()
+# ... your LLM calls ...
+
+pluvianai.flush()   # Send pending events now
+# or
+pluvianai.shutdown()  # Flush and stop background worker
+```
+
 ### Manual Tracking
 
 If you prefer to track calls manually:
