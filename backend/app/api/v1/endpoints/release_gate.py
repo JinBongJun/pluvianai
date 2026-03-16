@@ -33,8 +33,6 @@ from app.api.v1.endpoints.behavior import (
     _build_ruleset_hash,
     _derive_agent_id,
     _iso,
-    _resolve_effective_rules,
-    _run_behavior_validation,
 )
 from app.core.behavior_diff import compute_behavior_diff, tool_calls_summary_to_sequence
 from app.core.canonical import (
@@ -58,6 +56,10 @@ from app.domain.live_view_release_gate import build_agent_visibility_context, is
 from app.services.ops_alerting import ops_alerting
 from app.services.replay_service import replay_service
 from app.services.user_api_key_service import UserApiKeyService
+from app.services.behavior_rules_service import (
+    resolve_effective_rules,
+    run_behavior_validation,
+)
 
 router = APIRouter()
 SUPPORTED_REPLAY_PROVIDERS = {"openai", "anthropic", "google"}
@@ -1164,10 +1166,10 @@ async def _run_release_gate(
                     all_reasons.append(reason)
                     continue
 
-                candidate_rules, candidate_policy_resolution = _resolve_effective_rules(
+                candidate_rules, candidate_policy_resolution = resolve_effective_rules(
                     rules, candidate_steps
                 )
-                _candidate_status, candidate_summary, candidate_violations = _run_behavior_validation(
+                _candidate_status, candidate_summary, candidate_violations = run_behavior_validation(
                     candidate_rules, candidate_steps
                 )
                 candidate_summary["policy_resolution"] = candidate_policy_resolution

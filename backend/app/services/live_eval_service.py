@@ -10,11 +10,11 @@ from sqlalchemy.orm import Session
 
 from app.models.snapshot import Snapshot
 from app.models.behavior_rule import BehaviorRule
-from app.api.v1.endpoints.behavior import (
-    _resolve_effective_rules,
-    _run_behavior_validation,
-)
 from app.core.canonical import response_to_canonical_steps
+from app.services.behavior_rules_service import (
+    resolve_effective_rules,
+    run_behavior_validation,
+)
 
 
 def _clamp_int(value: Any, default: int, minimum: int, maximum: int) -> int:
@@ -219,8 +219,8 @@ def _run_tool_policy_for_snapshot(
     )
     if not rules:
         return "pass"
-    effective_rules, _ = _resolve_effective_rules(rules, steps)
-    status_out, _, _ = _run_behavior_validation(effective_rules, steps)
+    effective_rules, _ = resolve_effective_rules(rules, steps)
+    status_out, _, _ = run_behavior_validation(effective_rules, steps)
     return status_out
 
 
