@@ -37,6 +37,10 @@ from app.models.user import User
 from app.models.validation_dataset import ValidationDataset
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.project import Project
+from app.services.behavior_rules_service import (
+    resolve_effective_rules,
+    run_behavior_validation,
+)
 
 router = APIRouter()
 
@@ -289,81 +293,7 @@ def _resolve_effective_rules(
     rules: List[BehaviorRule],
     steps: List[Dict[str, Any]],
 ) -> Tuple[List[BehaviorRule], Dict[str, Any]]:
-    """
-    Resolve effective policy rules for a specific validation target.
-
-    Priority:
-    - Project defaults always apply unless overridden.
-    - Agent-scoped rules apply when the target contains that agent_id.
-    - Agent overrides can shadow project defaults via rule_json.meta.override_mode:
-      - additive (default): no shadowing
-      - replace_same_name: replace project rules with same name+type
-      - replace_same_type: replace all project rules of same type
-    - Optional explicit shadowing:
-      - rule_json.meta.override_project_rule_ids: [rule_id, ...]
-      - rule_json.meta.override_project_rule_names: [rule_name, ...]
-    """
-    scoped_rules = [r for r in rules if r.enabled and _match_rule_scope(r, steps)]
-    project_rules = [r for r in scoped_rules if str(r.scope_type or "project") == "project"]
-    agent_rules = [r for r in scoped_rules if str(r.scope_type or "") == "agent"]
-    other_rules = [r for r in scoped_rules if str(r.scope_type or "") not in {"project", "agent"}]
-
-    remaining_project_rules = list(project_rules)
-    override_events: List[Dict[str, Any]] = []
-
-    for agent_rule in agent_rules:
-        rule_json = agent_rule.rule_json if isinstance(agent_rule.rule_json, dict) else {}
-        meta = rule_json.get("meta") if isinstance(rule_json.get("meta"), dict) else {}
-        override_mode = str(meta.get("override_mode") or "additive").strip().lower()
-
-        explicit_ids = {str(x) for x in (meta.get("override_project_rule_ids") or [])}
-        explicit_names = {_normalize_rule_name(x) for x in (meta.get("override_project_rule_names") or [])}
-
-        removed_ids: List[str] = []
-        next_project_rules: List[BehaviorRule] = []
-        for project_rule in remaining_project_rules:
-            remove = False
-            if project_rule.id in explicit_ids:
-                remove = True
-            if _normalize_rule_name(project_rule.name) in explicit_names and _normalize_rule_name(project_rule.name):
-                remove = True
-
-            same_type = _rule_type(project_rule) == _rule_type(agent_rule) and bool(_rule_type(project_rule))
-            same_name_and_type = (
-                _normalize_rule_name(project_rule.name) == _normalize_rule_name(agent_rule.name)
-                and same_type
-                and bool(_normalize_rule_name(project_rule.name))
-            )
-
-            if override_mode == "replace_same_name" and same_name_and_type:
-                remove = True
-            elif override_mode == "replace_same_type" and same_type:
-                remove = True
-
-            if remove:
-                removed_ids.append(project_rule.id)
-            else:
-                next_project_rules.append(project_rule)
-
-        remaining_project_rules = next_project_rules
-        if removed_ids:
-            override_events.append(
-                {
-                    "agent_rule_id": agent_rule.id,
-                    "agent_id": agent_rule.scope_ref,
-                    "override_mode": override_mode,
-                    "shadowed_project_rule_ids": removed_ids,
-                }
-            )
-
-    effective_rules = remaining_project_rules + agent_rules + other_rules
-    resolution = {
-        "project_defaults_total": len(project_rules),
-        "agent_overrides_total": len(agent_rules),
-        "effective_rule_count": len(effective_rules),
-        "override_events": override_events,
-    }
-    return effective_rules, resolution
+    return resolve_effective_rules(rules, steps)
 
 
 def _validate_tool_order(rule: BehaviorRule, spec: Dict[str, Any], steps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -692,73 +622,7 @@ def _persist_trajectory_steps(
 
 
 def _run_behavior_validation(rules: List[BehaviorRule], steps: List[Dict[str, Any]]) -> Tuple[str, Dict[str, Any], List[Dict[str, Any]]]:
-    violations: List[Dict[str, Any]] = []
-
-    # System violations (must be added before status calculation)
-    if any(s.get("_provider_unknown") for s in steps):
-        violations.append({
-            "rule_id": None,
-            "rule_name": None,
-            "severity": "critical",
-            "step_ref": None,
-            "message": "Unknown provider response; cannot validate tool calls",
-            "evidence": {},
-        })
-    if any(s.get("_id_conflict") for s in steps):
-        violations.append({
-            "rule_id": None,
-            "rule_name": None,
-            "severity": "critical",
-            "step_ref": None,
-            "message": "Duplicate tool_call id with conflicting name or arguments",
-            "evidence": {},
-        })
-    if any(
-        s.get("step_type") == "tool_call" and (s.get("tool_name") == "" or s.get("_tool_name_empty"))
-        for s in steps
-    ):
-        violations.append({
-            "rule_id": None,
-            "rule_name": None,
-            "severity": "critical",
-            "step_ref": None,
-            "message": "Tool name empty or invalid",
-            "evidence": {},
-        })
-
-    for rule in rules:
-        if not rule.enabled:
-            continue
-        if not _match_rule_scope(rule, steps):
-            continue
-        rule_json = rule.rule_json or {}
-        rule_type = rule_json.get("type")
-        spec = rule_json.get("spec") or {}
-
-        if rule_type == "tool_order":
-            violations.extend(_validate_tool_order(rule, spec, steps))
-        elif rule_type == "tool_forbidden":
-            violations.extend(_validate_tool_forbidden(rule, spec, steps))
-        elif rule_type == "tool_allowlist":
-            violations.extend(_validate_tool_allowlist(rule, spec, steps))
-        elif rule_type == "tool_args_schema":
-            violations.extend(_validate_tool_args_schema(rule, spec, steps))
-
-    severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
-    for v in violations:
-        sev = str(v.get("severity") or "medium").lower()
-        if sev in severity_counts:
-            severity_counts[sev] += 1
-
-    status_out = "pass" if len(violations) == 0 else "fail"
-    summary = {
-        "status": status_out,
-        "step_count": len(steps),
-        "rule_count": len(rules),
-        "violation_count": len(violations),
-        "severity_breakdown": severity_counts,
-    }
-    return status_out, summary, violations
+    return run_behavior_validation(rules, steps)
 
 
 @router.get("/projects/{project_id}/behavior/rules")
