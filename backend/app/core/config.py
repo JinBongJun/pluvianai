@@ -39,6 +39,8 @@ class Settings(BaseSettings):
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
+    # Ingest queue (Phase 3: SDK api-calls pushed here, worker pops and persists)
+    INGEST_QUEUE_KEY: str = "ingest:api_calls"
 
     # Security
     SECRET_KEY: str = "your-secret-key-change-in-production"  # Should be changed in production

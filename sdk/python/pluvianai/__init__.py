@@ -6,6 +6,7 @@ import json
 import time
 import httpx
 import threading
+from queue import Queue, Empty
 from typing import Optional, Dict, Any, Callable
 from functools import wraps
 from contextlib import contextmanager
@@ -25,7 +26,9 @@ class PluvianAI:
         firewall_timeout: float = 1.0,
         pii_timeout: float = 0.1,
         circuit_breaker: Optional[Dict[str, Any]] = None,
-        health_check_interval: float = 30.0
+        health_check_interval: float = 30.0,
+        flush_at: Optional[int] = None,
+        flush_interval: Optional[float] = None,
     ):
         """
         Initialize PluvianAI SDK
@@ -41,6 +44,8 @@ class PluvianAI:
             pii_timeout: PII sanitization timeout in seconds (default: 0.1)
             circuit_breaker: Circuit breaker config (default: failure_threshold=5, recovery_time=30)
             health_check_interval: Health check interval in seconds (default: 30.0)
+            flush_at: Max events to batch before sending (default: 10, env PLUVIANAI_FLUSH_AT)
+            flush_interval: Max seconds to wait before sending a batch (default: 5.0, env PLUVIANAI_FLUSH_INTERVAL)
         """
         self.api_key = api_key or os.getenv("PLUVIANAI_API_KEY")
         self.project_id = project_id or os.getenv("PLUVIANAI_PROJECT_ID")
@@ -53,6 +58,28 @@ class PluvianAI:
         self.firewall_timeout = firewall_timeout
         self.pii_timeout = pii_timeout
         self.health_check_interval = health_check_interval
+
+        # Batching: queue + background send (Langfuse-style)
+        _flush_at = flush_at
+        if _flush_at is None and os.getenv("PLUVIANAI_FLUSH_AT"):
+            try:
+                _flush_at = int(os.getenv("PLUVIANAI_FLUSH_AT", "10"))
+            except ValueError:
+                _flush_at = 10
+        self._flush_at = _flush_at if _flush_at is not None else 10
+        _flush_interval = flush_interval
+        if _flush_interval is None and os.getenv("PLUVIANAI_FLUSH_INTERVAL"):
+            try:
+                _flush_interval = float(os.getenv("PLUVIANAI_FLUSH_INTERVAL", "5.0"))
+            except ValueError:
+                _flush_interval = 5.0
+        self._flush_interval = _flush_interval if _flush_interval is not None else 5.0
+        self._queue: Queue = Queue()
+        self._shutdown = False
+        self._flush_event = threading.Event()
+        self._worker = threading.Thread(target=self._worker_loop, daemon=True)
+        if self.enabled:
+            self._worker.start()
 
         # Circuit Breaker configuration
         self.circuit_breaker_config = circuit_breaker or {
@@ -273,16 +300,12 @@ class PluvianAI:
                 delattr(self._local, 'agent_name')
 
     def _send_to_api(self, request_data: Dict[str, Any], response_data: Dict[str, Any], latency_ms: float, status_code: int):
-        """Send API call data to PluvianAI (non-blocking)"""
+        """Enqueue API call data for background send (non-blocking)."""
         if not self.enabled:
             return
-
         try:
-            # Get chain_id and agent_name from context
             chain_id = self._get_chain_id()
             agent_name = self._get_agent_name()
-
-            # Prepare payload
             payload = {
                 "project_id": int(self.project_id),
                 "request_data": request_data,
@@ -291,39 +314,74 @@ class PluvianAI:
                 "status_code": status_code,
                 "agent_name": agent_name,
             }
-
-            # Add chain_id if available
             if chain_id:
                 payload["chain_id"] = chain_id
-
-            # Check Circuit Breaker state
             if not self._check_circuit_breaker():
-                # Circuit is open, bypass PluvianAI (fail-open)
                 return
-
-            # Send asynchronously (fire and forget)
-            # In production, use a background thread or queue
-            try:
-                with httpx.Client(timeout=self.proxy_timeout) as client:
-                    response = client.post(
-                        f"{self.api_url}/api/v1/api-calls",
-                        json=payload,
-                        headers={
-                            "Authorization": f"Bearer {self.api_key}",
-                            "Content-Type": "application/json",
-                        },
-                    )
-                    # Success - reset circuit breaker
-                    self._reset_circuit_breaker()
-            except Exception as e:
-                # Record failure for circuit breaker
-                self._record_circuit_failure()
-                # Silently fail - don't block the application (fail-open)
-                pass
-
+            self._queue.put_nowait(payload)
+            if self._queue.qsize() >= self._flush_at:
+                self._flush_event.set()
         except Exception:
-            # Silently fail - don't block the application
             pass
+
+    def _do_send(self, payload: Dict[str, Any]) -> None:
+        """Send a single payload to the API (used by worker and flush)."""
+        if not self.enabled:
+            return
+        try:
+            if not self._check_circuit_breaker():
+                return
+            with httpx.Client(timeout=self.proxy_timeout) as client:
+                client.post(
+                    f"{self.api_url}/api/v1/projects/{self.project_id}/api-calls",
+                    json=payload,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                )
+                self._reset_circuit_breaker()
+        except Exception:
+            self._record_circuit_failure()
+
+    def _worker_loop(self) -> None:
+        """Background thread: flush queue by flush_interval or flush_at."""
+        while not self._shutdown:
+            self._flush_event.wait(timeout=self._flush_interval)
+            self._flush_event.clear()
+            batch = []
+            for _ in range(self._flush_at):
+                try:
+                    batch.append(self._queue.get_nowait())
+                except Empty:
+                    break
+            for i, p in enumerate(batch):
+                if self._shutdown:
+                    for q in batch[i:]:
+                        self._queue.put_nowait(q)
+                    break
+                self._do_send(p)
+
+    def flush(self) -> None:
+        """Send all pending events immediately. Call before process exit in serverless/short-lived envs."""
+        if not self.enabled:
+            return
+        batch = []
+        try:
+            while True:
+                batch.append(self._queue.get_nowait())
+        except Empty:
+            pass
+        for p in batch:
+            self._do_send(p)
+
+    def shutdown(self) -> None:
+        """Flush pending events and stop the background worker. Call before process exit to avoid losing events."""
+        self._shutdown = True
+        self._flush_event.set()
+        self.flush()
+        if self._worker.is_alive():
+            self._worker.join(timeout=5.0)
 
     def track_call(
         self,
@@ -563,12 +621,15 @@ def init(
     firewall_timeout: float = 1.0,
     pii_timeout: float = 0.1,
     circuit_breaker: Optional[Dict[str, Any]] = None,
-    health_check_interval: float = 30.0
+    health_check_interval: float = 30.0,
+    flush_at: Optional[int] = None,
+    flush_interval: Optional[float] = None,
 ):
     """
     Initialize PluvianAI with zero-config setup
 
     This function automatically patches the OpenAI SDK to capture all API calls.
+    Events are queued and sent in the background (batch by flush_at or flush_interval).
 
     Example:
         import pluvianai
@@ -579,11 +640,15 @@ def init(
         client = OpenAI()
         response = client.chat.completions.create(...)
 
+        # Before exit (e.g. serverless): pluvianai.flush() or pluvianai.shutdown()
+
     Args:
         api_key: PluvianAI API key (defaults to PLUVIANAI_API_KEY env var)
         project_id: Project ID (defaults to PLUVIANAI_PROJECT_ID env var)
         api_url: PluvianAI API URL (defaults to PLUVIANAI_API_URL env var)
         agent_name: Agent name for tracking (defaults to PLUVIANAI_AGENT_NAME env var)
+        flush_at: Max events per batch (default 10; env PLUVIANAI_FLUSH_AT)
+        flush_interval: Max seconds before sending a batch (default 5.0; env PLUVIANAI_FLUSH_INTERVAL)
     """
     global _global_instance
     _global_instance = PluvianAI(
@@ -595,7 +660,9 @@ def init(
         firewall_timeout=firewall_timeout,
         pii_timeout=pii_timeout,
         circuit_breaker=circuit_breaker,
-        health_check_interval=health_check_interval
+        health_check_interval=health_check_interval,
+        flush_at=flush_at,
+        flush_interval=flush_interval,
     )
     _global_instance.init()
 
@@ -703,6 +770,20 @@ def check_status(
         )
 
 
+def flush() -> None:
+    """Send all pending events immediately. Call before process exit in serverless/short-lived envs."""
+    global _global_instance
+    if _global_instance:
+        _global_instance.flush()
+
+
+def shutdown() -> None:
+    """Flush pending events and stop the background worker. Call before process exit to avoid losing events."""
+    global _global_instance
+    if _global_instance:
+        _global_instance.shutdown()
+
+
 def get_project_status() -> Dict[str, Any]:
     """
     Get the current regression status for the project.
@@ -758,6 +839,8 @@ __all__ = [
     "init",
     "chain",
     "track_call",
+    "flush",
+    "shutdown",
     "check_status",
     "get_project_status",
     "is_safe",
