@@ -28,6 +28,7 @@ from app.core.security import (
     create_refresh_token,
     decode_token,
     get_current_user,
+    auth_error_detail,
 )
 from app.core.logging_config import logger
 from app.core.decorators import handle_errors
@@ -293,7 +294,10 @@ async def login(
             print(f"🔴 LOGIN FAILED: Invalid credentials for {masked_email}", file=sys.stderr)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password",
+                detail=auth_error_detail(
+                    "invalid_credentials",
+                    "Email or password is incorrect.",
+                ),
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -439,13 +443,22 @@ async def refresh_token(
     if not refresh_token_str:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token required in body or cookie",
+            detail=auth_error_detail(
+                "refresh_token_missing",
+                "Refresh token is required to renew your session.",
+            ),
         )
     
     payload = decode_token(refresh_token_str)
 
     if payload is None or payload.get("type") != "refresh":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=auth_error_detail(
+                "refresh_token_invalid",
+                "Your login session is no longer valid. Please sign in again.",
+            ),
+        )
 
     user_id = int(payload.get("sub"))
     

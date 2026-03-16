@@ -21,6 +21,7 @@ import "reactflow/dist/style.css";
 
 import CanvasPageLayout from "@/components/layout/CanvasPageLayout";
 import { behaviorAPI, liveViewAPI, projectsAPI, organizationsAPI } from "@/lib/api";
+import { getApiErrorCode, getApiErrorMessage, redirectToLogin } from "@/lib/api/client";
 import { AgentCardNode } from "@/components/live-view/AgentCardNode";
 import DrawIOEdge from "@/components/shared/DrawIOEdge";
 import RailwaySidePanel from "@/components/shared/RailwaySidePanel";
@@ -563,14 +564,24 @@ function LiveViewContent() {
   }, [selectedAgentId, setNodes, dragEndCounter]);
 
   const agentsErrorStatus = Number((agentsError as any)?.response?.status ?? 0);
+  const agentsErrorCode = getApiErrorCode(agentsError);
   const showLoadingOverlay = agentsLoading && typeof agentsData === "undefined";
-  const showAccessDeniedOverlay = !!agentsError && (agentsErrorStatus === 401 || agentsErrorStatus === 403);
-  const showApiErrorOverlay = !!agentsError && !showAccessDeniedOverlay;
+  const showAccessDeniedOverlay = !!agentsError && agentsErrorStatus === 403;
+  const showApiErrorOverlay =
+    !!agentsError && agentsErrorStatus !== 401 && !showAccessDeniedOverlay;
   const showEmptyOverlay =
     !showLoadingOverlay &&
     !showAccessDeniedOverlay &&
     !showApiErrorOverlay &&
     agentsList.length === 0;
+
+  useEffect(() => {
+    if (agentsErrorStatus !== 401) return;
+    redirectToLogin({
+      code: agentsErrorCode,
+      message: getApiErrorMessage(agentsError),
+    });
+  }, [agentsError, agentsErrorCode, agentsErrorStatus]);
 
   return (
     <CanvasPageLayout
