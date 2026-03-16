@@ -36,6 +36,16 @@ export const unwrapArrayResponse = (response: { data: any }): any[] => {
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_TIMEOUT_MS = 30_000;
+const SESSION_AUTH_CODES = new Set([
+  "no_token",
+  "access_token_expired",
+  "access_token_invalid",
+  "refresh_token_missing",
+  "refresh_token_expired",
+  "refresh_token_invalid",
+  "refresh_token_not_found",
+  "refresh_token_revoked",
+]);
 
 const PUBLIC_PATHS = [
   /^\/auth\/login/,
@@ -60,6 +70,84 @@ function isPublicPath(url: string): boolean {
   else if (path.startsWith("/api/v1")) path = "/";
   if (!path.startsWith("/")) path = "/" + path;
   return PUBLIC_PATHS.some(re => re.test(path));
+}
+
+type ApiErrorPayload = {
+  status: number;
+  code: string | null;
+  message: string | null;
+  details: Record<string, unknown> | null;
+};
+
+function getSafeNextPath(): string | null {
+  if (typeof window === "undefined") return null;
+  const next = `${window.location.pathname}${window.location.search}`;
+  return next.startsWith("/") ? next : null;
+}
+
+export function clearStoredAuth(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+  localStorage.removeItem("user_info");
+}
+
+export function extractApiErrorPayload(error: any): ApiErrorPayload {
+  const status = Number(error?.response?.status ?? 0);
+  const responseData = error?.response?.data;
+  const topLevelError =
+    responseData?.error && typeof responseData.error === "object" ? responseData.error : null;
+  const detail =
+    responseData?.detail && typeof responseData.detail === "object" ? responseData.detail : null;
+
+  const code =
+    (typeof topLevelError?.code === "string" && topLevelError.code) ||
+    (typeof detail?.code === "string" && detail.code) ||
+    null;
+  const message =
+    (typeof topLevelError?.message === "string" && topLevelError.message) ||
+    (typeof detail?.message === "string" && detail.message) ||
+    (typeof responseData?.message === "string" && responseData.message) ||
+    (typeof responseData?.detail === "string" && responseData.detail) ||
+    null;
+  const details =
+    (topLevelError?.details &&
+    typeof topLevelError.details === "object" &&
+    !Array.isArray(topLevelError.details)
+      ? topLevelError.details
+      : detail) || null;
+
+  return { status, code, message, details };
+}
+
+export function getApiErrorCode(error: any): string | null {
+  return extractApiErrorPayload(error).code;
+}
+
+export function getApiErrorMessage(error: any): string | null {
+  return extractApiErrorPayload(error).message;
+}
+
+export function isSessionAuthError(errorOrCode: any): boolean {
+  const code =
+    typeof errorOrCode === "string" ? errorOrCode : extractApiErrorPayload(errorOrCode).code;
+  return !!code && SESSION_AUTH_CODES.has(code);
+}
+
+export function redirectToLogin(options?: { code?: string | null; message?: string | null }): void {
+  if (typeof window === "undefined") return;
+  const params = new URLSearchParams();
+  params.set("reauth", "1");
+  const code = options?.code?.trim();
+  if (code) params.set("code", code);
+  const next = getSafeNextPath();
+  if (next) params.set("next", next);
+  if (options?.message) {
+    sessionStorage.setItem("pluvianai_reauth_message", options.message);
+  } else {
+    sessionStorage.removeItem("pluvianai_reauth_message");
+  }
+  window.location.href = `/login?${params.toString()}`;
 }
 
 export const apiClient = axios.create({
@@ -87,7 +175,10 @@ apiClient.interceptors.request.use(
         config.url
       );
     }
-    window.location.href = "/login?reauth=1";
+    redirectToLogin({
+      code: "no_token",
+      message: "You need to sign in to access this page.",
+    });
     return Promise.reject(new Error("Not authenticated"));
   },
   err => Promise.reject(err)
@@ -109,14 +200,13 @@ apiClient.interceptors.response.use(
 
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
+      const { code, message } = extractApiErrorPayload(error);
       if (process.env.NODE_ENV === "development") {
-        const detail =
-          error.response?.data?.detail ?? error.response?.data?.message ?? "unknown";
         console.warn(
           "[API] 401 on",
           originalRequest.url,
           "– backend says:",
-          typeof detail === "string" ? detail : JSON.stringify(detail)
+          JSON.stringify({ code, message })
         );
       }
 
@@ -142,16 +232,24 @@ apiClient.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${access_token}`;
           return apiClient(originalRequest);
         } catch (refreshError) {
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("refresh_token");
-          window.location.href = "/login?reauth=1";
+          const refreshPayload = extractApiErrorPayload(refreshError);
+          clearStoredAuth();
+          redirectToLogin({
+            code: refreshPayload.code || code,
+            message:
+              refreshPayload.message ||
+              message ||
+              "Your session has expired. Please sign in again.",
+          });
           return Promise.reject(refreshError);
         }
       }
       if (typeof window !== "undefined") {
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
-        window.location.href = "/login?reauth=1";
+        clearStoredAuth();
+        redirectToLogin({
+          code,
+          message: message || "Your session has expired. Please sign in again.",
+        });
       }
     }
 

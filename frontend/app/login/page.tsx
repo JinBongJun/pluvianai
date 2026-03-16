@@ -6,7 +6,7 @@ import { useFormState, useFormStatus } from "react-dom";
 import { registerAction } from "@/actions/auth-actions";
 import { authAPI } from "@/lib/api";
 import { analytics } from "@/lib/analytics";
-import { getAuthErrorMessage } from "@/lib/auth-messages";
+import { getAuthErrorMessage, getReauthMessage } from "@/lib/auth-messages";
 import { passwordStrength } from "@/lib/validation";
 import { Lock, Mail, User, Eye, EyeOff, ArrowLeft, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
@@ -55,6 +55,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [reauthMessageShown, setReauthMessageShown] = useState(false);
   const [registeredMessageShown, setRegisteredMessageShown] = useState(false);
+  const [reauthBannerMessage, setReauthBannerMessage] = useState("Please log in again.");
   const [mounted, setMounted] = useState(false);
   const [clientLoginSubmitting, setClientLoginSubmitting] = useState(false);
   const [clientLoginError, setClientLoginError] = useState<string | null>(null);
@@ -106,6 +107,7 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get("mode");
     const reauth = params.get("reauth");
+    const reauthCode = params.get("code");
     const sessionExpired = params.get("session_expired");
     const registered = params.get("registered");
     const nextPath = params.get("next");
@@ -124,10 +126,19 @@ export default function LoginPage() {
     }
 
     if (reauth === "1" || sessionExpired === "1") {
+      const storedMessage =
+        typeof window !== "undefined"
+          ? sessionStorage.getItem("pluvianai_reauth_message")
+          : null;
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.delete("reauth");
+      newUrl.searchParams.delete("code");
       newUrl.searchParams.delete("session_expired");
       window.history.replaceState({}, "", newUrl.toString());
+      setReauthBannerMessage(getReauthMessage(reauthCode, storedMessage));
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("pluvianai_reauth_message");
+      }
       setReauthMessageShown(true);
       setTimeout(() => setReauthMessageShown(false), 5000);
     }
@@ -305,7 +316,7 @@ export default function LoginPage() {
                 {/* Reauth message: 401/no-token redirect (not "session expired" — e.g. wrong server or token invalid) */}
                 {reauthMessageShown && !errorMessage && (
                   <div className="bg-amber-500/5 border border-amber-500/20 text-amber-400 px-4 py-3 rounded-2xl text-xs font-bold">
-                    Please log in again.
+                    {reauthBannerMessage}
                     <span className="block mt-1 text-amber-500/80">
                       If you switched between local and Railway, use an account for the current
                       server.
