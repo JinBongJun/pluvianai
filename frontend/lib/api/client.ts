@@ -79,6 +79,13 @@ type ApiErrorPayload = {
   details: Record<string, unknown> | null;
 };
 
+export type RateLimitInfo = {
+  bucket: string | null;
+  limit: number | null;
+  windowSec: number | null;
+  retryAfterSec: number | null;
+};
+
 function getSafeNextPath(): string | null {
   if (typeof window === "undefined") return null;
   const next = `${window.location.pathname}${window.location.search}`;
@@ -126,6 +133,26 @@ export function getApiErrorCode(error: any): string | null {
 
 export function getApiErrorMessage(error: any): string | null {
   return extractApiErrorPayload(error).message;
+}
+
+export function isRateLimitError(error: any): boolean {
+  return Number(error?.response?.status ?? 0) === 429;
+}
+
+export function getRateLimitInfo(error: any): RateLimitInfo {
+  const { details } = extractApiErrorPayload(error);
+  const asNumber = (value: unknown): number | null => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  };
+  return {
+    bucket: typeof details?.bucket === "string" ? details.bucket : null,
+    limit: asNumber(details?.limit),
+    windowSec: asNumber(details?.window_sec),
+    retryAfterSec:
+      asNumber(details?.retry_after_sec) ??
+      asNumber(error?.response?.headers?.["retry-after"]),
+  };
 }
 
 export function isSessionAuthError(errorOrCode: any): boolean {

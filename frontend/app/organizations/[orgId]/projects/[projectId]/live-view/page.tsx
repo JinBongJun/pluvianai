@@ -21,7 +21,13 @@ import "reactflow/dist/style.css";
 
 import CanvasPageLayout from "@/components/layout/CanvasPageLayout";
 import { behaviorAPI, liveViewAPI, projectsAPI, organizationsAPI } from "@/lib/api";
-import { getApiErrorCode, getApiErrorMessage, redirectToLogin } from "@/lib/api/client";
+import {
+  getApiErrorCode,
+  getApiErrorMessage,
+  getRateLimitInfo,
+  isRateLimitError,
+  redirectToLogin,
+} from "@/lib/api/client";
 import { AgentCardNode } from "@/components/live-view/AgentCardNode";
 import DrawIOEdge from "@/components/shared/DrawIOEdge";
 import RailwaySidePanel from "@/components/shared/RailwaySidePanel";
@@ -393,7 +399,11 @@ function LiveViewContent() {
   } = useSWR(
     projectId && !isNaN(projectId) && projectId > 0 ? ["live-view-agents", projectId] : null,
     () => liveViewAPI.getAgents(projectId),
-    { refreshInterval: 2000 }
+    {
+      refreshInterval: 3000,
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+    }
   );
 
   const { fitView } = useReactFlow();
@@ -565,6 +575,7 @@ function LiveViewContent() {
 
   const agentsErrorStatus = Number((agentsError as any)?.response?.status ?? 0);
   const agentsErrorCode = getApiErrorCode(agentsError);
+  const agentsRateLimit = getRateLimitInfo(agentsError);
   const showLoadingOverlay = agentsLoading && typeof agentsData === "undefined";
   const showAccessDeniedOverlay = !!agentsError && agentsErrorStatus === 403;
   const showApiErrorOverlay =
@@ -601,6 +612,7 @@ function LiveViewContent() {
           title={selectedAgentId || "Agent Diagnostics"}
           isOpen={!!selectedAgentId}
           width={760}
+          contentClassName="min-h-0 overflow-hidden"
           onClose={() => {
             setSelectedAgentId(null);
             setPanelTab("logs");
@@ -614,28 +626,16 @@ function LiveViewContent() {
           activeTab={panelTab}
           onTabChange={id => setPanelTab(id as "logs" | "eval" | "data" | "settings")}
         >
-          <div
-            className={panelTab === "logs" ? "h-full" : "hidden"}
-            aria-hidden={panelTab !== "logs"}
-          >
+          {panelTab === "logs" ? (
             <ClinicalLog projectId={projectId} agentId={selectedAgentId || ""} />
-          </div>
-          <div
-            className={panelTab === "eval" ? "h-full" : "hidden"}
-            aria-hidden={panelTab !== "eval"}
-          >
+          ) : null}
+          {panelTab === "eval" ? (
             <AgentEvaluationPanel projectId={projectId} agentId={selectedAgentId || ""} />
-          </div>
-          <div
-            className={panelTab === "data" ? "h-full" : "hidden"}
-            aria-hidden={panelTab !== "data"}
-          >
+          ) : null}
+          {panelTab === "data" ? (
             <ClinicalLogDataSection projectId={projectId} agentId={selectedAgentId || ""} />
-          </div>
-          <div
-            className={panelTab === "settings" ? "h-full" : "hidden"}
-            aria-hidden={panelTab !== "settings"}
-          >
+          ) : null}
+          {panelTab === "settings" ? (
             <AgentSettingsPanel
               projectId={projectId}
               agentId={selectedAgentId || ""}
@@ -646,7 +646,7 @@ function LiveViewContent() {
                 void mutateAgents(undefined, true);
               }}
             />
-          </div>
+          ) : null}
         </RailwaySidePanel>
       }
     >
@@ -668,8 +668,12 @@ function LiveViewContent() {
         )}
         {showApiErrorOverlay && (
           <LiveViewErrorState
-            title="Unable to Load Agents"
-            description="We could not reach the Live View API right now. Please retry in a few seconds. If the problem continues, check backend health and network connectivity."
+            title={isRateLimitError(agentsError) ? "Live View Busy" : "Unable to Load Agents"}
+            description={
+              isRateLimitError(agentsError)
+                ? `Live View is refreshing too quickly right now. Please wait${agentsRateLimit.retryAfterSec ? ` about ${agentsRateLimit.retryAfterSec} seconds` : " a moment"} and retry.`
+                : "We could not reach the Live View API right now. Please retry in a few seconds. If the problem continues, check backend health and network connectivity."
+            }
             onRetry={() => void mutateAgents()}
           />
         )}

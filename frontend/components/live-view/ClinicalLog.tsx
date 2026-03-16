@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { behaviorAPI, liveViewAPI } from "@/lib/api";
+import { getRateLimitInfo, isRateLimitError } from "@/lib/api/client";
 import { toEvalRows } from "@/lib/evalRows";
 import useSWR, { mutate as globalMutate } from "swr";
 import { SnapshotDetailModal } from "@/components/shared/SnapshotDetailModal";
@@ -361,7 +362,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
 
   const { data: settingsData, mutate: mutateSettings } = useSWR(
     projectId && agentId ? ["agent-log-settings", projectId, agentId] : null,
-    () => liveViewAPI.getAgentSettings(projectId, agentId)
+    () => liveViewAPI.getAgentSettings(projectId, agentId),
+    { revalidateOnFocus: false }
   );
 
   React.useEffect(() => {
@@ -381,7 +383,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
         limit: recentTraceLimit,
         light: true,
       }),
-    { keepPreviousData: true }
+    { keepPreviousData: true, revalidateOnFocus: false, shouldRetryOnError: false }
   );
 
   const saveRecentTraceLimit = async () => {
@@ -450,7 +452,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
 
   const { data: evalData } = useSWR(
     projectId && agentId ? ["agent-eval-runtime", projectId, agentId, recentTraceLimit] : null,
-    () => liveViewAPI.getAgentEvaluation(projectId, agentId)
+    () => liveViewAPI.getAgentEvaluation(projectId, agentId),
+    { revalidateOnFocus: false }
   );
   const { data: projectRulesData } = useSWR(
     projectId ? ["policy-rules-project", projectId] : null,
@@ -779,9 +782,11 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
   }
 
   const isEmptyResult = visibleSnapshots.length === 0;
+  const isRateLimited = isRateLimitError(error);
+  const rateLimitInfo = getRateLimitInfo(error);
 
   const mainContent = (
-    <div className="flex flex-col h-full bg-[#111216]">
+    <div className="flex flex-col h-full min-h-0 bg-[#111216]">
       {/* Log Header Summary */}
       <div className="p-5 flex items-center justify-between gap-4 border-b border-white/[0.04] bg-[#18191e]">
         <div className="flex items-center">
@@ -908,7 +913,9 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
       {error && (
         <div className="mx-4 mb-3 px-3 py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 flex items-center justify-between gap-3">
           <span className="text-xs text-rose-300 font-medium">
-            Failed to load snapshots. Please retry.
+            {isRateLimited
+              ? `Live updates are temporarily throttled. Please wait${rateLimitInfo.retryAfterSec ? ` about ${rateLimitInfo.retryAfterSec} seconds` : " a moment"} and retry.`
+              : "Failed to load snapshots. Please retry."}
           </span>
           <button
             type="button"
