@@ -1,15 +1,23 @@
 """
 Rate limiting middleware.
+
+Bucketed limits:
+- dashboard_read: high-frequency internal UI polling and light reads
+- expensive_read: heavier read paths and report/detail queries
+- mutations: user-driven writes and settings changes
+- ingest: SDK / telemetry writes
+- default: everything else
+
 Uses Redis when available; falls back to in-memory per-process limits when Redis is disabled.
-Global limit applies to all requests; heavy endpoints have an additional per-endpoint limit.
-Per-user limit applies when JWT is present (avoids NAT/shared-IP throttling).
 """
 
 import time
 from typing import Dict, Optional, Tuple
-from fastapi import Request, HTTPException, status
+from fastapi import Request, status
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.services.cache_service import cache_service
+from app.core.responses import error_response
 
 # In-memory fallback when Redis is unavailable: client_id -> (count, window_end_ts)
 _memory_rate: Dict[str, Tuple[int, float]] = {}
@@ -17,8 +25,19 @@ _memory_heavy: Dict[str, Tuple[int, float]] = {}
 _memory_user: Dict[str, Tuple[int, float]] = {}
 _MEMORY_WINDOW_SEC = 60
 
-# Per-user rate limit (same as global per minute when applied)
-RATE_LIMIT_USER_PER_MINUTE = 60
+# Global IP fallback limit (coarse abuse protection)
+GLOBAL_RATE_LIMIT_PER_MINUTE = 600
+
+# Per-user bucket limits
+BUCKET_LIMITS_PER_MINUTE: Dict[str, int] = {
+    "dashboard_read": 300,
+    "expensive_read": 90,
+    "mutations": 45,
+    "ingest": 1200,
+    "default": 120,
+}
+
+BUCKET_WINDOW_SEC = 60
 
 # Heavy endpoints: (path_substring, method, limit_per_min, path_key). Longest path first.
 HEAVY_ENDPOINTS: Tuple[Tuple[str, str, int, str], ...] = (
@@ -28,8 +47,90 @@ HEAVY_ENDPOINTS: Tuple[Tuple[str, str, int, str], ...] = (
     ("behavior/validate", "POST", 20, "behavior_validate"),
     ("behavior/compare", "POST", 20, "behavior_compare"),
 )
-RATE_LIMIT_INGEST_PER_MINUTE = 100
-RATE_LIMIT_SNAPSHOTS_CREATE_PER_MINUTE = 10
+RATE_LIMIT_INGEST_PER_MINUTE = 1200
+RATE_LIMIT_SNAPSHOTS_CREATE_PER_MINUTE = 120
+
+
+def _normalize_path(path: str) -> str:
+    path = path or ""
+    if path.startswith("/api/v1/"):
+        return path[len("/api/v1") :]
+    if path.startswith("/api/v1"):
+        return "/"
+    return path
+
+
+def _is_light_snapshot_read(path: str, method: str, request: Request) -> bool:
+    if method != "GET" or not path.rstrip("/").endswith("/snapshots"):
+        return False
+    light_value = str(request.query_params.get("light", "")).strip().lower()
+    return light_value in {"1", "true", "yes"}
+
+
+def classify_rate_limit_bucket(request: Request) -> str:
+    method = request.method.upper()
+    path = _normalize_path(request.url.path)
+
+    if method == "POST" and ("api-calls" in path or path.rstrip("/").endswith("/snapshots")):
+        return "ingest"
+
+    if method in {"PATCH", "POST", "DELETE"}:
+        if (
+            "/live-view/agents/" in path
+            or "/saved-logs" in path
+            or "/members" in path
+            or "/user-api-keys" in path
+            or "/settings" in path
+        ):
+            return "mutations"
+
+    if method == "GET":
+        if (
+            path == "/organizations"
+            or path == "/projects"
+            or "/live-view/agents" in path
+            or path.endswith("/evaluation")
+            or path.endswith("/settings")
+            or _is_light_snapshot_read(path, method, request)
+        ):
+            return "dashboard_read"
+
+        if (
+            "/release-gate" in path
+            or "/behavior" in path
+            or path.rstrip("/").endswith("/snapshots")
+            or "/saved-logs" in path
+        ):
+            return "expensive_read"
+
+    return "default"
+
+
+def _rate_limit_headers(bucket: str, limit: int, retry_after_sec: int) -> Dict[str, str]:
+    return {
+        "Retry-After": str(retry_after_sec),
+        "X-RateLimit-Limit": str(limit),
+        "X-RateLimit-Remaining": "0",
+        "X-RateLimit-Reset": str(retry_after_sec),
+        "X-RateLimit-Bucket": bucket,
+    }
+
+
+def _rate_limit_response(bucket: str, limit: int, scope: str) -> JSONResponse:
+    retry_after_sec = BUCKET_WINDOW_SEC
+    return error_response(
+        code="RATE_LIMIT_EXCEEDED",
+        message="Too many requests. Please wait a moment and try again.",
+        details={
+            "bucket": bucket,
+            "scope": scope,
+            "limit": limit,
+            "window_sec": BUCKET_WINDOW_SEC,
+            "retry_after_sec": retry_after_sec,
+        },
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        headers=_rate_limit_headers(bucket, limit, retry_after_sec),
+    )
 
 
 def _prune_memory_rate() -> None:
@@ -175,12 +276,17 @@ def _check_rate_limit_memory_user(user_key: str, limit: int) -> bool:
     return True
 
 
-def check_user_rate_limit(user_id: str, limit_per_minute: int, window_sec: int = 60) -> bool:
+def check_user_rate_limit(
+    user_id: str,
+    limit_per_minute: int,
+    window_sec: int = 60,
+    bucket_key: str = "default",
+) -> bool:
     """
     Returns True if user is under limit (and increments). False if over limit.
     Uses Redis when enabled, else in-memory _memory_user.
     """
-    user_key = f"rate_limit:user:{user_id}"
+    user_key = f"rate_limit:user:{bucket_key}:{user_id}"
     if cache_service.enabled:
         current = cache_service.get(user_key)
         if current is None:
@@ -196,7 +302,7 @@ def check_user_rate_limit(user_id: str, limit_per_minute: int, window_sec: int =
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Middleware for rate limiting API requests"""
 
-    def __init__(self, app, requests_per_minute: int = 60):
+    def __init__(self, app, requests_per_minute: int = GLOBAL_RATE_LIMIT_PER_MINUTE):
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
 
@@ -207,31 +313,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         client_id = self._get_client_id(request)
         client_ip = client_id.replace("rate_limit:", "", 1) if client_id.startswith("rate_limit:") else client_id
+        bucket = classify_rate_limit_bucket(request)
+        bucket_limit = BUCKET_LIMITS_PER_MINUTE.get(bucket, BUCKET_LIMITS_PER_MINUTE["default"])
 
         # Global rate limit (all endpoints)
         if not self._check_rate_limit(client_id):
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Rate limit exceeded. Maximum {self.requests_per_minute} requests per minute.",
-            )
+            return _rate_limit_response("global_ip", self.requests_per_minute, "ip")
 
         # Per-user rate limit (when JWT present; avoids NAT/shared-IP throttling)
         user_id = _extract_user_id_from_request(request)
-        if user_id and not check_user_rate_limit(user_id, RATE_LIMIT_USER_PER_MINUTE):
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Rate limit exceeded per user. Maximum {RATE_LIMIT_USER_PER_MINUTE} requests per minute. Try again later.",
-            )
+        if user_id and not check_user_rate_limit(user_id, bucket_limit, bucket_key=bucket):
+            return _rate_limit_response(bucket, bucket_limit, "user")
 
         # Heavy-endpoint rate limit (stricter per-endpoint limit)
         heavy = _get_heavy_limit(request.url.path, request.method)
         if heavy is not None:
             path_key, limit = heavy
             if not check_endpoint_rate_limit(client_ip, path_key, limit):
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"Rate limit exceeded for this endpoint. Maximum {limit} requests per minute. Try again later.",
-                )
+                return _rate_limit_response(path_key, limit, "endpoint")
 
         return await call_next(request)
 

@@ -56,19 +56,23 @@ export function AgentSettingsPanel({
     isLoading: settingsLoading,
   } = useSWR(
     projectId && agentId ? ["live-view-agent-settings-panel", projectId, agentId] : null,
-    () => liveViewAPI.getAgentSettings(projectId, agentId)
+    () => liveViewAPI.getAgentSettings(projectId, agentId),
+    { revalidateOnFocus: false }
   );
   const { data: latestSnapshotData } = useSWR(
     projectId && agentId ? ["live-view-agent-settings-latest-snapshot", projectId, agentId] : null,
     () =>
-      liveViewAPI.listSnapshots(projectId, { agent_id: agentId, limit: 1, offset: 0, light: true })
+      liveViewAPI.listSnapshots(projectId, { agent_id: agentId, limit: 1, offset: 0, light: true }),
+    { revalidateOnFocus: false }
   );
   const {
     data: keysData,
     mutate: mutateKeys,
     isLoading: keysLoading,
-  } = useSWR(projectId ? ["project-user-api-keys-settings-panel", projectId] : null, () =>
-    projectUserApiKeysAPI.list(projectId)
+  } = useSWR(
+    projectId ? ["project-user-api-keys-settings-panel", projectId] : null,
+    () => projectUserApiKeysAPI.list(projectId),
+    { revalidateOnFocus: false }
   );
 
   const [displayNameDraft, setDisplayNameDraft] = useState(agentId);
