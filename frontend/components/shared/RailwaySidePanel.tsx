@@ -28,6 +28,7 @@ interface RailwaySidePanelProps {
   side?: "left" | "right";
   /** Optional test id prefix for tab buttons (e.g. "rg-data-tab"). */
   tabTestIdPrefix?: string;
+  contentClassName?: string;
 }
 
 const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
@@ -44,6 +45,7 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
   showCloseButton = true,
   side = "right",
   tabTestIdPrefix,
+  contentClassName = "",
 }) => {
   const isLeft = side === "left";
   const slideFrom = isLeft ? "-100%" : "100%";
@@ -115,7 +117,9 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
           )}
 
           {/* Content Area */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-0">{children}</div>
+          <div className={clsx("flex-1 overflow-y-auto custom-scrollbar p-0 min-h-0", contentClassName)}>
+            {children}
+          </div>
 
           {/* Functional Footer */}
           <div className="px-5 py-2.5 border-t border-white/[0.06] bg-black/30 flex items-center">
