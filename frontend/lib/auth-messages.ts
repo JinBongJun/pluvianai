@@ -23,7 +23,7 @@ const SESSION_REAUTH_MESSAGES: Record<string, string> = {
 const LOGIN_MESSAGES: Record<number, string> = {
   400: "Invalid request. Please check your email and password.",
   401: "Incorrect email or password. Please try again or sign up.",
-  403: "This account has been deactivated. Contact support if you need access.",
+  403: "Access denied. Please try again or contact support if this continues.",
   429: "Too many attempts. Please wait a moment and try again.",
   500: "Something went wrong on our side. Please try again in a few minutes.",
 };

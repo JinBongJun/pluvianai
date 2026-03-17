@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useFormState, useFormStatus } from "react-dom";
-import { loginAction, registerAction } from "@/actions/auth-actions";
+import { authAPI } from "@/lib/api";
 import { analytics } from "@/lib/analytics";
 import { getAuthErrorMessage, getReauthMessage } from "@/lib/auth-messages";
 import { passwordStrength } from "@/lib/validation";
@@ -12,7 +11,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { useLoading } from "@/hooks/useLoading";
 
-// Submit button component (uses useFormStatus)
 function SubmitButton({
   isLogin,
   liabilityAccepted,
@@ -22,9 +20,8 @@ function SubmitButton({
   liabilityAccepted: boolean;
   isLoadingOverride?: boolean;
 }) {
-  const { pending } = useFormStatus();
-  const isDisabled = pending || isLoadingOverride || (!isLogin && !liabilityAccepted);
-  const isSubmitting = pending || isLoadingOverride;
+  const isDisabled = isLoadingOverride || (!isLogin && !liabilityAccepted);
+  const isSubmitting = !!isLoadingOverride;
 
   return (
     <button
@@ -55,13 +52,11 @@ export default function LoginPage() {
   const [reauthMessageShown, setReauthMessageShown] = useState(false);
   const [registeredMessageShown, setRegisteredMessageShown] = useState(false);
   const [reauthBannerMessage, setReauthBannerMessage] = useState("Please log in again.");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [postAuthRedirect, setPostAuthRedirect] = useState("/organizations");
   const { isLoading, start } = useLoading({ minDuration: 800 });
-
-  // Server Actions
-  const [loginState, loginFormAction] = useFormState(loginAction, null);
-  const [registerState, registerFormAction] = useFormState(registerAction, null);
 
   const pwdStrength = passwordStrength(password);
 
@@ -150,42 +145,63 @@ export default function LoginPage() {
     }
   }, [mounted]);
 
-  useEffect(() => {
-    if (loginState?.success) {
+  const handleClientLogin = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError(null);
+    setIsSubmitting(true);
+
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") || "").trim();
+    const rawPassword = String(formData.get("password") || "");
+
+    try {
+      await authAPI.login(email, rawPassword);
       start();
       analytics.capture("user_login", { method: "password" });
       setTimeout(() => {
         window.location.href = postAuthRedirect;
       }, 400);
+    } catch (error) {
+      setFormError(getAuthErrorMessage(error, "login"));
+      setIsSubmitting(false);
     }
-  }, [loginState, postAuthRedirect, start]);
+  };
 
-  useEffect(() => {
-    if (registerState?.success && registerState.data?.authenticated) {
-      start();
+  const handleClientRegister = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError(null);
+    setIsSubmitting(true);
 
-      // Auto-login success handling
-      analytics.capture("user_register", { method: "password" });
+    const formData = new FormData(event.currentTarget);
+    const fullName = String(formData.get("fullName") || "").trim() || undefined;
+    const email = String(formData.get("email") || "").trim();
+    const rawPassword = String(formData.get("password") || "");
+    const accepted = formData.get("liabilityAgreementAccepted") === "true";
 
-      setTimeout(() => {
-        window.location.href = postAuthRedirect;
-      }, 1000);
-    } else if (registerState?.success) {
-      // Success but no token (manual login required)
-      start();
-      analytics.capture("user_register", { method: "password" });
-      setTimeout(() => {
-        router.push("/login?registered=1");
-      }, 800);
+    try {
+      await authAPI.register(email, rawPassword, fullName, accepted);
+
+      try {
+        await authAPI.login(email, rawPassword);
+        start();
+        analytics.capture("user_register", { method: "password" });
+        setTimeout(() => {
+          window.location.href = postAuthRedirect;
+        }, 1000);
+      } catch {
+        start();
+        analytics.capture("user_register", { method: "password" });
+        setTimeout(() => {
+          router.push("/login?registered=1");
+        }, 800);
+      }
+    } catch (error) {
+      setFormError(getAuthErrorMessage(error, "register"));
+      setIsSubmitting(false);
     }
-  }, [registerState, start, router, postAuthRedirect]);
+  };
 
-  const loginError =
-    loginState?.errors?._form?.[0] || (loginState?.errors && Object.values(loginState.errors)[0]?.[0]);
-  const registerError =
-    registerState?.errors?._form?.[0] ||
-    (registerState?.errors && Object.values(registerState.errors)[0]?.[0]);
-  const errorMessage = isLogin ? loginError : registerError;
+  const errorMessage = formError;
 
   return (
     <div className="min-h-screen flex bg-[#030303] selection:bg-emerald-500/30 font-sans relative overflow-hidden">
@@ -278,7 +294,7 @@ export default function LoginPage() {
 
               <form
                 className="space-y-6 relative z-10"
-                action={isLogin ? loginFormAction : registerFormAction}
+                onSubmit={isLogin ? handleClientLogin : handleClientRegister}
               >
                 {/* Error Message */}
                 {errorMessage && (
@@ -463,7 +479,7 @@ export default function LoginPage() {
                   <SubmitButton
                     isLogin={isLogin}
                     liabilityAccepted={liabilityAgreementAccepted}
-                    isLoadingOverride={isLoading}
+                    isLoadingOverride={isLoading || isSubmitting}
                   />
                 </div>
 
@@ -475,6 +491,8 @@ export default function LoginPage() {
                       setIsLogin(!isLogin);
                       setPassword("");
                       setLiabilityAgreementAccepted(false);
+                      setFormError(null);
+                      setIsSubmitting(false);
                     }}
                     className="text-xs font-black text-slate-500 hover:text-emerald-400 transition-colors uppercase tracking-[0.2em]"
                   >
