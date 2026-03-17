@@ -3,19 +3,17 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import {
   Settings,
-  ShieldCheck,
-  Key,
   Activity,
   Users,
-  BookOpen,
-  Beaker,
   LayoutDashboard,
   ChevronRight,
 } from "lucide-react";
 import { clsx } from "clsx";
 import TopHeader from "./TopHeader";
-import { authAPI } from "@/lib/api";
+import useSWR from "swr";
+import { authAPI, organizationsAPI } from "@/lib/api";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
 
 interface Breadcrumb {
   label: string;
@@ -40,6 +38,7 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
   const pathname = usePathname();
   const router = useRouter();
   const resolvedOrgId = orgId || params.orgId;
+  const resolvedOrgKey = resolvedOrgId ? String(resolvedOrgId) : null;
   const hasToken = useRequireAuth();
 
   const [userName, setUserName] = useState("");
@@ -59,6 +58,23 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
     };
     loadUser();
   }, [hasToken]);
+
+  const { data: organizations } = useSWR<OrganizationSummary[]>(
+    hasToken ? "organizations" : null,
+    () => organizationsAPI.list({ includeStats: false }),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 10_000,
+    }
+  );
+  const { data: projects } = useSWR<OrganizationProject[]>(
+    hasToken && resolvedOrgKey ? ["organization-projects-list", resolvedOrgKey] : null,
+    ([, id]) => organizationsAPI.listProjects(id as string, { includeStats: false }),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 10_000,
+    }
+  );
 
   const orgNavItems = [
     {
@@ -146,7 +162,12 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
         <div className="absolute top-[40%] left-[-10%] w-[120%] h-[2px] bg-cyan-500/20 blur-[2px] -rotate-12 pointer-events-none mix-blend-screen" />
       </div>
 
-      <TopHeader userName={userName} userEmail={userEmail} />
+      <TopHeader
+        userName={userName}
+        userEmail={userEmail}
+        organizations={organizations}
+        projects={projects}
+      />
 
       {/* Scientific Sidebar */}
       <aside className="fixed top-[90px] left-0 w-80 h-[calc(100vh-90px)] border-r border-white/5 bg-[#030303]/20 backdrop-blur-2xl z-40 overflow-hidden">
