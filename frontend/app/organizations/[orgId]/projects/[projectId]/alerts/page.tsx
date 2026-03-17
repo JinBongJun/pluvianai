@@ -26,6 +26,7 @@ import {
 import { clsx } from "clsx";
 import ProjectTabs from "@/components/ProjectTabs";
 import useSWR from "swr";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 type SortField = "created_at" | "severity" | "alert_type";
 type SortDirection = "asc" | "desc";
@@ -60,6 +61,7 @@ const DEFAULT_ALERT_TYPES = [
 
 export default function AlertsPage() {
   const router = useRouter();
+  const isAuthenticated = useRequireAuth();
   const toast = useToast();
   const { orgId, projectId } = useOrgProjectParams();
 
@@ -213,11 +215,7 @@ export default function AlertsPage() {
   ]);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    if (!isAuthenticated) return;
 
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       if (orgId) {
@@ -229,7 +227,7 @@ export default function AlertsPage() {
     }
 
     void loadAlerts();
-  }, [projectId, orgId, router, loadAlerts]);
+  }, [isAuthenticated, projectId, orgId, router, loadAlerts]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {

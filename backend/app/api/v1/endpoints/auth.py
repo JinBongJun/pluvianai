@@ -10,10 +10,12 @@ Security: bcrypt passwords, JWT (HS256), brute-force protection, login attempts 
 """
 
 import time
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, Field
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.usage_limits import (
     get_snapshots_count_this_month,
@@ -51,6 +53,61 @@ from app.core.analytics import analytics_service
 from app.utils.privacy import mask_email
 
 router = APIRouter()
+ACCESS_COOKIE_NAME = "access_token"
+REFRESH_COOKIE_NAME = "refresh_token"
+
+
+def _token_max_age_seconds(token: str, fallback_seconds: int) -> int:
+    payload = decode_token(token)
+    if not payload:
+        return fallback_seconds
+
+    exp = payload.get("exp")
+    if not exp:
+        return fallback_seconds
+
+    try:
+        max_age = int(exp) - int(datetime.utcnow().timestamp())
+    except (TypeError, ValueError):
+        return fallback_seconds
+
+    return max(max_age, 0)
+
+
+def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    secure = settings.ENVIRONMENT == "production"
+    cookie_domain = settings.AUTH_COOKIE_DOMAIN or None
+
+    response.set_cookie(
+        key=ACCESS_COOKIE_NAME,
+        value=access_token,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        path="/",
+        domain=cookie_domain,
+        max_age=_token_max_age_seconds(
+            access_token, settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        ),
+    )
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        path="/",
+        domain=cookie_domain,
+        max_age=_token_max_age_seconds(
+            refresh_token, settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+        ),
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    cookie_domain = settings.AUTH_COOKIE_DOMAIN or None
+    response.delete_cookie(ACCESS_COOKIE_NAME, path="/", domain=cookie_domain)
+    response.delete_cookie(REFRESH_COOKIE_NAME, path="/", domain=cookie_domain)
 
 
 class UserCreate(BaseModel):
@@ -175,6 +232,7 @@ async def register(
 @router.post("/login", response_model=TokenResponse)
 async def login(
     request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
     audit_service = Depends(get_audit_service),
@@ -391,6 +449,7 @@ async def login(
 
         # Always return tokens even if auxiliary operations fail
         logger.info(f"✅ LOGIN SUCCESS: user_id={user.id}")
+        _set_auth_cookies(response, access_token, refresh_token)
         return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
     
     except HTTPException:
@@ -421,6 +480,7 @@ async def login(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
     request: Request,
+    response: Response,
     token_data: TokenRefresh = None,
     db: Session = Depends(get_db),
     audit_service = Depends(get_audit_service)
@@ -481,7 +541,15 @@ async def refresh_token(
         user_agent=user_agent
     )
 
+    _set_auth_cookies(response, access_token, refresh_token)
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(response: Response):
+    _clear_auth_cookies(response)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return None
 
 
 @router.get("/me", response_model=UserResponse)

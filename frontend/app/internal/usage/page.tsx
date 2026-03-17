@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { internalUsageAPI } from "@/lib/api";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 type ProjectUsageItem = {
   project_id: number | null;
@@ -25,11 +25,11 @@ function getCurrentMonth(): string {
 }
 
 export default function InternalUsagePage() {
-  const router = useRouter();
   const [month, setMonth] = useState<string>(getCurrentMonth());
   const [data, setData] = useState<ProjectUsageResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const isAuthenticated = useRequireAuth();
 
   const monthLabel = useMemo(() => {
     const [y, m] = month.split("-");
@@ -41,11 +41,7 @@ export default function InternalUsagePage() {
   }, [month]);
 
   useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    if (!isAuthenticated) return;
 
     const load = async () => {
       setLoading(true);
@@ -68,7 +64,7 @@ export default function InternalUsagePage() {
     };
 
     void load();
-  }, [month, router]);
+  }, [isAuthenticated, month]);
 
   const items = data?.items ?? [];
 

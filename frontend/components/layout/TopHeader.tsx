@@ -20,6 +20,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
 import { organizationsAPI, projectsAPI } from "@/lib/api";
+import { authAPI } from "@/lib/api/auth";
+import { useAuthSession } from "@/hooks/useAuthSession";
 import SwitcherDropdown from "@/components/ui/SwitcherDropdown";
 
 interface TopHeaderProps {
@@ -45,19 +47,14 @@ const TopHeader: React.FC<TopHeaderProps> = ({
 
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  // Only fetch when we have a token (avoids 401 on first paint after login redirect)
-  const [hasToken, setHasToken] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setHasToken(!!localStorage.getItem("access_token"));
-  }, []);
+  const { isAuthenticated } = useAuthSession();
 
   // Single shared key/fetcher with organizations page to avoid duplicate 401s
-  const { data: organizations } = useSWR(hasToken ? "organizations" : null, () =>
+  const { data: organizations } = useSWR(isAuthenticated ? "organizations" : null, () =>
     organizationsAPI.list({ includeStats: false })
   );
   const { data: projects } = useSWR(
-    hasToken && currentOrgId ? ["organization-projects-list", currentOrgId] : null,
+    isAuthenticated && currentOrgId ? ["organization-projects-list", currentOrgId] : null,
     ([, id]) => organizationsAPI.listProjects(id as string, { includeStats: false })
   );
 
@@ -252,13 +249,14 @@ const TopHeader: React.FC<TopHeaderProps> = ({
                             </Link>
 
                             <button
-                              onClick={() => {
-                                if (onLogout) onLogout();
-                                else {
-                                  localStorage.removeItem("access_token");
-                                  localStorage.removeItem("refresh_token");
-                                  window.location.href = "/login";
+                              onClick={async () => {
+                                if (onLogout) {
+                                  onLogout();
+                                  return;
                                 }
+
+                                await authAPI.logout().catch(() => undefined);
+                                window.location.href = "/login";
                               }}
                               className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-red-500/5 transition-all group/item border border-transparent hover:border-red-500/10"
                             >

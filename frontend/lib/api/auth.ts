@@ -1,5 +1,5 @@
 import axios from "axios";
-import { apiClient, API_URL } from "./client";
+import { apiClient, API_URL, clearFrontendAuthSession } from "./client";
 
 export const authAPI = {
   register: async (
@@ -22,41 +22,35 @@ export const authAPI = {
     formData.append("username", email);
     formData.append("password", password);
 
-    const response = await axios.post(`${API_URL}/api/v1/auth/login`, formData, {
+    await axios.post(`${API_URL}/api/v1/auth/login`, formData, {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
       },
+      withCredentials: true,
     });
 
-    const data = response.data?.data ?? response.data;
-    const access_token = data?.access_token ?? response.data?.access_token;
-    const refresh_token = data?.refresh_token ?? response.data?.refresh_token;
-    if (!access_token) throw new Error("Login response missing access_token");
-
-    localStorage.setItem("access_token", access_token);
-    if (refresh_token) localStorage.setItem("refresh_token", refresh_token);
-
-    let userInfo: { id?: string; email?: string; full_name?: string } | null = null;
+    let userInfo: { id?: string | number; email?: string; full_name?: string } | null = null;
     try {
-      const payload = JSON.parse(
-        atob(access_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))
-      );
-      userInfo = {
-        id: payload.sub,
-        email: payload.email ?? email,
-        full_name: payload.full_name ?? "",
-      };
-      localStorage.setItem("user_info", JSON.stringify(userInfo));
-    } catch {
-      localStorage.setItem("user_info", JSON.stringify({ email, full_name: "" }));
-    }
+      const meResponse = await axios.get(`${API_URL}/api/v1/auth/me`, {
+        withCredentials: true,
+      });
+      userInfo = meResponse.data?.data ?? meResponse.data ?? null;
+    } catch {}
 
-    return { access_token, refresh_token, user_info: userInfo };
+    return { user_info: userInfo };
   },
 
-  logout: () => {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
+  logout: async () => {
+    await axios
+      .post(
+        `${API_URL}/api/v1/auth/logout`,
+        {},
+        {
+          withCredentials: true,
+        }
+      )
+      .catch(() => undefined);
+    await clearFrontendAuthSession();
   },
 
   getCurrentUser: async () => {

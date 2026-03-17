@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { ConfirmModal } from "@/components/shared/ConfirmModal";
 import { organizationsAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
@@ -42,6 +43,7 @@ export default function TeamPage() {
   const router = useRouter();
   const toast = useToast();
   const { orgId } = useOrgProjectParams();
+  const isAuthenticated = useRequireAuth();
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member" | "viewer">("member");
@@ -63,11 +65,8 @@ export default function TeamPage() {
   );
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-    }
-  }, [router]);
+    if (!isAuthenticated) return;
+  }, [isAuthenticated]);
 
   const handleInvite = async () => {
     if (!inviteEmail.trim()) {

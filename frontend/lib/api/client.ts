@@ -72,6 +72,11 @@ function isPublicPath(url: string): boolean {
   return PUBLIC_PATHS.some(re => re.test(path));
 }
 
+function isRefreshRequest(url: string | undefined): boolean {
+  if (!url) return false;
+  return /\/auth\/refresh(?:\?|$)/.test(url);
+}
+
 type ApiErrorPayload = {
   status: number;
   code: string | null;
@@ -92,21 +97,6 @@ function getSafeNextPath(): string | null {
   return next.startsWith("/") ? next : null;
 }
 
-export async function syncFrontendAuthSession(tokens: {
-  access_token?: string;
-  refresh_token?: string;
-}): Promise<void> {
-  if (typeof window === "undefined") return;
-
-  await fetch("/api/auth/session", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(tokens),
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-}
-
 export async function clearFrontendAuthSession(): Promise<void> {
   if (typeof window === "undefined") return;
 
@@ -119,9 +109,6 @@ export async function clearFrontendAuthSession(): Promise<void> {
 
 export function clearStoredAuth(): void {
   if (typeof window === "undefined") return;
-  localStorage.removeItem("access_token");
-  localStorage.removeItem("refresh_token");
-  localStorage.removeItem("user_info");
 }
 
 export function extractApiErrorPayload(error: any): ApiErrorPayload {
@@ -212,27 +199,14 @@ export const apiClient = axios.create({
 apiClient.interceptors.request.use(
   config => {
     if (typeof window === "undefined") return config;
-    const token = localStorage.getItem("access_token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-      if (process.env.NODE_ENV === "development") {
-        const url = (config.baseURL || "") + (config.url || "");
-        console.debug("[API] Request with token:", url?.replace(/^.*\/api\/v1/, ""));
-      }
-      return config;
-    }
     if (isPublicPath(config.url || "")) return config;
     if (process.env.NODE_ENV === "development") {
-      console.warn(
-        "[API] No token in localStorage for protected request – redirecting to login. URL:",
+      console.debug(
+        "[API] Protected request using cookie-backed auth. URL:",
         config.url
       );
     }
-    redirectToLogin({
-      code: "no_token",
-      message: "You need to sign in to access this page.",
-    });
-    return Promise.reject(new Error("Not authenticated"));
+    return config;
   },
   err => Promise.reject(err)
 );
@@ -241,6 +215,7 @@ apiClient.interceptors.response.use(
   response => response,
   async error => {
     const originalRequest = error?.config as any | undefined;
+    const requestUrl = originalRequest?.url as string | undefined;
 
     if (
       error.response?.status === 403 &&
@@ -251,7 +226,12 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !isRefreshRequest(requestUrl)
+    ) {
       originalRequest._retry = true;
       const { code, message } = extractApiErrorPayload(error);
       if (process.env.NODE_ENV === "development") {
@@ -267,43 +247,29 @@ apiClient.interceptors.response.use(
         return Promise.reject(error);
       }
 
-      const refreshToken = localStorage.getItem("refresh_token");
-      if (refreshToken) {
-        try {
-          const response = await axios.post(
-            `${API_URL}/api/v1/auth/refresh`,
-            { refresh_token: refreshToken },
-            {
-              headers: { "Content-Type": "application/json" },
-              withCredentials: true,
-            }
-          );
-          const data = response.data?.data ?? response.data;
-          const access_token = data?.access_token;
-          const refresh_token_new = data?.refresh_token;
-          if (!access_token) throw new Error("Refresh response missing access_token");
-          localStorage.setItem("access_token", access_token);
-          if (refresh_token_new) localStorage.setItem("refresh_token", refresh_token_new);
-          await syncFrontendAuthSession({
-            access_token,
-            refresh_token: refresh_token_new ?? refreshToken,
-          });
-          originalRequest.headers = originalRequest.headers || {};
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
-          return apiClient(originalRequest);
-        } catch (refreshError) {
-          const refreshPayload = extractApiErrorPayload(refreshError);
-          clearStoredAuth();
-          await clearFrontendAuthSession().catch(() => undefined);
-          redirectToLogin({
-            code: refreshPayload.code || code,
-            message:
-              refreshPayload.message ||
-              message ||
-              "Your session has expired. Please sign in again.",
-          });
-          return Promise.reject(refreshError);
+      try {
+        await axios.post(
+          `${API_URL}/api/v1/auth/refresh`,
+          {},
+          {
+            headers: { "Content-Type": "application/json" },
+            withCredentials: true,
+          }
+        );
+        if (originalRequest.headers?.Authorization) {
+          delete originalRequest.headers.Authorization;
         }
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        const refreshPayload = extractApiErrorPayload(refreshError);
+        clearStoredAuth();
+        await clearFrontendAuthSession().catch(() => undefined);
+        redirectToLogin({
+          code: refreshPayload.code || code,
+          message:
+            refreshPayload.message || message || "Your session has expired. Please sign in again.",
+        });
+        return Promise.reject(refreshError);
       }
       if (typeof window !== "undefined") {
         clearStoredAuth();

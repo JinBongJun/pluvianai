@@ -24,12 +24,10 @@ export default function BillingPage() {
   });
   useEffect(() => {
     if (myUsage) return;
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    if (!token) return;
 
     const backendBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     fetch(`${backendBase}/api/v1/auth/me/usage`, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
     })
       .then(async res => {
         if (!res.ok) return null;
