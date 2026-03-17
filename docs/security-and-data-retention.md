@@ -5,6 +5,8 @@
 - Free plan baseline retention: 30 days for snapshots and related logs.
 - Project/organization delete requests use soft-delete first.
 - Soft-deleted entities are hard-deleted after a 30-day grace window.
+- Live View node settings also use soft-delete first, support auto-restore for matching traffic, and can be hard-deleted later after their grace window.
+- See `docs/live-view-node-lifecycle-policy.md` for the node-specific lifecycle policy.
 
 ## Secret Handling
 
