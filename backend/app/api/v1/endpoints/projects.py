@@ -90,9 +90,32 @@ async def create_project(
         is_superuser=bool(getattr(current_user, "is_superuser", False)),
     )
     if not can_create:
+        plan_info = SubscriptionService(db).get_user_plan(current_user.id)
+        plan_type = str(plan_info.get("plan_type") or "free")
+        limits = plan_info.get("limits") or {}
+        project_limit = int(limits.get("projects", 1))
+
+        project_count = (
+            db.query(Project)
+            .filter(
+                Project.owner_id == current_user.id,
+                Project.is_active.is_(True),
+                Project.is_deleted.is_(False),
+            )
+            .count()
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=error_msg or "Project limit reached. Please upgrade your plan.",
+            detail={
+                "code": "PROJECT_LIMIT_REACHED",
+                "message": error_msg or "You have reached the project limit for your current plan.",
+                "details": {
+                    "plan_type": plan_type,
+                    "current": int(project_count),
+                    "limit": project_limit,
+                    "upgrade_path": "/settings/subscription",
+                },
+            },
         )
 
     usage_mode = (project_data.usage_mode or "full").strip().lower()

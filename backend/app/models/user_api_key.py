@@ -9,7 +9,7 @@ from app.core.database import Base
 
 
 class UserApiKey(Base):
-    """User-provided API key (encrypted) for Judge calls"""
+    """User-provided API key (encrypted) for Release Gate / evaluation calls"""
 
     __tablename__ = "user_api_keys"
 

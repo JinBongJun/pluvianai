@@ -14,6 +14,8 @@ import {
   Building2,
   LayoutGrid,
   Plus,
+  BarChart3,
+  CreditCard,
 } from "lucide-react";
 import FeedbackModal from "@/components/modals/FeedbackModal";
 import { motion, AnimatePresence } from "framer-motion";
@@ -263,6 +265,40 @@ const TopHeader: React.FC<TopHeaderProps> = ({
                                 </p>
                                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">
                                   Personal Identity
+                                </p>
+                              </div>
+                            </Link>
+
+                            <Link
+                              href="/settings/usage"
+                              className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group/item border border-transparent hover:border-white/5"
+                            >
+                              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-400 group-hover/item:text-emerald-400 transition-colors">
+                                <BarChart3 className="w-5 h-5" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-black text-white uppercase tracking-wider">
+                                  Usage
+                                </p>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">
+                                  Account-wide limits
+                                </p>
+                              </div>
+                            </Link>
+
+                            <Link
+                              href="/settings/billing"
+                              className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group/item border border-transparent hover:border-white/5"
+                            >
+                              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-400 group-hover/item:text-emerald-400 transition-colors">
+                                <CreditCard className="w-5 h-5" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-black text-white uppercase tracking-wider">
+                                  Billing
+                                </p>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">
+                                  Plan & invoices
                                 </p>
                               </div>
                             </Link>
