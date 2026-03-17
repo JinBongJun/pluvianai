@@ -12,6 +12,7 @@ from app.utils.secret_redaction import redact_secrets
 
 
 from app.core.diagnostics import calculate_diagnostic_scores
+from app.domain.live_view_release_gate import restore_agent_if_soft_deleted
 from app.services.live_eval_service import evaluate_one_snapshot_at_save, eval_config_version_hash
 from app.utils.tool_calls import extract_tool_calls_summary
 
@@ -315,6 +316,7 @@ class SnapshotService:
             worst_status=snapshot_data["worst_status"],
         )
         saved_snapshot = self.snapshot_repo.save(snapshot)
+        restore_agent_if_soft_deleted(self.db, project_id, saved_snapshot.agent_id)
         
         # Track snapshot usage for subscription limits (only in fallback mode)
         if project_id:

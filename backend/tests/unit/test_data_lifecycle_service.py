@@ -5,6 +5,7 @@ import pytest
 from datetime import datetime, timedelta
 from app.services.data_lifecycle_service import DataLifecycleService
 from app.models.behavior_report import BehaviorReport
+from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.snapshot import Snapshot
 from app.models.trace import Trace
 from app.models.project import Project
@@ -369,6 +370,42 @@ class TestDataLifecycleService:
         assert result["purged_organizations_count"] >= 1
         assert db.query(Project).filter(Project.id == project.id).first() is None
         assert db.query(Organization).filter(Organization.id == org.id).first() is None
+
+    def test_purge_soft_deleted_agent_settings_hard_deletes_expired_rows(
+        self, db, test_project, service
+    ):
+        expired = AgentDisplaySetting(
+            project_id=test_project.id,
+            system_prompt_hash="agent-expired",
+            is_deleted=True,
+            deleted_at=datetime.utcnow() - timedelta(days=31),
+        )
+        fresh = AgentDisplaySetting(
+            project_id=test_project.id,
+            system_prompt_hash="agent-fresh",
+            is_deleted=True,
+            deleted_at=datetime.utcnow() - timedelta(days=5),
+        )
+        db.add_all([expired, fresh])
+        db.commit()
+
+        result = service.purge_soft_deleted_agent_settings(grace_days=30)
+
+        assert result["purged_agent_settings_count"] == 1
+        assert (
+            db.query(AgentDisplaySetting)
+            .filter(AgentDisplaySetting.project_id == test_project.id)
+            .filter(AgentDisplaySetting.system_prompt_hash == "agent-expired")
+            .first()
+            is None
+        )
+        assert (
+            db.query(AgentDisplaySetting)
+            .filter(AgentDisplaySetting.project_id == test_project.id)
+            .filter(AgentDisplaySetting.system_prompt_hash == "agent-fresh")
+            .first()
+            is not None
+        )
 
     def test_auto_archive_success(self, db, test_user, test_project, service):
         """Test auto-archiving snapshots"""

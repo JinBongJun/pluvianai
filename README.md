@@ -24,6 +24,21 @@ Agent behavior firewall for multi‑LLM applications — capture traffic, replay
 
 ---
 
+## Live View Node Lifecycle
+
+- Removing a Live View node is a **soft delete**.
+- Same-node traffic can **auto-restore** a removed node within the configured restore window.
+- Old soft-deleted node settings can be **hard-deleted** later by scheduled cleanup.
+
+Current repository defaults:
+
+- `AGENT_AUTO_RESTORE_DAYS=30`
+- `AGENT_SOFT_DELETE_GRACE_DAYS=30`
+
+See [`docs/live-view-node-lifecycle-policy.md`](./docs/live-view-node-lifecycle-policy.md) for the full policy.
+
+---
+
 ## Tech stack
 
 - **Backend**: FastAPI (Python)
@@ -108,6 +123,7 @@ The root `.md` files are the single source of truth for documentation (the `docs
 - **[BUSINESS_PLAN.md](./BUSINESS_PLAN.md)** — business plan.
 - **[SCHEMA_SPEC.md](./SCHEMA_SPEC.md)** — API schema specification.
 - **[PRD_AGENT_BEHAVIOR_VALIDATION.md](./PRD_AGENT_BEHAVIOR_VALIDATION.md)** — behavior validation PRD.
+- **[`docs/live-view-node-lifecycle-policy.md`](./docs/live-view-node-lifecycle-policy.md)** — Live View node soft delete, restore, and purge policy.
 
 ---
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import useSWR from "swr";
 import { AlertCircle, KeyRound, Save, Trash2 } from "lucide-react";
 
@@ -298,6 +299,25 @@ export function AgentSettingsPanel({
             </div>
           </div>
         )}
+      </section>
+
+      <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-5 space-y-3">
+        <div>
+          <h3 className="text-sm font-black uppercase tracking-wider text-emerald-200">
+            Lifecycle Policy
+          </h3>
+          <p className="mt-1 text-xs leading-relaxed text-slate-400">
+            Removing a node hides it from Live View immediately. Matching traffic can auto-restore
+            the same node during the configured restore window, and scheduled cleanup may permanently
+            purge old soft-deleted node settings after the grace period.
+          </p>
+        </div>
+        <p className="text-[11px] leading-relaxed text-slate-500">
+          Check the repository docs for the current default values and operator guidance.
+          <Link href="/docs" className="ml-1 text-emerald-300 hover:text-emerald-200">
+            Open docs
+          </Link>
+        </p>
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-4">

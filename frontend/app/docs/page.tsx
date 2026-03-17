@@ -24,6 +24,7 @@ type SectionId =
   | "introduction"
   | "quickstart"
   | "integrations"
+  | "node-lifecycle"
   | "when-things-dont-work"
   | "key-concepts"
   | "architecture"
@@ -45,6 +46,7 @@ export default function DocsPage() {
   useEffect(() => {
     const section = searchParams.get("section");
     if (section === "integrations") setActiveSection("integrations");
+    if (section === "node-lifecycle") setActiveSection("node-lifecycle");
     if (section === "when-things-dont-work") setActiveSection("when-things-dont-work");
   }, [searchParams]);
 
@@ -763,6 +765,163 @@ Content-Type: application/json
         </div>
       ),
     },
+    "node-lifecycle": {
+      id: "node-lifecycle",
+      title: "Node Lifecycle",
+      icon: (
+        <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.15)] mb-8">
+          <History className="w-8 h-8" />
+        </div>
+      ),
+      content: (
+        <div className="space-y-12">
+          <p className="text-2xl text-slate-400 leading-relaxed font-medium max-w-4xl tracking-tight">
+            Live View node removal is designed to be reversible first, destructive later. That means
+            deleting a node hides it immediately, but the system can still restore it if matching
+            traffic returns or if an admin restores it manually.
+          </p>
+
+          <div className="grid md:grid-cols-3 gap-5 max-w-5xl">
+            <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-6">
+              <div className="text-[10px] font-black uppercase tracking-[0.3em] text-rose-300 mb-3">
+                Step 1
+              </div>
+              <h4 className="text-lg font-black text-white uppercase tracking-wide">Soft Delete</h4>
+              <p className="mt-3 text-sm leading-relaxed text-slate-400">
+                Removing a node hides it from the normal Live View canvas right away. Historical
+                snapshots are preserved, and the node enters a soft-deleted state.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6">
+              <div className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-300 mb-3">
+                Step 2
+              </div>
+              <h4 className="text-lg font-black text-white uppercase tracking-wide">Restore Window</h4>
+              <p className="mt-3 text-sm leading-relaxed text-slate-400">
+                If the same node identity sends traffic again, PluvianAI can auto-restore it during
+                the configured restore window. Admins can also restore it manually from Live View.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-6">
+              <div className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-300 mb-3">
+                Step 3
+              </div>
+              <h4 className="text-lg font-black text-white uppercase tracking-wide">Hard Delete</h4>
+              <p className="mt-3 text-sm leading-relaxed text-slate-400">
+                Scheduled cleanup can permanently purge old soft-deleted node settings after the grace
+                period expires. This cleans up old display state, not your historical snapshots.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-8 max-w-5xl space-y-6">
+            <div className="flex items-center gap-3">
+              <Shield className="w-5 h-5 text-emerald-400" />
+              <h3 className="text-lg font-black uppercase tracking-[0.2em] text-white">
+                Current Policy Defaults
+              </h3>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="rounded-xl border border-white/10 bg-black/20 p-5">
+                <div className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
+                  Auto Restore
+                </div>
+                <div className="mt-3 text-3xl font-black text-emerald-300">30 days</div>
+                <p className="mt-3 text-sm leading-relaxed text-slate-400">
+                  Default restore window for matching traffic. Same-node traffic inside this window
+                  can bring the node back automatically.
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-5">
+                <div className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
+                  Soft Delete Grace
+                </div>
+                <div className="mt-3 text-3xl font-black text-amber-300">30 days</div>
+                <p className="mt-3 text-sm leading-relaxed text-slate-400">
+                  Default grace period before scheduled cleanup can permanently delete old
+                  soft-deleted node settings.
+                </p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-5 py-4 text-sm text-slate-300 leading-relaxed">
+              If your workspace overrides backend settings, actual values can differ by deployment.
+              The repository defaults are{" "}
+              <code className="px-1.5 py-0.5 rounded bg-black/40 text-emerald-300 font-mono text-xs">
+                AGENT_AUTO_RESTORE_DAYS=30
+              </code>{" "}
+              and{" "}
+              <code className="px-1.5 py-0.5 rounded bg-black/40 text-emerald-300 font-mono text-xs">
+                AGENT_SOFT_DELETE_GRACE_DAYS=30
+              </code>
+              .
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-8 max-w-5xl space-y-5">
+            <h3 className="text-lg font-black uppercase tracking-[0.2em] text-white">
+              Common Scenarios
+            </h3>
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="rounded-xl border border-white/10 bg-black/20 p-5">
+                <h4 className="text-sm font-black text-white">Same node returns</h4>
+                <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                  If a removed node sends matching traffic again with the same identity, it can
+                  auto-restore and continue collecting fresh logs under that node.
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-5">
+                <h4 className="text-sm font-black text-white">Config changed</h4>
+                <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                  If prompt, model, code path, or other identity inputs change enough to create a
+                  different node identity, Live View treats it as a new node instead.
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-5">
+                <h4 className="text-sm font-black text-white">Too old to restore</h4>
+                <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                  Once the restore or purge window has passed, the old soft-deleted display-setting
+                  state may no longer be restorable automatically.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-6 max-w-5xl">
+            <h4 className="text-sm font-black uppercase tracking-[0.2em] text-white mb-3">
+              Where to manage this
+            </h4>
+            <ul className="space-y-2 text-sm leading-relaxed text-slate-400">
+              <li>
+                Live View canvas: open{" "}
+                <span className="text-white font-semibold">Deleted Nodes</span> to restore hidden
+                nodes.
+              </li>
+              <li>
+                Live View side panel: open{" "}
+                <span className="text-white font-semibold">Settings</span> for lifecycle guidance and
+                manual removal.
+              </li>
+              <li>
+                Repository docs: see{" "}
+                <code className="px-1.5 py-0.5 rounded bg-black/40 text-emerald-300 font-mono text-xs">
+                  docs/live-view-node-lifecycle-policy.md
+                </code>{" "}
+                for operator-facing detail.
+              </li>
+            </ul>
+            <div className="mt-5">
+              <Link
+                href="/docs?section=quickstart"
+                className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+              >
+                Continue to Quickstart
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      ),
+    },
     "when-things-dont-work": {
       id: "when-things-dont-work",
       title: "When things don't work",
@@ -1180,6 +1339,7 @@ Content-Type: application/json
         { id: "introduction", label: "Introduction" },
         { id: "quickstart", label: "Quickstart" },
         { id: "integrations", label: "Integrations by tool" },
+        { id: "node-lifecycle", label: "Node Lifecycle" },
         { id: "when-things-dont-work", label: "When things don't work" },
         { id: "key-concepts", label: "Key Concepts" },
         { id: "architecture", label: "Architecture" },

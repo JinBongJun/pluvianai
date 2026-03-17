@@ -48,11 +48,13 @@ import {
   Layers,
   Grip,
   LayoutGrid,
+  RotateCcw,
 } from "lucide-react";
 import { ClinicalLog } from "@/components/live-view/ClinicalLog";
 import { AgentEvaluationPanel } from "@/components/live-view/AgentEvaluationPanel";
 import { ClinicalLogDataSection } from "@/components/live-view/ClinicalLogDataSection";
 import { AgentSettingsPanel } from "@/components/live-view/AgentSettingsPanel";
+import { useToast } from "@/components/ToastContainer";
 
 // Stable references for React Flow (avoid "new nodeTypes/edgeTypes object" warning)
 const NODE_TYPES = { agentCard: AgentCardNode };
@@ -333,6 +335,83 @@ function LiveViewErrorState({
   );
 }
 
+function DeletedAgentsTray({
+  agents,
+  restoringAgentId,
+  onRestore,
+}: {
+  agents: Array<{
+    agent_id: string;
+    display_name?: string;
+    total?: number;
+    last_seen?: string | null;
+    deleted_at?: string | null;
+  }>;
+  restoringAgentId: string | null;
+  onRestore: (agentId: string) => void;
+}) {
+  if (agents.length === 0) return null;
+
+  return (
+    <div className="absolute top-6 right-6 z-[60] w-[320px] rounded-2xl border border-amber-500/25 bg-[#141414]/90 p-4 shadow-2xl backdrop-blur-xl">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-300">
+            Deleted Nodes
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-400">
+            Hidden nodes can be restored here. Matching new traffic also restores them automatically
+            during the configured restore window.
+          </p>
+        </div>
+        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-200">
+          {agents.length}
+        </span>
+      </div>
+      <div className="mt-4 max-h-[260px] space-y-2 overflow-y-auto custom-scrollbar pr-1">
+        {agents.map(agent => (
+          <div
+            key={agent.agent_id}
+            className="rounded-xl border border-white/10 bg-black/30 px-3 py-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">
+                  {agent.display_name || agent.agent_id}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {agent.total ?? 0} snapshots
+                </p>
+                <p className="mt-1 text-[11px] text-slate-600">
+                  {agent.deleted_at
+                    ? `Deleted ${new Date(agent.deleted_at).toLocaleString()}`
+                    : "Soft-deleted node"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRestore(agent.agent_id)}
+                disabled={restoringAgentId === agent.agent_id}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                {restoringAgentId === agent.agent_id ? "Restoring..." : "Restore"}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-[11px] leading-relaxed text-slate-400">
+        Removal hides a node immediately. Identical traffic can auto-restore it, and scheduled cleanup
+        can permanently purge soft-deleted node settings after the grace period.
+        <Link href="/docs" className="ml-1 text-emerald-300 hover:text-emerald-200">
+          See docs
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 const LV_GRID_SPACING_X = 300;
 const LV_GRID_SPACING_Y = 200;
 const LV_GRID_COLS = 3;
@@ -370,6 +449,7 @@ function LiveViewContent() {
   const rawProjectId = params?.projectId;
   const projectIdStr = Array.isArray(rawProjectId) ? rawProjectId[0] : rawProjectId;
   const projectId = projectIdStr ? Number(projectIdStr) : 0;
+  const toast = useToast();
 
   const { data: project } = useSWR(
     projectId && !isNaN(projectId) ? ["project", projectId] : null,
@@ -398,7 +478,7 @@ function LiveViewContent() {
     error: agentsError,
   } = useSWR(
     projectId && !isNaN(projectId) && projectId > 0 ? ["live-view-agents", projectId] : null,
-    () => liveViewAPI.getAgents(projectId),
+    () => liveViewAPI.getAgents(projectId, 30, true),
     {
       refreshInterval: 3000,
       revalidateOnFocus: false,
@@ -453,16 +533,24 @@ function LiveViewContent() {
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [panelTab, setPanelTab] = useState<"logs" | "eval" | "data" | "settings">("logs");
+  const [restoringAgentId, setRestoringAgentId] = useState<string | null>(null);
 
-  // Sync Data to React Flow (exclude soft-deleted nodes)
-  const agentsList = useMemo(() => {
+  const allAgents = useMemo(() => {
     const raw = Array.isArray(agentsData?.agents)
       ? agentsData.agents
       : Array.isArray((agentsData as any)?.data?.agents)
         ? (agentsData as any).data.agents
         : [];
-    return raw.filter((a: { is_deleted?: boolean }) => !a.is_deleted);
+    return Array.isArray(raw) ? raw : [];
   }, [agentsData]);
+
+  const agentsList = useMemo(() => {
+    return allAgents.filter((a: { is_deleted?: boolean }) => !a.is_deleted);
+  }, [allAgents]);
+
+  const deletedAgents = useMemo(() => {
+    return allAgents.filter((a: { is_deleted?: boolean }) => a.is_deleted);
+  }, [allAgents]);
 
   // Calculate Real Telemetry Stats from backend data (exclude soft-deleted)
   const telemetryStats = useMemo(() => {
@@ -594,6 +682,26 @@ function LiveViewContent() {
     });
   }, [agentsError, agentsErrorCode, agentsErrorStatus]);
 
+  const handleRestoreAgent = useCallback(
+    async (agentId: string) => {
+      if (!projectId || !agentId) return;
+      setRestoringAgentId(agentId);
+      try {
+        await liveViewAPI.restoreAgent(projectId, agentId);
+        await mutateAgents(undefined, true);
+        setSelectedAgentId(agentId);
+        setPanelTab("logs");
+        toast.showToast("Node restored to Live View.", "success");
+      } catch (err: unknown) {
+        const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+        toast.showToast(typeof msg === "string" ? msg : "Failed to restore node.", "error");
+      } finally {
+        setRestoringAgentId(null);
+      }
+    },
+    [mutateAgents, projectId, toast]
+  );
+
   return (
     <CanvasPageLayout
       orgId={orgId}
@@ -679,6 +787,13 @@ function LiveViewContent() {
           />
         )}
         {showEmptyOverlay && <LiveViewEmptyState project={project} projectId={projectId} />}
+        {!showLoadingOverlay && !showAccessDeniedOverlay && !showApiErrorOverlay && (
+          <DeletedAgentsTray
+            agents={deletedAgents}
+            restoringAgentId={restoringAgentId}
+            onRestore={handleRestoreAgent}
+          />
+        )}
 
         {/* Clinical Monitoring Watermark */}
         <div className="absolute bottom-10 left-10 z-0 pointer-events-none select-none opacity-20">

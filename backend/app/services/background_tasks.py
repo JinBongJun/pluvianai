@@ -11,6 +11,7 @@ from app.core.database import SessionLocal
 from app.models.api_call import APICall
 from app.models.trace import Trace
 from app.models.snapshot import Snapshot
+from app.domain.live_view_release_gate import restore_agent_if_soft_deleted
 from app.services.data_normalizer import DataNormalizer
 from app.utils.compression import optimize_api_call_data, compress_json
 from app.utils.tool_calls import extract_tool_calls_summary
@@ -219,6 +220,7 @@ class BackgroundTaskService:
                         eval_config_version=eval_config_version,
                     )
                     db.add(snapshot)
+                    restore_agent_if_soft_deleted(db, project_id, agent_id)
             except Exception as snap_err:
                 logger.warning(f"Failed to create snapshot for Live View (non-fatal): {snap_err}")
 
