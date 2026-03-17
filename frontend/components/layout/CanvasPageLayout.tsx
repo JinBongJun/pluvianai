@@ -1,11 +1,14 @@
 "use client";
 
 import React from "react";
+import useSWR from "swr";
 import TopHeader from "./TopHeader";
 import { LaboratoryNavbar } from "./LaboratoryNavbar";
 import { TelemetryHUD, type TelemetryStat } from "./TelemetryHUD";
 import clsx from "clsx";
-import { Activity } from "lucide-react";
+import { organizationsAPI } from "@/lib/api";
+import { useAuthSession } from "@/hooks/useAuthSession";
+import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
 
 interface CanvasPageLayoutProps {
   children: React.ReactNode;
@@ -42,11 +45,31 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
   // Ensure projectId is consistently handled for the navbar
   const effectiveProjectId = projectId ? Number(projectId) : undefined;
   const hasValidProject = orgId && effectiveProjectId !== undefined && !isNaN(effectiveProjectId);
+  const { isAuthenticated } = useAuthSession();
+
+  const { data: organizations } = useSWR<OrganizationSummary[]>(
+    isAuthenticated ? "organizations" : null,
+    () => organizationsAPI.list({ includeStats: false }),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 10_000,
+    }
+  );
+  const { data: projects } = useSWR<OrganizationProject[]>(
+    isAuthenticated && orgId ? ["organization-projects-list", orgId] : null,
+    ([, id]) => organizationsAPI.listProjects(String(id), { includeStats: false }),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 10_000,
+    }
+  );
 
   return (
     <div className="h-screen w-screen bg-[#0a0a0c] overflow-hidden flex flex-col font-sans text-slate-200">
       {/* Global Top Header - Fixed at 90px */}
       <TopHeader
+        organizations={organizations}
+        projects={projects}
         nav={
           navigationVariant === "top" &&
           hasValidProject && <LaboratoryNavbar orgId={orgId!} projectId={effectiveProjectId!} />

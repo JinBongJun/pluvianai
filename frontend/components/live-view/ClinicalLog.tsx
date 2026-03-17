@@ -19,6 +19,7 @@ import {
 import clsx from "clsx";
 import { behaviorAPI, liveViewAPI } from "@/lib/api";
 import { getRateLimitInfo, isRateLimitError } from "@/lib/api/client";
+import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { toEvalRows } from "@/lib/evalRows";
 import useSWR from "swr";
 import { SnapshotDetailModal } from "@/components/shared/SnapshotDetailModal";
@@ -356,6 +357,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
   );
   const [newDatasetName, setNewDatasetName] = React.useState("");
   const [pollIntervalMs, setPollIntervalMs] = React.useState(CLINICAL_LOG_BASE_POLL_MS);
+  const isPageVisible = usePageVisibility();
+  const wasPageVisibleRef = React.useRef(isPageVisible);
 
   // Keep log selection strictly scoped to the current node.
   React.useEffect(() => {
@@ -388,7 +391,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
       }),
     {
       keepPreviousData: true,
-      refreshInterval: pollIntervalMs,
+      refreshInterval: isPageVisible ? pollIntervalMs : 0,
       revalidateOnFocus: false,
       refreshWhenHidden: false,
       shouldRetryOnError: false,
@@ -416,6 +419,14 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
 
     setPollIntervalMs(current => Math.min(current * 2, CLINICAL_LOG_MAX_POLL_MS));
   }, [agentId, error, isRateLimited, projectId, rateLimitInfo.retryAfterSec]);
+
+  React.useEffect(() => {
+    if (!projectId || !agentId) return;
+    const becameVisible = !wasPageVisibleRef.current && isPageVisible;
+    wasPageVisibleRef.current = isPageVisible;
+    if (!becameVisible) return;
+    void mutate();
+  }, [agentId, isPageVisible, mutate, projectId]);
 
   const saveRecentTraceLimit = async () => {
     if (!projectId || !agentId) return;
