@@ -59,6 +59,8 @@ import { useToast } from "@/components/ToastContainer";
 // Stable references for React Flow (avoid "new nodeTypes/edgeTypes object" warning)
 const NODE_TYPES = { agentCard: AgentCardNode };
 const EDGE_TYPES = { default: DrawIOEdge };
+const LIVE_VIEW_BASE_POLL_MS = 3000;
+const LIVE_VIEW_MAX_POLL_MS = 60000;
 
 function LiveViewToolbar({
   onUndo,
@@ -450,6 +452,7 @@ function LiveViewContent() {
   const projectIdStr = Array.isArray(rawProjectId) ? rawProjectId[0] : rawProjectId;
   const projectId = projectIdStr ? Number(projectIdStr) : 0;
   const toast = useToast();
+  const [agentsPollIntervalMs, setAgentsPollIntervalMs] = useState(LIVE_VIEW_BASE_POLL_MS);
 
   const { data: project } = useSWR(
     projectId && !isNaN(projectId) ? ["project", projectId] : null,
@@ -480,7 +483,7 @@ function LiveViewContent() {
     projectId && !isNaN(projectId) && projectId > 0 ? ["live-view-agents", projectId] : null,
     () => liveViewAPI.getAgents(projectId, 30, true),
     {
-      refreshInterval: 3000,
+      refreshInterval: agentsPollIntervalMs,
       revalidateOnFocus: false,
       shouldRetryOnError: false,
     }
@@ -664,6 +667,7 @@ function LiveViewContent() {
   const agentsErrorStatus = Number((agentsError as any)?.response?.status ?? 0);
   const agentsErrorCode = getApiErrorCode(agentsError);
   const agentsRateLimit = getRateLimitInfo(agentsError);
+  const agentsRetryAfterSec = agentsRateLimit.retryAfterSec;
   const showLoadingOverlay = agentsLoading && typeof agentsData === "undefined";
   const showAccessDeniedOverlay = !!agentsError && agentsErrorStatus === 403;
   const showApiErrorOverlay =
@@ -681,6 +685,25 @@ function LiveViewContent() {
       message: getApiErrorMessage(agentsError),
     });
   }, [agentsError, agentsErrorCode, agentsErrorStatus]);
+
+  useEffect(() => {
+    if (!projectId || Number.isNaN(projectId) || projectId <= 0) return;
+    if (!agentsError) {
+      setAgentsPollIntervalMs(LIVE_VIEW_BASE_POLL_MS);
+      return;
+    }
+
+    if (isRateLimitError(agentsError)) {
+      const retryAfterMs = Math.max(
+        LIVE_VIEW_BASE_POLL_MS,
+        (agentsRetryAfterSec || 0) * 1000
+      );
+      setAgentsPollIntervalMs(Math.min(retryAfterMs, LIVE_VIEW_MAX_POLL_MS));
+      return;
+    }
+
+    setAgentsPollIntervalMs(current => Math.min(current * 2, LIVE_VIEW_MAX_POLL_MS));
+  }, [agentsError, agentsRetryAfterSec, projectId]);
 
   const handleRestoreAgent = useCallback(
     async (agentId: string) => {
@@ -780,7 +803,7 @@ function LiveViewContent() {
             title={isRateLimitError(agentsError) ? "Live View Busy" : "Unable to Load Agents"}
             description={
               isRateLimitError(agentsError)
-                ? `Live View is refreshing too quickly right now. Please wait${agentsRateLimit.retryAfterSec ? ` about ${agentsRateLimit.retryAfterSec} seconds` : " a moment"} and retry.`
+                ? `Live View is temporarily throttled. Updates will resume automatically${agentsRateLimit.retryAfterSec ? ` in about ${agentsRateLimit.retryAfterSec} seconds` : " shortly"}. You can also retry now.`
                 : "We could not reach the Live View API right now. Please retry in a few seconds. If the problem continues, check backend health and network connectivity."
             }
             onRetry={() => void mutateAgents()}

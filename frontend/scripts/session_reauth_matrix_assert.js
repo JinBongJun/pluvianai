@@ -28,11 +28,21 @@ async function runCase(baseUrl, route, tokenValue) {
   try {
     // Prime origin and storage
     await page.goto(`${baseUrl}/login`, { waitUntil: "domcontentloaded", timeout: 45000 });
-    await page.evaluate(token => {
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
-      if (token) localStorage.setItem("access_token", token);
-    }, tokenValue);
+    const url = new URL(baseUrl);
+    await page.context().clearCookies();
+    if (tokenValue) {
+      await page.context().addCookies([
+        {
+          name: "access_token",
+          value: tokenValue,
+          domain: url.hostname,
+          path: "/",
+          httpOnly: false,
+          secure: url.protocol === "https:",
+          sameSite: "Lax",
+        },
+      ]);
+    }
 
     await page.goto(`${baseUrl}${route}`, { waitUntil: "domcontentloaded", timeout: 45000 });
     const checks = await assertReauthLanding(page);

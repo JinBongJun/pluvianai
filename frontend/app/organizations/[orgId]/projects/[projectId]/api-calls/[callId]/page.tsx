@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ProjectLayout from "@/components/layout/ProjectLayout";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import JSONViewer from "@/components/ui/JSONViewer";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -18,6 +19,7 @@ export default function APICallDetailPage() {
   const params = useParams();
   const toast = useToast();
   const { orgId, projectId } = useOrgProjectParams();
+  const isAuthenticated = useRequireAuth();
   const callId = Number(
     Array.isArray(params?.callId) ? params.callId[0] : params?.callId
   );
@@ -77,14 +79,9 @@ export default function APICallDetailPage() {
   }, [callId, projectId, basePath, router, toast]);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
+    if (!isAuthenticated) return;
     void loadAPICall();
-  }, [router, loadAPICall]);
+  }, [isAuthenticated, loadAPICall]);
 
   const navigateToCall = (newCallId: number) => {
     router.push(`${basePath}/api-calls/${newCallId}`);

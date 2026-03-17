@@ -10,6 +10,12 @@ async function login(page, baseUrl, email, password) {
   await page.waitForURL(/\/organizations/, { timeout: 45000 });
 }
 
+async function getAuthCookieHeader(page, targetUrl) {
+  const cookies = await page.context().cookies(targetUrl);
+  if (!cookies.length) return null;
+  return cookies.map(cookie => `${cookie.name}=${cookie.value}`).join("; ");
+}
+
 async function checkLoggedOutLanding(baseUrl) {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
@@ -68,16 +74,16 @@ async function checkLoggedInLandingAndBilling(baseUrl, backendUrl, email, passwo
 
     await page.waitForTimeout(1000);
     let resolvedOrgId = String(orgId || "").trim();
-    const token = await page.evaluate(() => localStorage.getItem("access_token"));
+    const cookieHeader = await getAuthCookieHeader(page, backendUrl);
     let orgIdFromApi = null;
     let orgLookupStatus = null;
     let orgCreateStatus = null;
     let usageStatus = null;
     let usagePayload = null;
-    if (token) {
+    if (cookieHeader) {
       try {
         const usageRes = await fetch(`${backendUrl}/api/v1/auth/me/usage`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Cookie: cookieHeader },
         });
         usageStatus = usageRes.status;
         if (usageRes.ok) {
@@ -85,7 +91,7 @@ async function checkLoggedInLandingAndBilling(baseUrl, backendUrl, email, passwo
         }
 
         const listRes = await fetch(`${backendUrl}/api/v1/organizations`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Cookie: cookieHeader },
         });
         orgLookupStatus = listRes.status;
         if (listRes.ok) {
@@ -99,7 +105,7 @@ async function checkLoggedInLandingAndBilling(baseUrl, backendUrl, email, passwo
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
+              Cookie: cookieHeader,
             },
             body: JSON.stringify({
               name: `qa-billing-org-${Date.now()}`,

@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
   BarChart3,
@@ -27,17 +26,10 @@ import PricingSection from "@/components/landing/PricingSection";
 import InteractiveHoverText from "@/components/ui/InteractiveHoverText";
 import SilkGradientBg from "@/components/landing/SilkGradientBg";
 import MarketingNavbar from "@/components/layout/MarketingNavbar";
+import { useAuthSession } from "@/hooks/useAuthSession";
 
 export default function Home() {
-  const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (token) {
-      setIsLoggedIn(true);
-    }
-  }, []);
+  const { isAuthenticated: isLoggedIn } = useAuthSession();
 
   return (
     <div className="min-h-screen text-slate-200 selection:bg-emerald-500/30 font-sans relative">
