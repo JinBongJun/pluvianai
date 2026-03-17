@@ -17,29 +17,6 @@ export const authAPI = {
     return response.data;
   },
 
-  login: async (email: string, password: string) => {
-    const formData = new FormData();
-    formData.append("username", email);
-    formData.append("password", password);
-
-    await axios.post(`${API_URL}/api/v1/auth/login`, formData, {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      withCredentials: true,
-    });
-
-    let userInfo: { id?: string | number; email?: string; full_name?: string } | null = null;
-    try {
-      const meResponse = await axios.get(`${API_URL}/api/v1/auth/me`, {
-        withCredentials: true,
-      });
-      userInfo = meResponse.data?.data ?? meResponse.data ?? null;
-    } catch {}
-
-    return { user_info: userInfo };
-  },
-
   logout: async () => {
     await axios
       .post(
