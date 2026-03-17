@@ -8,6 +8,8 @@ import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { projectsAPI, organizationsAPI } from "@/lib/api";
 import { analytics } from "@/lib/analytics";
 import { useToast } from "@/components/ToastContainer";
+import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
+import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 
 type UsageMode = "full" | "test_only";
 
@@ -19,6 +21,7 @@ export default function NewProjectPage() {
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [planError, setPlanError] = useState<PlanLimitError | null>(null);
 
   const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
     organizationsAPI.get(orgId, { includeStats: false })
@@ -33,6 +36,7 @@ export default function NewProjectPage() {
 
     setLoading(true);
     setError(null);
+    setPlanError(null);
 
     try {
       const project = await projectsAPI.create({
@@ -53,8 +57,19 @@ export default function NewProjectPage() {
       toast.showToast("Project created successfully", "success");
       router.push(`/organizations/${orgId}/projects/${project.id}`);
     } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || "Failed to create project");
-      toast.showToast(err.response?.data?.detail || "Failed to create project", "error");
+      const parsed = parsePlanLimitError(err);
+      if (parsed && parsed.code === "PROJECT_LIMIT_REACHED") {
+        setPlanError(parsed);
+        setError(null);
+      } else {
+        const detail = err?.response?.data?.detail;
+        const message =
+          (typeof detail === "string" ? detail : detail?.message) ||
+          err?.message ||
+          "Failed to create project";
+        setError(message);
+        toast.showToast(message, "error");
+      }
     } finally {
       setLoading(false);
     }
@@ -88,7 +103,12 @@ export default function NewProjectPage() {
           </div>
         </div>
 
-        {error && (
+        {planError && (
+          <div className="mb-8">
+            <PlanLimitBanner {...planError} context="project" />
+          </div>
+        )}
+        {error && !planError && (
           <div className="mb-8 rounded-xl border border-rose-500/30 bg-rose-500/10 p-5 flex items-start gap-4 shadow-[0_0_20px_rgba(244,63,94,0.15)]">
             <div className="w-6 h-6 rounded-full bg-rose-500/20 flex items-center justify-center shrink-0">
               <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />

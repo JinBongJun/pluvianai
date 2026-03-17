@@ -17,6 +17,7 @@ from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.services.cache_service import cache_service
 from app.middleware.usage_middleware import check_team_member_limit
 from app.services.activity_logger import activity_logger
+from app.services.subscription_service import SubscriptionService
 from app.models.user import User
 from app.models.project import Project
 from app.models.project_member import ProjectMember
@@ -110,9 +111,27 @@ async def add_project_member(
     # Check team member limit
     can_add, error_msg = check_team_member_limit(current_user.id, project_id, db)
     if not can_add:
+        plan_info = SubscriptionService(db).get_user_plan(current_user.id)
+        plan_type = str(plan_info.get("plan_type") or "free")
+        limits = plan_info.get("limits") or {}
+        member_limit = int(limits.get("team_members_per_project", 1))
+        current_members = (
+            db.query(ProjectMember)
+            .filter(ProjectMember.project_id == project_id)
+            .count()
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=error_msg or "Team member limit reached. Please upgrade your plan.",
+            detail={
+                "code": "TEAM_MEMBER_LIMIT_REACHED",
+                "message": error_msg or "You have reached the team member limit for this project.",
+                "details": {
+                    "plan_type": plan_type,
+                    "current": current_members,
+                    "limit": member_limit,
+                    "upgrade_path": "/settings/subscription",
+                },
+            },
         )
 
     try:

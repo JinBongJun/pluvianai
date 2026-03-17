@@ -6,6 +6,8 @@ import TopHeader from "@/components/layout/TopHeader";
 import { organizationsAPI } from "@/lib/api";
 import { Beaker, ArrowLeft, Building2, Shield, Activity, Plus } from "lucide-react";
 import Button from "@/components/ui/Button";
+import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
+import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 
 export default function NewOrganizationPage() {
   const router = useRouter();
@@ -13,6 +15,7 @@ export default function NewOrganizationPage() {
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [planError, setPlanError] = useState<PlanLimitError | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -22,6 +25,7 @@ export default function NewOrganizationPage() {
     }
     setLoading(true);
     setError(null);
+    setPlanError(null);
     try {
       const org = await organizationsAPI.create({
         name: name.trim(),
@@ -30,9 +34,18 @@ export default function NewOrganizationPage() {
       });
       router.push(`/organizations/${org.id}/projects`);
     } catch (err: any) {
-      const message =
-        err?.response?.data?.detail || err?.message || "Failed to create organization";
-      setError(message);
+      const parsed = parsePlanLimitError(err);
+      if (parsed && parsed.code === "ORG_LIMIT_REACHED") {
+        setPlanError(parsed);
+        setError(null);
+      } else {
+        const detail = err?.response?.data?.detail;
+        const message =
+          (typeof detail === "string" ? detail : detail?.message) ||
+          err?.message ||
+          "Failed to create organization";
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -156,9 +169,10 @@ export default function NewOrganizationPage() {
             </div>
           </div>
 
-          {error && (
-            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-xs font-bold text-red-400 uppercase tracking-wider animate-shake">
-              {error}
+          {planError && <PlanLimitBanner {...planError} context="organization" className="mb-4" />}
+          {error && !planError && (
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 animate-shake space-y-3">
+              <p className="text-xs font-bold text-red-400 uppercase tracking-wider">{error}</p>
             </div>
           )}
 

@@ -14,6 +14,8 @@ import ProjectTabs from "@/components/ProjectTabs";
 import { analytics } from "@/lib/analytics";
 import { clsx } from "clsx";
 import useSWR from "swr";
+import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
+import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 
 export default function ReplayPage() {
   const router = useRouter();
@@ -29,6 +31,7 @@ export default function ReplayPage() {
   const [loading, setLoading] = useState(true);
   const [replaying, setReplaying] = useState(false);
   const [isConcurrencyBlocked, setIsConcurrencyBlocked] = useState(false);
+  const [planError, setPlanError] = useState<PlanLimitError | null>(null);
   const [concurrencyError, setConcurrencyError] = useState<{
     message?: string;
     limit?: number;
@@ -98,6 +101,7 @@ export default function ReplayPage() {
     if (isConcurrencyBlocked) return;
 
     setReplaying(true);
+    setPlanError(null);
     try {
       const replayResults = await replayAPI.runBatchReplay(projectId, {
         snapshot_ids: selectedIds,
@@ -119,9 +123,17 @@ export default function ReplayPage() {
       setResults(replayResults);
       toast.showToast(`Batch replay of ${selectedIds.length} items completed`, "success");
     } catch (err: any) {
+      const parsed = parsePlanLimitError(err);
       const detail = err?.response?.data?.detail;
       const errorCode = typeof detail === "object" ? detail?.code : undefined;
-      if (err?.response?.status === 403 && errorCode === "CONCURRENT_TEST_NOT_ALLOWED") {
+      if (parsed && parsed.code === "LIMIT_PLATFORM_REPLAY_CREDITS") {
+        setPlanError(parsed);
+        toast.showToast(
+          parsed.message ||
+            "You have used all hosted replay credits for this billing period. Use your own provider key or upgrade your plan.",
+          "warning"
+        );
+      } else if (err?.response?.status === 403 && errorCode === "CONCURRENT_TEST_NOT_ALLOWED") {
         setIsConcurrencyBlocked(true);
         setConcurrencyError({
           message:
@@ -181,6 +193,11 @@ export default function ReplayPage() {
       ]}
     >
       <div className="max-w-7xl mx-auto">
+        {planError && (
+          <div className="mb-4">
+            <PlanLimitBanner {...planError} context="replay" />
+          </div>
+        )}
         {concurrencyError && (
           <div className="mb-4 rounded-md border border-yellow-500/60 bg-yellow-500/10 px-3 py-2 text-xs flex items-start justify-between gap-3">
             <div>
