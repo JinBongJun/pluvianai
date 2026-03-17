@@ -63,6 +63,15 @@ class DeleteSavedLogsRequest(BaseModel):
         description="Snapshot IDs to remove from saved logs for the selected node.",
     )
 
+
+class SnapshotBatchDeleteRequest(BaseModel):
+    snapshot_ids: List[int] = Field(
+        ...,
+        min_length=1,
+        max_length=1000,
+        description="Snapshot IDs to soft-delete.",
+    )
+
 @router.get("/projects/{project_id}/live-view/agents")
 def list_agents(
     project_id: int,
@@ -91,7 +100,7 @@ def list_agents(
                 # Explicitly count worst snapshots using robust SQLAlchemy 2.0 syntax
                 func.count(case((Snapshot.is_worst.is_(True), 1), else_=None)).label("worst_count")
             )
-            .filter(Snapshot.project_id == project_id)
+            .filter(Snapshot.project_id == project_id, Snapshot.is_deleted.is_(False))
             .group_by(Snapshot.agent_id, Snapshot.model, Snapshot.system_prompt)
             # Use label for ordering to avoid PostgreSQL grouping ambiguity on some versions
             .order_by(desc("last_seen"))
@@ -512,6 +521,7 @@ def list_saved_logs(
             SavedLog.agent_id == agent_id,
             Snapshot.project_id == project_id,
             Snapshot.agent_id == agent_id,
+            Snapshot.is_deleted.is_(False),
         )
         .order_by(SavedLog.created_at.desc())
         .offset(offset)
@@ -558,6 +568,7 @@ def save_logs_for_agent(
         .filter(
             Snapshot.project_id == project_id,
             Snapshot.id.in_(requested_ids),
+            Snapshot.is_deleted.is_(False),
         )
         .all()
     )
@@ -757,18 +768,14 @@ def list_snapshots(
     Use light=true for list view; open detail with GET /snapshots/{id} for full payload.
     """
     _ensure_project(project_id, current_user, db)
-    query = db.query(Snapshot).filter(Snapshot.project_id == project_id)
+    query = db.query(Snapshot).filter(Snapshot.project_id == project_id, Snapshot.is_deleted.is_(False))
     if agent_id:
         query = query.filter(Snapshot.agent_id == agent_id)
     if is_worst is not None:
         query = query.filter(Snapshot.is_worst == is_worst)
 
-    items = (
-        query.order_by(Snapshot.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    total_count = query.count()
+    items = query.order_by(Snapshot.created_at.desc()).offset(offset).limit(limit).all()
 
     def _tool_fields(snap, skip_payload: bool = False):
         summary = getattr(snap, "tool_calls_summary", None)
@@ -820,6 +827,7 @@ def list_snapshots(
     return {
         "items": [_item(s) for s in items],
         "count": len(items),
+        "total_count": int(total_count),
         "limit": limit,
         "offset": offset,
     }
@@ -836,7 +844,11 @@ def get_snapshot(
     _ensure_project(project_id, current_user, db)
     snap = (
         db.query(Snapshot)
-        .filter(Snapshot.project_id == project_id, Snapshot.id == snapshot_id)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.id == snapshot_id,
+            Snapshot.is_deleted.is_(False),
+        )
         .first()
     )
     if not snap:
@@ -873,6 +885,80 @@ def get_snapshot(
         "has_tool_calls": bool(summary),
         "tool_calls_summary": summary or [],
     }
+
+
+@router.delete("/projects/{project_id}/snapshots/{snapshot_id}")
+def delete_snapshot(
+    project_id: int,
+    snapshot_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_project_admin(project_id, current_user, db)
+    snapshot = (
+        db.query(Snapshot)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.id == snapshot_id,
+            Snapshot.is_deleted.is_(False),
+        )
+        .first()
+    )
+    if not snapshot:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
+
+    now_utc = datetime.now(timezone.utc)
+    snapshot.is_deleted = True
+    snapshot.deleted_at = now_utc
+    db.query(SavedLog).filter(
+        SavedLog.project_id == project_id,
+        SavedLog.snapshot_id == snapshot_id,
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"ok": True, "deleted": 1}
+
+
+@router.post("/projects/{project_id}/snapshots/batch-delete")
+def batch_delete_snapshots(
+    project_id: int,
+    body: SnapshotBatchDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_project_admin(project_id, current_user, db)
+    snapshot_ids = list(dict.fromkeys(int(sid) for sid in body.snapshot_ids if sid is not None))
+    if not snapshot_ids:
+        return {"ok": True, "deleted": 0}
+
+    rows = (
+        db.query(Snapshot)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.id.in_(snapshot_ids),
+            Snapshot.is_deleted.is_(False),
+        )
+        .all()
+    )
+    if not rows:
+        return {"ok": True, "deleted": 0}
+
+    now_utc = datetime.now(timezone.utc)
+    matched_ids = [int(row.id) for row in rows]
+    (
+        db.query(Snapshot)
+        .filter(Snapshot.project_id == project_id, Snapshot.id.in_(matched_ids))
+        .update(
+            {"is_deleted": True, "deleted_at": now_utc},
+            synchronize_session=False,
+        )
+    )
+    (
+        db.query(SavedLog)
+        .filter(SavedLog.project_id == project_id, SavedLog.snapshot_id.in_(matched_ids))
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"ok": True, "deleted": len(matched_ids)}
 
 
 def _parse_created_at(created_at: Any) -> Optional[datetime]:
@@ -940,7 +1026,11 @@ def evaluate_agent_with_eval_config(
     window_limit = normalize_eval_config(current_eval)["window"]["limit"]
     rows = (
         db.query(Snapshot)
-        .filter(Snapshot.project_id == project_id, Snapshot.agent_id == agent_id)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.agent_id == agent_id,
+            Snapshot.is_deleted.is_(False),
+        )
         .order_by(Snapshot.created_at.desc())
         .limit(window_limit)
         .all()

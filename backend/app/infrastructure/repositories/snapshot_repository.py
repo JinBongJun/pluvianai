@@ -15,7 +15,7 @@ class SnapshotRepository(SQLAlchemyRepository[Snapshot]):
         """Find all snapshots for a trace"""
         return (
             self.db.query(Snapshot)
-            .filter(Snapshot.trace_id == trace_id)
+            .filter(Snapshot.trace_id == trace_id, Snapshot.is_deleted.is_(False))
             .order_by(Snapshot.created_at.desc())
             .all()
         )
@@ -26,7 +26,7 @@ class SnapshotRepository(SQLAlchemyRepository[Snapshot]):
         return (
             self.db.query(Snapshot)
             .join(Trace)
-            .filter(Trace.project_id == project_id)
+            .filter(Trace.project_id == project_id, Snapshot.is_deleted.is_(False))
             .order_by(Snapshot.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -45,7 +45,8 @@ class SnapshotRepository(SQLAlchemyRepository[Snapshot]):
                 and_(
                     Trace.project_id == project_id,
                     Snapshot.provider == provider,
-                    Snapshot.model == model
+                    Snapshot.model == model,
+                    Snapshot.is_deleted.is_(False),
                 )
             )
             .order_by(Snapshot.created_at.desc())
@@ -60,6 +61,6 @@ class SnapshotRepository(SQLAlchemyRepository[Snapshot]):
         return (
             self.db.query(Snapshot)
             .join(Trace)
-            .filter(Trace.project_id == project_id)
+            .filter(Trace.project_id == project_id, Snapshot.is_deleted.is_(False))
             .count()
         )

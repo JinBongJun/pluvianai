@@ -251,6 +251,7 @@ def get_recommended_snapshots_for_agent(
             Snapshot.project_id == project_id,
             Snapshot.agent_id == effective_agent_id,
             Snapshot.created_at >= since,
+            Snapshot.is_deleted.is_(False),
         )
         .order_by(Snapshot.created_at.desc())
         .limit(800)
@@ -641,6 +642,7 @@ async def _run_release_gate(
             .filter(
                 Snapshot.project_id == project_id,
                 Snapshot.id == snapshot_ids_to_use[0],
+                Snapshot.is_deleted.is_(False),
             )
             .first()
         )
@@ -654,6 +656,7 @@ async def _run_release_gate(
             .filter(
                 Snapshot.project_id == project_id,
                 Snapshot.agent_id == payload.agent_id,
+                Snapshot.is_deleted.is_(False),
             )
             .order_by(Snapshot.created_at.desc())
             .limit(payload.recent_snapshot_limit)
@@ -745,6 +748,7 @@ async def _run_release_gate(
                     .filter(
                         Snapshot.project_id == project_id,
                         Snapshot.id == ds.snapshot_ids[0],
+                        Snapshot.is_deleted.is_(False),
                     )
                     .first()
                 )
@@ -774,6 +778,7 @@ async def _run_release_gate(
             .filter(
                 Snapshot.project_id == project_id,
                 Snapshot.id.in_(snapshot_ids_to_use),
+                Snapshot.is_deleted.is_(False),
             )
             .all()
         }
@@ -817,7 +822,11 @@ async def _run_release_gate(
     else:
         snapshots = (
             db.query(Snapshot)
-            .filter(Snapshot.project_id == project_id, Snapshot.trace_id == trace_id)
+            .filter(
+                Snapshot.project_id == project_id,
+                Snapshot.trace_id == trace_id,
+                Snapshot.is_deleted.is_(False),
+            )
             .order_by(Snapshot.span_order.asc().nullslast(), Snapshot.created_at.asc())
             .limit(payload.max_snapshots)
             .all()
@@ -1488,7 +1497,11 @@ def list_release_gate_agents(
     project = check_project_access(project_id, current_user, db)
     rows = (
         db.query(Snapshot.agent_id, func.max(Snapshot.created_at).label("last_seen"))
-        .filter(Snapshot.project_id == project_id, Snapshot.agent_id.isnot(None))
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.agent_id.isnot(None),
+            Snapshot.is_deleted.is_(False),
+        )
         .group_by(Snapshot.agent_id)
         .order_by(desc("last_seen"))
         .limit(limit)
@@ -1547,6 +1560,7 @@ def list_recent_snapshots_for_agent(
         .filter(
             Snapshot.project_id == project_id,
             Snapshot.agent_id == agent_id,
+            Snapshot.is_deleted.is_(False),
         )
         .scalar()
         or 0
@@ -1571,6 +1585,7 @@ def list_recent_snapshots_for_agent(
         .filter(
             Snapshot.project_id == project_id,
             Snapshot.agent_id == agent_id,
+            Snapshot.is_deleted.is_(False),
         )
         .order_by(Snapshot.created_at.desc())
         .limit(limit)
@@ -1778,7 +1793,11 @@ async def suggest_release_gate_baseline(
     if not effective_agent:
         latest_snapshot = (
             db.query(Snapshot)
-            .filter(Snapshot.project_id == project_id, Snapshot.trace_id == trace_id)
+            .filter(
+                Snapshot.project_id == project_id,
+                Snapshot.trace_id == trace_id,
+                Snapshot.is_deleted.is_(False),
+            )
             .order_by(Snapshot.created_at.desc())
             .first()
         )
@@ -1822,6 +1841,7 @@ async def suggest_release_gate_baseline(
                 Snapshot.agent_id == effective_agent,
                 Snapshot.trace_id.isnot(None),
                 Snapshot.trace_id != trace_id,
+                Snapshot.is_deleted.is_(False),
             )
             .order_by(Snapshot.created_at.desc())
             .limit(300)
