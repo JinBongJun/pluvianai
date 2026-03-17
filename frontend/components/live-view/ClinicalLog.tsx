@@ -349,6 +349,9 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
   const [policyByTrace, setPolicyByTrace] = React.useState<Record<string, PolicyState>>({});
   const [isSelectMode, setIsSelectMode] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [isRemoveMode, setIsRemoveMode] = React.useState(false);
+  const [selectedRemoveIds, setSelectedRemoveIds] = React.useState<Set<string>>(new Set());
+  const [dismissedSnapshotIds, setDismissedSnapshotIds] = React.useState<Set<string>>(new Set());
   const [isSavingToDatasets, setIsSavingToDatasets] = React.useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = React.useState(false);
   const [snapshotIdsToSave, setSnapshotIdsToSave] = React.useState<number[]>([]);
@@ -363,7 +366,10 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
   // Keep log selection strictly scoped to the current node.
   React.useEffect(() => {
     setSelectedIds(new Set());
+    setSelectedRemoveIds(new Set());
     setIsSelectMode(false);
+    setIsRemoveMode(false);
+    setDismissedSnapshotIds(new Set());
   }, [projectId, agentId]);
 
   const { data: settingsData, mutate: mutateSettings } = useSWR(
@@ -463,6 +469,11 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     setExpandedId(null);
   }, [riskFilter, recentTraceLimit, agentId]);
 
+  const activeSnapshots = React.useMemo(
+    () => snapshots.filter(s => !dismissedSnapshotIds.has(String(s.id))),
+    [snapshots, dismissedSnapshotIds]
+  );
+
   // List uses light mode (no payload/long text); detail modal always needs full snapshot. Cache by (projectId, snapshotId).
   const snapshotDetailCacheRef = React.useRef<Map<string, ClinicalSnapshot>>(new Map());
   const [detailFetchedSnapshot, setDetailFetchedSnapshot] = React.useState<ClinicalSnapshot | null>(
@@ -535,8 +546,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
   );
   // Use stored eval_checks_result only (single source of truth; matches DATA tab detail).
   const hasAnyEvalContext = React.useMemo(
-    () => snapshots.some(s => toEvalRows(s as unknown as Record<string, unknown>).length > 0),
-    [snapshots]
+    () => activeSnapshots.some(s => toEvalRows(s as unknown as Record<string, unknown>).length > 0),
+    [activeSnapshots]
   );
   const evalEnabled = hasAnyEvalContext || enabledEvalChecks.length > 0;
   const getSnapshotEvalRows = React.useCallback((snapshot: ClinicalSnapshot) => {
@@ -547,8 +558,11 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
       const rows = getSnapshotEvalRows(snapshot);
       return rows.reduce((acc, row) => {
         const st = row.status;
-        // Gate/quality policy: both "fail" and "not_applicable" count as failures.
-        return st === "fail" || st === "not_applicable" ? acc + 1 : acc;
+        // Evaluation rules:
+        // - "fail"     → counts as failure
+        // - "pass"     → counts as success
+        // - anything else (e.g. "not_applicable", "skipped") is treated as neutral
+        return st === "fail" ? acc + 1 : acc;
       }, 0);
     },
     [getSnapshotEvalRows]
@@ -557,14 +571,14 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     const hasEvalContext = hasAnyEvalContext;
     const isEvalFlagged = (s: ClinicalSnapshot) => getSnapshotFailedCount(s) > 0;
 
-    if (riskFilter === "all") return snapshots;
+    if (riskFilter === "all") return activeSnapshots;
     if (riskFilter === "worst") {
       // FLAGGED: prefer eval-based failure signal; fallback to backend critical flag.
-      return snapshots.filter(s => (hasEvalContext ? isEvalFlagged(s) : Boolean(s.is_worst)));
+      return activeSnapshots.filter(s => (hasEvalContext ? isEvalFlagged(s) : Boolean(s.is_worst)));
     }
     // HEALTHY: no eval failures (or no backend critical flag when eval context is unavailable)
-    return snapshots.filter(s => (hasEvalContext ? !isEvalFlagged(s) : !s.is_worst));
-  }, [snapshots, riskFilter, hasAnyEvalContext, getSnapshotFailedCount]);
+    return activeSnapshots.filter(s => (hasEvalContext ? !isEvalFlagged(s) : !s.is_worst));
+  }, [activeSnapshots, riskFilter, hasAnyEvalContext, getSnapshotFailedCount]);
   const visibleSnapshots = React.useMemo(() => {
     const out = [...filteredSnapshots];
     if (sortMode === "oldest") {
@@ -649,6 +663,37 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
       else next.add(snapshotId);
       return next;
     });
+  };
+
+  const toggleRemoveSelect = (snapshotId: string) => {
+    setSelectedRemoveIds(prev => {
+      const next = new Set(prev);
+      if (next.has(snapshotId)) next.delete(snapshotId);
+      else next.add(snapshotId);
+      return next;
+    });
+  };
+
+  const selectAllForRemove = () => {
+    if (selectedRemoveIds.size === visibleSnapshots.length) {
+      setSelectedRemoveIds(new Set());
+    } else {
+      setSelectedRemoveIds(new Set(visibleSnapshots.map(s => String(s.id))));
+    }
+  };
+
+  const deleteSelectedFromView = () => {
+    if (selectedRemoveIds.size === 0) return;
+    setDismissedSnapshotIds(prev => {
+      const next = new Set(prev);
+      selectedRemoveIds.forEach(id => next.add(id));
+      return next;
+    });
+    setSelectedRemoveIds(new Set());
+    setIsRemoveMode(false);
+    if (expandedId && selectedRemoveIds.has(String(expandedId))) {
+      setExpandedId(null);
+    }
   };
 
   const selectAll = () => {
@@ -831,7 +876,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
       <div className="p-5 flex items-center justify-between gap-4 border-b border-white/[0.04] bg-[#18191e]">
         <div className="flex items-center">
           <span className="px-2 py-0.5 rounded-md text-[13px] font-mono text-slate-400 capitalize tracking-wide">
-            Total {visibleSnapshots.length} {visibleSnapshots.length === 1 ? "Run" : "Runs"}
+            Showing {visibleSnapshots.length} {visibleSnapshots.length === 1 ? "Run" : "Runs"} (limit{" "}
+            {recentTraceLimit})
           </span>
         </div>
 
@@ -918,6 +964,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
           <button
             onClick={() => {
               setIsSelectMode(m => !m);
+              setIsRemoveMode(false);
+              setSelectedRemoveIds(new Set());
               if (isSelectMode) setSelectedIds(new Set());
             }}
             className={clsx(
@@ -945,6 +993,45 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                 className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-[12px] font-bold uppercase tracking-wide text-emerald-300 hover:bg-emerald-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
               >
                 {isSavingToDatasets ? "SAVING…" : `SAVE (${selectedIds.size})`}
+              </button>
+            </div>
+          )}
+
+          {/* Remove from current view */}
+          <button
+            onClick={() => {
+              setIsRemoveMode(m => !m);
+              setIsSelectMode(false);
+              setSelectedIds(new Set());
+              if (!isRemoveMode) {
+                setSelectedRemoveIds(new Set());
+              }
+            }}
+            className={clsx(
+              "px-4 py-1.5 rounded-xl border text-[12px] font-bold uppercase tracking-wide transition-all flex items-center gap-2",
+              isRemoveMode
+                ? "bg-rose-500/20 border-rose-500/30 text-rose-300"
+                : "bg-[#030806] border-white/[0.04] text-slate-300 hover:border-white/10 hover:bg-white/[0.05]"
+            )}
+          >
+            {isRemoveMode ? <XCircle className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
+            {isRemoveMode ? "CANCEL" : "REMOVE"}
+          </button>
+
+          {isRemoveMode && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={selectAllForRemove}
+                className="px-3 py-1.5 rounded-xl bg-[#030806] border border-white/[0.04] text-[12px] font-bold uppercase tracking-wide text-slate-300 hover:bg-white/[0.05]"
+              >
+                {selectedRemoveIds.size === visibleSnapshots.length ? "DESELECT" : "ALL"}
+              </button>
+              <button
+                onClick={deleteSelectedFromView}
+                disabled={selectedRemoveIds.size === 0}
+                className="px-3 py-1.5 rounded-xl bg-rose-500/20 border border-rose-500/30 text-[12px] font-bold uppercase tracking-wide text-rose-300 hover:bg-rose-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {selectedRemoveIds.size === 0 ? "DELETE" : `DELETE (${selectedRemoveIds.size})`}
               </button>
             </div>
           )}
@@ -981,6 +1068,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
             <div className="flex items-center gap-4 flex-1 pr-4">
               {isSelectMode ? (
                 <div className="w-8 shrink-0 text-center">SEL</div>
+              ) : isRemoveMode ? (
+                <div className="w-8 shrink-0 text-center">DEL</div>
               ) : (
                 <div className="w-[4.5rem] shrink-0 pl-1 capitalize">time</div>
               )}
@@ -1104,6 +1193,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                       onClick={() => {
                         if (isSelectMode) {
                           toggleSelect(String(s.id));
+                        } else if (isRemoveMode) {
+                          toggleRemoveSelect(String(s.id));
                         } else {
                           setExpandedId(isExpanded ? null : s.id);
                         }
@@ -1117,6 +1208,14 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                               <CheckSquare className="w-4 h-4 text-emerald-400" />
                             ) : (
                               <Square className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors" />
+                            )}
+                          </div>
+                        ) : isRemoveMode ? (
+                          <div className="flex flex-col items-center justify-center w-8 shrink-0">
+                            {selectedRemoveIds.has(String(s.id)) ? (
+                              <CheckSquare className="w-4 h-4 text-rose-400" />
+                            ) : (
+                              <Square className="w-4 h-4 text-slate-600 group-hover:text-rose-400 transition-colors" />
                             )}
                           </div>
                         ) : (
