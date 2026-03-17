@@ -577,6 +577,23 @@ async def get_my_usage(
     guard_credits = get_guard_credits_this_month(db, current_user.id)
     platform_replay_credits = get_platform_replay_credits_this_month(db, current_user.id)
     limits = plan_info.get("limits", {})
+    # Aggregate usage metrics from Usage table (e.g., api_calls_per_month)
+    summary = service.get_usage_summary(current_user.id)
+    metrics = summary.get("metrics", {})
+    api_calls_metric = metrics.get("api_calls", {})
+    api_calls_current = int(api_calls_metric.get("current") or 0)
+    api_calls_limit = api_calls_metric.get("limit")
+    # Projects used: active, non-deleted projects owned by this user
+    from app.models.project import Project
+    projects_used = (
+        db.query(Project)
+        .filter(
+            Project.owner_id == current_user.id,
+            Project.is_active.is_(True),
+            Project.is_deleted.is_(False),
+        )
+        .count()
+    )
     return {
         "plan_type": plan_info.get("plan_type", "free"),
         "limits": limits,
@@ -584,5 +601,8 @@ async def get_my_usage(
             "snapshots": snapshots,
             "guard_credits": guard_credits,
             "platform_replay_credits": platform_replay_credits,
+            "api_calls": api_calls_current,
+            "projects_used": int(projects_used),
+            "api_calls_limit": api_calls_limit,
         },
     }
