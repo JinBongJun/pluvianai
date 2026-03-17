@@ -38,8 +38,8 @@ export default function ProjectGeneralSettingsPage() {
       setDescription(p.description ?? "");
     } catch (e: any) {
       const status = e?.response?.status;
-      const msg = e?.response?.data?.detail ?? e?.response?.data?.error?.message ?? "";
-      if (status === 404 && (msg === "Project not found" || msg === "Not Found")) {
+      if (status === 404) {
+        toast.showToast("This project no longer exists. Redirecting to projects list.", "info");
         router.replace(orgId ? `/organizations/${orgId}/projects` : "/organizations");
         return;
       }
@@ -122,7 +122,7 @@ export default function ProjectGeneralSettingsPage() {
         undefined,
         { revalidate: false }
       );
-      router.push(`/organizations/${orgId}/projects`);
+      router.replace(`/organizations/${orgId}/projects`);
     } catch (err: any) {
       toast.showToast(err?.response?.data?.detail ?? "Failed to delete project", "error");
     } finally {
