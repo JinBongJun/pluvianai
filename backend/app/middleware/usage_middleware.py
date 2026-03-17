@@ -56,8 +56,11 @@ def check_project_limit(user_id: int, db: Session, is_superuser: bool = False) -
     return (True, None)
 
 
-def check_organization_limit(user_id: int, db: Session) -> tuple[bool, str | None]:
+def check_organization_limit(user_id: int, db: Session, is_superuser: bool = False) -> tuple[bool, str | None]:
     """Check if user can create a new organization."""
+    if is_superuser:
+        return (True, None)
+
     service = SubscriptionService(db)
     plan_info = service.get_user_plan(user_id)
     limits = plan_info["limits"]

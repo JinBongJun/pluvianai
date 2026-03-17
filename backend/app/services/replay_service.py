@@ -802,14 +802,14 @@ class ReplayService:
                                     )
                                     
                                     billing_service = BillingService(judge_db)
-                                    # Check limit before calling judge
+                                    # Check hosted evaluation credit soft cap before calling judge
                                     is_allowed, warning = billing_service.increment_usage(
                                         project.owner_id, "judge_calls", 1
                                     )
                                     if not is_allowed:
                                         res["judge_evaluation"] = {
-                                            "error": "Judge call limit exceeded. Please upgrade your plan.",
-                                            "limit_warning": warning
+                                            "error": "Hosted replay evaluation limit reached for your current plan. Switch to your own provider key or upgrade your plan to keep running Release Gate.",
+                                            "limit_warning": warning,
                                         }
                                         continue
                         except Exception as e:
