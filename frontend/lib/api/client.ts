@@ -92,6 +92,31 @@ function getSafeNextPath(): string | null {
   return next.startsWith("/") ? next : null;
 }
 
+export async function syncFrontendAuthSession(tokens: {
+  access_token?: string;
+  refresh_token?: string;
+}): Promise<void> {
+  if (typeof window === "undefined") return;
+
+  await fetch("/api/auth/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(tokens),
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+}
+
+export async function clearFrontendAuthSession(): Promise<void> {
+  if (typeof window === "undefined") return;
+
+  await fetch("/api/auth/session", {
+    method: "DELETE",
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+}
+
 export function clearStoredAuth(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem("access_token");
@@ -181,6 +206,7 @@ export const apiClient = axios.create({
   baseURL: `${API_URL}/api/v1`,
   timeout: API_TIMEOUT_MS,
   headers: { "Content-Type": "application/json" },
+  withCredentials: true,
 });
 
 apiClient.interceptors.request.use(
@@ -247,7 +273,10 @@ apiClient.interceptors.response.use(
           const response = await axios.post(
             `${API_URL}/api/v1/auth/refresh`,
             { refresh_token: refreshToken },
-            { headers: { "Content-Type": "application/json" } }
+            {
+              headers: { "Content-Type": "application/json" },
+              withCredentials: true,
+            }
           );
           const data = response.data?.data ?? response.data;
           const access_token = data?.access_token;
@@ -255,12 +284,17 @@ apiClient.interceptors.response.use(
           if (!access_token) throw new Error("Refresh response missing access_token");
           localStorage.setItem("access_token", access_token);
           if (refresh_token_new) localStorage.setItem("refresh_token", refresh_token_new);
+          await syncFrontendAuthSession({
+            access_token,
+            refresh_token: refresh_token_new ?? refreshToken,
+          });
           originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers.Authorization = `Bearer ${access_token}`;
           return apiClient(originalRequest);
         } catch (refreshError) {
           const refreshPayload = extractApiErrorPayload(refreshError);
           clearStoredAuth();
+          await clearFrontendAuthSession().catch(() => undefined);
           redirectToLogin({
             code: refreshPayload.code || code,
             message:
@@ -273,6 +307,7 @@ apiClient.interceptors.response.use(
       }
       if (typeof window !== "undefined") {
         clearStoredAuth();
+        await clearFrontendAuthSession().catch(() => undefined);
         redirectToLogin({
           code,
           message: message || "Your session has expired. Please sign in again.",

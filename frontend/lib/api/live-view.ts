@@ -1,9 +1,9 @@
 import { apiClient, unwrapResponse } from "./client";
 
 export const liveViewAPI = {
-  getAgents: async (projectId: number, limit: number = 30) => {
+  getAgents: async (projectId: number, limit: number = 30, includeDeleted: boolean = false) => {
     const response = await apiClient.get(`/projects/${projectId}/live-view/agents`, {
-      params: { limit },
+      params: { limit, include_deleted: includeDeleted },
     });
     return unwrapResponse(response);
   },
@@ -34,6 +34,14 @@ export const liveViewAPI = {
   deleteAgent: async (projectId: number, agentId: string) => {
     const safeAgentId = encodeURIComponent(agentId);
     await apiClient.delete(`/projects/${projectId}/live-view/agents/${safeAgentId}`);
+  },
+
+  restoreAgent: async (projectId: number, agentId: string) => {
+    const safeAgentId = encodeURIComponent(agentId);
+    const response = await apiClient.post(
+      `/projects/${projectId}/live-view/agents/${safeAgentId}/restore`
+    );
+    return unwrapResponse(response);
   },
 
   listSnapshots: async (

@@ -113,6 +113,8 @@ class Settings(BaseSettings):
     OPS_SNAPSHOT_5XX_RATIO_THRESHOLD: float = 0.20
     OPS_SNAPSHOT_ERROR_MIN_SAMPLES: int = 20
     SOFT_DELETE_GRACE_DAYS: int = 30
+    AGENT_SOFT_DELETE_GRACE_DAYS: int = 30
+    AGENT_AUTO_RESTORE_DAYS: int = 30
 
     # Encryption for user API keys
     ENCRYPTION_KEY: Optional[str] = None  # Fernet key for encrypting user API keys (32-byte base64)

@@ -109,6 +109,12 @@ class TestProjectRoleBoundary:
         )
         assert delete_agent_response.status_code == status.HTTP_403_FORBIDDEN
 
+        restore_agent_response = await async_client.post(
+            f"/api/v1/projects/{test_project.id}/live-view/agents/{agent_id}/restore",
+            headers=auth_headers,
+        )
+        assert restore_agent_response.status_code == status.HTTP_403_FORBIDDEN
+
         save_logs_response = await async_client.post(
             f"/api/v1/projects/{test_project.id}/live-view/agents/{agent_id}/saved-logs",
             json={"snapshot_ids": [1]},
