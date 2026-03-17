@@ -352,7 +352,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [isRemoveMode, setIsRemoveMode] = React.useState(false);
   const [selectedRemoveIds, setSelectedRemoveIds] = React.useState<Set<string>>(new Set());
-  const [dismissedSnapshotIds, setDismissedSnapshotIds] = React.useState<Set<string>>(new Set());
+  const [isDeletingSnapshots, setIsDeletingSnapshots] = React.useState(false);
   const [isSavingToDatasets, setIsSavingToDatasets] = React.useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = React.useState(false);
   const [snapshotIdsToSave, setSnapshotIdsToSave] = React.useState<number[]>([]);
@@ -370,7 +370,6 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     setSelectedRemoveIds(new Set());
     setIsSelectMode(false);
     setIsRemoveMode(false);
-    setDismissedSnapshotIds(new Set());
   }, [projectId, agentId]);
 
   const { data: settingsData, mutate: mutateSettings } = useSWR(
@@ -470,10 +469,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     setExpandedId(null);
   }, [riskFilter, recentTraceLimit, agentId]);
 
-  const activeSnapshots = React.useMemo(
-    () => snapshots.filter(s => !dismissedSnapshotIds.has(String(s.id))),
-    [snapshots, dismissedSnapshotIds]
-  );
+  const activeSnapshots = React.useMemo(() => snapshots, [snapshots]);
+  const totalSnapshotsCount = Number(data?.total_count ?? data?.count ?? snapshots.length);
 
   // List uses light mode (no payload/long text); detail modal always needs full snapshot. Cache by (projectId, snapshotId).
   const snapshotDetailCacheRef = React.useRef<Map<string, ClinicalSnapshot>>(new Map());
@@ -683,17 +680,33 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     }
   };
 
-  const deleteSelectedFromView = () => {
+  const deleteSelectedSnapshots = async () => {
     if (selectedRemoveIds.size === 0) return;
-    setDismissedSnapshotIds(prev => {
-      const next = new Set(prev);
-      selectedRemoveIds.forEach(id => next.add(id));
-      return next;
-    });
-    setSelectedRemoveIds(new Set());
-    setIsRemoveMode(false);
-    if (expandedId && selectedRemoveIds.has(String(expandedId))) {
-      setExpandedId(null);
+    const targetIds = Array.from(selectedRemoveIds)
+      .map(id => Number(id))
+      .filter(id => Number.isFinite(id));
+    if (targetIds.length === 0) return;
+    setIsDeletingSnapshots(true);
+    try {
+      const result = await liveViewAPI.deleteSnapshotsBatch(projectId, targetIds);
+      const deletedCount = Number(result?.deleted ?? 0);
+      toast.showToast(
+        deletedCount > 0
+          ? `Deleted ${deletedCount} log${deletedCount === 1 ? "" : "s"} from project history.`
+          : "No logs were deleted.",
+        deletedCount > 0 ? "success" : "info"
+      );
+      setSelectedRemoveIds(new Set());
+      setIsRemoveMode(false);
+      if (expandedId && targetIds.includes(Number(expandedId))) {
+        setExpandedId(null);
+      }
+      await mutate();
+    } catch (error) {
+      console.error("Failed to delete snapshots:", error);
+      toast.showToast("Failed to delete selected logs. Please try again.", "error");
+    } finally {
+      setIsDeletingSnapshots(false);
     }
   };
 
@@ -877,8 +890,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
       <div className="p-5 flex items-center justify-between gap-4 border-b border-white/[0.04] bg-[#18191e]">
         <div className="flex items-center">
           <span className="px-2 py-0.5 rounded-md text-[13px] font-mono text-slate-400 capitalize tracking-wide">
-            Showing {visibleSnapshots.length} {visibleSnapshots.length === 1 ? "Run" : "Runs"} (limit{" "}
-            {recentTraceLimit})
+            Total {totalSnapshotsCount} {totalSnapshotsCount === 1 ? "Run" : "Runs"} - Showing{" "}
+            {visibleSnapshots.length} (limit {recentTraceLimit})
           </span>
         </div>
 
@@ -998,7 +1011,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
             </div>
           )}
 
-          {/* Remove from current view */}
+          {/* Delete from project history */}
           <button
             onClick={() => {
               setIsRemoveMode(m => !m);
@@ -1016,7 +1029,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
             )}
           >
             {isRemoveMode ? <XCircle className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
-            {isRemoveMode ? "CANCEL" : "REMOVE"}
+            {isRemoveMode ? "CANCEL" : "DELETE"}
           </button>
 
           {isRemoveMode && (
@@ -1028,11 +1041,15 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                 {selectedRemoveIds.size === visibleSnapshots.length ? "DESELECT" : "ALL"}
               </button>
               <button
-                onClick={deleteSelectedFromView}
-                disabled={selectedRemoveIds.size === 0}
+                onClick={() => void deleteSelectedSnapshots()}
+                disabled={selectedRemoveIds.size === 0 || isDeletingSnapshots}
                 className="px-3 py-1.5 rounded-xl bg-rose-500/20 border border-rose-500/30 text-[12px] font-bold uppercase tracking-wide text-rose-300 hover:bg-rose-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
               >
-                {selectedRemoveIds.size === 0 ? "DELETE" : `DELETE (${selectedRemoveIds.size})`}
+                {isDeletingSnapshots
+                  ? "DELETING..."
+                  : selectedRemoveIds.size === 0
+                    ? "DELETE"
+                    : `DELETE (${selectedRemoveIds.size})`}
               </button>
             </div>
           )}
