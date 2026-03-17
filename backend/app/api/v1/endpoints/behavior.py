@@ -147,6 +147,7 @@ def _resolve_dataset_agent_id(
         .filter(
             Snapshot.project_id == project_id,
             Snapshot.id.in_(normalized_snapshot_ids),
+            Snapshot.is_deleted.is_(False),
         )
         .all()
     )
@@ -192,7 +193,11 @@ def _resolve_dataset_agent_id(
 def _build_trace_steps(project_id: int, trace_id: str, db: Session) -> List[Dict[str, Any]]:
     rows = (
         db.query(Snapshot)
-        .filter(Snapshot.project_id == project_id, Snapshot.trace_id == trace_id)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.trace_id == trace_id,
+            Snapshot.is_deleted.is_(False),
+        )
         .order_by(Snapshot.span_order.asc().nullslast(), Snapshot.created_at.asc())
         .all()
     )
@@ -553,7 +558,11 @@ def _build_eval_summary(
     """
     rows = (
         db.query(Snapshot)
-        .filter(Snapshot.project_id == project_id, Snapshot.trace_id == trace_id)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.trace_id == trace_id,
+            Snapshot.is_deleted.is_(False),
+        )
         .order_by(Snapshot.span_order.asc().nullslast(), Snapshot.created_at.asc())
         .all()
     )
@@ -1052,7 +1061,11 @@ async def list_dataset_snapshots(
         return {"items": [], "total": 0}
     rows = (
         db.query(Snapshot)
-        .filter(Snapshot.project_id == project_id, Snapshot.id.in_(ids))
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.id.in_(ids),
+            Snapshot.is_deleted.is_(False),
+        )
         .order_by(Snapshot.created_at.desc())
         .all()
     )

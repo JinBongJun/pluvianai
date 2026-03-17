@@ -65,6 +65,20 @@ export const liveViewAPI = {
     return unwrapResponse(response);
   },
 
+  deleteSnapshot: async (projectId: number, snapshotId: string | number) => {
+    const response = await apiClient.delete(
+      `/projects/${projectId}/snapshots/${encodeURIComponent(String(snapshotId))}`
+    );
+    return unwrapResponse(response) as { ok: boolean; deleted: number };
+  },
+
+  deleteSnapshotsBatch: async (projectId: number, snapshotIds: number[]) => {
+    const response = await apiClient.post(`/projects/${projectId}/snapshots/batch-delete`, {
+      snapshot_ids: snapshotIds,
+    });
+    return unwrapResponse(response) as { ok: boolean; deleted: number };
+  },
+
   getAgentEvaluation: async (projectId: number, agentId: string) => {
     const safeAgentId = encodeURIComponent(agentId);
     const response = await apiClient.get(
