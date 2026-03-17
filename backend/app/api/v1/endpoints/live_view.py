@@ -248,6 +248,32 @@ def list_agents(
                 if _is_deleted(row.agent_id or "unknown") and not include_deleted:
                     continue
                 final_agents.append(serialize(row))
+                processed_ids.add(row.agent_id or "unknown")
+
+        # 4. Add setting-only nodes (no snapshots, not in blueprint/sentinel)
+        for setting_agent_id, setting in settings_map.items():
+            if setting_agent_id in processed_ids:
+                continue
+            if setting.is_deleted and not include_deleted:
+                continue
+            final_agents.append(
+                {
+                    "agent_id": setting_agent_id,
+                    "display_name": setting.display_name or setting_agent_id,
+                    "model": "UNKNOWN",
+                    "system_prompt": "",
+                    "total": 0,
+                    "worst_count": 0,
+                    "last_seen": None,
+                    "signals": {},
+                    "node_type": setting.node_type or "agentCard",
+                    "is_official": False,
+                    "drift_status": "custom",
+                    "is_deleted": bool(setting.is_deleted),
+                    "deleted_at": setting.deleted_at,
+                }
+            )
+            processed_ids.add(setting_agent_id)
 
         return {
             "agents": final_agents,
