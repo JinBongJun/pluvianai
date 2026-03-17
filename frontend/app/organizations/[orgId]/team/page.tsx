@@ -7,7 +7,9 @@ import OrgLayout from "@/components/layout/OrgLayout";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { ConfirmModal } from "@/components/shared/ConfirmModal";
+import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 import { organizationsAPI } from "@/lib/api";
+import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { useToast } from "@/components/ToastContainer";
 import { Users, Mail, Trash2, UserPlus, Shield, Activity, Fingerprint, Lock } from "lucide-react";
 
@@ -48,6 +50,7 @@ export default function TeamPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member" | "viewer">("member");
   const [inviting, setInviting] = useState(false);
+  const [planError, setPlanError] = useState<PlanLimitError | null>(null);
   const [confirmRemoveMemberId, setConfirmRemoveMemberId] = useState<number | null>(null);
   const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
 
@@ -75,13 +78,19 @@ export default function TeamPage() {
     }
 
     setInviting(true);
+    setPlanError(null);
     try {
       await organizationsAPI.inviteMember(orgId, { email: inviteEmail, role: inviteRole });
       toast.showToast("Access invitation dispatched successfully.", "success");
       setInviteEmail("");
       refetchMembers();
     } catch (error: any) {
-      toast.showToast(error.response?.data?.detail || "Failed to dispatch invitation.", "error");
+      const parsed = parsePlanLimitError(error);
+      if (parsed && parsed.code === "TEAM_MEMBER_LIMIT_REACHED") {
+        setPlanError(parsed);
+      } else {
+        toast.showToast(error.response?.data?.detail || "Failed to dispatch invitation.", "error");
+      }
     } finally {
       setInviting(false);
     }
@@ -185,6 +194,12 @@ export default function TeamPage() {
             access to team resources.
           </p>
         </div>
+
+        {planError && (
+          <div className="mb-8">
+            <PlanLimitBanner {...planError} context="team" />
+          </div>
+        )}
 
         <div className="mb-10 rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-4">
           <div className="mb-3 text-[10px] font-black text-slate-500 uppercase tracking-[0.22em]">

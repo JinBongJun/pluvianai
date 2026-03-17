@@ -323,17 +323,20 @@ class SchedulerService:
                     continue
 
             soft_delete_purge = lifecycle_service.purge_soft_deleted_entities()
+            soft_deleted_snapshot_purge = lifecycle_service.purge_soft_deleted_snapshots()
             agent_setting_purge = lifecycle_service.purge_soft_deleted_agent_settings()
             logger.info(
                 (
                     "Scheduled data lifecycle cleanup completed: %s snapshots cleaned, "
                     "%s release-gate history records purged, %s soft-deleted projects hard-deleted, "
-                    "%s soft-deleted organizations hard-deleted, %s soft-deleted agent settings hard-deleted"
+                    "%s soft-deleted organizations hard-deleted, %s soft-deleted snapshots hard-deleted, "
+                    "%s soft-deleted agent settings hard-deleted"
                 ),
                 total_snapshots_cleaned,
                 total_release_gate_reports_cleaned,
                 soft_delete_purge.get("purged_projects_count", 0),
                 soft_delete_purge.get("purged_organizations_count", 0),
+                soft_deleted_snapshot_purge.get("purged_snapshots_count", 0),
                 agent_setting_purge.get("purged_agent_settings_count", 0),
             )
         except Exception as e:

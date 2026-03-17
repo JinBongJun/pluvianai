@@ -79,6 +79,53 @@ export const liveViewAPI = {
     return unwrapResponse(response) as { ok: boolean; deleted: number };
   },
 
+  listDeletedSnapshots: async (
+    projectId: number,
+    params: { days?: number; limit?: number; offset?: number } = {}
+  ): Promise<{
+    items: Array<{
+      id: number;
+      trace_id?: string | null;
+      agent_id?: string | null;
+      model?: string | null;
+      status_code?: number | null;
+      created_at?: string | null;
+      deleted_at?: string | null;
+    }>;
+    count: number;
+    total_count: number;
+    limit: number;
+    offset: number;
+    window_days: number;
+  }> => {
+    const response = await apiClient.get(`/projects/${projectId}/snapshots/deleted`, { params });
+    return unwrapResponse(response);
+  },
+
+  restoreSnapshot: async (projectId: number, snapshotId: string | number) => {
+    const response = await apiClient.post(
+      `/projects/${projectId}/snapshots/${encodeURIComponent(String(snapshotId))}/restore`
+    );
+    return unwrapResponse(response) as { ok: boolean; restored: number };
+  },
+
+  restoreSnapshotsBatch: async (projectId: number, snapshotIds: number[]) => {
+    const response = await apiClient.post(`/projects/${projectId}/snapshots/deleted/batch-restore`, {
+      snapshot_ids: snapshotIds,
+    });
+    return unwrapResponse(response) as { ok: boolean; restored: number };
+  },
+
+  permanentlyDeleteSnapshots: async (projectId: number, snapshotIds: number[]) => {
+    const response = await apiClient.post(
+      `/projects/${projectId}/snapshots/deleted/permanent-delete`,
+      {
+        snapshot_ids: snapshotIds,
+      }
+    );
+    return unwrapResponse(response) as { ok: boolean; deleted: number };
+  },
+
   getAgentEvaluation: async (projectId: number, agentId: string) => {
     const safeAgentId = encodeURIComponent(agentId);
     const response = await apiClient.get(

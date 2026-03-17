@@ -73,19 +73,21 @@ def build_agent_visibility_context(
         for n in sentinel_agents
         if isinstance(n, dict) and n.get("id") and str(n.get("id")).strip()
     }
-    all_agent_ids = normalized_seed_ids | set(blueprint_map.keys()) | sentinel_ids
-
+    settings = (
+        db.query(AgentDisplaySetting)
+        .filter(AgentDisplaySetting.project_id == project_id)
+        .all()
+    )
     settings_map: Dict[str, AgentDisplaySetting] = {}
-    if all_agent_ids:
-        settings = (
-            db.query(AgentDisplaySetting)
-            .filter(
-                AgentDisplaySetting.project_id == project_id,
-                AgentDisplaySetting.system_prompt_hash.in_(all_agent_ids),
-            )
-            .all()
-        )
-        settings_map = {s.system_prompt_hash: s for s in settings}
+    setting_agent_ids: Set[str] = set()
+    for setting in settings:
+        key = str(setting.system_prompt_hash or "").strip()
+        if not key:
+            continue
+        settings_map[key] = setting
+        setting_agent_ids.add(key)
+
+    all_agent_ids = normalized_seed_ids | set(blueprint_map.keys()) | sentinel_ids | setting_agent_ids
 
     return AgentVisibilityContext(
         project=project,

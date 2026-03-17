@@ -285,6 +285,41 @@ class DataLifecycleService:
             "purged_organizations_count": purged_orgs,
         }
 
+    def purge_soft_deleted_snapshots(self, grace_days: Optional[int] = None) -> Dict[str, int]:
+        """
+        Hard-delete snapshots that have been soft-deleted longer than the grace window.
+        """
+        grace_window_days = grace_days if grace_days is not None else settings.SOFT_DELETE_GRACE_DAYS
+        cutoff = datetime.utcnow() - timedelta(days=grace_window_days)
+
+        expired_snapshots = (
+            self.db.query(Snapshot)
+            .filter(
+                Snapshot.is_deleted.is_(True),
+                Snapshot.deleted_at.isnot(None),
+                Snapshot.deleted_at < cutoff,
+            )
+            .all()
+        )
+
+        purged_snapshots = 0
+        for snapshot in expired_snapshots:
+            self.db.delete(snapshot)
+            purged_snapshots += 1
+
+        if purged_snapshots:
+            self.db.commit()
+            logger.info(
+                "Purged soft-deleted snapshots: %s rows (grace_days=%s)",
+                purged_snapshots,
+                grace_window_days,
+            )
+
+        return {
+            "grace_days": grace_window_days,
+            "purged_snapshots_count": purged_snapshots,
+        }
+
     def purge_soft_deleted_agent_settings(self, grace_days: Optional[int] = None) -> Dict[str, int]:
         """
         Hard-delete agent display settings that have been soft-deleted
