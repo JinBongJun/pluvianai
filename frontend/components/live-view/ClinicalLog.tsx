@@ -25,6 +25,8 @@ import { toEvalRows } from "@/lib/evalRows";
 import useSWR from "swr";
 import { SnapshotDetailModal } from "@/components/shared/SnapshotDetailModal";
 import { useToast } from "@/components/ToastContainer";
+import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
+import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 
 interface EvaluationMetric {
   score: number;
@@ -361,6 +363,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
   );
   const [newDatasetName, setNewDatasetName] = React.useState("");
   const [pollIntervalMs, setPollIntervalMs] = React.useState(CLINICAL_LOG_BASE_POLL_MS);
+  const [planError, setPlanError] = React.useState<PlanLimitError | null>(null);
   const isPageVisible = usePageVisibility();
   const wasPageVisibleRef = React.useRef(isPageVisible);
 
@@ -406,6 +409,19 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
 
   const rateLimitInfo = getRateLimitInfo(error);
   const isRateLimited = isRateLimitError(error);
+
+  React.useEffect(() => {
+    if (!error) {
+      setPlanError(null);
+      return;
+    }
+    const parsed = parsePlanLimitError(error);
+    if (parsed && parsed.code === "SNAPSHOT_PLAN_LIMIT_REACHED") {
+      setPlanError(parsed);
+    } else {
+      setPlanError(null);
+    }
+  }, [error]);
 
   React.useEffect(() => {
     if (!projectId || !agentId) return;
@@ -1055,7 +1071,12 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
           )}
         </div>
       </div>
-      {error && (
+      {planError && (
+        <div className="mx-4 mb-3">
+          <PlanLimitBanner {...planError} context="snapshots" />
+        </div>
+      )}
+      {error && !planError && (
         <div className="mx-4 mb-3 px-3 py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 flex items-center justify-between gap-3">
           <span className="text-xs text-rose-300 font-medium">
             {isRateLimited
