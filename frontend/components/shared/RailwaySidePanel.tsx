@@ -29,6 +29,7 @@ interface RailwaySidePanelProps {
   /** Optional test id prefix for tab buttons (e.g. "rg-data-tab"). */
   tabTestIdPrefix?: string;
   contentClassName?: string;
+  contentScrollable?: boolean;
 }
 
 const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
@@ -46,6 +47,7 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
   side = "right",
   tabTestIdPrefix,
   contentClassName = "",
+  contentScrollable = true,
 }) => {
   const isLeft = side === "left";
   const slideFrom = isLeft ? "-100%" : "100%";
@@ -65,6 +67,9 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
             className
           )}
           style={{ width: width }}
+          onWheelCapture={event => {
+            event.stopPropagation();
+          }}
         >
           {/* Header */}
           <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06] bg-black/30">
@@ -117,7 +122,16 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
           )}
 
           {/* Content Area */}
-          <div className={clsx("flex-1 overflow-y-auto custom-scrollbar p-0 min-h-0", contentClassName)}>
+          <div
+            className={clsx(
+              "flex-1 p-0 min-h-0",
+              contentScrollable && "overflow-y-auto custom-scrollbar",
+              contentClassName
+            )}
+            onWheelCapture={event => {
+              event.stopPropagation();
+            }}
+          >
             {children}
           </div>
 
