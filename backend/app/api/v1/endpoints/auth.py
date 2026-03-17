@@ -405,24 +405,28 @@ async def login(
         # Save refresh token to database (optional - if table doesn't exist, skip)
         try:
             import hashlib
+            from datetime import datetime, timezone
             from app.models.refresh_token import RefreshToken
-            from datetime import datetime
-            
+
             token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
             payload = decode_token(refresh_token)
-            expires_at = datetime.utcfromtimestamp(payload.get("exp", 0))
-            
+            exp_ts = payload.get("exp", 0) if payload else 0
+            expires_at = datetime.fromtimestamp(exp_ts, tz=timezone.utc)
+
             refresh_token_record = RefreshToken(
                 user_id=user.id,
                 token_hash=token_hash,
                 expires_at=expires_at,
-                is_revoked=False
+                is_revoked=False,
             )
             db.add(refresh_token_record)
             # Commit handled automatically by get_db() dependency
         except Exception as refresh_token_error:
             # If refresh token table doesn't exist or other error, log but don't fail login
-            logger.warning(f"Failed to save refresh token (non-critical): {refresh_token_error}", exc_info=True)
+            logger.warning(
+                f"Failed to save refresh token (non-critical): {refresh_token_error}",
+                exc_info=True,
+            )
 
         # Log audit event for successful login (non-critical)
         try:
