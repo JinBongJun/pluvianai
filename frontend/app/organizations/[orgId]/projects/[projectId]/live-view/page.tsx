@@ -612,7 +612,7 @@ function LiveViewContent() {
           title={selectedAgentId || "Agent Diagnostics"}
           isOpen={!!selectedAgentId}
           width={760}
-          contentClassName="min-h-0 overflow-hidden"
+          contentClassName="h-0 min-h-0 overflow-hidden"
           contentScrollable={false}
           onClose={() => {
             setSelectedAgentId(null);

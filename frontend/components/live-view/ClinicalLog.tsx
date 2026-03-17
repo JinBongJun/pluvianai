@@ -815,7 +815,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
   const isEmptyResult = visibleSnapshots.length === 0;
 
   const mainContent = (
-    <div className="flex flex-1 min-h-0 flex-col overflow-hidden bg-[#111216]">
+    <div className="flex h-0 flex-1 min-h-0 flex-col overflow-hidden bg-[#111216]">
       {/* Log Header Summary */}
       <div className="p-5 flex items-center justify-between gap-4 border-b border-white/[0.04] bg-[#18191e]">
         <div className="flex items-center">
@@ -959,7 +959,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
 
       {/* Scrollable Data Grid */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar relative flex flex-col p-4 md:p-6 lg:p-8"
+        className="relative flex h-0 flex-1 min-h-0 flex-col overflow-y-auto overscroll-contain custom-scrollbar p-4 md:p-6 lg:p-8"
         onWheelCapture={event => {
           event.stopPropagation();
         }}
