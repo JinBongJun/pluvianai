@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from app.models.snapshot import Snapshot
 from app.models.trace import Trace
+from app.domain.live_view_release_gate import restore_agent_if_soft_deleted
 from app.services.cache_service import cache_service
 from app.core.database import SessionLocal
 from app.core.logging_config import logger
@@ -221,6 +222,7 @@ class StreamProcessor:
                         tool_calls_summary=snapshot_data.get("tool_calls_summary"),
                     )
                     db.add(snapshot)
+                    restore_agent_if_soft_deleted(db, project_id, snapshot_data.get("agent_id"))
                     inserted_count += 1
                 except Exception as e:
                     logger.error(f"Error inserting snapshot {message_id}: {str(e)}")

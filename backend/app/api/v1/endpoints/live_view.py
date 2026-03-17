@@ -23,7 +23,11 @@ from app.utils.tool_calls import extract_tool_calls_summary
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.agent_eval_config_history import AgentEvalConfigHistory
 from app.models.project import Project
-from app.domain.live_view_release_gate import build_agent_visibility_context, is_agent_deleted
+from app.domain.live_view_release_gate import (
+    build_agent_visibility_context,
+    is_agent_deleted,
+    restore_agent_if_soft_deleted,
+)
 from app.services.live_eval_service import (
     evaluate_recent_snapshots,
     normalize_eval_config,
@@ -63,6 +67,7 @@ class DeleteSavedLogsRequest(BaseModel):
 def list_agents(
     project_id: int,
     limit: int = Query(30, ge=1, le=100),
+    include_deleted: bool = Query(False, description="Include soft-deleted agents in the response."),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -150,6 +155,7 @@ def list_agents(
                 "signals": _aggregate_signals(row.all_signals),
                 "node_type": setting.node_type if setting else "agentCard",
                 "is_deleted": setting.is_deleted if setting else False,
+                "deleted_at": setting.deleted_at if setting else None,
             }
 
         final_agents = []
@@ -162,7 +168,8 @@ def list_agents(
         for node_id, node in blueprint_map.items():
             if node.get('type') != 'agentCard':
                 continue
-            if _is_deleted(node_id):
+            is_deleted = _is_deleted(node_id)
+            if is_deleted and not include_deleted:
                 continue
 
             # Match snapshots
@@ -183,6 +190,8 @@ def list_agents(
                 "node_type": "agentCard",
                 "is_official": True,
                 "drift_status": "official",
+                "is_deleted": is_deleted,
+                "deleted_at": settings_map.get(node_id).deleted_at if settings_map.get(node_id) else None,
                 "position": node.get('position'),
             })
             processed_ids.add(node_id)
@@ -192,7 +201,8 @@ def list_agents(
             s_id = s_node.get("id")
             if s_id in processed_ids:
                 continue
-            if _is_deleted(s_id):
+            is_deleted = _is_deleted(s_id)
+            if is_deleted and not include_deleted:
                 continue
 
             stat = next((r for r in rows if r.agent_id == s_id), None)
@@ -209,13 +219,15 @@ def list_agents(
                 "is_official": False,
                 "drift_status": "ghost",
                 "is_ghost": True,
+                "is_deleted": is_deleted,
+                "deleted_at": settings_map.get(s_id).deleted_at if settings_map.get(s_id) else None,
             })
             processed_ids.add(s_id)
 
         # 3. Add any other detected snapshots (Probabilistic fallback)
         for row in rows:
             if row.agent_id not in processed_ids:
-                if _is_deleted(row.agent_id or "unknown"):
+                if _is_deleted(row.agent_id or "unknown") and not include_deleted:
                     continue
                 final_agents.append(serialize(row))
 
@@ -357,6 +369,7 @@ def update_agent_settings(
         .first()
     )
     if not setting:
+        deleted_at = datetime.now(timezone.utc) if is_deleted else None
         setting = AgentDisplaySetting(
             id=str(uuid.uuid4()),
             project_id=project_id,
@@ -364,6 +377,7 @@ def update_agent_settings(
             display_name=display_name,
             node_type=node_type or "agentCard",
             is_deleted=is_deleted or False,
+            deleted_at=deleted_at,
             diagnostic_config=diagnostic_config or {},
         )
         db.add(setting)
@@ -374,6 +388,7 @@ def update_agent_settings(
             setting.node_type = node_type
         if is_deleted is not None:
             setting.is_deleted = is_deleted
+            setting.deleted_at = datetime.now(timezone.utc) if is_deleted else None
         if diagnostic_config is not None:
             # Deep-merge with existing config to avoid partial updates wiping nested objects.
             current_config = setting.diagnostic_config or {}
@@ -420,6 +435,7 @@ def delete_agent(
     )
     if setting:
         setting.is_deleted = True
+        setting.deleted_at = datetime.now(timezone.utc)
     else:
         # So list_agents can exclude this agent via settings_map
         setting = AgentDisplaySetting(
@@ -427,10 +443,44 @@ def delete_agent(
             project_id=project_id,
             system_prompt_hash=agent_id,
             is_deleted=True,
+            deleted_at=datetime.now(timezone.utc),
         )
         db.add(setting)
     db.commit()
     return None
+
+
+@router.post("/projects/{project_id}/live-view/agents/{agent_id}/restore", status_code=status.HTTP_200_OK)
+def restore_agent(
+    project_id: int,
+    agent_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_project_admin(project_id, current_user, db)
+    restored = restore_agent_if_soft_deleted(db, project_id, agent_id, now=datetime.now(timezone.utc))
+    if not restored:
+        setting = (
+            db.query(AgentDisplaySetting)
+            .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash == agent_id)
+            .first()
+        )
+        if setting is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+        setting.is_deleted = False
+        setting.deleted_at = None
+    db.commit()
+    setting = (
+        db.query(AgentDisplaySetting)
+        .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash == agent_id)
+        .first()
+    )
+    return {
+        "agent_id": agent_id,
+        "display_name": setting.display_name if setting else None,
+        "is_deleted": setting.is_deleted if setting else False,
+        "diagnostic_config": setting.diagnostic_config if setting else {},
+    }
 
 
 @router.get("/projects/{project_id}/live-view/agents/{agent_id}/saved-logs")
@@ -677,6 +727,7 @@ async def create_snapshot(
     # Update agent_id if explicitly provided in wrapper
     if agent_id:
         snapshot.agent_id = agent_id
+        restore_agent_if_soft_deleted(db, project_id, agent_id, now=datetime.now(timezone.utc))
         db.commit()
 
     # Run policy (tool use) validation asynchronously so Clinical Log shows result without Run check

@@ -23,6 +23,7 @@ class AgentDisplaySetting(Base):
     display_name = Column(String(100), nullable=True)
     node_type = Column(String(50), nullable=True, server_default="agentCard")
     is_deleted = Column(Boolean, default=False, server_default="false")
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     
     # Custom thresholds for this specific agent (Overrides Project-level config)
     diagnostic_config = Column(JSON, nullable=True, server_default='{}')

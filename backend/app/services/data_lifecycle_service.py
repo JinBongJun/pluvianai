@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from app.models.behavior_report import BehaviorReport
+from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.snapshot import Snapshot
 from app.models.trace import Trace
 from app.models.project import Project
@@ -282,6 +283,44 @@ class DataLifecycleService:
             "grace_days": grace_window_days,
             "purged_projects_count": purged_projects,
             "purged_organizations_count": purged_orgs,
+        }
+
+    def purge_soft_deleted_agent_settings(self, grace_days: Optional[int] = None) -> Dict[str, int]:
+        """
+        Hard-delete agent display settings that have been soft-deleted
+        longer than the grace window.
+        """
+        grace_window_days = (
+            grace_days if grace_days is not None else settings.AGENT_SOFT_DELETE_GRACE_DAYS
+        )
+        cutoff = datetime.utcnow() - timedelta(days=grace_window_days)
+
+        expired_agent_settings = (
+            self.db.query(AgentDisplaySetting)
+            .filter(
+                AgentDisplaySetting.is_deleted.is_(True),
+                AgentDisplaySetting.deleted_at.isnot(None),
+                AgentDisplaySetting.deleted_at < cutoff,
+            )
+            .all()
+        )
+
+        purged_agent_settings = 0
+        for agent_setting in expired_agent_settings:
+            self.db.delete(agent_setting)
+            purged_agent_settings += 1
+
+        if purged_agent_settings:
+            self.db.commit()
+            logger.info(
+                "Purged soft-deleted agent settings: %s rows (grace_days=%s)",
+                purged_agent_settings,
+                grace_window_days,
+            )
+
+        return {
+            "grace_days": grace_window_days,
+            "purged_agent_settings_count": purged_agent_settings,
         }
 
     def archive_to_s3(self, snapshot_ids: List[int], project_id: Optional[int] = None) -> Dict[str, Any]:

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Dict, Iterable, List, Optional, Set
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.logging_config import logger
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.project import Project
@@ -101,4 +103,43 @@ def is_agent_deleted(settings_map: Dict[str, AgentDisplaySetting], agent_id: Opt
         return False
     setting = settings_map.get(key)
     return bool(setting is not None and setting.is_deleted)
+
+
+def restore_agent_if_soft_deleted(
+    db: Session,
+    project_id: Optional[int],
+    agent_id: Optional[str],
+    now: Optional[datetime] = None,
+) -> bool:
+    """Restore a recently deleted agent when identical traffic reappears."""
+    normalized_agent_id = str(agent_id or "").strip()
+    if not project_id or not normalized_agent_id:
+        return False
+
+    setting = (
+        db.query(AgentDisplaySetting)
+        .filter(
+            AgentDisplaySetting.project_id == project_id,
+            AgentDisplaySetting.system_prompt_hash == normalized_agent_id,
+        )
+        .first()
+    )
+    if setting is None or not setting.is_deleted:
+        return False
+
+    deleted_at = setting.deleted_at
+    restore_window_days = max(int(settings.AGENT_AUTO_RESTORE_DAYS or 0), 0)
+    if deleted_at is not None and restore_window_days > 0:
+        reference_now = now or datetime.utcnow()
+        if deleted_at.tzinfo is None and reference_now.tzinfo is not None:
+            reference_now = reference_now.replace(tzinfo=None)
+        elif deleted_at.tzinfo is not None and reference_now.tzinfo is None:
+            reference_now = reference_now.replace(tzinfo=deleted_at.tzinfo)
+        cutoff = reference_now - timedelta(days=restore_window_days)
+        if deleted_at < cutoff:
+            return False
+
+    setting.is_deleted = False
+    setting.deleted_at = None
+    return True
 
