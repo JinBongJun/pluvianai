@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -19,10 +19,11 @@ import FeedbackModal from "@/components/modals/FeedbackModal";
 import { motion, AnimatePresence } from "framer-motion";
 import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
-import { organizationsAPI, projectsAPI } from "@/lib/api";
+import { organizationsAPI } from "@/lib/api";
 import { authAPI } from "@/lib/api/auth";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import SwitcherDropdown from "@/components/ui/SwitcherDropdown";
+import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
 
 interface TopHeaderProps {
   breadcrumb?: { label: string; href?: string }[];
@@ -30,14 +31,17 @@ interface TopHeaderProps {
   userEmail?: string;
   onLogout?: () => void;
   nav?: React.ReactNode;
+  organizations?: OrganizationSummary[];
+  projects?: OrganizationProject[];
 }
 
 const TopHeader: React.FC<TopHeaderProps> = ({
-  breadcrumb,
   userName,
   userEmail,
   onLogout,
   nav,
+  organizations: providedOrganizations,
+  projects: providedProjects,
 }) => {
   const params = useParams();
   const pathname = usePathname();
@@ -48,18 +52,33 @@ const TopHeader: React.FC<TopHeaderProps> = ({
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const { isAuthenticated } = useAuthSession();
+  const shouldFetchOrganizations = !providedOrganizations;
+  const shouldFetchProjects = !providedProjects;
 
-  // Single shared key/fetcher with organizations page to avoid duplicate 401s
-  const { data: organizations } = useSWR(isAuthenticated ? "organizations" : null, () =>
-    organizationsAPI.list({ includeStats: false })
+  const { data: fetchedOrganizations } = useSWR(
+    isAuthenticated && shouldFetchOrganizations ? "organizations" : null,
+    () => organizationsAPI.list({ includeStats: false }),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 10_000,
+    }
   );
   const { data: projects } = useSWR(
-    isAuthenticated && currentOrgId ? ["organization-projects-list", currentOrgId] : null,
-    ([, id]) => organizationsAPI.listProjects(id as string, { includeStats: false })
+    isAuthenticated && currentOrgId && shouldFetchProjects
+      ? ["organization-projects-list", currentOrgId]
+      : null,
+    ([, id]) => organizationsAPI.listProjects(id as string, { includeStats: false }),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 10_000,
+    }
   );
 
+  const organizations = providedOrganizations ?? fetchedOrganizations;
+  const resolvedProjects = providedProjects ?? projects;
+
   const activeOrg = organizations?.find(o => String(o.id) === String(currentOrgId));
-  const activeProject = projects?.find(p => String(p.id) === String(currentProjectId));
+  const activeProject = resolvedProjects?.find(p => String(p.id) === String(currentProjectId));
 
   const orgSwitcherItems =
     organizations?.map(org => ({
@@ -70,7 +89,7 @@ const TopHeader: React.FC<TopHeaderProps> = ({
     })) || [];
 
   const projectSwitcherItems =
-    projects?.map(p => ({
+    resolvedProjects?.map(p => ({
       id: p.id,
       name: p.name,
       href: `/organizations/${currentOrgId}/projects/${p.id}`,

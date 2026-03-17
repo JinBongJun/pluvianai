@@ -55,6 +55,7 @@ import { AgentEvaluationPanel } from "@/components/live-view/AgentEvaluationPane
 import { ClinicalLogDataSection } from "@/components/live-view/ClinicalLogDataSection";
 import { AgentSettingsPanel } from "@/components/live-view/AgentSettingsPanel";
 import { useToast } from "@/components/ToastContainer";
+import { usePageVisibility } from "@/hooks/usePageVisibility";
 
 // Stable references for React Flow (avoid "new nodeTypes/edgeTypes object" warning)
 const NODE_TYPES = { agentCard: AgentCardNode };
@@ -453,6 +454,8 @@ function LiveViewContent() {
   const projectId = projectIdStr ? Number(projectIdStr) : 0;
   const toast = useToast();
   const [agentsPollIntervalMs, setAgentsPollIntervalMs] = useState(LIVE_VIEW_BASE_POLL_MS);
+  const isPageVisible = usePageVisibility();
+  const wasPageVisibleRef = useRef(isPageVisible);
 
   const { data: project } = useSWR(
     projectId && !isNaN(projectId) ? ["project", projectId] : null,
@@ -483,7 +486,7 @@ function LiveViewContent() {
     projectId && !isNaN(projectId) && projectId > 0 ? ["live-view-agents", projectId] : null,
     () => liveViewAPI.getAgents(projectId, 30, true),
     {
-      refreshInterval: agentsPollIntervalMs,
+      refreshInterval: isPageVisible ? agentsPollIntervalMs : 0,
       revalidateOnFocus: false,
       shouldRetryOnError: false,
     }
@@ -704,6 +707,14 @@ function LiveViewContent() {
 
     setAgentsPollIntervalMs(current => Math.min(current * 2, LIVE_VIEW_MAX_POLL_MS));
   }, [agentsError, agentsRetryAfterSec, projectId]);
+
+  useEffect(() => {
+    if (!projectId || Number.isNaN(projectId) || projectId <= 0) return;
+    const becameVisible = !wasPageVisibleRef.current && isPageVisible;
+    wasPageVisibleRef.current = isPageVisible;
+    if (!becameVisible) return;
+    void mutateAgents();
+  }, [isPageVisible, mutateAgents, projectId]);
 
   const handleRestoreAgent = useCallback(
     async (agentId: string) => {
