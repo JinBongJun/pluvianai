@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useFormState, useFormStatus } from "react-dom";
-import { registerAction } from "@/actions/auth-actions";
-import { authAPI } from "@/lib/api";
+import { loginAction, registerAction } from "@/actions/auth-actions";
 import { analytics } from "@/lib/analytics";
 import { getAuthErrorMessage, getReauthMessage } from "@/lib/auth-messages";
 import { passwordStrength } from "@/lib/validation";
@@ -57,12 +56,11 @@ export default function LoginPage() {
   const [registeredMessageShown, setRegisteredMessageShown] = useState(false);
   const [reauthBannerMessage, setReauthBannerMessage] = useState("Please log in again.");
   const [mounted, setMounted] = useState(false);
-  const [clientLoginSubmitting, setClientLoginSubmitting] = useState(false);
-  const [clientLoginError, setClientLoginError] = useState<string | null>(null);
   const [postAuthRedirect, setPostAuthRedirect] = useState("/organizations");
   const { isLoading, start } = useLoading({ minDuration: 800 });
 
-  // Server Action (register only; login is client-side)
+  // Server Actions
+  const [loginState, loginFormAction] = useFormState(loginAction, null);
   const [registerState, registerFormAction] = useFormState(registerAction, null);
 
   const pwdStrength = passwordStrength(password);
@@ -153,6 +151,16 @@ export default function LoginPage() {
   }, [mounted]);
 
   useEffect(() => {
+    if (loginState?.success) {
+      start();
+      analytics.capture("user_login", { method: "password" });
+      setTimeout(() => {
+        window.location.href = postAuthRedirect;
+      }, 400);
+    }
+  }, [loginState, postAuthRedirect, start]);
+
+  useEffect(() => {
     if (registerState?.success && registerState.data?.authenticated) {
       start();
 
@@ -172,35 +180,12 @@ export default function LoginPage() {
     }
   }, [registerState, start, router, postAuthRedirect]);
 
+  const loginError =
+    loginState?.errors?._form?.[0] || (loginState?.errors && Object.values(loginState.errors)[0]?.[0]);
   const registerError =
     registerState?.errors?._form?.[0] ||
     (registerState?.errors && Object.values(registerState.errors)[0]?.[0]);
-  const errorMessage = isLogin ? clientLoginError : registerError;
-
-  const handleClientLogin = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setClientLoginError(null);
-    setClientLoginSubmitting(true);
-    const form = e.currentTarget;
-    const email = (form.elements.namedItem("email") as HTMLInputElement)?.value?.trim();
-    const password = (form.elements.namedItem("password") as HTMLInputElement)?.value;
-    if (!email || !password) {
-      setClientLoginError("Please enter email and password.");
-      setClientLoginSubmitting(false);
-      return;
-    }
-    try {
-      await authAPI.login(email, password);
-      analytics.capture("user_login", { method: "password" });
-      start();
-      setTimeout(() => {
-        window.location.href = postAuthRedirect;
-      }, 400);
-    } catch (err: any) {
-      setClientLoginError(getAuthErrorMessage(err, "login"));
-      setClientLoginSubmitting(false);
-    }
-  };
+  const errorMessage = isLogin ? loginError : registerError;
 
   return (
     <div className="min-h-screen flex bg-[#030303] selection:bg-emerald-500/30 font-sans relative overflow-hidden">
@@ -293,8 +278,7 @@ export default function LoginPage() {
 
               <form
                 className="space-y-6 relative z-10"
-                action={isLogin ? undefined : registerFormAction}
-                onSubmit={isLogin ? handleClientLogin : undefined}
+                action={isLogin ? loginFormAction : registerFormAction}
               >
                 {/* Error Message */}
                 {errorMessage && (
@@ -479,7 +463,7 @@ export default function LoginPage() {
                   <SubmitButton
                     isLogin={isLogin}
                     liabilityAccepted={liabilityAgreementAccepted}
-                    isLoadingOverride={isLoading || clientLoginSubmitting}
+                    isLoadingOverride={isLoading}
                   />
                 </div>
 
