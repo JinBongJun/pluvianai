@@ -153,20 +153,10 @@ export default function LoginPage() {
   }, [mounted]);
 
   useEffect(() => {
-    if (registerState?.success && registerState.data?.access_token) {
+    if (registerState?.success && registerState.data?.authenticated) {
       start();
 
       // Auto-login success handling
-      if (typeof window !== "undefined") {
-        localStorage.setItem("access_token", registerState.data.access_token);
-        if (registerState.data.refresh_token) {
-          localStorage.setItem("refresh_token", registerState.data.refresh_token);
-        }
-        if (registerState.data.user_info) {
-          localStorage.setItem("user_info", JSON.stringify(registerState.data.user_info));
-        }
-      }
-
       analytics.capture("user_register", { method: "password" });
 
       setTimeout(() => {

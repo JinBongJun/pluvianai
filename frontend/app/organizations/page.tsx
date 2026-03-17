@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import TopHeader from "@/components/layout/TopHeader";
-import { organizationsAPI } from "@/lib/api";
+import { authAPI, organizationsAPI } from "@/lib/api";
 import { useDebouncedValue } from "@/hooks/useDebounce";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { Plus, Search, Building2, Briefcase } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -16,52 +17,16 @@ export default function OrganizationsPage() {
   const [userEmail, setUserEmail] = useState("");
   const [userName, setUserName] = useState("");
   const [authReady, setAuthReady] = useState(false);
-  const retryCountRef = useRef(0);
-  const maxRetries = 3;
+  const isAuthenticated = useRequireAuth();
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const loadUser = async () => {
       try {
-        if (typeof window === "undefined") return;
-
-        const accessToken = localStorage.getItem("access_token");
-        const refreshToken = localStorage.getItem("refresh_token");
-        const hasTokens = !!(accessToken && accessToken !== "undefined");
-
-        let userInfo: { email?: string; full_name?: string } | null = null;
-        const storedUser = localStorage.getItem("user_info");
-        if (storedUser) {
-          try {
-            userInfo = JSON.parse(storedUser);
-          } catch {
-            // ignore parse error
-          }
-        }
-
-        if (!userInfo && hasTokens && accessToken) {
-          try {
-            const payload = JSON.parse(
-              atob(accessToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))
-            );
-            userInfo = { email: payload.email ?? "user", full_name: payload.full_name ?? "" };
-            localStorage.setItem("user_info", JSON.stringify(userInfo));
-          } catch {
-            userInfo = { email: "user", full_name: "" };
-          }
-        }
-
-        if (!userInfo && !hasTokens) {
-          if (retryCountRef.current < maxRetries) {
-            retryCountRef.current++;
-            setTimeout(loadUser, 300);
-            return;
-          }
-          router.push("/login?reauth=1");
-          return;
-        }
-
-        setUserEmail(userInfo?.email || "");
-        setUserName(userInfo?.full_name || "");
+        const user = await authAPI.getCurrentUser();
+        setUserEmail(user?.email || "");
+        setUserName(user?.full_name || "");
         setAuthReady(true);
       } catch (error) {
         console.error("🔴 [OrganizationsPage] Error in loadUser:", error);
@@ -69,8 +34,8 @@ export default function OrganizationsPage() {
       }
     };
 
-    setTimeout(loadUser, 100);
-  }, [router]);
+    void loadUser();
+  }, [isAuthenticated, router]);
 
   // Same SWR key as TopHeader so one request only (no duplicate 401)
   const { data: orgs, mutate } = useSWR(authReady ? "organizations" : null, () =>

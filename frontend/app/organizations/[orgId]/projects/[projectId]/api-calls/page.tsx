@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import ProjectLayout from "@/components/layout/ProjectLayout";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import FilterPanel, { FilterState } from "@/components/filters/FilterPanel";
 import Pagination from "@/components/ui/Pagination";
 import Badge from "@/components/ui/Badge";
@@ -26,6 +27,7 @@ export default function APICallsListPage() {
   const router = useRouter();
   const toast = useToast();
   const { orgId, projectId } = useOrgProjectParams();
+  const isAuthenticated = useRequireAuth();
 
   const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
     organizationsAPI.get(orgId, { includeStats: false })
@@ -184,11 +186,7 @@ export default function APICallsListPage() {
   ]);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    if (!isAuthenticated) return;
 
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       if (orgId) {
@@ -200,7 +198,7 @@ export default function APICallsListPage() {
     }
 
     loadAPICalls();
-  }, [projectId, orgId, router, loadAPICalls]);
+  }, [isAuthenticated, projectId, orgId, router, loadAPICalls]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {

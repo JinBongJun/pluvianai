@@ -8,6 +8,7 @@ import ProjectTabs from "@/components/ProjectTabs";
 import CostChart from "@/components/CostChart";
 import { Button } from "@/components/ui/Button";
 import { apiCallsAPI } from "@/lib/api";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { ArrowLeft, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
 
 interface CostData {
@@ -20,6 +21,7 @@ interface CostData {
 export default function CostPage() {
   const router = useRouter();
   const { orgId, projectId } = useOrgProjectParams();
+  const isAuthenticated = useRequireAuth();
 
   const [data, setData] = useState<CostData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,13 +48,11 @@ export default function CostPage() {
   }, [projectId, days]);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
+    if (!isAuthenticated) {
       return;
     }
     loadData();
-  }, [router, loadData]);
+  }, [isAuthenticated, loadData]);
 
   if (!projectId || isNaN(projectId)) {
     return null;
