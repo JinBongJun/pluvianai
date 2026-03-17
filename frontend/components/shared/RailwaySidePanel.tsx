@@ -124,7 +124,7 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
           {/* Content Area */}
           <div
             className={clsx(
-              "flex-1 p-0 min-h-0",
+              "flex flex-1 min-h-0 flex-col p-0",
               contentScrollable && "overflow-y-auto custom-scrollbar",
               contentClassName
             )}
