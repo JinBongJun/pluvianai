@@ -178,6 +178,8 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
   const [removingKey, setRemovingKey] = useState<string | null>(null);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [isClearingAll, setIsClearingAll] = useState(false);
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [selectedDatasetIds, setSelectedDatasetIds] = useState<Set<string>>(new Set());
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [detailSnapshot, setDetailSnapshot] = useState<SnapshotForDetail | null>(null);
   const [expandedDatasetIds, setExpandedDatasetIds] = useState<Set<string>>(new Set());
@@ -375,7 +377,8 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
 
   const handleConfirmClearAll = async () => {
     if (!projectId || items.length === 0) return;
-    const idsToDelete = items.map(ds => ds.id);
+    const idsToDelete =
+      selectedDatasetIds.size > 0 ? Array.from(selectedDatasetIds) : items.map(ds => ds.id);
     setDeleteError(null);
     closeClearAllConfirm();
     setExpandedDatasetIds(new Set());
@@ -387,7 +390,12 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
     try {
       await behaviorAPI.deleteDatasetsBatch(projectId, idsToDelete);
       await mutate();
-      toast.showToast("All saved datasets deleted.", "success");
+      toast.showToast(
+        idsToDelete.length === items.length
+          ? "All saved datasets deleted."
+          : `Deleted ${idsToDelete.length} dataset${idsToDelete.length !== 1 ? "s" : ""}.`,
+        "success"
+      );
     } catch (e: unknown) {
       await mutate();
       const msg =
@@ -447,14 +455,21 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0a0f1e] shadow-2xl overflow-hidden">
             <div className="p-6 border-b border-white/5">
               <h3 className="text-sm font-black text-white uppercase tracking-wider">
-                Delete all saved datasets
+                {selectedDatasetIds.size > 0 ? "Delete selected datasets" : "Delete all saved datasets"}
               </h3>
               <p className="mt-2 text-sm text-slate-400">
-                Delete all saved datasets for this agent? This cannot be undone.
+                {selectedDatasetIds.size > 0
+                  ? "Delete only the selected datasets for this agent. This cannot be undone."
+                  : "Delete all saved datasets for this agent. This cannot be undone."}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                {datasetCount} dataset{datasetCount !== 1 ? "s" : ""} and {datasetLogCount} log
-                {datasetLogCount !== 1 ? "s" : ""} will be removed.
+                {selectedDatasetIds.size > 0
+                  ? `${selectedDatasetIds.size} dataset${
+                      selectedDatasetIds.size !== 1 ? "s" : ""
+                    } will be removed.`
+                  : `${datasetCount} dataset${datasetCount !== 1 ? "s" : ""} and ${datasetLogCount} log${
+                      datasetLogCount !== 1 ? "s" : ""
+                    } will be removed.`}
               </p>
               {deleteError && (
                 <p className="mt-3 text-xs text-rose-400 font-medium">{deleteError}</p>
@@ -521,23 +536,68 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
             {datasetLogCount !== 1 ? "s" : ""}
           </span>
           {datasetCount > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setDeleteError(null);
-                setConfirmClearAll(true);
-              }}
-              disabled={isClearingAll}
-              className={clsx(
-                "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-wide transition-colors",
-                "border-rose-500/30 text-rose-300 hover:bg-rose-500/10",
-                "disabled:opacity-50 disabled:pointer-events-none"
+            <>
+              {isDeleteMode ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDatasetIds(prev =>
+                        prev.size === items.length ? new Set() : new Set(items.map(ds => ds.id))
+                      );
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-[11px] font-bold uppercase tracking-wide text-slate-200 bg-white/[0.03] hover:bg-white/[0.08]"
+                  >
+                    {selectedDatasetIds.size === items.length ? "DESELECT" : "ALL"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedDatasetIds.size === 0) return;
+                      setDeleteError(null);
+                      setConfirmClearAll(true);
+                    }}
+                    disabled={isClearingAll || selectedDatasetIds.size === 0}
+                    className={clsx(
+                      "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-wide transition-colors",
+                      "border-rose-500/30 text-rose-300 hover:bg-rose-500/10",
+                      "disabled:opacity-50 disabled:pointer-events-none"
+                    )}
+                    title="Delete selected datasets"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete ({selectedDatasetIds.size})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeleteMode(false);
+                      setSelectedDatasetIds(new Set());
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-[11px] font-bold uppercase tracking-wide text-slate-200 bg-white/[0.02] hover:bg-white/[0.06]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteError(null);
+                    setIsDeleteMode(true);
+                    setSelectedDatasetIds(new Set());
+                  }}
+                  className={clsx(
+                    "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-wide transition-colors",
+                    "border-rose-500/30 text-rose-300 hover:bg-rose-500/10"
+                  )}
+                  title="Delete saved datasets"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete
+                </button>
               )}
-              title="Delete all saved datasets"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Clear all
-            </button>
+            </>
           )}
         </div>
       </div>
@@ -568,6 +628,25 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
               className="rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden"
             >
               <div className="w-full flex items-center gap-3 p-3 hover:bg-white/[0.03] transition-colors">
+                {isDeleteMode && (
+                  <button
+                    type="button"
+                    onClick={e => {
+                      e.stopPropagation();
+                      setSelectedDatasetIds(prev => {
+                        const next = new Set(prev);
+                        if (next.has(ds.id)) next.delete(ds.id);
+                        else next.add(ds.id);
+                        return next;
+                      });
+                    }}
+                    className="ml-1 w-4 h-4 flex items-center justify-center rounded border border-white/15 bg-black/40 text-[10px] text-slate-300"
+                    aria-pressed={selectedDatasetIds.has(ds.id)}
+                    aria-label={selectedDatasetIds.has(ds.id) ? "Deselect dataset" : "Select dataset"}
+                  >
+                    {selectedDatasetIds.has(ds.id) ? "✓" : ""}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => toggleDatasetExpanded(ds.id)}
