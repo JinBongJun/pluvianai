@@ -203,7 +203,11 @@ def create_organization(
             detail="Organization name is required",
         )
 
-    can_create, error_msg = check_organization_limit(current_user.id, db)
+    can_create, error_msg = check_organization_limit(
+        current_user.id,
+        db,
+        is_superuser=bool(getattr(current_user, "is_superuser", False)),
+    )
     if not can_create:
         plan_info = SubscriptionService(db).get_user_plan(current_user.id)
         plan_type = str(plan_info.get("plan_type") or "free")

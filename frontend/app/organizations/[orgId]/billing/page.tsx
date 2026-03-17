@@ -47,9 +47,10 @@ export default function BillingPage() {
 
   const currentPlanId = org?.plan || "free";
 
-  // Mock limits if not returned by backend
+  // Org-scoped usage view – limits come from account-level plan;
+  // we only need light defaults here for visualization.
   const usageLimits = {
-    free: { calls: 10000, projects: 3, platformReplayCredits: 1000, teamMembers: 1 },
+    free: { calls: 10000, projects: 1, platformReplayCredits: 50, teamMembers: 3 },
     pro: { calls: 100000, projects: 10, platformReplayCredits: 10000, teamMembers: 5 },
     enterprise: { calls: -1, projects: -1, platformReplayCredits: -1, teamMembers: -1 },
   };
@@ -147,11 +148,11 @@ export default function BillingPage() {
             </p>
           </div>
           <h1 className="text-5xl font-black text-white uppercase tracking-tighter mb-4">
-            Usage & Billing
+            Organization Usage
           </h1>
-          <p className="text-slate-400 font-bold uppercase tracking-widest text-sm max-w-2xl leading-relaxed">
-            Track product usage, monitor hosted replay credits, and preview upcoming plans.
-          </p>
+            <p className="text-slate-400 font-bold uppercase tracking-widest text-sm max-w-2xl leading-relaxed">
+              View usage for this organization&apos;s projects. For account-wide quotas and billing, use the Account Usage and Billing pages.
+            </p>
         </div>
 
         {/* Telemetry Runway (Usage Summary) */}
