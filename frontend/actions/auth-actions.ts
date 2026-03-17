@@ -12,6 +12,30 @@ import {
 import { getLoginErrorMessage, getRegisterErrorMessage } from "@/lib/auth-messages";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const DEFAULT_ACCESS_TOKEN_MAX_AGE_SEC = 60 * 30;
+const DEFAULT_REFRESH_TOKEN_MAX_AGE_SEC = 60 * 60 * 24 * 7;
+const AUTH_COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN || undefined;
+
+function getTokenMaxAge(token: string | undefined, fallbackSeconds: number): number {
+  if (!token) return fallbackSeconds;
+
+  try {
+    const [, payloadBase64] = token.split(".");
+    if (!payloadBase64) return fallbackSeconds;
+
+    const normalized = payloadBase64.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const payloadJson = Buffer.from(padded, "base64").toString("utf8");
+    const payload = JSON.parse(payloadJson) as { exp?: number };
+    const exp = Number(payload.exp);
+    if (!Number.isFinite(exp)) return fallbackSeconds;
+
+    const maxAge = exp - Math.floor(Date.now() / 1000);
+    return maxAge > 0 ? maxAge : fallbackSeconds;
+  } catch {
+    return fallbackSeconds;
+  }
+}
 
 // ===== Zod schemas =====
 
@@ -117,18 +141,18 @@ export async function loginAction(
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax" as const,
       path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
     };
 
-    cookies().set("access_token", access_token, cookieOptions);
-    cookies().set("refresh_token", refresh_token, cookieOptions);
-
-    if (userInfo) {
-      cookies().set("user_info", JSON.stringify(userInfo), {
-        ...cookieOptions,
-        httpOnly: false, // Accessible to client
-      });
-    }
+    cookies().set("access_token", access_token, {
+      ...cookieOptions,
+      domain: AUTH_COOKIE_DOMAIN,
+      maxAge: getTokenMaxAge(access_token, DEFAULT_ACCESS_TOKEN_MAX_AGE_SEC),
+    });
+    cookies().set("refresh_token", refresh_token, {
+      ...cookieOptions,
+      domain: AUTH_COOKIE_DOMAIN,
+      maxAge: getTokenMaxAge(refresh_token, DEFAULT_REFRESH_TOKEN_MAX_AGE_SEC),
+    });
 
     console.log("✅ [loginAction] Authentication cookies set");
     return formSuccessResponse({
@@ -154,17 +178,13 @@ export async function loginAction(
 export async function registerAction(
   prevState: FormActionState<{
     user_id: number;
-    access_token?: string;
-    refresh_token?: string;
-    user_info?: any;
+    authenticated?: boolean;
   }> | null,
   formData: FormData
 ): Promise<
   FormActionState<{
     user_id: number;
-    access_token?: string;
-    refresh_token?: string;
-    user_info?: any;
+    authenticated?: boolean;
   }>
 > {
   // 1. Parse form data
@@ -226,17 +246,21 @@ export async function registerAction(
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: "/",
+      domain: AUTH_COOKIE_DOMAIN,
+      maxAge: getTokenMaxAge(access_token, DEFAULT_ACCESS_TOKEN_MAX_AGE_SEC),
     });
     cookies().set("refresh_token", refresh_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: "/",
+      domain: AUTH_COOKIE_DOMAIN,
+      maxAge: getTokenMaxAge(refresh_token, DEFAULT_REFRESH_TOKEN_MAX_AGE_SEC),
     });
 
     // Include tokens in return payload (for client-side localStorage usage)
-    return formSuccessResponse({ user_id: userData.id, access_token, refresh_token });
+    return formSuccessResponse({ user_id: userData.id, authenticated: true });
   } catch (error: any) {
     console.error("[registerAction] Error:", error);
     const msg = getRegisterErrorMessage({
@@ -253,9 +277,8 @@ export async function registerAction(
  * Deletes cookies and redirects to the login page.
  */
 export async function logoutAction(): Promise<void> {
-  cookies().delete("access_token");
-  cookies().delete("refresh_token");
-  cookies().delete("user_info");
+  cookies().delete({ name: "access_token", path: "/", domain: AUTH_COOKIE_DOMAIN });
+  cookies().delete({ name: "refresh_token", path: "/", domain: AUTH_COOKIE_DOMAIN });
   redirect("/login");
 }
 

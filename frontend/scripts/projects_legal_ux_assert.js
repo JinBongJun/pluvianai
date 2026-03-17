@@ -8,12 +8,18 @@ async function login(page, baseUrl, email, password) {
   await page.waitForURL(/\/organizations/, { timeout: 60000 });
 }
 
-async function apiFetchJson(url, token, options = {}) {
+async function getAuthCookieHeader(page, targetUrl) {
+  const cookies = await page.context().cookies(targetUrl);
+  if (!cookies.length) return null;
+  return cookies.map(cookie => `${cookie.name}=${cookie.value}`).join("; ");
+}
+
+async function apiFetchJson(url, cookieHeader, options = {}) {
   const response = await fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      ...(cookieHeader ? { Cookie: cookieHeader } : {}),
       ...(options.headers || {}),
     },
   });
@@ -27,10 +33,10 @@ async function apiFetchJson(url, token, options = {}) {
 }
 
 async function ensureOrgId(baseUrl, backendUrl, page) {
-  const token = await page.evaluate(() => localStorage.getItem("access_token"));
-  if (!token) return { token: null, orgId: null, details: { tokenPresent: false } };
+  const cookieHeader = await getAuthCookieHeader(page, backendUrl);
+  if (!cookieHeader) return { cookieHeader: null, orgId: null, details: { tokenPresent: false } };
 
-  const list = await apiFetchJson(`${backendUrl}/api/v1/organizations`, token);
+  const list = await apiFetchJson(`${backendUrl}/api/v1/organizations`, cookieHeader);
   if (list.ok && Array.isArray(list.payload) && list.payload.length > 0) {
     const forcedOrgId = process.env.AGENTGUARD_ORG_ID ? String(process.env.AGENTGUARD_ORG_ID) : null;
     const orgs = list.payload.filter(x => x && x.id != null);
@@ -41,7 +47,7 @@ async function ensureOrgId(baseUrl, backendUrl, page) {
       const id = String(org.id);
       const projects = await apiFetchJson(
         `${backendUrl}/api/v1/organizations/${id}/projects?include_stats=false`,
-        token
+        cookieHeader
       );
       const count = Array.isArray(projects.payload) ? projects.payload.length : 0;
       counts[id] = count;
@@ -59,7 +65,7 @@ async function ensureOrgId(baseUrl, backendUrl, page) {
     }
 
     return {
-      token,
+      cookieHeader,
       orgId: selected,
       details: {
         tokenPresent: true,
@@ -70,7 +76,7 @@ async function ensureOrgId(baseUrl, backendUrl, page) {
     };
   }
 
-  const create = await apiFetchJson(`${backendUrl}/api/v1/organizations`, token, {
+  const create = await apiFetchJson(`${backendUrl}/api/v1/organizations`, cookieHeader, {
     method: "POST",
     body: JSON.stringify({
       name: `qa-group6-org-${Date.now()}`,
@@ -79,7 +85,7 @@ async function ensureOrgId(baseUrl, backendUrl, page) {
     }),
   });
   return {
-    token,
+    cookieHeader,
     orgId: create.ok && create.payload && create.payload.id != null ? String(create.payload.id) : null,
     details: {
       tokenPresent: true,
@@ -90,8 +96,8 @@ async function ensureOrgId(baseUrl, backendUrl, page) {
   };
 }
 
-async function createProject(backendUrl, token, organizationId, name, description) {
-  return apiFetchJson(`${backendUrl}/api/v1/projects`, token, {
+async function createProject(backendUrl, cookieHeader, organizationId, name, description) {
+  return apiFetchJson(`${backendUrl}/api/v1/projects`, cookieHeader, {
     method: "POST",
     body: JSON.stringify({
       name,
@@ -128,26 +134,26 @@ async function checkProjectsAndRoleUx(baseUrl, backendUrl, email, password) {
 
   try {
     await login(page, baseUrl, email, password);
-    const { token, orgId, details } = await ensureOrgId(baseUrl, backendUrl, page);
+    const { cookieHeader, orgId, details } = await ensureOrgId(baseUrl, backendUrl, page);
     out.details = { ...out.details, ...details, orgId };
-    if (!token || !orgId) {
+    if (!cookieHeader || !orgId) {
       throw new Error("Could not resolve org/token for Group 6 checks");
     }
 
     let existingProjects = await apiFetchJson(
       `${backendUrl}/api/v1/organizations/${orgId}/projects?include_stats=false`,
-      token
+      cookieHeader
     );
     let existingItems = Array.isArray(existingProjects.payload) ? existingProjects.payload : [];
     const stamp = Date.now();
     const p1 = { name: `qa-l6-alpha-${stamp}`, description: `qa desc alpha ${stamp}` };
     const p2 = { name: `qa-l6-beta-${stamp}`, description: `qa desc beta ${stamp}` };
-    const c1 = await createProject(backendUrl, token, orgId, p1.name, p1.description);
-    const c2 = await createProject(backendUrl, token, orgId, p2.name, p2.description);
+    const c1 = await createProject(backendUrl, cookieHeader, orgId, p1.name, p1.description);
+    const c2 = await createProject(backendUrl, cookieHeader, orgId, p2.name, p2.description);
     out.details.projectCreateStatuses = [c1.status, c2.status];
     existingProjects = await apiFetchJson(
       `${backendUrl}/api/v1/organizations/${orgId}/projects?include_stats=false`,
-      token
+      cookieHeader
     );
     existingItems = Array.isArray(existingProjects.payload) ? existingProjects.payload : [];
     out.details.existingProjectsCount = existingItems.length;
@@ -363,10 +369,6 @@ async function checkLegalPagesAndFooter(baseUrl) {
 
   try {
     await page.goto(`${baseUrl}/login`, { waitUntil: "domcontentloaded", timeout: 45000 });
-    await page.evaluate(() => {
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
-    });
 
     // M-4 + M-6
     await page.goto(`${baseUrl}/terms`, { waitUntil: "networkidle", timeout: 45000 });

@@ -9,6 +9,7 @@ import QualityChart from "@/components/QualityChart";
 import { Button } from "@/components/ui/Button";
 import { qualityAPI } from "@/lib/api";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { ArrowLeft, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface QualityData {
@@ -21,23 +22,17 @@ interface QualityData {
 export default function QualityPage() {
   const router = useRouter();
   const { orgId, projectId } = useOrgProjectParams();
+  const isAuthenticated = useRequireAuth();
 
   const [days, setDays] = useState<7 | 30 | 90>(30);
-
-  // Auth check
-  useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-    }
-  }, [router]);
 
   // Use custom hook for data fetching - replaces manual useState + useEffect pattern
   const fetcher = useCallback(() => qualityAPI.getStats(projectId, days), [projectId, days]);
 
   const { data, loading, error, refetch } = useAsyncData<QualityData>(fetcher, {
-    deps: [projectId, days],
+    deps: [projectId, days, isAuthenticated],
     keepPreviousData: true,
+    immediate: isAuthenticated,
   });
 
   if (!projectId || isNaN(projectId)) {

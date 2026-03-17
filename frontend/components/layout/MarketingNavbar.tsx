@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useAuthSession } from "@/hooks/useAuthSession";
 
 type NavActive = "home" | "docs";
 
@@ -12,12 +13,7 @@ interface MarketingNavbarProps {
 }
 
 export default function MarketingNavbar({ active = "home" }: MarketingNavbarProps) {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setIsLoggedIn(!!localStorage.getItem("access_token"));
-  }, []);
+  const { isAuthenticated: isLoggedIn } = useAuthSession();
 
   return (
     <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-[#030303]/80 backdrop-blur-xl">

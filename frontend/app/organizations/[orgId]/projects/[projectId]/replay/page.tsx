@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { replayAPI, apiCallsAPI, organizationsAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { Play, History, Split, ArrowRight, Settings2, Trash2 } from "lucide-react";
 import ProjectTabs from "@/components/ProjectTabs";
 import { analytics } from "@/lib/analytics";
@@ -18,6 +19,7 @@ export default function ReplayPage() {
   const router = useRouter();
   const toast = useToast();
   const { orgId, projectId } = useOrgProjectParams();
+  const isAuthenticated = useRequireAuth();
 
   const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
     organizationsAPI.get(orgId, { includeStats: false })
@@ -73,11 +75,7 @@ export default function ReplayPage() {
   }, [projectId, toast]);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    if (!isAuthenticated) return;
 
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       if (orgId) {
@@ -90,7 +88,7 @@ export default function ReplayPage() {
 
     loadSnapshots();
     loadRubrics();
-  }, [projectId, orgId, router, loadSnapshots, loadRubrics]);
+  }, [isAuthenticated, projectId, orgId, router, loadSnapshots, loadRubrics]);
 
   const handleRunReplay = async () => {
     if (selectedIds.length === 0) {

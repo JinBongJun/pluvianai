@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     # Use "*" to allow all origins (for development/flexibility)
     # In production, specify exact domains for better security
     CORS_ORIGINS: str = "*"
+    AUTH_COOKIE_DOMAIN: Optional[str] = None
 
     # API Keys (for LLM providers - optional)
     OPENAI_API_KEY: Optional[str] = None
