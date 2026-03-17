@@ -441,7 +441,7 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
   }
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div className="relative flex h-0 flex-1 min-h-0 flex-col overflow-hidden">
       {confirmClearAll && (
         <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0a0f1e] shadow-2xl overflow-hidden">
@@ -545,7 +545,7 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
         <p className="px-8 pb-2 text-xs text-rose-400 font-medium">{deleteError}</p>
       )}
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar px-6 pb-20 space-y-3">
+      <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-6 pb-20 space-y-3">
         {items.length === 0 && (
           <div className="p-10 text-center space-y-4 border border-dashed border-white/5 rounded-3xl">
             <FileArchive className="w-8 h-8 text-slate-700 mx-auto" />
