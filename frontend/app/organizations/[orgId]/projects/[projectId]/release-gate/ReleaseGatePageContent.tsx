@@ -51,6 +51,8 @@ import {
   type ReleaseGateResult,
 } from "@/lib/api";
 import { getApiErrorCode, getApiErrorMessage, redirectToLogin } from "@/lib/api/client";
+import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
+import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 
 type GateTab = "validate" | "history";
 type EditableTool = { id: string; name: string; description: string; parameters: string };
@@ -567,6 +569,7 @@ export default function ReleaseGatePageContent() {
   const [cancelRequested, setCancelRequested] = useState(false);
   const [result, setResult] = useState<ReleaseGateResult | null>(null);
   const [error, setError] = useState("");
+  const [planError, setPlanError] = useState<PlanLimitError | null>(null);
   const [repeatRuns, setRepeatRuns] = useState<number>(1);
   const [repeatDropdownOpen, setRepeatDropdownOpen] = useState(false);
   const repeatDropdownRef = useRef<HTMLDivElement>(null);
@@ -1617,6 +1620,7 @@ export default function ReleaseGatePageContent() {
     setIsValidating(true);
     setCancelRequested(false);
     cancelRequestedRef.current = false;
+    setPlanError(null);
     setError("");
     let startedAsyncJob = false;
     try {
@@ -1727,6 +1731,16 @@ export default function ReleaseGatePageContent() {
         }
       }
     } catch (e: any) {
+      const parsedPlanError = parsePlanLimitError(e);
+      if (parsedPlanError && parsedPlanError.code === "LIMIT_PLATFORM_REPLAY_CREDITS") {
+        setPlanError(parsedPlanError);
+        setError(
+          parsedPlanError.message ||
+            "You have used all hosted replay credits for this billing period. Use your own provider key or upgrade your plan for more hosted runs."
+        );
+        setResult(null);
+        return;
+      }
       const detail = e?.response?.data?.detail;
       const detailObj =
         detail && typeof detail === "object" && !Array.isArray(detail)
@@ -1933,7 +1947,7 @@ export default function ReleaseGatePageContent() {
     orgId && projectId && !isNaN(projectId)
       ? `/organizations/${encodeURIComponent(orgId)}/projects/${projectId}/live-view`
       : "/organizations";
-  const layoutChildren = showGateLoadingState
+  const rawLayoutChildren = showGateLoadingState
     ? React.createElement(ReleaseGateStatusPanel, {
         title: "Loading Release Gate",
         description: "Fetching agents and release history for this project...",
@@ -1991,6 +2005,18 @@ export default function ReleaseGatePageContent() {
                 projectName: project?.name,
               })
             : React.createElement(ReleaseGateExpandedView);
+  const layoutChildren = planError
+    ? React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(
+          "div",
+          { className: "px-4 pt-4" },
+          React.createElement(PlanLimitBanner, { ...planError, context: "replay" })
+        ),
+        rawLayoutChildren
+      )
+    : rawLayoutChildren;
   return React.createElement(
     ReleaseGatePageContext.Provider,
     { value: contextValue },

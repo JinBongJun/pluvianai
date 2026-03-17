@@ -25,6 +25,7 @@ from app.models.api_call import APICall
 from app.models.alert import Alert
 from app.models.quality_score import QualityScore
 from app.services.cost_analyzer import CostAnalyzer
+from app.services.subscription_service import SubscriptionService
 
 
 router = APIRouter()
@@ -204,9 +205,30 @@ def create_organization(
 
     can_create, error_msg = check_organization_limit(current_user.id, db)
     if not can_create:
+        plan_info = SubscriptionService(db).get_user_plan(current_user.id)
+        plan_type = str(plan_info.get("plan_type") or "free")
+        limits = plan_info.get("limits") or {}
+        org_limit = int(limits.get("organizations", 1))
+        current_orgs = (
+            db.query(Organization)
+            .filter(
+                Organization.owner_id == current_user.id,
+                Organization.is_deleted.is_(False),
+            )
+            .count()
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=error_msg or "Organization limit reached for current plan",
+            detail={
+                "code": "ORG_LIMIT_REACHED",
+                "message": error_msg or "You have reached the organization limit for your current plan.",
+                "details": {
+                    "plan_type": plan_type,
+                    "current": current_orgs,
+                    "limit": org_limit,
+                    "upgrade_path": "/settings/subscription",
+                },
+            },
         )
 
     try:

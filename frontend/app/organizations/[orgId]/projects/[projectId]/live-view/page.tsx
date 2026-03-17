@@ -56,6 +56,8 @@ import { ClinicalLogDataSection } from "@/components/live-view/ClinicalLogDataSe
 import { AgentSettingsPanel } from "@/components/live-view/AgentSettingsPanel";
 import { useToast } from "@/components/ToastContainer";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
+import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
+import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 
 // Stable references for React Flow (avoid "new nodeTypes/edgeTypes object" warning)
 const NODE_TYPES = { agentCard: AgentCardNode };
@@ -454,6 +456,7 @@ function LiveViewContent() {
   const projectId = projectIdStr ? Number(projectIdStr) : 0;
   const toast = useToast();
   const [agentsPollIntervalMs, setAgentsPollIntervalMs] = useState(LIVE_VIEW_BASE_POLL_MS);
+  const [agentsPlanError, setAgentsPlanError] = useState<PlanLimitError | null>(null);
   const isPageVisible = usePageVisibility();
   const wasPageVisibleRef = useRef(isPageVisible);
 
@@ -671,8 +674,20 @@ function LiveViewContent() {
   const agentsErrorCode = getApiErrorCode(agentsError);
   const agentsRateLimit = getRateLimitInfo(agentsError);
   const agentsRetryAfterSec = agentsRateLimit.retryAfterSec;
+  useEffect(() => {
+    if (!agentsError || agentsErrorStatus !== 403) {
+      setAgentsPlanError(null);
+      return;
+    }
+    const parsed = parsePlanLimitError(agentsError);
+    if (parsed && parsed.code === "SNAPSHOT_PLAN_LIMIT_REACHED") {
+      setAgentsPlanError(parsed);
+    } else {
+      setAgentsPlanError(null);
+    }
+  }, [agentsError, agentsErrorStatus]);
   const showLoadingOverlay = agentsLoading && typeof agentsData === "undefined";
-  const showAccessDeniedOverlay = !!agentsError && agentsErrorStatus === 403;
+  const showAccessDeniedOverlay = !!agentsError && agentsErrorStatus === 403 && !agentsPlanError;
   const showApiErrorOverlay =
     !!agentsError && agentsErrorStatus !== 401 && !showAccessDeniedOverlay;
   const showEmptyOverlay =
@@ -801,6 +816,11 @@ function LiveViewContent() {
           <div className="absolute inset-x-0 bottom-[-40%] h-[80%] bg-emerald-500/12 rounded-full blur-[170px]" />
         </div>
 
+        {agentsPlanError && (
+          <div className="absolute left-4 right-4 top-4 z-20">
+            <PlanLimitBanner {...agentsPlanError} context="snapshots" />
+          </div>
+        )}
         {showLoadingOverlay && <LiveViewLoadingState />}
         {showAccessDeniedOverlay && (
           <LiveViewErrorState

@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSWRConfig } from "swr";
+import useSWR from "swr";
 import { useRouter } from "next/navigation";
 import ProjectSettingsShell from "@/components/layout/ProjectSettingsShell";
-import { projectsAPI } from "@/lib/api";
+import { liveViewAPI, projectsAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
@@ -25,6 +26,9 @@ export default function ProjectGeneralSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [selectedDeletedIds, setSelectedDeletedIds] = useState<Set<number>>(new Set());
+  const [isRestoringDeleted, setIsRestoringDeleted] = useState(false);
+  const [isPermanentlyDeleting, setIsPermanentlyDeleting] = useState(false);
 
   const loadProject = useCallback(async () => {
     if (!projectId || isNaN(projectId)) return;
@@ -51,6 +55,30 @@ export default function ProjectGeneralSettingsPage() {
       void loadProject();
     }
   }, [projectId, hasToken, loadProject]);
+
+  const { data: deletedSnapshotsData, mutate: mutateDeletedSnapshots } = useSWR(
+    hasToken && projectId && !Number.isNaN(projectId)
+      ? ["deleted-snapshots-settings", projectId]
+      : null,
+    () => liveViewAPI.listDeletedSnapshots(projectId!, { days: 30, limit: 200, offset: 0 }),
+    { keepPreviousData: true, revalidateOnFocus: false }
+  );
+  const deletedSnapshots = deletedSnapshotsData?.items ?? [];
+
+  useEffect(() => {
+    if (!deletedSnapshots.length) {
+      setSelectedDeletedIds(new Set());
+      return;
+    }
+    const allowedIds = new Set(deletedSnapshots.map(item => Number(item.id)));
+    setSelectedDeletedIds(prev => {
+      const next = new Set<number>();
+      prev.forEach(id => {
+        if (allowedIds.has(id)) next.add(id);
+      });
+      return next;
+    });
+  }, [deletedSnapshots]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,6 +127,69 @@ export default function ProjectGeneralSettingsPage() {
       toast.showToast(err?.response?.data?.detail ?? "Failed to delete project", "error");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const toggleDeletedSnapshotSelection = (id: number) => {
+    setSelectedDeletedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const restoreSelectedDeletedSnapshots = async () => {
+    if (!projectId || Number.isNaN(projectId) || selectedDeletedIds.size === 0) return;
+    const targetIds = Array.from(selectedDeletedIds);
+    setIsRestoringDeleted(true);
+    try {
+      const result = await liveViewAPI.restoreSnapshotsBatch(projectId, targetIds);
+      const restored = Number(result?.restored ?? 0);
+      toast.showToast(
+        restored > 0 ? `Restored ${restored} deleted log(s).` : "No deleted logs were restored.",
+        restored > 0 ? "success" : "info"
+      );
+      setSelectedDeletedIds(new Set());
+      await mutateDeletedSnapshots();
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.detail?.message ||
+        error?.response?.data?.detail ||
+        "Failed to restore deleted logs.";
+      toast.showToast(message, "error");
+    } finally {
+      setIsRestoringDeleted(false);
+    }
+  };
+
+  const permanentlyDeleteSelectedSnapshots = async () => {
+    if (!projectId || Number.isNaN(projectId) || selectedDeletedIds.size === 0) return;
+    const confirmed = window.confirm(
+      "Permanently delete selected logs now? This action cannot be undone."
+    );
+    if (!confirmed) return;
+    const targetIds = Array.from(selectedDeletedIds);
+    setIsPermanentlyDeleting(true);
+    try {
+      const result = await liveViewAPI.permanentlyDeleteSnapshots(projectId, targetIds);
+      const deleted = Number(result?.deleted ?? 0);
+      toast.showToast(
+        deleted > 0
+          ? `Permanently deleted ${deleted} log(s).`
+          : "No deleted logs were permanently removed.",
+        deleted > 0 ? "success" : "info"
+      );
+      setSelectedDeletedIds(new Set());
+      await mutateDeletedSnapshots();
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.detail?.message ||
+        error?.response?.data?.detail ||
+        "Failed to permanently delete logs.";
+      toast.showToast(message, "error");
+    } finally {
+      setIsPermanentlyDeleting(false);
     }
   };
 
@@ -168,6 +259,85 @@ export default function ProjectGeneralSettingsPage() {
               >
                 {deleting ? "Deleting..." : "Delete project"}
               </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Recently Deleted Logs (Last 30 Days)</CardTitle>
+              <CardDescription>
+                Restore logs deleted from Live View or permanently remove them before the 30-day
+                cleanup window.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {deletedSnapshots.length === 0 ? (
+                <p className="text-sm text-slate-400">No deleted logs found in the last 30 days.</p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      onClick={restoreSelectedDeletedSnapshots}
+                      disabled={selectedDeletedIds.size === 0 || isRestoringDeleted}
+                    >
+                      {isRestoringDeleted
+                        ? "Restoring..."
+                        : `Restore selected (${selectedDeletedIds.size})`}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      onClick={permanentlyDeleteSelectedSnapshots}
+                      disabled={selectedDeletedIds.size === 0 || isPermanentlyDeleting}
+                    >
+                      {isPermanentlyDeleting
+                        ? "Deleting..."
+                        : `Delete permanently (${selectedDeletedIds.size})`}
+                    </Button>
+                  </div>
+                  <div className="overflow-x-auto border border-white/10 rounded-lg">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-white/5 text-slate-300">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold">Select</th>
+                          <th className="px-3 py-2 text-left font-semibold">Time</th>
+                          <th className="px-3 py-2 text-left font-semibold">Agent</th>
+                          <th className="px-3 py-2 text-left font-semibold">Trace ID</th>
+                          <th className="px-3 py-2 text-left font-semibold">Deleted At</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {deletedSnapshots.map(item => (
+                          <tr key={item.id} className="border-t border-white/10">
+                            <td className="px-3 py-2">
+                              <input
+                                type="checkbox"
+                                checked={selectedDeletedIds.has(Number(item.id))}
+                                onChange={() => toggleDeletedSnapshotSelection(Number(item.id))}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-slate-200">
+                              {item.created_at
+                                ? new Date(item.created_at).toLocaleString()
+                                : "-"}
+                            </td>
+                            <td className="px-3 py-2 text-slate-200">{item.agent_id || "-"}</td>
+                            <td className="px-3 py-2 text-slate-300 font-mono">
+                              {item.trace_id || "-"}
+                            </td>
+                            <td className="px-3 py-2 text-slate-400">
+                              {item.deleted_at
+                                ? new Date(item.deleted_at).toLocaleString()
+                                : "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>

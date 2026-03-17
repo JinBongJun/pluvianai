@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, Back
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case, desc
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 import time
 import uuid
@@ -70,6 +70,15 @@ class SnapshotBatchDeleteRequest(BaseModel):
         min_length=1,
         max_length=1000,
         description="Snapshot IDs to soft-delete.",
+    )
+
+
+class SnapshotBatchActionRequest(BaseModel):
+    snapshot_ids: List[int] = Field(
+        ...,
+        min_length=1,
+        max_length=1000,
+        description="Snapshot IDs for batch action.",
     )
 
 @router.get("/projects/{project_id}/live-view/agents")
@@ -706,7 +715,16 @@ async def create_snapshot(
     project = _ensure_project(project_id, current_user, db)
     allowed, err_msg = check_snapshot_limit(db, project.owner_id, getattr(current_user, "is_superuser", False))
     if not allowed:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=err_msg)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "SNAPSHOT_PLAN_LIMIT_REACHED",
+                "message": err_msg or "You have reached the monthly snapshot limit for your plan.",
+                "details": {
+                    "upgrade_path": "/settings/subscription",
+                },
+            },
+        )
 
     trace_id = payload.get("trace_id")
     provider = payload.get("provider", "unknown")
@@ -887,6 +905,54 @@ def get_snapshot(
     }
 
 
+@router.get("/projects/{project_id}/snapshots/deleted")
+def list_deleted_snapshots(
+    project_id: int,
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_project_admin(project_id, current_user, db)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    query = (
+        db.query(Snapshot)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.is_deleted.is_(True),
+            Snapshot.deleted_at.isnot(None),
+            Snapshot.deleted_at >= cutoff,
+        )
+    )
+    total_count = query.count()
+    items = (
+        query.order_by(Snapshot.deleted_at.desc(), Snapshot.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": s.id,
+                "trace_id": s.trace_id,
+                "agent_id": s.agent_id,
+                "model": s.model,
+                "status_code": s.status_code,
+                "created_at": s.created_at,
+                "deleted_at": s.deleted_at,
+            }
+            for s in items
+        ],
+        "count": len(items),
+        "total_count": int(total_count),
+        "limit": limit,
+        "offset": offset,
+        "window_days": days,
+    }
+
+
 @router.delete("/projects/{project_id}/snapshots/{snapshot_id}")
 def delete_snapshot(
     project_id: int,
@@ -959,6 +1025,80 @@ def batch_delete_snapshots(
     )
     db.commit()
     return {"ok": True, "deleted": len(matched_ids)}
+
+
+@router.post("/projects/{project_id}/snapshots/{snapshot_id}/restore")
+def restore_snapshot(
+    project_id: int,
+    snapshot_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_project_admin(project_id, current_user, db)
+    snapshot = (
+        db.query(Snapshot)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.id == snapshot_id,
+            Snapshot.is_deleted.is_(True),
+        )
+        .first()
+    )
+    if not snapshot:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deleted snapshot not found")
+
+    snapshot.is_deleted = False
+    snapshot.deleted_at = None
+    db.commit()
+    return {"ok": True, "restored": 1}
+
+
+@router.post("/projects/{project_id}/snapshots/deleted/batch-restore")
+def restore_snapshots_batch(
+    project_id: int,
+    body: SnapshotBatchActionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_project_admin(project_id, current_user, db)
+    snapshot_ids = list(dict.fromkeys(int(sid) for sid in body.snapshot_ids if sid is not None))
+    if not snapshot_ids:
+        return {"ok": True, "restored": 0}
+    restored = (
+        db.query(Snapshot)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.id.in_(snapshot_ids),
+            Snapshot.is_deleted.is_(True),
+        )
+        .update({"is_deleted": False, "deleted_at": None}, synchronize_session=False)
+    )
+    db.commit()
+    return {"ok": True, "restored": int(restored or 0)}
+
+
+@router.post("/projects/{project_id}/snapshots/deleted/permanent-delete")
+def permanently_delete_snapshots(
+    project_id: int,
+    body: SnapshotBatchActionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_project_admin(project_id, current_user, db)
+    snapshot_ids = list(dict.fromkeys(int(sid) for sid in body.snapshot_ids if sid is not None))
+    if not snapshot_ids:
+        return {"ok": True, "deleted": 0}
+    deleted = (
+        db.query(Snapshot)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.id.in_(snapshot_ids),
+            Snapshot.is_deleted.is_(True),
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"ok": True, "deleted": int(deleted or 0)}
 
 
 def _parse_created_at(created_at: Any) -> Optional[datetime]:
