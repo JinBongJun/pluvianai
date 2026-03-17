@@ -2,7 +2,7 @@
 Security utilities for JWT authentication
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Any, Tuple
 from jose import JWTError, jwt
 from jose.exceptions import ExpiredSignatureError
@@ -51,7 +51,7 @@ def get_password_hash(password: str) -> str:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create a JWT access token"""
     to_encode = data.copy()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expire = now + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire, "iat": now, "type": "access"})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
@@ -65,7 +65,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 def create_refresh_token(data: dict) -> str:
     """Create a JWT refresh token"""
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire, "type": "refresh"})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
@@ -302,8 +302,9 @@ async def get_user_from_api_key(
             detail=auth_error_detail("api_key_invalid", "API key is invalid."),
         )
 
-    # Check if API key is expired
-    if api_key_record.expires_at and api_key_record.expires_at < datetime.utcnow():
+    # Check if API key is expired (timezone-aware UTC comparison)
+    now_utc = datetime.now(timezone.utc)
+    if api_key_record.expires_at and api_key_record.expires_at < now_utc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=auth_error_detail("api_key_expired", "API key has expired."),
@@ -317,8 +318,8 @@ async def get_user_from_api_key(
             detail=auth_error_detail("api_key_user_invalid", "API key is no longer associated with an active user."),
         )
 
-    # Update last_used_at
-    api_key_record.last_used_at = datetime.utcnow()
+    # Update last_used_at (timezone-aware UTC)
+    api_key_record.last_used_at = now_utc
     db.commit()
 
     # Parse scope: "*", "ingest,read", or JSON ["ingest","read"]. Default ["*"] for backward compatibility.
@@ -482,8 +483,9 @@ def rotate_refresh_token(
             ),
         )
     
-    # Check if token is expired
-    if refresh_token_record.expires_at < datetime.utcnow():
+    # Check if token is expired (timezone-aware UTC comparison)
+    now_utc = datetime.now(timezone.utc)
+    if refresh_token_record.expires_at < now_utc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=auth_error_detail(
@@ -494,7 +496,7 @@ def rotate_refresh_token(
     
     # Revoke old refresh token
     refresh_token_record.is_revoked = True
-    refresh_token_record.revoked_at = datetime.utcnow()
+    refresh_token_record.revoked_at = now_utc
     
     # Create new tokens
     new_access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
@@ -505,7 +507,8 @@ def rotate_refresh_token(
     
     # Get expiration time for new refresh token
     new_payload = decode_token(new_refresh_token)
-    expires_at = datetime.utcfromtimestamp(new_payload.get("exp", 0))
+    exp_ts = new_payload.get("exp", 0) if new_payload else 0
+    expires_at = datetime.fromtimestamp(exp_ts, tz=timezone.utc)
     
     # Save new refresh token to database
     new_refresh_token_record = RefreshToken(
