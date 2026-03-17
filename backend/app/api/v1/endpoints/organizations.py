@@ -654,6 +654,30 @@ def add_organization_member(
             ),
         )
 
+    plan_info = SubscriptionService(db).get_user_plan(current_user.id)
+    limits = plan_info.get("limits") or {}
+    member_limit = int(limits.get("team_members_per_project", 1))
+    if member_limit != -1:
+        current_members = (
+            db.query(OrganizationMember)
+            .filter(OrganizationMember.organization_id == org_id)
+            .count()
+        )
+        if current_members >= member_limit:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "TEAM_MEMBER_LIMIT_REACHED",
+                    "message": "You have reached the team member limit for your current plan.",
+                    "details": {
+                        "plan_type": str(plan_info.get("plan_type") or "free"),
+                        "current": int(current_members),
+                        "limit": int(member_limit),
+                        "upgrade_path": "/settings/subscription",
+                    },
+                },
+            )
+
     try:
         member = org_service.add_member(
             organization_id=org_id,
