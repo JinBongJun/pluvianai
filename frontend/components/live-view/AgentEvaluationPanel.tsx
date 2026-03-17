@@ -487,8 +487,8 @@ export function AgentEvaluationPanel({
   return (
     <div
       className={clsx(
-        "flex flex-col text-slate-200 relative",
-        embedded ? "bg-transparent" : "h-full bg-[#0a0f1e]/20",
+        "relative flex min-h-0 flex-col text-slate-200",
+        embedded ? "bg-transparent" : "h-0 flex-1 bg-[#0a0f1e]/20",
         disabled && "pointer-events-none select-none opacity-70"
       )}
       aria-busy={disabled}
@@ -618,7 +618,7 @@ export function AgentEvaluationPanel({
       {/* Signal List Container */}
       <div
         className={clsx(
-          "overflow-y-auto custom-scrollbar",
+          "min-h-0 overflow-y-auto custom-scrollbar",
           embedded ? "max-h-[min(64rem,70vh)]" : "flex-1 p-6"
         )}
       >

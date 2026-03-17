@@ -236,7 +236,7 @@ export function AgentSettingsPanel({
   };
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="h-0 flex-1 min-h-0 overflow-y-auto custom-scrollbar p-8 space-y-6">
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
         <div>
           <h3 className="text-sm font-black uppercase tracking-wider text-slate-300">
