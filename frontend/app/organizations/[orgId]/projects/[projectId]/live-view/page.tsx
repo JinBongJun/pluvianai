@@ -765,6 +765,7 @@ function LiveViewContent() {
           nodesConnectable={false}
           elementsSelectable={true}
           panOnDrag={!selectedAgentId}
+          zoomOnScroll={!selectedAgentId}
           zoomOnDoubleClick={false}
         >
           <Background

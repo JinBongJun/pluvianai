@@ -20,7 +20,7 @@ import clsx from "clsx";
 import { behaviorAPI, liveViewAPI } from "@/lib/api";
 import { getRateLimitInfo, isRateLimitError } from "@/lib/api/client";
 import { toEvalRows } from "@/lib/evalRows";
-import useSWR, { mutate as globalMutate } from "swr";
+import useSWR from "swr";
 import { SnapshotDetailModal } from "@/components/shared/SnapshotDetailModal";
 import { useToast } from "@/components/ToastContainer";
 
@@ -64,6 +64,8 @@ const MIN_LAST_N_RUNS = 10;
 const MAX_LAST_N_RUNS = 200;
 const MAX_STEP_ROWS = 30;
 const DEFAULT_LAST_N_RUNS = 30;
+const CLINICAL_LOG_BASE_POLL_MS = 4000;
+const CLINICAL_LOG_MAX_POLL_MS = 30000;
 
 type RiskFilter = "all" | "worst" | "healthy";
 const RISK_FILTER_LABELS: Record<RiskFilter, string> = {
@@ -353,6 +355,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     new Set()
   );
   const [newDatasetName, setNewDatasetName] = React.useState("");
+  const [pollIntervalMs, setPollIntervalMs] = React.useState(CLINICAL_LOG_BASE_POLL_MS);
 
   // Keep log selection strictly scoped to the current node.
   React.useEffect(() => {
@@ -383,8 +386,36 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
         limit: recentTraceLimit,
         light: true,
       }),
-    { keepPreviousData: true, revalidateOnFocus: false, shouldRetryOnError: false }
+    {
+      keepPreviousData: true,
+      refreshInterval: pollIntervalMs,
+      revalidateOnFocus: false,
+      refreshWhenHidden: false,
+      shouldRetryOnError: false,
+    }
   );
+
+  const rateLimitInfo = getRateLimitInfo(error);
+  const isRateLimited = isRateLimitError(error);
+
+  React.useEffect(() => {
+    if (!projectId || !agentId) return;
+    if (!error) {
+      setPollIntervalMs(CLINICAL_LOG_BASE_POLL_MS);
+      return;
+    }
+
+    if (isRateLimited) {
+      const retryAfterMs = Math.max(
+        CLINICAL_LOG_BASE_POLL_MS,
+        (rateLimitInfo.retryAfterSec || 0) * 1000
+      );
+      setPollIntervalMs(Math.min(retryAfterMs, CLINICAL_LOG_MAX_POLL_MS));
+      return;
+    }
+
+    setPollIntervalMs(current => Math.min(current * 2, CLINICAL_LOG_MAX_POLL_MS));
+  }, [agentId, error, isRateLimited, projectId, rateLimitInfo.retryAfterSec]);
 
   const saveRecentTraceLimit = async () => {
     if (!projectId || !agentId) return;
@@ -782,11 +813,9 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
   }
 
   const isEmptyResult = visibleSnapshots.length === 0;
-  const isRateLimited = isRateLimitError(error);
-  const rateLimitInfo = getRateLimitInfo(error);
 
   const mainContent = (
-    <div className="flex flex-col h-full min-h-0 bg-[#111216]">
+    <div className="flex flex-1 min-h-0 flex-col overflow-hidden bg-[#111216]">
       {/* Log Header Summary */}
       <div className="p-5 flex items-center justify-between gap-4 border-b border-white/[0.04] bg-[#18191e]">
         <div className="flex items-center">
@@ -967,7 +996,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
               <Terminal className="w-8 h-8 text-slate-700 mx-auto" />
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wide leading-relaxed">
                 {riskFilter === "all"
-                  ? "No clinical snapshots found yet. Try running the agent, then refresh."
+                  ? "No clinical snapshots found yet. Run the agent and this panel will auto-refresh every few seconds."
                   : `No snapshots match ${RISK_FILTER_LABELS[riskFilter]} filter. Try ALL or increase LIMIT.`}
               </p>
               {riskFilter !== "all" && (
