@@ -20,6 +20,7 @@ import { ClientPortal } from "@/components/shared/ClientPortal";
 type GateTab = "validate" | "history";
 type ThresholdPreset = "strict" | "default" | "lenient" | "custom";
 type ResultCaseFilter = "all" | "failed";
+type LogsStatusFilter = "all" | "failed" | "passed";
 type FixHint = {
   key: string;
   label: string;
@@ -930,6 +931,10 @@ export function ReleaseGateExpandedView() {
     attemptIndex: number;
     baselineSnapshot: Record<string, unknown> | null;
   } | null>(null);
+
+  const [logsStatusFilter, setLogsStatusFilter] = useState<LogsStatusFilter>("all");
+  const [logsSortMode, setLogsSortMode] = useState<"newest" | "oldest">("newest");
+  const [logsLimitInput, setLogsLimitInput] = useState<string>("30");
   const requestTools = useMemo(
     () => (Array.isArray(requestBody.tools) ? requestBody.tools : []),
     [requestBody]
@@ -1003,6 +1008,44 @@ export function ReleaseGateExpandedView() {
     expandedDatasetSnapshotsError,
     datasetSnapshotsError,
   ]);
+
+  const logsLimit = useMemo(() => {
+    const n = Number(logsLimitInput);
+    if (!Number.isFinite(n)) return 30;
+    return Math.max(10, Math.min(200, Math.round(n)));
+  }, [logsLimitInput]);
+
+  const filteredRecentSnapshots = useMemo(() => {
+    const items = Array.isArray(recentSnapshots) ? [...recentSnapshots] : [];
+
+    if (logsStatusFilter !== "all") {
+      const wantFail = logsStatusFilter === "failed";
+      const target = wantFail ? "fail" : "pass";
+      const filtered = items.filter(item => {
+        const evalStatus = String(
+          (item?.eval_checks_result as any)?.overall_status ??
+            (item as any)?.status ??
+            ""
+        )
+          .trim()
+          .toLowerCase();
+        if (!evalStatus) return false;
+        if (wantFail) {
+          return evalStatus === "fail" || evalStatus === "flaky";
+        }
+        return evalStatus === target;
+      });
+      items.splice(0, items.length, ...filtered);
+    }
+
+    items.sort((a, b) => {
+      const aTime = a?.created_at ? new Date(String(a.created_at)).getTime() : 0;
+      const bTime = b?.created_at ? new Date(String(b.created_at)).getTime() : 0;
+      return logsSortMode === "oldest" ? aTime - bTime : bTime - aTime;
+    });
+
+    return items.slice(0, logsLimit);
+  }, [logsLimit, logsSortMode, logsStatusFilter, recentSnapshots]);
 
   useEffect(() => {
     setDataPanelTab("logs");
@@ -1238,120 +1281,180 @@ export function ReleaseGateExpandedView() {
             >
               <div className="flex h-full flex-col">
                 {dataPanelTab === "logs" && (
-                  <div className="flex-1 overflow-y-auto custom-scrollbar" data-testid="rg-data-panel-logs">
-                    {recentSnapshotsError ? (
-                      <div className="p-8 text-center" data-testid="rg-logs-state-error">
-                        <div className="text-xs font-medium uppercase tracking-widest text-rose-400">
-                          Unable to load recent snapshots
+                  <div className="flex h-full flex-col" data-testid="rg-data-panel-logs">
+                    <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-black/30 px-4 py-3">
+                      <span className="text-[11px] font-mono text-slate-400">
+                        Total {filteredRecentSnapshots.length} Runs
+                      </span>
+                      <div className="flex flex-wrap items-center justify-end gap-3">
+                        <div className="flex items-center rounded-xl border border-white/[0.08] bg-black/40 p-0.5">
+                          {(["all", "failed", "passed"] as LogsStatusFilter[]).map(mode => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setLogsStatusFilter(mode)}
+                              className={clsx(
+                                "rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] transition-all",
+                                logsStatusFilter === mode
+                                  ? "bg-white/[0.12] text-white shadow-sm"
+                                  : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
+                              )}
+                            >
+                              {mode === "all" ? "ALL" : mode === "failed" ? "FAILED" : "PASSED"}
+                            </button>
+                          ))}
                         </div>
-                        <div className="mt-2 text-[11px] text-slate-400">{recentSnapshotsErrorMessage}</div>
-                        <button
-                          type="button"
-                          onClick={() => void mutateRecentSnapshots?.()}
-                          className="mt-4 inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10 transition-colors"
-                        >
-                          Retry
-                        </button>
+
+                        <div className="group flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-black/40 pl-3 transition-colors focus-within:border-fuchsia-500/60">
+                          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-600 group-focus-within:text-fuchsia-400">
+                            LIMIT
+                          </span>
+                          <input
+                            type="number"
+                            min={10}
+                            max={200}
+                            value={logsLimitInput}
+                            onChange={e => setLogsLimitInput(e.target.value)}
+                            className="w-[44px] bg-transparent py-1.5 text-center font-mono text-[12px] text-slate-200 outline-none"
+                            title="Max recent runs to show (10–200)"
+                          />
+                        </div>
+
+                        <div className="rounded-xl border border-white/[0.08] bg-black/40 transition-colors hover:border-white/20 focus-within:border-fuchsia-500/60">
+                          <select
+                            value={logsSortMode}
+                            onChange={e => setLogsSortMode(e.target.value as "newest" | "oldest")}
+                            className="cursor-pointer bg-transparent py-1.5 pl-3 pr-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-300 outline-none"
+                          >
+                            <option value="newest" className="bg-[#18191e] text-slate-200">
+                              Newest
+                            </option>
+                            <option value="oldest" className="bg-[#18191e] text-slate-200">
+                              Oldest
+                            </option>
+                          </select>
+                        </div>
                       </div>
-                    ) : recentSnapshotsLoading && !recentSnapshots?.length ? (
-                      <div className="p-8 text-center" data-testid="rg-logs-state-loading">
-                        <div className="text-xs font-medium uppercase tracking-widest text-slate-500">
-                          Loading recent snapshots
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                      {recentSnapshotsError ? (
+                        <div className="p-8 text-center" data-testid="rg-logs-state-error">
+                          <div className="text-xs font-medium uppercase tracking-widest text-rose-400">
+                            Unable to load recent snapshots
+                          </div>
+                          <div className="mt-2 text-[11px] text-slate-400">
+                            {recentSnapshotsErrorMessage}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void mutateRecentSnapshots?.()}
+                            className="mt-4 inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-white/10"
+                          >
+                            Retry
+                          </button>
                         </div>
-                        <div className="mt-2 text-[11px] text-slate-500">
-                          Fetching baseline logs for this node...
+                      ) : recentSnapshotsLoading && !recentSnapshots?.length ? (
+                        <div className="p-8 text-center" data-testid="rg-logs-state-loading">
+                          <div className="text-xs font-medium uppercase tracking-widest text-slate-500">
+                            Loading recent snapshots
+                          </div>
+                          <div className="mt-2 text-[11px] text-slate-500">
+                            Fetching baseline logs for this node...
+                          </div>
                         </div>
-                      </div>
-                    ) : !recentSnapshots?.length ? (
-                      <div className="p-8 text-center" data-testid="rg-logs-state-empty">
-                        <div className="text-xs font-medium uppercase tracking-widest text-slate-500">
-                          No recent snapshots
+                      ) : filteredRecentSnapshots.length === 0 ? (
+                        <div className="p-8 text-center" data-testid="rg-logs-state-empty">
+                          <div className="text-xs font-medium uppercase tracking-widest text-slate-500">
+                            No logs match this filter
+                          </div>
+                          <div className="mt-2 text-[11px] text-slate-500">
+                            Try ALL, increase LIMIT, or wait for more baseline traffic from Live View.
+                          </div>
                         </div>
-                        <div className="mt-2 text-[11px] text-slate-500">
-                          Send traffic to this node in Live View to load baseline logs.
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-white/[0.03]" data-testid="rg-logs-state-list">
-                        {recentSnapshots.map(
-                          (skinny: { id: string; trace_id?: string; created_at?: string }) => {
-                            const full = baselineSnapshotsById.get(String(skinny.id)) as
-                              | Record<string, unknown>
-                              | undefined;
-                            const snap = (full ?? skinny) as Record<string, unknown>;
-                            const checked = runSnapshotIds.includes(String(skinny.id));
-                            const failed = snapshotEvalFailed(full ?? null);
-                            return (
-                              <div
-                                key={skinny.id}
-                                data-testid={`rg-live-log-row-${skinny.id}`}
-                                className={clsx(
-                                  "group transition-colors",
-                                  checked ? "bg-fuchsia-500/5" : "hover:bg-white/[0.02]"
-                                )}
-                              >
+                      ) : (
+                        <div className="divide-y divide-white/[0.03]" data-testid="rg-logs-state-list">
+                          {filteredRecentSnapshots.map(
+                            (skinny: { id: string; trace_id?: string; created_at?: string }) => {
+                              const full = baselineSnapshotsById.get(String(skinny.id)) as
+                                | Record<string, unknown>
+                                | undefined;
+                              const snap = (full ?? skinny) as Record<string, unknown>;
+                              const checked = runSnapshotIds.includes(String(skinny.id));
+                              const failed = snapshotEvalFailed(full ?? null);
+
+                              return (
                                 <div
-                                  className="flex cursor-pointer items-start gap-3 p-4"
-                                  onClick={() =>
-                                    setBaselineDetailSnapshot(snap as unknown as SnapshotForDetail)
-                                  }
+                                  key={skinny.id}
+                                  data-testid={`rg-live-log-row-${skinny.id}`}
+                                  className={clsx(
+                                    "group transition-colors",
+                                    checked ? "bg-fuchsia-500/5" : "hover:bg-white/[0.02]"
+                                  )}
                                 >
-                                  <div className="pt-0.5" onClick={e => e.stopPropagation()}>
-                                    <input
-                                      type="checkbox"
-                                      checked={checked}
-                                      disabled={runLocked}
-                                      data-testid={`rg-live-log-checkbox-${skinny.id}`}
-                                      onChange={() => {
-                                        if (runLocked) return;
-                                        const id = String(skinny.id);
-                                        setRunSnapshotIds(prev =>
-                                          prev.includes(id)
-                                            ? prev.filter(x => x !== id)
-                                            : [...prev, id]
-                                        );
-                                        setDataSource("recent");
-                                        setRunDatasetIds([]);
-                                      }}
-                                      className="h-4 w-4 rounded border-white/10 bg-black/40 text-fuchsia-500"
-                                    />
-                                  </div>
-                                  <div className="min-w-0 flex-1 space-y-1">
-                                    <div className="flex items-center justify-between gap-3">
-                                      <span className="font-mono text-[11px] font-bold text-slate-300">
-                                        {formatDateTime(snap.created_at)}
-                                      </span>
-                                      <span
-                                        className={clsx(
-                                          "rounded border px-2 py-0.5 text-[9px] font-black uppercase",
-                                          failed
-                                            ? "border-rose-500/20 bg-rose-500/10 text-rose-400"
-                                            : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                                        )}
-                                      >
-                                        {failed ? "FAIL" : "PASS"}
-                                      </span>
+                                  <div
+                                    className="flex cursor-pointer items-start gap-3 p-4"
+                                    onClick={() =>
+                                      setBaselineDetailSnapshot(snap as unknown as SnapshotForDetail)
+                                    }
+                                  >
+                                    <div className="pt-0.5" onClick={e => e.stopPropagation()}>
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        disabled={runLocked}
+                                        data-testid={`rg-live-log-checkbox-${skinny.id}`}
+                                        onChange={() => {
+                                          if (runLocked) return;
+                                          const id = String(skinny.id);
+                                          setRunSnapshotIds(prev =>
+                                            prev.includes(id)
+                                              ? prev.filter(x => x !== id)
+                                              : [...prev, id]
+                                          );
+                                          setDataSource("recent");
+                                          setRunDatasetIds([]);
+                                        }}
+                                        className="h-4 w-4 rounded border-white/10 bg-black/40 text-fuchsia-500"
+                                      />
                                     </div>
-                                    <p className="line-clamp-2 text-[12px] leading-relaxed text-slate-300">
-                                      {shortText(
-                                        snap.user_message ?? snap.request_prompt ?? "—",
-                                        "—",
-                                        90
-                                      )}
-                                    </p>
-                                    {Boolean(snap.trace_id) && (
-                                      <p className="truncate text-[11px] text-slate-500">
-                                        Trace {String(snap.trace_id)}
+                                    <div className="min-w-0 flex-1 space-y-1">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <span className="font-mono text-[11px] font-bold text-slate-300">
+                                          {formatDateTime(snap.created_at)}
+                                        </span>
+                                        <span
+                                          className={clsx(
+                                            "rounded border px-2 py-0.5 text-[9px] font-black uppercase",
+                                            failed
+                                              ? "border-rose-500/20 bg-rose-500/10 text-rose-400"
+                                              : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                                          )}
+                                        >
+                                          {failed ? "FAIL" : "PASS"}
+                                        </span>
+                                      </div>
+                                      <p className="line-clamp-2 text-[12px] leading-relaxed text-slate-300">
+                                        {shortText(
+                                          snap.user_message ?? snap.request_prompt ?? "—",
+                                          "—",
+                                          90
+                                        )}
                                       </p>
-                                    )}
+                                      {Boolean(snap.trace_id) && (
+                                        <p className="truncate text-[11px] text-slate-500">
+                                          Trace {String(snap.trace_id)}
+                                        </p>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            );
-                          }
-                        )}
-                      </div>
-                    )}
+                              );
+                            }
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
