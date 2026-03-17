@@ -376,7 +376,11 @@ def evaluate_recent_snapshots(
 
     rows: List[Snapshot] = (
         db.query(Snapshot)
-        .filter(Snapshot.project_id == project_id, Snapshot.agent_id == agent_id)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.agent_id == agent_id,
+            Snapshot.is_deleted.is_(False),
+        )
         .order_by(Snapshot.created_at.desc())
         .limit(window_limit)
         .all()
