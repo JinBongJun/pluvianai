@@ -273,30 +273,29 @@ function getEvalDetail(
       return { actualStr: `${len} chars`, configStr };
     }
     case "latency": {
-      const warn = toFiniteNumber(cfg?.warn_ms, 2000);
-      const crit = toFiniteNumber(cfg?.crit_ms, 5000);
-      configStr = `warn > ${warn}ms, crit > ${crit}ms`;
+      const failMs = toFiniteNumber(cfg?.fail_ms ?? cfg?.crit_ms ?? cfg?.warn_ms, 5000);
+      configStr = `fail ≥ ${failMs}ms`;
       const ms = s.latency_ms ?? 0;
       return { actualStr: `${ms}ms`, configStr };
     }
     case "status_code": {
-      const warnFrom = toFiniteNumber(cfg?.warn_from, 400);
-      const critFrom = toFiniteNumber(cfg?.crit_from, 500);
-      configStr = `warn ≥ ${warnFrom}, crit ≥ ${critFrom}`;
+      const failFrom = toFiniteNumber(cfg?.fail_from ?? cfg?.crit_from ?? cfg?.warn_from, 500);
+      configStr = `fail ≥ ${failFrom}`;
       const code = s.status_code ?? 200;
       return { actualStr: String(code), configStr };
     }
     case "length": {
-      const warnR = toFiniteNumber(cfg?.warn_ratio, 0.35);
-      const critR = toFiniteNumber(cfg?.crit_ratio, 0.75);
-      configStr = `warn ±${Math.round(warnR * 100)}%, crit ±${Math.round(critR * 100)}% vs baseline`;
+      const failR = toFiniteNumber(cfg?.fail_ratio ?? cfg?.crit_ratio ?? cfg?.warn_ratio, 0.75);
+      configStr = `fail ±${Math.round(failR * 100)}% vs baseline`;
       actualStr = `${len} chars (vs baseline window)`;
       return { actualStr, configStr };
     }
     case "repetition": {
-      const warnR = toFiniteNumber(cfg?.warn_line_repeats, 3);
-      const critR = toFiniteNumber(cfg?.crit_line_repeats, 6);
-      configStr = `warn ${warnR}, crit ${critR} repeats`;
+      const failR = toFiniteNumber(
+        cfg?.fail_line_repeats ?? cfg?.crit_line_repeats ?? cfg?.warn_line_repeats,
+        6
+      );
+      configStr = `fail ≥ ${failR} repeats`;
       const lines = res
         .split("\n")
         .map(l => l.trim())

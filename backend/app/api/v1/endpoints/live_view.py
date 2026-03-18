@@ -310,7 +310,7 @@ def list_agents(
             "sentinel_online": len(sentinel_agents) > 0
         }
         if cache_service.enabled:
-            cache_service.set(cache_key, payload, ttl=3)
+            cache_service.set(cache_key, payload, ttl=5)
         return payload
     except HTTPException:
         raise
@@ -336,6 +336,72 @@ async def live_view_stream(
     - agents_changed: { project_id, agent_ids? }
     """
     _ensure_project(project_id, current_user, db)
+
+    # Connection limits (for 1000+ concurrent dashboards).
+    MAX_SSE_PER_USER = 3
+    MAX_SSE_PER_PROJECT = 300
+    PRESENCE_TTL_SEC = 120  # must exceed heartbeat and typical transient disconnects
+    RETRY_AFTER_SEC = 30
+
+    conn_id = str(uuid.uuid4())
+    user_id = str(getattr(current_user, "id", "") or "")
+
+    def _zset_key_project(pid: int) -> str:
+        return f"sse:live_view:project:{int(pid)}"
+
+    def _zset_key_user(uid: str) -> str:
+        return f"sse:live_view:user:{uid}"
+
+    def _reject(detail: str, scope: str) -> None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "SSE_LIMIT_EXCEEDED",
+                "message": detail,
+                "details": {
+                    "scope": scope,
+                    "project_id": int(project_id),
+                    "retry_after_sec": RETRY_AFTER_SEC,
+                },
+            },
+            headers={"Retry-After": str(RETRY_AFTER_SEC)},
+        )
+
+    # Enforce limits using Redis ZSET presence when available.
+    project_zkey = _zset_key_project(project_id)
+    user_zkey = _zset_key_user(user_id)
+    if cache_service.enabled and user_id:
+        try:
+            now_ts = time.time()
+            pipe = cache_service.redis_client.pipeline()
+            # prune stale
+            pipe.zremrangebyscore(project_zkey, "-inf", now_ts)
+            pipe.zremrangebyscore(user_zkey, "-inf", now_ts)
+            pipe.zcard(project_zkey)
+            pipe.zcard(user_zkey)
+            _ = pipe.execute()
+            proj_count = int(_[-2] or 0)
+            user_count = int(_[-1] or 0)
+            if user_count >= MAX_SSE_PER_USER:
+                _reject(f"Too many Live View streams for this user (max={MAX_SSE_PER_USER}).", "user")
+            if proj_count >= MAX_SSE_PER_PROJECT:
+                _reject(
+                    f"Too many Live View streams for this project (max={MAX_SSE_PER_PROJECT}).",
+                    "project",
+                )
+            expire_at = now_ts + PRESENCE_TTL_SEC
+            pipe = cache_service.redis_client.pipeline()
+            pipe.zadd(project_zkey, {conn_id: expire_at})
+            pipe.zadd(user_zkey, {conn_id: expire_at})
+            # ensure keys eventually expire even if disconnect cleanup fails
+            pipe.expire(project_zkey, PRESENCE_TTL_SEC * 2)
+            pipe.expire(user_zkey, PRESENCE_TTL_SEC * 2)
+            pipe.execute()
+        except HTTPException:
+            raise
+        except Exception:
+            # Fail-open for SSE limits (don't block dashboards on Redis hiccups)
+            pass
 
     async def event_gen():
         # Heartbeat keeps proxies from buffering/closing idle connections.
@@ -389,6 +455,19 @@ async def live_view_stream(
                 if now - last_heartbeat >= heartbeat_sec:
                     last_heartbeat = now
                     yield b": heartbeat\n\n"
+                    # Refresh presence TTL (best-effort).
+                    if cache_service.enabled and user_id:
+                        try:
+                            now_ts = time.time()
+                            expire_at = now_ts + PRESENCE_TTL_SEC
+                            pipe = cache_service.redis_client.pipeline()
+                            pipe.zadd(project_zkey, {conn_id: expire_at}, xx=True)
+                            pipe.zadd(user_zkey, {conn_id: expire_at}, xx=True)
+                            pipe.expire(project_zkey, PRESENCE_TTL_SEC * 2)
+                            pipe.expire(user_zkey, PRESENCE_TTL_SEC * 2)
+                            pipe.execute()
+                        except Exception:
+                            pass
 
                 try:
                     raw = await asyncio.wait_for(queue.get(), timeout=1.0)
@@ -399,6 +478,15 @@ async def live_view_stream(
                 yield f"event: agents_changed\ndata: {raw}\n\n".encode("utf-8")
         finally:
             stop_flag.set()
+            # Best-effort remove presence entries.
+            if cache_service.enabled and user_id:
+                try:
+                    pipe = cache_service.redis_client.pipeline()
+                    pipe.zrem(project_zkey, conn_id)
+                    pipe.zrem(user_zkey, conn_id)
+                    pipe.execute()
+                except Exception:
+                    pass
             try:
                 pubsub.unsubscribe(channel)
                 pubsub.close()
@@ -495,25 +583,7 @@ def _validate_eval_config_for_save(eval_part: Dict[str, Any]) -> None:
             detail="When format is enabled, set sections_csv.",
         )
 
-    length_cfg = normalized_eval.get("length", {})
-    if length_cfg.get("enabled"):
-        warn_ratio = float(length_cfg.get("warn_ratio", 0.0))
-        crit_ratio = float(length_cfg.get("crit_ratio", 0.0))
-        if crit_ratio < warn_ratio:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="For length, crit_ratio must be greater than or equal to warn_ratio.",
-            )
-
-    repetition_cfg = normalized_eval.get("repetition", {})
-    if repetition_cfg.get("enabled"):
-        warn_repeats = int(repetition_cfg.get("warn_line_repeats", 0))
-        crit_repeats = int(repetition_cfg.get("crit_line_repeats", 0))
-        if crit_repeats < warn_repeats:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="For repetition, crit_line_repeats must be greater than or equal to warn_line_repeats.",
-            )
+    # Length and repetition use single fail thresholds in MVP (pass/fail contract).
 
 
 @router.patch("/projects/{project_id}/live-view/agents/{agent_id}/settings")
