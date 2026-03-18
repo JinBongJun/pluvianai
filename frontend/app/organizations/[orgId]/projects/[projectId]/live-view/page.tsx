@@ -22,6 +22,7 @@ import "reactflow/dist/style.css";
 import CanvasPageLayout from "@/components/layout/CanvasPageLayout";
 import { behaviorAPI, liveViewAPI, projectsAPI, organizationsAPI } from "@/lib/api";
 import {
+  API_URL,
   getApiErrorCode,
   getApiErrorMessage,
   getRateLimitInfo,
@@ -630,8 +631,8 @@ function LiveViewContent() {
     if (sseRef.current) return;
 
     try {
-      const url = `/api/v1/projects/${projectId}/live-view/stream`;
-      const es = new EventSource(url);
+      const url = `${API_URL}/api/v1/projects/${projectId}/live-view/stream`;
+      const es = new EventSource(url, { withCredentials: true });
       sseRef.current = es;
 
       const cleanup = () => {
