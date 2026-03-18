@@ -49,9 +49,19 @@ export default function OrgSettingsPage() {
   const { data: org, mutate: refetchOrg } = useSWR(
     orgId ? ["organization", orgId] : null,
     async () => {
-      const data = await organizationsAPI.get(orgId, { includeStats: false });
-      setOrgName(data.name || "");
-      return data;
+      try {
+        const data = await organizationsAPI.get(orgId, { includeStats: false });
+        setOrgName(data.name || "");
+        return data;
+      } catch (error: any) {
+        const status = error?.response?.status;
+        if (status === 404) {
+          toast.showToast("This organization has been archived or deleted.", "info");
+          router.replace("/organizations");
+          return null;
+        }
+        throw error;
+      }
     }
   );
 
@@ -99,7 +109,7 @@ export default function OrgSettingsPage() {
         undefined,
         { revalidate: false }
       );
-      router.push("/organizations");
+      router.replace("/organizations");
     } catch (error: any) {
       toast.showToast(
         error.response?.data?.detail || "Failed to decommission environment.",

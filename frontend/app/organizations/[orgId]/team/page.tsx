@@ -56,7 +56,19 @@ export default function TeamPage() {
 
   const { data: org, isValidating: isOrgValidating } = useSWR(
     orgId ? ["organization", orgId] : null,
-    () => organizationsAPI.get(orgId, { includeStats: false })
+    async () => {
+      try {
+        return await organizationsAPI.get(orgId, { includeStats: false });
+      } catch (error: any) {
+        const status = error?.response?.status;
+        if (status === 404) {
+          toast.showToast("This organization has been archived or deleted.", "info");
+          router.replace("/organizations");
+          return null;
+        }
+        throw error;
+      }
+    }
   );
 
   const {
