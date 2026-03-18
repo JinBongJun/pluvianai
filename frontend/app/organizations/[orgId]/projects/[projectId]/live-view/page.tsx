@@ -575,6 +575,10 @@ function LiveViewContent() {
   const wasPageVisibleRef = useRef(isPageVisible);
   const [sseConnected, setSseConnected] = useState(false);
   const sseRef = useRef<EventSource | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [panelTab, setPanelTab] = useState<"logs" | "eval" | "data" | "settings">("logs");
+  const [restoringAgentId, setRestoringAgentId] = useState<string | null>(null);
+  const [hardDeletingAgents, setHardDeletingAgents] = useState(false);
 
   const { data: project } = useSWR(
     projectId && !isNaN(projectId) ? ["project", projectId] : null,
@@ -715,11 +719,6 @@ function LiveViewContent() {
       return newNodes;
     });
   };
-
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
-  const [panelTab, setPanelTab] = useState<"logs" | "eval" | "data" | "settings">("logs");
-  const [restoringAgentId, setRestoringAgentId] = useState<string | null>(null);
-  const [hardDeletingAgents, setHardDeletingAgents] = useState(false);
 
   const allAgents = useMemo(() => {
     const raw = Array.isArray(agentsData?.agents)
