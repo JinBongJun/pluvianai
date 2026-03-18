@@ -177,23 +177,6 @@ class PluvianAI:
             openai.OpenAI.__init__ = patched_init
             self._original_functions["OpenAI.__init__"] = original_init
 
-        # Also try to patch completions directly for already-created clients
-        try:
-            from openai.resources.chat import completions
-            if hasattr(completions, 'Completions'):
-                original_completions_create = completions.Completions.create
-
-                def patched_completions_create(self_instance, *args, **kwargs):
-                    return pluvian_instance._capture_call(
-                        lambda *a, **kw: original_completions_create(self_instance, *a, **kw),
-                        *args, **kwargs
-                    )
-
-                completions.Completions.create = patched_completions_create
-                self._original_functions["completions.Completions.create"] = original_completions_create
-        except (ImportError, AttributeError):
-            pass  # OpenAI v0.x or structure changed
-
     def _capture_call(self, original_func: Callable, *args, **kwargs):
         """Capture and log an API call"""
         start_time = time.time()
