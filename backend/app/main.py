@@ -164,7 +164,7 @@ app.add_middleware(GZipMiddleware)
 # Rate limiting middleware (prevent abuse)
 # Keep a coarse IP-level fallback limit high enough that dashboard polling is governed
 # by bucket-specific per-user limits instead of a single low global cap.
-app.add_middleware(RateLimitMiddleware, requests_per_minute=600)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=6000)
 
 # API Hook middleware for capturing LLM API calls
 app.add_middleware(APIHookMiddleware, enabled=True)

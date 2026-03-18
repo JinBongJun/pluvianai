@@ -15,6 +15,7 @@ from app.core.logging_config import logger
 from app.core.config import settings
 from app.utils.tool_calls import extract_tool_calls_summary
 from app.utils.agent_signature import build_node_key
+from app.services.live_view_events import publish_agents_changed
 import httpx
 
 
@@ -244,6 +245,21 @@ class StreamProcessor:
             if inserted_count > 0:
                 db.commit()
                 logger.info(f"Batch inserted {inserted_count} snapshots from {stream_key}")
+
+                # Notify Live View dashboards (SSE) that agent lists changed.
+                try:
+                    by_project = {}
+                    for snapshot_data, proj_id, _ in filtered_snapshots:
+                        if not proj_id:
+                            continue
+                        aid = snapshot_data.get("agent_id")
+                        if not aid:
+                            continue
+                        by_project.setdefault(int(proj_id), set()).add(str(aid))
+                    for pid, aids in by_project.items():
+                        publish_agents_changed(pid, aids)
+                except Exception:
+                    pass
 
                 # Optional: track snapshot_created event in PostHog (batch-level)
                 try:

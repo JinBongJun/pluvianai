@@ -17,6 +17,7 @@ from app.utils.compression import optimize_api_call_data, compress_json
 from app.utils.tool_calls import extract_tool_calls_summary
 from app.utils.secret_redaction import redact_secrets
 from app.utils.agent_signature import build_node_key
+from app.services.live_view_events import publish_agents_changed
 from app.core.logging_config import logger
 
 
@@ -249,6 +250,11 @@ class BackgroundTaskService:
 
             db.commit()
             db.refresh(api_call)
+            # Notify Live View dashboards (SSE) that this agent updated.
+            try:
+                publish_agents_changed(project_id, [agent_id])
+            except Exception:
+                pass
             return api_call.id
         except Exception as e:
             db.rollback()
