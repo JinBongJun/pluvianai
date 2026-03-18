@@ -63,8 +63,11 @@ import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 // Stable references for React Flow (avoid "new nodeTypes/edgeTypes object" warning)
 const NODE_TYPES = { agentCard: AgentCardNode };
 const EDGE_TYPES = { default: DrawIOEdge };
-const LIVE_VIEW_BASE_POLL_MS = 3000;
+// Polling defaults: keep light enough to avoid 429 under multi-tab / multi-user load.
+const LIVE_VIEW_BASE_POLL_MS = 10000;
 const LIVE_VIEW_MAX_POLL_MS = 60000;
+const LIVE_VIEW_FOCUSED_POLL_MS = 5000;
+const LIVE_VIEW_SWRS_DEDUPE_MS = 5000;
 
 function LiveViewToolbar({
   onUndo,
@@ -570,6 +573,12 @@ function LiveViewContent() {
   const [agentsPlanError, setAgentsPlanError] = useState<PlanLimitError | null>(null);
   const isPageVisible = usePageVisibility();
   const wasPageVisibleRef = useRef(isPageVisible);
+  const [sseConnected, setSseConnected] = useState(false);
+  const sseRef = useRef<EventSource | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [panelTab, setPanelTab] = useState<"logs" | "eval" | "data" | "settings">("logs");
+  const [restoringAgentId, setRestoringAgentId] = useState<string | null>(null);
+  const [hardDeletingAgents, setHardDeletingAgents] = useState(false);
 
   const { data: project } = useSWR(
     projectId && !isNaN(projectId) ? ["project", projectId] : null,
@@ -600,11 +609,70 @@ function LiveViewContent() {
     projectId && !isNaN(projectId) && projectId > 0 ? ["live-view-agents", projectId] : null,
     () => liveViewAPI.getAgents(projectId, 30, true),
     {
-      refreshInterval: isPageVisible ? agentsPollIntervalMs : 0,
+      refreshInterval: sseConnected
+        ? 0
+        : isPageVisible
+        ? selectedAgentId
+          ? Math.min(agentsPollIntervalMs, LIVE_VIEW_FOCUSED_POLL_MS)
+          : agentsPollIntervalMs
+        : 0,
       revalidateOnFocus: false,
       shouldRetryOnError: false,
+      dedupingInterval: LIVE_VIEW_SWRS_DEDUPE_MS,
     }
   );
+
+  // SSE stream: when connected, we rely on push notifications and stop polling.
+  useEffect(() => {
+    if (!projectId || Number.isNaN(projectId) || projectId <= 0) return;
+    if (!isPageVisible) return;
+    // Avoid creating multiple connections.
+    if (sseRef.current) return;
+
+    try {
+      const url = `/api/v1/projects/${projectId}/live-view/stream`;
+      const es = new EventSource(url);
+      sseRef.current = es;
+
+      const cleanup = () => {
+        try {
+          es.close();
+        } catch {}
+        sseRef.current = null;
+        setSseConnected(false);
+      };
+
+      es.addEventListener("connected", () => {
+        setSseConnected(true);
+      });
+
+      es.addEventListener("agents_changed", () => {
+        // Refresh agent list when backend signals change.
+        void mutateAgents();
+      });
+
+      es.onerror = () => {
+        // EventSource will auto-reconnect; mark as disconnected so polling can resume if needed.
+        setSseConnected(false);
+      };
+
+      return cleanup;
+    } catch {
+      setSseConnected(false);
+      return;
+    }
+  }, [isPageVisible, mutateAgents, projectId]);
+
+  // Close SSE when tab becomes hidden to reduce server load.
+  useEffect(() => {
+    if (isPageVisible) return;
+    if (!sseRef.current) return;
+    try {
+      sseRef.current.close();
+    } catch {}
+    sseRef.current = null;
+    setSseConnected(false);
+  }, [isPageVisible]);
 
   const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -617,6 +685,7 @@ function LiveViewContent() {
   const isDraggingRef = useRef(false);
   const didActuallyDragRef = useRef(false);
   const [dragEndCounter, setDragEndCounter] = useState(0);
+  const prevAgentIdsRef = useRef<Set<string>>(new Set());
 
   // Helper to commit current nodes position to history
   const commitHistory = (newNodes: Node[]) => {
@@ -650,11 +719,6 @@ function LiveViewContent() {
       return newNodes;
     });
   };
-
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
-  const [panelTab, setPanelTab] = useState<"logs" | "eval" | "data" | "settings">("logs");
-  const [restoringAgentId, setRestoringAgentId] = useState<string | null>(null);
-  const [hardDeletingAgents, setHardDeletingAgents] = useState(false);
 
   const allAgents = useMemo(() => {
     const raw = Array.isArray(agentsData?.agents)
@@ -755,6 +819,12 @@ function LiveViewContent() {
     if (typeof agentsData === "undefined") return;
 
     const saved = loadLvPositions(projectId);
+    const currentAgentIds = new Set(agentsList.map((a: any) => String(a.agent_id)));
+    const prevAgentIds = prevAgentIdsRef.current;
+    const hasNewAgents =
+      prevAgentIds.size > 0 &&
+      Array.from(currentAgentIds).some(id => !prevAgentIds.has(id));
+    prevAgentIdsRef.current = currentAgentIds;
 
     setNodes(currentNodes => {
       const updatedNodes = agentsList.map((agent: any, idx: number) => {
@@ -792,6 +862,11 @@ function LiveViewContent() {
 
       return updatedNodes;
     });
+
+    // Auto-fit when new agents appear, but don't interrupt focused investigations or dragging.
+    if (hasNewAgents && !isDraggingRef.current && !selectedAgentId) {
+      setTimeout(() => fitView({ duration: 600, padding: 0.2 }), 50);
+    }
   }, [agentsData, agentsList, selectedAgentId, projectId]);
 
   // Reset node selected/blur state after drag ends or selection changes

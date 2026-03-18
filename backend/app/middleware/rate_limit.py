@@ -30,7 +30,7 @@ GLOBAL_RATE_LIMIT_PER_MINUTE = 600
 
 # Per-user bucket limits
 BUCKET_LIMITS_PER_MINUTE: Dict[str, int] = {
-    "dashboard_read": 300,
+    "dashboard_read": 1200,
     "expensive_read": 90,
     "mutations": 45,
     "ingest": 1200,

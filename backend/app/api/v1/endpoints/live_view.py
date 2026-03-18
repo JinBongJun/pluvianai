@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, BackgroundTasks, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case, desc
 from datetime import datetime, timezone, timedelta
@@ -7,6 +7,8 @@ from typing import List, Optional, Dict, Any
 import time
 import uuid
 import json
+import asyncio
+import threading
 from pydantic import BaseModel, Field
 from sqlalchemy.types import JSON
 from app.core.logging_config import logger
@@ -23,6 +25,8 @@ from app.utils.tool_calls import extract_tool_calls_summary
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.agent_eval_config_history import AgentEvalConfigHistory
 from app.models.project import Project
+from app.services.cache_service import cache_service
+from app.services.live_view_events import publish_agents_changed
 from app.domain.live_view_release_gate import (
     build_agent_visibility_context,
     is_agent_deleted,
@@ -36,6 +40,14 @@ from app.services.live_eval_service import (
 )
 
 router = APIRouter()
+
+def _iso(dt: Any) -> Optional[str]:
+    if dt is None:
+        return None
+    try:
+        return dt.isoformat()
+    except Exception:
+        return str(dt)
 
 
 def _ensure_project(project_id: int, current_user: User, db: Session) -> Project:
@@ -104,6 +116,14 @@ def list_agents(
     logger.info(f"LIST_AGENTS: Project={project_id}, User={current_user.id} ({current_user.email})")
     try:
         _ensure_project(project_id, current_user, db)
+
+        # Hot-path cache: dashboard polls this endpoint frequently.
+        # Short TTL prevents stale UX while dramatically reducing DB load and 429 risk.
+        cache_key = f"project:{project_id}:live_view:agents:v2:limit={int(limit)}:include_deleted={int(bool(include_deleted))}"
+        if cache_service.enabled:
+            cached = cache_service.get(cache_key)
+            if isinstance(cached, dict) and "agents" in cached:
+                return cached
 
         # Aggregate snapshots by agent_id (fallback to 'unknown' if missing)
         rows = (
@@ -178,11 +198,11 @@ def list_agents(
                 "system_prompt": row.system_prompt,
                 "total": row.total,
                 "worst_count": int(row.worst_count or 0),
-                "last_seen": row.last_seen,
+                "last_seen": _iso(row.last_seen),
                 "signals": _aggregate_signals(row.all_signals),
                 "node_type": setting.node_type if setting else "agentCard",
                 "is_deleted": setting.is_deleted if setting else False,
-                "deleted_at": setting.deleted_at if setting else None,
+                "deleted_at": _iso(setting.deleted_at) if setting else None,
             }
 
         final_agents = []
@@ -212,13 +232,13 @@ def list_agents(
                 "system_prompt": node.get('data', {}).get('system_prompt') or (stat.system_prompt if stat else ""),
                 "total": stat.total if stat else 0,
                 "worst_count": int(stat.worst_count or 0) if stat else 0,
-                "last_seen": stat.last_seen if stat else datetime.now(),
+                "last_seen": _iso(stat.last_seen) if stat else _iso(datetime.now()),
                 "signals": _aggregate_signals(stat.all_signals) if stat else {},
                 "node_type": "agentCard",
                 "is_official": True,
                 "drift_status": "official",
                 "is_deleted": is_deleted,
-                "deleted_at": settings_map.get(node_id).deleted_at if settings_map.get(node_id) else None,
+                "deleted_at": _iso(settings_map.get(node_id).deleted_at) if settings_map.get(node_id) else None,
                 "position": node.get('position'),
             })
             processed_ids.add(node_id)
@@ -240,14 +260,14 @@ def list_agents(
                 "model": s_node.get("model") or (stat.model if stat else "UNKNOWN"),
                 "total": stat.total if stat else 0,
                 "worst_count": int(stat.worst_count or 0) if stat else 0,
-                "last_seen": stat.last_seen if stat else datetime.now(),
+                "last_seen": _iso(stat.last_seen) if stat else _iso(datetime.now()),
                 "signals": _aggregate_signals(stat.all_signals) if stat else {},
                 "node_type": "agentCard",
                 "is_official": False,
                 "drift_status": "ghost",
                 "is_ghost": True,
                 "is_deleted": is_deleted,
-                "deleted_at": settings_map.get(s_id).deleted_at if settings_map.get(s_id) else None,
+                "deleted_at": _iso(settings_map.get(s_id).deleted_at) if settings_map.get(s_id) else None,
             })
             processed_ids.add(s_id)
 
@@ -279,16 +299,19 @@ def list_agents(
                     "is_official": False,
                     "drift_status": "custom",
                     "is_deleted": bool(setting.is_deleted),
-                    "deleted_at": setting.deleted_at,
+                    "deleted_at": _iso(setting.deleted_at),
                 }
             )
             processed_ids.add(setting_agent_id)
 
-        return {
+        payload = {
             "agents": final_agents,
             "has_drift": has_drift,
             "sentinel_online": len(sentinel_agents) > 0
         }
+        if cache_service.enabled:
+            cache_service.set(cache_key, payload, ttl=3)
+        return payload
     except HTTPException:
         raise
     except Exception as e:
@@ -297,6 +320,101 @@ def list_agents(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to list agents",
         )
+
+
+@router.get("/projects/{project_id}/live-view/stream")
+async def live_view_stream(
+    project_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Server-Sent Events stream for Live View dashboards (v0).
+
+    Emits events:
+    - agents_changed: { project_id, agent_ids? }
+    """
+    _ensure_project(project_id, current_user, db)
+
+    async def event_gen():
+        # Heartbeat keeps proxies from buffering/closing idle connections.
+        heartbeat_sec = 15
+        last_heartbeat = asyncio.get_event_loop().time()
+
+        # If Redis is unavailable, fall back to heartbeat-only stream.
+        if not cache_service.enabled:
+            while not await request.is_disconnected():
+                now = asyncio.get_event_loop().time()
+                if now - last_heartbeat >= heartbeat_sec:
+                    last_heartbeat = now
+                    yield b": heartbeat\n\n"
+                await asyncio.sleep(1)
+            return
+
+        channel = f"project:{int(project_id)}:live_view:events"
+        pubsub = cache_service.redis_client.pubsub(ignore_subscribe_messages=True)
+        pubsub.subscribe(channel)
+
+        queue: asyncio.Queue[str] = asyncio.Queue(maxsize=200)
+        stop_flag = threading.Event()
+
+        def _worker():
+            try:
+                for msg in pubsub.listen():
+                    if stop_flag.is_set():
+                        break
+                    if not msg or msg.get("type") != "message":
+                        continue
+                    data = msg.get("data")
+                    if not data:
+                        continue
+                    try:
+                        # Non-blocking put; drop if queue is full.
+                        queue.put_nowait(str(data))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        t = threading.Thread(target=_worker, daemon=True)
+        t.start()
+
+        try:
+            # Kick a tiny event so client can mark "connected".
+            yield b"event: connected\ndata: {}\n\n"
+
+            while not await request.is_disconnected():
+                now = asyncio.get_event_loop().time()
+                if now - last_heartbeat >= heartbeat_sec:
+                    last_heartbeat = now
+                    yield b": heartbeat\n\n"
+
+                try:
+                    raw = await asyncio.wait_for(queue.get(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    continue
+
+                # SSE framing
+                yield f"event: agents_changed\ndata: {raw}\n\n".encode("utf-8")
+        finally:
+            stop_flag.set()
+            try:
+                pubsub.unsubscribe(channel)
+                pubsub.close()
+            except Exception:
+                pass
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            # Helps with nginx / some proxies that buffer streaming responses.
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/projects/{project_id}/live-view/agents/{agent_id}/settings")
