@@ -81,6 +81,15 @@ class SnapshotBatchActionRequest(BaseModel):
         description="Snapshot IDs for batch action.",
     )
 
+
+class AgentHardDeleteRequest(BaseModel):
+    agent_ids: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Agent IDs (system_prompt_hash) to hard-delete for this project.",
+    )
+
 @router.get("/projects/{project_id}/live-view/agents")
 def list_agents(
     project_id: int,
@@ -492,6 +501,47 @@ def delete_agent(
         db.add(setting)
     db.commit()
     return None
+
+
+@router.post(
+    "/projects/{project_id}/live-view/agents/hard-delete",
+    status_code=status.HTTP_200_OK,
+)
+def hard_delete_agents(
+    project_id: int,
+    payload: AgentHardDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Permanently delete soft-deleted agent display settings for the given project.
+
+    This is a targeted hard-delete that bypasses the scheduled lifecycle cleanup
+    for agents selected by the user in the Live View "Deleted Nodes" tray.
+    """
+    _ensure_project_admin(project_id, current_user, db)
+
+    normalized_ids = [str(a or "").strip() for a in payload.agent_ids]
+    normalized_ids = [a for a in normalized_ids if a]
+    if not normalized_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid agent_ids provided",
+        )
+
+    settings_q = (
+        db.query(AgentDisplaySetting)
+        .filter(
+            AgentDisplaySetting.project_id == project_id,
+            AgentDisplaySetting.system_prompt_hash.in_(normalized_ids),
+        )
+    )
+    deleted_count = settings_q.count()
+    if deleted_count:
+        settings_q.delete(synchronize_session=False)
+        db.commit()
+
+    return {"ok": True, "deleted_agent_settings": deleted_count}
 
 
 @router.post("/projects/{project_id}/live-view/agents/{agent_id}/restore", status_code=status.HTTP_200_OK)
