@@ -237,7 +237,7 @@ export default function AccountUsagePage() {
           </a>
         </div>
       </div>
-    </OrgLayout>
+    </AccountLayout>
   );
 }
 
