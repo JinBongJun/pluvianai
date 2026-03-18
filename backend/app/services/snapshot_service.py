@@ -15,31 +15,29 @@ from app.core.diagnostics import calculate_diagnostic_scores
 from app.domain.live_view_release_gate import restore_agent_if_soft_deleted
 from app.services.live_eval_service import evaluate_one_snapshot_at_save, eval_config_version_hash
 from app.utils.tool_calls import extract_tool_calls_summary
+from app.utils.agent_signature import build_node_key
 
 
 def _extract_agent_id(payload: Dict[str, Any]) -> Optional[str]:
-    """Best-effort extraction for stable agent identity.
-
-    Priority:
-    1. Explicit agent identifier fields from the SDK or caller
-    2. Deterministic hash of the system prompt (for auto-detected agents)
-    """
+    """Legacy helper (kept for compatibility). Prefer signature-based node keys."""
     for key in ("agent_id", "agentId", "agent_name", "agentName"):
         value = payload.get(key)
         if value is not None:
             text = str(value).strip()
             if text:
                 return text
-
-    # Fallback: derive from system prompt when no explicit id is present
-    prompt_fields = _extract_prompt_fields(payload)
-    system_prompt = prompt_fields.get("system_prompt") or ""
-    if system_prompt:
-        import hashlib
-
-        return hashlib.sha256(system_prompt.encode()).hexdigest()[:16]
-
     return None
+
+
+def _extract_request_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Return the request-shaped payload for signature extraction.
+    - Proxy path sends the raw request JSON (model/messages/tools/settings)
+    - Some SDK/manual paths wrap as {"request": ..., "response": ...}
+    """
+    if isinstance(payload.get("request"), dict):
+        return payload["request"]
+    return payload
 
 
 def _extract_prompt_fields(payload: Dict[str, Any]) -> Dict[str, Optional[str]]:
@@ -152,7 +150,15 @@ class SnapshotService:
         sanitized_payload = self.sanitizer.sanitize_payload(redacted_payload)
         is_sanitized = True  # Currently always sanitized by the service
         prompt_fields = _extract_prompt_fields(sanitized_payload)
-        agent_id = _extract_agent_id(sanitized_payload)
+        request_payload = _extract_request_payload(sanitized_payload)
+
+        # v1.0 node identity: signature over provider/model/system_prompt/settings/tools (agent_name excluded)
+        agent_id = build_node_key(
+            provider=provider,
+            model=model,
+            system_prompt=prompt_fields.get("system_prompt"),
+            request_payload=request_payload,
+        )
         
         # Fetch project diagnostic_config and agent-specific overrides for threshold-based evaluation
         diagnostic_config = {}
