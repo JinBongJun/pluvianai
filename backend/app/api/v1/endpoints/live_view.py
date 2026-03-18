@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, BackgroundTasks, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case, desc
 from datetime import datetime, timezone, timedelta
@@ -7,6 +7,8 @@ from typing import List, Optional, Dict, Any
 import time
 import uuid
 import json
+import asyncio
+import threading
 from pydantic import BaseModel, Field
 from sqlalchemy.types import JSON
 from app.core.logging_config import logger
@@ -24,6 +26,7 @@ from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.agent_eval_config_history import AgentEvalConfigHistory
 from app.models.project import Project
 from app.services.cache_service import cache_service
+from app.services.live_view_events import publish_agents_changed
 from app.domain.live_view_release_gate import (
     build_agent_visibility_context,
     is_agent_deleted,
@@ -317,6 +320,101 @@ def list_agents(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to list agents",
         )
+
+
+@router.get("/projects/{project_id}/live-view/stream")
+async def live_view_stream(
+    project_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Server-Sent Events stream for Live View dashboards (v0).
+
+    Emits events:
+    - agents_changed: { project_id, agent_ids? }
+    """
+    _ensure_project(project_id, current_user, db)
+
+    async def event_gen():
+        # Heartbeat keeps proxies from buffering/closing idle connections.
+        heartbeat_sec = 15
+        last_heartbeat = asyncio.get_event_loop().time()
+
+        # If Redis is unavailable, fall back to heartbeat-only stream.
+        if not cache_service.enabled:
+            while not await request.is_disconnected():
+                now = asyncio.get_event_loop().time()
+                if now - last_heartbeat >= heartbeat_sec:
+                    last_heartbeat = now
+                    yield b": heartbeat\n\n"
+                await asyncio.sleep(1)
+            return
+
+        channel = f"project:{int(project_id)}:live_view:events"
+        pubsub = cache_service.redis_client.pubsub(ignore_subscribe_messages=True)
+        pubsub.subscribe(channel)
+
+        queue: asyncio.Queue[str] = asyncio.Queue(maxsize=200)
+        stop_flag = threading.Event()
+
+        def _worker():
+            try:
+                for msg in pubsub.listen():
+                    if stop_flag.is_set():
+                        break
+                    if not msg or msg.get("type") != "message":
+                        continue
+                    data = msg.get("data")
+                    if not data:
+                        continue
+                    try:
+                        # Non-blocking put; drop if queue is full.
+                        queue.put_nowait(str(data))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        t = threading.Thread(target=_worker, daemon=True)
+        t.start()
+
+        try:
+            # Kick a tiny event so client can mark "connected".
+            yield b"event: connected\ndata: {}\n\n"
+
+            while not await request.is_disconnected():
+                now = asyncio.get_event_loop().time()
+                if now - last_heartbeat >= heartbeat_sec:
+                    last_heartbeat = now
+                    yield b": heartbeat\n\n"
+
+                try:
+                    raw = await asyncio.wait_for(queue.get(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    continue
+
+                # SSE framing
+                yield f"event: agents_changed\ndata: {raw}\n\n".encode("utf-8")
+        finally:
+            stop_flag.set()
+            try:
+                pubsub.unsubscribe(channel)
+                pubsub.close()
+            except Exception:
+                pass
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            # Helps with nginx / some proxies that buffer streaming responses.
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/projects/{project_id}/live-view/agents/{agent_id}/settings")

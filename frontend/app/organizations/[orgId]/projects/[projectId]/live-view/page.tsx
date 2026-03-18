@@ -573,6 +573,8 @@ function LiveViewContent() {
   const [agentsPlanError, setAgentsPlanError] = useState<PlanLimitError | null>(null);
   const isPageVisible = usePageVisibility();
   const wasPageVisibleRef = useRef(isPageVisible);
+  const [sseConnected, setSseConnected] = useState(false);
+  const sseRef = useRef<EventSource | null>(null);
 
   const { data: project } = useSWR(
     projectId && !isNaN(projectId) ? ["project", projectId] : null,
@@ -603,7 +605,9 @@ function LiveViewContent() {
     projectId && !isNaN(projectId) && projectId > 0 ? ["live-view-agents", projectId] : null,
     () => liveViewAPI.getAgents(projectId, 30, true),
     {
-      refreshInterval: isPageVisible
+      refreshInterval: sseConnected
+        ? 0
+        : isPageVisible
         ? selectedAgentId
           ? Math.min(agentsPollIntervalMs, LIVE_VIEW_FOCUSED_POLL_MS)
           : agentsPollIntervalMs
@@ -613,6 +617,58 @@ function LiveViewContent() {
       dedupingInterval: LIVE_VIEW_SWRS_DEDUPE_MS,
     }
   );
+
+  // SSE stream: when connected, we rely on push notifications and stop polling.
+  useEffect(() => {
+    if (!projectId || Number.isNaN(projectId) || projectId <= 0) return;
+    if (!isPageVisible) return;
+    // Avoid creating multiple connections.
+    if (sseRef.current) return;
+
+    try {
+      const url = `/api/v1/projects/${projectId}/live-view/stream`;
+      const es = new EventSource(url);
+      sseRef.current = es;
+
+      const cleanup = () => {
+        try {
+          es.close();
+        } catch {}
+        sseRef.current = null;
+        setSseConnected(false);
+      };
+
+      es.addEventListener("connected", () => {
+        setSseConnected(true);
+      });
+
+      es.addEventListener("agents_changed", () => {
+        // Refresh agent list when backend signals change.
+        void mutateAgents();
+      });
+
+      es.onerror = () => {
+        // EventSource will auto-reconnect; mark as disconnected so polling can resume if needed.
+        setSseConnected(false);
+      };
+
+      return cleanup;
+    } catch {
+      setSseConnected(false);
+      return;
+    }
+  }, [isPageVisible, mutateAgents, projectId]);
+
+  // Close SSE when tab becomes hidden to reduce server load.
+  useEffect(() => {
+    if (isPageVisible) return;
+    if (!sseRef.current) return;
+    try {
+      sseRef.current.close();
+    } catch {}
+    sseRef.current = null;
+    setSseConnected(false);
+  }, [isPageVisible]);
 
   const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
