@@ -1515,17 +1515,28 @@ def list_release_gate_agents(
         project=project,
     )
 
+    # Start with agents that have recent snapshots
     ordered_agent_ids: List[str] = list(snapshot_agent_ids)
     seen = set(ordered_agent_ids)
+
+    # Then include agents from blueprint (canvas) so nodes without recent logs still appear
     for aid in visibility.blueprint_map.keys():
         if aid not in seen:
             ordered_agent_ids.append(aid)
             seen.add(aid)
+
+    # Then include agents detected by Sentinel (drift) cache
     for node in visibility.sentinel_agents:
         sid = str(node.get("id") or "").strip() if isinstance(node, dict) else ""
         if sid and sid not in seen:
             ordered_agent_ids.append(sid)
             seen.add(sid)
+
+    # Finally include agents that only exist in AgentDisplaySetting (display settings only)
+    for aid in visibility.settings_map.keys():
+        if aid and aid not in seen:
+            ordered_agent_ids.append(aid)
+            seen.add(aid)
 
     items = []
     for aid in ordered_agent_ids:

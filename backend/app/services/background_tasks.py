@@ -119,8 +119,19 @@ class BackgroundTaskService:
 
             # Create Snapshot so Live View boxes appear (SDK traffic -> snapshots per design)
             trace_id = chain_id or str(uuid.uuid4())
-            agent_id = (agent_name or "unknown").strip() or "unknown"
             system_prompt = normalized.get("system_prompt")
+            # Derive a stable agent identifier:
+            # 1) Use explicit agent_name when provided
+            # 2) Otherwise, hash the system prompt (matches proxy/snapshot path behavior)
+            # 3) Fallback to "unknown" if neither is available
+            if agent_name and agent_name.strip():
+                agent_id = agent_name.strip()
+            elif system_prompt:
+                import hashlib
+
+                agent_id = hashlib.sha256(system_prompt.encode()).hexdigest()[:16]
+            else:
+                agent_id = "unknown"
             request_prompt = normalized.get("request_prompt")
             response_text = normalized.get("response_text")
             payload_for_snapshot = {
