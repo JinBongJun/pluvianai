@@ -339,7 +339,7 @@ async def live_view_stream(
 
     async def event_gen():
         # Heartbeat keeps proxies from buffering/closing idle connections.
-        heartbeat_sec = 15
+        heartbeat_sec = 5
         last_heartbeat = asyncio.get_event_loop().time()
 
         # If Redis is unavailable, fall back to heartbeat-only stream.
@@ -409,7 +409,7 @@ async def live_view_stream(
         event_gen(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             # Helps with nginx / some proxies that buffer streaming responses.
             "X-Accel-Buffering": "no",
