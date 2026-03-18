@@ -18,13 +18,27 @@ from app.utils.tool_calls import extract_tool_calls_summary
 
 
 def _extract_agent_id(payload: Dict[str, Any]) -> Optional[str]:
-    """Best-effort extraction for stable agent identity."""
+    """Best-effort extraction for stable agent identity.
+
+    Priority:
+    1. Explicit agent identifier fields from the SDK or caller
+    2. Deterministic hash of the system prompt (for auto-detected agents)
+    """
     for key in ("agent_id", "agentId", "agent_name", "agentName"):
         value = payload.get(key)
         if value is not None:
             text = str(value).strip()
             if text:
                 return text
+
+    # Fallback: derive from system prompt when no explicit id is present
+    prompt_fields = _extract_prompt_fields(payload)
+    system_prompt = prompt_fields.get("system_prompt") or ""
+    if system_prompt:
+        import hashlib
+
+        return hashlib.sha256(system_prompt.encode()).hexdigest()[:16]
+
     return None
 
 
@@ -139,12 +153,6 @@ class SnapshotService:
         is_sanitized = True  # Currently always sanitized by the service
         prompt_fields = _extract_prompt_fields(sanitized_payload)
         agent_id = _extract_agent_id(sanitized_payload)
-        if not agent_id:
-            # Fallback to deterministic hash for stability when explicit id is missing.
-            hash_seed = prompt_fields.get("system_prompt") or ""
-            if hash_seed:
-                import hashlib
-                agent_id = hashlib.sha256(hash_seed.encode()).hexdigest()[:16]
         
         # Fetch project diagnostic_config and agent-specific overrides for threshold-based evaluation
         diagnostic_config = {}
