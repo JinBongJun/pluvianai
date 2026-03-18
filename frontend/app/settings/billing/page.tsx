@@ -1,6 +1,6 @@
 "use client";
 
-import OrgLayout from "@/components/layout/OrgLayout";
+import AccountLayout from "@/components/layout/AccountLayout";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import useSWR from "swr";
 import { apiClient } from "@/lib/api/client";
@@ -66,30 +66,14 @@ export default function AccountBillingPage() {
   ];
 
   return (
-    <OrgLayout
+    <AccountLayout
+      activeTab="billing"
       breadcrumb={[
         { label: "Account", href: "/settings/profile" },
         { label: "Billing" },
       ]}
     >
-      <div className="max-w-5xl mx-auto pb-24 relative">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none" />
-
-        <div className="mb-12 relative z-10">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,1)] animate-pulse" />
-            <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em]">
-              Plan & Billing
-            </p>
-          </div>
-          <h1 className="text-5xl font-black text-white uppercase tracking-tighter mb-4">
-            Subscription Plans
-          </h1>
-          <p className="text-slate-400 font-bold uppercase tracking-widest text-sm max-w-2xl leading-relaxed">
-            Choose the runway that fits your agents. Upgrade when you&apos;re ready to scale.
-          </p>
-        </div>
-
+      <div className="pb-24 relative">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
           {plans.map(plan => {
             const isCurrent = plan.id === currentPlanId;
@@ -164,7 +148,7 @@ export default function AccountBillingPage() {
           })}
         </div>
       </div>
-    </OrgLayout>
+    </AccountLayout>
   );
 }
 
