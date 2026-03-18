@@ -26,6 +26,7 @@ export default function ProjectGeneralSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleted, setDeleted] = useState(false);
   const [selectedDeletedIds, setSelectedDeletedIds] = useState<Set<number>>(new Set());
   const [isRestoringDeleted, setIsRestoringDeleted] = useState(false);
   const [isPermanentlyDeleting, setIsPermanentlyDeleting] = useState(false);
@@ -126,7 +127,13 @@ export default function ProjectGeneralSettingsPage() {
         undefined,
         { revalidate: false }
       );
-      router.replace(`/organizations/${orgId}/projects`);
+      setDeleted(true);
+      const target = orgId ? `/organizations/${orgId}/projects` : "/organizations";
+      if (typeof window !== "undefined") {
+        window.location.assign(target);
+      } else {
+        router.replace(target);
+      }
     } catch (err: any) {
       showToast(err?.response?.data?.detail ?? "Failed to delete project", "error");
     } finally {
@@ -197,7 +204,7 @@ export default function ProjectGeneralSettingsPage() {
     }
   };
 
-  if (!projectId || isNaN(projectId)) {
+  if (!projectId || isNaN(projectId) || deleted) {
     return null;
   }
 
