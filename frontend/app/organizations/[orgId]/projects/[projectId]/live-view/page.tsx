@@ -69,6 +69,8 @@ const LIVE_VIEW_BASE_POLL_MS = 10000;
 const LIVE_VIEW_MAX_POLL_MS = 60000;
 const LIVE_VIEW_FOCUSED_POLL_MS = 5000;
 const LIVE_VIEW_SWRS_DEDUPE_MS = 5000;
+const LIVE_VIEW_SSE_MUTATE_DEBOUNCE_MS = 1000;
+const LIVE_VIEW_SSE_POLL_BACKOFF_MS = 30000;
 
 function LiveViewToolbar({
   onUndo,
@@ -576,6 +578,8 @@ function LiveViewContent() {
   const wasPageVisibleRef = useRef(isPageVisible);
   const [sseConnected, setSseConnected] = useState(false);
   const sseRef = useRef<EventSource | null>(null);
+  const sseMutateTimerRef = useRef<number | null>(null);
+  const sseBackoffUntilRef = useRef<number>(0);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [panelTab, setPanelTab] = useState<"logs" | "eval" | "data" | "settings">("logs");
   const [restoringAgentId, setRestoringAgentId] = useState<string | null>(null);
@@ -610,13 +614,15 @@ function LiveViewContent() {
     projectId && !isNaN(projectId) && projectId > 0 ? ["live-view-agents", projectId] : null,
     () => liveViewAPI.getAgents(projectId, 30, true),
     {
-      refreshInterval: sseConnected
-        ? 0
-        : isPageVisible
-        ? selectedAgentId
+      refreshInterval: (() => {
+        if (!isPageVisible) return 0;
+        if (sseConnected) return 0;
+        // When SSE is reconnecting/flapping, don't immediately fall back to polling.
+        if (Date.now() < sseBackoffUntilRef.current) return 0;
+        return selectedAgentId
           ? Math.min(agentsPollIntervalMs, LIVE_VIEW_FOCUSED_POLL_MS)
-          : agentsPollIntervalMs
-        : 0,
+          : agentsPollIntervalMs;
+      })(),
       revalidateOnFocus: false,
       shouldRetryOnError: false,
       dedupingInterval: LIVE_VIEW_SWRS_DEDUPE_MS,
@@ -636,6 +642,10 @@ function LiveViewContent() {
       sseRef.current = es;
 
       const cleanup = () => {
+        if (sseMutateTimerRef.current) {
+          window.clearTimeout(sseMutateTimerRef.current);
+          sseMutateTimerRef.current = null;
+        }
         try {
           es.close();
         } catch {}
@@ -648,18 +658,26 @@ function LiveViewContent() {
       });
 
       es.addEventListener("agents_changed", () => {
-        // Refresh agent list when backend signals change.
-        void mutateAgents();
+        // Debounce refresh so bursts don't spam the agents endpoint.
+        if (sseMutateTimerRef.current) {
+          window.clearTimeout(sseMutateTimerRef.current);
+        }
+        sseMutateTimerRef.current = window.setTimeout(() => {
+          sseMutateTimerRef.current = null;
+          void mutateAgents();
+        }, LIVE_VIEW_SSE_MUTATE_DEBOUNCE_MS);
       });
 
       es.onerror = () => {
         // EventSource will auto-reconnect; mark as disconnected so polling can resume if needed.
         setSseConnected(false);
+        sseBackoffUntilRef.current = Date.now() + LIVE_VIEW_SSE_POLL_BACKOFF_MS;
       };
 
       return cleanup;
     } catch {
       setSseConnected(false);
+      sseBackoffUntilRef.current = Date.now() + LIVE_VIEW_SSE_POLL_BACKOFF_MS;
       return;
     }
   }, [isPageVisible, mutateAgents, projectId]);
@@ -673,6 +691,7 @@ function LiveViewContent() {
     } catch {}
     sseRef.current = null;
     setSseConnected(false);
+    sseBackoffUntilRef.current = Date.now() + LIVE_VIEW_SSE_POLL_BACKOFF_MS;
   }, [isPageVisible]);
 
   const { fitView } = useReactFlow();
