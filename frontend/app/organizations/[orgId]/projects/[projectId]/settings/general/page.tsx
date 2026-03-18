@@ -16,7 +16,7 @@ import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export default function ProjectGeneralSettingsPage() {
   const router = useRouter();
-  const toast = useToast();
+  const { showToast } = useToast();
   const hasToken = useRequireAuth();
   const { mutate } = useSWRConfig();
   const { orgId, projectId } = useOrgProjectParams();
@@ -39,15 +39,15 @@ export default function ProjectGeneralSettingsPage() {
     } catch (e: any) {
       const status = e?.response?.status;
       if (status === 404) {
-        toast.showToast("This project no longer exists. Redirecting to projects list.", "info");
+        showToast("This project no longer exists. Redirecting to projects list.", "info");
         router.replace(orgId ? `/organizations/${orgId}/projects` : "/organizations");
         return;
       }
-      toast.showToast("Failed to load project", "error");
+      showToast("Failed to load project", "error");
     } finally {
       setLoading(false);
     }
-  }, [projectId, orgId, router, toast]);
+  }, [projectId, orgId, router, showToast]);
 
   useEffect(() => {
     if (!hasToken) return;
@@ -93,9 +93,9 @@ export default function ProjectGeneralSettingsPage() {
         name: name.trim() || undefined,
         description: description.trim() || undefined,
       });
-      toast.showToast("Project updated", "success");
+      showToast("Project updated", "success");
     } catch (err: any) {
-      toast.showToast(err?.response?.data?.detail ?? "Failed to update project", "error");
+      showToast(err?.response?.data?.detail ?? "Failed to update project", "error");
     } finally {
       setSaving(false);
     }
@@ -111,7 +111,7 @@ export default function ProjectGeneralSettingsPage() {
     setDeleting(true);
     try {
       await projectsAPI.delete(projectId);
-      toast.showToast("Project deleted", "success");
+      showToast("Project deleted", "success");
       // Prevent SWR from revalidating deleted project (avoids 404 noise after delete)
       mutate(
         key =>
@@ -128,7 +128,7 @@ export default function ProjectGeneralSettingsPage() {
       );
       router.replace(`/organizations/${orgId}/projects`);
     } catch (err: any) {
-      toast.showToast(err?.response?.data?.detail ?? "Failed to delete project", "error");
+      showToast(err?.response?.data?.detail ?? "Failed to delete project", "error");
     } finally {
       setDeleting(false);
     }
@@ -150,7 +150,7 @@ export default function ProjectGeneralSettingsPage() {
     try {
       const result = await liveViewAPI.restoreSnapshotsBatch(projectId, targetIds);
       const restored = Number(result?.restored ?? 0);
-      toast.showToast(
+      showToast(
         restored > 0 ? `Restored ${restored} deleted log(s).` : "No deleted logs were restored.",
         restored > 0 ? "success" : "info"
       );
@@ -161,7 +161,7 @@ export default function ProjectGeneralSettingsPage() {
         error?.response?.data?.detail?.message ||
         error?.response?.data?.detail ||
         "Failed to restore deleted logs.";
-      toast.showToast(message, "error");
+      showToast(message, "error");
     } finally {
       setIsRestoringDeleted(false);
     }
@@ -178,7 +178,7 @@ export default function ProjectGeneralSettingsPage() {
     try {
       const result = await liveViewAPI.permanentlyDeleteSnapshots(projectId, targetIds);
       const deleted = Number(result?.deleted ?? 0);
-      toast.showToast(
+      showToast(
         deleted > 0
           ? `Permanently deleted ${deleted} log(s).`
           : "No deleted logs were permanently removed.",
@@ -191,7 +191,7 @@ export default function ProjectGeneralSettingsPage() {
         error?.response?.data?.detail?.message ||
         error?.response?.data?.detail ||
         "Failed to permanently delete logs.";
-      toast.showToast(message, "error");
+      showToast(message, "error");
     } finally {
       setIsPermanentlyDeleting(false);
     }
