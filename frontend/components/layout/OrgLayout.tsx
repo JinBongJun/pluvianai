@@ -89,12 +89,6 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
       href: `/organizations/${resolvedOrgId}/team`,
       icon: Users,
     },
-    {
-      label: "Usage & Billing",
-      desc: "Agent traffic & billing",
-      href: `/organizations/${resolvedOrgId}/billing`,
-      icon: Activity,
-    },
   ];
 
   const navItems = [
