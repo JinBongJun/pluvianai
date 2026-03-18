@@ -363,6 +363,22 @@ function DeletedAgentsTray({
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  useEffect(() => {
+    // Keep selection in sync with current deleted agents list
+    setSelectedIds(prev => {
+      const currentIds = new Set(agents.map(a => a.agent_id));
+      const next = new Set<string>();
+      prev.forEach(id => {
+        if (currentIds.has(id)) next.add(id);
+      });
+      return next;
+    });
+    // Automatically exit delete mode when there are no deleted agents left
+    if (agents.length === 0 && isDeleteMode) {
+      setIsDeleteMode(false);
+    }
+  }, [agents, isDeleteMode]);
+
   const toggleSelected = (agentId: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
