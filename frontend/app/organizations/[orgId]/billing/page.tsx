@@ -5,18 +5,35 @@ import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { organizationsAPI, authAPI } from "@/lib/api";
+import { useToast } from "@/components/ToastContainer";
+import { useRouter } from "next/navigation";
 import { Zap, Activity, Database, ShieldCheck, CheckCircle2, BarChart3 } from "lucide-react";
 
 export default function BillingPage() {
   const { orgId } = useOrgProjectParams();
+  const toast = useToast();
+  const router = useRouter();
   const [fallbackUsage, setFallbackUsage] = useState<{
     plan_type?: string;
     limits?: Record<string, number>;
     usage_this_month?: Record<string, number>;
   } | null>(null);
 
-  const { data: org, isValidating } = useSWR(orgId ? ["organization", orgId] : null, () =>
-    organizationsAPI.get(orgId, { includeStats: true })
+  const { data: org, isValidating } = useSWR(
+    orgId ? ["organization", orgId] : null,
+    async () => {
+      try {
+        return await organizationsAPI.get(orgId, { includeStats: true });
+      } catch (error: any) {
+        const status = error?.response?.status;
+        if (status === 404) {
+          toast.showToast("This organization has been archived or deleted.", "info");
+          router.replace("/organizations");
+          return null;
+        }
+        throw error;
+      }
+    }
   );
 
   const { data: myUsage } = useSWR("my-usage", () => authAPI.getMyUsage(), {
