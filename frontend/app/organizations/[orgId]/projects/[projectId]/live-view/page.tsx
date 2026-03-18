@@ -655,6 +655,8 @@ function LiveViewContent() {
 
       es.addEventListener("connected", () => {
         setSseConnected(true);
+        // Reset to normal polling baseline (though SSE will disable polling).
+        setAgentsPollIntervalMs(LIVE_VIEW_BASE_POLL_MS);
       });
 
       es.addEventListener("agents_changed", () => {
@@ -672,12 +674,15 @@ function LiveViewContent() {
         // EventSource will auto-reconnect; mark as disconnected so polling can resume if needed.
         setSseConnected(false);
         sseBackoffUntilRef.current = Date.now() + LIVE_VIEW_SSE_POLL_BACKOFF_MS;
+        // If we have to fall back to polling, keep it very light.
+        setAgentsPollIntervalMs(LIVE_VIEW_MAX_POLL_MS);
       };
 
       return cleanup;
     } catch {
       setSseConnected(false);
       sseBackoffUntilRef.current = Date.now() + LIVE_VIEW_SSE_POLL_BACKOFF_MS;
+      setAgentsPollIntervalMs(LIVE_VIEW_MAX_POLL_MS);
       return;
     }
   }, [isPageVisible, mutateAgents, projectId]);
