@@ -49,6 +49,7 @@ import {
   Grip,
   LayoutGrid,
   RotateCcw,
+  Trash2,
 } from "lucide-react";
 import { ClinicalLog } from "@/components/live-view/ClinicalLog";
 import { AgentEvaluationPanel } from "@/components/live-view/AgentEvaluationPanel";
@@ -359,6 +360,7 @@ function DeletedAgentsTray({
   onHardDelete: (agentIds: string[]) => void;
   hardDeleting: boolean;
 }) {
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const toggleSelected = (agentId: string) => {
@@ -383,6 +385,7 @@ function DeletedAgentsTray({
 
   const handleCancel = () => {
     setSelectedIds(new Set());
+    setIsDeleteMode(false);
   };
 
   const handleDelete = () => {
@@ -415,14 +418,16 @@ function DeletedAgentsTray({
             key={agent.agent_id}
             className="rounded-xl border border-white/10 bg-black/30 px-3 py-3 flex items-start gap-3"
           >
-            <div className="pt-1">
-              <input
-                type="checkbox"
-                className="h-3.5 w-3.5 rounded border-slate-500 bg-transparent"
-                checked={selectedIds.has(agent.agent_id)}
-                onChange={() => toggleSelected(agent.agent_id)}
-              />
-            </div>
+            {isDeleteMode && (
+              <div className="pt-1">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 rounded border-slate-500 bg-transparent"
+                  checked={selectedIds.has(agent.agent_id)}
+                  onChange={() => toggleSelected(agent.agent_id)}
+                />
+              </div>
+            )}
             <div className="flex-1 min-w-0 flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-white">
@@ -451,34 +456,50 @@ function DeletedAgentsTray({
         ))}
       </div>
       <div className="mt-4 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
+        {isDeleteMode ? (
+          <>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="flex-1 rounded-xl border border-rose-500/40 bg-rose-500/15 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-rose-200 hover:bg-rose-500/25"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSelectAllOrDeselect}
+                className="flex-1 rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-200 hover:bg-white/5"
+              >
+                {selectedIds.size === agents.length ? "Deselect" : "All"}
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={hardDeleting || selectedIds.size === 0}
+                className="flex-1 rounded-xl border border-rose-500/40 bg-rose-500/25 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-rose-100 hover:bg-rose-500/40 disabled:opacity-40"
+              >
+                {hardDeleting
+                  ? "Deleting..."
+                  : selectedIds.size === 0
+                    ? "Delete"
+                    : `Delete (${selectedIds.size})`}
+              </button>
+            </div>
+          </>
+        ) : (
           <button
             type="button"
-            onClick={handleCancel}
-            className="flex-1 rounded-xl border border-rose-500/40 bg-rose-500/15 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-rose-200 hover:bg-rose-500/25"
+            onClick={() => {
+              setIsDeleteMode(true);
+              setSelectedIds(new Set());
+            }}
+            className="w-full rounded-xl border border-rose-500/40 bg-black/40 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-rose-200 hover:bg-rose-500/20 flex items-center justify-center gap-2"
           >
-            Cancel
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete
           </button>
-          <button
-            type="button"
-            onClick={handleSelectAllOrDeselect}
-            className="flex-1 rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-200 hover:bg-white/5"
-          >
-            {selectedIds.size === agents.length ? "Deselect" : "All"}
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={hardDeleting || selectedIds.size === 0}
-            className="flex-1 rounded-xl border border-rose-500/40 bg-rose-500/25 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-rose-100 hover:bg-rose-500/40 disabled:opacity-40"
-          >
-            {hardDeleting
-              ? "Deleting..."
-              : selectedIds.size === 0
-                ? "Delete"
-                : `Delete (${selectedIds.size})`}
-          </button>
-        </div>
+        )}
         <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-[11px] leading-relaxed text-slate-400">
           Removal hides a node immediately. Matching traffic can auto-restore it within the grace
           window. Hard delete will permanently remove node display settings for the selected agents.
