@@ -1810,12 +1810,7 @@ export default function ReleaseGatePageContent() {
   const showGateAccessDeniedState = !!agentsError && agentsErrorStatus === 403;
   const showGateApiErrorState =
     !!agentsError && agentsErrorStatus !== 401 && !showGateAccessDeniedState;
-  const showGateEmptyState =
-    !showGateLoadingState &&
-    !showGateAccessDeniedState &&
-    !showGateApiErrorState &&
-    agentsLoaded &&
-    agents.length === 0;
+  const showGateEmptyState = false;
 
   useEffect(() => {
     if (agentsErrorStatus !== 401) return;
