@@ -36,6 +36,13 @@ export const liveViewAPI = {
     await apiClient.delete(`/projects/${projectId}/live-view/agents/${safeAgentId}`);
   },
 
+  hardDeleteAgents: async (projectId: number, agentIds: string[]) => {
+    const response = await apiClient.post(`/projects/${projectId}/live-view/agents/hard-delete`, {
+      agent_ids: agentIds,
+    });
+    return unwrapResponse(response) as { ok: boolean; deleted_agent_settings: number };
+  },
+
   restoreAgent: async (projectId: number, agentId: string) => {
     const safeAgentId = encodeURIComponent(agentId);
     const response = await apiClient.post(
