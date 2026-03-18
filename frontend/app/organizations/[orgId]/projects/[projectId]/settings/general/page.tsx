@@ -61,7 +61,11 @@ export default function ProjectGeneralSettingsPage() {
       ? ["deleted-snapshots-settings", projectId]
       : null,
     () => liveViewAPI.listDeletedSnapshots(projectId!, { days: 30, limit: 200, offset: 0 }),
-    { keepPreviousData: true, revalidateOnFocus: false }
+    {
+      keepPreviousData: true,
+      revalidateOnFocus: false,
+      errorRetryCount: 0,
+    }
   );
   const deletedSnapshots = deletedSnapshotsData?.items ?? [];
 
