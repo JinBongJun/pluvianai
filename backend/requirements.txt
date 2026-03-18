@@ -10,7 +10,7 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 python-multipart==0.0.6
-redis==5.0.1
+redis==7.3.0
 httpx==0.28.1
 reportlab==4.0.7
 resend==2.1.0
