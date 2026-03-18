@@ -442,6 +442,74 @@ function applySystemPromptToBody(
   return next;
 }
 
+function buildFinalCandidateRequest(options: {
+  baselineSeedSnapshot: Record<string, unknown> | null;
+  baselinePayload: Record<string, unknown> | null;
+  nodeBasePayload: Record<string, unknown> | null;
+  requestBody: Record<string, unknown>;
+  requestSystemPrompt: string;
+  modelOverrideEnabled: boolean;
+  newModel: string;
+}): Record<string, unknown> {
+  const {
+    baselineSeedSnapshot,
+    baselinePayload,
+    nodeBasePayload,
+    requestBody,
+    requestSystemPrompt,
+    modelOverrideEnabled,
+    newModel,
+  } = options;
+
+  const baseFromSnapshot = asPayloadObject(baselineSeedSnapshot?.payload);
+  const baseRequest = baseFromSnapshot
+    ? getRequestPart(baseFromSnapshot)
+    : baselinePayload || nodeBasePayload || {};
+
+  let finalReq: Record<string, unknown> = JSON.parse(JSON.stringify(baseRequest || {}));
+
+  if (modelOverrideEnabled && newModel.trim()) {
+    finalReq.model = newModel.trim();
+  }
+
+  const trimmedPrompt = requestSystemPrompt.trim();
+  if (trimmedPrompt) {
+    finalReq = applySystemPromptToBody(finalReq, trimmedPrompt);
+  }
+
+  if (typeof requestBody.temperature === "number") {
+    finalReq.temperature = requestBody.temperature;
+  }
+  if (typeof requestBody.max_tokens === "number") {
+    finalReq.max_tokens = requestBody.max_tokens;
+  }
+  if (typeof requestBody.top_p === "number") {
+    finalReq.top_p = requestBody.top_p;
+  }
+
+  for (const [k, v] of Object.entries(requestBody)) {
+    if (
+      k === "model" ||
+      k === "system_prompt" ||
+      k === "messages" ||
+      k === "message" ||
+      k === "user_message" ||
+      k === "response" ||
+      k === "responses" ||
+      k === "input" ||
+      k === "inputs" ||
+      k === "trace_id" ||
+      k === "agent_id" ||
+      k === "agent_name"
+    ) {
+      continue;
+    }
+    finalReq[k] = v;
+  }
+
+  return finalReq;
+}
+
 function extractSystemPromptFromPayload(payload: Record<string, unknown> | null): string {
   if (!payload) return "";
   const direct = payload.system_prompt;
@@ -1452,13 +1520,19 @@ export default function ReleaseGatePageContent() {
 
   const liveViewSettingsHref = `/organizations/${orgId}/projects/${projectId}/live-view`;
 
-  const requestSystemPrompt = useMemo(
-    () =>
-      (typeof requestBody.system_prompt === "string"
+  const requestSystemPrompt = useMemo(() => {
+    const fromBody =
+      typeof requestBody.system_prompt === "string"
         ? requestBody.system_prompt
-        : extractSystemPromptFromPayload(requestBody)) || "",
-    [requestBody]
-  );
+        : extractSystemPromptFromPayload(requestBody);
+    if (fromBody && fromBody.trim()) {
+      return fromBody.trim();
+    }
+    // When the editable request body does not yet contain a prompt (e.g. seeded only
+    // with sampling knobs or provider template), fall back to the node's detected
+    // system prompt so the textarea is prefilled instead of empty.
+    return runDataPrompt || "";
+  }, [requestBody, runDataPrompt]);
   const requestBodyWithoutTools = useMemo(
     () => editableRequestBodyWithoutTools(requestBody),
     [requestBody]
@@ -1466,6 +1540,28 @@ export default function ReleaseGatePageContent() {
   const requestBodyJson = useMemo(
     () => JSON.stringify(requestBodyWithoutTools, null, 2),
     [requestBodyWithoutTools]
+  );
+
+  const finalCandidateRequest = useMemo(
+    () =>
+      buildFinalCandidateRequest({
+        baselineSeedSnapshot,
+        baselinePayload,
+        nodeBasePayload,
+        requestBody,
+        requestSystemPrompt,
+        modelOverrideEnabled,
+        newModel,
+      }),
+    [
+      baselineSeedSnapshot,
+      baselinePayload,
+      nodeBasePayload,
+      requestBody,
+      requestSystemPrompt,
+      modelOverrideEnabled,
+      newModel,
+    ]
   );
 
   const handleRequestJsonBlur = useCallback(() => {
@@ -1866,6 +1962,7 @@ export default function ReleaseGatePageContent() {
     baselineSeedSnapshot,
     baselinePayload,
     nodeBasePayload,
+    finalCandidateRequest,
     configSourceLabel,
     selectedBaselineCount,
     selectedDataSummary,
