@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import OrgLayout from "@/components/layout/OrgLayout";
+import AccountLayout from "@/components/layout/AccountLayout";
 import { apiClient } from "@/lib/api/client";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { BarChart3, Zap, Database } from "lucide-react";
@@ -61,31 +61,16 @@ export default function AccountUsagePage() {
   const pct = (used: number, limit: number) =>
     limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
 
-  // Account-level pages still live inside OrgLayout shell for now; we omit org-specific props.
   return (
-    <OrgLayout
+    <AccountLayout
+      activeTab="usage"
       breadcrumb={[
         { label: "Account", href: "/settings/profile" },
         { label: "Usage" },
       ]}
     >
-      <div className="max-w-5xl mx-auto pb-24 relative">
+      <div className="pb-24 relative">
         <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none" />
-
-        <div className="mb-12 relative z-10">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,1)] animate-pulse" />
-            <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em]">
-              Account Usage
-            </p>
-          </div>
-          <h1 className="text-5xl font-black text-white uppercase tracking-tighter mb-4">
-            Usage & Quotas
-          </h1>
-          <p className="text-slate-400 font-bold uppercase tracking-widest text-sm max-w-2xl leading-relaxed">
-            View how much of your current plan you&apos;ve used across all organizations and projects.
-          </p>
-        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16 relative z-10">
           {/* Snapshots */}
