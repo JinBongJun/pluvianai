@@ -103,6 +103,13 @@ export default function OrgSettingsPage() {
         undefined,
         { revalidate: false }
       );
+      // Also remove this org from the global organizations list in header/sidebar
+      mutate(
+        "organizations",
+        (prev: any) =>
+          Array.isArray(prev) ? prev.filter((item: any) => item.id !== orgId && String(item.id) !== String(orgId)) : prev,
+        { revalidate: false }
+      );
       // Also clear organization project lists for this org
       mutate(
         key => Array.isArray(key) && key[0] === "organization-projects-list" && key[1] === orgId,
