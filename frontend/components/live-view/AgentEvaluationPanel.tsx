@@ -31,12 +31,12 @@ import { motion, AnimatePresence } from "framer-motion";
 type EvalConfig = {
   enabled?: boolean;
   empty?: { enabled?: boolean; min_chars?: number };
-  latency?: { enabled?: boolean; warn_ms?: number; crit_ms?: number };
-  status_code?: { enabled?: boolean; warn_from?: number; crit_from?: number };
+  latency?: { enabled?: boolean; fail_ms?: number };
+  status_code?: { enabled?: boolean; fail_from?: number };
   json?: { enabled?: boolean; mode?: "if_json" | "always" | "off" };
   refusal?: { enabled?: boolean };
-  length?: { enabled?: boolean; warn_ratio?: number; crit_ratio?: number };
-  repetition?: { enabled?: boolean; warn_line_repeats?: number; crit_line_repeats?: number };
+  length?: { enabled?: boolean; fail_ratio?: number };
+  repetition?: { enabled?: boolean; fail_line_repeats?: number };
   required?: { enabled?: boolean; keywords_csv?: string; json_fields_csv?: string };
   format?: { enabled?: boolean; sections_csv?: string };
   leakage?: { enabled?: boolean };
@@ -48,12 +48,12 @@ const DEFAULT_EVAL: Required<EvalConfig> = {
   enabled: true,
   window: { limit: 50 },
   empty: { enabled: true, min_chars: 16 },
-  latency: { enabled: true, warn_ms: 2000, crit_ms: 5000 },
-  status_code: { enabled: true, warn_from: 400, crit_from: 500 },
+  latency: { enabled: true, fail_ms: 5000 },
+  status_code: { enabled: true, fail_from: 500 },
   json: { enabled: true, mode: "if_json" },
   refusal: { enabled: true },
-  length: { enabled: true, warn_ratio: 0.35, crit_ratio: 0.75 },
-  repetition: { enabled: true, warn_line_repeats: 3, crit_line_repeats: 6 },
+  length: { enabled: false, fail_ratio: 0.75 },
+  repetition: { enabled: false, fail_line_repeats: 6 },
   required: { enabled: false, keywords_csv: "", json_fields_csv: "" },
   format: { enabled: false, sections_csv: "" },
   leakage: { enabled: false },
@@ -93,15 +93,13 @@ function getEvalRuleSummary(id: string, config: any): string {
     case "empty":
       return typeof config.min_chars === "number" ? `min ${config.min_chars} chars` : "";
     case "latency": {
-      const w = config.warn_ms;
-      const c = config.crit_ms;
       const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}s` : `${n}ms`);
-      return typeof w === "number" && typeof c === "number" ? `warn ${fmt(w)}, crit ${fmt(c)}` : "";
+      const f = config.fail_ms;
+      return typeof f === "number" ? `fail ≥ ${fmt(f)}` : "";
     }
     case "status_code": {
-      const w = config.warn_from;
-      const c = config.crit_from;
-      return typeof w === "number" && typeof c === "number" ? `warn ≥${w}, crit ≥${c}` : "";
+      const f = config.fail_from;
+      return typeof f === "number" ? `fail ≥${f}` : "";
     }
     case "json":
       return config.mode === "always"
@@ -112,17 +110,13 @@ function getEvalRuleSummary(id: string, config: any): string {
     case "refusal":
       return "On";
     case "length": {
-      const wr = config.warn_ratio;
-      const cr = config.crit_ratio;
+      const fr = config.fail_ratio;
       const pct = (r: number) => `${Math.round(r * 100)}%`;
-      return typeof wr === "number" && typeof cr === "number"
-        ? `warn ${pct(wr)}, crit ${pct(cr)}`
-        : "";
+      return typeof fr === "number" ? `fail ±${pct(fr)} vs baseline` : "";
     }
     case "repetition": {
-      const w = config.warn_line_repeats;
-      const c = config.crit_line_repeats;
-      return typeof w === "number" && typeof c === "number" ? `warn ${w}, crit ${c} lines` : "";
+      const f = config.fail_line_repeats;
+      return typeof f === "number" ? `fail ≥ ${f} repeats` : "";
     }
     case "required":
       return config.keywords_csv?.trim() || config.json_fields_csv?.trim()
@@ -661,41 +655,22 @@ export function AgentEvaluationPanel({
             onUpdate={c => updateConfig("latency", c)}
             summary={getEvalRuleSummary("latency", safeDraft.latency)}
             renderSettings={(cfg, update) => (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <FieldLabel
-                    label="Warn (ms)"
-                    help="Warning threshold for latency in milliseconds. Use your normal p95 as a starting point."
-                  />
-                  <input
-                    type="number"
-                    min={100}
-                    max={120000}
-                    className={InputCls}
-                    value={cfg.warn_ms}
-                    onChange={e =>
-                      update({ ...cfg, warn_ms: clampNumber(Number(e.target.value), 100, 120000) })
-                    }
-                  />
-                  <p className={HintCls}>Range: 100 to 120,000 ms</p>
-                </div>
-                <div>
-                  <FieldLabel
-                    label="Critical (ms)"
-                    help="Critical threshold for latency in milliseconds. Use your normal p99 as a starting point."
-                  />
-                  <input
-                    type="number"
-                    min={200}
-                    max={180000}
-                    className={InputCls}
-                    value={cfg.crit_ms}
-                    onChange={e =>
-                      update({ ...cfg, crit_ms: clampNumber(Number(e.target.value), 200, 180000) })
-                    }
-                  />
-                  <p className={HintCls}>Range: 200 to 180,000 ms</p>
-                </div>
+              <div>
+                <FieldLabel
+                  label="Fail Threshold (ms)"
+                  help="If latency is at or above this value, the check fails. Use your normal p99 as a starting point."
+                />
+                <input
+                  type="number"
+                  min={100}
+                  max={180000}
+                  className={InputCls}
+                  value={cfg.fail_ms}
+                  onChange={e =>
+                    update({ ...cfg, fail_ms: clampNumber(Number(e.target.value), 100, 180000) })
+                  }
+                />
+                <p className={HintCls}>Range: 100 to 180,000 ms</p>
               </div>
             )}
           />
@@ -709,41 +684,22 @@ export function AgentEvaluationPanel({
             onUpdate={c => updateConfig("status_code", c)}
             summary={getEvalRuleSummary("status_code", safeDraft.status_code)}
             renderSettings={(cfg, update) => (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <FieldLabel
-                    label="Warn From"
-                    help="HTTP status code at or above this value is treated as warning-level failure."
-                  />
-                  <input
-                    type="number"
-                    min={100}
-                    max={599}
-                    className={InputCls}
-                    value={cfg.warn_from}
-                    onChange={e =>
-                      update({ ...cfg, warn_from: clampNumber(Number(e.target.value), 100, 599) })
-                    }
-                  />
-                  <p className={HintCls}>Range: 100 to 599</p>
-                </div>
-                <div>
-                  <FieldLabel
-                    label="Critical From"
-                    help="HTTP status code at or above this value is treated as critical failure. Common default is 500."
-                  />
-                  <input
-                    type="number"
-                    min={100}
-                    max={599}
-                    className={InputCls}
-                    value={cfg.crit_from}
-                    onChange={e =>
-                      update({ ...cfg, crit_from: clampNumber(Number(e.target.value), 100, 599) })
-                    }
-                  />
-                  <p className={HintCls}>Range: 100 to 599</p>
-                </div>
+              <div>
+                <FieldLabel
+                  label="Fail From"
+                  help="HTTP status code at or above this value fails the check. Common default is 500."
+                />
+                <input
+                  type="number"
+                  min={100}
+                  max={599}
+                  className={InputCls}
+                  value={cfg.fail_from}
+                  onChange={e =>
+                    update({ ...cfg, fail_from: clampNumber(Number(e.target.value), 100, 599) })
+                  }
+                />
+                <p className={HintCls}>Range: 100 to 599</p>
               </div>
             )}
           />
@@ -990,43 +946,23 @@ export function AgentEvaluationPanel({
                 onUpdate={c => updateConfig("length", c)}
                 summary={getEvalRuleSummary("length", safeDraft.length)}
                 renderSettings={(cfg, update) => (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <FieldLabel
-                        label="Warn ratio"
-                        help="Relative output-length change from baseline that triggers warning. Example: 0.35 means 35% drift."
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        max={2}
-                        step="0.05"
-                        className={InputCls}
-                        value={cfg.warn_ratio}
-                        onChange={e =>
-                          update({ ...cfg, warn_ratio: clampNumber(Number(e.target.value), 0, 2) })
-                        }
-                      />
-                      <p className={HintCls}>Range: 0.00 to 2.00</p>
-                    </div>
-                    <div>
-                      <FieldLabel
-                        label="Critical ratio"
-                        help="Relative output-length change from baseline that triggers critical state."
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        max={3}
-                        step="0.05"
-                        className={InputCls}
-                        value={cfg.crit_ratio}
-                        onChange={e =>
-                          update({ ...cfg, crit_ratio: clampNumber(Number(e.target.value), 0, 3) })
-                        }
-                      />
-                      <p className={HintCls}>Range: 0.00 to 3.00</p>
-                    </div>
+                  <div>
+                    <FieldLabel
+                      label="Fail ratio"
+                      help="Relative output-length change from baseline that fails. Example: 0.75 means 75% drift."
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={3}
+                      step="0.05"
+                      className={InputCls}
+                      value={cfg.fail_ratio}
+                      onChange={e =>
+                        update({ ...cfg, fail_ratio: clampNumber(Number(e.target.value), 0, 3) })
+                      }
+                    />
+                    <p className={HintCls}>Range: 0.00 to 3.00</p>
                   </div>
                 )}
               />
@@ -1040,47 +976,25 @@ export function AgentEvaluationPanel({
                 onUpdate={c => updateConfig("repetition", c)}
                 summary={getEvalRuleSummary("repetition", safeDraft.repetition)}
                 renderSettings={(cfg, update) => (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <FieldLabel
-                        label="Warn Repeats"
-                        help="Number of repeated lines that triggers warning-level repetition detection."
-                      />
-                      <input
-                        type="number"
-                        min={1}
-                        max={100}
-                        className={InputCls}
-                        value={cfg.warn_line_repeats}
-                        onChange={e =>
-                          update({
-                            ...cfg,
-                            warn_line_repeats: clampNumber(Number(e.target.value), 1, 100),
-                          })
-                        }
-                      />
-                      <p className={HintCls}>Range: 1 to 100</p>
-                    </div>
-                    <div>
-                      <FieldLabel
-                        label="Critical Repeats"
-                        help="Number of repeated lines that triggers critical repetition detection."
-                      />
-                      <input
-                        type="number"
-                        min={1}
-                        max={150}
-                        className={InputCls}
-                        value={cfg.crit_line_repeats}
-                        onChange={e =>
-                          update({
-                            ...cfg,
-                            crit_line_repeats: clampNumber(Number(e.target.value), 1, 150),
-                          })
-                        }
-                      />
-                      <p className={HintCls}>Range: 1 to 150</p>
-                    </div>
+                  <div>
+                    <FieldLabel
+                      label="Fail repeats"
+                      help="Number of repeated lines that fails the repetition check."
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      max={150}
+                      className={InputCls}
+                      value={cfg.fail_line_repeats}
+                      onChange={e =>
+                        update({
+                          ...cfg,
+                          fail_line_repeats: clampNumber(Number(e.target.value), 1, 150),
+                        })
+                      }
+                    />
+                    <p className={HintCls}>Range: 1 to 150</p>
                   </div>
                 )}
               />

@@ -583,25 +583,7 @@ def _validate_eval_config_for_save(eval_part: Dict[str, Any]) -> None:
             detail="When format is enabled, set sections_csv.",
         )
 
-    length_cfg = normalized_eval.get("length", {})
-    if length_cfg.get("enabled"):
-        warn_ratio = float(length_cfg.get("warn_ratio", 0.0))
-        crit_ratio = float(length_cfg.get("crit_ratio", 0.0))
-        if crit_ratio < warn_ratio:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="For length, crit_ratio must be greater than or equal to warn_ratio.",
-            )
-
-    repetition_cfg = normalized_eval.get("repetition", {})
-    if repetition_cfg.get("enabled"):
-        warn_repeats = int(repetition_cfg.get("warn_line_repeats", 0))
-        crit_repeats = int(repetition_cfg.get("crit_line_repeats", 0))
-        if crit_repeats < warn_repeats:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="For repetition, crit_line_repeats must be greater than or equal to warn_line_repeats.",
-            )
+    # Length and repetition use single fail thresholds in MVP (pass/fail contract).
 
 
 @router.patch("/projects/{project_id}/live-view/agents/{agent_id}/settings")
