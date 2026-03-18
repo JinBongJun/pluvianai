@@ -121,6 +121,8 @@ export function ReleaseGateConfigPanel({
   const runDataProvider = toReplayProvider(ctx?.runDataProvider);
   const runDataModel = (ctx?.runDataModel as string) ?? "";
   const baselinePayload = (ctx?.baselinePayload as Record<string, unknown> | null) ?? null;
+  const finalCandidateRequest =
+    (ctx?.finalCandidateRequest as Record<string, unknown> | null) ?? null;
   const selectedBaselineCount = Number(ctx?.selectedBaselineCount ?? 0);
   const selectedDataSummary =
     (ctx?.selectedDataSummary as string) ??
@@ -135,6 +137,10 @@ export function ReleaseGateConfigPanel({
   const baselinePayloadJson = useMemo(
     () => stringifyJson(sanitizePayloadForPreview(baselinePayload ?? {})),
     [baselinePayload]
+  );
+  const finalCandidateJson = useMemo(
+    () => stringifyJson(finalCandidateRequest ?? {}),
+    [finalCandidateRequest]
   );
   const candidateJsonValue = requestJsonDraft ?? requestBodyJson;
 
@@ -263,7 +269,7 @@ export function ReleaseGateConfigPanel({
 
           {/* Main Content */}
           <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,2.2fr)] items-start">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.8fr)] items-start">
               {/* Left Column: Baseline */}
               <section className="sticky top-0 space-y-6">
                 {selectedBaselineCount === 0 && (
@@ -314,7 +320,7 @@ export function ReleaseGateConfigPanel({
                   <div className="p-5 flex flex-col">
                     <div className="mb-3 flex items-center justify-between">
                       <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
-                        Config-only Preview
+                        Baseline Request (Preview)
                       </div>
                       {selectedBaselineCount > 0 && (
                         <button
@@ -346,6 +352,31 @@ export function ReleaseGateConfigPanel({
                           : "No baseline payload available yet."}
                       </pre>
                     )}
+                  </div>
+                </div>
+              </section>
+
+              {/* Middle Column: Final Candidate Request */}
+              <section className="space-y-6">
+                <div className="rounded-2xl border border-white/5 bg-[#0f1115] overflow-hidden flex flex-col shadow-inner">
+                  <div className="flex items-center justify-between border-b border-white/5 px-5 py-4 bg-white/[0.02]">
+                    <div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1">
+                        Candidate Request
+                      </div>
+                      <div className="text-base font-semibold text-white">After Overrides</div>
+                    </div>
+                    <div className="text-xs text-slate-500 max-w-xs text-right">
+                      This JSON shows how your overrides will be applied to the original request.
+                    </div>
+                  </div>
+
+                  <div className="p-5">
+                    <pre className="min-h-[400px] max-h-[600px] rounded-xl border border-white/5 bg-[#0a0c10] p-5 text-[13px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-all overflow-auto custom-scrollbar shadow-inner">
+                      {finalCandidateRequest
+                        ? finalCandidateJson
+                        : "No candidate request available yet. Select a node and baseline, then adjust overrides on the right."}
+                    </pre>
                   </div>
                 </div>
               </section>
