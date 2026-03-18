@@ -14,6 +14,7 @@ from app.core.database import SessionLocal
 from app.core.logging_config import logger
 from app.core.config import settings
 from app.utils.tool_calls import extract_tool_calls_summary
+from app.utils.agent_signature import build_node_key
 import httpx
 
 
@@ -101,7 +102,6 @@ class StreamProcessor:
                             eval_config_version = None
                         snapshot_data = {
                             "trace_id": data.get("trace_id"),
-                            "agent_id": data.get("agent_id") or None,
                             "provider": data.get("provider"),
                             "model": data.get("model"),
                             "system_prompt": data.get("system_prompt") or None,
@@ -114,6 +114,17 @@ class StreamProcessor:
                             "eval_config_version": eval_config_version,
                             "tool_calls_summary": tool_calls_summary if tool_calls_summary else None,
                         }
+                        # v1.0 node identity: always recompute from signature to avoid mixing
+                        # (stream payload may contain legacy agent_id/agent_name fields)
+                        request_payload = payload.get("request") if isinstance(payload, dict) else None
+                        if not isinstance(request_payload, dict) and isinstance(payload, dict):
+                            request_payload = payload
+                        snapshot_data["agent_id"] = build_node_key(
+                            provider=snapshot_data.get("provider"),
+                            model=snapshot_data.get("model"),
+                            system_prompt=snapshot_data.get("system_prompt"),
+                            request_payload=request_payload if isinstance(request_payload, dict) else {},
+                        )
                         project_id = int(data.get("project_id")) if data.get("project_id") else None
                         
                         snapshots_to_insert.append((snapshot_data, project_id, message_id))

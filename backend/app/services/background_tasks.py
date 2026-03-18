@@ -16,6 +16,7 @@ from app.services.data_normalizer import DataNormalizer
 from app.utils.compression import optimize_api_call_data, compress_json
 from app.utils.tool_calls import extract_tool_calls_summary
 from app.utils.secret_redaction import redact_secrets
+from app.utils.agent_signature import build_node_key
 from app.core.logging_config import logger
 
 
@@ -120,18 +121,14 @@ class BackgroundTaskService:
             # Create Snapshot so Live View boxes appear (SDK traffic -> snapshots per design)
             trace_id = chain_id or str(uuid.uuid4())
             system_prompt = normalized.get("system_prompt")
-            # Derive a stable agent identifier:
-            # 1) Use explicit agent_name when provided
-            # 2) Otherwise, hash the system prompt (matches proxy/snapshot path behavior)
-            # 3) Fallback to "unknown" if neither is available
-            if agent_name and agent_name.strip():
-                agent_id = agent_name.strip()
-            elif system_prompt:
-                import hashlib
-
-                agent_id = hashlib.sha256(system_prompt.encode()).hexdigest()[:16]
-            else:
-                agent_id = "unknown"
+            # v1.0 node identity: signature over provider/model/system_prompt/settings/tools (agent_name excluded)
+            # For SDK path, the request payload is available as request_data.
+            agent_id = build_node_key(
+                provider=normalized.get("provider", "unknown"),
+                model=normalized.get("model", "unknown"),
+                system_prompt=system_prompt,
+                request_payload=request_data or {},
+            )
             request_prompt = normalized.get("request_prompt")
             response_text = normalized.get("response_text")
             payload_for_snapshot = {
