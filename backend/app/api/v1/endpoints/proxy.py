@@ -195,6 +195,7 @@ async def _proxy_request(
                         from app.services.snapshot_service import SnapshotService
                         from app.infrastructure.repositories.trace_repository import TraceRepository
                         from app.infrastructure.repositories.snapshot_repository import SnapshotRepository
+                        from app.services.live_view_events import publish_agents_changed
                         
                         # Create service instance for background task
                         trace_repo = TraceRepository(bg_db)
@@ -210,6 +211,10 @@ async def _proxy_request(
                         # Only commit if snapshot was saved directly (fallback mode)
                         if result is not None:
                             bg_db.commit()
+                            try:
+                                publish_agents_changed(p_id, [getattr(result, "agent_id", None)])
+                            except Exception:
+                                pass
                         # If result is None, snapshot was queued to Redis Stream (async)
                     except Exception as ex:
                         logger.warning(f"Background snapshot error (fail-silent): {str(ex)}")
