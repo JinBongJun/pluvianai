@@ -90,6 +90,48 @@ def normalize_eval_config(raw_eval: Any) -> Dict[str, Any]:
         tool_cfg = cfg.get("tool_use_policy")
     if not isinstance(tool_cfg, dict):
         tool_cfg = {}
+    # NOTE: MVP contract uses pass/fail/not_applicable.
+    # Each check should have a single "fail threshold" knob where applicable.
+    # Backward compatibility: older configs may still contain warn/crit fields; we map them.
+    latency_src = cfg.get("latency") if isinstance(cfg.get("latency"), dict) else {}
+    status_src = cfg.get("status_code") if isinstance(cfg.get("status_code"), dict) else {}
+    length_src = cfg.get("length") if isinstance(cfg.get("length"), dict) else {}
+    repetition_src = cfg.get("repetition") if isinstance(cfg.get("repetition"), dict) else {}
+
+    latency_fail_ms = (
+        (latency_src.get("fail_ms") if isinstance(latency_src, dict) else None)
+        if isinstance(latency_src, dict)
+        else None
+    )
+    if latency_fail_ms is None:
+        # Prefer legacy crit_ms when present, else warn_ms, else default.
+        legacy = latency_src.get("crit_ms") if isinstance(latency_src, dict) else None
+        if legacy is None:
+            legacy = latency_src.get("warn_ms") if isinstance(latency_src, dict) else None
+        latency_fail_ms = legacy
+
+    status_fail_from = status_src.get("fail_from") if isinstance(status_src, dict) else None
+    if status_fail_from is None:
+        # Prefer legacy crit_from when present, else warn_from, else default.
+        legacy = status_src.get("crit_from") if isinstance(status_src, dict) else None
+        if legacy is None:
+            legacy = status_src.get("warn_from") if isinstance(status_src, dict) else None
+        status_fail_from = legacy
+
+    length_fail_ratio = length_src.get("fail_ratio") if isinstance(length_src, dict) else None
+    if length_fail_ratio is None:
+        legacy = length_src.get("crit_ratio") if isinstance(length_src, dict) else None
+        if legacy is None:
+            legacy = length_src.get("warn_ratio") if isinstance(length_src, dict) else None
+        length_fail_ratio = legacy
+
+    repetition_fail_repeats = repetition_src.get("fail_line_repeats") if isinstance(repetition_src, dict) else None
+    if repetition_fail_repeats is None:
+        legacy = repetition_src.get("crit_line_repeats") if isinstance(repetition_src, dict) else None
+        if legacy is None:
+            legacy = repetition_src.get("warn_line_repeats") if isinstance(repetition_src, dict) else None
+        repetition_fail_repeats = legacy
+
     normalized = {
         "enabled": bool(cfg.get("enabled", True)),
         "window": {"limit": _clamp_int((cfg.get("window") or {}).get("limit"), 50, 10, 200)},
@@ -99,13 +141,11 @@ def normalize_eval_config(raw_eval: Any) -> Dict[str, Any]:
         },
         "latency": {
             "enabled": bool((cfg.get("latency") or {}).get("enabled", True)),
-            "warn_ms": _clamp_int((cfg.get("latency") or {}).get("warn_ms"), 2000, 100, 120000),
-            "crit_ms": _clamp_int((cfg.get("latency") or {}).get("crit_ms"), 5000, 200, 180000),
+            "fail_ms": _clamp_int(latency_fail_ms, 5000, 100, 180000),
         },
         "status_code": {
             "enabled": bool((cfg.get("status_code") or {}).get("enabled", True)),
-            "warn_from": _clamp_int((cfg.get("status_code") or {}).get("warn_from"), 400, 100, 599),
-            "crit_from": _clamp_int((cfg.get("status_code") or {}).get("crit_from"), 500, 100, 599),
+            "fail_from": _clamp_int(status_fail_from, 500, 100, 599),
         },
         "json": {
             "enabled": bool((cfg.get("json") or {}).get("enabled", True)),
@@ -114,13 +154,11 @@ def normalize_eval_config(raw_eval: Any) -> Dict[str, Any]:
         "refusal": {"enabled": bool((cfg.get("refusal") or {}).get("enabled", True))},
         "length": {
             "enabled": bool((cfg.get("length") or {}).get("enabled", True)),
-            "warn_ratio": _clamp_float((cfg.get("length") or {}).get("warn_ratio"), 0.35, 0.0, 2.0),
-            "crit_ratio": _clamp_float((cfg.get("length") or {}).get("crit_ratio"), 0.75, 0.0, 3.0),
+            "fail_ratio": _clamp_float(length_fail_ratio, 0.75, 0.0, 3.0),
         },
         "repetition": {
             "enabled": bool((cfg.get("repetition") or {}).get("enabled", True)),
-            "warn_line_repeats": _clamp_int((cfg.get("repetition") or {}).get("warn_line_repeats"), 3, 1, 100),
-            "crit_line_repeats": _clamp_int((cfg.get("repetition") or {}).get("crit_line_repeats"), 6, 1, 150),
+            "fail_line_repeats": _clamp_int(repetition_fail_repeats, 6, 1, 150),
         },
         "required": {
             "enabled": bool((cfg.get("required") or {}).get("enabled", False)),
@@ -248,7 +286,7 @@ def _evaluate_one_snapshot(
 
     if cfg["latency"]["enabled"]:
         if isinstance(s.get("latency_ms"), (int, float)):
-            if s["latency_ms"] >= cfg["latency"]["warn_ms"]:
+            if s["latency_ms"] >= cfg["latency"]["fail_ms"]:
                 status_map["latency"] = FAIL_STATUS
             else:
                 status_map["latency"] = PASS_STATUS
@@ -257,7 +295,7 @@ def _evaluate_one_snapshot(
 
     if cfg["status_code"]["enabled"]:
         if isinstance(s.get("status_code"), int):
-            if s["status_code"] >= cfg["status_code"]["warn_from"]:
+            if s["status_code"] >= cfg["status_code"]["fail_from"]:
                 status_map["status_code"] = FAIL_STATUS
             else:
                 status_map["status_code"] = PASS_STATUS
@@ -300,11 +338,8 @@ def _evaluate_one_snapshot(
         # Length drift is only meaningful when we have a non-zero baseline and a non-empty response.
         if baseline_len and baseline_len > 0 and len(trimmed) > 0:
             ratio = abs(len(trimmed) - baseline_len) / baseline_len
-            crit_ratio = cfg["length"]["crit_ratio"]
-            warn_ratio = cfg["length"]["warn_ratio"]
-            # Fail when deviation crosses the critical band; warn band is treated as "pass" for now
-            # but can be surfaced as a softer signal in the future without changing the status shape.
-            if ratio >= crit_ratio:
+            fail_ratio = cfg["length"]["fail_ratio"]
+            if ratio >= fail_ratio:
                 status_map["length"] = FAIL_STATUS
             else:
                 status_map["length"] = PASS_STATUS
@@ -314,9 +349,8 @@ def _evaluate_one_snapshot(
     if cfg["repetition"]["enabled"]:
         if trimmed:
             max_repeat = _max_line_repeat_count(trimmed)
-            crit_repeats = cfg["repetition"]["crit_line_repeats"]
-            warn_repeats = cfg["repetition"]["warn_line_repeats"]
-            if max_repeat >= crit_repeats:
+            fail_repeats = cfg["repetition"]["fail_line_repeats"]
+            if max_repeat >= fail_repeats:
                 status_map["repetition"] = FAIL_STATUS
             else:
                 status_map["repetition"] = PASS_STATUS
