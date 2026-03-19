@@ -322,18 +322,18 @@ export function ReleaseGateConfigPanel({
                   <div className="grid grid-cols-2 gap-px bg-white/5 border-b border-white/5">
                     <div className="bg-[#0f1115] p-4">
                       <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1.5">
-                        Using Model
+                        Original Model
                       </div>
                       <div className="text-sm font-mono text-slate-200 truncate">
-                        {usingModel || "Not specified"}
+                        {runDataModel || "Not detected"}
                       </div>
                     </div>
                     <div className="bg-[#0f1115] p-4">
                       <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1.5">
-                        Using Provider
+                        Original Provider
                       </div>
                       <div className="text-sm text-slate-200">
-                        {formatProviderLabel(usingProvider)}
+                        {formatProviderLabel(runDataProvider)}
                       </div>
                     </div>
                   </div>
