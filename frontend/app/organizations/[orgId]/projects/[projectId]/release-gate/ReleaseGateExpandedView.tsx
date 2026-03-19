@@ -607,12 +607,19 @@ function AttemptDetailOverlay({
     .toLowerCase();
   const candidateExtractPath = String((candidateSnapshot as any)?.response_extract_path ?? "").trim();
   const candidateExtractReason = String((candidateSnapshot as any)?.response_extract_reason ?? "").trim();
+  const requestFallbackStage = String((candidateSnapshot as any)?.request_fallback_stage ?? "").trim();
+  const requestFallbackAttempts = Array.isArray((candidateSnapshot as any)?.request_fallback_attempts)
+    ? (((candidateSnapshot as any).request_fallback_attempts as unknown[])
+        .map(v => String(v ?? "").trim())
+        .filter(Boolean) as string[])
+    : [];
   const candidateResponseUsedFallback =
     candidateExtractReason === "serialized_json_fallback" ||
     candidateExtractReason === "serialized_json_exception_fallback" ||
     candidateExtractReason === "parser_exception_fallback" ||
     candidateExtractReason === "extract_meta_runtime_error" ||
-    candidateExtractReason === "extract_meta_invalid";
+    candidateExtractReason === "extract_meta_invalid" ||
+    Boolean(requestFallbackStage);
   const baselineResponseDataKeys = Array.isArray((attempt as any)?.baseline_snapshot?.response_data_keys)
     ? (((attempt as any).baseline_snapshot.response_data_keys as unknown[]) ?? [])
     : [];
@@ -914,7 +921,11 @@ function AttemptDetailOverlay({
                       )}
                       {candidateResponse && candidateResponseUsedFallback && (
                         <div className="mt-1 text-[10px] text-amber-300">
-                          Preview recovered via fallback path.
+                          Preview recovered via fallback path
+                          {requestFallbackStage ? ` (${requestFallbackStage})` : ""}.
+                          {requestFallbackAttempts.length > 1
+                            ? ` Tried: ${requestFallbackAttempts.join(" -> ")}.`
+                            : ""}
                         </div>
                       )}
                       {!candidateResponse && (candidateExtractPath || candidateExtractReason) && (
