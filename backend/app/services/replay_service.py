@@ -671,7 +671,8 @@ class ReplayService:
                     try:
                         response_data: Any = response.json()
                     except Exception:
-                        response_data = response.text
+                        # Preserve raw body in a dict so downstream normalizers can extract preview text.
+                        response_data = {"text": response.text}
 
                     input_tokens, output_tokens = self._extract_token_usage(
                         provider, response_data if isinstance(response_data, dict) else {}

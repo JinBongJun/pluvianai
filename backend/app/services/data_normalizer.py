@@ -290,14 +290,61 @@ class DataNormalizer:
         if not response_data:
             return None
 
+        def _content_parts_to_text(value: Any) -> Optional[str]:
+            if value is None:
+                return None
+            if isinstance(value, str):
+                return value
+            if isinstance(value, dict):
+                t = value.get("text")
+                return t if isinstance(t, str) else None
+            if isinstance(value, list):
+                parts: List[str] = []
+                for item in value:
+                    if isinstance(item, str):
+                        parts.append(item)
+                        continue
+                    if isinstance(item, dict):
+                        # OpenAI Responses-style blocks: {"type":"output_text","text":"..."}
+                        t = item.get("text")
+                        if isinstance(t, str) and t.strip():
+                            parts.append(t)
+                            continue
+                        # Generic: nested content
+                        inner = item.get("content")
+                        inner_t = _content_parts_to_text(inner)
+                        if isinstance(inner_t, str) and inner_t.strip():
+                            parts.append(inner_t)
+                out = "\n".join(p.strip() for p in parts if isinstance(p, str) and p.strip()).strip()
+                return out or None
+            return None
+
         # OpenAI format
         if "choices" in response_data and isinstance(response_data["choices"], list):
             if len(response_data["choices"]) > 0:
                 choice = response_data["choices"][0]
                 if "message" in choice and isinstance(choice["message"], dict):
-                    content = choice["message"].get("content", "")
-                    if isinstance(content, str):
-                        return content
+                    msg = choice["message"]
+                    content = msg.get("content", "")
+                    text = _content_parts_to_text(content)
+                    if isinstance(text, str) and text.strip():
+                        return text
+                    # Tool-call only completions can have no content.
+                    tool_calls = msg.get("tool_calls")
+                    if isinstance(tool_calls, list) and len(tool_calls) > 0:
+                        return "(tool calls only; no assistant text)"
+                # Legacy completions format
+                if "text" in choice and isinstance(choice.get("text"), str):
+                    return choice.get("text")
+
+        # OpenAI Responses API style (best-effort)
+        if "output_text" in response_data and isinstance(response_data.get("output_text"), str):
+            t = response_data.get("output_text")
+            return t if t.strip() else None
+        if "output" in response_data and isinstance(response_data.get("output"), list):
+            out_text = _content_parts_to_text(response_data.get("output"))
+            if isinstance(out_text, str) and out_text.strip():
+                return out_text
 
         # Anthropic format
         if "content" in response_data:
@@ -310,6 +357,7 @@ class DataNormalizer:
 
         # Direct text field
         if "text" in response_data:
-            return response_data["text"]
+            t = response_data["text"]
+            return t if isinstance(t, str) else str(t)
 
         return None
