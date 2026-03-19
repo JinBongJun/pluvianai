@@ -115,6 +115,11 @@ export interface ReleaseGateAttempt {
   pass: boolean;
   trace_id?: string;
   failure_reasons?: string[];
+  signals?: {
+    checks: Record<string, string>;
+    failed: string[];
+    config_version?: string | null;
+  };
   replay?: {
     attempted: number;
     succeeded: number;

@@ -60,6 +60,11 @@ from app.services.behavior_rules_service import (
     resolve_effective_rules,
     run_behavior_validation,
 )
+from app.services.live_eval_service import (
+    evaluate_one_snapshot_at_save,
+    eval_config_version_hash,
+    normalize_eval_config,
+)
 
 router = APIRouter()
 SUPPORTED_REPLAY_PROVIDERS = {"openai", "anthropic", "google"}
@@ -966,6 +971,36 @@ async def _run_release_gate(
     rules = rules_query.order_by(BehaviorRule.created_at.asc()).all()
     baseline_steps: List[Dict[str, Any]] = []
 
+    # Load Live View diagnostic config (signals eval) for this agent, if available.
+    eval_config_raw: Any = {}
+    if payload.agent_id:
+        try:
+            setting = (
+                db.query(AgentDisplaySetting)
+                .filter(
+                    AgentDisplaySetting.project_id == project_id,
+                    AgentDisplaySetting.system_prompt_hash == payload.agent_id,
+                )
+                .first()
+            )
+            if setting and isinstance(getattr(setting, "diagnostic_config", None), dict):
+                eval_config_raw = setting.diagnostic_config or {}
+        except Exception:
+            eval_config_raw = {}
+
+    try:
+        eval_config_version = eval_config_version_hash(eval_config_raw or {})
+    except Exception:
+        eval_config_version = None
+
+    # Signals-only config (do not run tool policy twice; policy is validated via BehaviorRules).
+    try:
+        eval_config_signals = normalize_eval_config(eval_config_raw or {})
+        if isinstance(eval_config_signals.get("tool"), dict):
+            eval_config_signals["tool"]["enabled"] = False
+    except Exception:
+        eval_config_signals = {"enabled": True}
+
     if payload.evaluation_mode == "replay_test":
         snapshot_by_id: Dict[int, Snapshot] = {s.id: s for s in snapshots}
         attempts_by_snapshot: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
@@ -1060,6 +1095,52 @@ async def _run_release_gate(
                 except Exception:
                     candidate_response_preview = ""
 
+                baseline_response_text = ""
+                try:
+                    raw_baseline_resp = getattr(snapshot, "response", None)
+                    if isinstance(raw_baseline_resp, str):
+                        baseline_response_text = raw_baseline_resp
+                    elif isinstance(raw_baseline_resp, dict):
+                        baseline_response_text = normalizer._extract_response_text(raw_baseline_resp)
+                    else:
+                        baseline_response_text = str(raw_baseline_resp or "")
+                except Exception:
+                    baseline_response_text = ""
+                baseline_len = len(baseline_response_text.strip()) if baseline_response_text else None
+
+                try:
+                    status_code_val = res.get("status_code")
+                    status_code_int = int(status_code_val) if isinstance(status_code_val, int) else None
+                except Exception:
+                    status_code_int = None
+                try:
+                    latency_val = res.get("latency_ms")
+                    latency_int = int(latency_val) if isinstance(latency_val, (int, float)) else None
+                except Exception:
+                    latency_int = None
+
+                signals_checks: Dict[str, str] = {}
+                try:
+                    signals_checks = evaluate_one_snapshot_at_save(
+                        response_text=candidate_response_preview or "",
+                        latency_ms=latency_int,
+                        status_code=status_code_int,
+                        eval_config=eval_config_signals,
+                        baseline_len=baseline_len,
+                    )
+                except Exception:
+                    signals_checks = {}
+                failed_signals_local = [
+                    k
+                    for k, v in (signals_checks or {}).items()
+                    if str(v).strip().lower() == "fail"
+                ]
+                signals_obj = {
+                    "checks": signals_checks or {},
+                    "failed": failed_signals_local,
+                    "config_version": eval_config_version,
+                }
+
                 run_tool_summary = response_to_canonical_tool_calls_summary(
                     res.get("response_data") or {}, res.get("replay_provider")
                 )
@@ -1112,6 +1193,7 @@ async def _run_release_gate(
                                 ),
                             },
                             "behavior_diff": behavior_diff,
+                            "signals": signals_obj,
                             "candidate_snapshot": {
                                 "provider": replay_provider,
                                 "model": str(res.get("replay_model") or snapshot.model or "").strip()
@@ -1162,6 +1244,7 @@ async def _run_release_gate(
                                 "missing_provider_keys": [],
                             },
                             "behavior_diff": behavior_diff,
+                            "signals": signals_obj,
                             "candidate_snapshot": {
                                 "provider": str(res.get("replay_provider") or "").strip() or None,
                                 "model": str(res.get("replay_model") or snapshot.model or "").strip()
@@ -1190,8 +1273,14 @@ async def _run_release_gate(
                     for r in candidate_rules
                 ]
 
-                run_pass = len(candidate_violations) == 0
-                reasons = [f"{len(candidate_violations)} eval element(s) failed"] if not run_pass else []
+                policy_failed = len(candidate_violations) > 0
+                signals_failed = len(failed_signals_local) > 0
+                run_pass = (not policy_failed) and (not signals_failed)
+                reasons: List[str] = []
+                if policy_failed:
+                    reasons.append(f"{len(candidate_violations)} policy rule(s) failed")
+                if signals_failed:
+                    reasons.append(f"{len(failed_signals_local)} signal check(s) failed")
                 if reasons:
                     all_reasons.extend(reasons)
 
@@ -1220,6 +1309,7 @@ async def _run_release_gate(
                             "missing_provider_keys": [],
                         },
                         "behavior_diff": behavior_diff,
+                        "signals": signals_obj,
                         "candidate_snapshot": {
                             "provider": str(res.get("replay_provider") or "").strip() or None,
                             "model": str(res.get("replay_model") or snapshot.model or "").strip()
@@ -1420,10 +1510,11 @@ async def _run_release_gate(
         )
         failed_signals = list(
             dict.fromkeys(
-                v.get("rule_id")
+                sig
                 for run in case_results
-                for v in (run.get("violations") or [])
-                if v.get("rule_id")
+                for a in (run.get("attempts") or [])
+                for sig in (((a.get("signals") or {}).get("failed")) or [])
+                if sig
             )
         )
 
