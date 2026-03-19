@@ -382,17 +382,29 @@ function AttemptDetailOverlay({
   const signalsApplicable = signalsRows.filter(r => r.applicable);
   const signalsPassed = signalsApplicable.filter(r => r.pass);
 
+  const candidateSnapshot =
+    attempt?.candidate_snapshot &&
+    typeof attempt.candidate_snapshot === "object" &&
+    !Array.isArray(attempt.candidate_snapshot)
+      ? (attempt.candidate_snapshot as Record<string, unknown>)
+      : null;
   const candidatePayloadPreview = (() => {
     if (attempt?.replay?.provider_error?.response_preview) {
       return String(attempt.replay.provider_error.response_preview);
     }
     try {
+      const responseDataKeys =
+        (candidateSnapshot as any)?.response_data_keys ??
+        (attempt?.replay?.provider_error && typeof attempt.replay.provider_error === "object"
+          ? (attempt.replay.provider_error as any).response_data_keys
+          : undefined);
       return JSON.stringify(
         {
           summary: attempt?.summary ?? {},
           replay: attempt?.replay ?? {},
           behavior_diff: attempt?.behavior_diff ?? {},
           failure_reasons: attempt?.failure_reasons ?? [],
+          response_data_keys: responseDataKeys ?? [],
         },
         null,
         2
@@ -401,12 +413,6 @@ function AttemptDetailOverlay({
       return "{}";
     }
   })();
-  const candidateSnapshot =
-    attempt?.candidate_snapshot &&
-    typeof attempt.candidate_snapshot === "object" &&
-    !Array.isArray(attempt.candidate_snapshot)
-      ? (attempt.candidate_snapshot as Record<string, unknown>)
-      : null;
   const candidateModel = String(
     candidateSnapshot?.model ??
       (attempt?.summary?.target && typeof attempt.summary.target === "object"
@@ -421,6 +427,9 @@ function AttemptDetailOverlay({
       attempt?.replay?.provider_error?.response_preview ??
       ""
   ).trim();
+  const candidateResponseDataKeys = Array.isArray((candidateSnapshot as any)?.response_data_keys)
+    ? ((candidateSnapshot as any).response_data_keys as unknown[])
+    : [];
 
   const pass = Boolean(attempt?.pass);
 
@@ -558,6 +567,17 @@ function AttemptDetailOverlay({
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
                 Response preview
               </div>
+              {candidateResponseDataKeys.length > 0 && (
+                <div className="mt-1 truncate text-[11px] text-slate-500">
+                  Response keys:{" "}
+                  {candidateResponseDataKeys
+                    .map(k => String(k))
+                    .filter(Boolean)
+                    .slice(0, 6)
+                    .join(", ")}
+                  {candidateResponseDataKeys.length > 6 ? "…" : ""}
+                </div>
+              )}
               <p className="mt-2 max-h-28 overflow-auto custom-scrollbar text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
                 {candidateResponse || "No response preview captured for this attempt."}
               </p>

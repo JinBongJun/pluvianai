@@ -1095,6 +1095,21 @@ async def _run_release_gate(
                 except Exception:
                     candidate_response_preview = ""
 
+                # Capture lightweight response_data key summary for UI debugging.
+                response_data_keys: List[str] = []
+                try:
+                    rd = res.get("response_data")
+                    if isinstance(rd, dict):
+                        response_data_keys = sorted([str(k) for k in rd.keys()])
+                    elif isinstance(rd, str):
+                        response_data_keys = ["<text>"]
+                    elif rd is None:
+                        response_data_keys = []
+                    else:
+                        response_data_keys = [f"<{type(rd).__name__}>"]
+                except Exception:
+                    response_data_keys = []
+
                 baseline_response_text = ""
                 try:
                     raw_baseline_resp = getattr(snapshot, "response", None)
@@ -1168,6 +1183,7 @@ async def _run_release_gate(
                         "error_type": res.get("error_type"),
                         "message": res.get("error"),
                         "response_preview": provider_error_preview,
+                        "response_data_keys": response_data_keys,
                     }
                     attempts_by_snapshot[snapshot.id].append(
                         {
@@ -1202,6 +1218,7 @@ async def _run_release_gate(
                                 "input_text": baseline_input_text,
                                 "response_preview": candidate_response_preview
                                 or str(res.get("error") or "").strip(),
+                                "response_data_keys": response_data_keys,
                             },
                         }
                     )
@@ -1240,6 +1257,7 @@ async def _run_release_gate(
                                     "error_type": res.get("error_type"),
                                     "message": res.get("error"),
                                     "response_preview": provider_error_preview,
+                                    "response_data_keys": response_data_keys,
                                 },
                                 "missing_provider_keys": [],
                             },
@@ -1252,6 +1270,7 @@ async def _run_release_gate(
                                 "status_code": res.get("status_code"),
                                 "input_text": baseline_input_text,
                                 "response_preview": candidate_response_preview or reason,
+                                "response_data_keys": response_data_keys,
                             },
                         }
                     )
@@ -1317,6 +1336,7 @@ async def _run_release_gate(
                             "status_code": res.get("status_code"),
                             "input_text": baseline_input_text,
                             "response_preview": candidate_response_preview,
+                            "response_data_keys": response_data_keys,
                         },
                     }
                 )
