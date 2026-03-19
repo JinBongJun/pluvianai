@@ -1564,6 +1564,113 @@ export default function ReleaseGatePageContent() {
     ]
   );
 
+  /**
+   * UI preview for what Release Gate validate will override and send.
+   * Intentionally excludes snapshot conversation ("messages") so the preview
+   * stays clean and doesn't duplicate system prompt content.
+   */
+  const validateOverridePreview = useMemo(() => {
+    const preview: Record<string, unknown> = {
+      model_source: modelOverrideEnabled ? "platform" : "detected",
+    };
+
+    if (modelOverrideEnabled) {
+      const trimmedModel = newModel.trim();
+      if (trimmedModel) {
+        const inferredProvider = inferProviderFromModelId(trimmedModel);
+        const effectiveProvider = inferredProvider || replayProvider;
+        preview.new_model = trimmedModel;
+        preview.replay_provider = effectiveProvider;
+      }
+    }
+
+    const sys =
+      (typeof requestBody.system_prompt === "string"
+        ? requestBody.system_prompt
+        : requestSystemPrompt
+      ).trim() || undefined;
+    if (sys) preview.new_system_prompt = sys;
+
+    const temp = requestBody.temperature;
+    if (temp != null && typeof temp === "number" && Number.isFinite(temp) && temp >= 0) {
+      preview.replay_temperature = temp;
+    }
+
+    const maxTok = requestBody.max_tokens;
+    if (
+      maxTok != null &&
+      (typeof maxTok === "number"
+        ? Number.isInteger(maxTok)
+        : Number.isInteger(Number(maxTok))) &&
+      Number(maxTok) > 0
+    ) {
+      preview.replay_max_tokens = Number(maxTok);
+    }
+
+    const topP = requestBody.top_p;
+    if (topP != null && typeof topP === "number" && Number.isFinite(topP)) {
+      preview.replay_top_p = topP;
+    }
+
+    const overrides: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(requestBody)) {
+      if (
+        k === "model" ||
+        k === "system_prompt" ||
+        k === "messages" ||
+        k === "temperature" ||
+        k === "max_tokens" ||
+        k === "top_p"
+      ) {
+        continue;
+      }
+      overrides[k] = v;
+    }
+
+    // Tools are passed via replay_overrides.tools (built from toolsList),
+    // unless requestBody already contains a tools array.
+    if (Array.isArray(requestBody.tools) && requestBody.tools.length > 0) {
+      overrides.tools = requestBody.tools;
+    } else if (toolsList.length > 0) {
+      const built: Array<Record<string, unknown>> = [];
+      for (const t of toolsList) {
+        const name = t.name.trim();
+        if (!name) continue;
+        let params: Record<string, unknown> = {};
+        if (t.parameters.trim()) {
+          try {
+            const p = JSON.parse(t.parameters.trim());
+            if (p && typeof p === "object") params = p as Record<string, unknown>;
+          } catch {
+            continue;
+          }
+        }
+        built.push({
+          type: "function",
+          function: {
+            name,
+            description: t.description.trim() || undefined,
+            ...(Object.keys(params).length ? { parameters: params } : {}),
+          },
+        });
+      }
+      if (built.length) overrides.tools = built;
+    }
+
+    if (Object.keys(overrides).length) {
+      preview.replay_overrides = overrides;
+    }
+
+    return preview;
+  }, [
+    modelOverrideEnabled,
+    newModel,
+    replayProvider,
+    requestBody,
+    requestSystemPrompt,
+    toolsList,
+  ]);
+
   const handleRequestJsonBlur = useCallback(() => {
     const raw = requestJsonDraft ?? requestBodyJson;
     const trimmed = raw.trim();
@@ -1963,6 +2070,7 @@ export default function ReleaseGatePageContent() {
     baselinePayload,
     nodeBasePayload,
     finalCandidateRequest,
+    validateOverridePreview,
     configSourceLabel,
     selectedBaselineCount,
     selectedDataSummary,
