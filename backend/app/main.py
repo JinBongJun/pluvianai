@@ -56,7 +56,6 @@ from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.logging_middleware import LoggingMiddleware
 from app.middleware.metrics_middleware import MetricsMiddleware
 from app.middleware.security_middleware import SecurityHeadersMiddleware
-from app.middleware.force_cors_middleware import ForceCORSMiddleware
 from app.core.metrics import update_app_info
 from app.services.cache_service import cache_service
 
@@ -105,49 +104,6 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
 app.add_exception_handler(Exception, general_exception_handler)
 
-# CRITICAL: CORS middleware MUST be added LAST (last in list = first to execute)
-# FastAPI middleware executes in REVERSE order (last added = first executed)
-# CORS must handle preflight OPTIONS requests before any other middleware
-# Parse CORS_ORIGINS from settings (supports comma-separated list or "*")
-cors_origins = settings.cors_origins_list
-
-# CORS configuration for cookie-based authentication
-# For cookies to work, we need:
-# 1. Specific origins (not "*")
-# 2. allow_credentials=True
-cors_origins = settings.cors_origins_list
-
-# Allow localhost for development and production origins
-allow_origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3000",
-]
-
-# Add production origins from settings if available
-if cors_origins and cors_origins != ["*"]:
-    allow_origins.extend(cors_origins)
-
-allow_credentials = True  # Required for httpOnly cookies
-
-logger.info(f"CORS configuration: allow_origins={allow_origins}, allow_credentials={allow_credentials}")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allow_origins,
-    allow_credentials=allow_credentials,
-    allow_methods=["*"],  # Allow all HTTP methods
-    allow_headers=["*"],  # Allow all headers
-    expose_headers=["*"],  # Expose all response headers
-    max_age=3600,  # Cache preflight for 1 hour
-)
-
-logger.info("✅ CORS middleware configured successfully")
-
-# Force CORS middleware - ALWAYS add CORS headers as final fallback
-# This runs FIRST (last added = first executed) to ensure CORS headers are never missing
-app.add_middleware(ForceCORSMiddleware)
-
 # Logging middleware (added immediately after CORS to catch all requests)
 # This MUST be early in the chain to log requests even if they fail later
 app.add_middleware(LoggingMiddleware)
@@ -168,6 +124,42 @@ app.add_middleware(RateLimitMiddleware, requests_per_minute=6000)
 
 # API Hook middleware for capturing LLM API calls
 app.add_middleware(APIHookMiddleware, enabled=True)
+
+# CRITICAL: CORS middleware MUST be added LAST (last added = first executed)
+# FastAPI middleware executes in REVERSE order (last added = first executed).
+# By adding CORSMiddleware last, even "early return" middlewares (e.g. rate limit 429)
+# still get correct CORS headers on the way back out.
+#
+# CORS configuration for cookie-based authentication:
+# - allow_credentials=True
+# - explicit allow_origins (never "*")
+cors_origins = settings.cors_origins_list
+
+# Allow localhost for development and production origins
+allow_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+]
+
+# Add production origins from settings if available
+if cors_origins and cors_origins != ["*"]:
+    allow_origins.extend(cors_origins)
+
+allow_credentials = True  # Required for httpOnly cookies
+logger.info(f"CORS configuration: allow_origins={allow_origins}, allow_credentials={allow_credentials}")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins,
+    allow_credentials=allow_credentials,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],  # Expose all response headers
+    max_age=3600,  # Cache preflight for 1 hour
+)
+
+logger.info("✅ CORS middleware configured successfully")
 
 # Include API routers
 app.include_router(api_router, prefix="/api/v1")
