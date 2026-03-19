@@ -743,11 +743,6 @@ export default function ReleaseGatePageContent() {
   const [overridesOpen, setOverridesOpen] = useState(false);
   const [toolsHydratedKey, setToolsHydratedKey] = useState("");
   const [overridesHydratedKey, setOverridesHydratedKey] = useState("");
-  const { data: coreModelsData } = useSWR(
-    projectId && !isNaN(projectId) ? ["release-gate-core-models", projectId] : null,
-    () => releaseGateAPI.getCoreModels(projectId),
-    { isPaused: () => runLocked }
-  );
 
   const [runDatasetIds, setRunDatasetIds] = useState<string[]>([]);
   const [runSnapshotIds, setRunSnapshotIds] = useState<string[]>([]);
@@ -774,6 +769,11 @@ export default function ReleaseGatePageContent() {
     null
   );
   const runLocked = isValidating || Boolean(activeJobId);
+  const { data: coreModelsData } = useSWR(
+    projectId && !isNaN(projectId) ? ["release-gate-core-models", projectId] : null,
+    () => releaseGateAPI.getCoreModels(projectId),
+    { isPaused: () => runLocked }
+  );
   const cancelRequestedRef = useRef(false);
   const pollNowRef = useRef<null | (() => void)>(null);
   const cancelBurstRemainingRef = useRef(0);
