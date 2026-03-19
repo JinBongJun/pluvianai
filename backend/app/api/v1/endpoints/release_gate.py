@@ -1122,6 +1122,13 @@ async def _run_release_gate(
                 candidate_extract_reason: Optional[str] = None
                 try:
                     extract_meta = normalizer._extract_response_text_with_meta(res.get("response_data"))
+                    if not isinstance(extract_meta, dict):
+                        extract_meta = {
+                            "text": _safe_preview_json(res.get("response_data"))
+                            or "[non-text response received]",
+                            "path": "__extract_meta_invalid__",
+                            "reason": "extract_meta_invalid",
+                        }
                     candidate_response_preview = str(extract_meta.get("text") or "")
                     candidate_extract_path = (
                         str(extract_meta.get("path")).strip() if extract_meta.get("path") else None

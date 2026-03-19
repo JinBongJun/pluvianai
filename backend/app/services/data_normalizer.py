@@ -312,54 +312,157 @@ class DataNormalizer:
                 return text[:max_chars] + "\n…(truncated)…"
             return text
 
-        def _content_parts_to_text(value: Any) -> Optional[str]:
+        def _join_text_parts(parts: List[str]) -> Optional[str]:
+            out = "\n".join(p.strip() for p in parts if isinstance(p, str) and p.strip()).strip()
+            return out or None
+
+        def _extract_openai_content_text(value: Any) -> Optional[str]:
             if value is None:
                 return None
             if isinstance(value, str):
-                return value
-            if isinstance(value, dict):
-                t = value.get("text")
-                if isinstance(t, str):
-                    return t
-                # Some providers wrap text as {"text": {"value": "..."}}
-                if isinstance(t, dict):
-                    tv = t.get("value")
-                    if isinstance(tv, str):
-                        return tv
-                # Generic nested structures
-                inner = value.get("content")
-                inner_t = _content_parts_to_text(inner)
-                if isinstance(inner_t, str) and inner_t.strip():
-                    return inner_t
-                parts = value.get("parts")
-                parts_t = _content_parts_to_text(parts)
-                if isinstance(parts_t, str) and parts_t.strip():
-                    return parts_t
+                return value.strip() or None
+            if not isinstance(value, list):
+                return None
+            parts: List[str] = []
+            for item in value:
+                if isinstance(item, str) and item.strip():
+                    parts.append(item)
+                    continue
+                if not isinstance(item, dict):
+                    continue
+                item_type = str(item.get("type") or "").strip().lower()
+                if item_type in {"text", "output_text"}:
+                    text_val = item.get("text")
+                    if isinstance(text_val, str) and text_val.strip():
+                        parts.append(text_val)
+                        continue
+                    if isinstance(text_val, dict):
+                        nested_value = text_val.get("value")
+                        if isinstance(nested_value, str) and nested_value.strip():
+                            parts.append(nested_value)
+            return _join_text_parts(parts)
+
+        def _extract_anthropic_content_text(value: Any) -> Optional[str]:
+            if isinstance(value, str):
+                return value.strip() or None
+            if not isinstance(value, list):
+                return None
+            parts: List[str] = []
+            for block in value:
+                if not isinstance(block, dict):
+                    continue
+                block_type = str(block.get("type") or "").strip().lower()
+                if block_type == "text":
+                    text_val = block.get("text")
+                    if isinstance(text_val, str) and text_val.strip():
+                        parts.append(text_val)
+                    continue
+                # tool_result can include human-readable text in content, but tool_use.input
+                # must not be treated as model response text.
+                if block_type == "tool_result":
+                    nested_content = block.get("content")
+                    nested_text = _extract_anthropic_content_text(nested_content)
+                    if isinstance(nested_text, str) and nested_text.strip():
+                        parts.append(nested_text)
+                    elif isinstance(nested_content, str) and nested_content.strip():
+                        parts.append(nested_content)
+            return _join_text_parts(parts)
+
+        def _extract_google_parts_text(value: Any) -> Optional[str]:
+            if not isinstance(value, list):
+                return None
+            parts: List[str] = []
+            for part in value:
+                if not isinstance(part, dict):
+                    continue
+                text_val = part.get("text")
+                if isinstance(text_val, str) and text_val.strip():
+                    parts.append(text_val)
+            return _join_text_parts(parts)
+
+        def _extract_openai_text(body: Any) -> Optional[str]:
+            if not isinstance(body, dict):
+                return None
+            message = body.get("message")
+            if isinstance(message, dict):
+                content_text = _extract_openai_content_text(message.get("content"))
+                if content_text:
+                    return content_text
+                content_raw = message.get("content")
+                if isinstance(content_raw, str) and content_raw.strip():
+                    return content_raw.strip()
+            choices = body.get("choices")
+            if isinstance(choices, list) and choices:
+                choice = choices[0] if isinstance(choices[0], dict) else {}
+                message = choice.get("message")
+                if isinstance(message, dict):
+                    content_text = _extract_openai_content_text(message.get("content"))
+                    if content_text:
+                        return content_text
+                if isinstance(choice.get("text"), str) and str(choice.get("text")).strip():
+                    return str(choice.get("text")).strip()
+            output_text = body.get("output_text")
+            if isinstance(output_text, str) and output_text.strip():
+                return output_text.strip()
+            output = body.get("output")
+            if isinstance(output, list):
+                return _extract_openai_content_text(output)
+            return None
+
+        def _extract_anthropic_text(body: Any) -> Optional[str]:
+            if not isinstance(body, dict):
+                return None
+            return _extract_anthropic_content_text(body.get("content"))
+
+        def _extract_google_text(body: Any) -> Optional[str]:
+            if not isinstance(body, dict):
+                return None
+            candidates = body.get("candidates")
+            if not isinstance(candidates, list) or not candidates:
+                return None
+            first = candidates[0] if isinstance(candidates[0], dict) else {}
+            content = first.get("content")
+            if isinstance(content, dict):
+                return _extract_google_parts_text(content.get("parts"))
+            if isinstance(content, list):
+                return _extract_google_parts_text(content)
+            nested_response = first.get("response")
+            if isinstance(nested_response, dict):
+                nested_content = nested_response.get("content")
+                if isinstance(nested_content, dict):
+                    return _extract_google_parts_text(nested_content.get("parts"))
+                if isinstance(nested_content, list):
+                    return _extract_google_parts_text(nested_content)
+            return None
+
+        def _extract_from_serialized_json(value: Any) -> Optional[str]:
+            if isinstance(value, str):
+                raw = value.strip()
+                if raw.startswith("{") or raw.startswith("["):
+                    try:
+                        parsed = json.loads(raw)
+                    except Exception:
+                        return None
+                    return (
+                        _extract_openai_text(parsed)
+                        or _extract_anthropic_text(parsed)
+                        or _extract_google_text(parsed)
+                        or _extract_from_serialized_json(parsed)
+                    )
                 return None
             if isinstance(value, list):
-                parts: List[str] = []
                 for item in value:
-                    if isinstance(item, str):
-                        parts.append(item)
-                        continue
-                    if isinstance(item, dict):
-                        # OpenAI Responses-style blocks: {"type":"output_text","text":"..."}
-                        t = item.get("text")
-                        if isinstance(t, str) and t.strip():
-                            parts.append(t)
-                            continue
-                        if isinstance(t, dict):
-                            tv = t.get("value")
-                            if isinstance(tv, str) and tv.strip():
-                                parts.append(tv)
-                                continue
-                        # Generic: nested content
-                        inner = item.get("content")
-                        inner_t = _content_parts_to_text(inner)
-                        if isinstance(inner_t, str) and inner_t.strip():
-                            parts.append(inner_t)
-                out = "\n".join(p.strip() for p in parts if isinstance(p, str) and p.strip()).strip()
-                return out or None
+                    nested = _extract_from_serialized_json(item)
+                    if isinstance(nested, str) and nested.strip():
+                        return nested
+                return None
+            if isinstance(value, dict):
+                # Only inspect nested serialized payload containers, not arbitrary content/text keys.
+                for key in ("response", "data", "raw_dump", "body", "payload"):
+                    nested = value.get(key)
+                    result = _extract_from_serialized_json(nested)
+                    if isinstance(result, str) and result.strip():
+                        return result
             return None
 
         try:
@@ -370,7 +473,7 @@ class DataNormalizer:
                     if isinstance(choice, dict) and "message" in choice and isinstance(choice["message"], dict):
                         msg = choice["message"]
                         content = msg.get("content", "")
-                        text = _content_parts_to_text(content)
+                        text = _extract_openai_content_text(content)
                         if isinstance(text, str) and text.strip():
                             return {
                                 "text": text,
@@ -399,7 +502,7 @@ class DataNormalizer:
                 if isinstance(t, str) and t.strip():
                     return {"text": t, "path": "output_text", "reason": None}
             if "output" in response_data and isinstance(response_data.get("output"), list):
-                out_text = _content_parts_to_text(response_data.get("output"))
+                out_text = _extract_openai_content_text(response_data.get("output"))
                 if isinstance(out_text, str) and out_text.strip():
                     return {"text": out_text, "path": "output", "reason": None}
 
@@ -407,7 +510,7 @@ class DataNormalizer:
             if "content" in response_data:
                 content = response_data["content"]
                 if isinstance(content, list) and len(content) > 0:
-                    text = _content_parts_to_text(content)
+                    text = _extract_anthropic_content_text(content)
                     if isinstance(text, str) and text.strip():
                         return {"text": text, "path": "content", "reason": None}
 
@@ -425,26 +528,38 @@ class DataNormalizer:
                     elif isinstance(content_obj, list):
                         parts = content_obj
                     if parts is not None:
-                        text = _content_parts_to_text(parts)
+                        text = _extract_google_parts_text(parts)
                         if isinstance(text, str) and text.strip():
                             return {
                                 "text": text,
                                 "path": "candidates[0].content.parts",
                                 "reason": None,
                             }
+                    nested_response = first.get("response") if isinstance(first, dict) else None
+                    nested_content = nested_response.get("content") if isinstance(nested_response, dict) else None
+                    nested_parts = nested_content.get("parts") if isinstance(nested_content, dict) else None
+                    candidate_text = _extract_google_parts_text(nested_parts)
+                    if isinstance(candidate_text, str) and candidate_text.strip():
+                        return {
+                            "text": candidate_text,
+                            "path": "candidates[0].response.content.parts",
+                            "reason": None,
+                        }
 
             # Generic nested "response"/"data" wrapper (defensive fallback)
             nested = response_data.get("response") or response_data.get("data")
             if isinstance(nested, dict):
-                nested_output = nested.get("output") or nested.get("content")
-                if nested_output is not None:
-                    text = _content_parts_to_text(nested_output)
-                    if isinstance(text, str) and text.strip():
-                        return {
-                            "text": text,
-                            "path": "response|data.(output|content)",
-                            "reason": None,
-                        }
+                nested_text = (
+                    _extract_openai_text(nested)
+                    or _extract_anthropic_text(nested)
+                    or _extract_google_text(nested)
+                )
+                if isinstance(nested_text, str) and nested_text.strip():
+                    return {
+                        "text": nested_text,
+                        "path": "response|data",
+                        "reason": None,
+                    }
 
             # Direct text field
             if "text" in response_data:
@@ -454,16 +569,38 @@ class DataNormalizer:
                     "path": "text",
                     "reason": None,
                 }
+
+            serialized_text = _extract_from_serialized_json(response_data)
+            if isinstance(serialized_text, str) and serialized_text.strip():
+                return {
+                    "text": serialized_text,
+                    "path": "__serialized_json_scan__",
+                    "reason": "serialized_json_fallback",
+                }
         except Exception as exc:
+            serialized_text = None
+            try:
+                serialized_text = _extract_from_serialized_json(response_data)
+            except Exception:
+                serialized_text = None
             try:
                 keys = sorted([str(k) for k in response_data.keys()]) if isinstance(response_data, dict) else []
             except Exception:
                 keys = []
-            logger.warning(
-                "Response text extraction fallback triggered: %s (keys=%s)",
-                str(exc),
-                keys[:20],
-            )
+            try:
+                logger.warning(
+                    "Response text extraction fallback triggered: %s (keys=%s)",
+                    str(exc),
+                    keys[:20],
+                )
+            except Exception:
+                pass
+            if isinstance(serialized_text, str) and serialized_text.strip():
+                return {
+                    "text": serialized_text,
+                    "path": "__serialized_json_scan__",
+                    "reason": "serialized_json_exception_fallback",
+                }
             return {
                 "text": "[non-text response received]\n\n" + _safe_json_preview(response_data),
                 "path": "__parser_exception__",
