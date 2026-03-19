@@ -652,7 +652,7 @@ function AttemptDetailOverlay({
 
           <div className="flex-[1.6] min-w-0 border-r border-white/8 p-5">
             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-              Tested snapshot
+              Replay attempt
             </div>
             <div className="mt-3 rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.04] p-3 h-[calc(100%-24px)]">
               <div className="flex items-center justify-between gap-3">
@@ -846,7 +846,11 @@ function AttemptDetailOverlay({
                 </div>
               )}
               <p className="mt-2 max-h-28 overflow-auto custom-scrollbar text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
-                {candidateResponse || "No response preview captured for this attempt."}
+                {candidateResponse
+                  ? candidateResponse
+                  : Number(candidateSnapshot?.status_code ?? 0) === 200
+                    ? "Provider returned 200, but response text could not be extracted. Use the response keys above and the raw debug JSON to inspect the response shape."
+                    : "No response preview captured for this attempt."}
               </p>
             </div>
 
