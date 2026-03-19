@@ -16,6 +16,7 @@ from app.services.data_normalizer import DataNormalizer
 from app.models.replay_run import ReplayRun
 from app.models.usage import Usage
 from app.models.project import Project
+from app.services.providers.capabilities import resolve_capabilities
 
 
 def _persist_replay_usage(
@@ -55,6 +56,26 @@ class ReplayService:
     def __init__(self, max_concurrency: int = 50):
         self.semaphore = asyncio.Semaphore(max_concurrency)
         self.timeout = httpx.Timeout(60.0)
+        # Provider adapters encapsulate request/response differences.
+        # Shared normalization/classification stays in this service.
+        from app.services.providers.openai_adapter import OpenAIProviderAdapter
+        from app.services.providers.anthropic_adapter import AnthropicProviderAdapter
+        from app.services.providers.google_adapter import GoogleProviderAdapter
+
+        self._provider_adapters = {
+            "openai": OpenAIProviderAdapter(
+                classify_error=self._classify_error,
+                friendly_error_message=self._friendly_error_message,
+            ),
+            "anthropic": AnthropicProviderAdapter(
+                classify_error=self._classify_error,
+                friendly_error_message=self._friendly_error_message,
+            ),
+            "google": GoogleProviderAdapter(
+                classify_error=self._classify_error,
+                friendly_error_message=self._friendly_error_message,
+            ),
+        }
 
     def _content_to_text(self, value: Any) -> str:
         if value is None:
@@ -281,6 +302,13 @@ class ReplayService:
         model_for_request: str,
         response: httpx.Response,
     ) -> Dict[str, Any]:
+        provider_key = (provider or "").strip().lower()
+        adapter = self._provider_adapters.get(provider_key)
+        if adapter is not None:
+            return adapter.extract_provider_error(
+                model_for_request=model_for_request, response=response
+            )
+
         status_code = response.status_code
         error_code = ""
         message = ""
@@ -334,101 +362,47 @@ class ReplayService:
         tool_specs = self._normalize_tool_specs(payload)
         tool_choice = self._map_tool_choice_for_provider(payload, target_provider)
 
-        if target_provider == "openai":
-            out_messages: List[Dict[str, Any]] = []
-            if system_prompt:
-                out_messages.append({"role": "system", "content": system_prompt})
-            out_messages.extend(messages or [{"role": "user", "content": ""}])
-            out: Dict[str, Any] = {"model": model_for_request, "messages": out_messages}
-            if knobs.get("temperature") is not None:
-                out["temperature"] = knobs["temperature"]
-            if knobs.get("top_p") is not None:
-                out["top_p"] = knobs["top_p"]
-            if knobs.get("max_tokens") is not None:
-                out["max_tokens"] = knobs["max_tokens"]
-            if tool_specs:
-                out["tools"] = [
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": t["name"],
-                            "description": t.get("description") or "",
-                            "parameters": t.get("schema") or {"type": "object", "properties": {}},
-                        },
-                    }
-                    for t in tool_specs
-                ]
-            if tool_choice is not None:
-                out["tool_choice"] = tool_choice
-            return out
+        capabilities = resolve_capabilities(target_provider, model_for_request)
 
-        if target_provider == "anthropic":
-            out = {
-                "model": model_for_request,
-                "messages": [
-                    {"role": m.get("role", "user"), "content": m.get("content", "")}
-                    for m in (messages or [{"role": "user", "content": ""}])
-                ],
-                "max_tokens": int(knobs.get("max_tokens") or 1024),
-            }
-            if system_prompt:
-                out["system"] = system_prompt
-            if knobs.get("temperature") is not None:
-                out["temperature"] = knobs["temperature"]
-            if knobs.get("top_p") is not None:
-                out["top_p"] = knobs["top_p"]
-            if tool_specs:
-                out["tools"] = [
-                    {
-                        "name": t["name"],
-                        "description": t.get("description") or "",
-                        "input_schema": t.get("schema") or {"type": "object", "properties": {}},
-                    }
-                    for t in tool_specs
-                ]
-            if isinstance(tool_choice, dict):
-                out["tool_choice"] = tool_choice
-            return out
+        if not bool(capabilities.get("supports_tools", True)):
+            tool_specs = []
+            tool_choice = None
 
-        if target_provider == "google":
-            contents = [
-                {
-                    "role": "model" if m.get("role") == "assistant" else "user",
-                    "parts": [{"text": m.get("content", "")}],
-                }
-                for m in (messages or [{"role": "user", "content": ""}])
-            ]
-            out: Dict[str, Any] = {"contents": contents}
-            generation_config: Dict[str, Any] = {}
-            if knobs.get("temperature") is not None:
-                generation_config["temperature"] = knobs["temperature"]
-            if knobs.get("top_p") is not None:
-                generation_config["topP"] = knobs["top_p"]
-            if knobs.get("max_tokens") is not None:
-                generation_config["maxOutputTokens"] = int(knobs["max_tokens"])
-            if generation_config:
-                out["generationConfig"] = generation_config
-            if system_prompt:
-                # Prefer modern Gemini request field name.
-                out["systemInstruction"] = {"parts": [{"text": system_prompt}]}
-            if tool_specs:
-                out["tools"] = [
-                    {
-                        "functionDeclarations": [
-                            {
-                                "name": t["name"],
-                                "description": t.get("description") or "",
-                                "parameters": t.get("schema") or {"type": "object", "properties": {}},
-                            }
-                            for t in tool_specs
-                        ]
-                    }
-                ]
-            if isinstance(tool_choice, dict):
-                out["toolConfig"] = tool_choice
-            return out
+        if not bool(capabilities.get("supports_system_prompt", True)):
+            system_prompt = ""
+
+        adapter = self._provider_adapters.get(target_provider)
+        if adapter is not None:
+            if target_provider == "google":
+                return adapter.build_payload(
+                    system_prompt=system_prompt,
+                    messages=messages,
+                    knobs=knobs,
+                    tool_specs=tool_specs,
+                    tool_choice=tool_choice,
+                    model_for_request=model_for_request,
+                    system_instruction_field=capabilities.get(
+                        "google_system_instruction_field", "system_instruction"
+                    ),
+                )
+            return adapter.build_payload(
+                system_prompt=system_prompt,
+                messages=messages,
+                knobs=knobs,
+                tool_specs=tool_specs,
+                tool_choice=tool_choice,
+                model_for_request=model_for_request,
+            )
 
         return payload
+
+    def _google_payload_fallback_variants(
+        self, payload: Dict[str, Any]
+    ) -> List[Tuple[str, Dict[str, Any]]]:
+        adapter = self._provider_adapters.get("google")
+        if adapter is None:
+            return []
+        return adapter.payload_fallback_variants(payload)
 
     def _extract_token_usage(
         self,
@@ -440,6 +414,11 @@ class ReplayService:
 
         Returns (input_tokens, output_tokens). Falls back to (0, 0) when unknown.
         """
+        provider_key = (provider or "").strip().lower()
+        adapter = self._provider_adapters.get(provider_key)
+        if adapter is not None:
+            return adapter.extract_token_usage(response_data)
+
         if not isinstance(response_data, dict):
             return 0, 0
 
@@ -656,6 +635,51 @@ class ReplayService:
                         normalized_error = self._extract_provider_error(
                             provider, model_for_request, response
                         )
+                        fallback_attempts: List[str] = []
+                        if provider == "google" and normalized_error.get("error_type") == "payload_schema":
+                            for stage, fallback_payload in self._google_payload_fallback_variants(payload):
+                                fallback_attempts.append(stage)
+                                try:
+                                    retry_response = await client.post(
+                                        target_url, headers=headers, json=fallback_payload
+                                    )
+                                except Exception:
+                                    continue
+                                if retry_response.status_code != 200:
+                                    normalized_error = self._extract_provider_error(
+                                        provider, model_for_request, retry_response
+                                    )
+                                    continue
+
+                                try:
+                                    response_data = retry_response.json()
+                                except Exception:
+                                    response_data = {"text": retry_response.text}
+
+                                input_tokens, output_tokens = self._extract_token_usage(
+                                    provider, response_data if isinstance(response_data, dict) else {}
+                                )
+                                used_credits = calculate_credits(
+                                    provider=provider,
+                                    model=model_for_request,
+                                    input_tokens=input_tokens,
+                                    output_tokens=output_tokens,
+                                )
+                                return {
+                                    "snapshot_id": snapshot.id,
+                                    "original_model": snapshot.model,
+                                    "replay_model": model_for_request,
+                                    "replay_provider": provider,
+                                    "status_code": retry_response.status_code,
+                                    "response_data": response_data,
+                                    "latency_ms": duration_ms,
+                                    "input_tokens": input_tokens,
+                                    "output_tokens": output_tokens,
+                                    "used_credits": used_credits,
+                                    "success": True,
+                                    "request_fallback_stage": stage,
+                                    "request_fallback_attempts": fallback_attempts,
+                                }
                         return {
                             "snapshot_id": snapshot.id,
                             "original_model": snapshot.model,
@@ -666,6 +690,7 @@ class ReplayService:
                             "output_tokens": 0,
                             "used_credits": 0,
                             "success": False,
+                            "request_fallback_attempts": fallback_attempts,
                             **normalized_error,
                         }
 
@@ -697,6 +722,8 @@ class ReplayService:
                         "output_tokens": output_tokens,
                         "used_credits": used_credits,
                         "success": response.status_code == 200,
+                        "request_fallback_stage": None,
+                        "request_fallback_attempts": [],
                     }
             except Exception as e:
                 logger.error(f"Replay failed for snapshot {snapshot.id}: {str(e)}")
