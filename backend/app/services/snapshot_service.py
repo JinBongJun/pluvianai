@@ -302,9 +302,10 @@ class SnapshotService:
                 # Successfully queued to Redis Stream - background worker will process
                 return None  # Return None to indicate async queuing
             except Exception as e:
-                # Fail-silent: Log error but don't block
-                logger.warning(f"Failed to queue snapshot to Redis Stream: {str(e)}. Snapshot will be skipped.")
-                return None  # Skip snapshot, don't block response
+                # Fall back to DB save if stream enqueue fails, so we don't lose snapshots.
+                logger.warning(
+                    f"Failed to queue snapshot to Redis Stream: {str(e)}. Falling back to direct DB save."
+                )
         
         # Fallback: If Redis is not available, save directly to DB (synchronous)
         # This is less ideal but ensures data is not lost
