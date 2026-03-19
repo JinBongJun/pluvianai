@@ -120,9 +120,11 @@ export function ReleaseGateConfigPanel({
     | undefined;
   const runDataProvider = toReplayProvider(ctx?.runDataProvider);
   const runDataModel = (ctx?.runDataModel as string) ?? "";
+  const runDataPrompt = (ctx?.runDataPrompt as string) ?? "";
   const baselinePayload = (ctx?.baselinePayload as Record<string, unknown> | null) ?? null;
-  const finalCandidateRequest =
-    (ctx?.finalCandidateRequest as Record<string, unknown> | null) ?? null;
+  const validateOverridePreview = (ctx?.validateOverridePreview as
+    | Record<string, unknown>
+    | null) ?? null;
   const selectedBaselineCount = Number(ctx?.selectedBaselineCount ?? 0);
   const selectedDataSummary =
     (ctx?.selectedDataSummary as string) ??
@@ -134,13 +136,9 @@ export function ReleaseGateConfigPanel({
     setActiveProviderTab(modelOverrideEnabled ? replayProvider : runDataProvider);
   }, [isOpen, modelOverrideEnabled, replayProvider, runDataProvider]);
 
-  const baselinePayloadJson = useMemo(
-    () => stringifyJson(sanitizePayloadForPreview(baselinePayload ?? {})),
-    [baselinePayload]
-  );
   const finalCandidateJson = useMemo(
-    () => stringifyJson(finalCandidateRequest ?? {}),
-    [finalCandidateRequest]
+    () => stringifyJson(validateOverridePreview ?? {}),
+    [validateOverridePreview]
   );
   const candidateJsonValue = requestJsonDraft ?? requestBodyJson;
 
@@ -163,6 +161,20 @@ export function ReleaseGateConfigPanel({
     delete clean.tools;
     delete (clean as any).system_prompt;
     setRequestBody(clean);
+    setRequestJsonDraft?.(null);
+  };
+
+  const systemPromptOverride = typeof requestBody.system_prompt === "string" ? requestBody.system_prompt : "";
+  const isSystemPromptOverridden =
+    systemPromptOverride.trim().length > 0 && systemPromptOverride.trim() !== runDataPrompt.trim();
+
+  const handleResetSystemPrompt = () => {
+    if (runLocked || !setRequestBody) return;
+    setRequestBody(prev => {
+      const next = { ...prev };
+      delete (next as any).system_prompt;
+      return next;
+    });
     setRequestJsonDraft?.(null);
   };
 
@@ -270,25 +282,23 @@ export function ReleaseGateConfigPanel({
           {/* Main Content */}
           <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.8fr)] items-start">
+              {selectedBaselineCount === 0 && (
+                <div className="col-span-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-200/90 font-medium flex items-center gap-3">
+                  <SearchCode className="w-5 h-5 text-amber-400 shrink-0" />
+                  <span>
+                    No baseline data selected. First, send traffic to Live View, then choose baseline snapshots from Live Logs or Saved Data before running a Release Gate.
+                  </span>
+                </div>
+              )}
               {/* Left Column: Baseline */}
               <section className="sticky top-0 space-y-6">
-                {selectedBaselineCount === 0 && (
-                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-200/90 font-medium flex items-center gap-3">
-                    <SearchCode className="w-5 h-5 text-amber-400 shrink-0" />
-                    <span>
-                      No baseline data selected. First, send traffic to Live View, then choose
-                      baseline snapshots from Live Logs or Saved Data before running a Release Gate.
-                    </span>
-                  </div>
-                )}
-
                 <div className="rounded-2xl border border-white/5 bg-[#0f1115] overflow-hidden flex flex-col shadow-inner">
                   <div className="flex items-center justify-between border-b border-white/5 px-5 py-4 bg-white/[0.02]">
                     <div>
                       <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1">
                         Baseline Reference
                       </div>
-                      <div className="text-base font-semibold text-white">Original Payload</div>
+                      <div className="text-base font-semibold text-white">Original System Prompt</div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm text-slate-300 font-medium">
@@ -333,24 +343,22 @@ export function ReleaseGateConfigPanel({
                       )}
                     </div>
 
-                    {selectedBaselineCount === 0 ? (
+                    {runDataPrompt ? (
+                      <pre className="min-h-[400px] max-h-[600px] rounded-xl border border-white/5 bg-[#0a0c10] p-5 text-[13px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-all overflow-auto custom-scrollbar shadow-inner">
+                        {runDataPrompt}
+                      </pre>
+                    ) : (
                       <div className="min-h-[300px] rounded-xl border border-dashed border-white/10 bg-white/[0.01] flex flex-col items-center justify-center gap-3 text-center p-6">
                         <SearchCode className="w-8 h-8 text-slate-600" />
                         <div>
                           <div className="text-sm font-semibold text-slate-300 mb-1">
-                            No baseline available
+                            No system prompt available
                           </div>
-                          <p className="text-xs text-slate-500 max-w-[200px]">
-                            Select data to preview the original request payload here.
+                          <p className="text-xs text-slate-500 max-w-[260px]">
+                            Select a node in Live View to populate the baseline system instruction.
                           </p>
                         </div>
                       </div>
-                    ) : (
-                      <pre className="min-h-[400px] max-h-[600px] rounded-xl border border-white/5 bg-[#0a0c10] p-5 text-[13px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-all overflow-auto custom-scrollbar shadow-inner">
-                        {baselinePayload
-                          ? baselinePayloadJson
-                          : "No baseline payload available yet."}
-                      </pre>
                     )}
                   </div>
                 </div>
@@ -362,20 +370,39 @@ export function ReleaseGateConfigPanel({
                   <div className="flex items-center justify-between border-b border-white/5 px-5 py-4 bg-white/[0.02]">
                     <div>
                       <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1">
-                        Candidate Request
+                        Final Override Payload
                       </div>
                       <div className="text-base font-semibold text-white">After Overrides</div>
                     </div>
                     <div className="text-xs text-slate-500 max-w-xs text-right">
-                      This JSON shows how your overrides will be applied to the original request.
+                      What Release Gate validate will send to the model.
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-px bg-white/5 border-b border-white/5">
+                    <div className="bg-[#0f1115] p-4">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1.5">
+                        Detected Model
+                      </div>
+                      <div className="text-sm font-mono text-slate-200 truncate">
+                        {runDataModel || "Not detected"}
+                      </div>
+                    </div>
+                    <div className="bg-[#0f1115] p-4">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1.5">
+                        Detected Provider
+                      </div>
+                      <div className="text-sm text-slate-200">
+                        {formatProviderLabel(runDataProvider)}
+                      </div>
                     </div>
                   </div>
 
                   <div className="p-5">
                     <pre className="min-h-[400px] max-h-[600px] rounded-xl border border-white/5 bg-[#0a0c10] p-5 text-[13px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-all overflow-auto custom-scrollbar shadow-inner">
-                      {finalCandidateRequest
+                      {validateOverridePreview
                         ? finalCandidateJson
-                        : "No candidate request available yet. Select a node and baseline, then adjust overrides on the right."}
+                        : "No override payload available yet. Select a node and baseline, then adjust overrides on the right."}
                     </pre>
                   </div>
                 </div>
@@ -670,6 +697,19 @@ export function ReleaseGateConfigPanel({
                     placeholder="Override system prompt for the candidate run"
                     className="min-h-[140px] w-full flex-1 rounded-xl border border-white/10 bg-[#0a0c10] p-4 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar resize-y"
                   />
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      disabled={runLocked || !isSystemPromptOverridden}
+                      onClick={handleResetSystemPrompt}
+                      className="shrink-0 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    >
+                      Reset to node default
+                    </button>
+                    <div className="text-xs text-slate-500">
+                      {isSystemPromptOverridden ? "Override active" : "Using node default"}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Sampling */}
