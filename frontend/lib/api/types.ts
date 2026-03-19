@@ -115,6 +115,10 @@ export interface ReleaseGateAttempt {
   pass: boolean;
   trace_id?: string;
   failure_reasons?: string[];
+  baseline_snapshot?: {
+    response_preview?: string;
+    response_data_keys?: string[];
+  };
   signals?: {
     checks: Record<string, string>;
     failed: string[];
@@ -131,6 +135,9 @@ export interface ReleaseGateAttempt {
     missing_provider_keys?: string[];
   };
   behavior_diff?: BehaviorDiffResult;
+  candidate_snapshot?: {
+    response_preview_status?: "ok" | "empty" | "tool_calls_only" | "unknown" | string;
+  };
 }
 
 export interface ReleaseGateRunSummary {
