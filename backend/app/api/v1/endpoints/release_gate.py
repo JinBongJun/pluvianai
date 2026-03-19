@@ -55,6 +55,7 @@ from app.services.data_lifecycle_service import DataLifecycleService
 from app.domain.live_view_release_gate import build_agent_visibility_context, is_agent_deleted
 from app.services.ops_alerting import ops_alerting
 from app.services.replay_service import replay_service
+from app.services.data_normalizer import DataNormalizer
 from app.services.user_api_key_service import UserApiKeyService
 from app.services.behavior_rules_service import (
     resolve_effective_rules,
@@ -1032,6 +1033,7 @@ async def _run_release_gate(
         eval_config_signals = {"enabled": True}
 
     if payload.evaluation_mode == "replay_test":
+        normalizer = DataNormalizer()
         snapshot_by_id: Dict[int, Snapshot] = {s.id: s for s in snapshots}
         attempts_by_snapshot: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
         all_reasons: List[str] = []
