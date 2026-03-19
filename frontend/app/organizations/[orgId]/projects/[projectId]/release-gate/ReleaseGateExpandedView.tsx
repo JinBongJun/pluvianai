@@ -426,36 +426,12 @@ function AttemptDetailOverlay({
   baselineSnapshot: Record<string, unknown> | null;
 }) {
   const [showTestedRaw, setShowTestedRaw] = useState(false);
-  const [showBaselineRaw, setShowBaselineRaw] = useState(false);
   const [showResponseDiff, setShowResponseDiff] = useState(false);
 
   const baselineInput = String(
     baselineSnapshot?.user_message ?? baselineSnapshot?.request_prompt ?? "No input text captured."
   ).trim();
   const baselineModel = String(baselineSnapshot?.model ?? "—").trim() || "—";
-  const baselinePayload = baselineSnapshot?.payload;
-  const baselineRequest = useMemo(() => {
-    const obj = asPayloadObject(baselinePayload);
-    return getRequestPart(obj);
-  }, [baselinePayload]);
-  const baselineSystemPrompt = useMemo(
-    () =>
-      String(baselineSnapshot?.system_prompt ?? "").trim() ||
-      extractSystemPromptFromPayload(baselineRequest),
-    [baselineSnapshot, baselineRequest]
-  );
-  const baselineConfigSummary = useMemo(
-    () => buildBaselineConfigSummary(baselineRequest),
-    [baselineRequest]
-  );
-  const baselinePayloadPreview = (() => {
-    const clean = sanitizePayloadForPreview(baselineRequest);
-    try {
-      return JSON.stringify(clean, null, 2);
-    } catch {
-      return "{}";
-    }
-  })();
 
   const attemptViolations = Array.isArray(attempt?.violations) ? attempt.violations : [];
   type PolicyRow = {
@@ -617,7 +593,6 @@ function AttemptDetailOverlay({
   const baselineResponseDataKeys = Array.isArray((attempt as any)?.baseline_snapshot?.response_data_keys)
     ? (((attempt as any).baseline_snapshot.response_data_keys as unknown[]) ?? [])
     : [];
-  const sameInput = baselineInput.trim() && candidateInput.trim() && baselineInput.trim() === candidateInput.trim();
   const responseDiffLines = useMemo(() => {
     if (!baselineResponse || !candidateResponse) return [];
     return computeSimpleLineDiff(baselineResponse, candidateResponse, 200);
@@ -703,50 +678,6 @@ function AttemptDetailOverlay({
         </div>
 
         <div className="flex flex-1 min-h-0">
-          <div className="hidden">
-            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-              Original snapshot
-            </div>
-            <div className="mt-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Input
-              </div>
-              <p className="mt-2 max-h-28 overflow-auto custom-scrollbar whitespace-pre-wrap break-words text-sm text-slate-200">
-                {baselineInput}
-              </p>
-            </div>
-            <div className="mt-3 rounded-2xl border border-white/8 bg-black/40 p-3 h-[calc(100%-122px)]">
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-2">
-                Baseline request (preview)
-              </div>
-              <div className="h-[calc(100%-22px)] overflow-auto custom-scrollbar">
-                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                  <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                    Original system prompt
-                  </div>
-                  <p className="mt-2 text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
-                    {baselineSystemPrompt || "—"}
-                  </p>
-                  {baselineConfigSummary ? (
-                    <div className="mt-3 text-[11px] text-slate-400">Config: {baselineConfigSummary}</div>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => setShowBaselineRaw(v => !v)}
-                    className="mt-3 inline-flex items-center rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-200 hover:bg-white/10"
-                  >
-                    {showBaselineRaw ? "Hide raw" : "View full request"}
-                  </button>
-                  {showBaselineRaw && (
-                    <pre className="mt-3 max-h-56 overflow-auto custom-scrollbar text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-words">
-                      {baselinePayloadPreview}
-                    </pre>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div className="flex-1 min-w-0 border-r border-white/8 p-5">
             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
               Replay attempt
