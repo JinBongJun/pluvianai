@@ -346,14 +346,37 @@ class DataNormalizer:
             if isinstance(out_text, str) and out_text.strip():
                 return out_text
 
-        # Anthropic format
+        # Anthropic format (Messages API)
         if "content" in response_data:
             content = response_data["content"]
             if isinstance(content, list) and len(content) > 0:
-                # Get text from first content block
-                first_block = content[0]
-                if isinstance(first_block, dict) and first_block.get("type") == "text":
-                    return first_block.get("text", "")
+                text = _content_parts_to_text(content)
+                if isinstance(text, str) and text.strip():
+                    return text
+
+        # Google Gemini format: candidates[0].content.parts[].text
+        if "candidates" in response_data and isinstance(response_data["candidates"], list):
+            if len(response_data["candidates"]) > 0:
+                first = response_data["candidates"][0]
+                content_obj = first.get("content")
+                parts = None
+                if isinstance(content_obj, dict):
+                    parts = content_obj.get("parts")
+                elif isinstance(content_obj, list):
+                    parts = content_obj
+                if parts is not None:
+                    text = _content_parts_to_text(parts)
+                    if isinstance(text, str) and text.strip():
+                        return text
+
+        # Generic nested "response"/"data" wrapper (defensive fallback)
+        nested = response_data.get("response") or response_data.get("data")
+        if isinstance(nested, dict):
+            nested_output = nested.get("output") or nested.get("content")
+            if nested_output is not None:
+                text = _content_parts_to_text(nested_output)
+                if isinstance(text, str) and text.strip():
+                    return text
 
         # Direct text field
         if "text" in response_data:
