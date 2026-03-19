@@ -1,7 +1,6 @@
 import asyncio
 import httpx
 import json
-from copy import deepcopy
 from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 from app.models.snapshot import Snapshot
@@ -372,100 +371,6 @@ class ReplayService:
                 tool_choice=tool_choice,
                 model_for_request=model_for_request,
             )
-
-        if target_provider == "openai":
-            out_messages: List[Dict[str, Any]] = []
-            if system_prompt:
-                out_messages.append({"role": "system", "content": system_prompt})
-            out_messages.extend(messages or [{"role": "user", "content": ""}])
-            out: Dict[str, Any] = {"model": model_for_request, "messages": out_messages}
-            if knobs.get("temperature") is not None:
-                out["temperature"] = knobs["temperature"]
-            if knobs.get("top_p") is not None:
-                out["top_p"] = knobs["top_p"]
-            if knobs.get("max_tokens") is not None:
-                out["max_tokens"] = knobs["max_tokens"]
-            if tool_specs:
-                out["tools"] = [
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": t["name"],
-                            "description": t.get("description") or "",
-                            "parameters": t.get("schema") or {"type": "object", "properties": {}},
-                        },
-                    }
-                    for t in tool_specs
-                ]
-            if tool_choice is not None:
-                out["tool_choice"] = tool_choice
-            return out
-
-        if target_provider == "anthropic":
-            out = {
-                "model": model_for_request,
-                "messages": [
-                    {"role": m.get("role", "user"), "content": m.get("content", "")}
-                    for m in (messages or [{"role": "user", "content": ""}])
-                ],
-                "max_tokens": int(knobs.get("max_tokens") or 1024),
-            }
-            if system_prompt:
-                out["system"] = system_prompt
-            if knobs.get("temperature") is not None:
-                out["temperature"] = knobs["temperature"]
-            if knobs.get("top_p") is not None:
-                out["top_p"] = knobs["top_p"]
-            if tool_specs:
-                out["tools"] = [
-                    {
-                        "name": t["name"],
-                        "description": t.get("description") or "",
-                        "input_schema": t.get("schema") or {"type": "object", "properties": {}},
-                    }
-                    for t in tool_specs
-                ]
-            if isinstance(tool_choice, dict):
-                out["tool_choice"] = tool_choice
-            return out
-
-        if target_provider == "google":
-            contents = [
-                {
-                    "role": "model" if m.get("role") == "assistant" else "user",
-                    "parts": [{"text": m.get("content", "")}],
-                }
-                for m in (messages or [{"role": "user", "content": ""}])
-            ]
-            out: Dict[str, Any] = {"contents": contents}
-            generation_config: Dict[str, Any] = {}
-            if knobs.get("temperature") is not None:
-                generation_config["temperature"] = knobs["temperature"]
-            if knobs.get("top_p") is not None:
-                generation_config["topP"] = knobs["top_p"]
-            if knobs.get("max_tokens") is not None:
-                generation_config["maxOutputTokens"] = int(knobs["max_tokens"])
-            if generation_config:
-                out["generationConfig"] = generation_config
-            if system_prompt:
-                # Gemini REST docs commonly use snake_case for this field.
-                out["system_instruction"] = {"parts": [{"text": system_prompt}]}
-            if tool_specs:
-                out["tools"] = [
-                    {
-                        "functionDeclarations": [
-                            {
-                                "name": t["name"],
-                                "description": t.get("description") or "",
-                                "parameters": t.get("schema") or {"type": "object", "properties": {}},
-                            }
-                            for t in tool_specs
-                        ]
-                    }
-                ]
-            if isinstance(tool_choice, dict):
-                out["toolConfig"] = tool_choice
-            return out
 
         return payload
 
