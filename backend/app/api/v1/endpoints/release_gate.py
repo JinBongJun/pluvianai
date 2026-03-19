@@ -1095,18 +1095,52 @@ async def _run_release_gate(
                 except Exception:
                     candidate_response_preview = ""
 
+                # Small status flag for UI/debugging.
+                response_preview_status = "ok"
+                try:
+                    preview_text = str(candidate_response_preview or "").strip()
+                    if not preview_text:
+                        response_preview_status = "empty"
+                    elif "tool calls only" in preview_text.lower():
+                        response_preview_status = "tool_calls_only"
+                except Exception:
+                    response_preview_status = "unknown"
+
+                # Capture lightweight response_data key summary for UI debugging.
+                response_data_keys: List[str] = []
+                try:
+                    rd = res.get("response_data")
+                    if isinstance(rd, dict):
+                        response_data_keys = sorted([str(k) for k in rd.keys()])
+                    elif isinstance(rd, str):
+                        response_data_keys = ["<text>"]
+                    elif rd is None:
+                        response_data_keys = []
+                    else:
+                        response_data_keys = [f"<{type(rd).__name__}>"]
+                except Exception:
+                    response_data_keys = []
+
                 baseline_response_text = ""
+                baseline_response_data_keys: List[str] = []
                 try:
                     raw_baseline_resp = getattr(snapshot, "response", None)
                     if isinstance(raw_baseline_resp, str):
                         baseline_response_text = raw_baseline_resp
+                        baseline_response_data_keys = ["<text>"] if raw_baseline_resp.strip() else []
                     elif isinstance(raw_baseline_resp, dict):
                         baseline_response_text = normalizer._extract_response_text(raw_baseline_resp)
+                        baseline_response_data_keys = sorted([str(k) for k in raw_baseline_resp.keys()])
                     else:
                         baseline_response_text = str(raw_baseline_resp or "")
+                        baseline_response_data_keys = (
+                            [f"<{type(raw_baseline_resp).__name__}>"] if raw_baseline_resp is not None else []
+                        )
                 except Exception:
                     baseline_response_text = ""
+                    baseline_response_data_keys = []
                 baseline_len = len(baseline_response_text.strip()) if baseline_response_text else None
+                baseline_response_preview = str(baseline_response_text or "").strip()[:2000]
 
                 try:
                     status_code_val = res.get("status_code")
@@ -1168,6 +1202,7 @@ async def _run_release_gate(
                         "error_type": res.get("error_type"),
                         "message": res.get("error"),
                         "response_preview": provider_error_preview,
+                        "response_data_keys": response_data_keys,
                     }
                     attempts_by_snapshot[snapshot.id].append(
                         {
@@ -1194,6 +1229,10 @@ async def _run_release_gate(
                             },
                             "behavior_diff": behavior_diff,
                             "signals": signals_obj,
+                            "baseline_snapshot": {
+                                "response_preview": baseline_response_preview,
+                                "response_data_keys": baseline_response_data_keys,
+                            },
                             "candidate_snapshot": {
                                 "provider": replay_provider,
                                 "model": str(res.get("replay_model") or snapshot.model or "").strip()
@@ -1202,6 +1241,8 @@ async def _run_release_gate(
                                 "input_text": baseline_input_text,
                                 "response_preview": candidate_response_preview
                                 or str(res.get("error") or "").strip(),
+                                "response_data_keys": response_data_keys,
+                                "response_preview_status": response_preview_status,
                             },
                         }
                     )
@@ -1240,11 +1281,16 @@ async def _run_release_gate(
                                     "error_type": res.get("error_type"),
                                     "message": res.get("error"),
                                     "response_preview": provider_error_preview,
+                                    "response_data_keys": response_data_keys,
                                 },
                                 "missing_provider_keys": [],
                             },
                             "behavior_diff": behavior_diff,
                             "signals": signals_obj,
+                            "baseline_snapshot": {
+                                "response_preview": baseline_response_preview,
+                                "response_data_keys": baseline_response_data_keys,
+                            },
                             "candidate_snapshot": {
                                 "provider": str(res.get("replay_provider") or "").strip() or None,
                                 "model": str(res.get("replay_model") or snapshot.model or "").strip()
@@ -1252,6 +1298,8 @@ async def _run_release_gate(
                                 "status_code": res.get("status_code"),
                                 "input_text": baseline_input_text,
                                 "response_preview": candidate_response_preview or reason,
+                                "response_data_keys": response_data_keys,
+                                "response_preview_status": response_preview_status,
                             },
                         }
                     )
@@ -1310,6 +1358,10 @@ async def _run_release_gate(
                         },
                         "behavior_diff": behavior_diff,
                         "signals": signals_obj,
+                        "baseline_snapshot": {
+                            "response_preview": baseline_response_preview,
+                            "response_data_keys": baseline_response_data_keys,
+                        },
                         "candidate_snapshot": {
                             "provider": str(res.get("replay_provider") or "").strip() or None,
                             "model": str(res.get("replay_model") or snapshot.model or "").strip()
@@ -1317,6 +1369,8 @@ async def _run_release_gate(
                             "status_code": res.get("status_code"),
                             "input_text": baseline_input_text,
                             "response_preview": candidate_response_preview,
+                            "response_data_keys": response_data_keys,
+                            "response_preview_status": response_preview_status,
                         },
                     }
                 )
