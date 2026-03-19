@@ -68,6 +68,25 @@ from app.services.live_eval_service import (
 
 router = APIRouter()
 SUPPORTED_REPLAY_PROVIDERS = {"openai", "anthropic", "google"}
+CORE_REPLAY_MODELS: Dict[str, List[str]] = {
+    # Keep this intentionally small and stable; users can still pass custom model ids.
+    "openai": [
+        "gpt-4o-mini",
+        "gpt-4o",
+        "gpt-4.1",
+        "gpt-4.1-mini",
+    ],
+    "anthropic": [
+        "claude-sonnet-4-5-20250929",
+        "claude-haiku-4-5-20251001",
+        "claude-sonnet-4-20250514",
+    ],
+    "google": [
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-1.5-flash",
+    ],
+}
 
 
 class ReleaseGateCancelled(Exception):
@@ -1121,7 +1140,7 @@ async def _run_release_gate(
                     if not preview_text:
                         response_preview_status = (
                             "tool_calls_only"
-                            if (candidate_extract_reason or "").lower().find("tool calls") >= 0
+                            if str(candidate_extract_reason or "").strip().lower() == "tool_calls_only"
                             else "empty"
                         )
                     elif "tool calls only" in preview_text.lower():
@@ -1848,6 +1867,17 @@ def list_release_gate_agents(
         if len(items) >= limit:
             break
     return {"items": items}
+
+
+@router.get("/projects/{project_id}/release-gate/core-models")
+def get_release_gate_core_models(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return curated core model presets used by Release Gate UI."""
+    check_project_access(project_id, current_user, db)
+    return {"providers": CORE_REPLAY_MODELS}
 
 
 @router.get("/projects/{project_id}/release-gate/agents/{agent_id}/recent-snapshots")
