@@ -60,12 +60,15 @@ class TestReplayGooglePayloadFallback:
         payload = {
             "contents": [{"role": "user", "parts": [{"text": "User asks something"}]}],
             "system_instruction": {"parts": [{"text": "System prompt"}]},
+            "tools": [{"functionDeclarations": []}],
+            "toolConfig": {"functionCallingConfig": {"mode": "AUTO"}},
         }
 
         variants = service._google_payload_fallback_variants(payload)
         stages = [stage for stage, _ in variants]
         assert "google_system_instruction_camel" in stages
         assert "google_system_inlined_into_user" in stages
+        assert "google_tools_off" in stages
 
         camel_payload = next(v for s, v in variants if s == "google_system_instruction_camel")
         assert "systemInstruction" in camel_payload
@@ -78,3 +81,7 @@ class TestReplayGooglePayloadFallback:
         first_text = inline_payload["contents"][0]["parts"][0]["text"]
         assert "System prompt" in first_text
         assert "User asks something" in first_text
+
+        tools_off_payload = next(v for s, v in variants if s == "google_tools_off")
+        assert "tools" not in tools_off_payload
+        assert "toolConfig" not in tools_off_payload

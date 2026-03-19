@@ -187,5 +187,15 @@ class GoogleProviderAdapter:
             inline_base["contents"] = contents
             variants.append(("google_system_inlined_into_user", inline_base))
 
+        # If payload schema errors persist, tool/function calling schema
+        # is a frequent culprit. Degrade by removing tools and toolConfig.
+        tools_off = deepcopy(payload)
+        had_tools = "tools" in tools_off or "toolConfig" in tools_off
+        tools_off.pop("tools", None)
+        tools_off.pop("toolConfig", None)
+        tools_off.pop("tool_config", None)  # defensive: non-camelized variant
+        if had_tools:
+            variants.append(("google_tools_off", tools_off))
+
         return variants
 
