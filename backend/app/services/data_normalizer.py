@@ -5,6 +5,7 @@ Data normalizer for LLM API requests/responses
 import json
 import re
 from typing import Dict, Any, List, Optional
+from app.core.logging_config import logger
 
 
 class DataNormalizer:
@@ -453,11 +454,20 @@ class DataNormalizer:
                     "path": "text",
                     "reason": None,
                 }
-        except Exception:
+        except Exception as exc:
+            try:
+                keys = sorted([str(k) for k in response_data.keys()]) if isinstance(response_data, dict) else []
+            except Exception:
+                keys = []
+            logger.warning(
+                "Response text extraction fallback triggered: %s (keys=%s)",
+                str(exc),
+                keys[:20],
+            )
             return {
-                "text": "[extractor_error: fallback text rendered]",
-                "path": None,
-                "reason": "extractor_error",
+                "text": "[non-text response received]\n\n" + _safe_json_preview(response_data),
+                "path": "__parser_exception__",
+                "reason": "parser_exception_fallback",
             }
 
         return {
