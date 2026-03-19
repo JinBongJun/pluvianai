@@ -312,7 +312,6 @@ function AttemptDetailOverlay({
   attemptIndex,
   attempt,
   baselineSnapshot,
-  evalChecks,
 }: {
   open: boolean;
   onClose: () => void;
@@ -320,7 +319,6 @@ function AttemptDetailOverlay({
   attemptIndex: number;
   attempt: any;
   baselineSnapshot: Record<string, unknown> | null;
-  evalChecks: Array<{ name: string }>;
 }) {
   if (!open) return null;
 
@@ -342,25 +340,47 @@ function AttemptDetailOverlay({
     }
   })();
 
-  const failedRuleIds = new Set(
-    (Array.isArray(attempt?.violations) ? attempt.violations : [])
-      .map((v: any) => String(v?.rule_id || "").trim())
-      .filter(Boolean)
-  );
-  const evalRows = evalChecks.map(check => {
-    const id = String(check?.name || "").trim();
-    const normalizedId = id === "tool" ? "tool_use_policy" : id;
-    const failed = failedRuleIds.has(id) || failedRuleIds.has(normalizedId);
-    return {
-      id: normalizedId || id || "unknown",
-      label:
-        EVAL_CHECK_LABELS[normalizedId || id] ??
-        (normalizedId || id || "unknown")
-          .replace(/_/g, " ")
-          .replace(/\b\w/g, (l: string) => l.toUpperCase()),
-      pass: !failed,
-    };
-  });
+  const attemptViolations = Array.isArray(attempt?.violations) ? attempt.violations : [];
+  type PolicyRow = {
+    key: string;
+    label: string;
+    message: string;
+    severity: string;
+  };
+  const policyRows: PolicyRow[] = attemptViolations
+    .map((v: any, idx: number) => {
+      const ruleId = String(v?.rule_id ?? "").trim();
+      const ruleName = String(v?.rule_name ?? "").trim();
+      const message = String(v?.message ?? "").trim();
+      const severity = String(v?.severity ?? "").trim().toLowerCase();
+      return {
+        key: `${ruleId || "violation"}-${idx}`,
+        label: ruleName || ruleId || `Violation ${idx + 1}`,
+        message,
+        severity,
+      };
+    })
+    .filter((r: PolicyRow) => Boolean(r.label));
+
+  const signalsChecksRaw = (attempt?.signals && typeof attempt.signals === "object"
+    ? (attempt.signals as Record<string, unknown>).checks
+    : undefined) as Record<string, unknown> | undefined;
+  const signalsRows = signalsChecksRaw
+    ? Object.entries(signalsChecksRaw).map(([id, status]) => {
+        const normalizedId = normalizeViolationRuleId(id);
+        const label = toHumanRuleLabel(normalizedId, id);
+        const s = String(status ?? "").trim().toLowerCase();
+        return {
+          id: normalizedId || id,
+          label,
+          status: s,
+          pass: s === "pass",
+          applicable: s === "pass" || s === "fail",
+        };
+      })
+    : [];
+  const signalsApplicable = signalsRows.filter(r => r.applicable);
+  const signalsPassed = signalsApplicable.filter(r => r.pass);
 
   const candidatePayloadPreview = (() => {
     if (attempt?.replay?.provider_error?.response_preview) {
@@ -545,16 +565,26 @@ function AttemptDetailOverlay({
 
             <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Eval checks
+                Signals checks
               </div>
               <div className="mt-1 text-[11px] text-slate-400">
-                {evalRows.filter(row => row.pass).length}/{evalRows.length || 0} checks passed
+                {signalsChecksRaw ? (
+                  <>
+                    {signalsPassed.length}/{signalsApplicable.length || 0} checks passed
+                  </>
+                ) : (
+                  <>No signals captured for this attempt.</>
+                )}
               </div>
               <div className="mt-2 space-y-2">
-                {evalRows.length === 0 ? (
-                  <div className="text-xs text-slate-500">No eval checks detected.</div>
+                {!signalsChecksRaw ? (
+                  <div className="text-xs text-slate-500">
+                    Signals eval was not executed (or not returned) for this attempt.
+                  </div>
+                ) : signalsRows.length === 0 ? (
+                  <div className="text-xs text-slate-500">No signal checks returned.</div>
                 ) : (
-                  evalRows.map(row => (
+                  signalsRows.map(row => (
                     <div
                       key={row.id}
                       className={clsx(
@@ -565,7 +595,44 @@ function AttemptDetailOverlay({
                       )}
                     >
                       <span className="truncate pr-3">{row.label}</span>
-                      <span className="font-black">{row.pass ? "PASS" : "FAIL"}</span>
+                      <span className="font-black">
+                        {row.status === "not_applicable" ? "N/A" : row.pass ? "PASS" : "FAIL"}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                Policy checks
+              </div>
+              <div className="mt-1 text-[11px] text-slate-400">
+                {policyRows.length === 0 ? "No policy violations." : `${policyRows.length} violation(s) detected`}
+              </div>
+              <div className="mt-2 space-y-2">
+                {policyRows.length === 0 ? (
+                  <div className="text-xs text-slate-500">
+                    This attempt produced no BehaviorRule violations.
+                  </div>
+                ) : (
+                  policyRows.slice(0, 6).map(row => (
+                    <div
+                      key={row.key}
+                      className="rounded-xl border border-rose-500/20 bg-rose-500/8 px-2.5 py-2 text-xs text-rose-200"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate pr-3 font-semibold">{row.label}</span>
+                        {row.severity ? (
+                          <span className="shrink-0 rounded-full border border-white/10 bg-black/30 px-2 py-0.5 text-[10px] font-black uppercase text-slate-200">
+                            {row.severity}
+                          </span>
+                        ) : null}
+                      </div>
+                      {row.message ? (
+                        <div className="mt-1 text-[11px] leading-relaxed text-rose-100/90">{row.message}</div>
+                      ) : null}
                     </div>
                   ))
                 )}
@@ -2201,7 +2268,6 @@ export function ReleaseGateExpandedView() {
               attemptIndex={detailAttemptView.attemptIndex}
               attempt={detailAttemptView.attempt}
               baselineSnapshot={detailAttemptView.baselineSnapshot}
-              evalChecks={runEvalElements}
             />
           </ClientPortal>
         )}
