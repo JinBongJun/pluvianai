@@ -426,36 +426,12 @@ function AttemptDetailOverlay({
   baselineSnapshot: Record<string, unknown> | null;
 }) {
   const [showTestedRaw, setShowTestedRaw] = useState(false);
-  const [showBaselineRaw, setShowBaselineRaw] = useState(false);
   const [showResponseDiff, setShowResponseDiff] = useState(false);
 
   const baselineInput = String(
     baselineSnapshot?.user_message ?? baselineSnapshot?.request_prompt ?? "No input text captured."
   ).trim();
   const baselineModel = String(baselineSnapshot?.model ?? "—").trim() || "—";
-  const baselinePayload = baselineSnapshot?.payload;
-  const baselineRequest = useMemo(() => {
-    const obj = asPayloadObject(baselinePayload);
-    return getRequestPart(obj);
-  }, [baselinePayload]);
-  const baselineSystemPrompt = useMemo(
-    () =>
-      String(baselineSnapshot?.system_prompt ?? "").trim() ||
-      extractSystemPromptFromPayload(baselineRequest),
-    [baselineSnapshot, baselineRequest]
-  );
-  const baselineConfigSummary = useMemo(
-    () => buildBaselineConfigSummary(baselineRequest),
-    [baselineRequest]
-  );
-  const baselinePayloadPreview = (() => {
-    const clean = sanitizePayloadForPreview(baselineRequest);
-    try {
-      return JSON.stringify(clean, null, 2);
-    } catch {
-      return "{}";
-    }
-  })();
 
   const attemptViolations = Array.isArray(attempt?.violations) ? attempt.violations : [];
   type PolicyRow = {
@@ -617,13 +593,122 @@ function AttemptDetailOverlay({
   const baselineResponseDataKeys = Array.isArray((attempt as any)?.baseline_snapshot?.response_data_keys)
     ? (((attempt as any).baseline_snapshot.response_data_keys as unknown[]) ?? [])
     : [];
-  const sameInput = baselineInput.trim() && candidateInput.trim() && baselineInput.trim() === candidateInput.trim();
   const responseDiffLines = useMemo(() => {
     if (!baselineResponse || !candidateResponse) return [];
     return computeSimpleLineDiff(baselineResponse, candidateResponse, 200);
   }, [baselineResponse, candidateResponse]);
 
   const pass = Boolean(attempt?.pass);
+  const decisionReasons: string[] = Array.isArray(attempt?.failure_reasons)
+    ? (attempt.failure_reasons as string[])
+    : [];
+  type SeverityRank = 0 | 1 | 2 | 3;
+  type DecisionSeverity = "low" | "medium" | "high" | "critical";
+  type DecisionIssue = {
+    source: "policy" | "gate" | "reason";
+    severity: DecisionSeverity;
+    message: string;
+  };
+  const normalizeSeverity = (
+    value: unknown,
+    fallback: DecisionSeverity = "medium"
+  ): DecisionSeverity => {
+    const s = String(value ?? "").trim().toLowerCase();
+    if (s === "critical" || s === "high" || s === "medium" || s === "low") return s;
+    return fallback;
+  };
+  const severityRank = (value: unknown): SeverityRank => {
+    const s = String(value ?? "").trim().toLowerCase();
+    if (s === "critical") return 3;
+    if (s === "high") return 2;
+    if (s === "medium") return 1;
+    return 0;
+  };
+  const gateRows: Array<{
+    id: "tool_integrity" | "latency" | "regression_diff";
+    label: string;
+    status: "pass" | "fail" | "not_applicable";
+    reason: string;
+  }> = [
+    {
+      id: "tool_integrity",
+      label: "Tool Integrity",
+      status: policyRows.length > 0 ? "fail" : "pass",
+      reason:
+        policyRows.length > 0
+          ? policyRows[0]?.message || `${policyRows.length} policy violation(s) detected`
+          : "No policy violations detected.",
+    },
+    {
+      id: "latency",
+      label: "Latency",
+      status: (() => {
+        const v = String((signalsChecksRaw as any)?.latency ?? "").trim().toLowerCase();
+        if (v === "pass" || v === "fail" || v === "not_applicable") return v;
+        return "not_applicable";
+      })(),
+      reason: formatSignalWhy("latency", (signalsDetailsRaw as any)?.latency) || "No latency evidence.",
+    },
+    {
+      id: "regression_diff",
+      label: "Regression Diff",
+      status:
+        Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0) > 0 ||
+        Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0) > 0
+          ? "fail"
+          : "pass",
+      reason:
+        Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0) > 0
+          ? `Sequence edits ${Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0)}`
+          : "No meaningful behavior diff detected.",
+    },
+  ];
+  const decisionHeadline = (() => {
+    const toHeadline = (reason: string) => `Reason: ${reason}`;
+    if (pass) return toHeadline("No blocking regressions detected.");
+    const gateSeverityMap: Record<(typeof gateRows)[number]["id"], DecisionSeverity> = {
+      tool_integrity: "critical",
+      latency: "high",
+      regression_diff: "high",
+    };
+    const issues: DecisionIssue[] = [];
+    policyRows.forEach(row => {
+      issues.push({
+        source: "policy",
+        severity: normalizeSeverity(row.severity, "high"),
+        message: row.message || row.label,
+      });
+    });
+    gateRows
+      .filter(g => g.status === "fail")
+      .forEach(g => {
+        issues.push({
+          source: "gate",
+          severity: gateSeverityMap[g.id] ?? "medium",
+          message: g.reason || `${g.label} failed`,
+        });
+      });
+    if (issues.length === 0 && decisionReasons.length > 0) {
+      decisionReasons.forEach(reason => {
+        issues.push({
+          source: "reason",
+          severity: "medium",
+          message: String(reason ?? "").trim(),
+        });
+      });
+    }
+    const sorted = issues
+      .filter(i => Boolean(i.message))
+      .sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
+    const top = sorted[0];
+    if (top && severityRank(top.severity) >= 2) {
+      return toHeadline(top.message);
+    }
+    const failCount = gateRows.filter(g => g.status === "fail").length + policyRows.length;
+    if (failCount > 1) return toHeadline(`${failCount} blocking checks failed.`);
+    if (top?.message) return toHeadline(top.message);
+    return toHeadline("Blocking issues detected.");
+  })();
 
   if (!open) return null;
 
@@ -666,59 +751,51 @@ function AttemptDetailOverlay({
           </button>
         </div>
 
-        <div className="flex flex-1 min-h-0">
-          <div className="flex-[1.6] min-w-0 border-r border-white/8 p-5">
-            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-              Original snapshot
-            </div>
-            <div className="mt-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Input
-              </div>
-              <p className="mt-2 max-h-28 overflow-auto custom-scrollbar whitespace-pre-wrap break-words text-sm text-slate-200">
-                {baselineInput}
-              </p>
-            </div>
-            <div className="mt-3 rounded-2xl border border-white/8 bg-black/40 p-3 h-[calc(100%-122px)]">
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-2">
-                Baseline request (preview)
-              </div>
-              <div className="h-[calc(100%-22px)] overflow-auto custom-scrollbar">
-                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                  <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                    Original system prompt
-                  </div>
-                  <p className="mt-2 text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
-                    {baselineSystemPrompt || "—"}
-                  </p>
-                  {baselineConfigSummary ? (
-                    <div className="mt-3 text-[11px] text-slate-400">Config: {baselineConfigSummary}</div>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => setShowBaselineRaw(v => !v)}
-                    className="mt-3 inline-flex items-center rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-200 hover:bg-white/10"
-                  >
-                    {showBaselineRaw ? "Hide raw" : "View full request"}
-                  </button>
-                  {showBaselineRaw && (
-                    <pre className="mt-3 max-h-56 overflow-auto custom-scrollbar text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-words">
-                      {baselinePayloadPreview}
-                    </pre>
-                  )}
+        <div className="px-6 py-3 border-b border-white/8">
+          <div
+            className={clsx(
+              "rounded-2xl border px-4 py-3",
+              pass
+                ? "border-emerald-500/30 bg-emerald-500/10"
+                : "border-rose-500/30 bg-rose-500/10"
+            )}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                  Decision
                 </div>
+                <div className="mt-1 text-sm font-bold text-white">
+                  {pass ? "RELEASE READY" : "RELEASE BLOCKED"}
+                </div>
+                <div className="mt-1 text-xs text-slate-200">{decisionHeadline}</div>
+              </div>
+              <div className="text-xs text-slate-300">
+                {baselineModel} → {candidateModel} · {formatDurationMs((attempt?.replay ?? {}).avg_latency_ms)}
               </div>
             </div>
+            {!pass && decisionReasons.length > 0 && (
+              <div className="mt-2 space-y-1 text-xs text-rose-100">
+                {decisionReasons.slice(0, 3).map((r: string, i: number) => (
+                  <div key={`${r}-${i}`}>- {r}</div>
+                ))}
+                {decisionReasons.length > 3 && (
+                  <div className="text-slate-300">+{decisionReasons.length - 3} more</div>
+                )}
+              </div>
+            )}
           </div>
+        </div>
 
-          <div className="flex-[1.6] min-w-0 border-r border-white/8 p-5">
+        <div className="flex flex-1 min-h-0">
+          <div className="flex-1 min-w-0 border-r border-white/8 p-5">
             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
               Replay attempt
             </div>
             <div className="mt-3 rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.04] p-3 h-[calc(100%-24px)]">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                  Run summary
+                  Gate Results
                 </div>
                 {attempt?.trace_id && (
                   <div className="truncate text-[11px] text-slate-500 max-w-[220px]">
@@ -727,33 +804,33 @@ function AttemptDetailOverlay({
                 )}
               </div>
               <div className="mt-2 space-y-3 h-[calc(100%-22px)] overflow-auto custom-scrollbar">
-                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Using model</div>
-                    <div className="mt-1 truncate">{candidateModel}</div>
-                  </div>
-                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Using provider</div>
-                    <div className="mt-1 truncate">{candidateProvider}</div>
-                  </div>
-                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Signals failed</div>
-                    <div className="mt-1">
-                      {signalsChecksRaw
-                        ? `${signalsApplicable.length - signalsPassed.length}/${signalsApplicable.length || 0}`
-                        : "—"}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px]">
+                  {gateRows.map(g => (
+                    <div key={g.id} className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">{g.label}</div>
+                        <span
+                          className={clsx(
+                            "text-[10px] font-black uppercase",
+                            g.status === "fail"
+                              ? "text-rose-300"
+                              : g.status === "pass"
+                                ? "text-emerald-300"
+                                : "text-slate-500"
+                          )}
+                        >
+                          {g.status === "not_applicable" ? "N/A" : g.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="mt-1 break-words text-xs text-slate-300">{g.reason}</div>
                     </div>
-                  </div>
-                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Policy violations</div>
-                    <div className="mt-1">{policyRows.length}</div>
-                  </div>
+                  ))}
                 </div>
 
                 {Array.isArray(attempt?.failure_reasons) && attempt.failure_reasons.length > 0 ? (
                   <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
                     <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                      Failure reasons
+                      Why failed
                     </div>
                     <div className="mt-2 space-y-1.5">
                       {attempt.failure_reasons.slice(0, 5).map((r: string, i: number) => (
