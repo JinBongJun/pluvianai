@@ -82,32 +82,21 @@ const REPLAY_PROVIDER_LABEL: Record<ReplayProvider, string> = {
 };
 const REPLAY_PROVIDER_MODEL_LIBRARY: Record<ReplayProvider, string[]> = {
   openai: [
-    "gpt-4o",
     "gpt-4o-mini",
+    "gpt-4o",
     "gpt-4.1",
     "gpt-4.1-mini",
-    "gpt-4.1-nano",
-    "o3",
-    "o3-mini",
-    "o4-mini",
   ],
   anthropic: [
-    // Pinned (versioned) Anthropic model ids only — recommended for Release Gate reproducibility.
-    "claude-haiku-4-5-20251001",
-    "claude-opus-4-5-20251101",
+    // Keep conservative, pinned IDs for reproducible Release Gate runs.
     "claude-sonnet-4-5-20250929",
-    "claude-opus-4-1-20250805",
-    "claude-opus-4-20250514",
+    "claude-haiku-4-5-20251001",
     "claude-sonnet-4-20250514",
   ],
   google: [
-    "gemini-2.5-pro-preview",
-    "gemini-2.5-flash-preview",
     "gemini-2.0-flash",
     "gemini-2.0-flash-lite",
-    "gemini-1.5-pro",
     "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
   ],
 };
 const REPLAY_THRESHOLD_PRESETS = {
@@ -190,6 +179,16 @@ function inferProviderFromModelId(modelId: unknown): ReplayProvider | null {
     .trim()
     .toLowerCase();
   if (!model) return null;
+  if (
+    model.startsWith("gpt") ||
+    model.startsWith("o1") ||
+    model.startsWith("o3") ||
+    model.startsWith("o4") ||
+    model.startsWith("text-embedding") ||
+    model.startsWith("openai/")
+  ) {
+    return "openai";
+  }
   if (model.includes("claude") || model.startsWith("anthropic/")) return "anthropic";
   if (
     model.includes("gemini") ||
@@ -199,7 +198,7 @@ function inferProviderFromModelId(modelId: unknown): ReplayProvider | null {
   ) {
     return "google";
   }
-  return "openai";
+  return null;
 }
 
 function collectMissingProviderKeys(result: ReleaseGateResult | null): ReplayProvider[] {
@@ -1857,15 +1856,8 @@ export default function ReleaseGatePageContent() {
     setModelProviderTab(inferredProvider);
   }, [modelOverrideEnabled, runDataProvider, runDataModel]);
 
-  useEffect(() => {
-    if (!modelOverrideEnabled) return;
-    const inferred = inferProviderFromModelId(newModel);
-    if (!inferred) return;
-    if (inferred !== replayProvider) {
-      setReplayProvider(inferred);
-      setModelProviderTab(inferred);
-    }
-  }, [modelOverrideEnabled, newModel, replayProvider]);
+  // Keep provider selection user-driven while overriding.
+  // We validate mismatch at run time and show a clear error instead of silently changing tabs/providers.
 
   const handleValidate = async () => {
     if (!projectId || isNaN(projectId) || !canValidate || isValidating) return;
@@ -1901,14 +1893,9 @@ export default function ReleaseGatePageContent() {
       }
       if (modelOverrideEnabled) {
         const trimmedModel = newModel.trim();
-        const inferredProvider = inferProviderFromModelId(trimmedModel);
-        const effectiveProvider = inferredProvider || replayProvider;
+        const effectiveProvider = replayProvider;
         payload.new_model = trimmedModel;
         payload.replay_provider = effectiveProvider;
-        if (inferredProvider && inferredProvider !== replayProvider) {
-          setReplayProvider(inferredProvider);
-          setModelProviderTab(inferredProvider);
-        }
       }
       payload.new_system_prompt =
         (typeof requestBody.system_prompt === "string"

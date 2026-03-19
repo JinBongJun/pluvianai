@@ -285,10 +285,10 @@ class DataNormalizer:
 
         return None
 
-    def _extract_response_text(self, response_data: Optional[Dict]) -> Optional[str]:
-        """Extract response text from response data"""
+    def _extract_response_text_with_meta(self, response_data: Optional[Dict]) -> Dict[str, Optional[str]]:
+        """Extract response text and lightweight diagnostics metadata."""
         if not response_data:
-            return None
+            return {"text": None, "path": None, "reason": "response_data is empty"}
 
         def _content_parts_to_text(value: Any) -> Optional[str]:
             if value is None:
@@ -297,7 +297,23 @@ class DataNormalizer:
                 return value
             if isinstance(value, dict):
                 t = value.get("text")
-                return t if isinstance(t, str) else None
+                if isinstance(t, str):
+                    return t
+                # Some providers wrap text as {"text": {"value": "..."}}
+                if isinstance(t, dict):
+                    tv = t.get("value")
+                    if isinstance(tv, str):
+                        return tv
+                # Generic nested structures
+                inner = value.get("content")
+                inner_t = _content_parts_to_text(inner)
+                if isinstance(inner_t, str) and inner_t.strip():
+                    return inner_t
+                parts = value.get("parts")
+                parts_t = _content_parts_to_text(parts)
+                if isinstance(parts_t, str) and parts_t.strip():
+                    return parts_t
+                return None
             if isinstance(value, list):
                 parts: List[str] = []
                 for item in value:
@@ -310,6 +326,11 @@ class DataNormalizer:
                         if isinstance(t, str) and t.strip():
                             parts.append(t)
                             continue
+                        if isinstance(t, dict):
+                            tv = t.get("value")
+                            if isinstance(tv, str) and tv.strip():
+                                parts.append(tv)
+                                continue
                         # Generic: nested content
                         inner = item.get("content")
                         inner_t = _content_parts_to_text(inner)
@@ -328,23 +349,36 @@ class DataNormalizer:
                     content = msg.get("content", "")
                     text = _content_parts_to_text(content)
                     if isinstance(text, str) and text.strip():
-                        return text
+                        return {
+                            "text": text,
+                            "path": "choices[0].message.content",
+                            "reason": None,
+                        }
                     # Tool-call only completions can have no content.
                     tool_calls = msg.get("tool_calls")
                     if isinstance(tool_calls, list) and len(tool_calls) > 0:
-                        return "(tool calls only; no assistant text)"
+                        return {
+                            "text": "(tool calls only; no assistant text)",
+                            "path": "choices[0].message.tool_calls",
+                            "reason": "tool calls present without assistant text",
+                        }
                 # Legacy completions format
                 if "text" in choice and isinstance(choice.get("text"), str):
-                    return choice.get("text")
+                    return {
+                        "text": choice.get("text"),
+                        "path": "choices[0].text",
+                        "reason": None,
+                    }
 
         # OpenAI Responses API style (best-effort)
         if "output_text" in response_data and isinstance(response_data.get("output_text"), str):
             t = response_data.get("output_text")
-            return t if t.strip() else None
+            if isinstance(t, str) and t.strip():
+                return {"text": t, "path": "output_text", "reason": None}
         if "output" in response_data and isinstance(response_data.get("output"), list):
             out_text = _content_parts_to_text(response_data.get("output"))
             if isinstance(out_text, str) and out_text.strip():
-                return out_text
+                return {"text": out_text, "path": "output", "reason": None}
 
         # Anthropic format (Messages API)
         if "content" in response_data:
@@ -352,7 +386,7 @@ class DataNormalizer:
             if isinstance(content, list) and len(content) > 0:
                 text = _content_parts_to_text(content)
                 if isinstance(text, str) and text.strip():
-                    return text
+                    return {"text": text, "path": "content", "reason": None}
 
         # Google Gemini format: candidates[0].content.parts[].text
         if "candidates" in response_data and isinstance(response_data["candidates"], list):
@@ -367,7 +401,11 @@ class DataNormalizer:
                 if parts is not None:
                     text = _content_parts_to_text(parts)
                     if isinstance(text, str) and text.strip():
-                        return text
+                        return {
+                            "text": text,
+                            "path": "candidates[0].content.parts",
+                            "reason": None,
+                        }
 
         # Generic nested "response"/"data" wrapper (defensive fallback)
         nested = response_data.get("response") or response_data.get("data")
@@ -376,11 +414,29 @@ class DataNormalizer:
             if nested_output is not None:
                 text = _content_parts_to_text(nested_output)
                 if isinstance(text, str) and text.strip():
-                    return text
+                    return {
+                        "text": text,
+                        "path": "response|data.(output|content)",
+                        "reason": None,
+                    }
 
         # Direct text field
         if "text" in response_data:
             t = response_data["text"]
-            return t if isinstance(t, str) else str(t)
+            return {
+                "text": t if isinstance(t, str) else str(t),
+                "path": "text",
+                "reason": None,
+            }
 
-        return None
+        return {
+            "text": None,
+            "path": None,
+            "reason": "no text found in known response fields",
+        }
+
+    def _extract_response_text(self, response_data: Optional[Dict]) -> Optional[str]:
+        """Extract response text from response data"""
+        result = self._extract_response_text_with_meta(response_data)
+        text = result.get("text")
+        return text if isinstance(text, str) else None
