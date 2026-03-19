@@ -955,10 +955,6 @@ export function ReleaseGateExpandedView() {
   const result = ctx.result as any;
   const expandedCaseIndex = ctx.expandedCaseIndex as number | null;
   const setExpandedCaseIndex = ctx.setExpandedCaseIndex as (n: number | null) => void;
-  const selectedAttempt = ctx.selectedAttempt as { caseIndex: number; attemptIndex: number } | null;
-  const setSelectedAttempt = ctx.setSelectedAttempt as (
-    a: { caseIndex: number; attemptIndex: number } | null
-  ) => void;
   const baselineDetailSnapshot = ctx.baselineDetailSnapshot as SnapshotForDetail | null;
   const agentEvalData = ctx.agentEvalData as Record<string, unknown> | undefined;
   const runEvalElements = (ctx.runEvalElements as Array<{ name: string }>) ?? [];
@@ -1121,14 +1117,12 @@ export function ReleaseGateExpandedView() {
     setSettingsPanelOpen(false);
     setDetailAttemptView(null);
     setExpandedCaseIndex(null);
-    setSelectedAttempt(null);
     setSelectedRunId(null);
     setRepeatDropdownOpen(false);
   }, [
     agentId,
     setExpandedCaseIndex,
     setRepeatDropdownOpen,
-    setSelectedAttempt,
     setSelectedRunId,
   ]);
 
@@ -1148,7 +1142,6 @@ export function ReleaseGateExpandedView() {
     setExpandedDatasetId(null);
     setDetailAttemptView(null);
     setExpandedCaseIndex(null);
-    setSelectedAttempt(null);
     setSelectedRunId(null);
     setRepeatDropdownOpen(false);
   };
@@ -1963,12 +1956,6 @@ export function ReleaseGateExpandedView() {
                                 ? "FLAKY"
                                 : "FAIL";
                             const isExpanded = expandedCaseIndex === idx;
-                            const selectedAttemptIndex =
-                              selectedAttempt?.caseIndex === idx ? selectedAttempt.attemptIndex : null;
-                            const activeAttempt =
-                              typeof selectedAttemptIndex === "number"
-                                ? attempts[selectedAttemptIndex]
-                                : null;
 
                             return (
                               <div
@@ -1987,7 +1974,6 @@ export function ReleaseGateExpandedView() {
                                   type="button"
                                   onClick={() => {
                                     setExpandedCaseIndex(isExpanded ? null : idx);
-                                    setSelectedAttempt(null);
                                   }}
                                   data-testid={`rg-result-case-toggle-${idx}`}
                                   className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
@@ -2057,34 +2043,21 @@ export function ReleaseGateExpandedView() {
                                         </div>
                                       ) : (
                                         attempts.map((attempt: any, attemptIdx: number) => {
-                                          const isActive =
-                                            selectedAttempt?.caseIndex === idx &&
-                                            selectedAttempt?.attemptIndex === attemptIdx;
                                           return (
                                             <button
                                               key={attemptIdx}
                                               type="button"
                                               onClick={() => {
-                                                const next = isActive
-                                                  ? null
-                                                  : { caseIndex: idx, attemptIndex: attemptIdx };
-                                                setSelectedAttempt(next);
-                                                if (next) {
-                                                  setDetailAttemptView({
-                                                    attempt,
-                                                    caseIndex: idx,
-                                                    attemptIndex: attemptIdx,
-                                                    baselineSnapshot: baselineSnapshotForRun,
-                                                  });
-                                                } else {
-                                                  setDetailAttemptView(null);
-                                                }
+                                                setDetailAttemptView({
+                                                  attempt,
+                                                  caseIndex: idx,
+                                                  attemptIndex: attemptIdx,
+                                                  baselineSnapshot: baselineSnapshotForRun,
+                                                });
                                               }}
                                               className={clsx(
                                                 "flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left transition",
-                                                isActive
-                                                  ? "border-fuchsia-500/30 bg-fuchsia-500/10"
-                                                  : "border-white/8 bg-white/[0.03] hover:bg-white/[0.05]"
+                                                "border-white/8 bg-white/[0.03] hover:bg-white/[0.05]"
                                               )}
                                             >
                                               <div className="min-w-0">
@@ -2114,39 +2087,6 @@ export function ReleaseGateExpandedView() {
                                         })
                                       )}
                                     </div>
-
-                                    {activeAttempt && (
-                                      <div className="space-y-3 rounded-2xl border border-white/8 bg-black/30 p-4">
-                                        <div className="flex items-center justify-between gap-3">
-                                          <div className="text-sm font-semibold text-white">
-                                            Attempt detail
-                                          </div>
-                                          {activeAttempt.trace_id && (
-                                            <div className="truncate text-[11px] text-slate-400">
-                                              {String(activeAttempt.trace_id)}
-                                            </div>
-                                          )}
-                                        </div>
-                                        <p className="text-sm text-slate-300">
-                                          Open a larger comparison view for baseline vs replay snapshot,
-                                          eval checks, and tool-call diagnostics.
-                                        </p>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setDetailAttemptView({
-                                              attempt: activeAttempt,
-                                              caseIndex: idx,
-                                              attemptIndex: selectedAttempt?.attemptIndex ?? 0,
-                                              baselineSnapshot: baselineSnapshotForRun,
-                                            })
-                                          }
-                                          className="inline-flex items-center gap-2 rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-fuchsia-200 hover:bg-fuchsia-500/15"
-                                        >
-                                          Open detailed comparison
-                                        </button>
-                                      </div>
-                                    )}
                                   </div>
                                 )}
                               </div>
