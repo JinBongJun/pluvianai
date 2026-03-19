@@ -15,13 +15,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response: Response = await call_next(request)
 
-        # CRITICAL: Never override CORS headers - they must be set by CORS middleware
-        # Only add security headers if CORS headers are not already present
-        if "access-control-allow-origin" not in response.headers:
-            # If CORS headers are missing, add them (fallback)
-            response.headers["Access-Control-Allow-Origin"] = "*"
-            response.headers["Access-Control-Allow-Methods"] = "*"
-            response.headers["Access-Control-Allow-Headers"] = "*"
+        # CRITICAL: Never add/override CORS headers here.
+        # CORS must be handled centrally by FastAPI's CORSMiddleware to ensure
+        # credentialed requests never receive wildcard origins.
 
         # HSTS (HTTP Strict Transport Security) - only for HTTPS
         if request.url.scheme == "https":
