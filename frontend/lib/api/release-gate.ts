@@ -28,6 +28,15 @@ type ReleaseGateValidatePayload = {
 };
 
 export const releaseGateAPI = {
+  getCoreModels: async (
+    projectId: number
+  ): Promise<{
+    providers: Record<"openai" | "anthropic" | "google", string[]>;
+  }> => {
+    const response = await apiClient.get(`/projects/${projectId}/release-gate/core-models`);
+    return response.data;
+  },
+
   getAgents: async (
     projectId: number,
     limit: number = 50
