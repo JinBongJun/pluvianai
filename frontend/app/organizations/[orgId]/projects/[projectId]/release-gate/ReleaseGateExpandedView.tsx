@@ -664,7 +664,8 @@ function AttemptDetailOverlay({
     },
   ];
   const decisionHeadline = (() => {
-    if (pass) return "✅ RELEASE READY — no blocking regressions";
+    const toHeadline = (reason: string) => `Reason: ${reason}`;
+    if (pass) return toHeadline("No blocking regressions detected.");
     const gateSeverityMap: Record<(typeof gateRows)[number]["id"], DecisionSeverity> = {
       tool_integrity: "critical",
       latency: "high",
@@ -701,12 +702,12 @@ function AttemptDetailOverlay({
       .sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
     const top = sorted[0];
     if (top && severityRank(top.severity) >= 2) {
-      return `❌ RELEASE BLOCKED — ${top.message}`;
+      return toHeadline(top.message);
     }
     const failCount = gateRows.filter(g => g.status === "fail").length + policyRows.length;
-    if (failCount > 1) return `❌ RELEASE BLOCKED — ${failCount} blocking checks failed`;
-    if (top?.message) return `❌ RELEASE BLOCKED — ${top.message}`;
-    return "❌ RELEASE BLOCKED — blocking issues detected";
+    if (failCount > 1) return toHeadline(`${failCount} blocking checks failed.`);
+    if (top?.message) return toHeadline(top.message);
+    return toHeadline("Blocking issues detected.");
   })();
 
   if (!open) return null;
