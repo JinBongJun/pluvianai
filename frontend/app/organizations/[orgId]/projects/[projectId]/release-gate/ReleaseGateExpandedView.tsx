@@ -599,8 +599,24 @@ function AttemptDetailOverlay({
   }, [baselineResponse, candidateResponse]);
 
   const pass = Boolean(attempt?.pass);
-  const decisionReasons = Array.isArray(attempt?.failure_reasons) ? attempt.failure_reasons : [];
+  const decisionReasons: string[] = Array.isArray(attempt?.failure_reasons)
+    ? (attempt.failure_reasons as string[])
+    : [];
   type SeverityRank = 0 | 1 | 2 | 3;
+  type DecisionSeverity = "low" | "medium" | "high" | "critical";
+  type DecisionIssue = {
+    source: "policy" | "gate" | "reason";
+    severity: DecisionSeverity;
+    message: string;
+  };
+  const normalizeSeverity = (
+    value: unknown,
+    fallback: DecisionSeverity = "medium"
+  ): DecisionSeverity => {
+    const s = String(value ?? "").trim().toLowerCase();
+    if (s === "critical" || s === "high" || s === "medium" || s === "low") return s;
+    return fallback;
+  };
   const severityRank = (value: unknown): SeverityRank => {
     const s = String(value ?? "").trim().toLowerCase();
     if (s === "critical") return 3;
@@ -649,24 +665,47 @@ function AttemptDetailOverlay({
   ];
   const decisionHeadline = (() => {
     if (pass) return "✅ RELEASE READY — no blocking regressions";
-    const topPolicy = [...policyRows].sort(
-      (a, b) => severityRank(b.severity) - severityRank(a.severity)
-    )[0];
-    if (topPolicy && severityRank(topPolicy.severity) >= 2) {
-      const sev = topPolicy.severity || "high";
-      return `❌ RELEASE BLOCKED — ${topPolicy.message || topPolicy.label} (${sev})`;
+    const gateSeverityMap: Record<(typeof gateRows)[number]["id"], DecisionSeverity> = {
+      tool_integrity: "critical",
+      latency: "high",
+      regression_diff: "high",
+    };
+    const issues: DecisionIssue[] = [];
+    policyRows.forEach(row => {
+      issues.push({
+        source: "policy",
+        severity: normalizeSeverity(row.severity, "high"),
+        message: row.message || row.label,
+      });
+    });
+    gateRows
+      .filter(g => g.status === "fail")
+      .forEach(g => {
+        issues.push({
+          source: "gate",
+          severity: gateSeverityMap[g.id] ?? "medium",
+          message: g.reason || `${g.label} failed`,
+        });
+      });
+    if (issues.length === 0 && decisionReasons.length > 0) {
+      decisionReasons.forEach(reason => {
+        issues.push({
+          source: "reason",
+          severity: "medium",
+          message: String(reason ?? "").trim(),
+        });
+      });
     }
-    const topGateFail = gateRows.find(g => g.status === "fail");
-    if (topGateFail?.reason) {
-      return `❌ RELEASE BLOCKED — ${topGateFail.reason}`;
+    const sorted = issues
+      .filter(i => Boolean(i.message))
+      .sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
+    const top = sorted[0];
+    if (top && severityRank(top.severity) >= 2) {
+      return `❌ RELEASE BLOCKED — ${top.message}`;
     }
-    const failCount = gateRows.filter(g => g.status === "fail").length;
-    if (failCount > 0) {
-      return `❌ RELEASE BLOCKED — ${failCount} gate(s) failed`;
-    }
-    if (decisionReasons.length > 0) {
-      return `❌ RELEASE BLOCKED — ${decisionReasons[0]}`;
-    }
+    const failCount = gateRows.filter(g => g.status === "fail").length + policyRows.length;
+    if (failCount > 1) return `❌ RELEASE BLOCKED — ${failCount} blocking checks failed`;
+    if (top?.message) return `❌ RELEASE BLOCKED — ${top.message}`;
     return "❌ RELEASE BLOCKED — blocking issues detected";
   })();
 
