@@ -600,6 +600,14 @@ function AttemptDetailOverlay({
 
   const pass = Boolean(attempt?.pass);
   const decisionReasons = Array.isArray(attempt?.failure_reasons) ? attempt.failure_reasons : [];
+  type SeverityRank = 0 | 1 | 2 | 3;
+  const severityRank = (value: unknown): SeverityRank => {
+    const s = String(value ?? "").trim().toLowerCase();
+    if (s === "critical") return 3;
+    if (s === "high") return 2;
+    if (s === "medium") return 1;
+    return 0;
+  };
   const gateRows: Array<{
     id: "tool_integrity" | "latency" | "regression_diff";
     label: string;
@@ -639,6 +647,28 @@ function AttemptDetailOverlay({
           : "No meaningful behavior diff detected.",
     },
   ];
+  const decisionHeadline = (() => {
+    if (pass) return "✅ RELEASE READY — no blocking regressions";
+    const topPolicy = [...policyRows].sort(
+      (a, b) => severityRank(b.severity) - severityRank(a.severity)
+    )[0];
+    if (topPolicy && severityRank(topPolicy.severity) >= 2) {
+      const sev = topPolicy.severity || "high";
+      return `❌ RELEASE BLOCKED — ${topPolicy.message || topPolicy.label} (${sev})`;
+    }
+    const topGateFail = gateRows.find(g => g.status === "fail");
+    if (topGateFail?.reason) {
+      return `❌ RELEASE BLOCKED — ${topGateFail.reason}`;
+    }
+    const failCount = gateRows.filter(g => g.status === "fail").length;
+    if (failCount > 0) {
+      return `❌ RELEASE BLOCKED — ${failCount} gate(s) failed`;
+    }
+    if (decisionReasons.length > 0) {
+      return `❌ RELEASE BLOCKED — ${decisionReasons[0]}`;
+    }
+    return "❌ RELEASE BLOCKED — blocking issues detected";
+  })();
 
   if (!open) return null;
 
@@ -698,6 +728,7 @@ function AttemptDetailOverlay({
                 <div className="mt-1 text-sm font-bold text-white">
                   {pass ? "RELEASE READY" : "RELEASE BLOCKED"}
                 </div>
+                <div className="mt-1 text-xs text-slate-200">{decisionHeadline}</div>
               </div>
               <div className="text-xs text-slate-300">
                 {baselineModel} → {candidateModel} · {formatDurationMs((attempt?.replay ?? {}).avg_latency_ms)}
