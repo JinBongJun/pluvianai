@@ -1123,6 +1123,8 @@ async def _run_release_gate(
 
                 baseline_response_text = ""
                 baseline_response_data_keys: List[str] = []
+                baseline_response_preview_status = "unknown"
+                baseline_response_capture_reason: Optional[str] = None
                 try:
                     raw_baseline_resp = getattr(snapshot, "response", None)
                     if isinstance(raw_baseline_resp, str):
@@ -1141,6 +1143,22 @@ async def _run_release_gate(
                     baseline_response_data_keys = []
                 baseline_len = len(baseline_response_text.strip()) if baseline_response_text else None
                 baseline_response_preview = str(baseline_response_text or "").strip()[:2000]
+                try:
+                    if raw_baseline_resp is None:
+                        baseline_response_preview_status = "not_captured"
+                        baseline_response_capture_reason = "snapshot.response is null"
+                    elif isinstance(raw_baseline_resp, str) and not raw_baseline_resp.strip():
+                        baseline_response_preview_status = "empty"
+                        baseline_response_capture_reason = "snapshot.response is empty string"
+                    elif isinstance(raw_baseline_resp, dict) and not str(baseline_response_preview or "").strip():
+                        baseline_response_preview_status = "empty"
+                        baseline_response_capture_reason = "snapshot.response extracted to empty text"
+                    elif str(baseline_response_preview or "").strip():
+                        baseline_response_preview_status = "ok"
+                    else:
+                        baseline_response_preview_status = "unknown"
+                except Exception:
+                    baseline_response_preview_status = "unknown"
 
                 try:
                     status_code_val = res.get("status_code")
@@ -1164,6 +1182,101 @@ async def _run_release_gate(
                     )
                 except Exception:
                     signals_checks = {}
+                # Rich "why" details for UI: include thresholds + measured values per check.
+                signals_details: Dict[str, Any] = {}
+                try:
+                    cfg = normalize_eval_config(eval_config_signals or {})
+                    text_trimmed = str(candidate_response_preview or "").strip()
+                    actual_chars = len(text_trimmed)
+                    # empty
+                    if "empty" in (signals_checks or {}):
+                        signals_details["empty"] = {
+                            "status": signals_checks.get("empty"),
+                            "min_chars": cfg.get("empty", {}).get("min_chars"),
+                            "actual_chars": actual_chars,
+                        }
+                    # latency
+                    if "latency" in (signals_checks or {}):
+                        signals_details["latency"] = {
+                            "status": signals_checks.get("latency"),
+                            "fail_ms": cfg.get("latency", {}).get("fail_ms"),
+                            "actual_ms": latency_int,
+                        }
+                    # status_code
+                    if "status_code" in (signals_checks or {}):
+                        signals_details["status_code"] = {
+                            "status": signals_checks.get("status_code"),
+                            "fail_from": cfg.get("status_code", {}).get("fail_from"),
+                            "actual_status": status_code_int,
+                        }
+                    # refusal (best-effort heuristic; aligns with live_eval_service patterns)
+                    if "refusal" in (signals_checks or {}):
+                        t = text_trimmed.lower()
+                        refusal_markers = [
+                            "i cannot",
+                            "i can't",
+                            "unable to",
+                            "as an ai",
+                            "sorry, but i",
+                            "apologize",
+                        ]
+                        signals_details["refusal"] = {
+                            "status": signals_checks.get("refusal"),
+                            "matched": any(m in t for m in refusal_markers) if t else None,
+                        }
+                    # json
+                    if "json" in (signals_checks or {}):
+                        mode = (cfg.get("json") or {}).get("mode")
+                        looks_like_json = (
+                            (text_trimmed.startswith("{") and text_trimmed.endswith("}"))
+                            or (text_trimmed.startswith("[") and text_trimmed.endswith("]"))
+                        )
+                        parsed_ok: Optional[bool] = None
+                        if mode != "off" and (mode == "always" or looks_like_json):
+                            try:
+                                json.loads(text_trimmed)
+                                parsed_ok = True
+                            except Exception:
+                                parsed_ok = False
+                        signals_details["json"] = {
+                            "status": signals_checks.get("json"),
+                            "mode": mode,
+                            "checked": (mode != "off") and (mode == "always" or looks_like_json),
+                            "parsed_ok": parsed_ok,
+                        }
+                    # length drift
+                    if "length" in (signals_checks or {}):
+                        fail_ratio = (cfg.get("length") or {}).get("fail_ratio")
+                        ratio_val: Optional[float] = None
+                        if baseline_len and baseline_len > 0 and actual_chars > 0:
+                            ratio_val = abs(actual_chars - baseline_len) / float(baseline_len)
+                        signals_details["length"] = {
+                            "status": signals_checks.get("length"),
+                            "fail_ratio": fail_ratio,
+                            "baseline_len": baseline_len,
+                            "actual_chars": actual_chars,
+                            "ratio": ratio_val,
+                        }
+                    # repetition (max repeated line count)
+                    if "repetition" in (signals_checks or {}):
+                        lines = [ln.strip() for ln in text_trimmed.split("\n") if len(ln.strip()) >= 4]
+                        counts: Dict[str, int] = {}
+                        max_repeat = 0
+                        for ln in lines:
+                            counts[ln] = counts.get(ln, 0) + 1
+                            if counts[ln] > max_repeat:
+                                max_repeat = counts[ln]
+                        signals_details["repetition"] = {
+                            "status": signals_checks.get("repetition"),
+                            "fail_line_repeats": (cfg.get("repetition") or {}).get("fail_line_repeats"),
+                            "max_line_repeats": max_repeat,
+                        }
+                    # required/format/leakage/tool: keep minimal structure so UI can render status even if no details
+                    for k in ["required", "format", "leakage", "tool"]:
+                        if k in (signals_checks or {}):
+                            signals_details[k] = {"status": signals_checks.get(k)}
+                except Exception:
+                    signals_details = {}
                 failed_signals_local = [
                     k
                     for k, v in (signals_checks or {}).items()
@@ -1173,6 +1286,7 @@ async def _run_release_gate(
                     "checks": signals_checks or {},
                     "failed": failed_signals_local,
                     "config_version": eval_config_version,
+                    "details": signals_details or {},
                 }
 
                 run_tool_summary = response_to_canonical_tool_calls_summary(
@@ -1232,6 +1346,8 @@ async def _run_release_gate(
                             "baseline_snapshot": {
                                 "response_preview": baseline_response_preview,
                                 "response_data_keys": baseline_response_data_keys,
+                                "response_preview_status": baseline_response_preview_status,
+                                "capture_reason": baseline_response_capture_reason,
                             },
                             "candidate_snapshot": {
                                 "provider": replay_provider,
@@ -1290,6 +1406,8 @@ async def _run_release_gate(
                             "baseline_snapshot": {
                                 "response_preview": baseline_response_preview,
                                 "response_data_keys": baseline_response_data_keys,
+                                "response_preview_status": baseline_response_preview_status,
+                                "capture_reason": baseline_response_capture_reason,
                             },
                             "candidate_snapshot": {
                                 "provider": str(res.get("replay_provider") or "").strip() or None,
@@ -1361,6 +1479,8 @@ async def _run_release_gate(
                         "baseline_snapshot": {
                             "response_preview": baseline_response_preview,
                             "response_data_keys": baseline_response_data_keys,
+                            "response_preview_status": baseline_response_preview_status,
+                            "capture_reason": baseline_response_capture_reason,
                         },
                         "candidate_snapshot": {
                             "provider": str(res.get("replay_provider") or "").strip() or None,
