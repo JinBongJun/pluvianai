@@ -16,6 +16,7 @@ from app.services.data_normalizer import DataNormalizer
 from app.models.replay_run import ReplayRun
 from app.models.usage import Usage
 from app.models.project import Project
+from app.services.providers.capabilities import resolve_capabilities
 
 
 def _persist_replay_usage(
@@ -361,8 +362,29 @@ class ReplayService:
         tool_specs = self._normalize_tool_specs(payload)
         tool_choice = self._map_tool_choice_for_provider(payload, target_provider)
 
+        capabilities = resolve_capabilities(target_provider, model_for_request)
+
+        if not bool(capabilities.get("supports_tools", True)):
+            tool_specs = []
+            tool_choice = None
+
+        if not bool(capabilities.get("supports_system_prompt", True)):
+            system_prompt = ""
+
         adapter = self._provider_adapters.get(target_provider)
         if adapter is not None:
+            if target_provider == "google":
+                return adapter.build_payload(
+                    system_prompt=system_prompt,
+                    messages=messages,
+                    knobs=knobs,
+                    tool_specs=tool_specs,
+                    tool_choice=tool_choice,
+                    model_for_request=model_for_request,
+                    system_instruction_field=capabilities.get(
+                        "google_system_instruction_field", "system_instruction"
+                    ),
+                )
             return adapter.build_payload(
                 system_prompt=system_prompt,
                 messages=messages,
