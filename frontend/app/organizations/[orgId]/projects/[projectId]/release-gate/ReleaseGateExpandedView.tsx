@@ -550,6 +550,18 @@ function AttemptDetailOverlay({
           behavior_diff: attempt?.behavior_diff ?? {},
           failure_reasons: attempt?.failure_reasons ?? [],
           response_data_keys: responseDataKeys ?? [],
+          response_extract_path:
+            (candidateSnapshot as any)?.response_extract_path ??
+            (attempt?.replay?.provider_error && typeof attempt.replay.provider_error === "object"
+              ? (attempt.replay.provider_error as any).response_extract_path
+              : undefined) ??
+            null,
+          response_extract_reason:
+            (candidateSnapshot as any)?.response_extract_reason ??
+            (attempt?.replay?.provider_error && typeof attempt.replay.provider_error === "object"
+              ? (attempt.replay.provider_error as any).response_extract_reason
+              : undefined) ??
+            null,
         },
         null,
         2
@@ -590,6 +602,11 @@ function AttemptDetailOverlay({
   const candidateResponseDataKeys = Array.isArray((candidateSnapshot as any)?.response_data_keys)
     ? ((candidateSnapshot as any).response_data_keys as unknown[])
     : [];
+  const candidateResponseStatus = String((candidateSnapshot as any)?.response_preview_status ?? "")
+    .trim()
+    .toLowerCase();
+  const candidateExtractPath = String((candidateSnapshot as any)?.response_extract_path ?? "").trim();
+  const candidateExtractReason = String((candidateSnapshot as any)?.response_extract_reason ?? "").trim();
   const baselineResponseDataKeys = Array.isArray((attempt as any)?.baseline_snapshot?.response_data_keys)
     ? (((attempt as any).baseline_snapshot.response_data_keys as unknown[]) ?? [])
     : [];
@@ -889,8 +906,20 @@ function AttemptDetailOverlay({
                           {candidateResponseDataKeys.length > 6 ? "…" : ""}
                         </div>
                       )}
+                      {!candidateResponse && (candidateExtractPath || candidateExtractReason) && (
+                        <div className="mt-1 space-y-0.5 text-[10px] text-slate-500">
+                          {candidateExtractPath ? <div>Path: {candidateExtractPath}</div> : null}
+                          {candidateExtractReason ? <div>Why empty: {candidateExtractReason}</div> : null}
+                        </div>
+                      )}
                       <p className="mt-2 max-h-28 overflow-auto custom-scrollbar text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
-                        {candidateResponse || "—"}
+                        {candidateResponse
+                          ? candidateResponse
+                          : candidateResponseStatus === "tool_calls_only"
+                            ? "Candidate returned tool calls only (no assistant text)."
+                            : candidateResponseStatus === "empty"
+                              ? "Candidate response text is empty. Check extractor path/reason and debug JSON."
+                              : "—"}
                       </p>
                     </div>
                   </div>

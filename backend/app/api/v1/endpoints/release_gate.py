@@ -578,6 +578,16 @@ def _infer_provider_from_model(model: Any) -> Optional[str]:
     m = str(model or "").strip().lower()
     if not m:
         return None
+    # Explicit OpenAI families
+    if (
+        m.startswith("gpt")
+        or m.startswith("o1")
+        or m.startswith("o3")
+        or m.startswith("o4")
+        or m.startswith("text-embedding")
+        or m.startswith("openai/")
+    ):
+        return "openai"
     if "claude" in m or m.startswith("anthropic/"):
         return "anthropic"
     if (
@@ -587,7 +597,8 @@ def _infer_provider_from_model(model: Any) -> Optional[str]:
         or m.startswith("google/")
     ):
         return "google"
-    return "openai"
+    # Unknown model IDs should not force a provider.
+    return None
 
 
 def _assert_provider_matches_model(replay_provider: Any, model: Any) -> None:
@@ -1088,19 +1099,31 @@ async def _run_release_gate(
                     or snapshot_payload.get("user_message")
                     or ""
                 ).strip()
+                candidate_extract_path: Optional[str] = None
+                candidate_extract_reason: Optional[str] = None
                 try:
-                    candidate_response_preview = normalizer._extract_response_text(
-                        res.get("response_data")
+                    extract_meta = normalizer._extract_response_text_with_meta(res.get("response_data"))
+                    candidate_response_preview = str(extract_meta.get("text") or "")
+                    candidate_extract_path = (
+                        str(extract_meta.get("path")).strip() if extract_meta.get("path") else None
+                    )
+                    candidate_extract_reason = (
+                        str(extract_meta.get("reason")).strip() if extract_meta.get("reason") else None
                     )
                 except Exception:
                     candidate_response_preview = ""
+                    candidate_extract_reason = "extractor_error"
 
                 # Small status flag for UI/debugging.
                 response_preview_status = "ok"
                 try:
                     preview_text = str(candidate_response_preview or "").strip()
                     if not preview_text:
-                        response_preview_status = "empty"
+                        response_preview_status = (
+                            "tool_calls_only"
+                            if (candidate_extract_reason or "").lower().find("tool calls") >= 0
+                            else "empty"
+                        )
                     elif "tool calls only" in preview_text.lower():
                         response_preview_status = "tool_calls_only"
                 except Exception:
@@ -1359,6 +1382,8 @@ async def _run_release_gate(
                                 or str(res.get("error") or "").strip(),
                                 "response_data_keys": response_data_keys,
                                 "response_preview_status": response_preview_status,
+                                "response_extract_path": candidate_extract_path,
+                                "response_extract_reason": candidate_extract_reason,
                             },
                         }
                     )
@@ -1418,6 +1443,8 @@ async def _run_release_gate(
                                 "response_preview": candidate_response_preview or reason,
                                 "response_data_keys": response_data_keys,
                                 "response_preview_status": response_preview_status,
+                                "response_extract_path": candidate_extract_path,
+                                "response_extract_reason": candidate_extract_reason,
                             },
                         }
                     )
@@ -1491,6 +1518,8 @@ async def _run_release_gate(
                             "response_preview": candidate_response_preview,
                             "response_data_keys": response_data_keys,
                             "response_preview_status": response_preview_status,
+                            "response_extract_path": candidate_extract_path,
+                            "response_extract_reason": candidate_extract_reason,
                         },
                     }
                 )
