@@ -122,6 +122,7 @@ export function ReleaseGateConfigPanel({
   const runDataModel = (ctx?.runDataModel as string) ?? "";
   const runDataPrompt = (ctx?.runDataPrompt as string) ?? "";
   const baselinePayload = (ctx?.baselinePayload as Record<string, unknown> | null) ?? null;
+  const baselineConfigSummary = (ctx?.baselineConfigSummary as string) ?? "";
   const validateOverridePreview = (ctx?.validateOverridePreview as
     | Record<string, unknown>
     | null) ?? null;
@@ -339,6 +340,14 @@ export function ReleaseGateConfigPanel({
                   </div>
 
                   <div className="p-5 flex flex-col">
+                    {baselineConfigSummary && (
+                      <div className="mb-3 text-[11px] text-slate-400">
+                        <span className="font-bold uppercase tracking-[0.15em] text-slate-500 mr-2">
+                          Baseline Config
+                        </span>
+                        <span className="text-[11px] text-slate-300">{baselineConfigSummary}</span>
+                      </div>
+                    )}
                     <div className="mb-3 flex items-center justify-between">
                       <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
                         Baseline Request (Preview)
