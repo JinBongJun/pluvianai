@@ -65,6 +65,111 @@ const RULE_FIX_HINTS: Record<string, string> = {
     "Review tool-call allowlist/order and tighten tool arguments so behavior matches baseline.",
 };
 
+function asPayloadObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function getRequestPart(payload: Record<string, unknown> | null): Record<string, unknown> {
+  if (!payload) return {};
+  const req = (payload as any).request;
+  return req && typeof req === "object" && !Array.isArray(req) ? (req as Record<string, unknown>) : payload;
+}
+
+function extractSystemPromptFromPayload(payload: Record<string, unknown> | null): string {
+  if (!payload) return "";
+  const direct = (payload as any).system_prompt;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+  const msgs = (payload as any).messages;
+  if (!Array.isArray(msgs)) return "";
+  for (const msg of msgs) {
+    if (!msg || typeof msg !== "object") continue;
+    const m = msg as any;
+    if (String(m.role ?? "").toLowerCase() !== "system") continue;
+    const c = m.content;
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
+  return "";
+}
+
+function buildBaselineConfigSummary(payload: Record<string, unknown> | null): string {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "";
+  const obj = payload as Record<string, unknown>;
+  const parts: string[] = [];
+
+  const temp = obj.temperature;
+  if (typeof temp === "number" && Number.isFinite(temp)) parts.push(`Temp ${temp}`);
+  const maxTok = obj.max_tokens;
+  if (
+    maxTok != null &&
+    (typeof maxTok === "number"
+      ? Number.isInteger(maxTok)
+      : Number.isInteger(Number(maxTok))) &&
+    Number(maxTok) > 0
+  ) {
+    parts.push(`Max ${Number(maxTok)}`);
+  }
+  const topP = obj.top_p;
+  if (typeof topP === "number" && Number.isFinite(topP)) parts.push(`Top p ${topP}`);
+
+  const tools = obj.tools;
+  if (Array.isArray(tools) && tools.length > 0) {
+    const names: string[] = [];
+    for (const t of tools) {
+      if (!t || typeof t !== "object") continue;
+      const tool = t as Record<string, unknown>;
+      const fnRaw = tool.function;
+      const fn = fnRaw && typeof fnRaw === "object" ? (fnRaw as Record<string, unknown>) : {};
+      const name = String((fn as any).name ?? (tool as any).name ?? "").trim();
+      if (name) names.push(name);
+    }
+    if (names.length > 0) {
+      const previewNames = names.slice(0, 3).join(", ");
+      const suffix = names.length > 3 ? `, +${names.length - 3}` : "";
+      parts.push(`Tools ${names.length} (${previewNames}${suffix})`);
+    } else {
+      parts.push(`Tools ${tools.length}`);
+    }
+  }
+
+  return parts.join(" · ");
+}
+
+function computeSimpleLineDiff(a: string, b: string, maxLines = 200): string[] {
+  const aLines = a.split("\n").slice(0, maxLines);
+  const bLines = b.split("\n").slice(0, maxLines);
+  const n = aLines.length;
+  const m = bLines.length;
+  if (n === 0 && m === 0) return [];
+  // LCS DP (bounded)
+  const dp: number[][] = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = aLines[i] === bLines[j] ? 1 + dp[i + 1][j + 1] : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const out: string[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (aLines[i] === bLines[j]) {
+      out.push(`  ${aLines[i]}`);
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      out.push(`- ${aLines[i]}`);
+      i++;
+    } else {
+      out.push(`+ ${bLines[j]}`);
+      j++;
+    }
+  }
+  while (i < n) out.push(`- ${aLines[i++]}`);
+  while (j < m) out.push(`+ ${bLines[j++]}`);
+  return out;
+}
+
 function normalizeViolationRuleId(value: unknown): string {
   const raw = String(value ?? "")
     .trim()
@@ -320,19 +425,31 @@ function AttemptDetailOverlay({
   attempt: any;
   baselineSnapshot: Record<string, unknown> | null;
 }) {
-  if (!open) return null;
+  const [showTestedRaw, setShowTestedRaw] = useState(false);
+  const [showBaselineRaw, setShowBaselineRaw] = useState(false);
+  const [showResponseDiff, setShowResponseDiff] = useState(false);
 
   const baselineInput = String(
     baselineSnapshot?.user_message ?? baselineSnapshot?.request_prompt ?? "No input text captured."
   ).trim();
   const baselineModel = String(baselineSnapshot?.model ?? "—").trim() || "—";
   const baselinePayload = baselineSnapshot?.payload;
+  const baselineRequest = useMemo(() => {
+    const obj = asPayloadObject(baselinePayload);
+    return getRequestPart(obj);
+  }, [baselinePayload]);
+  const baselineSystemPrompt = useMemo(
+    () =>
+      String(baselineSnapshot?.system_prompt ?? "").trim() ||
+      extractSystemPromptFromPayload(baselineRequest),
+    [baselineSnapshot, baselineRequest]
+  );
+  const baselineConfigSummary = useMemo(
+    () => buildBaselineConfigSummary(baselineRequest),
+    [baselineRequest]
+  );
   const baselinePayloadPreview = (() => {
-    const clean = sanitizePayloadForPreview(
-      baselinePayload && typeof baselinePayload === "object" && !Array.isArray(baselinePayload)
-        ? (baselinePayload as Record<string, unknown>)
-        : null
-    );
+    const clean = sanitizePayloadForPreview(baselineRequest);
     try {
       return JSON.stringify(clean, null, 2);
     } catch {
@@ -427,11 +544,27 @@ function AttemptDetailOverlay({
       attempt?.replay?.provider_error?.response_preview ??
       ""
   ).trim();
+  const baselineResponse = String(
+    (attempt?.baseline_snapshot && typeof attempt.baseline_snapshot === "object"
+      ? (attempt.baseline_snapshot as any).response_preview
+      : "") ??
+      ""
+  ).trim();
   const candidateResponseDataKeys = Array.isArray((candidateSnapshot as any)?.response_data_keys)
     ? ((candidateSnapshot as any).response_data_keys as unknown[])
     : [];
+  const baselineResponseDataKeys = Array.isArray((attempt as any)?.baseline_snapshot?.response_data_keys)
+    ? (((attempt as any).baseline_snapshot.response_data_keys as unknown[]) ?? [])
+    : [];
+  const sameInput = baselineInput.trim() && candidateInput.trim() && baselineInput.trim() === candidateInput.trim();
+  const responseDiffLines = useMemo(() => {
+    if (!baselineResponse || !candidateResponse) return [];
+    return computeSimpleLineDiff(baselineResponse, candidateResponse, 200);
+  }, [baselineResponse, candidateResponse]);
 
   const pass = Boolean(attempt?.pass);
+
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/70 backdrop-blur-md p-6">
@@ -439,7 +572,7 @@ function AttemptDetailOverlay({
         <div className="flex items-center justify-between gap-3 border-b border-white/8 px-6 py-4">
           <div className="min-w-0">
             <div className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
-              Unit diagnostics
+              Unit Diagnostics
             </div>
             <div className="mt-1 flex items-center gap-3">
               <h2 className="text-base font-semibold text-white">
@@ -487,11 +620,33 @@ function AttemptDetailOverlay({
             </div>
             <div className="mt-3 rounded-2xl border border-white/8 bg-black/40 p-3 h-[calc(100%-122px)]">
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-2">
-                Baseline payload
+                Baseline request (preview)
               </div>
-              <pre className="h-[calc(100%-22px)] overflow-auto custom-scrollbar text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-words">
-                {baselinePayloadPreview}
-              </pre>
+              <div className="h-[calc(100%-22px)] overflow-auto custom-scrollbar">
+                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+                  <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                    Original system prompt
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
+                    {baselineSystemPrompt || "—"}
+                  </p>
+                  {baselineConfigSummary ? (
+                    <div className="mt-3 text-[11px] text-slate-400">Config: {baselineConfigSummary}</div>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setShowBaselineRaw(v => !v)}
+                    className="mt-3 inline-flex items-center rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-200 hover:bg-white/10"
+                  >
+                    {showBaselineRaw ? "Hide raw" : "View full request"}
+                  </button>
+                  {showBaselineRaw && (
+                    <pre className="mt-3 max-h-56 overflow-auto custom-scrollbar text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-words">
+                      {baselinePayloadPreview}
+                    </pre>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -502,7 +657,7 @@ function AttemptDetailOverlay({
             <div className="mt-3 rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.04] p-3 h-[calc(100%-24px)]">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                  Tested payload
+                  Run summary
                 </div>
                 {attempt?.trace_id && (
                   <div className="truncate text-[11px] text-slate-500 max-w-[220px]">
@@ -510,9 +665,121 @@ function AttemptDetailOverlay({
                   </div>
                 )}
               </div>
-              <pre className="mt-2 h-[calc(100%-22px)] overflow-auto custom-scrollbar text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-words">
-                {candidatePayloadPreview}
-              </pre>
+              <div className="mt-2 space-y-3 h-[calc(100%-22px)] overflow-auto custom-scrollbar">
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Using model</div>
+                    <div className="mt-1 truncate">{candidateModel}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Using provider</div>
+                    <div className="mt-1 truncate">{candidateProvider}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Signals failed</div>
+                    <div className="mt-1">
+                      {signalsChecksRaw
+                        ? `${signalsApplicable.length - signalsPassed.length}/${signalsApplicable.length || 0}`
+                        : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Policy violations</div>
+                    <div className="mt-1">{policyRows.length}</div>
+                  </div>
+                </div>
+
+                {Array.isArray(attempt?.failure_reasons) && attempt.failure_reasons.length > 0 ? (
+                  <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+                    <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                      Failure reasons
+                    </div>
+                    <div className="mt-2 space-y-1.5">
+                      {attempt.failure_reasons.slice(0, 5).map((r: string, i: number) => (
+                        <div key={`${r}-${i}`} className="text-xs text-slate-200">
+                          {r}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                      Response comparison
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowResponseDiff(v => !v)}
+                      className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-200 hover:bg-white/10"
+                    >
+                      {showResponseDiff ? "Hide diff" : "Show diff"}
+                    </button>
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div className="rounded-xl border border-white/8 bg-black/30 p-2.5">
+                      <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                        Baseline
+                      </div>
+                      {baselineResponseDataKeys.length > 0 && (
+                        <div className="mt-1 truncate text-[10px] text-slate-500">
+                          Keys: {baselineResponseDataKeys.slice(0, 6).map(k => String(k)).join(", ")}
+                          {baselineResponseDataKeys.length > 6 ? "…" : ""}
+                        </div>
+                      )}
+                      <p className="mt-2 max-h-28 overflow-auto custom-scrollbar text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
+                        {baselineResponse || "—"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-white/8 bg-black/30 p-2.5">
+                      <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                        Candidate
+                      </div>
+                      {candidateResponseDataKeys.length > 0 && (
+                        <div className="mt-1 truncate text-[10px] text-slate-500">
+                          Keys: {candidateResponseDataKeys.slice(0, 6).map(k => String(k)).join(", ")}
+                          {candidateResponseDataKeys.length > 6 ? "…" : ""}
+                        </div>
+                      )}
+                      <p className="mt-2 max-h-28 overflow-auto custom-scrollbar text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
+                        {candidateResponse || "—"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {showResponseDiff && (
+                    <div className="mt-3 rounded-xl border border-white/8 bg-black/30 p-2.5">
+                      <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                        Diff (lines)
+                      </div>
+                      {baselineResponse && candidateResponse ? (
+                        <pre className="mt-2 max-h-40 overflow-auto custom-scrollbar text-[11px] leading-relaxed whitespace-pre-wrap break-words text-slate-200">
+                          {responseDiffLines.join("\n")}
+                        </pre>
+                      ) : (
+                        <div className="mt-2 text-xs text-slate-500">
+                          Diff unavailable (missing baseline or candidate response preview).
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowTestedRaw(v => !v)}
+                  className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-200 hover:bg-white/10"
+                >
+                  {showTestedRaw ? "Hide debug JSON" : "View full raw debug JSON"}
+                </button>
+                {showTestedRaw && (
+                  <pre className="rounded-2xl border border-white/8 bg-black/30 p-3 text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-words">
+                    {candidatePayloadPreview}
+                  </pre>
+                )}
+              </div>
             </div>
           </div>
 
@@ -559,7 +826,7 @@ function AttemptDetailOverlay({
                 Input used
               </div>
               <p className="mt-2 max-h-20 overflow-auto custom-scrollbar text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
-                {candidateInput}
+                {sameInput ? "Same as original." : candidateInput}
               </p>
             </div>
 

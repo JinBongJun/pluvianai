@@ -1111,17 +1111,25 @@ async def _run_release_gate(
                     response_data_keys = []
 
                 baseline_response_text = ""
+                baseline_response_data_keys: List[str] = []
                 try:
                     raw_baseline_resp = getattr(snapshot, "response", None)
                     if isinstance(raw_baseline_resp, str):
                         baseline_response_text = raw_baseline_resp
+                        baseline_response_data_keys = ["<text>"] if raw_baseline_resp.strip() else []
                     elif isinstance(raw_baseline_resp, dict):
                         baseline_response_text = normalizer._extract_response_text(raw_baseline_resp)
+                        baseline_response_data_keys = sorted([str(k) for k in raw_baseline_resp.keys()])
                     else:
                         baseline_response_text = str(raw_baseline_resp or "")
+                        baseline_response_data_keys = (
+                            [f"<{type(raw_baseline_resp).__name__}>"] if raw_baseline_resp is not None else []
+                        )
                 except Exception:
                     baseline_response_text = ""
+                    baseline_response_data_keys = []
                 baseline_len = len(baseline_response_text.strip()) if baseline_response_text else None
+                baseline_response_preview = str(baseline_response_text or "").strip()[:2000]
 
                 try:
                     status_code_val = res.get("status_code")
@@ -1210,6 +1218,10 @@ async def _run_release_gate(
                             },
                             "behavior_diff": behavior_diff,
                             "signals": signals_obj,
+                            "baseline_snapshot": {
+                                "response_preview": baseline_response_preview,
+                                "response_data_keys": baseline_response_data_keys,
+                            },
                             "candidate_snapshot": {
                                 "provider": replay_provider,
                                 "model": str(res.get("replay_model") or snapshot.model or "").strip()
@@ -1263,6 +1275,10 @@ async def _run_release_gate(
                             },
                             "behavior_diff": behavior_diff,
                             "signals": signals_obj,
+                            "baseline_snapshot": {
+                                "response_preview": baseline_response_preview,
+                                "response_data_keys": baseline_response_data_keys,
+                            },
                             "candidate_snapshot": {
                                 "provider": str(res.get("replay_provider") or "").strip() or None,
                                 "model": str(res.get("replay_model") or snapshot.model or "").strip()
@@ -1329,6 +1345,10 @@ async def _run_release_gate(
                         },
                         "behavior_diff": behavior_diff,
                         "signals": signals_obj,
+                        "baseline_snapshot": {
+                            "response_preview": baseline_response_preview,
+                            "response_data_keys": baseline_response_data_keys,
+                        },
                         "candidate_snapshot": {
                             "provider": str(res.get("replay_provider") or "").strip() or None,
                             "model": str(res.get("replay_model") or snapshot.model or "").strip()
