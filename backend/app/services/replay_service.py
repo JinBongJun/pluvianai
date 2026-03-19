@@ -409,7 +409,8 @@ class ReplayService:
             if generation_config:
                 out["generationConfig"] = generation_config
             if system_prompt:
-                out["system_instruction"] = {"parts": [{"text": system_prompt}]}
+                # Prefer modern Gemini request field name.
+                out["systemInstruction"] = {"parts": [{"text": system_prompt}]}
             if tool_specs:
                 out["tools"] = [
                     {
