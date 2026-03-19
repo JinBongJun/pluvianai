@@ -140,6 +140,8 @@ export interface ReleaseGateAttempt {
   behavior_diff?: BehaviorDiffResult;
   candidate_snapshot?: {
     response_preview_status?: "ok" | "empty" | "tool_calls_only" | "unknown" | string;
+    response_extract_path?: string | null;
+    response_extract_reason?: string | null;
   };
 }
 
