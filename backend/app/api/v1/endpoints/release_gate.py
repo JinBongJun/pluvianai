@@ -1129,9 +1129,21 @@ async def _run_release_gate(
                     candidate_extract_reason = (
                         str(extract_meta.get("reason")).strip() if extract_meta.get("reason") else None
                     )
-                except Exception:
-                    candidate_response_preview = ""
-                    candidate_extract_reason = "extractor_error"
+                except Exception as exc:
+                    candidate_response_preview = (
+                        _safe_preview_json(res.get("response_data"))
+                        or "[non-text response received]"
+                    )
+                    candidate_extract_path = "__release_gate_runtime__"
+                    candidate_extract_reason = "extract_meta_runtime_error"
+                    try:
+                        logger.warning(
+                            "Release Gate extract meta runtime fallback: snapshot_id=%s, error=%s",
+                            str(res.get("snapshot_id")),
+                            str(exc),
+                        )
+                    except Exception:
+                        pass
 
                 # Small status flag for UI/debugging.
                 response_preview_status = "ok"
