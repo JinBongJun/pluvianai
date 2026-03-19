@@ -140,6 +140,17 @@ export function ReleaseGateConfigPanel({
     () => stringifyJson(validateOverridePreview ?? {}),
     [validateOverridePreview]
   );
+
+  // "Final Override Payload"에 표시되는 값과 동일한 "실제로 적용될" 모델/제공자를 보여준다.
+  // override가 꺼져있으면 감지값(runDataModel/runDataProvider)을 사용하고,
+  // override가 켜져있으면 validateOverridePreview에 들어가는 new_model/replay_provider를 우선한다.
+  const previewNewModel =
+    typeof (validateOverridePreview as any)?.new_model === "string"
+      ? String((validateOverridePreview as any)?.new_model)
+      : "";
+  const previewReplayProviderRaw = (validateOverridePreview as any)?.replay_provider;
+  const usingModel = previewNewModel.trim().length ? previewNewModel.trim() : runDataModel;
+  const usingProvider = toReplayProvider(previewReplayProviderRaw ?? runDataProvider);
   const candidateJsonValue = requestJsonDraft ?? requestBodyJson;
 
   const cleanBaselineForComparison = useMemo(() => {
@@ -311,18 +322,18 @@ export function ReleaseGateConfigPanel({
                   <div className="grid grid-cols-2 gap-px bg-white/5 border-b border-white/5">
                     <div className="bg-[#0f1115] p-4">
                       <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1.5">
-                        Detected Model
+                        Using Model
                       </div>
                       <div className="text-sm font-mono text-slate-200 truncate">
-                        {runDataModel || "Not detected"}
+                        {usingModel || "Not specified"}
                       </div>
                     </div>
                     <div className="bg-[#0f1115] p-4">
                       <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1.5">
-                        Detected Provider
+                        Using Provider
                       </div>
                       <div className="text-sm text-slate-200">
-                        {formatProviderLabel(runDataProvider)}
+                        {formatProviderLabel(usingProvider)}
                       </div>
                     </div>
                   </div>
