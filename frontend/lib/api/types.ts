@@ -135,6 +135,9 @@ export interface ReleaseGateAttempt {
     missing_provider_keys?: string[];
   };
   behavior_diff?: BehaviorDiffResult;
+  candidate_snapshot?: {
+    response_preview_status?: "ok" | "empty" | "tool_calls_only" | "unknown" | string;
+  };
 }
 
 export interface ReleaseGateRunSummary {

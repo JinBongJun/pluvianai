@@ -1095,6 +1095,17 @@ async def _run_release_gate(
                 except Exception:
                     candidate_response_preview = ""
 
+                # Small status flag for UI/debugging.
+                response_preview_status = "ok"
+                try:
+                    preview_text = str(candidate_response_preview or "").strip()
+                    if not preview_text:
+                        response_preview_status = "empty"
+                    elif "tool calls only" in preview_text.lower():
+                        response_preview_status = "tool_calls_only"
+                except Exception:
+                    response_preview_status = "unknown"
+
                 # Capture lightweight response_data key summary for UI debugging.
                 response_data_keys: List[str] = []
                 try:
@@ -1231,6 +1242,7 @@ async def _run_release_gate(
                                 "response_preview": candidate_response_preview
                                 or str(res.get("error") or "").strip(),
                                 "response_data_keys": response_data_keys,
+                                "response_preview_status": response_preview_status,
                             },
                         }
                     )
@@ -1287,6 +1299,7 @@ async def _run_release_gate(
                                 "input_text": baseline_input_text,
                                 "response_preview": candidate_response_preview or reason,
                                 "response_data_keys": response_data_keys,
+                                "response_preview_status": response_preview_status,
                             },
                         }
                     )
@@ -1357,6 +1370,7 @@ async def _run_release_gate(
                             "input_text": baseline_input_text,
                             "response_preview": candidate_response_preview,
                             "response_data_keys": response_data_keys,
+                            "response_preview_status": response_preview_status,
                         },
                     }
                 )
