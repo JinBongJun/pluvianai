@@ -1424,6 +1424,14 @@ async def _run_release_gate(
                                 "response_preview_status": response_preview_status,
                                 "response_extract_path": candidate_extract_path,
                                 "response_extract_reason": candidate_extract_reason,
+                                "request_fallback_stage": (
+                                    str(res.get("request_fallback_stage") or "").strip() or None
+                                ),
+                                "request_fallback_attempts": (
+                                    res.get("request_fallback_attempts")
+                                    if isinstance(res.get("request_fallback_attempts"), list)
+                                    else []
+                                ),
                             },
                         }
                     )
@@ -1485,6 +1493,14 @@ async def _run_release_gate(
                                 "response_preview_status": response_preview_status,
                                 "response_extract_path": candidate_extract_path,
                                 "response_extract_reason": candidate_extract_reason,
+                                "request_fallback_stage": (
+                                    str(res.get("request_fallback_stage") or "").strip() or None
+                                ),
+                                "request_fallback_attempts": (
+                                    res.get("request_fallback_attempts")
+                                    if isinstance(res.get("request_fallback_attempts"), list)
+                                    else []
+                                ),
                             },
                         }
                     )
@@ -1560,6 +1576,14 @@ async def _run_release_gate(
                             "response_preview_status": response_preview_status,
                             "response_extract_path": candidate_extract_path,
                             "response_extract_reason": candidate_extract_reason,
+                            "request_fallback_stage": (
+                                str(res.get("request_fallback_stage") or "").strip() or None
+                            ),
+                            "request_fallback_attempts": (
+                                res.get("request_fallback_attempts")
+                                if isinstance(res.get("request_fallback_attempts"), list)
+                                else []
+                            ),
                         },
                     }
                 )

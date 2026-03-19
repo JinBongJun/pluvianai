@@ -1,7 +1,7 @@
 import pytest
 
 from app.models.usage import Usage
-from app.services.replay_service import _persist_replay_usage
+from app.services.replay_service import ReplayService, _persist_replay_usage
 
 
 @pytest.mark.unit
@@ -37,3 +37,44 @@ class TestReplayUsagePersistence:
         assert records[0].quantity == 150
         assert records[0].project_id == test_project.id
         assert records[0].user_id == test_project.owner_id
+
+
+@pytest.mark.unit
+class TestReplayGooglePayloadFallback:
+    def test_build_payload_uses_google_system_instruction_snake_case(self):
+        service = ReplayService()
+        payload = {
+            "messages": [
+                {"role": "system", "content": "System prompt here"},
+                {"role": "user", "content": "hello"},
+            ]
+        }
+
+        built = service._build_payload_for_provider(payload, "google", "gemini-2.0-flash")
+        assert "system_instruction" in built
+        assert "systemInstruction" not in built
+        assert built["system_instruction"]["parts"][0]["text"] == "System prompt here"
+
+    def test_google_payload_fallback_variants_include_camel_and_inline(self):
+        service = ReplayService()
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": "User asks something"}]}],
+            "system_instruction": {"parts": [{"text": "System prompt"}]},
+        }
+
+        variants = service._google_payload_fallback_variants(payload)
+        stages = [stage for stage, _ in variants]
+        assert "google_system_instruction_camel" in stages
+        assert "google_system_inlined_into_user" in stages
+
+        camel_payload = next(v for s, v in variants if s == "google_system_instruction_camel")
+        assert "systemInstruction" in camel_payload
+        assert "system_instruction" not in camel_payload
+
+        inline_payload = next(v for s, v in variants if s == "google_system_inlined_into_user")
+        assert "system_instruction" not in inline_payload
+        assert "systemInstruction" not in inline_payload
+        assert "contents" in inline_payload
+        first_text = inline_payload["contents"][0]["parts"][0]["text"]
+        assert "System prompt" in first_text
+        assert "User asks something" in first_text
