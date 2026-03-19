@@ -624,6 +624,7 @@ function AttemptDetailOverlay({
   }, [baselineResponse, candidateResponse]);
 
   const pass = Boolean(attempt?.pass);
+  const decisionReasons = Array.isArray(attempt?.failure_reasons) ? attempt.failure_reasons : [];
 
   if (!open) return null;
 
@@ -666,8 +667,43 @@ function AttemptDetailOverlay({
           </button>
         </div>
 
+        <div className="px-6 py-3 border-b border-white/8">
+          <div
+            className={clsx(
+              "rounded-2xl border px-4 py-3",
+              pass
+                ? "border-emerald-500/30 bg-emerald-500/10"
+                : "border-rose-500/30 bg-rose-500/10"
+            )}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                  Decision
+                </div>
+                <div className="mt-1 text-sm font-bold text-white">
+                  {pass ? "RELEASE READY" : "RELEASE BLOCKED"}
+                </div>
+              </div>
+              <div className="text-xs text-slate-300">
+                {baselineModel} → {candidateModel} · {formatDurationMs((attempt?.replay ?? {}).avg_latency_ms)}
+              </div>
+            </div>
+            {!pass && decisionReasons.length > 0 && (
+              <div className="mt-2 space-y-1 text-xs text-rose-100">
+                {decisionReasons.slice(0, 3).map((r: string, i: number) => (
+                  <div key={`${r}-${i}`}>- {r}</div>
+                ))}
+                {decisionReasons.length > 3 && (
+                  <div className="text-slate-300">+{decisionReasons.length - 3} more</div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="flex flex-1 min-h-0">
-          <div className="flex-[1.6] min-w-0 border-r border-white/8 p-5">
+          <div className="hidden">
             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
               Original snapshot
             </div>
@@ -711,7 +747,7 @@ function AttemptDetailOverlay({
             </div>
           </div>
 
-          <div className="flex-[1.6] min-w-0 border-r border-white/8 p-5">
+          <div className="flex-1 min-w-0 border-r border-white/8 p-5">
             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
               Replay attempt
             </div>
