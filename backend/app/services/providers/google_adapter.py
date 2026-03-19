@@ -25,6 +25,7 @@ class GoogleProviderAdapter:
         tool_specs: List[Dict[str, Any]],
         tool_choice: Optional[Any],
         model_for_request: str,
+        system_instruction_field: str = "system_instruction",
     ) -> Dict[str, Any]:
         contents = [
             {
@@ -48,7 +49,7 @@ class GoogleProviderAdapter:
 
         if system_prompt:
             # REST docs typically use snake_case for this field.
-            out["system_instruction"] = {"parts": [{"text": system_prompt}]}
+            out[system_instruction_field] = {"parts": [{"text": system_prompt}]}
 
         if tool_specs:
             out["tools"] = [

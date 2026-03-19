@@ -2,6 +2,7 @@ import pytest
 
 from app.models.usage import Usage
 from app.services.replay_service import ReplayService, _persist_replay_usage
+from app.services.providers.capabilities import resolve_capabilities
 
 
 @pytest.mark.unit
@@ -50,6 +51,9 @@ class TestReplayGooglePayloadFallback:
             ]
         }
 
+        caps = resolve_capabilities("google", "gemini-2.0-flash")
+        assert caps["google_system_instruction_field"] == "system_instruction"
+
         built = service._build_payload_for_provider(payload, "google", "gemini-2.0-flash")
         assert "system_instruction" in built
         assert "systemInstruction" not in built
@@ -85,3 +89,25 @@ class TestReplayGooglePayloadFallback:
         tools_off_payload = next(v for s, v in variants if s == "google_tools_off")
         assert "tools" not in tools_off_payload
         assert "toolConfig" not in tools_off_payload
+
+    def test_google_adapter_supports_camel_system_instruction_field(self):
+        from app.services.providers.google_adapter import GoogleProviderAdapter
+
+        adapter = GoogleProviderAdapter(
+            classify_error=lambda status_code, error_code, message: "payload_schema",
+            friendly_error_message=lambda provider, kind, model: "",
+        )
+
+        payload = adapter.build_payload(
+            system_prompt="System prompt here",
+            messages=[{"role": "user", "content": "hello"}],
+            knobs={"temperature": None, "top_p": None, "max_tokens": None},
+            tool_specs=[],
+            tool_choice=None,
+            model_for_request="gemini-2.0-flash",
+            system_instruction_field="systemInstruction",
+        )
+
+        assert "systemInstruction" in payload
+        assert "system_instruction" not in payload
+        assert payload["systemInstruction"]["parts"][0]["text"] == "System prompt here"
