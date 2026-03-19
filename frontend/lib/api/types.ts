@@ -118,11 +118,14 @@ export interface ReleaseGateAttempt {
   baseline_snapshot?: {
     response_preview?: string;
     response_data_keys?: string[];
+    response_preview_status?: "ok" | "empty" | "not_captured" | "unknown" | string;
+    capture_reason?: string | null;
   };
   signals?: {
     checks: Record<string, string>;
     failed: string[];
     config_version?: string | null;
+    details?: Record<string, any>;
   };
   replay?: {
     attempted: number;

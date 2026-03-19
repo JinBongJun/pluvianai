@@ -496,8 +496,60 @@ function AttemptDetailOverlay({
         };
       })
     : [];
+  const signalsDetailsRaw =
+    attempt?.signals && typeof attempt.signals === "object"
+      ? ((attempt.signals as any).details as Record<string, unknown> | undefined)
+      : undefined;
   const signalsApplicable = signalsRows.filter(r => r.applicable);
   const signalsPassed = signalsApplicable.filter(r => r.pass);
+
+  const formatSignalWhy = (id: string, raw: unknown): string => {
+    const d = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const status = String(d.status ?? "").trim().toLowerCase();
+    if (!status) return "";
+    if (id === "empty") {
+      const min = d.min_chars;
+      const actual = d.actual_chars;
+      return `min_chars=${String(min ?? "—")}, actual_chars=${String(actual ?? "—")}`;
+    }
+    if (id === "latency") {
+      const failMs = d.fail_ms;
+      const actualMs = d.actual_ms;
+      return `fail_ms=${String(failMs ?? "—")}, actual_ms=${String(actualMs ?? "—")}`;
+    }
+    if (id === "status_code") {
+      const failFrom = d.fail_from;
+      const actual = d.actual_status;
+      return `fail_from=${String(failFrom ?? "—")}, actual=${String(actual ?? "—")}`;
+    }
+    if (id === "length") {
+      const failRatio = d.fail_ratio;
+      const ratio = d.ratio;
+      const baselineLen = d.baseline_len;
+      const actual = d.actual_chars;
+      return `fail_ratio=${String(failRatio ?? "—")}, ratio=${String(ratio ?? "—")}, baseline_len=${String(
+        baselineLen ?? "—"
+      )}, actual_chars=${String(actual ?? "—")}`;
+    }
+    if (id === "repetition") {
+      const fail = d.fail_line_repeats;
+      const max = d.max_line_repeats;
+      return `fail_line_repeats=${String(fail ?? "—")}, max_line_repeats=${String(max ?? "—")}`;
+    }
+    if (id === "json") {
+      const mode = d.mode;
+      const checked = d.checked;
+      const parsedOk = d.parsed_ok;
+      return `mode=${String(mode ?? "—")}, checked=${String(checked ?? "—")}, parsed_ok=${String(
+        parsedOk ?? "—"
+      )}`;
+    }
+    if (id === "refusal") {
+      const matched = d.matched;
+      return `matched=${String(matched ?? "—")}`;
+    }
+    return "";
+  };
 
   const candidateSnapshot =
     attempt?.candidate_snapshot &&
@@ -544,12 +596,21 @@ function AttemptDetailOverlay({
       attempt?.replay?.provider_error?.response_preview ??
       ""
   ).trim();
-  const baselineResponse = String(
+  const baselineResponseFromAttempt = String(
     (attempt?.baseline_snapshot && typeof attempt.baseline_snapshot === "object"
       ? (attempt.baseline_snapshot as any).response_preview
-      : "") ??
-      ""
+      : "") ?? ""
   ).trim();
+  const baselineResponseFromSnapshot = String(
+    (baselineSnapshot?.response_text ?? baselineSnapshot?.response ?? "") || ""
+  ).trim();
+  const baselineResponse = baselineResponseFromAttempt || baselineResponseFromSnapshot;
+  const baselineResponseStatus = String(
+    (attempt as any)?.baseline_snapshot?.response_preview_status ?? ""
+  )
+    .trim()
+    .toLowerCase();
+  const baselineCaptureReason = String((attempt as any)?.baseline_snapshot?.capture_reason ?? "").trim();
   const candidateResponseDataKeys = Array.isArray((candidateSnapshot as any)?.response_data_keys)
     ? ((candidateSnapshot as any).response_data_keys as unknown[])
     : [];
@@ -730,7 +791,15 @@ function AttemptDetailOverlay({
                         </div>
                       )}
                       <p className="mt-2 max-h-28 overflow-auto custom-scrollbar text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
-                        {baselineResponse || "—"}
+                        {baselineResponse
+                          ? baselineResponse
+                          : baselineResponseStatus === "not_captured"
+                            ? `Baseline response not captured (original logs did not store response text).${
+                                baselineCaptureReason ? ` (${baselineCaptureReason})` : ""
+                              }`
+                            : baselineResponseStatus === "empty"
+                              ? "Baseline response is empty."
+                              : "Baseline response preview unavailable."}
                       </p>
                     </div>
                     <div className="rounded-xl border border-white/8 bg-black/30 p-2.5">
@@ -823,40 +892,7 @@ function AttemptDetailOverlay({
 
             <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Input used
-              </div>
-              <p className="mt-2 max-h-20 overflow-auto custom-scrollbar text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
-                {sameInput ? "Same as original." : candidateInput}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Response preview
-              </div>
-              {candidateResponseDataKeys.length > 0 && (
-                <div className="mt-1 truncate text-[11px] text-slate-500">
-                  Response keys:{" "}
-                  {candidateResponseDataKeys
-                    .map(k => String(k))
-                    .filter(Boolean)
-                    .slice(0, 6)
-                    .join(", ")}
-                  {candidateResponseDataKeys.length > 6 ? "…" : ""}
-                </div>
-              )}
-              <p className="mt-2 max-h-28 overflow-auto custom-scrollbar text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
-                {candidateResponse
-                  ? candidateResponse
-                  : Number(candidateSnapshot?.status_code ?? 0) === 200
-                    ? "Provider returned 200, but response text could not be extracted. Use the response keys above and the raw debug JSON to inspect the response shape."
-                    : "No response preview captured for this attempt."}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Signals checks
+                Signals checks (Why)
               </div>
               <div className="mt-1 text-[11px] text-slate-400">
                 {signalsChecksRaw ? (
@@ -879,16 +915,28 @@ function AttemptDetailOverlay({
                     <div
                       key={row.id}
                       className={clsx(
-                        "flex items-center justify-between rounded-xl border px-2.5 py-2 text-xs",
+                        "rounded-xl border px-2.5 py-2 text-xs",
                         row.pass
                           ? "border-emerald-500/20 bg-emerald-500/8 text-emerald-200"
                           : "border-rose-500/20 bg-rose-500/8 text-rose-200"
                       )}
                     >
-                      <span className="truncate pr-3">{row.label}</span>
-                      <span className="font-black">
-                        {row.status === "not_applicable" ? "N/A" : row.pass ? "PASS" : "FAIL"}
-                      </span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate pr-3">{row.label}</span>
+                        <span className="shrink-0 font-black">
+                          {row.status === "not_applicable" ? "N/A" : row.pass ? "PASS" : "FAIL"}
+                        </span>
+                      </div>
+                      {signalsDetailsRaw && (
+                        (() => {
+                          const why = formatSignalWhy(row.id, (signalsDetailsRaw as any)?.[row.id]);
+                          return why ? (
+                            <div className="mt-1 text-[11px] leading-relaxed text-slate-300 break-words">
+                              {why}
+                            </div>
+                          ) : null;
+                        })()
+                      )}
                     </div>
                   ))
                 )}
