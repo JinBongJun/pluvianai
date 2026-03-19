@@ -2,8 +2,9 @@
 Data normalizer for LLM API requests/responses
 """
 
+import json
 import re
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 
 
 class DataNormalizer:
@@ -286,9 +287,29 @@ class DataNormalizer:
         return None
 
     def _extract_response_text_with_meta(self, response_data: Optional[Dict]) -> Dict[str, Optional[str]]:
-        """Extract response text and lightweight diagnostics metadata."""
+        """Extract response text with robust metadata; never raise."""
         if not response_data:
-            return {"text": None, "path": None, "reason": "response_data is empty"}
+            return {"text": "[empty response payload]", "path": None, "reason": "response_data_empty"}
+
+        def _non_empty(text: Optional[str], fallback: str) -> str:
+            if isinstance(text, str) and text.strip():
+                return text
+            return fallback
+
+        def _safe_json_preview(value: Any, max_chars: int = 2000) -> str:
+            try:
+                if isinstance(value, (dict, list)):
+                    text = json.dumps(value, ensure_ascii=False, indent=2)
+                else:
+                    text = str(value)
+            except Exception:
+                text = str(value)
+            text = text.strip()
+            if not text:
+                return "[non-text response received]"
+            if len(text) > max_chars:
+                return text[:max_chars] + "\n…(truncated)…"
+            return text
 
         def _content_parts_to_text(value: Any) -> Optional[str]:
             if value is None:
@@ -340,99 +361,109 @@ class DataNormalizer:
                 return out or None
             return None
 
-        # OpenAI format
-        if "choices" in response_data and isinstance(response_data["choices"], list):
-            if len(response_data["choices"]) > 0:
-                choice = response_data["choices"][0]
-                if "message" in choice and isinstance(choice["message"], dict):
-                    msg = choice["message"]
-                    content = msg.get("content", "")
+        try:
+            # OpenAI format
+            if "choices" in response_data and isinstance(response_data["choices"], list):
+                if len(response_data["choices"]) > 0:
+                    choice = response_data["choices"][0]
+                    if isinstance(choice, dict) and "message" in choice and isinstance(choice["message"], dict):
+                        msg = choice["message"]
+                        content = msg.get("content", "")
+                        text = _content_parts_to_text(content)
+                        if isinstance(text, str) and text.strip():
+                            return {
+                                "text": text,
+                                "path": "choices[0].message.content",
+                                "reason": None,
+                            }
+                        # Tool-call only completions can have no content.
+                        tool_calls = msg.get("tool_calls")
+                        if isinstance(tool_calls, list) and len(tool_calls) > 0:
+                            return {
+                                "text": "[tool-call-only response: no assistant text]",
+                                "path": "choices[0].message.tool_calls",
+                                "reason": "tool_calls_only",
+                            }
+                    # Legacy completions format
+                    if isinstance(choice, dict) and "text" in choice and isinstance(choice.get("text"), str):
+                        return {
+                            "text": choice.get("text"),
+                            "path": "choices[0].text",
+                            "reason": None,
+                        }
+
+            # OpenAI Responses API style (best-effort)
+            if "output_text" in response_data and isinstance(response_data.get("output_text"), str):
+                t = response_data.get("output_text")
+                if isinstance(t, str) and t.strip():
+                    return {"text": t, "path": "output_text", "reason": None}
+            if "output" in response_data and isinstance(response_data.get("output"), list):
+                out_text = _content_parts_to_text(response_data.get("output"))
+                if isinstance(out_text, str) and out_text.strip():
+                    return {"text": out_text, "path": "output", "reason": None}
+
+            # Anthropic format (Messages API)
+            if "content" in response_data:
+                content = response_data["content"]
+                if isinstance(content, list) and len(content) > 0:
                     text = _content_parts_to_text(content)
                     if isinstance(text, str) and text.strip():
-                        return {
-                            "text": text,
-                            "path": "choices[0].message.content",
-                            "reason": None,
-                        }
-                    # Tool-call only completions can have no content.
-                    tool_calls = msg.get("tool_calls")
-                    if isinstance(tool_calls, list) and len(tool_calls) > 0:
-                        return {
-                            "text": "(tool calls only; no assistant text)",
-                            "path": "choices[0].message.tool_calls",
-                            "reason": "tool calls present without assistant text",
-                        }
-                # Legacy completions format
-                if "text" in choice and isinstance(choice.get("text"), str):
-                    return {
-                        "text": choice.get("text"),
-                        "path": "choices[0].text",
-                        "reason": None,
-                    }
+                        return {"text": text, "path": "content", "reason": None}
 
-        # OpenAI Responses API style (best-effort)
-        if "output_text" in response_data and isinstance(response_data.get("output_text"), str):
-            t = response_data.get("output_text")
-            if isinstance(t, str) and t.strip():
-                return {"text": t, "path": "output_text", "reason": None}
-        if "output" in response_data and isinstance(response_data.get("output"), list):
-            out_text = _content_parts_to_text(response_data.get("output"))
-            if isinstance(out_text, str) and out_text.strip():
-                return {"text": out_text, "path": "output", "reason": None}
+            # Google Gemini format: candidates[0].content.parts[].text
+            if "candidates" in response_data and isinstance(response_data["candidates"], list):
+                if len(response_data["candidates"]) > 0:
+                    first = response_data["candidates"][0]
+                    if isinstance(first, dict):
+                        content_obj = first.get("content")
+                    else:
+                        content_obj = None
+                    parts = None
+                    if isinstance(content_obj, dict):
+                        parts = content_obj.get("parts")
+                    elif isinstance(content_obj, list):
+                        parts = content_obj
+                    if parts is not None:
+                        text = _content_parts_to_text(parts)
+                        if isinstance(text, str) and text.strip():
+                            return {
+                                "text": text,
+                                "path": "candidates[0].content.parts",
+                                "reason": None,
+                            }
 
-        # Anthropic format (Messages API)
-        if "content" in response_data:
-            content = response_data["content"]
-            if isinstance(content, list) and len(content) > 0:
-                text = _content_parts_to_text(content)
-                if isinstance(text, str) and text.strip():
-                    return {"text": text, "path": "content", "reason": None}
-
-        # Google Gemini format: candidates[0].content.parts[].text
-        if "candidates" in response_data and isinstance(response_data["candidates"], list):
-            if len(response_data["candidates"]) > 0:
-                first = response_data["candidates"][0]
-                content_obj = first.get("content")
-                parts = None
-                if isinstance(content_obj, dict):
-                    parts = content_obj.get("parts")
-                elif isinstance(content_obj, list):
-                    parts = content_obj
-                if parts is not None:
-                    text = _content_parts_to_text(parts)
+            # Generic nested "response"/"data" wrapper (defensive fallback)
+            nested = response_data.get("response") or response_data.get("data")
+            if isinstance(nested, dict):
+                nested_output = nested.get("output") or nested.get("content")
+                if nested_output is not None:
+                    text = _content_parts_to_text(nested_output)
                     if isinstance(text, str) and text.strip():
                         return {
                             "text": text,
-                            "path": "candidates[0].content.parts",
+                            "path": "response|data.(output|content)",
                             "reason": None,
                         }
 
-        # Generic nested "response"/"data" wrapper (defensive fallback)
-        nested = response_data.get("response") or response_data.get("data")
-        if isinstance(nested, dict):
-            nested_output = nested.get("output") or nested.get("content")
-            if nested_output is not None:
-                text = _content_parts_to_text(nested_output)
-                if isinstance(text, str) and text.strip():
-                    return {
-                        "text": text,
-                        "path": "response|data.(output|content)",
-                        "reason": None,
-                    }
-
-        # Direct text field
-        if "text" in response_data:
-            t = response_data["text"]
+            # Direct text field
+            if "text" in response_data:
+                t = response_data["text"]
+                return {
+                    "text": _non_empty(t if isinstance(t, str) else str(t), "[non-text response received]"),
+                    "path": "text",
+                    "reason": None,
+                }
+        except Exception:
             return {
-                "text": t if isinstance(t, str) else str(t),
-                "path": "text",
-                "reason": None,
+                "text": "[extractor_error: fallback text rendered]",
+                "path": None,
+                "reason": "extractor_error",
             }
 
         return {
-            "text": None,
+            "text": "[non-text response received]\n\n" + _safe_json_preview(response_data),
             "path": None,
-            "reason": "no text found in known response fields",
+            "reason": "no_text_found_in_known_fields",
         }
 
     def _extract_response_text(self, response_data: Optional[Dict]) -> Optional[str]:

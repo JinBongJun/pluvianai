@@ -80,7 +80,7 @@ const REPLAY_PROVIDER_LABEL: Record<ReplayProvider, string> = {
   anthropic: "Anthropic",
   google: "Google",
 };
-const REPLAY_PROVIDER_MODEL_LIBRARY: Record<ReplayProvider, string[]> = {
+const DEFAULT_REPLAY_PROVIDER_MODEL_LIBRARY: Record<ReplayProvider, string[]> = {
   openai: [
     "gpt-4o-mini",
     "gpt-4o",
@@ -199,6 +199,22 @@ function inferProviderFromModelId(modelId: unknown): ReplayProvider | null {
     return "google";
   }
   return null;
+}
+
+function validateCustomModelForProvider(
+  provider: ReplayProvider,
+  modelId: string
+): { ok: true } | { ok: false; message: string } {
+  const trimmed = String(modelId ?? "").trim();
+  if (!trimmed) return { ok: false, message: "Model id is required." };
+  const inferred = inferProviderFromModelId(trimmed);
+  if (inferred && inferred !== provider) {
+    return {
+      ok: false,
+      message: `Run blocked: model "${trimmed}" looks like ${REPLAY_PROVIDER_LABEL[inferred]}, but provider is set to ${REPLAY_PROVIDER_LABEL[provider]}.`,
+    };
+  }
+  return { ok: true };
 }
 
 function collectMissingProviderKeys(result: ReleaseGateResult | null): ReplayProvider[] {
@@ -727,6 +743,11 @@ export default function ReleaseGatePageContent() {
   const [overridesOpen, setOverridesOpen] = useState(false);
   const [toolsHydratedKey, setToolsHydratedKey] = useState("");
   const [overridesHydratedKey, setOverridesHydratedKey] = useState("");
+  const { data: coreModelsData } = useSWR(
+    projectId && !isNaN(projectId) ? ["release-gate-core-models", projectId] : null,
+    () => releaseGateAPI.getCoreModels(projectId),
+    { isPaused: () => runLocked }
+  );
 
   const [runDatasetIds, setRunDatasetIds] = useState<string[]>([]);
   const [runSnapshotIds, setRunSnapshotIds] = useState<string[]>([]);
@@ -1303,6 +1324,34 @@ export default function ReleaseGatePageContent() {
     if (typeof fromPayload === "string" && fromPayload.trim()) return fromPayload.trim();
     return "";
   }, [liveNodeLatestSnapshot, baselineSeedSnapshot, liveNodeLatestPayload, baselinePayload]);
+  const replayProviderModelLibrary = useMemo(() => {
+    const providers = (coreModelsData as { providers?: Record<string, unknown> } | undefined)?.providers;
+    if (!providers || typeof providers !== "object") {
+      return DEFAULT_REPLAY_PROVIDER_MODEL_LIBRARY;
+    }
+    const normalized: Record<ReplayProvider, string[]> = {
+      openai: Array.isArray(providers.openai)
+        ? providers.openai.map(v => String(v)).filter(Boolean)
+        : [],
+      anthropic: Array.isArray(providers.anthropic)
+        ? providers.anthropic.map(v => String(v)).filter(Boolean)
+        : [],
+      google: Array.isArray(providers.google)
+        ? providers.google.map(v => String(v)).filter(Boolean)
+        : [],
+    };
+    return {
+      openai: normalized.openai.length
+        ? normalized.openai
+        : DEFAULT_REPLAY_PROVIDER_MODEL_LIBRARY.openai,
+      anthropic: normalized.anthropic.length
+        ? normalized.anthropic
+        : DEFAULT_REPLAY_PROVIDER_MODEL_LIBRARY.anthropic,
+      google: normalized.google.length
+        ? normalized.google
+        : DEFAULT_REPLAY_PROVIDER_MODEL_LIBRARY.google,
+    };
+  }, [coreModelsData]);
   const runDataProvider = useMemo(() => {
     const fromLatest = normalizeReplayProvider(liveNodeLatestSnapshot?.provider);
     if (fromLatest) return fromLatest;
@@ -1869,6 +1918,13 @@ export default function ReleaseGatePageContent() {
       setError("Run blocked: select a model id for override or switch back to detected model.");
       return;
     }
+    if (modelOverrideEnabled) {
+      const modelValidation = validateCustomModelForProvider(replayProvider, newModel);
+      if (!modelValidation.ok) {
+        setError(modelValidation.message);
+        return;
+      }
+    }
     setIsValidating(true);
     setCancelRequested(false);
     cancelRequestedRef.current = false;
@@ -2119,7 +2175,7 @@ export default function ReleaseGatePageContent() {
     configSourceLabel,
     selectedBaselineCount,
     selectedDataSummary,
-    REPLAY_PROVIDER_MODEL_LIBRARY,
+    REPLAY_PROVIDER_MODEL_LIBRARY: replayProviderModelLibrary,
     REPLAY_THRESHOLD_PRESETS,
     thresholdPreset,
     setThresholdPreset,
