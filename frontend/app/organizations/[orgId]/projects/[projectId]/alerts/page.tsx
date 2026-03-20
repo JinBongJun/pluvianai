@@ -10,6 +10,7 @@ import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import DateRangePicker from "@/components/ui/DateRangePicker";
 import { alertsAPI, organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import { useToast } from "@/components/ToastContainer";
 import {
   ArrowUpDown,
@@ -65,7 +66,7 @@ export default function AlertsPage() {
   const toast = useToast();
   const { orgId, projectId } = useOrgProjectParams();
 
-  const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
+  const { data: org } = useSWR(orgId ? orgKeys.detail(orgId) : null, () =>
     organizationsAPI.get(orgId, { includeStats: false })
   );
 

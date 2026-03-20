@@ -12,6 +12,7 @@ import { clsx } from "clsx";
 import TopHeader from "./TopHeader";
 import useSWR from "swr";
 import { authAPI, organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
 
@@ -60,7 +61,7 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
   }, [hasToken]);
 
   const { data: organizations } = useSWR<OrganizationSummary[]>(
-    hasToken ? "organizations" : null,
+    hasToken ? orgKeys.list() : null,
     () => organizationsAPI.list({ includeStats: false }),
     {
       revalidateOnFocus: false,
@@ -68,8 +69,8 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
     }
   );
   const { data: projects } = useSWR<OrganizationProject[]>(
-    hasToken && resolvedOrgKey ? ["organization-projects-list", resolvedOrgKey] : null,
-    ([, id]) => organizationsAPI.listProjects(id as string, { includeStats: false }),
+    hasToken && resolvedOrgKey ? orgKeys.projects(resolvedOrgKey, "") : null,
+    ([, , id]) => organizationsAPI.listProjects(id as string, { includeStats: false }),
     {
       revalidateOnFocus: false,
       dedupingInterval: 10_000,

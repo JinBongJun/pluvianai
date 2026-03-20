@@ -17,7 +17,9 @@
     "qa:i-login-flow": "node scripts/login_query_flow_assert.js",
     "qa:n1-reauth-matrix": "node scripts/session_reauth_matrix_assert.js",
     "qa:l-m-legal-ux": "node scripts/projects_legal_ux_assert.js",
-    "qa:rg-warn-ui": "node scripts/release_gate_warn_ui_assert.js"
+    "qa:rg-warn-ui": "node scripts/release_gate_warn_ui_assert.js",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.32.1",
@@ -41,6 +43,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.42",
     "@types/react-dom": "^18.2.17",

@@ -2,8 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { useSWRConfig } from "swr";
 import TopHeader from "@/components/layout/TopHeader";
-import { organizationsAPI } from "@/lib/api";
+import { createOrganization } from "@/lib/orgProjectMutations";
 import { Beaker, ArrowLeft, Building2, Shield, Activity, Plus } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
@@ -11,6 +12,7 @@ import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 
 export default function NewOrganizationPage() {
   const router = useRouter();
+  const { mutate } = useSWRConfig();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,12 +29,14 @@ export default function NewOrganizationPage() {
     setError(null);
     setPlanError(null);
     try {
-      const org = await organizationsAPI.create({
-        name: name.trim(),
-        description: description.trim() || null,
-        plan_type: "free",
-      });
-      router.push(`/organizations/${org.id}/projects`);
+      await createOrganization(
+        {
+          name: name.trim(),
+          description: description.trim() || null,
+          plan_type: "free",
+        },
+        { mutate, router }
+      );
     } catch (err: any) {
       const parsed = parsePlanLimitError(err);
       if (parsed && parsed.code === "ORG_LIMIT_REACHED") {

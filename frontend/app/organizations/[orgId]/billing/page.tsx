@@ -5,6 +5,7 @@ import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { organizationsAPI, authAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import { useToast } from "@/components/ToastContainer";
 import { useRouter } from "next/navigation";
 import { Zap, Activity, Database, ShieldCheck, CheckCircle2, BarChart3 } from "lucide-react";
@@ -20,7 +21,7 @@ export default function BillingPage() {
   } | null>(null);
 
   const { data: org, isValidating } = useSWR(
-    orgId ? ["organization", orgId] : null,
+    orgId ? orgKeys.detail(orgId) : null,
     async () => {
       try {
         return await organizationsAPI.get(orgId, { includeStats: true });

@@ -40,6 +40,7 @@ import { AgentNodePickerModal } from "@/components/release-gate/AgentNodePickerM
 import type { AgentForPicker } from "@/components/release-gate/AgentPickerCard";
 import { DatasetPickerModal } from "@/components/release-gate/DatasetPickerModal";
 import { PassRateGauge } from "@/components/release-gate/PassRateGauge";
+import { orgKeys } from "@/lib/queryKeys";
 import {
   behaviorAPI,
   liveViewAPI,
@@ -688,7 +689,7 @@ export default function ReleaseGatePageContent() {
       }
     }
   );
-  const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
+  const { data: org } = useSWR(orgId ? orgKeys.detail(orgId) : null, () =>
     organizationsAPI.get(orgId)
   );
 

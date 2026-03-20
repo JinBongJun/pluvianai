@@ -22,6 +22,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
 import { organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import { authAPI } from "@/lib/api/auth";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import SwitcherDropdown from "@/components/ui/SwitcherDropdown";
@@ -58,7 +59,7 @@ const TopHeader: React.FC<TopHeaderProps> = ({
   const shouldFetchProjects = !providedProjects;
 
   const { data: fetchedOrganizations } = useSWR(
-    isAuthenticated && shouldFetchOrganizations ? "organizations" : null,
+    isAuthenticated && shouldFetchOrganizations ? orgKeys.list() : null,
     () => organizationsAPI.list({ includeStats: false }),
     {
       revalidateOnFocus: false,
@@ -67,9 +68,9 @@ const TopHeader: React.FC<TopHeaderProps> = ({
   );
   const { data: projects } = useSWR(
     isAuthenticated && currentOrgId && shouldFetchProjects
-      ? ["organization-projects-list", currentOrgId]
+      ? orgKeys.projects(currentOrgId as string, "")
       : null,
-    ([, id]) => organizationsAPI.listProjects(id as string, { includeStats: false }),
+    ([, , id]) => organizationsAPI.listProjects(id as string, { includeStats: false }),
     {
       revalidateOnFocus: false,
       dedupingInterval: 10_000,
