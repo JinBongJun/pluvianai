@@ -2748,7 +2748,7 @@ export function ReleaseGateExpandedView() {
                                     </span>
                                     {baselineInputPreview && (
                                       <span className="truncate text-[11px] text-slate-400">
-                                        "{baselineInputPreview}"
+                                        {baselineInputPreview}
                                       </span>
                                     )}
                                   </div>
