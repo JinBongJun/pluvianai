@@ -410,6 +410,8 @@ function MetricTile({
   );
 }
 
+type AttemptDetailMainTab = "summary" | "responses" | "diff" | "debug";
+
 function AttemptDetailOverlay({
   open,
   onClose,
@@ -425,9 +427,15 @@ function AttemptDetailOverlay({
   attempt: any;
   baselineSnapshot: Record<string, unknown> | null;
 }) {
-  const [showTestedRaw, setShowTestedRaw] = useState(false);
-  // Paid UX: blocked cases should show "answer change" immediately.
-  const [showResponseDiff, setShowResponseDiff] = useState(() => !Boolean(attempt?.pass));
+  const [detailMainTab, setDetailMainTab] = useState<AttemptDetailMainTab>("summary");
+  const [inputExpanded, setInputExpanded] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setDetailMainTab("summary");
+      setInputExpanded(false);
+    }
+  }, [open, inputIndex, attemptIndex]);
 
   const baselineInput = String(
     baselineSnapshot?.user_message ?? baselineSnapshot?.request_prompt ?? "No input text captured."
@@ -612,9 +620,8 @@ function AttemptDetailOverlay({
   const decisionReasons: string[] = Array.isArray(attempt?.failure_reasons)
     ? (attempt.failure_reasons as string[])
     : [];
-  // For paid UX: focus on what actually failed (not generic reasons).
   const failedSignals = signalsRows.filter(r => r.status === "fail");
-  const signalsToRender = failedSignals.length > 0 ? failedSignals : signalsRows.slice(0, 3);
+  const diffTabEnabled = Boolean(baselineResponse && candidateResponse);
   type SeverityRank = 0 | 1 | 2 | 3;
   type DecisionSeverity = "low" | "medium" | "high" | "critical";
   type DecisionIssue = {
@@ -726,15 +733,17 @@ function AttemptDetailOverlay({
 
   if (!open) return null;
 
+  const inputPreview = candidateInput || baselineInput;
+
   return (
     <div className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/70 backdrop-blur-md p-6">
       <div className="w-full max-w-[1400px] h-[86vh] rounded-[28px] border border-white/10 bg-[#0d0f14] shadow-2xl overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between gap-3 border-b border-white/8 px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/8 px-6 py-3.5">
           <div className="min-w-0">
             <div className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
-              Unit Diagnostics
+              Unit diagnostics
             </div>
-            <div className="mt-1 flex items-center gap-3">
+            <div className="mt-1 flex flex-wrap items-center gap-2 sm:gap-3">
               <h2 className="text-base font-semibold text-white">
                 Input {inputIndex + 1} · Attempt {attemptIndex + 1}
               </h2>
@@ -751,7 +760,7 @@ function AttemptDetailOverlay({
               <span className="text-[11px] text-slate-400">
                 {formatDurationMs((attempt?.replay ?? {}).avg_latency_ms)}
               </span>
-              <span className="text-[11px] text-slate-500 truncate max-w-[360px]">
+              <span className="text-[11px] text-slate-500 truncate max-w-[min(360px,40vw)]">
                 {baselineModel} → {candidateModel}
               </span>
             </div>
@@ -759,156 +768,253 @@ function AttemptDetailOverlay({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-white/10 px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-white/5"
+            className="shrink-0 rounded-xl border border-white/10 px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-white/5"
           >
             Close
           </button>
         </div>
 
-        <div className="px-6 py-3 border-b border-white/8">
-          <div
-            className={clsx(
-              "rounded-2xl border px-4 py-3",
-              pass
-                ? "border-emerald-500/30 bg-emerald-500/10"
-                : "border-rose-500/30 bg-rose-500/10"
-            )}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                  Decision
-                </div>
-                <div className="mt-1 text-sm font-bold text-white">
-                  {pass ? "RELEASE READY" : "RELEASE BLOCKED"}
-                </div>
-                <div className="mt-1 text-sm font-semibold text-slate-200">
-                  {decisionHeadline.replace(/^Reason:\s*/i, "")}
-                </div>
-              </div>
-              <div className="text-xs text-slate-300">
-                {baselineModel} → {candidateModel} · {formatDurationMs((attempt?.replay ?? {}).avg_latency_ms)}
-              </div>
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-white/8">
+            <div
+              role="tablist"
+              aria-label="Attempt detail"
+              className="flex shrink-0 flex-wrap gap-1 border-b border-white/8 px-4 py-2.5"
+            >
+              {(
+                [
+                  { id: "summary" as const, label: "Summary" },
+                  { id: "responses" as const, label: "Responses" },
+                  { id: "diff" as const, label: "Diff", needsBodies: true as const },
+                  { id: "debug" as const, label: "Debug" },
+                ] as const
+              ).map(tab => {
+                const disabled = "needsBodies" in tab && tab.needsBodies && !diffTabEnabled;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={detailMainTab === tab.id}
+                    disabled={disabled}
+                    onClick={() => {
+                      if (!disabled) setDetailMainTab(tab.id);
+                    }}
+                    className={clsx(
+                      "rounded-lg px-3 py-1.5 text-[11px] font-semibold tracking-wide transition-colors",
+                      detailMainTab === tab.id
+                        ? "bg-white/[0.12] text-white shadow-sm"
+                        : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200",
+                      disabled && "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-slate-400"
+                    )}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
             </div>
-            {!pass && (
-              <div className="mt-2 space-y-1 text-xs text-rose-100">
-                {(() => {
-                  const lines: string[] = [];
-                  failedGates.slice(0, 2).forEach(g => {
-                    if (lines.length >= 2) return;
-                    if (g.reason) lines.push(g.reason);
-                  });
-                  if (lines.length < 2 && failedSignals.length > 0) {
-                    const s = failedSignals[0];
-                    const why = signalsDetailsRaw ? formatSignalWhy(s.id, (signalsDetailsRaw as any)?.[s.id]) : "";
-                    if (why) lines.push(why);
-                    else if (s.label) lines.push(s.label);
-                  }
-                  if (lines.length < 2 && policyRows.length > 0) {
-                    if (policyRows[0]?.message) lines.push(policyRows[0].message);
-                  }
-                  if (lines.length < 2 && decisionReasons.length > 0) {
-                    if (decisionReasons[0]) lines.push(decisionReasons[0]);
-                  }
-                  return lines.slice(0, 2).map((l, i) => <div key={`${l}-${i}`}>- {l}</div>);
-                })()}
-              </div>
-            )}
-          </div>
-        </div>
 
-        <div className="flex flex-1 min-h-0">
-          <div className="flex-1 min-w-0 border-r border-white/8 p-5">
-            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-              Replay attempt
-            </div>
-            <div className="mt-3 rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.04] p-3 h-[calc(100%-24px)]">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                  Gate Results
-                </div>
-                {attempt?.trace_id && (
-                  <div className="truncate text-[11px] text-slate-500 max-w-[220px]">
-                    {String(attempt.trace_id)}
-                  </div>
-                )}
-              </div>
-              <div className="mt-2 space-y-3 h-[calc(100%-22px)] overflow-auto custom-scrollbar">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px]">
-                  {gateRows.map(g => (
-                    <div key={g.id} className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">{g.label}</div>
-                        <span
-                          className={clsx(
-                            "text-[10px] font-black uppercase",
-                            g.status === "fail"
-                              ? "text-rose-300"
-                              : g.status === "pass"
-                                ? "text-emerald-300"
-                                : "text-slate-500"
-                          )}
-                        >
-                          {g.status === "not_applicable" ? "N/A" : g.status.toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="mt-1 break-words text-xs text-slate-300">{g.reason}</div>
+            <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-5">
+              {detailMainTab === "summary" && (
+                <div className="space-y-4">
+                  <div
+                    className={clsx(
+                      "rounded-2xl border px-4 py-3.5",
+                      pass
+                        ? "border-emerald-500/25 bg-emerald-500/[0.07]"
+                        : "border-rose-500/25 bg-rose-500/[0.07]"
+                    )}
+                  >
+                    <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                      Decision
                     </div>
-                  ))}
-                </div>
+                    <div className="mt-1 text-base font-bold text-white">
+                      {pass ? "Release ready" : "Release blocked"}
+                    </div>
+                    <p className="mt-1 text-sm font-medium leading-snug text-slate-200">
+                      {decisionHeadline.replace(/^Reason:\s*/i, "")}
+                    </p>
+                  </div>
 
-                {!pass ? (
+                  <div className="rounded-2xl border border-white/8 bg-black/25 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                        Input
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setInputExpanded(v => !v)}
+                        className="text-[10px] font-bold uppercase tracking-wider text-fuchsia-300/90 hover:text-fuchsia-200"
+                      >
+                        {inputExpanded ? "Collapse" : "Expand"}
+                      </button>
+                    </div>
+                    <p
+                      className={clsx(
+                        "mt-2 text-sm leading-relaxed text-slate-200 whitespace-pre-wrap break-words",
+                        !inputExpanded && "line-clamp-4 max-h-[4.5rem] overflow-hidden"
+                      )}
+                    >
+                      {inputPreview}
+                    </p>
+                  </div>
+
+                  {attempt?.trace_id ? (
+                    <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-slate-400">
+                      <span className="font-black uppercase tracking-wider text-slate-500">Trace</span>{" "}
+                      <span className="break-all text-slate-300">{String(attempt.trace_id)}</span>
+                    </div>
+                  ) : null}
+
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                      Gate results
+                    </div>
+                    <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+                      {gateRows.map(g => (
+                        <div
+                          key={g.id}
+                          className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                              {g.label}
+                            </div>
+                            <span
+                              className={clsx(
+                                "text-[10px] font-black uppercase",
+                                g.status === "fail"
+                                  ? "text-rose-300"
+                                  : g.status === "pass"
+                                    ? "text-emerald-300"
+                                    : "text-slate-500"
+                              )}
+                            >
+                              {g.status === "not_applicable" ? "N/A" : g.status.toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="mt-1 break-words text-xs text-slate-300">{g.reason}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
                     <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                      Eval summary (Why)
+                      Signal checks
                     </div>
-                    <div className="mt-2 space-y-1.5">
-                      {failedSignals.length > 0 ? (
-                        failedSignals.slice(0, 3).map((s, i) => {
-                          const why = signalsDetailsRaw ? formatSignalWhy(s.id, (signalsDetailsRaw as any)?.[s.id]) : "";
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Technical detail for failures lives here only — sidebar shows status at a glance.
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {!signalsChecksRaw ? (
+                        <div className="text-xs text-slate-500">
+                          Signals were not returned for this attempt.
+                        </div>
+                      ) : signalsRows.length === 0 ? (
+                        <div className="text-xs text-slate-500">No signal rows.</div>
+                      ) : (
+                        signalsRows.map(row => {
+                          const why =
+                            signalsDetailsRaw && row.status === "fail"
+                              ? formatSignalWhy(row.id, (signalsDetailsRaw as any)?.[row.id])
+                              : "";
                           return (
-                            <div key={`${s.id}-${i}`} className="text-xs text-slate-200">
-                              {s.label}: {why || "FAIL"}
+                            <div
+                              key={row.id}
+                              className={clsx(
+                                "rounded-xl border px-3 py-2",
+                                row.pass
+                                  ? "border-emerald-500/15 bg-emerald-500/[0.06]"
+                                  : row.status === "fail"
+                                    ? "border-rose-500/20 bg-rose-500/[0.06]"
+                                    : "border-white/8 bg-black/20"
+                              )}
+                            >
+                              <div className="flex items-center justify-between gap-2 text-xs">
+                                <span className="min-w-0 font-medium text-slate-200">{row.label}</span>
+                                <span className="shrink-0 font-black text-[10px] uppercase text-slate-400">
+                                  {row.status === "not_applicable" ? "N/A" : row.pass ? "Pass" : "Fail"}
+                                </span>
+                              </div>
+                              {why ? (
+                                <div className="mt-1.5 font-mono text-[11px] leading-relaxed break-words text-slate-400">
+                                  {why}
+                                </div>
+                              ) : null}
                             </div>
                           );
                         })
-                      ) : failedGates.length > 0 ? (
-                        failedGates.slice(0, 2).map((g, i) => (
-                          <div key={`${g.id}-${i}`} className="text-xs text-slate-200">
-                            {g.label}: {g.reason}
+                      )}
+                    </div>
+                  </div>
+
+                  {policyRows.length > 0 ? (
+                    <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] p-3">
+                      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-rose-200/90">
+                        Policy violations
+                      </div>
+                      <div className="mt-2 space-y-2">
+                        {policyRows.map(row => (
+                          <div key={row.key} className="rounded-xl border border-white/10 bg-black/30 px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-semibold text-rose-100">{row.label}</span>
+                              {row.severity ? (
+                                <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-black uppercase text-slate-300">
+                                  {row.severity}
+                                </span>
+                              ) : null}
+                            </div>
+                            {row.message ? (
+                              <p className="mt-1 text-[11px] leading-relaxed text-rose-100/85">
+                                {row.message}
+                              </p>
+                            ) : null}
                           </div>
-                        ))
-                      ) : (
-                        <div className="text-xs text-slate-200">{decisionReasons[0] || "Blocking issue detected."}</div>
-                      )}
-
-                      {policyRows.length > 0 && (
-                        <div className="text-xs text-slate-200">Policy violations: {policyRows.length}</div>
-                      )}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null}
 
-                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
                     <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                      Response comparison
+                      Tool behavior
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowResponseDiff(v => !v)}
-                      className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-200 hover:bg-white/10"
-                    >
-                      {showResponseDiff ? "Hide answer change" : "Show answer change"}
-                    </button>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                      <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                        Sequence edits {Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0)}
+                      </div>
+                      <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                        Tool divergence{" "}
+                        {percentFromRate(Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0) / 100)}
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-400">
+                      {(() => {
+                        const seqEdits = Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0);
+                        const toolDivPct = Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0);
+                        const isStable = seqEdits === 0 && toolDivPct === 0;
+                        return isStable
+                          ? "Tool call pattern matches baseline (or no tools in either run)."
+                          : `Calls diverged: ${seqEdits} sequence edit(s), ${percentFromRate(toolDivPct / 100)} tool divergence.`;
+                      })()}
+                    </p>
                   </div>
+                </div>
+              )}
 
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <div className="rounded-xl border border-white/8 bg-black/30 p-2.5">
-                      <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+              {detailMainTab === "responses" && (
+                <div className="flex min-h-[min(520px,calc(86vh-220px))] flex-col gap-3 md:min-h-[420px]">
+                  <p className="text-[11px] text-slate-500">
+                    Baseline ({baselineModel}) vs candidate ({candidateModel}). Each column scrolls
+                    independently.
+                  </p>
+                  <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="flex min-h-[280px] flex-col rounded-2xl border border-white/8 bg-black/30 p-3 md:min-h-0">
+                      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
                         Baseline
                       </div>
-                      <p className="mt-2 max-h-64 overflow-auto custom-scrollbar text-sm leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
+                      <div className="custom-scrollbar mt-2 min-h-0 flex-1 overflow-y-auto text-sm leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
                         {baselineResponse
                           ? baselineResponse
                           : baselineResponseStatus === "not_captured"
@@ -918,211 +1024,162 @@ function AttemptDetailOverlay({
                             : baselineResponseStatus === "empty"
                               ? "Baseline response is empty."
                               : "Baseline response preview unavailable."}
-                      </p>
+                      </div>
                     </div>
-                    <div className="rounded-xl border border-white/8 bg-black/30 p-2.5">
-                      <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                    <div className="flex min-h-[280px] flex-col rounded-2xl border border-white/8 bg-black/30 p-3 md:min-h-0">
+                      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
                         Candidate
                       </div>
-                      <p className="mt-2 max-h-72 overflow-auto custom-scrollbar text-sm leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
+                      <div className="custom-scrollbar mt-2 min-h-0 flex-1 overflow-y-auto text-sm leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
                         {candidateResponse
                           ? candidateResponse
                           : candidateResponseStatus === "tool_calls_only"
                             ? "Candidate returned tool calls only (no assistant text)."
                             : candidateResponseStatus === "empty"
-                              ? "Candidate response text is empty. Check extractor path/reason and debug JSON."
+                              ? "Candidate response text is empty. Check extractor path/reason in Debug."
                               : "—"}
-                      </p>
+                      </div>
                     </div>
                   </div>
+                </div>
+              )}
 
-                  {showResponseDiff && (
-                    <div className="mt-3 rounded-xl border border-white/8 bg-black/30 p-2.5">
-                      <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
-                        Answer change (lines)
-                      </div>
-                      {baselineResponse && candidateResponse ? (
-                        <pre className="mt-2 max-h-40 overflow-auto custom-scrollbar text-[11px] leading-relaxed whitespace-pre-wrap break-words text-slate-200">
-                          {responseDiffLines.join("\n")}
-                        </pre>
-                      ) : (
-                        <div className="mt-2 text-xs text-slate-500">
-                          Diff unavailable (missing baseline or candidate response preview).
-                        </div>
-                      )}
-                    </div>
+              {detailMainTab === "diff" && (
+                <div className="flex min-h-[min(480px,calc(86vh-200px))] flex-col">
+                  {!diffTabEnabled ? (
+                    <p className="text-sm text-slate-500">
+                      Need both baseline and candidate response text to compute a line diff.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="mb-2 text-[11px] text-slate-500">
+                        Line-oriented diff (up to 200 lines). Open Responses for full text.
+                      </p>
+                      <pre className="custom-scrollbar min-h-0 flex-1 overflow-auto rounded-2xl border border-white/8 bg-black/40 p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words text-slate-200">
+                        {responseDiffLines.length > 0
+                          ? responseDiffLines.join("\n")
+                          : "No line-level additions or removals (texts may match)."}
+                      </pre>
+                    </>
                   )}
                 </div>
+              )}
 
-                <button
-                  type="button"
-                  onClick={() => setShowTestedRaw(v => !v)}
-                  className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-200 hover:bg-white/10"
-                >
-                  {showTestedRaw ? "Hide Advanced JSON" : "Advanced: View full raw debug JSON"}
-                </button>
-                {showTestedRaw && (
-                  <pre className="rounded-2xl border border-white/8 bg-black/30 p-3 text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-words">
+              {detailMainTab === "debug" && (
+                <div className="space-y-2">
+                  <p className="text-[11px] text-slate-500">
+                    Structured replay metadata for support — copy/paste friendly.
+                  </p>
+                  <pre className="custom-scrollbar max-h-[min(640px,calc(86vh-240px))] overflow-auto rounded-2xl border border-white/8 bg-black/40 p-3 text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-words">
                     {candidatePayloadPreview}
                   </pre>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="w-[360px] min-w-[360px] p-5 space-y-3 overflow-y-auto custom-scrollbar">
-            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Replay meta
-              </div>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-                <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Model</div>
-                  <div className="mt-1 truncate">{candidateModel}</div>
+          <aside className="custom-scrollbar flex w-[300px] min-w-[260px] shrink-0 flex-col overflow-y-auto border-l border-white/8 bg-[#090b10] p-4">
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                  Replay meta
                 </div>
-                <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Provider</div>
-                  <div className="mt-1 truncate">{candidateProvider}</div>
-                </div>
-                <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Status code</div>
-                  <div className="mt-1">{String(candidateSnapshot?.status_code ?? "—")}</div>
-                </div>
-                <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Latency</div>
-                  <div className="mt-1">{formatDurationMs((attempt?.replay ?? {}).avg_latency_ms)}</div>
-                </div>
-              </div>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                <MetricTile label="Attempted" value={Number((attempt?.replay ?? {}).attempted ?? 0)} />
-                <MetricTile
-                  label="Succeeded"
-                  value={Number((attempt?.replay ?? {}).succeeded ?? 0)}
-                  tone="success"
-                />
-                <MetricTile
-                  label="Failed"
-                  value={Number((attempt?.replay ?? {}).failed ?? 0)}
-                  tone={Number((attempt?.replay ?? {}).failed ?? 0) > 0 ? "danger" : "default"}
-                />
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Signals checks (Why)
-              </div>
-              <div className="mt-1 text-[11px] text-slate-400">
-                {!signalsChecksRaw ? (
-                  <>No signals captured for this attempt.</>
-                ) : failedSignals.length > 0 ? (
-                  <>{failedSignals.length} failing signal(s)</>
-                ) : (
-                  <>
-                    {signalsPassed.length}/{signalsApplicable.length || 0} checks passed
-                  </>
-                )}
-              </div>
-              <div className="mt-2 space-y-2">
-                {!signalsChecksRaw ? (
-                  <div className="text-xs text-slate-500">
-                    Signals eval was not executed (or not returned) for this attempt.
+                <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Model</div>
+                    <div className="mt-1 truncate">{candidateModel}</div>
                   </div>
-                ) : signalsRows.length === 0 ? (
-                  <div className="text-xs text-slate-500">No signal checks returned.</div>
-                ) : (
-                  signalsToRender.map((row) => (
-                    <div
-                      key={row.id}
-                      className={clsx(
-                        "rounded-xl border px-2.5 py-2 text-xs",
-                        row.pass
-                          ? "border-emerald-500/20 bg-emerald-500/8 text-emerald-200"
-                          : "border-rose-500/20 bg-rose-500/8 text-rose-200"
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="min-w-0 truncate pr-3">{row.label}</span>
-                        <span className="shrink-0 font-black">
-                          {row.status === "not_applicable" ? "N/A" : row.pass ? "PASS" : "FAIL"}
+                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Provider</div>
+                    <div className="mt-1 truncate">{candidateProvider}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Status</div>
+                    <div className="mt-1">{String(candidateSnapshot?.status_code ?? "—")}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Latency</div>
+                    <div className="mt-1">{formatDurationMs((attempt?.replay ?? {}).avg_latency_ms)}</div>
+                  </div>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-1.5">
+                  <MetricTile label="Attempted" value={Number((attempt?.replay ?? {}).attempted ?? 0)} />
+                  <MetricTile
+                    label="Succeeded"
+                    value={Number((attempt?.replay ?? {}).succeeded ?? 0)}
+                    tone="success"
+                  />
+                  <MetricTile
+                    label="Failed"
+                    value={Number((attempt?.replay ?? {}).failed ?? 0)}
+                    tone={Number((attempt?.replay ?? {}).failed ?? 0) > 0 ? "danger" : "default"}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                  Signals at a glance
+                </div>
+                <div className="mt-1 text-[11px] text-slate-400">
+                  {!signalsChecksRaw
+                    ? "No signals payload."
+                    : failedSignals.length > 0
+                      ? `${failedSignals.length} failing`
+                      : `${signalsPassed.length}/${signalsApplicable.length || 0} passed`}
+                </div>
+                <div className="mt-2 max-h-52 space-y-1.5 overflow-y-auto custom-scrollbar pr-0.5">
+                  {!signalsChecksRaw ? (
+                    <div className="text-xs text-slate-500">—</div>
+                  ) : (
+                    signalsRows.map(row => (
+                      <div
+                        key={row.id}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-white/6 bg-black/25 px-2 py-1.5 text-[11px]"
+                      >
+                        <span className="min-w-0 truncate text-slate-300">{row.label}</span>
+                        <span
+                          className={clsx(
+                            "shrink-0 font-black uppercase",
+                            row.pass
+                              ? "text-emerald-400/90"
+                              : row.status === "fail"
+                                ? "text-rose-400/90"
+                                : "text-slate-500"
+                          )}
+                        >
+                          {row.status === "not_applicable" ? "N/A" : row.pass ? "OK" : "Fail"}
                         </span>
                       </div>
-                      {signalsDetailsRaw && (
-                        (() => {
-                          const why = formatSignalWhy(row.id, (signalsDetailsRaw as any)?.[row.id]);
-                          return why ? (
-                            <div className="mt-1 text-[11px] leading-relaxed text-slate-300 break-words">
-                              {why}
-                            </div>
-                          ) : null;
-                        })()
-                      )}
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Policy checks
+              <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                  Policy
+                </div>
+                <p className="mt-1 text-sm font-semibold text-slate-200">
+                  {policyRows.length === 0 ? "Clean" : `${policyRows.length} violation(s)`}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">Open Summary for messages.</p>
               </div>
-              <div className="mt-1 text-[11px] text-slate-400">
-                {policyRows.length === 0 ? "No policy violations." : `${policyRows.length} violation(s) detected`}
-              </div>
-              <div className="mt-2 space-y-2">
-                {policyRows.length === 0 ? (
-                  <div className="text-xs text-slate-500">
-                    This attempt produced no BehaviorRule violations.
+
+              <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                  Tool behavior
+                </div>
+                <div className="mt-2 space-y-1 text-xs text-slate-300">
+                  <div>Edits {Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0)}</div>
+                  <div>
+                    Divergence{" "}
+                    {percentFromRate(Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0) / 100)}
                   </div>
-                ) : (
-                  policyRows.slice(0, 3).map(row => (
-                    <div
-                      key={row.key}
-                      className="rounded-xl border border-rose-500/20 bg-rose-500/8 px-2.5 py-2 text-xs text-rose-200"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="min-w-0 truncate pr-3 font-semibold">{row.label}</span>
-                        {row.severity ? (
-                          <span className="shrink-0 rounded-full border border-white/10 bg-black/30 px-2 py-0.5 text-[10px] font-black uppercase text-slate-200">
-                            {row.severity}
-                          </span>
-                        ) : null}
-                      </div>
-                      {row.message ? (
-                        <div className="mt-1 text-[11px] leading-relaxed text-rose-100/90">{row.message}</div>
-                      ) : null}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Tool behavior
-              </div>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                  Sequence edits {Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0)}
-                </div>
-                <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                  Tool divergence{" "}
-                  {percentFromRate(Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0) / 100)}
                 </div>
               </div>
-              <div className="mt-3 text-xs text-slate-200">
-                {(() => {
-                  const seqEdits = Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0);
-                  const toolDivPct = Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0);
-                  const isStable = seqEdits === 0 && toolDivPct === 0;
-                  return isStable
-                    ? "Tool calls pattern unchanged (or no tool calls in both runs)."
-                    : `Tool calls changed (sequence edits ${seqEdits}, divergence ${percentFromRate(toolDivPct / 100)}).`;
-                })()}
-              </div>
             </div>
-          </div>
+          </aside>
         </div>
       </div>
     </div>
