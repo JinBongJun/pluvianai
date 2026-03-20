@@ -429,11 +429,13 @@ function AttemptDetailOverlay({
 }) {
   const [detailMainTab, setDetailMainTab] = useState<AttemptDetailMainTab>("summary");
   const [inputExpanded, setInputExpanded] = useState(false);
+  const [showRemovedDiffLines, setShowRemovedDiffLines] = useState(false);
 
   useEffect(() => {
     if (open) {
       setDetailMainTab("summary");
       setInputExpanded(false);
+      setShowRemovedDiffLines(false);
     }
   }, [open, inputIndex, attemptIndex]);
 
@@ -539,7 +541,88 @@ function AttemptDetailOverlay({
   };
 
   const formatSignalWhy = (id: string, raw: unknown): string => {
-    return "";
+    const d = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+    if (!d) return "Evidence unavailable for this check.";
+    const status = String(d.status ?? "").trim().toLowerCase();
+    const statusLead =
+      status === "fail"
+        ? "Check failed."
+        : status === "pass"
+          ? "Check passed."
+          : status === "not_applicable"
+            ? "Not applicable for this run."
+            : "Status captured.";
+    const toNum = (value: unknown): number | null => {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    if (id === "empty") {
+      const actualChars = toNum(d.actual_chars);
+      const minChars = toNum(d.min_chars);
+      if (actualChars !== null && minChars !== null) {
+        return `Empty check: actual ${Math.round(actualChars)} chars (min ${Math.round(minChars)} chars).`;
+      }
+      return `${statusLead} Evidence unavailable for this check.`;
+    }
+
+    if (id === "latency") {
+      const actualMs = toNum(d.actual_ms);
+      const failMs = toNum(d.fail_ms);
+      if (actualMs !== null && failMs !== null) {
+        return `Latency ${Math.round(actualMs)}ms (limit ${Math.round(failMs)}ms).`;
+      }
+      return `${statusLead} Evidence unavailable for this check.`;
+    }
+
+    if (id === "status_code") {
+      const actualStatus = toNum(d.actual_status);
+      const failFrom = toNum(d.fail_from);
+      if (actualStatus !== null && failFrom !== null) {
+        return `HTTP status ${Math.round(actualStatus)} (fails from ${Math.round(failFrom)}).`;
+      }
+      return `${statusLead} Evidence unavailable for this check.`;
+    }
+
+    if (id === "refusal") {
+      if (typeof d.matched === "boolean") {
+        return `Refusal pattern ${d.matched ? "detected" : "not detected"}.`;
+      }
+      return `${statusLead} Evidence unavailable for this check.`;
+    }
+
+    if (id === "json") {
+      const mode = String(d.mode ?? "default").trim() || "default";
+      const checked = typeof d.checked === "boolean" ? (d.checked ? "yes" : "no") : "unknown";
+      const parsed =
+        typeof d.parsed_ok === "boolean" ? (d.parsed_ok ? "ok" : "failed") : "unknown";
+      return `JSON validity: mode ${mode}, checked ${checked}, parsed ${parsed}.`;
+    }
+
+    if (id === "length") {
+      const baselineLen = toNum(d.baseline_len);
+      const actualChars = toNum(d.actual_chars);
+      const ratio = toNum(d.ratio);
+      if (baselineLen !== null && actualChars !== null && ratio !== null) {
+        return `Output length drift ${Math.abs(ratio * 100).toFixed(1)}% (baseline ${Math.round(baselineLen)}, actual ${Math.round(actualChars)}).`;
+      }
+      return `${statusLead} Evidence unavailable for this check.`;
+    }
+
+    if (id === "repetition") {
+      const maxRepeats = toNum(d.max_line_repeats);
+      const failRepeats = toNum(d.fail_line_repeats);
+      if (maxRepeats !== null && failRepeats !== null) {
+        return `Repetition max ${Math.round(maxRepeats)} line repeats (fails at ${Math.round(failRepeats)}).`;
+      }
+      return `${statusLead} Evidence unavailable for this check.`;
+    }
+
+    if (id === "required" || id === "format" || id === "leakage" || id === "tool") {
+      return `${statusLead} Status available, detailed evidence unavailable for this check.`;
+    }
+
+    return `${statusLead} Evidence unavailable for this check.`;
   };
 
   const candidateSnapshot =
@@ -644,6 +727,44 @@ function AttemptDetailOverlay({
   const candidateLineCount = candidateResponse ? candidateResponse.split("\n").length : 0;
   const diffAddedCount = responseDiffLines.filter(line => line.startsWith("+")).length;
   const diffRemovedCount = responseDiffLines.filter(line => line.startsWith("-")).length;
+  const diffConfidenceLabel = (() => {
+    if (baselineResponse && candidateResponse) return "High";
+    if (baselineResponse || candidateResponse) return "Low";
+    return "Unavailable";
+  })();
+  const diffConfidenceMessage = (() => {
+    if (baselineResponse && candidateResponse) return "Both responses captured.";
+    if (!baselineResponse && !candidateResponse) return "Both response previews are missing.";
+    return "One side is missing; compare with caution.";
+  })();
+  const gateConfidence = (() => {
+    if (hasProviderError) {
+      return {
+        label: "Low",
+        detail: "Provider warnings detected in this attempt.",
+        toneClass: "border-rose-500/30 bg-rose-500/10 text-rose-200",
+      };
+    }
+    if (!baselineResponse && !candidateResponse) {
+      return {
+        label: "Low",
+        detail: "Both response previews are missing.",
+        toneClass: "border-rose-500/30 bg-rose-500/10 text-rose-200",
+      };
+    }
+    if (!baselineResponse || !candidateResponse || evalTotalCount === 0) {
+      return {
+        label: "Medium",
+        detail: "Some evidence channels are missing or limited.",
+        toneClass: "border-amber-500/30 bg-amber-500/10 text-amber-100",
+      };
+    }
+    return {
+      label: "High",
+      detail: "All core evidence channels are captured.",
+      toneClass: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+    };
+  })();
   type SeverityRank = 0 | 1 | 2 | 3;
   type DecisionSeverity = "low" | "medium" | "high" | "critical";
   type DecisionIssue = {
@@ -689,7 +810,9 @@ function AttemptDetailOverlay({
         if (v === "pass" || v === "fail" || v === "not_applicable") return v;
         return "not_applicable";
       })(),
-      reason: formatSignalWhy("latency", (signalsDetailsRaw as any)?.latency) || "No latency evidence.",
+      reason:
+        formatSignalWhy("latency", (signalsDetailsRaw as any)?.latency) ||
+        "Latency evidence missing; decision relied on other blocking checks.",
     },
     {
       id: "regression_diff",
@@ -706,6 +829,21 @@ function AttemptDetailOverlay({
     },
   ];
   const failedGates = gateRows.filter(g => g.status === "fail");
+  const decisionSourceLabels = (() => {
+    const failedOrdered = [
+      policyRows.length > 0 ? "Policy" : null,
+      failedGates.some(g => g.id === "tool_integrity") ? "Tool Integrity" : null,
+      failedGates.some(g => g.id === "latency") ? "Latency" : null,
+      failedGates.some(g => g.id === "regression_diff") ? "Regression Diff" : null,
+    ].filter((v): v is string => Boolean(v));
+    if (failedOrdered.length > 0) return failedOrdered;
+    return [
+      policyRows.length > 0 ? "Policy" : null,
+      "Tool Integrity",
+      gateRows.some(g => g.id === "latency" && g.status !== "not_applicable") ? "Latency" : null,
+      "Regression Diff",
+    ].filter((v): v is string => Boolean(v));
+  })();
   const decisionHeadline = (() => {
     const toHeadline = (reason: string) => `Reason: ${reason}`;
     if (pass) return toHeadline("No blocking regressions detected.");
@@ -874,7 +1012,7 @@ function AttemptDetailOverlay({
                         : "border-rose-500/25 bg-rose-500/[0.04]"
                     )}
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="min-w-0 space-y-2">
                         <div
                           className={clsx(
@@ -888,6 +1026,23 @@ function AttemptDetailOverlay({
                         <p className="max-w-3xl text-base font-medium leading-7 text-slate-100 text-balance">
                           {decisionHeadline.replace(/^Reason:\s*/i, "")}
                         </p>
+                      </div>
+                      <div className="min-w-[220px] rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                          Decision Confidence
+                        </div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <span
+                            className={clsx(
+                              "inline-flex rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                              gateConfidence.toneClass
+                            )}
+                          >
+                            {gateConfidence.label}
+                          </span>
+                          <span className="text-xs text-slate-400">Trust calibration</span>
+                        </div>
+                        <p className="mt-2 text-xs leading-relaxed text-slate-300">{gateConfidence.detail}</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -977,11 +1132,19 @@ function AttemptDetailOverlay({
                         <div className="grid gap-3 xl:grid-cols-2">
                           {!signalsChecksRaw ? (
                             <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-sm text-slate-500">
-                              No eval signals returned.
+                              <p>No eval signals returned.</p>
+                              <p className="mt-2 text-xs text-slate-400">Eval coverage: 0</p>
+                              <p className="mt-1 text-xs text-slate-400">
+                                Decision derived from {decisionSourceLabels.join(" / ")}.
+                              </p>
                             </div>
                           ) : signalsRows.length === 0 ? (
                             <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-sm text-slate-500">
-                              No signal rows.
+                              <p>No signal rows.</p>
+                              <p className="mt-2 text-xs text-slate-400">Eval coverage: 0</p>
+                              <p className="mt-1 text-xs text-slate-400">
+                                Decision derived from {decisionSourceLabels.join(" / ")}.
+                              </p>
                             </div>
                           ) : (
                             signalsRows.map(row => {
@@ -989,6 +1152,10 @@ function AttemptDetailOverlay({
                                 signalsDetailsRaw
                                   ? formatSignalValue(row.id, (signalsDetailsRaw as any)?.[row.id], row.pass)
                                   : null;
+                              const evidenceText =
+                                signalsDetailsRaw
+                                  ? formatSignalWhy(row.id, (signalsDetailsRaw as any)?.[row.id])
+                                  : "Evidence unavailable for this check.";
                               return (
                                 <div
                                   key={row.id}
@@ -1013,6 +1180,9 @@ function AttemptDetailOverlay({
                                     </span>
                                   </div>
                                   <div className="mt-3">{barNode}</div>
+                                  <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                                    {evidenceText}
+                                  </p>
                                 </div>
                               );
                             })
@@ -1147,10 +1317,23 @@ function AttemptDetailOverlay({
                     <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
                       Response Comparison
                     </p>
-                    <div className="text-[11px] text-slate-400">
-                      Green indicates added or modified candidate output.
+                    <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                      <span>Green indicates added or modified candidate output.</span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-300">
+                        Diff confidence {diffConfidenceLabel}
+                      </span>
+                      {diffRemovedCount > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowRemovedDiffLines(v => !v)}
+                          className="rounded-full border border-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-300 transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                        >
+                          {showRemovedDiffLines ? "Hide removed lines" : `Show removed lines (${diffRemovedCount})`}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
+                  <div className="px-1 text-[11px] text-slate-500">{diffConfidenceMessage}</div>
                   <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
                     <div className="flex min-h-[420px] flex-col overflow-hidden rounded-3xl border border-white/8 bg-[#0e0f11]">
                       <div className="flex items-center justify-between border-b border-white/5 bg-black/40 px-4 py-3">
@@ -1192,14 +1375,15 @@ function AttemptDetailOverlay({
                             {responseDiffLines.map((line, idx) => {
                               const isAdded = line.startsWith("+");
                               const isRemoved = line.startsWith("-");
-                              if (isRemoved) return null; // Only show added or unchanged in candidate side
+                              if (isRemoved && !showRemovedDiffLines) return null;
                               const content = isAdded ? line.substring(2) : line.substring(2);
                               return (
                                 <div
                                   key={idx}
                                   className={clsx(
                                     "block w-full px-5 py-0.5",
-                                    isAdded && "bg-emerald-500/20 font-medium text-emerald-200"
+                                    isAdded && "bg-emerald-500/20 font-medium text-emerald-200",
+                                    isRemoved && "bg-rose-500/20 text-rose-200 line-through decoration-rose-300/70"
                                   )}
                                 >
                                   {content || "\n"}
