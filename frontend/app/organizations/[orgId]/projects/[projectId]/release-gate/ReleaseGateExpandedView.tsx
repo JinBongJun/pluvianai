@@ -1055,10 +1055,28 @@ function AttemptDetailOverlay({
                       <p className="mb-2 text-[11px] text-slate-500">
                         Line-oriented diff (up to 200 lines). Open Responses for full text.
                       </p>
-                      <pre className="custom-scrollbar min-h-0 flex-1 overflow-auto rounded-2xl border border-white/8 bg-black/40 p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words text-slate-200">
-                        {responseDiffLines.length > 0
-                          ? responseDiffLines.join("\n")
-                          : "No line-level additions or removals (texts may match)."}
+                      <pre className="custom-scrollbar min-h-0 flex-1 overflow-auto rounded-2xl border border-white/8 bg-[#0a0a0c] p-4 font-mono text-[11px] leading-[1.6] break-all">
+                        {responseDiffLines.length > 0 ? (
+                          responseDiffLines.map((line, idx) => {
+                            const isAdded = line.startsWith("+");
+                            const isRemoved = line.startsWith("-");
+                            return (
+                              <div
+                                key={idx}
+                                className={clsx(
+                                  "px-1 -mx-1 rounded-sm",
+                                  isAdded && "bg-emerald-500/10 text-emerald-300",
+                                  isRemoved && "bg-rose-500/10 text-rose-300",
+                                  !isAdded && !isRemoved && "text-slate-400"
+                                )}
+                              >
+                                {line}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="text-slate-500">No line-level additions or removals (texts may match).</div>
+                        )}
                       </pre>
                     </>
                   )}
@@ -1078,69 +1096,69 @@ function AttemptDetailOverlay({
             </div>
           </div>
 
-          <aside className="custom-scrollbar flex w-[300px] min-w-[260px] shrink-0 flex-col overflow-y-auto border-l border-white/8 bg-[#090b10] p-4">
-            <div className="space-y-3">
-              <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+          <aside className="custom-scrollbar flex w-[280px] min-w-[240px] shrink-0 flex-col overflow-y-auto border-l border-white/8 bg-transparent p-5">
+            <div className="space-y-6">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-2">
                   Replay meta
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Model</div>
-                    <div className="mt-1 truncate">{candidateModel}</div>
+                <div className="space-y-3 text-[11px]">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 uppercase tracking-[0.14em]">Model</span>
+                    <span className="text-slate-200 truncate max-w-[120px]">{candidateModel}</span>
                   </div>
-                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Provider</div>
-                    <div className="mt-1 truncate">{candidateProvider}</div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 uppercase tracking-[0.14em]">Provider</span>
+                    <span className="text-slate-200 truncate max-w-[120px]">{candidateProvider}</span>
                   </div>
-                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Status</div>
-                    <div className="mt-1">{String(candidateSnapshot?.status_code ?? "—")}</div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 uppercase tracking-[0.14em]">Status</span>
+                    <span className="text-slate-200">{String(candidateSnapshot?.status_code ?? "—")}</span>
                   </div>
-                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                    <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Latency</div>
-                    <div className="mt-1">{formatDurationMs((attempt?.replay ?? {}).avg_latency_ms)}</div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 uppercase tracking-[0.14em]">Latency</span>
+                    <span className="text-slate-200">{formatDurationMs((attempt?.replay ?? {}).avg_latency_ms)}</span>
                   </div>
                 </div>
-                <div className="mt-2 grid grid-cols-3 gap-1.5">
-                  <MetricTile label="Attempted" value={Number((attempt?.replay ?? {}).attempted ?? 0)} />
-                  <MetricTile
-                    label="Succeeded"
-                    value={Number((attempt?.replay ?? {}).succeeded ?? 0)}
-                    tone="success"
-                  />
-                  <MetricTile
-                    label="Failed"
-                    value={Number((attempt?.replay ?? {}).failed ?? 0)}
-                    tone={Number((attempt?.replay ?? {}).failed ?? 0) > 0 ? "danger" : "default"}
-                  />
+                <div className="mt-4 flex gap-3 text-[11px]">
+                  <div className="flex-1">
+                    <div className="text-slate-500 uppercase tracking-[0.14em] mb-0.5">Attempted</div>
+                    <div className="text-slate-200 font-bold">{Number((attempt?.replay ?? {}).attempted ?? 0)}</div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-slate-500 uppercase tracking-[0.14em] mb-0.5">Succeeded</div>
+                    <div className="text-emerald-400 font-bold">{Number((attempt?.replay ?? {}).succeeded ?? 0)}</div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-slate-500 uppercase tracking-[0.14em] mb-0.5">Failed</div>
+                    <div className={Number((attempt?.replay ?? {}).failed ?? 0) > 0 ? "text-rose-400 font-bold" : "text-slate-200 font-bold"}>
+                      {Number((attempt?.replay ?? {}).failed ?? 0)}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-2">
                   Signals at a glance
                 </div>
-                <div className="mt-1 text-[11px] text-slate-400">
+                <div className="mb-2 text-[10px] text-slate-400">
                   {!signalsChecksRaw
                     ? "No signals payload."
                     : failedSignals.length > 0
                       ? `${failedSignals.length} failing`
                       : `${signalsPassed.length}/${signalsApplicable.length || 0} passed`}
                 </div>
-                <div className="mt-2 max-h-52 space-y-1.5 overflow-y-auto custom-scrollbar pr-0.5">
+                <div className="max-h-52 space-y-2 overflow-y-auto custom-scrollbar pr-1">
                   {!signalsChecksRaw ? (
                     <div className="text-xs text-slate-500">—</div>
                   ) : (
                     signalsRows.map(row => (
-                      <div
-                        key={row.id}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-white/6 bg-black/25 px-2 py-1.5 text-[11px]"
-                      >
+                      <div key={row.id} className="flex items-center justify-between gap-2 text-[11px]">
                         <span className="min-w-0 truncate text-slate-300">{row.label}</span>
                         <span
                           className={clsx(
-                            "shrink-0 font-black uppercase",
+                            "shrink-0 font-bold uppercase text-[10px]",
                             row.pass
                               ? "text-emerald-400/90"
                               : row.status === "fail"
@@ -1156,26 +1174,26 @@ function AttemptDetailOverlay({
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-1">
                   Policy
                 </div>
-                <p className="mt-1 text-sm font-semibold text-slate-200">
-                  {policyRows.length === 0 ? "Clean" : `${policyRows.length} violation(s)`}
-                </p>
-                <p className="mt-1 text-[11px] text-slate-500">Open Summary for messages.</p>
+                <div className="text-[11px] text-slate-300">
+                  {policyRows.length === 0 ? (
+                    "Clean"
+                  ) : (
+                    <span className="text-rose-400">{policyRows.length} violation(s)</span>
+                  )}
+                </div>
               </div>
 
-              <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-1">
                   Tool behavior
                 </div>
-                <div className="mt-2 space-y-1 text-xs text-slate-300">
-                  <div>Edits {Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0)}</div>
-                  <div>
-                    Divergence{" "}
-                    {percentFromRate(Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0) / 100)}
-                  </div>
+                <div className="text-[11px] text-slate-300">
+                  Edits {Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0)} · Div{" "}
+                  {percentFromRate(Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0) / 100)}
                 </div>
               </div>
             </div>
