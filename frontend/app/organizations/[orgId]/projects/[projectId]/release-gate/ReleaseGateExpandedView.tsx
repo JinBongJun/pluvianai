@@ -426,7 +426,8 @@ function AttemptDetailOverlay({
   baselineSnapshot: Record<string, unknown> | null;
 }) {
   const [showTestedRaw, setShowTestedRaw] = useState(false);
-  const [showResponseDiff, setShowResponseDiff] = useState(false);
+  // Paid UX: blocked cases should show "answer change" immediately.
+  const [showResponseDiff, setShowResponseDiff] = useState(() => !Boolean(attempt?.pass));
 
   const baselineInput = String(
     baselineSnapshot?.user_message ?? baselineSnapshot?.request_prompt ?? "No input text captured."
@@ -599,30 +600,9 @@ function AttemptDetailOverlay({
     .trim()
     .toLowerCase();
   const baselineCaptureReason = String((attempt as any)?.baseline_snapshot?.capture_reason ?? "").trim();
-  const candidateResponseDataKeys = Array.isArray((candidateSnapshot as any)?.response_data_keys)
-    ? ((candidateSnapshot as any).response_data_keys as unknown[])
-    : [];
   const candidateResponseStatus = String((candidateSnapshot as any)?.response_preview_status ?? "")
     .trim()
     .toLowerCase();
-  const candidateExtractPath = String((candidateSnapshot as any)?.response_extract_path ?? "").trim();
-  const candidateExtractReason = String((candidateSnapshot as any)?.response_extract_reason ?? "").trim();
-  const requestFallbackStage = String((candidateSnapshot as any)?.request_fallback_stage ?? "").trim();
-  const requestFallbackAttempts = Array.isArray((candidateSnapshot as any)?.request_fallback_attempts)
-    ? (((candidateSnapshot as any).request_fallback_attempts as unknown[])
-        .map(v => String(v ?? "").trim())
-        .filter(Boolean) as string[])
-    : [];
-  const candidateResponseUsedFallback =
-    candidateExtractReason === "serialized_json_fallback" ||
-    candidateExtractReason === "serialized_json_exception_fallback" ||
-    candidateExtractReason === "parser_exception_fallback" ||
-    candidateExtractReason === "extract_meta_runtime_error" ||
-    candidateExtractReason === "extract_meta_invalid" ||
-    Boolean(requestFallbackStage);
-  const baselineResponseDataKeys = Array.isArray((attempt as any)?.baseline_snapshot?.response_data_keys)
-    ? (((attempt as any).baseline_snapshot.response_data_keys as unknown[]) ?? [])
-    : [];
   const responseDiffLines = useMemo(() => {
     if (!baselineResponse || !candidateResponse) return [];
     return computeSimpleLineDiff(baselineResponse, candidateResponse, 200);
@@ -632,6 +612,9 @@ function AttemptDetailOverlay({
   const decisionReasons: string[] = Array.isArray(attempt?.failure_reasons)
     ? (attempt.failure_reasons as string[])
     : [];
+  // For paid UX: focus on what actually failed (not generic reasons).
+  const failedSignals = signalsRows.filter(r => r.status === "fail");
+  const signalsToRender = failedSignals.length > 0 ? failedSignals : signalsRows.slice(0, 3);
   type SeverityRank = 0 | 1 | 2 | 3;
   type DecisionSeverity = "low" | "medium" | "high" | "critical";
   type DecisionIssue = {
@@ -693,6 +676,7 @@ function AttemptDetailOverlay({
           : "No meaningful behavior diff detected.",
     },
   ];
+  const failedGates = gateRows.filter(g => g.status === "fail");
   const decisionHeadline = (() => {
     const toHeadline = (reason: string) => `Reason: ${reason}`;
     if (pass) return toHeadline("No blocking regressions detected.");
@@ -798,20 +782,36 @@ function AttemptDetailOverlay({
                 <div className="mt-1 text-sm font-bold text-white">
                   {pass ? "RELEASE READY" : "RELEASE BLOCKED"}
                 </div>
-                <div className="mt-1 text-xs text-slate-200">{decisionHeadline}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-200">
+                  {decisionHeadline.replace(/^Reason:\s*/i, "")}
+                </div>
               </div>
               <div className="text-xs text-slate-300">
                 {baselineModel} → {candidateModel} · {formatDurationMs((attempt?.replay ?? {}).avg_latency_ms)}
               </div>
             </div>
-            {!pass && decisionReasons.length > 0 && (
+            {!pass && (
               <div className="mt-2 space-y-1 text-xs text-rose-100">
-                {decisionReasons.slice(0, 3).map((r: string, i: number) => (
-                  <div key={`${r}-${i}`}>- {r}</div>
-                ))}
-                {decisionReasons.length > 3 && (
-                  <div className="text-slate-300">+{decisionReasons.length - 3} more</div>
-                )}
+                {(() => {
+                  const lines: string[] = [];
+                  failedGates.slice(0, 2).forEach(g => {
+                    if (lines.length >= 2) return;
+                    if (g.reason) lines.push(g.reason);
+                  });
+                  if (lines.length < 2 && failedSignals.length > 0) {
+                    const s = failedSignals[0];
+                    const why = signalsDetailsRaw ? formatSignalWhy(s.id, (signalsDetailsRaw as any)?.[s.id]) : "";
+                    if (why) lines.push(why);
+                    else if (s.label) lines.push(s.label);
+                  }
+                  if (lines.length < 2 && policyRows.length > 0) {
+                    if (policyRows[0]?.message) lines.push(policyRows[0].message);
+                  }
+                  if (lines.length < 2 && decisionReasons.length > 0) {
+                    if (decisionReasons[0]) lines.push(decisionReasons[0]);
+                  }
+                  return lines.slice(0, 2).map((l, i) => <div key={`${l}-${i}`}>- {l}</div>);
+                })()}
               </div>
             )}
           </div>
@@ -857,17 +857,34 @@ function AttemptDetailOverlay({
                   ))}
                 </div>
 
-                {Array.isArray(attempt?.failure_reasons) && attempt.failure_reasons.length > 0 ? (
+                {!pass ? (
                   <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
                     <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                      Why failed
+                      Eval summary (Why)
                     </div>
                     <div className="mt-2 space-y-1.5">
-                      {attempt.failure_reasons.slice(0, 5).map((r: string, i: number) => (
-                        <div key={`${r}-${i}`} className="text-xs text-slate-200">
-                          {r}
-                        </div>
-                      ))}
+                      {failedSignals.length > 0 ? (
+                        failedSignals.slice(0, 3).map((s, i) => {
+                          const why = signalsDetailsRaw ? formatSignalWhy(s.id, (signalsDetailsRaw as any)?.[s.id]) : "";
+                          return (
+                            <div key={`${s.id}-${i}`} className="text-xs text-slate-200">
+                              {s.label}: {why || "FAIL"}
+                            </div>
+                          );
+                        })
+                      ) : failedGates.length > 0 ? (
+                        failedGates.slice(0, 2).map((g, i) => (
+                          <div key={`${g.id}-${i}`} className="text-xs text-slate-200">
+                            {g.label}: {g.reason}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-xs text-slate-200">{decisionReasons[0] || "Blocking issue detected."}</div>
+                      )}
+
+                      {policyRows.length > 0 && (
+                        <div className="text-xs text-slate-200">Policy violations: {policyRows.length}</div>
+                      )}
                     </div>
                   </div>
                 ) : null}
@@ -882,7 +899,7 @@ function AttemptDetailOverlay({
                       onClick={() => setShowResponseDiff(v => !v)}
                       className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-200 hover:bg-white/10"
                     >
-                      {showResponseDiff ? "Hide diff" : "Show diff"}
+                      {showResponseDiff ? "Hide answer change" : "Show answer change"}
                     </button>
                   </div>
 
@@ -891,13 +908,7 @@ function AttemptDetailOverlay({
                       <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
                         Baseline
                       </div>
-                      {baselineResponseDataKeys.length > 0 && (
-                        <div className="mt-1 truncate text-[10px] text-slate-500">
-                          Keys: {baselineResponseDataKeys.slice(0, 6).map(k => String(k)).join(", ")}
-                          {baselineResponseDataKeys.length > 6 ? "…" : ""}
-                        </div>
-                      )}
-                      <p className="mt-2 max-h-28 overflow-auto custom-scrollbar text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
+                      <p className="mt-2 max-h-64 overflow-auto custom-scrollbar text-sm leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
                         {baselineResponse
                           ? baselineResponse
                           : baselineResponseStatus === "not_captured"
@@ -913,28 +924,7 @@ function AttemptDetailOverlay({
                       <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
                         Candidate
                       </div>
-                      {candidateResponseDataKeys.length > 0 && (
-                        <div className="mt-1 truncate text-[10px] text-slate-500">
-                          Keys: {candidateResponseDataKeys.slice(0, 6).map(k => String(k)).join(", ")}
-                          {candidateResponseDataKeys.length > 6 ? "…" : ""}
-                        </div>
-                      )}
-                      {candidateResponse && candidateResponseUsedFallback && (
-                        <div className="mt-1 text-[10px] text-amber-300">
-                          Preview recovered via fallback path
-                          {requestFallbackStage ? ` (${requestFallbackStage})` : ""}.
-                          {requestFallbackAttempts.length > 1
-                            ? ` Tried: ${requestFallbackAttempts.join(" -> ")}.`
-                            : ""}
-                        </div>
-                      )}
-                      {!candidateResponse && (candidateExtractPath || candidateExtractReason) && (
-                        <div className="mt-1 space-y-0.5 text-[10px] text-slate-500">
-                          {candidateExtractPath ? <div>Path: {candidateExtractPath}</div> : null}
-                          {candidateExtractReason ? <div>Why empty: {candidateExtractReason}</div> : null}
-                        </div>
-                      )}
-                      <p className="mt-2 max-h-28 overflow-auto custom-scrollbar text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
+                      <p className="mt-2 max-h-72 overflow-auto custom-scrollbar text-sm leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
                         {candidateResponse
                           ? candidateResponse
                           : candidateResponseStatus === "tool_calls_only"
@@ -949,7 +939,7 @@ function AttemptDetailOverlay({
                   {showResponseDiff && (
                     <div className="mt-3 rounded-xl border border-white/8 bg-black/30 p-2.5">
                       <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
-                        Diff (lines)
+                        Answer change (lines)
                       </div>
                       {baselineResponse && candidateResponse ? (
                         <pre className="mt-2 max-h-40 overflow-auto custom-scrollbar text-[11px] leading-relaxed whitespace-pre-wrap break-words text-slate-200">
@@ -969,7 +959,7 @@ function AttemptDetailOverlay({
                   onClick={() => setShowTestedRaw(v => !v)}
                   className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-200 hover:bg-white/10"
                 >
-                  {showTestedRaw ? "Hide debug JSON" : "View full raw debug JSON"}
+                  {showTestedRaw ? "Hide Advanced JSON" : "Advanced: View full raw debug JSON"}
                 </button>
                 {showTestedRaw && (
                   <pre className="rounded-2xl border border-white/8 bg-black/30 p-3 text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-words">
@@ -980,7 +970,7 @@ function AttemptDetailOverlay({
             </div>
           </div>
 
-          <div className="w-[330px] min-w-[330px] p-5 space-y-3 overflow-y-auto custom-scrollbar">
+          <div className="w-[360px] min-w-[360px] p-5 space-y-3 overflow-y-auto custom-scrollbar">
             <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
                 Replay meta
@@ -1023,12 +1013,14 @@ function AttemptDetailOverlay({
                 Signals checks (Why)
               </div>
               <div className="mt-1 text-[11px] text-slate-400">
-                {signalsChecksRaw ? (
+                {!signalsChecksRaw ? (
+                  <>No signals captured for this attempt.</>
+                ) : failedSignals.length > 0 ? (
+                  <>{failedSignals.length} failing signal(s)</>
+                ) : (
                   <>
                     {signalsPassed.length}/{signalsApplicable.length || 0} checks passed
                   </>
-                ) : (
-                  <>No signals captured for this attempt.</>
                 )}
               </div>
               <div className="mt-2 space-y-2">
@@ -1039,7 +1031,7 @@ function AttemptDetailOverlay({
                 ) : signalsRows.length === 0 ? (
                   <div className="text-xs text-slate-500">No signal checks returned.</div>
                 ) : (
-                  signalsRows.map(row => (
+                  signalsToRender.map((row) => (
                     <div
                       key={row.id}
                       className={clsx(
@@ -1084,7 +1076,7 @@ function AttemptDetailOverlay({
                     This attempt produced no BehaviorRule violations.
                   </div>
                 ) : (
-                  policyRows.slice(0, 6).map(row => (
+                  policyRows.slice(0, 3).map(row => (
                     <div
                       key={row.key}
                       className="rounded-xl border border-rose-500/20 bg-rose-500/8 px-2.5 py-2 text-xs text-rose-200"
@@ -1119,15 +1111,16 @@ function AttemptDetailOverlay({
                   {percentFromRate(Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0) / 100)}
                 </div>
               </div>
-              {Array.isArray(attempt?.failure_reasons) && attempt.failure_reasons.length > 0 && (
-                <div className="mt-3 space-y-1.5">
-                  {attempt.failure_reasons.slice(0, 4).map((r: string, i: number) => (
-                    <div key={`${r}-${i}`} className="rounded-lg bg-rose-500/10 px-2.5 py-2 text-xs text-rose-200">
-                      {r}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="mt-3 text-xs text-slate-200">
+                {(() => {
+                  const seqEdits = Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0);
+                  const toolDivPct = Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0);
+                  const isStable = seqEdits === 0 && toolDivPct === 0;
+                  return isStable
+                    ? "Tool calls pattern unchanged (or no tool calls in both runs)."
+                    : `Tool calls changed (sequence edits ${seqEdits}, divergence ${percentFromRate(toolDivPct / 100)}).`;
+                })()}
+              </div>
             </div>
           </div>
         </div>
