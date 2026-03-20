@@ -410,7 +410,7 @@ function MetricTile({
   );
 }
 
-type AttemptDetailMainTab = "summary" | "responses" | "diff" | "debug";
+type AttemptDetailMainTab = "summary" | "comparison" | "debug";
 
 function AttemptDetailOverlay({
   open,
@@ -488,51 +488,57 @@ function AttemptDetailOverlay({
   const signalsApplicable = signalsRows.filter(r => r.applicable);
   const signalsPassed = signalsApplicable.filter(r => r.pass);
 
-  const formatSignalWhy = (id: string, raw: unknown): string => {
+  const formatSignalValue = (id: string, raw: unknown, pass: boolean): React.ReactNode => {
     const d = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
     const status = String(d.status ?? "").trim().toLowerCase();
-    if (!status) return "";
-    if (id === "empty") {
-      const min = d.min_chars;
-      const actual = d.actual_chars;
-      return `min_chars=${String(min ?? "—")}, actual_chars=${String(actual ?? "—")}`;
-    }
-    if (id === "latency") {
-      const failMs = d.fail_ms;
-      const actualMs = d.actual_ms;
-      return `fail_ms=${String(failMs ?? "—")}, actual_ms=${String(actualMs ?? "—")}`;
-    }
-    if (id === "status_code") {
-      const failFrom = d.fail_from;
-      const actual = d.actual_status;
-      return `fail_from=${String(failFrom ?? "—")}, actual=${String(actual ?? "—")}`;
-    }
+    if (!status) return null;
+
     if (id === "length") {
-      const failRatio = d.fail_ratio;
-      const ratio = d.ratio;
-      const baselineLen = d.baseline_len;
-      const actual = d.actual_chars;
-      return `fail_ratio=${String(failRatio ?? "—")}, ratio=${String(ratio ?? "—")}, baseline_len=${String(
-        baselineLen ?? "—"
-      )}, actual_chars=${String(actual ?? "—")}`;
+      const failRatio = Number(d.fail_ratio);
+      const actualChars = Number(d.actual_chars);
+      const baselineLen = Number(d.baseline_len);
+      if (!Number.isFinite(baselineLen) || !Number.isFinite(actualChars)) return null;
+      
+      const maxAllowed = Math.round(baselineLen * (1 + (Number.isFinite(failRatio) ? failRatio : 0.5)));
+      const pct = Math.min(100, Math.max(0, (actualChars / maxAllowed) * 100));
+      
+      return (
+        <div className="mt-2 space-y-1.5 w-full max-w-md">
+          <div className="flex justify-between text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+            <span>Base {baselineLen} chars</span>
+            <span className={pass ? "text-emerald-400" : "text-rose-400"}>Actual {actualChars} chars</span>
+            <span>Max {maxAllowed}</span>
+          </div>
+          <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden flex">
+            <div className={clsx("h-full transition-all", pass ? "bg-emerald-500" : "bg-rose-500")} style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      );
     }
-    if (id === "repetition") {
-      const fail = d.fail_line_repeats;
-      const max = d.max_line_repeats;
-      return `fail_line_repeats=${String(fail ?? "—")}, max_line_repeats=${String(max ?? "—")}`;
+
+    if (id === "latency") {
+      const failMs = Number(d.fail_ms);
+      const actualMs = Number(d.actual_ms);
+      if (!Number.isFinite(failMs) || !Number.isFinite(actualMs)) return null;
+      
+      const pct = Math.min(100, Math.max(0, (actualMs / failMs) * 100));
+      return (
+        <div className="mt-2 space-y-1.5 w-full max-w-md">
+          <div className="flex justify-between text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+            <span>Actual {actualMs}ms</span>
+            <span className={pass ? "text-slate-400" : "text-rose-400"}>Limit {failMs}ms</span>
+          </div>
+          <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden flex">
+            <div className={clsx("h-full transition-all", pass ? "bg-emerald-500" : "bg-rose-500")} style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      );
     }
-    if (id === "json") {
-      const mode = d.mode;
-      const checked = d.checked;
-      const parsedOk = d.parsed_ok;
-      return `mode=${String(mode ?? "—")}, checked=${String(checked ?? "—")}, parsed_ok=${String(
-        parsedOk ?? "—"
-      )}`;
-    }
-    if (id === "refusal") {
-      const matched = d.matched;
-      return `matched=${String(matched ?? "—")}`;
-    }
+    
+    return null;
+  };
+
+  const formatSignalWhy = (id: string, raw: unknown): string => {
     return "";
   };
 
@@ -775,7 +781,7 @@ function AttemptDetailOverlay({
         </div>
 
         <div className="flex min-h-0 flex-1">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-white/8">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div
               role="tablist"
               aria-label="Attempt detail"
@@ -784,28 +790,22 @@ function AttemptDetailOverlay({
               {(
                 [
                   { id: "summary" as const, label: "Summary" },
-                  { id: "responses" as const, label: "Responses" },
-                  { id: "diff" as const, label: "Diff", needsBodies: true as const },
-                  { id: "debug" as const, label: "Debug" },
+                  { id: "comparison" as const, label: "Comparison" },
+                  { id: "debug" as const, label: "Raw Trace" },
                 ] as const
               ).map(tab => {
-                const disabled = "needsBodies" in tab && tab.needsBodies && !diffTabEnabled;
                 return (
                   <button
                     key={tab.id}
                     type="button"
                     role="tab"
                     aria-selected={detailMainTab === tab.id}
-                    disabled={disabled}
-                    onClick={() => {
-                      if (!disabled) setDetailMainTab(tab.id);
-                    }}
+                    onClick={() => setDetailMainTab(tab.id)}
                     className={clsx(
                       "rounded-lg px-3 py-1.5 text-[11px] font-semibold tracking-wide transition-colors",
                       detailMainTab === tab.id
                         ? "bg-white/[0.12] text-white shadow-sm"
-                        : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200",
-                      disabled && "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-slate-400"
+                        : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
                     )}
                   >
                     {tab.label}
@@ -814,390 +814,265 @@ function AttemptDetailOverlay({
               })}
             </div>
 
-            <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-5">
+            <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-5 md:p-8">
               {detailMainTab === "summary" && (
-                <div className="space-y-4">
+                <div className="max-w-4xl mx-auto space-y-6">
                   <div
                     className={clsx(
-                      "rounded-2xl border px-4 py-3.5",
+                      "rounded-2xl border px-5 py-4",
                       pass
-                        ? "border-emerald-500/25 bg-emerald-500/[0.07]"
-                        : "border-rose-500/25 bg-rose-500/[0.07]"
+                        ? "border-emerald-500/25 bg-emerald-500/[0.04]"
+                        : "border-rose-500/25 bg-rose-500/[0.04]"
                     )}
                   >
-                    <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                      Decision
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className={clsx(
+                        "flex items-center gap-2 text-sm font-bold uppercase tracking-wider",
+                        pass ? "text-emerald-400" : "text-rose-400"
+                      )}>
+                        {pass ? "Release Ready" : "Release Blocked"}
+                      </div>
+                      <div className="h-4 w-px bg-white/20 hidden sm:block" />
+                      <p className="text-sm font-medium text-slate-200">
+                        {decisionHeadline.replace(/^Reason:\s*/i, "")}
+                      </p>
                     </div>
-                    <div className="mt-1 text-base font-bold text-white">
-                      {pass ? "Release ready" : "Release blocked"}
-                    </div>
-                    <p className="mt-1 text-sm font-medium leading-snug text-slate-200">
-                      {decisionHeadline.replace(/^Reason:\s*/i, "")}
-                    </p>
                   </div>
 
-                  <div className="rounded-2xl border border-white/8 bg-black/25 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                        Input
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 px-1">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                        User Input
                       </div>
                       <button
                         type="button"
                         onClick={() => setInputExpanded(v => !v)}
-                        className="text-[10px] font-bold uppercase tracking-wider text-fuchsia-300/90 hover:text-fuchsia-200"
+                        className="text-[10px] font-bold uppercase tracking-wider text-fuchsia-300/80 hover:text-fuchsia-200 transition-colors"
                       >
                         {inputExpanded ? "Collapse" : "Expand"}
                       </button>
                     </div>
-                    <p
-                      className={clsx(
-                        "mt-2 text-sm leading-relaxed text-slate-200 whitespace-pre-wrap break-words",
-                        !inputExpanded && "line-clamp-4 max-h-[4.5rem] overflow-hidden"
-                      )}
-                    >
-                      {inputPreview}
-                    </p>
+                    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                      <p
+                        className={clsx(
+                          "text-sm leading-relaxed text-slate-300 whitespace-pre-wrap break-words",
+                          !inputExpanded && "line-clamp-2"
+                        )}
+                      >
+                        {inputPreview}
+                      </p>
+                    </div>
                   </div>
 
                   {attempt?.trace_id ? (
-                    <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-slate-400">
-                      <span className="font-black uppercase tracking-wider text-slate-500">Trace</span>{" "}
-                      <span className="break-all text-slate-300">{String(attempt.trace_id)}</span>
+                    <div className="flex items-center gap-3 px-1">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Trace</span>
+                      <span className="text-xs font-mono text-slate-400">{String(attempt.trace_id)}</span>
                     </div>
                   ) : null}
 
-                  <div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                      Gate results
-                    </div>
-                    <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
-                      {gateRows.map(g => (
-                        <div
-                          key={g.id}
-                          className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
-                              {g.label}
-                            </div>
-                            <span
-                              className={clsx(
-                                "text-[10px] font-black uppercase",
-                                g.status === "fail"
-                                  ? "text-rose-300"
-                                  : g.status === "pass"
-                                    ? "text-emerald-300"
-                                    : "text-slate-500"
-                              )}
-                            >
-                              {g.status === "not_applicable" ? "N/A" : g.status.toUpperCase()}
-                            </span>
-                          </div>
-                          <div className="mt-1 break-words text-xs text-slate-300">{g.reason}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                    <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                      Signal checks
-                    </div>
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      Technical detail for failures lives here only — sidebar shows status at a glance.
-                    </p>
-                    <div className="mt-3 space-y-2">
-                      {!signalsChecksRaw ? (
-                        <div className="text-xs text-slate-500">
-                          Signals were not returned for this attempt.
-                        </div>
-                      ) : signalsRows.length === 0 ? (
-                        <div className="text-xs text-slate-500">No signal rows.</div>
-                      ) : (
-                        signalsRows.map(row => {
-                          const why =
-                            signalsDetailsRaw && row.status === "fail"
-                              ? formatSignalWhy(row.id, (signalsDetailsRaw as any)?.[row.id])
-                              : "";
-                          return (
-                            <div
-                              key={row.id}
-                              className={clsx(
-                                "rounded-xl border px-3 py-2",
-                                row.pass
-                                  ? "border-emerald-500/15 bg-emerald-500/[0.06]"
-                                  : row.status === "fail"
-                                    ? "border-rose-500/20 bg-rose-500/[0.06]"
-                                    : "border-white/8 bg-black/20"
-                              )}
-                            >
-                              <div className="flex items-center justify-between gap-2 text-xs">
-                                <span className="min-w-0 font-medium text-slate-200">{row.label}</span>
-                                <span className="shrink-0 font-black text-[10px] uppercase text-slate-400">
-                                  {row.status === "not_applicable" ? "N/A" : row.pass ? "Pass" : "Fail"}
-                                </span>
-                              </div>
-                              {why ? (
-                                <div className="mt-1.5 font-mono text-[11px] leading-relaxed break-words text-slate-400">
-                                  {why}
+                  <div className="pt-4 space-y-6">
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-400/80" />
+                        Output Quality (Eval)
+                      </h3>
+                      <div className="space-y-2">
+                        {!signalsChecksRaw ? (
+                          <div className="text-xs text-slate-500 pl-4">No eval signals returned.</div>
+                        ) : signalsRows.length === 0 ? (
+                          <div className="text-xs text-slate-500 pl-4">No signal rows.</div>
+                        ) : (
+                          signalsRows.map((row, rowIdx) => {
+                            const barNode =
+                              signalsDetailsRaw
+                                ? formatSignalValue(row.id, (signalsDetailsRaw as any)?.[row.id], row.pass)
+                                : null;
+                            return (
+                              <div
+                                key={row.id}
+                                className="rounded-xl border border-white/5 bg-white/[0.02] p-4"
+                              >
+                                <div className="flex items-center justify-between gap-4">
+                                  <span className="text-sm font-medium text-slate-200">{row.label}</span>
+                                  <span className="shrink-0 flex items-center gap-2">
+                                    {row.status === "not_applicable" ? (
+                                      <span className="text-[10px] font-bold uppercase text-slate-500">N/A</span>
+                                    ) : row.pass ? (
+                                      <span className="flex items-center gap-1.5">
+                                        <span className="text-[10px] font-bold uppercase text-emerald-400/80">Pass</span>
+                                        <span className="w-2 h-2 rounded-full bg-emerald-400/80 inline-block" />
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-1.5">
+                                        <span className="text-[10px] font-bold uppercase text-rose-400">Fail</span>
+                                        <span className="w-2 h-2 rounded-full bg-rose-400 inline-block" />
+                                      </span>
+                                    )}
+                                  </span>
                                 </div>
-                              ) : null}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-
-                  {policyRows.length > 0 ? (
-                    <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] p-3">
-                      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-rose-200/90">
-                        Policy violations
+                                {barNode}
+                              </div>
+                            );
+                          })
+                        )}
                       </div>
-                      <div className="mt-2 space-y-2">
-                        {policyRows.map(row => (
-                          <div key={row.key} className="rounded-xl border border-white/10 bg-black/30 px-3 py-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-semibold text-rose-100">{row.label}</span>
-                              {row.severity ? (
-                                <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-black uppercase text-slate-300">
-                                  {row.severity}
-                                </span>
-                              ) : null}
+                    </div>
+
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
+                        System & Policy
+                      </h3>
+                      <div className="space-y-2">
+                        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-sm font-medium text-slate-200">Tool Divergence</span>
+                            <div className="flex flex-col items-end">
+                              <span className={clsx(
+                                "text-sm font-medium",
+                                Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0) === 0 ? "text-slate-400" : "text-rose-300"
+                              )}>
+                                {Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0)} sequence edits
+                              </span>
+                              <span className="text-[10px] text-slate-500 uppercase">
+                                {percentFromRate(Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0) / 100)} Divergence
+                              </span>
                             </div>
-                            {row.message ? (
-                              <p className="mt-1 text-[11px] leading-relaxed text-rose-100/85">
-                                {row.message}
-                              </p>
-                            ) : null}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
+                        </div>
 
-                  <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                    <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                      Tool behavior
-                    </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                      <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                        Sequence edits {Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0)}
+                        {policyRows.length > 0 ? (
+                          <div className="rounded-xl border border-rose-500/20 bg-rose-500/[0.04] p-4">
+                            <div className="flex items-center justify-between gap-4 mb-3">
+                              <span className="text-sm font-medium text-rose-200">Policy Violations</span>
+                              <span className="text-xs font-bold text-rose-400">{policyRows.length} found</span>
+                            </div>
+                            <div className="space-y-2">
+                              {policyRows.map(row => (
+                                <div key={row.key} className="rounded-lg bg-black/40 px-3 py-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-semibold text-rose-100">{row.label}</span>
+                                    {row.severity && (
+                                      <span className="text-[10px] font-bold uppercase text-rose-400/80">
+                                        {row.severity}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {row.message && (
+                                    <p className="mt-1 text-[11px] leading-relaxed text-rose-200/70">
+                                      {row.message}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                            <div className="flex items-center justify-between gap-4">
+                              <span className="text-sm font-medium text-slate-200">Policy Violations</span>
+                              <span className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase text-emerald-400/80">Clean</span>
+                                <div className="w-2 h-2 rounded-full bg-emerald-400/80" />
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-200">
-                        Tool divergence{" "}
-                        {percentFromRate(Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0) / 100)}
-                      </div>
                     </div>
-                    <p className="mt-2 text-xs text-slate-400">
-                      {(() => {
-                        const seqEdits = Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0);
-                        const toolDivPct = Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0);
-                        const isStable = seqEdits === 0 && toolDivPct === 0;
-                        return isStable
-                          ? "Tool call pattern matches baseline (or no tools in either run)."
-                          : `Calls diverged: ${seqEdits} sequence edit(s), ${percentFromRate(toolDivPct / 100)} tool divergence.`;
-                      })()}
-                    </p>
                   </div>
                 </div>
               )}
 
-              {detailMainTab === "responses" && (
-                <div className="flex min-h-[min(520px,calc(86vh-220px))] flex-col gap-3 md:min-h-[420px]">
-                  <p className="text-[11px] text-slate-500">
-                    Baseline ({baselineModel}) vs candidate ({candidateModel}). Each column scrolls
-                    independently.
-                  </p>
-                  <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-2">
-                    <div className="flex min-h-[280px] flex-col rounded-2xl border border-white/8 bg-black/30 p-3 md:min-h-0">
-                      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                        Baseline
+              {detailMainTab === "comparison" && (
+                <div className="flex min-h-[calc(86vh-180px)] flex-col gap-4">
+                  <div className="flex items-center justify-between px-1">
+                    <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+                      Baseline vs Candidate
+                    </p>
+                    <div className="text-[11px] text-slate-400">
+                      Line diffs are highlighted in green/red
+                    </div>
+                  </div>
+                  <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div className="flex flex-col rounded-2xl border border-white/5 bg-[#0e0f11] overflow-hidden">
+                      <div className="border-b border-white/5 bg-black/40 px-4 py-2.5 flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                          Baseline
+                        </span>
+                        <span className="text-[10px] text-slate-400">{baselineModel}</span>
                       </div>
-                      <div className="custom-scrollbar mt-2 min-h-0 flex-1 overflow-y-auto text-sm leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
+                      <div className="custom-scrollbar p-4 min-h-0 flex-1 overflow-y-auto text-[13px] leading-[1.6] text-slate-300 font-mono whitespace-pre-wrap break-words">
                         {baselineResponse
                           ? baselineResponse
                           : baselineResponseStatus === "not_captured"
-                            ? `Baseline response not captured (original logs did not store response text).${
-                                baselineCaptureReason ? ` (${baselineCaptureReason})` : ""
-                              }`
+                            ? `Baseline response not captured (${baselineCaptureReason || "no reason"}).`
                             : baselineResponseStatus === "empty"
                               ? "Baseline response is empty."
                               : "Baseline response preview unavailable."}
                       </div>
                     </div>
-                    <div className="flex min-h-[280px] flex-col rounded-2xl border border-white/8 bg-black/30 p-3 md:min-h-0">
-                      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                        Candidate
+                    <div className="flex flex-col rounded-2xl border border-white/5 bg-[#0e0f11] overflow-hidden">
+                      <div className="border-b border-white/5 bg-black/40 px-4 py-2.5 flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                          Candidate
+                        </span>
+                        <span className="text-[10px] text-slate-400">{candidateModel}</span>
                       </div>
-                      <div className="custom-scrollbar mt-2 min-h-0 flex-1 overflow-y-auto text-sm leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
-                        {candidateResponse
-                          ? candidateResponse
-                          : candidateResponseStatus === "tool_calls_only"
-                            ? "Candidate returned tool calls only (no assistant text)."
-                            : candidateResponseStatus === "empty"
-                              ? "Candidate response text is empty. Check extractor path/reason in Debug."
-                              : "—"}
+                      <div className="custom-scrollbar p-4 min-h-0 flex-1 overflow-y-auto text-[13px] leading-[1.6] font-mono whitespace-pre-wrap break-words">
+                        {!candidateResponse ? (
+                          <span className="text-slate-500">
+                            {candidateResponseStatus === "tool_calls_only"
+                              ? "Candidate returned tool calls only (no assistant text)."
+                              : candidateResponseStatus === "empty"
+                                ? "Candidate response text is empty."
+                                : "—"}
+                          </span>
+                        ) : responseDiffLines.length === 0 ? (
+                          <span className="text-slate-300">{candidateResponse}</span>
+                        ) : (
+                          <div className="space-y-0 text-slate-300">
+                            {responseDiffLines.map((line, idx) => {
+                              const isAdded = line.startsWith("+");
+                              const isRemoved = line.startsWith("-");
+                              if (isRemoved) return null; // Only show added or unchanged in candidate side
+                              const content = isAdded ? line.substring(2) : line.substring(2);
+                              return (
+                                <div
+                                  key={idx}
+                                  className={clsx(
+                                    "px-1 -mx-1 rounded-sm",
+                                    isAdded && "bg-emerald-500/15 text-emerald-200"
+                                  )}
+                                >
+                                  {content || "\n"}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {detailMainTab === "diff" && (
-                <div className="flex min-h-[min(480px,calc(86vh-200px))] flex-col">
-                  {!diffTabEnabled ? (
-                    <p className="text-sm text-slate-500">
-                      Need both baseline and candidate response text to compute a line diff.
-                    </p>
-                  ) : (
-                    <>
-                      <p className="mb-2 text-[11px] text-slate-500">
-                        Line-oriented diff (up to 200 lines). Open Responses for full text.
-                      </p>
-                      <pre className="custom-scrollbar min-h-0 flex-1 overflow-auto rounded-2xl border border-white/8 bg-[#0a0a0c] p-4 font-mono text-[11px] leading-[1.6] break-all">
-                        {responseDiffLines.length > 0 ? (
-                          responseDiffLines.map((line, idx) => {
-                            const isAdded = line.startsWith("+");
-                            const isRemoved = line.startsWith("-");
-                            return (
-                              <div
-                                key={idx}
-                                className={clsx(
-                                  "px-1 -mx-1 rounded-sm",
-                                  isAdded && "bg-emerald-500/10 text-emerald-300",
-                                  isRemoved && "bg-rose-500/10 text-rose-300",
-                                  !isAdded && !isRemoved && "text-slate-400"
-                                )}
-                              >
-                                {line}
-                              </div>
-                            );
-                          })
-                        ) : (
-                          <div className="text-slate-500">No line-level additions or removals (texts may match).</div>
-                        )}
-                      </pre>
-                    </>
-                  )}
-                </div>
-              )}
-
               {detailMainTab === "debug" && (
-                <div className="space-y-2">
-                  <p className="text-[11px] text-slate-500">
-                    Structured replay metadata for support — copy/paste friendly.
-                  </p>
-                  <pre className="custom-scrollbar max-h-[min(640px,calc(86vh-240px))] overflow-auto rounded-2xl border border-white/8 bg-black/40 p-3 text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap break-words">
+                <div className="max-w-4xl mx-auto space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-200">Raw Trace Payload</h3>
+                    <p className="text-[11px] text-slate-500">
+                      Internal trace data for support and debugging.
+                    </p>
+                  </div>
+                  <pre className="custom-scrollbar max-h-[min(700px,calc(86vh-200px))] overflow-auto rounded-2xl border border-white/8 bg-[#0a0a0c] p-5 font-mono text-[11px] leading-[1.6] text-slate-300 whitespace-pre-wrap break-words">
                     {candidatePayloadPreview}
                   </pre>
                 </div>
               )}
             </div>
           </div>
-
-          <aside className="custom-scrollbar flex w-[280px] min-w-[240px] shrink-0 flex-col overflow-y-auto border-l border-white/8 bg-transparent p-5">
-            <div className="space-y-6">
-              <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-2">
-                  Replay meta
-                </div>
-                <div className="space-y-3 text-[11px]">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 uppercase tracking-[0.14em]">Model</span>
-                    <span className="text-slate-200 truncate max-w-[120px]">{candidateModel}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 uppercase tracking-[0.14em]">Provider</span>
-                    <span className="text-slate-200 truncate max-w-[120px]">{candidateProvider}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 uppercase tracking-[0.14em]">Status</span>
-                    <span className="text-slate-200">{String(candidateSnapshot?.status_code ?? "—")}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 uppercase tracking-[0.14em]">Latency</span>
-                    <span className="text-slate-200">{formatDurationMs((attempt?.replay ?? {}).avg_latency_ms)}</span>
-                  </div>
-                </div>
-                <div className="mt-4 flex gap-3 text-[11px]">
-                  <div className="flex-1">
-                    <div className="text-slate-500 uppercase tracking-[0.14em] mb-0.5">Attempted</div>
-                    <div className="text-slate-200 font-bold">{Number((attempt?.replay ?? {}).attempted ?? 0)}</div>
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-slate-500 uppercase tracking-[0.14em] mb-0.5">Succeeded</div>
-                    <div className="text-emerald-400 font-bold">{Number((attempt?.replay ?? {}).succeeded ?? 0)}</div>
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-slate-500 uppercase tracking-[0.14em] mb-0.5">Failed</div>
-                    <div className={Number((attempt?.replay ?? {}).failed ?? 0) > 0 ? "text-rose-400 font-bold" : "text-slate-200 font-bold"}>
-                      {Number((attempt?.replay ?? {}).failed ?? 0)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-2">
-                  Signals at a glance
-                </div>
-                <div className="mb-2 text-[10px] text-slate-400">
-                  {!signalsChecksRaw
-                    ? "No signals payload."
-                    : failedSignals.length > 0
-                      ? `${failedSignals.length} failing`
-                      : `${signalsPassed.length}/${signalsApplicable.length || 0} passed`}
-                </div>
-                <div className="max-h-52 space-y-2 overflow-y-auto custom-scrollbar pr-1">
-                  {!signalsChecksRaw ? (
-                    <div className="text-xs text-slate-500">—</div>
-                  ) : (
-                    signalsRows.map(row => (
-                      <div key={row.id} className="flex items-center justify-between gap-2 text-[11px]">
-                        <span className="min-w-0 truncate text-slate-300">{row.label}</span>
-                        <span
-                          className={clsx(
-                            "shrink-0 font-bold uppercase text-[10px]",
-                            row.pass
-                              ? "text-emerald-400/90"
-                              : row.status === "fail"
-                                ? "text-rose-400/90"
-                                : "text-slate-500"
-                          )}
-                        >
-                          {row.status === "not_applicable" ? "N/A" : row.pass ? "OK" : "Fail"}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-1">
-                  Policy
-                </div>
-                <div className="text-[11px] text-slate-300">
-                  {policyRows.length === 0 ? (
-                    "Clean"
-                  ) : (
-                    <span className="text-rose-400">{policyRows.length} violation(s)</span>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-1">
-                  Tool behavior
-                </div>
-                <div className="text-[11px] text-slate-300">
-                  Edits {Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0)} · Div{" "}
-                  {percentFromRate(Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0) / 100)}
-                </div>
-              </div>
-            </div>
-          </aside>
         </div>
       </div>
     </div>
