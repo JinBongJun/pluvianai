@@ -52,7 +52,7 @@ def get_alert_stats(
     }
 
 
-@router.get("/{project_id}/alerts/{alert_id}", response_model=AlertResponse)
+@router.get("/{project_id}/alerts/{alert_id:int}", response_model=AlertResponse)
 def get_alert(
     project_id: int,
     alert_id: int,
@@ -92,7 +92,7 @@ def list_alerts(
     )
 
 
-@router.post("/{project_id}/alerts/{alert_id}/resolve", response_model=AlertResponse)
+@router.post("/{project_id}/alerts/{alert_id:int}/resolve", response_model=AlertResponse)
 def resolve_alert(
     project_id: int,
     alert_id: int,
