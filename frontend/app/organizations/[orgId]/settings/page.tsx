@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
 import { organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
+import { renameOrganization, deleteOrganization } from "@/lib/orgProjectMutations";
 import { useToast } from "@/components/ToastContainer";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import {
@@ -47,7 +49,7 @@ export default function OrgSettingsPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const { data: org, mutate: refetchOrg } = useSWR(
-    orgId ? ["organization", orgId] : null,
+    orgId ? orgKeys.detail(orgId) : null,
     async () => {
       try {
         const data = await organizationsAPI.get(orgId, { includeStats: false });
@@ -73,7 +75,7 @@ export default function OrgSettingsPage() {
 
     setSaving(true);
     try {
-      await organizationsAPI.update(orgId, { name: orgName });
+      await renameOrganization(orgId, { name: orgName }, { mutate });
       toast.showToast("Environment configuration updated successfully.", "success");
       refetchOrg();
     } catch (error: any) {
@@ -90,33 +92,11 @@ export default function OrgSettingsPage() {
     }
 
     try {
-      await organizationsAPI.delete(orgId);
-      toast.showToast(
-        "Environment archived. Permanent deletion is scheduled after the safety grace period.",
-        "success"
-      );
-      // Prevent SWR from revalidating deleted org (avoids 404 noise after delete)
-      mutate(
-        key =>
-          Array.isArray(key) &&
-          key.some(part => part === orgId || part === String(orgId)),
-        undefined,
-        { revalidate: false }
-      );
-      // Also remove this org from the global organizations list in header/sidebar
-      mutate(
-        "organizations",
-        (prev: any) =>
-          Array.isArray(prev) ? prev.filter((item: any) => item.id !== orgId && String(item.id) !== String(orgId)) : prev,
-        { revalidate: false }
-      );
-      // Also clear organization project lists for this org
-      mutate(
-        key => Array.isArray(key) && key[0] === "organization-projects-list" && key[1] === orgId,
-        undefined,
-        { revalidate: false }
-      );
-      router.replace("/organizations");
+      await deleteOrganization(orgId, {
+        mutate,
+        router,
+        toast: { showToast: toast.showToast },
+      });
     } catch (error: any) {
       toast.showToast(
         error.response?.data?.detail || "Failed to decommission environment.",
