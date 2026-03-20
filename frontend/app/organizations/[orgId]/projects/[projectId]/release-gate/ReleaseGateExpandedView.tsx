@@ -639,6 +639,11 @@ function AttemptDetailOverlay({
   const responseDataKeys = Array.isArray((candidateSnapshot as any)?.response_data_keys)
     ? ((candidateSnapshot as any)?.response_data_keys as unknown[]).map(key => String(key))
     : [];
+  const hasProviderError = Boolean(providerErrorPreview || providerErrorMessage);
+  const baselineLineCount = baselineResponse ? baselineResponse.split("\n").length : 0;
+  const candidateLineCount = candidateResponse ? candidateResponse.split("\n").length : 0;
+  const diffAddedCount = responseDiffLines.filter(line => line.startsWith("+")).length;
+  const diffRemovedCount = responseDiffLines.filter(line => line.startsWith("-")).length;
   type SeverityRank = 0 | 1 | 2 | 3;
   type DecisionSeverity = "low" | "medium" | "high" | "critical";
   type DecisionIssue = {
@@ -902,23 +907,23 @@ function AttemptDetailOverlay({
                         </div>
                       </div>
 
-                      <div>
-                        <div className="mb-3 flex items-center justify-between gap-2 px-1">
+                      <section className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
+                        <div className="mb-4 flex items-center justify-between gap-2">
                           <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
                             <div className="h-1.5 w-1.5 rounded-full bg-blue-400/80" />
                             Output Quality (Eval)
                           </h3>
                           <div className="text-[11px] text-slate-500">
-                            Signals are grouped as user-facing checks instead of raw payload keys.
+                            User-facing checks with clear pass/fail evidence.
                           </div>
                         </div>
                         <div className="grid gap-3 xl:grid-cols-2">
                           {!signalsChecksRaw ? (
-                            <div className="rounded-2xl border border-white/5 bg-white/[0.02] px-4 py-5 text-sm text-slate-500">
+                            <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-sm text-slate-500">
                               No eval signals returned.
                             </div>
                           ) : signalsRows.length === 0 ? (
-                            <div className="rounded-2xl border border-white/5 bg-white/[0.02] px-4 py-5 text-sm text-slate-500">
+                            <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-sm text-slate-500">
                               No signal rows.
                             </div>
                           ) : (
@@ -930,7 +935,7 @@ function AttemptDetailOverlay({
                               return (
                                 <div
                                   key={row.id}
-                                  className="rounded-2xl border border-white/5 bg-white/[0.02] p-4"
+                                  className="rounded-2xl border border-white/5 bg-black/20 p-4"
                                 >
                                   <div className="flex items-center justify-between gap-4">
                                     <span className="text-sm font-medium text-slate-200">{row.label}</span>
@@ -956,7 +961,7 @@ function AttemptDetailOverlay({
                             })
                           )}
                         </div>
-                      </div>
+                      </section>
                     </div>
 
                     <div className="space-y-4">
@@ -1013,7 +1018,7 @@ function AttemptDetailOverlay({
                         ) : null}
                       </div>
 
-                      <div>
+                      <section className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
                         <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
                           <div className="h-1.5 w-1.5 rounded-full bg-amber-400/80" />
                           System & Policy
@@ -1074,7 +1079,7 @@ function AttemptDetailOverlay({
                             </div>
                           )}
                         </div>
-                      </div>
+                      </section>
                     </div>
                   </div>
                 </div>
@@ -1082,34 +1087,34 @@ function AttemptDetailOverlay({
 
               {detailMainTab === "comparison" && (
                 <div className="flex min-h-[calc(90vh-220px)] flex-col gap-4">
-                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+                  <div className="grid gap-3 xl:grid-cols-4">
                     <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                        Baseline vs Candidate
-                      </div>
-                      <p className="mt-2 text-sm leading-relaxed text-slate-300">
-                        Read the original response on the left and the candidate on the right. Added or changed candidate lines are highlighted so review stays anchored on the regression surface area.
-                      </p>
+                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Baseline</div>
+                      <div className="mt-2 text-sm font-medium text-slate-100 break-words">{baselineModel}</div>
+                      <div className="mt-1 text-xs text-slate-400 tabular-nums">{baselineLineCount} lines</div>
                     </div>
                     <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div>
-                          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Baseline</div>
-                          <div className="mt-2 text-sm font-medium text-slate-100 break-words">{baselineModel}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Candidate</div>
-                          <div className="mt-2 text-sm font-medium text-slate-100 break-words">{candidateModel}</div>
-                        </div>
-                      </div>
+                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Candidate</div>
+                      <div className="mt-2 text-sm font-medium text-slate-100 break-words">{candidateModel}</div>
+                      <div className="mt-1 text-xs text-slate-400 tabular-nums">{candidateLineCount} lines</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Added / Changed</div>
+                      <div className="mt-2 text-sm font-medium text-emerald-300 tabular-nums">+{diffAddedCount}</div>
+                      <div className="mt-1 text-xs text-slate-400">Highlighted on the candidate side.</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Removed</div>
+                      <div className="mt-2 text-sm font-medium text-rose-300 tabular-nums">-{diffRemovedCount}</div>
+                      <div className="mt-1 text-xs text-slate-400">Track lines missing from the candidate output.</div>
                     </div>
                   </div>
                   <div className="flex items-center justify-between px-1">
                     <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
-                      Baseline vs Candidate
+                      Response Comparison
                     </p>
                     <div className="text-[11px] text-slate-400">
-                      Line diffs are highlighted in green/red
+                      Green indicates added or modified candidate output.
                     </div>
                   </div>
                   <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
@@ -1177,19 +1182,30 @@ function AttemptDetailOverlay({
 
               {detailMainTab === "debug" && (
                 <div className="flex min-h-[calc(90vh-220px)] flex-col gap-4">
-                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                  <div className="grid gap-3 xl:grid-cols-4">
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4 xl:col-span-2">
                       <h3 className="text-sm font-bold text-slate-200">Raw Trace Payload</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-400">
-                        Internal trace data for support and debugging. This view exposes the raw replay payload, extraction hints, and provider-side metadata without any UI summarization.
+                        Internal trace data for support and debugging. Use this to inspect the untouched replay payload, response extraction hints, and provider metadata when the UI summary is not enough.
                       </p>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4">
-                        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Provider</div>
-                        <div className="mt-2 text-sm font-medium text-slate-100 break-words">{candidateProvider}</div>
-                        <div className="mt-1 text-xs text-slate-400">{candidateModel}</div>
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Provider</div>
+                      <div className="mt-2 text-sm font-medium text-slate-100 break-words">{candidateProvider}</div>
+                      <div className="mt-1 text-xs text-slate-400">{candidateModel}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Payload Health</div>
+                      <div className="mt-2 text-sm font-medium text-slate-100 break-words">
+                        {hasProviderError ? "Provider warning attached" : "Structured payload captured"}
                       </div>
+                      <div className="mt-1 text-xs text-slate-400">
+                        {responseDataKeys.length > 0 ? `${responseDataKeys.length} keys captured` : "No payload keys"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
+                    <div className="space-y-3">
                       <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4">
                         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Extract Path</div>
                         <div className="mt-2 text-sm font-medium text-slate-100 break-words">
@@ -1202,18 +1218,18 @@ function AttemptDetailOverlay({
                       <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4">
                         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Payload Keys</div>
                         <div className="mt-2 text-sm font-medium text-slate-100 break-words">
-                          {responseDataKeys.length > 0 ? responseDataKeys.slice(0, 6).join(", ") : "None captured"}
+                          {responseDataKeys.length > 0 ? responseDataKeys.slice(0, 10).join(", ") : "None captured"}
                         </div>
                         <div className="mt-1 text-xs text-slate-400">
                           {providerErrorPreview ? "Provider response preview included." : "Structured response payload."}
                         </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="min-h-0 flex-1 overflow-hidden rounded-3xl border border-white/8 bg-[#0a0a0c]">
-                    <pre className="custom-scrollbar h-full overflow-auto p-6 font-mono text-[11px] leading-[1.7] text-slate-300 whitespace-pre-wrap break-words">
-                      {candidatePayloadPreview}
-                    </pre>
+                    <div className="min-h-0 flex-1 overflow-hidden rounded-3xl border border-white/8 bg-[#0a0a0c]">
+                      <pre className="custom-scrollbar h-full overflow-auto p-6 font-mono text-[11px] leading-[1.7] text-slate-300 whitespace-pre-wrap break-words">
+                        {candidatePayloadPreview}
+                      </pre>
+                    </div>
                   </div>
                 </div>
               )}
