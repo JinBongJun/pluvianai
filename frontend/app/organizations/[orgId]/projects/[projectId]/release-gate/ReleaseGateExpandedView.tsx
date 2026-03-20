@@ -760,48 +760,39 @@ function AttemptDetailOverlay({
   return (
     <div className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-md sm:p-6">
       <div className="flex h-[90vh] w-full max-w-[1680px] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#0d0f14] shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/8 px-6 py-4 sm:px-7">
-          <div className="min-w-0">
-            <div className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
-              Unit diagnostics
+        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-white/8 px-6 py-4 sm:px-7">
+          <div className="flex min-w-0 flex-1 items-center gap-6 xl:gap-8">
+            <div className="min-w-0 shrink">
+              <div className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
+                Unit diagnostics
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-2 sm:gap-3">
+                <h2 className="text-base font-semibold text-white text-balance">
+                  Input {inputIndex + 1} · Attempt {attemptIndex + 1}
+                </h2>
+                <span
+                  className={clsx(
+                    "rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tabular-nums",
+                    pass
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                      : "border-rose-500/30 bg-rose-500/10 text-rose-300"
+                  )}
+                >
+                  {pass ? "PASS" : "FAIL"}
+                </span>
+                <span className="text-[11px] text-slate-400 tabular-nums">
+                  {replayLatencyLabel}
+                </span>
+                <span className="text-[11px] text-slate-500 truncate max-w-[min(360px,40vw)]">
+                  {baselineModel} → {candidateModel}
+                </span>
+              </div>
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-2 sm:gap-3">
-              <h2 className="text-base font-semibold text-white text-balance">
-                Input {inputIndex + 1} · Attempt {attemptIndex + 1}
-              </h2>
-              <span
-                className={clsx(
-                  "rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tabular-nums",
-                  pass
-                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                    : "border-rose-500/30 bg-rose-500/10 text-rose-300"
-                )}
-              >
-                {pass ? "PASS" : "FAIL"}
-              </span>
-              <span className="text-[11px] text-slate-400 tabular-nums">
-                {replayLatencyLabel}
-              </span>
-              <span className="text-[11px] text-slate-500 truncate max-w-[min(360px,40vw)]">
-                {baselineModel} → {candidateModel}
-              </span>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-xl border border-white/10 px-3 py-1.5 text-[11px] font-semibold text-slate-300 transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
-          >
-            Close
-          </button>
-        </div>
 
-        <div className="flex min-h-0 flex-1">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div
               role="tablist"
-              aria-label="Attempt detail"
-              className="flex shrink-0 flex-wrap gap-1 border-b border-white/8 px-4 py-2.5"
+              aria-label="Attempt detail tabs"
+              className="hidden shrink-0 flex-wrap items-center gap-1 rounded-xl border border-white/5 bg-white/[0.02] p-1 md:flex"
             >
               {(
                 [
@@ -818,7 +809,7 @@ function AttemptDetailOverlay({
                     aria-selected={detailMainTab === tab.id}
                     onClick={() => setDetailMainTab(tab.id)}
                     className={clsx(
-                      "rounded-lg px-3 py-1.5 text-[11px] font-semibold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70",
+                      "rounded-lg px-4 py-1.5 text-[11px] font-semibold tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70",
                       detailMainTab === tab.id
                         ? "bg-white/[0.12] text-white shadow-sm"
                         : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
@@ -829,82 +820,148 @@ function AttemptDetailOverlay({
                 );
               })}
             </div>
+          </div>
+          
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-xl border border-white/10 px-4 py-2 text-[11px] font-semibold text-slate-300 transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+          >
+            Close
+          </button>
+        </div>
 
+        {/* Mobile Tab Fallback */}
+        <div className="flex shrink-0 flex-wrap gap-1 border-b border-white/8 px-4 py-2.5 md:hidden">
+          {(
+            [
+              { id: "summary" as const, label: "Summary" },
+              { id: "comparison" as const, label: "Comparison" },
+              { id: "debug" as const, label: "Raw Trace" },
+            ] as const
+          ).map(tab => {
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={detailMainTab === tab.id}
+                onClick={() => setDetailMainTab(tab.id)}
+                className={clsx(
+                  "rounded-lg px-3 py-1.5 text-[11px] font-semibold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70",
+                  detailMainTab === tab.id
+                    ? "bg-white/[0.12] text-white shadow-sm"
+                    : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
+                )}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 md:p-7 xl:p-8">
               {detailMainTab === "summary" && (
-                <div className="space-y-6">
-                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.95fr)]">
-                    <div className="space-y-4">
-                      <div
-                        className={clsx(
-                          "rounded-3xl border px-6 py-5",
-                          pass
-                            ? "border-emerald-500/25 bg-emerald-500/[0.04]"
-                            : "border-rose-500/25 bg-rose-500/[0.04]"
-                        )}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-4">
-                          <div className="min-w-0 space-y-2">
-                            <div
-                              className={clsx(
-                                "flex items-center gap-2 text-sm font-bold uppercase tracking-wider",
-                                pass ? "text-emerald-400" : "text-rose-400"
-                              )}
-                            >
-                              <span>{pass ? "Release Ready" : "Release Blocked"}</span>
-                              <span className="inline-block h-2 w-2 rounded-full bg-current" />
-                            </div>
-                            <p className="max-w-3xl text-base font-medium leading-7 text-slate-100 text-balance">
-                              {decisionHeadline.replace(/^Reason:\s*/i, "")}
-                            </p>
-                          </div>
-                          <div className="grid min-w-[240px] grid-cols-2 gap-2 sm:min-w-[300px]">
-                            <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
-                              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                                Eval Checks
-                              </div>
-                              <div className="mt-2 text-lg font-semibold text-white tabular-nums">
-                                {evalTotalCount > 0 ? `${evalPassCount}/${evalTotalCount}` : "—"}
-                              </div>
-                              <div className="mt-1 text-xs text-slate-400">
-                                {failedSignals.length > 0
-                                  ? `${failedSignals.length} failing signal${failedSignals.length === 1 ? "" : "s"}`
-                                  : "No failing eval signals"}
-                              </div>
-                            </div>
-                            <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
-                              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                                Policy
-                              </div>
-                              <div className="mt-2 text-lg font-semibold text-white tabular-nums">
-                                {policyRows.length === 0 ? "Clean" : `${policyRows.length} found`}
-                              </div>
-                              <div className="mt-1 text-xs text-slate-400">
-                                {policyRows.length === 0 ? "No blocking policy issues." : "Review policy details in the side panel."}
-                              </div>
-                            </div>
-                            <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
-                              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                                Replay
-                              </div>
-                              <div className="mt-2 text-lg font-semibold text-white tabular-nums">
-                                {replayLatencyLabel}
-                              </div>
-                              <div className="mt-1 text-xs text-slate-400">
-                                {baselineModel} → {candidateModel}
-                              </div>
-                            </div>
-                            <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
-                              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                                Tool Divergence
-                              </div>
-                              <div className="mt-2 text-lg font-semibold text-white tabular-nums">
-                                {sequenceEdits} edit{sequenceEdits === 1 ? "" : "s"}
-                              </div>
-                              <div className="mt-1 text-xs text-slate-400">{toolDivergenceLabel} divergence</div>
-                            </div>
-                          </div>
+                <div className="mx-auto max-w-[1200px] space-y-6">
+                  {/* Global Status Banner + KPIs */}
+                  <div
+                    className={clsx(
+                      "flex flex-col gap-5 rounded-3xl border px-6 py-5",
+                      pass
+                        ? "border-emerald-500/25 bg-emerald-500/[0.04]"
+                        : "border-rose-500/25 bg-rose-500/[0.04]"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 space-y-2">
+                        <div
+                          className={clsx(
+                            "flex items-center gap-2 text-sm font-bold uppercase tracking-wider",
+                            pass ? "text-emerald-400" : "text-rose-400"
+                          )}
+                        >
+                          <span>{pass ? "Release Ready" : "Release Blocked"}</span>
+                          <span className="inline-block h-2 w-2 rounded-full bg-current" />
                         </div>
+                        <p className="max-w-3xl text-base font-medium leading-7 text-slate-100 text-balance">
+                          {decisionHeadline.replace(/^Reason:\s*/i, "")}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                      <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                          Eval Checks
+                        </div>
+                        <div className="mt-2 text-lg font-semibold text-white tabular-nums">
+                          {evalTotalCount > 0 ? `${evalPassCount}/${evalTotalCount}` : "—"}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          {failedSignals.length > 0
+                            ? `${failedSignals.length} failing signal${failedSignals.length === 1 ? "" : "s"}`
+                            : "No failing eval signals"}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                          Policy
+                        </div>
+                        <div className="mt-2 text-lg font-semibold text-white tabular-nums">
+                          {policyRows.length === 0 ? "Clean" : `${policyRows.length} found`}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          {policyRows.length === 0 ? "No blocking issues" : "Review policy details"}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                          Replay
+                        </div>
+                        <div className="mt-2 text-lg font-semibold text-white tabular-nums">
+                          {replayLatencyLabel}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          {baselineModel} → {candidateModel}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                          Tool Divergence
+                        </div>
+                        <div className="mt-2 text-lg font-semibold text-white tabular-nums">
+                          {sequenceEdits} edit{sequenceEdits === 1 ? "" : "s"}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-400">{toolDivergenceLabel} divergence</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Main Content Grid */}
+                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+                    <div className="space-y-5">
+                      <div className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                            User Input
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setInputExpanded(v => !v)}
+                            className="text-[10px] font-bold uppercase tracking-wider text-fuchsia-300/80 transition-colors hover:text-fuchsia-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                          >
+                            {inputExpanded ? "Collapse" : "Expand"}
+                          </button>
+                        </div>
+                        <p
+                          className={clsx(
+                            "mt-3 text-sm leading-relaxed text-slate-300 whitespace-pre-wrap break-words",
+                            !inputExpanded && "line-clamp-5"
+                          )}
+                        >
+                          {inputPreview}
+                        </p>
                       </div>
 
                       <section className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
@@ -935,7 +992,7 @@ function AttemptDetailOverlay({
                               return (
                                 <div
                                   key={row.id}
-                                  className="rounded-2xl border border-white/5 bg-black/20 p-4"
+                                  className="flex flex-col justify-between rounded-2xl border border-white/5 bg-black/20 p-4"
                                 >
                                   <div className="flex items-center justify-between gap-4">
                                     <span className="text-sm font-medium text-slate-200">{row.label}</span>
@@ -955,7 +1012,7 @@ function AttemptDetailOverlay({
                                       )}
                                     </span>
                                   </div>
-                                  {barNode}
+                                  <div className="mt-3">{barNode}</div>
                                 </div>
                               );
                             })
@@ -964,30 +1021,7 @@ function AttemptDetailOverlay({
                       </section>
                     </div>
 
-                    <div className="space-y-4">
-                      <div className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                            User Input
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setInputExpanded(v => !v)}
-                            className="text-[10px] font-bold uppercase tracking-wider text-fuchsia-300/80 transition-colors hover:text-fuchsia-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
-                          >
-                            {inputExpanded ? "Collapse" : "Expand"}
-                          </button>
-                        </div>
-                        <p
-                          className={clsx(
-                            "mt-3 text-sm leading-relaxed text-slate-300 whitespace-pre-wrap break-words",
-                            !inputExpanded && "line-clamp-5"
-                          )}
-                        >
-                          {inputPreview}
-                        </p>
-                      </div>
-
+                    <div className="space-y-5">
                       <div className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
                         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
                           Replay Context
@@ -1086,26 +1120,26 @@ function AttemptDetailOverlay({
               )}
 
               {detailMainTab === "comparison" && (
-                <div className="flex min-h-[calc(90vh-220px)] flex-col gap-4">
+                <div className="mx-auto flex w-full max-w-[1200px] min-h-[calc(90vh-220px)] flex-col gap-4">
                   <div className="grid gap-3 xl:grid-cols-4">
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
                       <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Baseline</div>
-                      <div className="mt-2 text-sm font-medium text-slate-100 break-words">{baselineModel}</div>
+                      <div className="mt-1.5 text-sm font-medium text-slate-100 break-words">{baselineModel}</div>
                       <div className="mt-1 text-xs text-slate-400 tabular-nums">{baselineLineCount} lines</div>
                     </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
                       <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Candidate</div>
-                      <div className="mt-2 text-sm font-medium text-slate-100 break-words">{candidateModel}</div>
+                      <div className="mt-1.5 text-sm font-medium text-slate-100 break-words">{candidateModel}</div>
                       <div className="mt-1 text-xs text-slate-400 tabular-nums">{candidateLineCount} lines</div>
                     </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
                       <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Added / Changed</div>
-                      <div className="mt-2 text-sm font-medium text-emerald-300 tabular-nums">+{diffAddedCount}</div>
+                      <div className="mt-1.5 text-sm font-medium text-emerald-300 tabular-nums">+{diffAddedCount}</div>
                       <div className="mt-1 text-xs text-slate-400">Highlighted on the candidate side.</div>
                     </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
                       <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Removed</div>
-                      <div className="mt-2 text-sm font-medium text-rose-300 tabular-nums">-{diffRemovedCount}</div>
+                      <div className="mt-1.5 text-sm font-medium text-rose-300 tabular-nums">-{diffRemovedCount}</div>
                       <div className="mt-1 text-xs text-slate-400">Track lines missing from the candidate output.</div>
                     </div>
                   </div>
@@ -1142,19 +1176,19 @@ function AttemptDetailOverlay({
                         </span>
                         <span className="text-[10px] text-slate-400">{candidateModel}</span>
                       </div>
-                      <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-5 font-mono text-[13px] leading-[1.75] whitespace-pre-wrap break-words">
+                      <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-0 font-mono text-[13px] leading-[1.75] whitespace-pre-wrap break-words">
                         {!candidateResponse ? (
-                          <span className="text-slate-500">
+                          <div className="p-5 text-slate-500">
                             {candidateResponseStatus === "tool_calls_only"
                               ? "Candidate returned tool calls only (no assistant text)."
                               : candidateResponseStatus === "empty"
                                 ? "Candidate response text is empty."
                                 : "—"}
-                          </span>
+                          </div>
                         ) : responseDiffLines.length === 0 ? (
-                          <span className="text-slate-300">{candidateResponse}</span>
+                          <div className="p-5 text-slate-300">{candidateResponse}</div>
                         ) : (
-                          <div className="space-y-0 text-slate-300">
+                          <div className="flex flex-col py-3 text-slate-300">
                             {responseDiffLines.map((line, idx) => {
                               const isAdded = line.startsWith("+");
                               const isRemoved = line.startsWith("-");
@@ -1164,8 +1198,8 @@ function AttemptDetailOverlay({
                                 <div
                                   key={idx}
                                   className={clsx(
-                                    "px-1 -mx-1 rounded-sm",
-                                    isAdded && "bg-emerald-500/15 text-emerald-200"
+                                    "block w-full px-5 py-0.5",
+                                    isAdded && "bg-emerald-500/20 font-medium text-emerald-200"
                                   )}
                                 >
                                   {content || "\n"}
@@ -1181,32 +1215,44 @@ function AttemptDetailOverlay({
               )}
 
               {detailMainTab === "debug" && (
-                <div className="flex min-h-[calc(90vh-220px)] flex-col gap-4">
-                  <div className="grid gap-3 xl:grid-cols-4">
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4 xl:col-span-2">
+                <div className="mx-auto flex w-full max-w-[1200px] min-h-[calc(90vh-220px)] flex-col gap-5">
+                  <div className="flex items-center justify-between">
+                    <div>
                       <h3 className="text-sm font-bold text-slate-200">Raw Trace Payload</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-slate-400">
-                        Internal trace data for support and debugging. Use this to inspect the untouched replay payload, response extraction hints, and provider metadata when the UI summary is not enough.
+                      <p className="mt-1 text-xs text-slate-400">
+                        Internal trace data for support and debugging. Inspect the untouched replay payload and provider metadata.
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Provider</div>
-                      <div className="mt-2 text-sm font-medium text-slate-100 break-words">{candidateProvider}</div>
-                      <div className="mt-1 text-xs text-slate-400">{candidateModel}</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Payload Health</div>
-                      <div className="mt-2 text-sm font-medium text-slate-100 break-words">
-                        {hasProviderError ? "Provider warning attached" : "Structured payload captured"}
-                      </div>
-                      <div className="mt-1 text-xs text-slate-400">
-                        {responseDataKeys.length > 0 ? `${responseDataKeys.length} keys captured` : "No payload keys"}
-                      </div>
-                    </div>
                   </div>
-                  <div className="grid gap-3 xl:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-                    <div className="space-y-3">
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4">
+
+                  <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-10">
+                    <div className="flex min-h-[400px] flex-col overflow-hidden rounded-3xl border border-white/8 bg-[#0a0a0c] xl:col-span-7">
+                      <div className="flex items-center justify-between border-b border-white/5 bg-black/40 px-5 py-3">
+                        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                          JSON Payload
+                        </span>
+                      </div>
+                      <pre className="custom-scrollbar min-h-0 flex-1 overflow-auto p-6 font-mono text-[12px] leading-[1.7] text-slate-300 whitespace-pre-wrap break-words">
+                        {candidatePayloadPreview}
+                      </pre>
+                    </div>
+
+                    <div className="space-y-3 xl:col-span-3">
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Provider</div>
+                        <div className="mt-2 text-sm font-medium text-slate-100 break-words">{candidateProvider}</div>
+                        <div className="mt-1 text-xs text-slate-400">{candidateModel}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Payload Health</div>
+                        <div className="mt-2 text-sm font-medium text-slate-100 break-words">
+                          {hasProviderError ? "Provider warning attached" : "Structured payload captured"}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          {responseDataKeys.length > 0 ? `${responseDataKeys.length} keys captured` : "No payload keys"}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
                         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Extract Path</div>
                         <div className="mt-2 text-sm font-medium text-slate-100 break-words">
                           {String((candidateSnapshot as any)?.response_extract_path ?? "Not captured")}
@@ -1215,20 +1261,15 @@ function AttemptDetailOverlay({
                           {String((candidateSnapshot as any)?.response_extract_reason ?? "No extraction warning")}
                         </div>
                       </div>
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4">
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
                         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Payload Keys</div>
                         <div className="mt-2 text-sm font-medium text-slate-100 break-words">
                           {responseDataKeys.length > 0 ? responseDataKeys.slice(0, 10).join(", ") : "None captured"}
                         </div>
                         <div className="mt-1 text-xs text-slate-400">
-                          {providerErrorPreview ? "Provider response preview included." : "Structured response payload."}
+                          {providerErrorPreview ? "Provider preview included" : "Structured response payload"}
                         </div>
                       </div>
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-hidden rounded-3xl border border-white/8 bg-[#0a0a0c]">
-                      <pre className="custom-scrollbar h-full overflow-auto p-6 font-mono text-[11px] leading-[1.7] text-slate-300 whitespace-pre-wrap break-words">
-                        {candidatePayloadPreview}
-                      </pre>
                     </div>
                   </div>
                 </div>
