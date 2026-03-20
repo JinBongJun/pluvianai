@@ -47,6 +47,7 @@ const EVAL_CHECK_LABELS: Record<string, string> = {
   leakage: "PII Leakage Shield",
   tool: "Tool Use Policy",
   tool_use_policy: "Tool Use Policy",
+  tool_grounding: "Tool Result Grounding",
 };
 
 const RULE_FIX_HINTS: Record<string, string> = {
@@ -294,6 +295,85 @@ function buildWhatToFixHints(result: any, cases: any[]): FixHint[] {
     count: 1,
     hint: reason,
   }));
+}
+
+/** Roll up tool_grounding across attempts for one input (case). */
+function summarizeGroundingForCase(run: any): {
+  rollup: "pass" | "fail" | "na" | null;
+  semantic: "pass" | "fail" | "unavailable" | null;
+} {
+  const attempts = Array.isArray(run?.attempts) ? run.attempts : [];
+  if (attempts.length === 0) return { rollup: null, semantic: null };
+
+  const groundingStatuses: string[] = [];
+  const semanticStatuses: string[] = [];
+
+  for (const attempt of attempts) {
+    const checks = attempt?.signals?.checks;
+    const g =
+      checks && typeof checks === "object" && !Array.isArray(checks)
+        ? String((checks as Record<string, unknown>).tool_grounding ?? "")
+            .trim()
+            .toLowerCase()
+        : "";
+    if (g) groundingStatuses.push(g);
+
+    const detail = attempt?.signals?.details?.tool_grounding;
+    if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+      const s = String((detail as Record<string, unknown>).semantic_status ?? "")
+        .trim()
+        .toLowerCase();
+      if (s) semanticStatuses.push(s);
+    }
+  }
+
+  if (groundingStatuses.length === 0) return { rollup: null, semantic: null };
+
+  let rollup: "pass" | "fail" | "na" | null = null;
+  if (groundingStatuses.every(s => s === "not_applicable")) {
+    rollup = "na";
+  } else if (groundingStatuses.some(s => s === "fail")) {
+    rollup = "fail";
+  } else if (groundingStatuses.some(s => s === "pass")) {
+    rollup = "pass";
+  }
+
+  let semantic: "pass" | "fail" | "unavailable" | null = null;
+  if (semanticStatuses.length > 0) {
+    if (semanticStatuses.some(s => s === "fail")) semantic = "fail";
+    else if (semanticStatuses.some(s => s === "pass")) semantic = "pass";
+    else if (semanticStatuses.every(s => s === "unavailable")) semantic = "unavailable";
+  }
+
+  return { rollup, semantic };
+}
+
+function summarizeRunToolGroundingFromCases(resultCases: any[]): {
+  withTools: number;
+  pass: number;
+  fail: number;
+  semanticOk: number;
+  semanticOff: number;
+} | null {
+  if (!Array.isArray(resultCases) || resultCases.length === 0) return null;
+  let withTools = 0;
+  let pass = 0;
+  let fail = 0;
+  let semanticOk = 0;
+  let semanticOff = 0;
+
+  for (const run of resultCases) {
+    const g = summarizeGroundingForCase(run);
+    if (!g.rollup || g.rollup === "na") continue;
+    withTools++;
+    if (g.rollup === "pass") pass++;
+    else fail++;
+    if (g.semantic === "pass") semanticOk++;
+    if (g.semantic === "unavailable") semanticOff++;
+  }
+
+  if (withTools === 0) return null;
+  return { withTools, pass, fail, semanticOk, semanticOff };
 }
 
 function getEvalCheckParams(id: string, config: Record<string, unknown> | undefined): string {
@@ -622,6 +702,54 @@ function AttemptDetailOverlay({
       return `${statusLead} Status available, detailed evidence unavailable for this check.`;
     }
 
+    if (id === "tool_grounding") {
+      const toolCalls = toNum(d.tool_calls);
+      const toolResults = toNum(d.tool_results);
+      const groundedRows = toNum(d.grounded_rows);
+      const evaluatedRows = toNum(d.evaluated_rows);
+      const coverageRatio = toNum(d.coverage_ratio);
+      const loopStatus = String(d.loop_status ?? "").trim() || "unknown";
+      const responsePresent =
+        typeof d.response_present === "boolean"
+          ? d.response_present
+            ? "yes"
+            : "no"
+          : "unknown";
+      const matchedTokens = Array.isArray(d.matched_tokens)
+        ? (d.matched_tokens as unknown[]).map(v => String(v ?? "").trim()).filter(Boolean)
+        : [];
+      const matchedFacts = Array.isArray(d.matched_facts)
+        ? (d.matched_facts as unknown[]).map(v => String(v ?? "").trim()).filter(Boolean)
+        : [];
+      const semanticStatus = String(d.semantic_status ?? "").trim().toLowerCase();
+      const semanticReason = String(d.semantic_reason ?? "").trim();
+      const semanticConfidence = String(d.semantic_confidence ?? "").trim();
+      const semanticModel = String(d.semantic_model ?? "").trim();
+      const reason = String(d.reason ?? "").trim();
+      const coverageLabel =
+        coverageRatio !== null ? `${Math.round(coverageRatio * 100)}%` : "unknown";
+      let summary = `Tool grounding: calls ${toolCalls ?? 0}, results ${toolResults ?? 0}, matched ${groundedRows ?? 0}/${evaluatedRows ?? toolResults ?? 0}, coverage ${coverageLabel}, loop ${loopStatus}, final response ${responsePresent}.`;
+      if (matchedTokens.length > 0) {
+        summary += ` Matched tokens: ${matchedTokens.slice(0, 4).join(", ")}.`;
+      }
+      if (matchedFacts.length > 0) {
+        summary += ` Semantic matches: ${matchedFacts.slice(0, 2).join("; ")}.`;
+      }
+      if (semanticStatus && semanticStatus !== "not_needed") {
+        summary += ` Semantic judge ${semanticStatus}.`;
+        if (semanticConfidence) {
+          summary += ` Confidence ${semanticConfidence}.`;
+        }
+        if (semanticModel) {
+          summary += ` Model ${semanticModel}.`;
+        }
+        if (semanticReason) {
+          summary += ` ${semanticReason}`;
+        }
+      }
+      return reason ? `${summary} ${reason}` : summary;
+    }
+
     return `${statusLead} Evidence unavailable for this check.`;
   };
 
@@ -646,6 +774,8 @@ function AttemptDetailOverlay({
           summary: attempt?.summary ?? {},
           replay: attempt?.replay ?? {},
           behavior_diff: attempt?.behavior_diff ?? {},
+          tool_execution_summary: attempt?.tool_execution_summary ?? {},
+          tool_evidence: Array.isArray(attempt?.tool_evidence) ? attempt.tool_evidence : [],
           failure_reasons: attempt?.failure_reasons ?? [],
           response_data_keys: responseDataKeys ?? [],
           response_extract_path:
@@ -700,6 +830,83 @@ function AttemptDetailOverlay({
   const candidateResponseStatus = String((candidateSnapshot as any)?.response_preview_status ?? "")
     .trim()
     .toLowerCase();
+  const toolExecutionSummary =
+    attempt?.tool_execution_summary &&
+    typeof attempt.tool_execution_summary === "object" &&
+    !Array.isArray(attempt.tool_execution_summary)
+      ? (attempt.tool_execution_summary as Record<string, unknown>)
+      : null;
+  const toolEvidenceRows = Array.isArray(attempt?.tool_evidence)
+    ? (attempt.tool_evidence as Array<Record<string, unknown>>)
+    : [];
+  const toolCountsRaw =
+    toolExecutionSummary &&
+    typeof toolExecutionSummary.counts === "object" &&
+    !Array.isArray(toolExecutionSummary.counts)
+      ? (toolExecutionSummary.counts as Record<string, unknown>)
+      : {};
+  const toolTotalCalls = Number(toolCountsRaw.total_calls ?? toolEvidenceRows.length ?? 0) || 0;
+  const toolExecutedCount = Number(toolCountsRaw.executed ?? 0) || 0;
+  const toolSimulatedCount = Number(toolCountsRaw.simulated ?? 0) || 0;
+  const toolSkippedCount = Number(toolCountsRaw.skipped ?? 0) || 0;
+  const toolFailedCount = Number(toolCountsRaw.failed ?? 0) || 0;
+  const toolResultCountFromSummary = Number(toolCountsRaw.tool_results ?? 0) || 0;
+  const toolEvidenceDetail =
+    String(toolExecutionSummary?.detail ?? "").trim() ||
+    (toolTotalCalls > 0
+      ? "Tool calls were detected during replay."
+      : "No tool calls were detected for this attempt.");
+  const toolEvidenceStatus = String(toolExecutionSummary?.status ?? "").trim().toLowerCase();
+  const replayObj =
+    attempt?.replay && typeof attempt.replay === "object" && !Array.isArray(attempt.replay)
+      ? (attempt.replay as Record<string, unknown>)
+      : {};
+  const toolLoopStatus =
+    String(
+      replayObj.tool_loop_status ??
+        (candidateSnapshot as any)?.tool_loop_status ??
+        "not_needed"
+    ).trim() || "not_needed";
+  const toolLoopRounds =
+    Number(replayObj.tool_loop_rounds ?? (candidateSnapshot as any)?.tool_loop_rounds ?? 0) || 0;
+  const toolLoopEvents = Array.isArray(
+    replayObj.tool_loop_events ?? (candidateSnapshot as any)?.tool_loop_events
+  )
+    ? ((replayObj.tool_loop_events ??
+        (candidateSnapshot as any)?.tool_loop_events) as Array<Record<string, unknown>>)
+    : [];
+  const flattenedToolLoopRows = toolLoopEvents
+    .flatMap(ev =>
+      Array.isArray(ev?.tool_rows)
+        ? (ev.tool_rows as Array<Record<string, unknown>>).map(row => ({
+            round: Number(ev?.round ?? 0) || 0,
+            mode: String(ev?.mode ?? "").trim(),
+            name: String(row?.name ?? "").trim(),
+            status: String(row?.status ?? "").trim().toLowerCase(),
+            argumentsPreview: String(row?.arguments_preview ?? "").trim(),
+            resultPreview: String(row?.result_preview ?? "").trim(),
+          }))
+        : []
+    )
+    .filter(row => row.name);
+  const summaryToolResultCountRaw =
+    attempt?.summary && typeof attempt.summary === "object" && !Array.isArray(attempt.summary)
+      ? (attempt.summary as any).tool_result_count
+      : undefined;
+  const toolResultCount =
+    summaryToolResultCountRaw != null
+      ? Number(summaryToolResultCountRaw) || 0
+      : toolResultCountFromSummary > 0
+        ? toolResultCountFromSummary
+        : flattenedToolLoopRows.length;
+  const toolGroundingDetail =
+    signalsDetailsRaw &&
+    typeof signalsDetailsRaw.tool_grounding === "object" &&
+    !Array.isArray(signalsDetailsRaw.tool_grounding)
+      ? (signalsDetailsRaw.tool_grounding as Record<string, unknown>)
+      : null;
+  const toolGroundingStatus = String(toolGroundingDetail?.status ?? "").trim().toLowerCase();
+  const toolGroundingReason = String(toolGroundingDetail?.reason ?? "").trim();
   const responseDiffLines = useMemo(() => {
     if (!baselineResponse || !candidateResponse) return [];
     return computeSimpleLineDiff(baselineResponse, candidateResponse, 200);
@@ -738,6 +945,20 @@ function AttemptDetailOverlay({
     return "One side is missing; compare with caution.";
   })();
   const gateConfidence = (() => {
+    if (toolGroundingStatus === "fail") {
+      return {
+        label: "Low",
+        detail: toolGroundingReason || "Tool results were not grounded into a stable final response.",
+        toneClass: "border-rose-500/30 bg-rose-500/10 text-rose-200",
+      };
+    }
+    if (toolTotalCalls > 0 && toolExecutedCount === 0) {
+      return {
+        label: "Low",
+        detail: "Tool calls were detected, but execution evidence is simulated only (Stage 1).",
+        toneClass: "border-rose-500/30 bg-rose-500/10 text-rose-200",
+      };
+    }
     if (hasProviderError) {
       return {
         label: "Low",
@@ -1091,6 +1312,34 @@ function AttemptDetailOverlay({
                         <div className="mt-1 text-xs text-slate-400">{toolDivergenceLabel} divergence</div>
                       </div>
                     </div>
+                    <div className="rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                          Tool Evidence
+                        </span>
+                        <span
+                          className={clsx(
+                            "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                            toolEvidenceStatus === "calls_detected_no_execution"
+                              ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                              : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                          )}
+                        >
+                          {toolTotalCalls > 0 ? "Detected" : "None"}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-300">
+                        <span>Calls {toolTotalCalls}</span>
+                        <span>Executed {toolExecutedCount}</span>
+                        <span>Simulated {toolSimulatedCount}</span>
+                        <span>Skipped {toolSkippedCount}</span>
+                        <span>Failed {toolFailedCount}</span>
+                      </div>
+                      <p className="mt-2 text-xs leading-relaxed text-slate-400">{toolEvidenceDetail}</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                        Loop {toolLoopStatus} {toolLoopRounds > 0 ? `(rounds ${toolLoopRounds})` : ""}
+                      </p>
+                    </div>
                   </div>
 
                   {/* Main Content Grid */}
@@ -1437,6 +1686,47 @@ function AttemptDetailOverlay({
                         </div>
                       </div>
                       <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Tool Evidence</div>
+                        <div className="mt-2 text-sm font-medium text-slate-100 break-words">
+                          {toolTotalCalls > 0
+                            ? `${toolTotalCalls} call${toolTotalCalls === 1 ? "" : "s"} detected`
+                            : "No tool calls detected"}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          Executed {toolExecutedCount} / Simulated {toolSimulatedCount} / Skipped{" "}
+                          {toolSkippedCount}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          Loop {toolLoopStatus}
+                          {toolLoopRounds > 0 ? ` (${toolLoopRounds} rounds)` : ""}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          Tool results captured {toolResultCount}
+                        </div>
+                        {flattenedToolLoopRows.length > 0 ? (
+                          <div className="mt-3 space-y-2">
+                            {flattenedToolLoopRows.slice(0, 3).map((row, idx) => (
+                              <div key={`${row.round}-${row.name}-${idx}`} className="rounded-xl border border-white/8 bg-black/20 px-3 py-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[11px] font-medium text-slate-200">
+                                    Round {row.round || 1} · {row.name}
+                                  </span>
+                                  <span className="text-[10px] uppercase tracking-wider text-slate-400">
+                                    {row.status || "simulated"}
+                                  </span>
+                                </div>
+                                {row.mode ? (
+                                  <p className="mt-1 text-[10px] text-slate-500">Mode: {row.mode}</p>
+                                ) : null}
+                                {row.argumentsPreview ? (
+                                  <p className="mt-1 line-clamp-2 text-[10px] text-slate-500">{row.argumentsPreview}</p>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
                         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Extract Path</div>
                         <div className="mt-2 text-sm font-medium text-slate-100 break-words">
                           {String((candidateSnapshot as any)?.response_extract_path ?? "Not captured")}
@@ -1501,6 +1791,13 @@ function HistoryDetailCard({
   const failedInputs = Number(gateSummary?.failed_inputs ?? item?.failed_runs ?? 0);
   const flakyInputs = Number(gateSummary?.flaky_inputs ?? 0);
   const repeatRuns = Number(item?.repeat_runs ?? gateSummary?.repeat_runs ?? 0) || "—";
+
+  const reportCases = Array.isArray(report?.run_results)
+    ? report.run_results
+    : Array.isArray(report?.case_results)
+      ? report.case_results
+      : [];
+  const historyToolGrounding = summarizeRunToolGroundingFromCases(reportCases);
 
   return (
     <div className="rounded-[24px] border border-white/10 bg-black/30 p-5 space-y-5">
@@ -1580,6 +1877,35 @@ function HistoryDetailCard({
           )}
         </div>
       )}
+
+      {historyToolGrounding ? (
+        <div className="rounded-2xl border border-white/8 bg-black/25 px-3 py-2">
+          <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+            Tool grounding
+          </div>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-300">
+            <span>
+              With tools:{" "}
+              <span className="font-semibold text-white/90">{historyToolGrounding.withTools}</span>
+            </span>
+            <span className="text-emerald-400/90">Pass {historyToolGrounding.pass}</span>
+            <span className="text-rose-400/90">Fail {historyToolGrounding.fail}</span>
+            {historyToolGrounding.semanticOk > 0 ? (
+              <span className="text-violet-300/90">
+                Semantic OK {historyToolGrounding.semanticOk}
+              </span>
+            ) : null}
+            {historyToolGrounding.semanticOff > 0 ? (
+              <span
+                className="text-slate-500"
+                title="Semantic judge did not run (e.g. no OpenAI key)."
+              >
+                Semantic judge off {historyToolGrounding.semanticOff}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {thresholdsRaw && (
         <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
@@ -1754,7 +2080,13 @@ export function ReleaseGateExpandedView() {
   const setExpandedCaseIndex = ctx.setExpandedCaseIndex as (n: number | null) => void;
   const baselineDetailSnapshot = ctx.baselineDetailSnapshot as SnapshotForDetail | null;
   const agentEvalData = ctx.agentEvalData as Record<string, unknown> | undefined;
-  const runEvalElements = (ctx.runEvalElements as Array<{ name: string }>) ?? [];
+  const runEvalElements = useMemo(
+    () =>
+      Array.isArray(ctx.runEvalElements)
+        ? (ctx.runEvalElements as Array<{ name: string }>)
+        : [],
+    [ctx.runEvalElements]
+  );
   const historyStatus = ctx.historyStatus as "all" | "pass" | "fail";
   const setHistoryStatus = ctx.setHistoryStatus as (s: "all" | "pass" | "fail") => void;
   const historyTraceId = ctx.historyTraceId as string;
@@ -1816,6 +2148,10 @@ export function ReleaseGateExpandedView() {
     [resultCases, resultCaseFilter]
   );
   const whatToFixHints = useMemo(() => buildWhatToFixHints(result, resultCases), [result, resultCases]);
+  const toolGroundingRunSummary = useMemo(
+    () => summarizeRunToolGroundingFromCases(resultCases),
+    [resultCases]
+  );
   const nodeHistoryItems = useMemo(
     () =>
       historyItems.filter(item => {
@@ -2577,6 +2913,40 @@ export function ReleaseGateExpandedView() {
                               </>
                             )}
                           </div>
+                          {toolGroundingRunSummary ? (
+                            <div className="mt-2 rounded-xl border border-white/8 bg-black/25 px-3 py-2">
+                              <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+                                Tool grounding
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-300">
+                                <span>
+                                  With tools:{" "}
+                                  <span className="font-semibold text-white/90">
+                                    {toolGroundingRunSummary.withTools}
+                                  </span>
+                                </span>
+                                <span className="text-emerald-400/90">
+                                  Pass {toolGroundingRunSummary.pass}
+                                </span>
+                                <span className="text-rose-400/90">
+                                  Fail {toolGroundingRunSummary.fail}
+                                </span>
+                                {toolGroundingRunSummary.semanticOk > 0 ? (
+                                  <span className="text-violet-300/90">
+                                    Semantic OK {toolGroundingRunSummary.semanticOk}
+                                  </span>
+                                ) : null}
+                                {toolGroundingRunSummary.semanticOff > 0 ? (
+                                  <span
+                                    className="text-slate-500"
+                                    title="Semantic judge did not run (e.g. no OpenAI key)."
+                                  >
+                                    Semantic judge off {toolGroundingRunSummary.semanticOff}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
 
                         {!result.pass && whatToFixHints.length > 0 && (
@@ -2704,6 +3074,7 @@ export function ReleaseGateExpandedView() {
                               baselineSnapshotForRun?.request_prompt ?? 
                               ""
                             ).trim();
+                            const caseGrounding = summarizeGroundingForCase(run);
 
                             return (
                               <button
@@ -2752,6 +3123,33 @@ export function ReleaseGateExpandedView() {
                                       </span>
                                     )}
                                   </div>
+                                  {caseGrounding.rollup && caseGrounding.rollup !== "na" ? (
+                                    <div className="mt-1 flex flex-wrap gap-1.5">
+                                      <span
+                                        className={clsx(
+                                          "rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]",
+                                          caseGrounding.rollup === "pass"
+                                            ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+                                            : "border-rose-500/25 bg-rose-500/10 text-rose-300"
+                                        )}
+                                      >
+                                        Grounding {caseGrounding.rollup === "pass" ? "OK" : "fail"}
+                                      </span>
+                                      {caseGrounding.semantic === "pass" ? (
+                                        <span className="rounded border border-violet-500/25 bg-violet-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-violet-200">
+                                          Semantic OK
+                                        </span>
+                                      ) : null}
+                                      {caseGrounding.semantic === "unavailable" ? (
+                                        <span
+                                          className="rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500"
+                                          title="Semantic judge did not run (e.g. no OpenAI key configured)."
+                                        >
+                                          Semantic off
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
                                 </div>
                                 <div className="flex shrink-0 items-center gap-2">
                                   <span className={clsx(

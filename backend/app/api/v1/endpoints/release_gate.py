@@ -155,6 +155,337 @@ def _safe_preview_json(value: Any, max_chars: int = 12000) -> Optional[str]:
     return text
 
 
+_GROUNDING_STOPWORDS: Set[str] = {
+    "the",
+    "and",
+    "for",
+    "with",
+    "this",
+    "that",
+    "from",
+    "into",
+    "your",
+    "have",
+    "has",
+    "were",
+    "was",
+    "will",
+    "would",
+    "about",
+    "after",
+    "before",
+    "there",
+    "their",
+    "they",
+    "them",
+    "then",
+    "than",
+    "http",
+    "https",
+    "www",
+    "json",
+    "true",
+    "false",
+    "null",
+    "none",
+    "tool",
+    "tools",
+    "result",
+    "results",
+    "response",
+    "content",
+    "message",
+    "status",
+    "value",
+    "data",
+    "items",
+    "item",
+    "text",
+}
+
+
+def _normalize_grounding_text(value: Any) -> str:
+    text = str(value or "").lower()
+    if not text:
+        return ""
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _extract_grounding_tokens(value: Any, max_tokens: int = 8) -> List[str]:
+    text = _normalize_grounding_text(value)
+    if not text:
+        return []
+    raw_tokens = re.findall(r"[a-z0-9][a-z0-9._:/-]{2,}", text)
+    out: List[str] = []
+    seen: Set[str] = set()
+    for token in raw_tokens:
+        if token in seen:
+            continue
+        if token in _GROUNDING_STOPWORDS:
+            continue
+        if token.isdigit():
+            continue
+        if len(token) < 4 and not any(ch.isdigit() for ch in token):
+            continue
+        seen.add(token)
+        out.append(token)
+        if len(out) >= max_tokens:
+            break
+    return out
+
+
+def _assess_tool_grounding(
+    tool_evidence: List[Dict[str, Any]],
+    candidate_response_preview: Any,
+    tool_loop_status: Any,
+) -> Dict[str, Any]:
+    tool_total_calls = len(tool_evidence or [])
+    response_text = str(candidate_response_preview or "").strip()
+    response_present = bool(response_text)
+    loop_status = str(tool_loop_status or "").strip().lower()
+
+    result_rows = [
+        row
+        for row in (tool_evidence or [])
+        if isinstance(row, dict) and str(row.get("result_preview") or "").strip()
+    ]
+    tool_result_count = len(result_rows)
+
+    if tool_total_calls <= 0:
+        return {
+            "status": "not_applicable",
+            "reason": "No tool calls detected for this attempt.",
+            "tool_calls": 0,
+            "tool_results": 0,
+            "loop_status": loop_status or None,
+            "response_present": response_present,
+            "grounded_rows": 0,
+            "evaluated_rows": 0,
+            "coverage_ratio": None,
+            "matched_tokens": [],
+            "expected_tokens": [],
+        }
+
+    if tool_result_count <= 0:
+        return {
+            "status": "fail",
+            "reason": "Tool calls were detected but no tool results were captured.",
+            "tool_calls": tool_total_calls,
+            "tool_results": 0,
+            "loop_status": loop_status or None,
+            "response_present": response_present,
+            "grounded_rows": 0,
+            "evaluated_rows": 0,
+            "coverage_ratio": 0.0,
+            "matched_tokens": [],
+            "expected_tokens": [],
+        }
+
+    if not response_present:
+        return {
+            "status": "fail",
+            "reason": "Tool results were captured, but no final assistant response text was produced.",
+            "tool_calls": tool_total_calls,
+            "tool_results": tool_result_count,
+            "loop_status": loop_status or None,
+            "response_present": False,
+            "grounded_rows": 0,
+            "evaluated_rows": tool_result_count,
+            "coverage_ratio": 0.0,
+            "matched_tokens": [],
+            "expected_tokens": [],
+        }
+
+    if loop_status in {"provider_error", "network_error", "id_conflict", "max_rounds_exceeded"}:
+        return {
+            "status": "fail",
+            "reason": f"Tool loop ended with status '{loop_status}', so grounding confidence is low.",
+            "tool_calls": tool_total_calls,
+            "tool_results": tool_result_count,
+            "loop_status": loop_status,
+            "response_present": True,
+            "grounded_rows": 0,
+            "evaluated_rows": tool_result_count,
+            "coverage_ratio": 0.0,
+            "matched_tokens": [],
+            "expected_tokens": [],
+        }
+
+    normalized_response = _normalize_grounding_text(response_text)
+    response_tokens = set(_extract_grounding_tokens(response_text, max_tokens=64))
+    grounded_rows = 0
+    matched_tokens: List[str] = []
+    expected_tokens: List[str] = []
+
+    for row in result_rows:
+        preview = str(row.get("result_preview") or "").strip()
+        tokens = _extract_grounding_tokens(preview, max_tokens=8)
+        direct_match = False
+        normalized_preview = _normalize_grounding_text(preview)
+        if 12 <= len(normalized_preview) <= 160 and normalized_preview in normalized_response:
+            direct_match = True
+        overlap = [token for token in tokens if token in response_tokens or token in normalized_response]
+        row_expected = tokens[:4]
+        for token in row_expected:
+            if token not in expected_tokens:
+                expected_tokens.append(token)
+        if direct_match or (len(tokens) <= 2 and len(overlap) >= 1) or (len(tokens) >= 3 and len(overlap) >= 2):
+            grounded_rows += 1
+            for token in overlap[:3]:
+                if token not in matched_tokens:
+                    matched_tokens.append(token)
+
+    coverage_ratio = grounded_rows / tool_result_count if tool_result_count > 0 else 0.0
+    if grounded_rows > 0 and coverage_ratio >= 0.5:
+        reason = (
+            f"Tool-result grounding matched {grounded_rows}/{tool_result_count} result row"
+            f"{'' if tool_result_count == 1 else 's'}."
+        )
+        if matched_tokens:
+            reason += f" Matched tokens: {', '.join(matched_tokens[:4])}."
+        status = "pass"
+    else:
+        reason = (
+            f"Tool results were captured, but the final response did not show enough overlap "
+            f"with tool evidence ({grounded_rows}/{tool_result_count} rows matched)."
+        )
+        if expected_tokens:
+            reason += f" Expected signals included: {', '.join(expected_tokens[:4])}."
+        status = "fail"
+
+    return {
+        "status": status,
+        "reason": reason,
+        "tool_calls": tool_total_calls,
+        "tool_results": tool_result_count,
+        "loop_status": loop_status or None,
+        "response_present": True,
+        "grounded_rows": grounded_rows,
+        "evaluated_rows": tool_result_count,
+        "coverage_ratio": round(coverage_ratio, 4),
+        "matched_tokens": matched_tokens[:6],
+        "expected_tokens": expected_tokens[:6],
+    }
+
+
+def _build_tool_evidence_grounding_text(
+    tool_evidence: List[Dict[str, Any]],
+    max_items: int = 4,
+) -> str:
+    lines: List[str] = []
+    for idx, row in enumerate(tool_evidence or [], start=1):
+        if idx > max_items:
+            break
+        if not isinstance(row, dict):
+            continue
+        tool_name = str(row.get("name") or "unknown_tool").strip()
+        result_preview = str(row.get("result_preview") or "").strip()
+        if not result_preview:
+            continue
+        lines.append(f"{idx}. {tool_name}: {result_preview[:800]}")
+    return "\n".join(lines).strip()
+
+
+async def _run_semantic_tool_grounding_judge(
+    *,
+    tool_evidence: List[Dict[str, Any]],
+    candidate_response_preview: Any,
+    project_id: int,
+    agent_id: Optional[str],
+    db: Session,
+    judge_model: str = "gpt-4o-mini",
+) -> Dict[str, Any]:
+    response_text = str(candidate_response_preview or "").strip()
+    evidence_text = _build_tool_evidence_grounding_text(tool_evidence)
+    if not evidence_text or not response_text:
+        return {
+            "status": "unavailable",
+            "reason": "Semantic grounding judge skipped because evidence or final response text was missing.",
+            "judge_model": judge_model,
+        }
+
+    user_api_key = None
+    try:
+        user_api_key = UserApiKeyService(db).get_user_api_key(project_id, "openai", agent_id)
+    except Exception:
+        user_api_key = None
+
+    if not user_api_key and not getattr(app_settings, "OPENAI_API_KEY", None):
+        return {
+            "status": "unavailable",
+            "reason": "Semantic grounding judge is unavailable because no OpenAI judge key is configured.",
+            "judge_model": judge_model,
+        }
+
+    from app.services.judge_service import judge_service
+
+    raw = await judge_service.evaluate_grounding(
+        tool_evidence_text=evidence_text,
+        final_response_text=response_text,
+        judge_model=judge_model,
+        user_api_key=user_api_key,
+    )
+    if not isinstance(raw, dict) or raw.get("error"):
+        return {
+            "status": "unavailable",
+            "reason": "Semantic grounding judge did not return a usable result.",
+            "judge_model": judge_model,
+        }
+
+    grounded = bool(raw.get("grounded"))
+    confidence = str(raw.get("confidence") or "").strip().lower() or "unknown"
+    reasoning = str(raw.get("reasoning") or "").strip() or (
+        "Semantic grounding judge found the response grounded."
+        if grounded
+        else "Semantic grounding judge found the response insufficiently grounded."
+    )
+    matched_facts = raw.get("matched_facts") if isinstance(raw.get("matched_facts"), list) else []
+    missing_facts = raw.get("missing_facts") if isinstance(raw.get("missing_facts"), list) else []
+    return {
+        "status": "pass" if grounded else "fail",
+        "reason": reasoning,
+        "judge_confidence": confidence,
+        "judge_model": judge_model,
+        "matched_facts": [str(v).strip() for v in matched_facts if str(v).strip()][:4],
+        "missing_facts": [str(v).strip() for v in missing_facts if str(v).strip()][:4],
+    }
+
+
+def _merge_tool_grounding_with_semantic(
+    heuristic: Dict[str, Any],
+    semantic: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    merged = dict(heuristic or {})
+    if not semantic or not isinstance(semantic, dict):
+        return merged
+
+    semantic_status = str(semantic.get("status") or "").strip().lower() or "unavailable"
+    merged["semantic_status"] = semantic_status
+    merged["semantic_reason"] = str(semantic.get("reason") or "").strip() or None
+    merged["semantic_confidence"] = str(semantic.get("judge_confidence") or "").strip() or None
+    merged["semantic_model"] = str(semantic.get("judge_model") or "").strip() or None
+    merged["matched_facts"] = semantic.get("matched_facts") if isinstance(semantic.get("matched_facts"), list) else []
+    merged["missing_facts"] = semantic.get("missing_facts") if isinstance(semantic.get("missing_facts"), list) else []
+
+    if semantic_status == "pass" and str(merged.get("status") or "").strip().lower() == "fail":
+        merged["status"] = "pass"
+        base_reason = str(merged.get("reason") or "").strip()
+        semantic_reason = str(semantic.get("reason") or "").strip()
+        merged["reason"] = (
+            f"{base_reason} Semantic judge rescue: {semantic_reason}".strip()
+            if base_reason
+            else semantic_reason or "Semantic judge found the final response grounded in tool evidence."
+        )
+    elif semantic_status == "fail":
+        merged["status"] = "fail"
+        semantic_reason = str(semantic.get("reason") or "").strip()
+        if semantic_reason:
+            merged["reason"] = semantic_reason
+
+    return merged
+
+
 DISALLOWED_REPLAY_OVERRIDE_KEYS: Set[str] = {
     # Content / trace fields that must not be overridden via replay_overrides.
     "messages",
@@ -543,6 +874,52 @@ def _build_replay_candidate_steps(
             if st.get("step_type") == "tool_call":
                 steps.append(st)
 
+        # Stage 2 alpha: preserve loop-level tool result evidence as canonical steps.
+        loop_events = res.get("tool_loop_events")
+        if isinstance(loop_events, list):
+            for ev_idx, ev in enumerate(loop_events, start=1):
+                if not isinstance(ev, dict):
+                    continue
+                round_no = ev.get("round")
+                try:
+                    round_no_int = int(round_no) if round_no is not None else ev_idx
+                except Exception:
+                    round_no_int = ev_idx
+                tool_rows = ev.get("tool_rows")
+                if not isinstance(tool_rows, list):
+                    continue
+                for row_idx, row in enumerate(tool_rows, start=1):
+                    if not isinstance(row, dict):
+                        continue
+                    tool_name = str(row.get("name") or "").strip()
+                    if not tool_name:
+                        continue
+                    step_order = (
+                        order
+                        + 0.2
+                        + float(max(round_no_int, 1)) * 0.01
+                        + float(row_idx) * 0.0001
+                    )
+                    step_result_payload = {
+                        "status": str(row.get("status") or "").strip().lower() or "unknown",
+                        "arguments_preview": row.get("arguments_preview"),
+                        "result_preview": row.get("result_preview"),
+                        "round": round_no_int,
+                    }
+                    steps.append(
+                        {
+                            **base,
+                            "step_order": step_order,
+                            "step_type": "tool_result",
+                            "tool_name": tool_name,
+                            "tool_args": {
+                                "status": step_result_payload["status"],
+                                "round": round_no_int,
+                            },
+                            "tool_result": step_result_payload,
+                        }
+                    )
+
     return sorted(steps, key=lambda x: x.get("step_order") or 0)
 
 
@@ -552,6 +929,127 @@ def _baseline_sequence_for_snapshot(snapshot: Snapshot) -> List[str]:
     if isinstance(raw, list):
         return tool_calls_summary_to_sequence(raw)
     return []
+
+
+def _build_stage1_tool_evidence(
+    run_tool_summary: Any,
+    replay_result: Optional[Dict[str, Any]] = None,
+    max_items: int = 20,
+) -> List[Dict[str, Any]]:
+    """
+    Stage 1 evidence model:
+    - detect tool calls from provider response
+    - do not execute tools yet
+    - expose deterministic evidence rows for UI trust cues
+    """
+    if not isinstance(run_tool_summary, list):
+        run_tool_summary = []
+
+    # Prefer richer loop events when present (Stage 2 alpha+).
+    if isinstance(replay_result, dict):
+        loop_events = replay_result.get("tool_loop_events")
+        if isinstance(loop_events, list):
+            rows: List[Dict[str, Any]] = []
+            for ev in loop_events:
+                if not isinstance(ev, dict):
+                    continue
+                tool_rows = ev.get("tool_rows")
+                if not isinstance(tool_rows, list):
+                    continue
+                for item in tool_rows:
+                    if not isinstance(item, dict):
+                        continue
+                    name = str(item.get("name") or "").strip()
+                    if not name:
+                        continue
+                    rows.append(
+                        {
+                            "order": len(rows) + 1,
+                            "name": name,
+                            "status": str(item.get("status") or "simulated"),
+                            "reason_code": "tool_loop_event",
+                            "reason_message": "Derived from tool loop events.",
+                            "arguments_preview": _safe_preview_json(
+                                item.get("arguments_preview"), max_chars=1500
+                            ),
+                            "result_preview": _safe_preview_json(
+                                item.get("result_preview"), max_chars=1500
+                            ),
+                        }
+                    )
+                    if len(rows) >= max_items:
+                        break
+                if len(rows) >= max_items:
+                    break
+            if rows:
+                return rows
+
+    out: List[Dict[str, Any]] = []
+    for idx, item in enumerate(run_tool_summary):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        args_preview = _safe_preview_json(item.get("arguments"), max_chars=1500)
+        out.append(
+            {
+                "order": idx + 1,
+                "name": name,
+                "status": "simulated",
+                "reason_code": "stage1_no_tool_execution_loop",
+                "reason_message": "Tool call detected, but execution is not enabled in Stage 1.",
+                "arguments_preview": args_preview,
+                "result_preview": None,
+            }
+        )
+        if len(out) >= max_items:
+            break
+    return out
+
+
+def _build_stage1_tool_execution_summary(tool_evidence: List[Dict[str, Any]]) -> Dict[str, Any]:
+    total_calls = len(tool_evidence or [])
+    executed = 0
+    simulated = sum(1 for row in (tool_evidence or []) if str(row.get("status")) == "simulated")
+    skipped = sum(1 for row in (tool_evidence or []) if str(row.get("status")) == "skipped")
+    failed = sum(1 for row in (tool_evidence or []) if str(row.get("status")) == "failed")
+    tool_results = sum(
+        1
+        for row in (tool_evidence or [])
+        if isinstance(row.get("result_preview"), str) and str(row.get("result_preview") or "").strip()
+    )
+
+    if total_calls <= 0:
+        return {
+            "status": "no_tool_calls",
+            "confidence": "medium",
+            "detail": "No tool calls detected for this attempt.",
+            "counts": {
+                "total_calls": 0,
+                "executed": 0,
+                "simulated": 0,
+                "skipped": 0,
+                "failed": 0,
+                "tool_results": 0,
+            },
+            "requires_stage2_loop": False,
+        }
+
+    return {
+        "status": "calls_detected_no_execution",
+        "confidence": "low",
+        "detail": "Tool calls were detected but not executed in Stage 1.",
+        "counts": {
+            "total_calls": total_calls,
+            "executed": executed,
+            "simulated": simulated,
+            "skipped": skipped,
+            "failed": failed,
+            "tool_results": tool_results,
+        },
+        "requires_stage2_loop": True,
+    }
 
 
 def _parse_snapshot_ids(raw: Optional[List[str]]) -> List[int]:
@@ -1356,6 +1854,32 @@ async def _run_release_gate(
                 run_tool_summary = response_to_canonical_tool_calls_summary(
                     res.get("response_data") or {}, res.get("replay_provider")
                 )
+                tool_evidence = _build_stage1_tool_evidence(run_tool_summary, replay_result=res)
+                tool_execution_summary = _build_stage1_tool_execution_summary(tool_evidence)
+                tool_loop_status = str(res.get("tool_loop_status") or "").strip().lower()
+                tool_grounding_heuristic = _assess_tool_grounding(
+                    tool_evidence=tool_evidence,
+                    candidate_response_preview=candidate_response_preview,
+                    tool_loop_status=tool_loop_status,
+                )
+                tool_grounding_semantic: Optional[Dict[str, Any]] = None
+                if str(tool_grounding_heuristic.get("status") or "").strip().lower() == "fail":
+                    tool_grounding_semantic = await _run_semantic_tool_grounding_judge(
+                        tool_evidence=tool_evidence,
+                        candidate_response_preview=candidate_response_preview,
+                        project_id=project_id,
+                        agent_id=getattr(snapshot, "agent_id", None),
+                        db=db,
+                    )
+                tool_grounding = _merge_tool_grounding_with_semantic(
+                    tool_grounding_heuristic,
+                    tool_grounding_semantic,
+                )
+                tool_grounding_status = str(tool_grounding.get("status") or "").strip().lower()
+                signals_obj["checks"]["tool_grounding"] = tool_grounding_status
+                signals_obj["details"]["tool_grounding"] = tool_grounding
+                if tool_grounding_status == "fail" and "tool_grounding" not in signals_obj["failed"]:
+                    signals_obj["failed"].append("tool_grounding")
                 baseline_seq = _baseline_sequence_for_snapshot(snapshot)
                 candidate_seq = tool_calls_summary_to_sequence(run_tool_summary)
                 behavior_diff = compute_behavior_diff(baseline_seq, candidate_seq).to_dict()
@@ -1404,9 +1928,26 @@ async def _run_release_gate(
                                     if replay_error_code == "missing_api_key" and replay_provider
                                     else []
                                 ),
+                                "tool_loop_status": str(res.get("tool_loop_status") or "").strip() or None,
+                                "tool_loop_rounds": (
+                                    int(res.get("tool_loop_rounds"))
+                                    if isinstance(res.get("tool_loop_rounds"), (int, float))
+                                    else 0
+                                ),
+                                "tool_loop_events": (
+                                    res.get("tool_loop_events")
+                                    if isinstance(res.get("tool_loop_events"), list)
+                                    else []
+                                ),
                             },
                             "behavior_diff": behavior_diff,
                             "signals": signals_obj,
+                            "tool_execution_summary": tool_execution_summary,
+                            "tool_evidence": tool_evidence,
+                            "tool_replay_status": tool_execution_summary.get("status"),
+                            "final_response_confidence_stage1": tool_execution_summary.get(
+                                "confidence"
+                            ),
                             "baseline_snapshot": {
                                 "response_preview": baseline_response_preview,
                                 "response_data_keys": baseline_response_data_keys,
@@ -1425,6 +1966,7 @@ async def _run_release_gate(
                                 "response_preview_status": response_preview_status,
                                 "response_extract_path": candidate_extract_path,
                                 "response_extract_reason": candidate_extract_reason,
+                                "tool_calls_summary": run_tool_summary,
                                 "request_fallback_stage": (
                                     str(res.get("request_fallback_stage") or "").strip() or None
                                 ),
@@ -1474,9 +2016,26 @@ async def _run_release_gate(
                                     "response_data_keys": response_data_keys,
                                 },
                                 "missing_provider_keys": [],
+                                "tool_loop_status": str(res.get("tool_loop_status") or "").strip() or None,
+                                "tool_loop_rounds": (
+                                    int(res.get("tool_loop_rounds"))
+                                    if isinstance(res.get("tool_loop_rounds"), (int, float))
+                                    else 0
+                                ),
+                                "tool_loop_events": (
+                                    res.get("tool_loop_events")
+                                    if isinstance(res.get("tool_loop_events"), list)
+                                    else []
+                                ),
                             },
                             "behavior_diff": behavior_diff,
                             "signals": signals_obj,
+                            "tool_execution_summary": tool_execution_summary,
+                            "tool_evidence": tool_evidence,
+                            "tool_replay_status": tool_execution_summary.get("status"),
+                            "final_response_confidence_stage1": tool_execution_summary.get(
+                                "confidence"
+                            ),
                             "baseline_snapshot": {
                                 "response_preview": baseline_response_preview,
                                 "response_data_keys": baseline_response_data_keys,
@@ -1494,6 +2053,7 @@ async def _run_release_gate(
                                 "response_preview_status": response_preview_status,
                                 "response_extract_path": candidate_extract_path,
                                 "response_extract_reason": candidate_extract_reason,
+                                "tool_calls_summary": run_tool_summary,
                                 "request_fallback_stage": (
                                     str(res.get("request_fallback_stage") or "").strip() or None
                                 ),
@@ -1514,8 +2074,12 @@ async def _run_release_gate(
                 _candidate_status, candidate_summary, candidate_violations = run_behavior_validation(
                     candidate_rules, candidate_steps
                 )
+                candidate_tool_result_steps = [
+                    st for st in candidate_steps if str(st.get("step_type") or "").strip() == "tool_result"
+                ]
                 candidate_summary["policy_resolution"] = candidate_policy_resolution
                 candidate_summary["ruleset_hash"] = _build_ruleset_hash(candidate_rules)
+                candidate_summary["tool_result_count"] = len(candidate_tool_result_steps)
                 # Keep rule snapshot lightweight for Release Gate jobs.
                 # Full rule definitions can be fetched from Behavior APIs when needed.
                 candidate_summary["rule_snapshot"] = [
@@ -1557,9 +2121,26 @@ async def _run_release_gate(
                             "error_messages": [],
                             "error_codes": [],
                             "missing_provider_keys": [],
+                            "tool_loop_status": str(res.get("tool_loop_status") or "").strip() or None,
+                            "tool_loop_rounds": (
+                                int(res.get("tool_loop_rounds"))
+                                if isinstance(res.get("tool_loop_rounds"), (int, float))
+                                else 0
+                            ),
+                            "tool_loop_events": (
+                                res.get("tool_loop_events")
+                                if isinstance(res.get("tool_loop_events"), list)
+                                else []
+                            ),
                         },
                         "behavior_diff": behavior_diff,
                         "signals": signals_obj,
+                        "tool_execution_summary": tool_execution_summary,
+                        "tool_evidence": tool_evidence,
+                        "tool_replay_status": tool_execution_summary.get("status"),
+                        "final_response_confidence_stage1": tool_execution_summary.get(
+                            "confidence"
+                        ),
                         "baseline_snapshot": {
                             "response_preview": baseline_response_preview,
                             "response_data_keys": baseline_response_data_keys,
@@ -1577,12 +2158,24 @@ async def _run_release_gate(
                             "response_preview_status": response_preview_status,
                             "response_extract_path": candidate_extract_path,
                             "response_extract_reason": candidate_extract_reason,
+                            "tool_calls_summary": run_tool_summary,
                             "request_fallback_stage": (
                                 str(res.get("request_fallback_stage") or "").strip() or None
                             ),
                             "request_fallback_attempts": (
                                 res.get("request_fallback_attempts")
                                 if isinstance(res.get("request_fallback_attempts"), list)
+                                else []
+                            ),
+                            "tool_loop_status": str(res.get("tool_loop_status") or "").strip() or None,
+                            "tool_loop_rounds": (
+                                int(res.get("tool_loop_rounds"))
+                                if isinstance(res.get("tool_loop_rounds"), (int, float))
+                                else 0
+                            ),
+                            "tool_loop_events": (
+                                res.get("tool_loop_events")
+                                if isinstance(res.get("tool_loop_events"), list)
                                 else []
                             ),
                         },

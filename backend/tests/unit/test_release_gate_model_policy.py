@@ -189,3 +189,118 @@ class TestReleaseGatePlatformCreditGate:
         assert isinstance(e.value.detail, dict)
         assert e.value.detail.get("code") == "LIMIT_PLATFORM_REPLAY_CREDITS"
 
+
+@pytest.mark.unit
+class TestReleaseGateToolEvidenceSummary:
+    def test_stage1_tool_execution_summary_counts_tool_results(self):
+        from app.api.v1.endpoints.release_gate import _build_stage1_tool_execution_summary
+
+        summary = _build_stage1_tool_execution_summary(
+            [
+                {"name": "web_search", "status": "simulated", "result_preview": "top result"},
+                {"name": "fetch_doc", "status": "failed", "result_preview": ""},
+            ]
+        )
+
+        assert summary["status"] == "calls_detected_no_execution"
+        assert summary["counts"]["total_calls"] == 2
+        assert summary["counts"]["simulated"] == 1
+        assert summary["counts"]["failed"] == 1
+        assert summary["counts"]["tool_results"] == 1
+
+    def test_stage1_tool_execution_summary_defaults_to_zero_without_calls(self):
+        from app.api.v1.endpoints.release_gate import _build_stage1_tool_execution_summary
+
+        summary = _build_stage1_tool_execution_summary([])
+
+        assert summary["status"] == "no_tool_calls"
+        assert summary["counts"]["tool_results"] == 0
+
+
+@pytest.mark.unit
+class TestReleaseGateToolGrounding:
+    def test_assess_tool_grounding_passes_on_token_overlap(self):
+        from app.api.v1.endpoints.release_gate import _assess_tool_grounding
+
+        result = _assess_tool_grounding(
+            tool_evidence=[
+                {
+                    "name": "get_weather",
+                    "status": "simulated",
+                    "result_preview": '{"city":"Seoul","forecast":"sunny","temperature":"23C"}',
+                }
+            ],
+            candidate_response_preview="The current weather in Seoul is sunny at 23C.",
+            tool_loop_status="completed",
+        )
+
+        assert result["status"] == "pass"
+        assert result["grounded_rows"] == 1
+        assert "seoul" in result["matched_tokens"]
+
+    def test_assess_tool_grounding_fails_when_response_ignores_tool_result(self):
+        from app.api.v1.endpoints.release_gate import _assess_tool_grounding
+
+        result = _assess_tool_grounding(
+            tool_evidence=[
+                {
+                    "name": "get_weather",
+                    "status": "simulated",
+                    "result_preview": '{"city":"Seoul","forecast":"sunny","temperature":"23C"}',
+                }
+            ],
+            candidate_response_preview="I cannot verify the current weather right now.",
+            tool_loop_status="completed",
+        )
+
+        assert result["status"] == "fail"
+        assert result["grounded_rows"] == 0
+        assert result["coverage_ratio"] == 0.0
+
+    def test_merge_tool_grounding_with_semantic_can_rescue_fail(self):
+        from app.api.v1.endpoints.release_gate import _merge_tool_grounding_with_semantic
+
+        merged = _merge_tool_grounding_with_semantic(
+            {
+                "status": "fail",
+                "reason": "Lexical overlap was weak.",
+                "tool_calls": 1,
+                "tool_results": 1,
+            },
+            {
+                "status": "pass",
+                "reason": "The final response accurately paraphrases the tool evidence.",
+                "judge_confidence": "high",
+                "judge_model": "gpt-4o-mini",
+                "matched_facts": ["Seoul weather is sunny"],
+            },
+        )
+
+        assert merged["status"] == "pass"
+        assert merged["semantic_status"] == "pass"
+        assert "Semantic judge rescue" in merged["reason"]
+        assert merged["matched_facts"] == ["Seoul weather is sunny"]
+
+    def test_merge_tool_grounding_with_semantic_preserves_fail(self):
+        from app.api.v1.endpoints.release_gate import _merge_tool_grounding_with_semantic
+
+        merged = _merge_tool_grounding_with_semantic(
+            {
+                "status": "fail",
+                "reason": "Lexical overlap was weak.",
+                "tool_calls": 1,
+                "tool_results": 1,
+            },
+            {
+                "status": "fail",
+                "reason": "The response introduces unsupported claims.",
+                "judge_confidence": "medium",
+                "judge_model": "gpt-4o-mini",
+                "missing_facts": ["Observed weather"],
+            },
+        )
+
+        assert merged["status"] == "fail"
+        assert merged["semantic_status"] == "fail"
+        assert merged["reason"] == "The response introduces unsupported claims."
+

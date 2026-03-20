@@ -26,6 +26,7 @@ class TestOpsAlertingService:
         service = ops_module.OpsAlertingService()
         events = _collect_dispatches(service)
 
+        monkeypatch.setattr(ops_module.settings, "OPS_LIVE_VIEW_MIN_SAMPLES", 3, raising=False)
         monkeypatch.setattr(ops_module.settings, "OPS_LIVE_VIEW_5XX_RATE_THRESHOLD", 0.2, raising=False)
         monkeypatch.setattr(ops_module.settings, "OPS_LIVE_VIEW_P95_MS_THRESHOLD", 10000, raising=False)
         monkeypatch.setattr(ops_module.settings, "OPS_ALERT_COOLDOWN_SECONDS", 600, raising=False)
