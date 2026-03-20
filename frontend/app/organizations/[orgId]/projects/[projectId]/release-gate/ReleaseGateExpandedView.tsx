@@ -539,7 +539,88 @@ function AttemptDetailOverlay({
   };
 
   const formatSignalWhy = (id: string, raw: unknown): string => {
-    return "";
+    const d = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+    if (!d) return "Evidence unavailable for this check.";
+    const status = String(d.status ?? "").trim().toLowerCase();
+    const statusLead =
+      status === "fail"
+        ? "Check failed."
+        : status === "pass"
+          ? "Check passed."
+          : status === "not_applicable"
+            ? "Not applicable for this run."
+            : "Status captured.";
+    const toNum = (value: unknown): number | null => {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    if (id === "empty") {
+      const actualChars = toNum(d.actual_chars);
+      const minChars = toNum(d.min_chars);
+      if (actualChars !== null && minChars !== null) {
+        return `Empty check: actual ${Math.round(actualChars)} chars (min ${Math.round(minChars)} chars).`;
+      }
+      return `${statusLead} Evidence unavailable for this check.`;
+    }
+
+    if (id === "latency") {
+      const actualMs = toNum(d.actual_ms);
+      const failMs = toNum(d.fail_ms);
+      if (actualMs !== null && failMs !== null) {
+        return `Latency ${Math.round(actualMs)}ms (limit ${Math.round(failMs)}ms).`;
+      }
+      return `${statusLead} Evidence unavailable for this check.`;
+    }
+
+    if (id === "status_code") {
+      const actualStatus = toNum(d.actual_status);
+      const failFrom = toNum(d.fail_from);
+      if (actualStatus !== null && failFrom !== null) {
+        return `HTTP status ${Math.round(actualStatus)} (fails from ${Math.round(failFrom)}).`;
+      }
+      return `${statusLead} Evidence unavailable for this check.`;
+    }
+
+    if (id === "refusal") {
+      if (typeof d.matched === "boolean") {
+        return `Refusal pattern ${d.matched ? "detected" : "not detected"}.`;
+      }
+      return `${statusLead} Evidence unavailable for this check.`;
+    }
+
+    if (id === "json") {
+      const mode = String(d.mode ?? "default").trim() || "default";
+      const checked = typeof d.checked === "boolean" ? (d.checked ? "yes" : "no") : "unknown";
+      const parsed =
+        typeof d.parsed_ok === "boolean" ? (d.parsed_ok ? "ok" : "failed") : "unknown";
+      return `JSON validity: mode ${mode}, checked ${checked}, parsed ${parsed}.`;
+    }
+
+    if (id === "length") {
+      const baselineLen = toNum(d.baseline_len);
+      const actualChars = toNum(d.actual_chars);
+      const ratio = toNum(d.ratio);
+      if (baselineLen !== null && actualChars !== null && ratio !== null) {
+        return `Output length drift ${Math.abs(ratio * 100).toFixed(1)}% (baseline ${Math.round(baselineLen)}, actual ${Math.round(actualChars)}).`;
+      }
+      return `${statusLead} Evidence unavailable for this check.`;
+    }
+
+    if (id === "repetition") {
+      const maxRepeats = toNum(d.max_line_repeats);
+      const failRepeats = toNum(d.fail_line_repeats);
+      if (maxRepeats !== null && failRepeats !== null) {
+        return `Repetition max ${Math.round(maxRepeats)} line repeats (fails at ${Math.round(failRepeats)}).`;
+      }
+      return `${statusLead} Evidence unavailable for this check.`;
+    }
+
+    if (id === "required" || id === "format" || id === "leakage" || id === "tool") {
+      return `${statusLead} Status available, detailed evidence unavailable for this check.`;
+    }
+
+    return `${statusLead} Evidence unavailable for this check.`;
   };
 
   const candidateSnapshot =
@@ -689,7 +770,9 @@ function AttemptDetailOverlay({
         if (v === "pass" || v === "fail" || v === "not_applicable") return v;
         return "not_applicable";
       })(),
-      reason: formatSignalWhy("latency", (signalsDetailsRaw as any)?.latency) || "No latency evidence.",
+      reason:
+        formatSignalWhy("latency", (signalsDetailsRaw as any)?.latency) ||
+        "Latency evidence missing; decision relied on other blocking checks.",
     },
     {
       id: "regression_diff",
@@ -706,6 +789,21 @@ function AttemptDetailOverlay({
     },
   ];
   const failedGates = gateRows.filter(g => g.status === "fail");
+  const decisionSourceLabels = (() => {
+    const failedOrdered = [
+      policyRows.length > 0 ? "Policy" : null,
+      failedGates.some(g => g.id === "tool_integrity") ? "Tool Integrity" : null,
+      failedGates.some(g => g.id === "latency") ? "Latency" : null,
+      failedGates.some(g => g.id === "regression_diff") ? "Regression Diff" : null,
+    ].filter((v): v is string => Boolean(v));
+    if (failedOrdered.length > 0) return failedOrdered;
+    return [
+      policyRows.length > 0 ? "Policy" : null,
+      "Tool Integrity",
+      gateRows.some(g => g.id === "latency" && g.status !== "not_applicable") ? "Latency" : null,
+      "Regression Diff",
+    ].filter((v): v is string => Boolean(v));
+  })();
   const decisionHeadline = (() => {
     const toHeadline = (reason: string) => `Reason: ${reason}`;
     if (pass) return toHeadline("No blocking regressions detected.");
@@ -977,11 +1075,19 @@ function AttemptDetailOverlay({
                         <div className="grid gap-3 xl:grid-cols-2">
                           {!signalsChecksRaw ? (
                             <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-sm text-slate-500">
-                              No eval signals returned.
+                              <p>No eval signals returned.</p>
+                              <p className="mt-2 text-xs text-slate-400">Eval coverage: 0</p>
+                              <p className="mt-1 text-xs text-slate-400">
+                                Decision derived from {decisionSourceLabels.join(" / ")}.
+                              </p>
                             </div>
                           ) : signalsRows.length === 0 ? (
                             <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-sm text-slate-500">
-                              No signal rows.
+                              <p>No signal rows.</p>
+                              <p className="mt-2 text-xs text-slate-400">Eval coverage: 0</p>
+                              <p className="mt-1 text-xs text-slate-400">
+                                Decision derived from {decisionSourceLabels.join(" / ")}.
+                              </p>
                             </div>
                           ) : (
                             signalsRows.map(row => {
@@ -989,6 +1095,10 @@ function AttemptDetailOverlay({
                                 signalsDetailsRaw
                                   ? formatSignalValue(row.id, (signalsDetailsRaw as any)?.[row.id], row.pass)
                                   : null;
+                              const evidenceText =
+                                signalsDetailsRaw
+                                  ? formatSignalWhy(row.id, (signalsDetailsRaw as any)?.[row.id])
+                                  : "Evidence unavailable for this check.";
                               return (
                                 <div
                                   key={row.id}
@@ -1013,6 +1123,9 @@ function AttemptDetailOverlay({
                                     </span>
                                   </div>
                                   <div className="mt-3">{barNode}</div>
+                                  <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                                    {evidenceText}
+                                  </p>
                                 </div>
                               );
                             })
