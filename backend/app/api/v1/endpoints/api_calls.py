@@ -91,7 +91,7 @@ def stream_recent_api_calls(
     return {"items": calls, "last_1m": 0, "last_5m": 0}
 
 
-@router.get("/{project_id}/api-calls/{call_id}", response_model=APICallResponse)
+@router.get("/{project_id}/api-calls/{call_id:int}", response_model=APICallResponse)
 def get_api_call(
     project_id: int,
     call_id: int,
