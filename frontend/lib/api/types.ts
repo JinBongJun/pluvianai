@@ -115,6 +115,31 @@ export interface ReleaseGateAttempt {
   pass: boolean;
   trace_id?: string;
   failure_reasons?: string[];
+  tool_execution_summary?: {
+    status?: string;
+    confidence?: "low" | "medium" | "high" | string;
+    detail?: string;
+    counts?: {
+      total_calls?: number;
+      executed?: number;
+      simulated?: number;
+      skipped?: number;
+      failed?: number;
+      tool_results?: number;
+    };
+    requires_stage2_loop?: boolean;
+  };
+  tool_evidence?: Array<{
+    order?: number;
+    name?: string;
+    status?: "executed" | "simulated" | "skipped" | "failed" | string;
+    reason_code?: string;
+    reason_message?: string;
+    arguments_preview?: string | null;
+    result_preview?: string | null;
+  }>;
+  tool_replay_status?: string;
+  final_response_confidence_stage1?: "low" | "medium" | "high" | string;
   baseline_snapshot?: {
     response_preview?: string;
     response_data_keys?: string[];
@@ -136,14 +161,51 @@ export interface ReleaseGateAttempt {
     error_messages?: string[];
     error_codes?: string[];
     missing_provider_keys?: string[];
+    tool_loop_status?: string | null;
+    tool_loop_rounds?: number;
+    tool_loop_events?: Array<{
+      round?: number;
+      status?: string;
+      mode?: string;
+      tool_count?: number;
+      tools?: string[];
+      tool_rows?: Array<{
+        name?: string;
+        status?: string;
+        arguments_preview?: string;
+        result_preview?: string;
+      }>;
+      reason?: string;
+      message?: string;
+      status_code?: number;
+    }>;
   };
   behavior_diff?: BehaviorDiffResult;
   candidate_snapshot?: {
     response_preview_status?: "ok" | "empty" | "tool_calls_only" | "unknown" | string;
     response_extract_path?: string | null;
     response_extract_reason?: string | null;
+    tool_calls_summary?: Array<{ name?: string; arguments?: unknown }>;
     request_fallback_stage?: string | null;
     request_fallback_attempts?: string[];
+    tool_loop_status?: string | null;
+    tool_loop_rounds?: number;
+    tool_loop_events?: Array<{
+      round?: number;
+      status?: string;
+      mode?: string;
+      tool_count?: number;
+      tools?: string[];
+      tool_rows?: Array<{
+        name?: string;
+        status?: string;
+        arguments_preview?: string;
+        result_preview?: string;
+      }>;
+      reason?: string;
+      message?: string;
+      status_code?: number;
+    }>;
   };
 }
 

@@ -198,7 +198,7 @@ async function checkLoggedInLandingAndBilling(baseUrl, backendUrl, email, passwo
     result.billing_paid_preview_only_disabled = previewCount >= 2 && previewDisabled >= 2;
     result.details = {
       orgIdUsed: resolvedOrgId,
-      tokenPresent: Boolean(token),
+      tokenPresent: Boolean(cookieHeader),
       usageStatus,
       usagePayload,
       orgLookupStatus,

@@ -620,7 +620,7 @@ def _persist_trajectory_steps(
                 agent_id=s.get("agent_id"),
                 tool_name=s.get("tool_name"),
                 tool_args=s.get("tool_args") or {},
-                tool_result=None,
+                tool_result=s.get("tool_result") if isinstance(s.get("tool_result"), dict) else None,
                 latency_ms=float(s.get("latency_ms")) if s.get("latency_ms") is not None else None,
                 source_type=s.get("source_type"),
                 source_id=str(s.get("source_id")) if s.get("source_id") is not None else None,
