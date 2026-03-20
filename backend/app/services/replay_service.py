@@ -17,6 +17,7 @@ from app.models.replay_run import ReplayRun
 from app.models.usage import Usage
 from app.models.project import Project
 from app.services.providers.capabilities import resolve_capabilities
+from app.core.canonical import response_to_canonical_tool_calls
 
 
 def _persist_replay_usage(
@@ -207,6 +208,241 @@ class ReplayService:
                 }
             )
         return out
+
+    def _build_simulated_tool_result_text(self, tool_name: str, tool_args: Dict[str, Any]) -> str:
+        """
+        Stage 2 alpha:
+        We do not execute arbitrary external tools yet.
+        Inject deterministic dry-run result text so the model can continue.
+        """
+        args_text = json.dumps(tool_args or {}, ensure_ascii=False)
+        return (
+            f"[tool_result simulated] tool={tool_name}; args={args_text}; "
+            "execution_mode=dry_run; result=Tool execution is not connected yet."
+        )
+
+    def _extract_text_and_tool_calls(
+        self,
+        response_data: Any,
+        provider: str,
+        normalizer: DataNormalizer,
+    ) -> Tuple[str, List[Dict[str, Any]], bool]:
+        text = ""
+        try:
+            text = normalizer._extract_response_text(response_data) or ""
+        except Exception:
+            text = ""
+        tool_calls, _provider, id_conflict = response_to_canonical_tool_calls(
+            response_data, provider_hint=provider
+        )
+        return text, tool_calls, bool(id_conflict)
+
+    def _build_openai_followup_payload_native(
+        self,
+        *,
+        model_for_request: str,
+        system_prompt: str,
+        conversation_messages: List[Dict[str, str]],
+        tool_calls: List[Dict[str, Any]],
+        tool_result_text_by_id: Dict[str, str],
+        base_tool_defs: List[Dict[str, Any]],
+        knobs_from_request: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Build an OpenAI-native follow-up payload:
+        assistant(tool_calls) -> tool(tool_result) -> next completion.
+        """
+        native_messages: List[Dict[str, Any]] = []
+        if system_prompt.strip():
+            native_messages.append({"role": "system", "content": system_prompt.strip()})
+
+        for m in conversation_messages:
+            role = str(m.get("role") or "user").strip().lower()
+            if role not in ("user", "assistant"):
+                role = "user"
+            native_messages.append({"role": role, "content": str(m.get("content") or "")})
+
+        tool_call_entries: List[Dict[str, Any]] = []
+        for idx, tc in enumerate(tool_calls, start=1):
+            call_id = str(tc.get("id") or f"call_{idx}")
+            name = str(tc.get("name") or "").strip() or "unknown_tool"
+            args = tc.get("arguments") if isinstance(tc.get("arguments"), dict) else {}
+            tool_call_entries.append(
+                {
+                    "id": call_id,
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "arguments": json.dumps(args, ensure_ascii=False),
+                    },
+                }
+            )
+        native_messages.append({"role": "assistant", "content": None, "tool_calls": tool_call_entries})
+
+        for entry in tool_call_entries:
+            call_id = str(entry.get("id") or "").strip()
+            if not call_id:
+                continue
+            tool_result_text = tool_result_text_by_id.get(call_id) or ""
+            native_messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": tool_result_text,
+                }
+            )
+
+        out: Dict[str, Any] = {
+            "model": model_for_request,
+            "messages": native_messages,
+        }
+        temperature = knobs_from_request.get("temperature")
+        top_p = knobs_from_request.get("top_p")
+        max_tokens = knobs_from_request.get("max_tokens")
+        if temperature is not None:
+            out["temperature"] = temperature
+        if top_p is not None:
+            out["top_p"] = top_p
+        if max_tokens is not None:
+            out["max_tokens"] = max_tokens
+        if isinstance(base_tool_defs, list) and base_tool_defs:
+            out["tools"] = base_tool_defs
+            out["tool_choice"] = "auto"
+        return out
+
+    def _build_anthropic_followup_payload_native(
+        self,
+        *,
+        model_for_request: str,
+        system_prompt: str,
+        conversation_messages: List[Dict[str, str]],
+        tool_calls: List[Dict[str, Any]],
+        tool_result_text_by_id: Dict[str, str],
+        base_tool_defs: List[Dict[str, Any]],
+        knobs_from_request: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        native_messages: List[Dict[str, Any]] = []
+        for m in conversation_messages:
+            role = str(m.get("role") or "user").strip().lower()
+            if role not in ("user", "assistant"):
+                role = "user"
+            native_messages.append({"role": role, "content": str(m.get("content") or "")})
+
+        assistant_blocks: List[Dict[str, Any]] = []
+        for idx, tc in enumerate(tool_calls, start=1):
+            call_id = str(tc.get("id") or f"toolu_{idx}")
+            name = str(tc.get("name") or "").strip() or "unknown_tool"
+            args = tc.get("arguments") if isinstance(tc.get("arguments"), dict) else {}
+            assistant_blocks.append(
+                {
+                    "type": "tool_use",
+                    "id": call_id,
+                    "name": name,
+                    "input": args,
+                }
+            )
+        native_messages.append({"role": "assistant", "content": assistant_blocks})
+
+        tool_result_blocks: List[Dict[str, Any]] = []
+        for block in assistant_blocks:
+            call_id = str(block.get("id") or "").strip()
+            if not call_id:
+                continue
+            tool_result_blocks.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": call_id,
+                    "content": tool_result_text_by_id.get(call_id) or "",
+                }
+            )
+        native_messages.append({"role": "user", "content": tool_result_blocks})
+
+        out: Dict[str, Any] = {
+            "model": model_for_request,
+            "messages": native_messages,
+            "max_tokens": int(knobs_from_request.get("max_tokens") or 1024),
+        }
+        if system_prompt.strip():
+            out["system"] = system_prompt.strip()
+        temperature = knobs_from_request.get("temperature")
+        top_p = knobs_from_request.get("top_p")
+        if temperature is not None:
+            out["temperature"] = temperature
+        if top_p is not None:
+            out["top_p"] = top_p
+        if isinstance(base_tool_defs, list) and base_tool_defs:
+            out["tools"] = base_tool_defs
+        return out
+
+    def _build_google_followup_payload_native(
+        self,
+        *,
+        model_for_request: str,
+        system_prompt: str,
+        conversation_messages: List[Dict[str, str]],
+        tool_calls: List[Dict[str, Any]],
+        tool_result_text_by_id: Dict[str, str],
+        base_tool_defs: List[Dict[str, Any]],
+        knobs_from_request: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        adapter = self._provider_adapters.get("google")
+        messages: List[Dict[str, Any]] = [
+            {"role": str(m.get("role") or "user"), "content": str(m.get("content") or "")}
+            for m in conversation_messages
+        ]
+
+        function_call_parts: List[Dict[str, Any]] = []
+        function_response_parts: List[Dict[str, Any]] = []
+        for idx, tc in enumerate(tool_calls, start=1):
+            call_id = str(tc.get("id") or f"call_{idx}")
+            name = str(tc.get("name") or "").strip() or "unknown_tool"
+            args = tc.get("arguments") if isinstance(tc.get("arguments"), dict) else {}
+            function_call_parts.append(
+                {
+                    "functionCall": {
+                        "id": call_id,
+                        "name": name,
+                        "args": args,
+                    }
+                }
+            )
+            function_response_parts.append(
+                {
+                    "functionResponse": {
+                        "name": name,
+                        "response": {
+                            "name": name,
+                            "content": {
+                                "result": tool_result_text_by_id.get(call_id) or "",
+                            },
+                        },
+                    }
+                }
+            )
+        messages.append({"role": "assistant", "content": function_call_parts})
+        messages.append({"role": "user", "content": function_response_parts})
+
+        if adapter is not None:
+            return adapter.build_payload(
+                system_prompt=system_prompt,
+                messages=messages,
+                knobs={
+                    "temperature": knobs_from_request.get("temperature"),
+                    "top_p": knobs_from_request.get("top_p"),
+                    "max_tokens": knobs_from_request.get("max_tokens"),
+                },
+                tool_specs=self._normalize_tool_specs({"tools": base_tool_defs}),
+                tool_choice={"functionCallingConfig": {"mode": "AUTO"}} if base_tool_defs else None,
+                model_for_request=model_for_request,
+                system_instruction_field=resolve_capabilities("google", model_for_request).get(
+                    "google_system_instruction_field", "system_instruction"
+                ),
+            )
+
+        return {
+            "model": model_for_request,
+            "messages": messages,
+        }
 
     def _map_tool_choice_for_provider(
         self, payload: Dict[str, Any], target_provider: str
@@ -556,6 +792,13 @@ class ReplayService:
                     "error_user_message": "Target model id is empty.",
                 }
 
+            # Keep a normalized seed conversation for tool-loop continuation.
+            normalized_seed = self._normalize_messages(payload)
+            seed_system_prompt = normalized_seed.get("system_prompt") or ""
+            seed_messages = normalized_seed.get("messages") or []
+            # Preserve original tool definitions for follow-up rounds.
+            base_tool_defs = payload.get("tools") if isinstance(payload.get("tools"), list) else []
+
             payload = self._build_payload_for_provider(payload, target_provider, model_for_request)
 
             # 2. Build URL
@@ -710,6 +953,231 @@ class ReplayService:
                         output_tokens=output_tokens,
                     )
 
+                    # Stage 2 alpha tool loop:
+                    # if provider returns tool calls, append simulated tool_result messages
+                    # and call the provider again up to max rounds.
+                    normalizer = DataNormalizer()
+                    loop_rounds = 0
+                    loop_events: List[Dict[str, Any]] = []
+                    loop_status = "not_needed"
+                    current_response_data = response_data
+                    total_input_tokens = int(input_tokens or 0)
+                    total_output_tokens = int(output_tokens or 0)
+                    total_used_credits = int(used_credits or 0)
+                    max_tool_rounds_raw = (
+                        replay_overrides.get("max_tool_rounds")
+                        if isinstance(replay_overrides, dict)
+                        else None
+                    )
+                    try:
+                        max_tool_rounds = int(max_tool_rounds_raw) if max_tool_rounds_raw is not None else 4
+                    except Exception:
+                        max_tool_rounds = 4
+                    max_tool_rounds = max(1, min(max_tool_rounds, 8))
+
+                    # Keep an evolving normalized conversation for follow-up rounds.
+                    conversation_messages: List[Dict[str, str]] = [
+                        {"role": str(m.get("role") or "user"), "content": str(m.get("content") or "")}
+                        for m in seed_messages
+                        if isinstance(m, dict) and str(m.get("content") or "").strip()
+                    ]
+                    # Ensure at least one user turn exists.
+                    if not conversation_messages:
+                        fallback_user = str(snapshot.user_message or "").strip()
+                        if fallback_user:
+                            conversation_messages.append({"role": "user", "content": fallback_user})
+
+                    for round_index in range(1, max_tool_rounds + 1):
+                        assistant_text, tool_calls, id_conflict = self._extract_text_and_tool_calls(
+                            current_response_data, provider, normalizer
+                        )
+                        if id_conflict:
+                            loop_status = "id_conflict"
+                            loop_events.append(
+                                {
+                                    "round": round_index,
+                                    "status": "stopped",
+                                    "reason": "tool_call_id_conflict",
+                                }
+                            )
+                            break
+                        if not tool_calls:
+                            if round_index == 1:
+                                loop_status = "not_needed"
+                            else:
+                                loop_status = "completed"
+                            break
+
+                        loop_rounds = round_index
+                        loop_status = "running"
+                        followup_mode = "text_fallback"
+                        tool_names = [str(tc.get("name") or "") for tc in tool_calls]
+                        tool_event_rows: List[Dict[str, Any]] = []
+                        tool_result_text_by_id: Dict[str, str] = {}
+                        for tc in tool_calls:
+                            tool_name = str(tc.get("name") or "").strip() or "unknown_tool"
+                            tool_args = tc.get("arguments") if isinstance(tc.get("arguments"), dict) else {}
+                            simulated_result = self._build_simulated_tool_result_text(tool_name, tool_args)
+                            call_id = str(tc.get("id") or "").strip()
+                            if not call_id:
+                                call_id = f"call_{round_index}_{tool_name}"
+                            tc["id"] = call_id
+                            tool_result_text_by_id[call_id] = simulated_result
+                            tool_event_rows.append(
+                                {
+                                    "name": tool_name,
+                                    "status": "simulated",
+                                    "arguments_preview": json.dumps(tool_args, ensure_ascii=False),
+                                    "result_preview": simulated_result,
+                                }
+                            )
+                        loop_events.append(
+                            {
+                                "round": round_index,
+                                "status": "tool_calls_detected",
+                                "tool_count": len(tool_calls),
+                                "tools": tool_names,
+                                "tool_rows": tool_event_rows,
+                                "mode": followup_mode,
+                            }
+                        )
+
+                        if assistant_text.strip():
+                            conversation_messages.append({"role": "assistant", "content": assistant_text.strip()})
+
+                        for tc in tool_calls:
+                            tool_name = str(tc.get("name") or "").strip() or "unknown_tool"
+                            tool_args = tc.get("arguments") if isinstance(tc.get("arguments"), dict) else {}
+                            simulated_result = self._build_simulated_tool_result_text(tool_name, tool_args)
+                            conversation_messages.append(
+                                {
+                                    "role": "user",
+                                    "content": simulated_result,
+                                }
+                            )
+
+                        if provider == "openai":
+                            followup_mode = "openai_native_tool_result"
+                            followup_payload = self._build_openai_followup_payload_native(
+                                model_for_request=model_for_request,
+                                system_prompt=seed_system_prompt,
+                                conversation_messages=conversation_messages,
+                                tool_calls=tool_calls,
+                                tool_result_text_by_id=tool_result_text_by_id,
+                                base_tool_defs=base_tool_defs,
+                                knobs_from_request=payload,
+                            )
+                        elif provider == "anthropic":
+                            followup_mode = "anthropic_native_tool_result"
+                            followup_payload = self._build_anthropic_followup_payload_native(
+                                model_for_request=model_for_request,
+                                system_prompt=seed_system_prompt,
+                                conversation_messages=conversation_messages,
+                                tool_calls=tool_calls,
+                                tool_result_text_by_id=tool_result_text_by_id,
+                                base_tool_defs=base_tool_defs,
+                                knobs_from_request=payload,
+                            )
+                        elif provider == "google":
+                            followup_mode = "google_native_tool_result"
+                            followup_payload = self._build_google_followup_payload_native(
+                                model_for_request=model_for_request,
+                                system_prompt=seed_system_prompt,
+                                conversation_messages=conversation_messages,
+                                tool_calls=tool_calls,
+                                tool_result_text_by_id=tool_result_text_by_id,
+                                base_tool_defs=base_tool_defs,
+                                knobs_from_request=payload,
+                            )
+                        else:
+                            followup_payload = {
+                                "model": model_for_request,
+                                "messages": conversation_messages,
+                            }
+                            if seed_system_prompt:
+                                followup_payload["system"] = seed_system_prompt
+                            if isinstance(base_tool_defs, list) and base_tool_defs:
+                                followup_payload["tools"] = base_tool_defs
+                                followup_payload["tool_choice"] = "auto"
+
+                            for knob_key in ("temperature", "top_p", "max_tokens"):
+                                knob_val = payload.get(knob_key)
+                                if knob_val is not None:
+                                    followup_payload[knob_key] = knob_val
+
+                            followup_payload = self._build_payload_for_provider(
+                                followup_payload, provider, model_for_request
+                            )
+                        if loop_events and isinstance(loop_events[-1], dict):
+                            loop_events[-1]["mode"] = followup_mode
+                        try:
+                            followup_resp = await client.post(
+                                target_url, headers=headers, json=followup_payload
+                            )
+                        except Exception as loop_exc:
+                            loop_status = "network_error"
+                            loop_events.append(
+                                {
+                                    "round": round_index,
+                                    "status": "failed",
+                                    "reason": "followup_request_error",
+                                    "message": str(loop_exc),
+                                    "mode": followup_mode,
+                                }
+                            )
+                            break
+
+                        if followup_resp.status_code != 200:
+                            loop_status = "provider_error"
+                            loop_events.append(
+                                {
+                                    "round": round_index,
+                                    "status": "failed",
+                                    "reason": "followup_non_200",
+                                    "status_code": int(followup_resp.status_code),
+                                    "mode": followup_mode,
+                                }
+                            )
+                            break
+
+                        try:
+                            current_response_data = followup_resp.json()
+                        except Exception:
+                            current_response_data = {"text": followup_resp.text}
+
+                        loop_input_tokens, loop_output_tokens = self._extract_token_usage(
+                            provider,
+                            current_response_data if isinstance(current_response_data, dict) else {},
+                        )
+                        total_input_tokens += int(loop_input_tokens or 0)
+                        total_output_tokens += int(loop_output_tokens or 0)
+                        total_used_credits += int(
+                            calculate_credits(
+                                provider=provider,
+                                model=model_for_request,
+                                input_tokens=loop_input_tokens,
+                                output_tokens=loop_output_tokens,
+                            )
+                            or 0
+                        )
+
+                        next_text, next_tool_calls, _ = self._extract_text_and_tool_calls(
+                            current_response_data, provider, normalizer
+                        )
+                        if next_text.strip():
+                            # Keep final assistant text available to subsequent rounds.
+                            conversation_messages.append({"role": "assistant", "content": next_text.strip()})
+                        if not next_tool_calls:
+                            loop_status = "completed"
+                            break
+                    else:
+                        loop_status = "max_rounds_exceeded"
+
+                    response_data = current_response_data
+                    input_tokens = total_input_tokens
+                    output_tokens = total_output_tokens
+                    used_credits = total_used_credits
+
                     return {
                         "snapshot_id": snapshot.id,
                         "original_model": snapshot.model,
@@ -722,6 +1190,10 @@ class ReplayService:
                         "output_tokens": output_tokens,
                         "used_credits": used_credits,
                         "success": response.status_code == 200,
+                        "tool_loop_status": loop_status,
+                        "tool_loop_rounds": loop_rounds,
+                        "tool_loop_events": loop_events,
+                        "max_tool_rounds": max_tool_rounds,
                         "request_fallback_stage": None,
                         "request_fallback_attempts": [],
                     }
