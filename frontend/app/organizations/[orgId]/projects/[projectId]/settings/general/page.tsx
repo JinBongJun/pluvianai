@@ -12,6 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
+import { orgKeys } from "@/lib/queryKeys";
+import { deleteProject } from "@/lib/orgProjectMutations";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export default function ProjectGeneralSettingsPage() {
@@ -111,29 +113,12 @@ export default function ProjectGeneralSettingsPage() {
 
     setDeleting(true);
     try {
-      await projectsAPI.delete(projectId);
-      showToast("Project deleted", "success");
-      // Prevent SWR from revalidating deleted project (avoids 404 noise after delete)
-      mutate(
-        key =>
-          Array.isArray(key) &&
-          key.some(part => part === projectId || part === Number(projectId)),
-        undefined,
-        { revalidate: false }
-      );
-      // Also clear organization project lists for this org
-      mutate(
-        key => Array.isArray(key) && key[0] === "organization-projects-list" && key[1] === orgId,
-        undefined,
-        { revalidate: false }
-      );
+      await deleteProject(orgId ?? "", projectId, {
+        mutate,
+        router,
+        toast: { showToast },
+      });
       setDeleted(true);
-      const target = orgId ? `/organizations/${orgId}/projects` : "/organizations";
-      if (typeof window !== "undefined") {
-        window.location.assign(target);
-      } else {
-        router.replace(target);
-      }
     } catch (err: any) {
       showToast(err?.response?.data?.detail ?? "Failed to delete project", "error");
     } finally {

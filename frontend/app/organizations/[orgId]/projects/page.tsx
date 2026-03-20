@@ -8,6 +8,7 @@ import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import Button from "@/components/ui/Button";
 import { clsx } from "clsx";
 import { OrganizationDetail, OrganizationProject, organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import { useDebouncedValue } from "@/hooks/useDebounce";
 import {
   Search,
@@ -49,8 +50,7 @@ export default function OrgProjectsPage() {
     error: orgError,
     isValidating: orgLoading,
     mutate: refetchOrg,
-  } = useSWR<OrganizationDetail>(orgId ? ["organization", orgId] : null, ([, id]) =>
-    // The org header does not require stats, so load without stats to avoid extra DB pressure.
+  } = useSWR<OrganizationDetail>(orgId ? orgKeys.detail(orgId) : null, ([, , id]) =>
     organizationsAPI.get(id as string, { includeStats: false })
   );
 
@@ -60,9 +60,8 @@ export default function OrgProjectsPage() {
     isValidating: projectsLoading,
     mutate: refetchProjects,
   } = useSWR<OrganizationProject[]>(
-    orgId ? ["organization-projects", orgId, debouncedProjectQuery] : null,
-    ([, id, search]) =>
-      // Project cards only need base fields; enable stats later only if needed.
+    orgId ? orgKeys.projects(orgId, debouncedProjectQuery) : null,
+    ([, , id, search]) =>
       organizationsAPI.listProjects(id as string, { includeStats: false, search: search as string })
   );
 

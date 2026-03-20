@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import TopHeader from "@/components/layout/TopHeader";
 import { authAPI, organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import { useDebouncedValue } from "@/hooks/useDebounce";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { Plus, Search, Building2, Briefcase } from "lucide-react";
@@ -38,7 +39,7 @@ export default function OrganizationsPage() {
   }, [isAuthenticated, router]);
 
   // Same SWR key as TopHeader so one request only (no duplicate 401)
-  const { data: orgs, mutate } = useSWR(authReady ? "organizations" : null, () =>
+  const { data: orgs, mutate } = useSWR(authReady ? orgKeys.list() : null, () =>
     organizationsAPI.list({ includeStats: false })
   );
 

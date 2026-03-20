@@ -8,7 +8,10 @@ import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { ConfirmModal } from "@/components/shared/ConfirmModal";
 import { PlanLimitBanner } from "@/components/PlanLimitBanner";
+import { useSWRConfig } from "swr";
 import { organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
+import { inviteOrganizationMember, removeOrganizationMember } from "@/lib/orgProjectMutations";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { useToast } from "@/components/ToastContainer";
 import { Users, Mail, Trash2, UserPlus, Shield, Activity, Fingerprint, Lock } from "lucide-react";
@@ -44,6 +47,7 @@ const ROLE_EXPLAINER: Record<Member["role"], { title: string; description: strin
 export default function TeamPage() {
   const router = useRouter();
   const toast = useToast();
+  const { mutate } = useSWRConfig();
   const { orgId } = useOrgProjectParams();
   const isAuthenticated = useRequireAuth();
 
@@ -55,7 +59,7 @@ export default function TeamPage() {
   const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
 
   const { data: org, isValidating: isOrgValidating } = useSWR(
-    orgId ? ["organization", orgId] : null,
+    orgId ? orgKeys.detail(orgId) : null,
     async () => {
       try {
         return await organizationsAPI.get(orgId, { includeStats: false });
@@ -75,7 +79,7 @@ export default function TeamPage() {
     data: members,
     mutate: refetchMembers,
     isValidating: isMembersValidating,
-  } = useSWR<Member[]>(orgId ? ["organization-members", orgId] : null, () =>
+  } = useSWR<Member[]>(orgId ? orgKeys.members(orgId) : null, () =>
     organizationsAPI.listMembers(orgId)
   );
 
@@ -92,10 +96,13 @@ export default function TeamPage() {
     setInviting(true);
     setPlanError(null);
     try {
-      await organizationsAPI.inviteMember(orgId, { email: inviteEmail, role: inviteRole });
+      await inviteOrganizationMember(
+        orgId,
+        { email: inviteEmail, role: inviteRole },
+        { mutate }
+      );
       toast.showToast("Access invitation dispatched successfully.", "success");
       setInviteEmail("");
-      refetchMembers();
     } catch (error: any) {
       const parsed = parsePlanLimitError(error);
       if (parsed && parsed.code === "TEAM_MEMBER_LIMIT_REACHED") {
@@ -116,10 +123,9 @@ export default function TeamPage() {
     if (confirmRemoveMemberId == null) return;
     setRemovingMemberId(confirmRemoveMemberId);
     try {
-      await organizationsAPI.removeMember(orgId, confirmRemoveMemberId);
+      await removeOrganizationMember(orgId, confirmRemoveMemberId, { mutate });
       toast.showToast("Operator clearance revoked.", "success");
       setConfirmRemoveMemberId(null);
-      refetchMembers();
     } catch (error: unknown) {
       const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       toast.showToast(msg || "Failed to revoke clearance.", "error");

@@ -7,6 +7,7 @@ import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { replayAPI, apiCallsAPI, organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import { useToast } from "@/components/ToastContainer";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { Play, History, Split, ArrowRight, Settings2, Trash2 } from "lucide-react";
@@ -23,7 +24,7 @@ export default function ReplayPage() {
   const { orgId, projectId } = useOrgProjectParams();
   const isAuthenticated = useRequireAuth();
 
-  const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
+  const { data: org } = useSWR(orgId ? orgKeys.detail(orgId) : null, () =>
     organizationsAPI.get(orgId, { includeStats: false })
   );
 

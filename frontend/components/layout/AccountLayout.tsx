@@ -3,6 +3,7 @@ import TopHeader from "./TopHeader";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import useSWR from "swr";
 import { authAPI, organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
 import { useRouter, usePathname } from "next/navigation";
 import { clsx } from "clsx";
@@ -36,7 +37,7 @@ const AccountLayout: React.FC<AccountLayoutProps> = ({ children, breadcrumb, act
   }, [hasToken]);
 
   const { data: organizations } = useSWR<OrganizationSummary[]>(
-    hasToken ? "account-organizations" : null,
+    hasToken ? orgKeys.list() : null,
     () => organizationsAPI.list({ includeStats: false }),
     {
       revalidateOnFocus: false,

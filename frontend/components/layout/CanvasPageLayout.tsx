@@ -7,6 +7,7 @@ import { LaboratoryNavbar } from "./LaboratoryNavbar";
 import { TelemetryHUD, type TelemetryStat } from "./TelemetryHUD";
 import clsx from "clsx";
 import { organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
 
@@ -48,7 +49,7 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
   const { isAuthenticated } = useAuthSession();
 
   const { data: organizations } = useSWR<OrganizationSummary[]>(
-    isAuthenticated ? "organizations" : null,
+    isAuthenticated ? orgKeys.list() : null,
     () => organizationsAPI.list({ includeStats: false }),
     {
       revalidateOnFocus: false,
@@ -56,8 +57,8 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
     }
   );
   const { data: projects } = useSWR<OrganizationProject[]>(
-    isAuthenticated && orgId ? ["organization-projects-list", orgId] : null,
-    ([, id]) => organizationsAPI.listProjects(String(id), { includeStats: false }),
+    isAuthenticated && orgId ? orgKeys.projects(orgId, "") : null,
+    ([, , id]) => organizationsAPI.listProjects(String(id), { includeStats: false }),
     {
       revalidateOnFocus: false,
       dedupingInterval: 10_000,
