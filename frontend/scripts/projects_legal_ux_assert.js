@@ -114,6 +114,19 @@ async function existsVisibleText(page, text) {
   return loc.isVisible();
 }
 
+async function waitForProjectVisibility(page, visibleTexts, hiddenTexts = [], timeoutMs = 8000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const visibleChecks = await Promise.all(visibleTexts.map(text => existsVisibleText(page, text)));
+    const hiddenChecks = await Promise.all(hiddenTexts.map(text => existsVisibleText(page, text)));
+    if (visibleChecks.every(Boolean) && hiddenChecks.every(v => !v)) {
+      return true;
+    }
+    await page.waitForTimeout(250);
+  }
+  return false;
+}
+
 async function checkProjectsAndRoleUx(baseUrl, backendUrl, email, password) {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1800, height: 1100 } });
@@ -217,19 +230,13 @@ async function checkProjectsAndRoleUx(baseUrl, backendUrl, email, password) {
 
       // L-1: search by name and description
       await page.fill("#project-search", aName);
-      await page.waitForTimeout(500);
-      const nameSearchOk =
-        (await existsVisibleText(page, aName)) && !(await existsVisibleText(page, bName));
+      const nameSearchOk = await waitForProjectVisibility(page, [aName], [bName]);
 
       await page.fill("#project-search", bDescOrName);
-      await page.waitForTimeout(500);
-      const descSearchOk =
-        (await existsVisibleText(page, bName)) && !(await existsVisibleText(page, aName));
+      const descSearchOk = await waitForProjectVisibility(page, [bName], [aName]);
 
       await page.fill("#project-search", "");
-      await page.waitForTimeout(500);
-      const clearedRestoresAll =
-        (await existsVisibleText(page, aName)) && (await existsVisibleText(page, bName));
+      const clearedRestoresAll = await waitForProjectVisibility(page, [aName, bName]);
       out.checks.l1_search_name_and_description = Boolean(
         bothVisibleInitially && nameSearchOk && descSearchOk && clearedRestoresAll
       );

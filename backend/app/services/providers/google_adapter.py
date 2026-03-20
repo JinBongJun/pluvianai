@@ -27,10 +27,19 @@ class GoogleProviderAdapter:
         model_for_request: str,
         system_instruction_field: str = "system_instruction",
     ) -> Dict[str, Any]:
+        def _message_to_parts(content: Any) -> List[Dict[str, Any]]:
+            if isinstance(content, list):
+                return [part for part in content if isinstance(part, dict)] or [{"text": ""}]
+            if isinstance(content, dict):
+                if isinstance(content.get("parts"), list):
+                    return [part for part in content.get("parts") if isinstance(part, dict)] or [{"text": ""}]
+                return [content]
+            return [{"text": content if isinstance(content, str) else str(content or "")}]
+
         contents = [
             {
                 "role": "model" if m.get("role") == "assistant" else "user",
-                "parts": [{"text": m.get("content", "")}],
+                "parts": _message_to_parts(m.get("content", "")),
             }
             for m in (messages or [{"role": "user", "content": ""}])
         ]
