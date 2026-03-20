@@ -1,12 +1,13 @@
+import type { ScopedMutator } from "swr";
 import type { PlanType } from "@/lib/api/types";
 import { organizationsAPI, projectsAPI } from "@/lib/api";
 import { orgKeys } from "@/lib/queryKeys";
 import { safeReplace } from "@/lib/navigation";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Mutate = (key?: any, data?: any, opts?: { revalidate?: boolean }) => Promise<any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Toast = { showToast: (msg: string, type?: any) => void };
+type Mutate = ScopedMutator;
+type Toast = {
+  showToast: (msg: string, type?: "success" | "error" | "info" | "warning") => void;
+};
 type Router = { replace: (href: string) => void; push: (href: string) => void };
 
 export async function createOrganization(
