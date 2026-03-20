@@ -737,6 +737,34 @@ function AttemptDetailOverlay({
     if (!baselineResponse && !candidateResponse) return "Both response previews are missing.";
     return "One side is missing; compare with caution.";
   })();
+  const gateConfidence = (() => {
+    if (hasProviderError) {
+      return {
+        label: "Low",
+        detail: "Provider warnings detected in this attempt.",
+        toneClass: "border-rose-500/30 bg-rose-500/10 text-rose-200",
+      };
+    }
+    if (!baselineResponse && !candidateResponse) {
+      return {
+        label: "Low",
+        detail: "Both response previews are missing.",
+        toneClass: "border-rose-500/30 bg-rose-500/10 text-rose-200",
+      };
+    }
+    if (!baselineResponse || !candidateResponse || evalTotalCount === 0) {
+      return {
+        label: "Medium",
+        detail: "Some evidence channels are missing or limited.",
+        toneClass: "border-amber-500/30 bg-amber-500/10 text-amber-100",
+      };
+    }
+    return {
+      label: "High",
+      detail: "All core evidence channels are captured.",
+      toneClass: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+    };
+  })();
   type SeverityRank = 0 | 1 | 2 | 3;
   type DecisionSeverity = "low" | "medium" | "high" | "critical";
   type DecisionIssue = {
@@ -984,7 +1012,7 @@ function AttemptDetailOverlay({
                         : "border-rose-500/25 bg-rose-500/[0.04]"
                     )}
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="min-w-0 space-y-2">
                         <div
                           className={clsx(
@@ -998,6 +1026,23 @@ function AttemptDetailOverlay({
                         <p className="max-w-3xl text-base font-medium leading-7 text-slate-100 text-balance">
                           {decisionHeadline.replace(/^Reason:\s*/i, "")}
                         </p>
+                      </div>
+                      <div className="min-w-[220px] rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                          Decision Confidence
+                        </div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <span
+                            className={clsx(
+                              "inline-flex rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                              gateConfidence.toneClass
+                            )}
+                          >
+                            {gateConfidence.label}
+                          </span>
+                          <span className="text-xs text-slate-400">Trust calibration</span>
+                        </div>
+                        <p className="mt-2 text-xs leading-relaxed text-slate-300">{gateConfidence.detail}</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
