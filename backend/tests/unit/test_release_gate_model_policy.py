@@ -55,7 +55,7 @@ class TestReleaseGateProviderModelMismatch:
     def test_assert_provider_matches_model_allows_matching(self):
         from app.api.v1.endpoints import release_gate as rg
 
-        rg._assert_provider_matches_model("google", "gemini-2.0-flash")
+        rg._assert_provider_matches_model("google", "gemini-2.5-flash")
         rg._assert_provider_matches_model("anthropic", "claude-sonnet-4-20250514")
         rg._assert_provider_matches_model("openai", "gpt-4.1-mini")
 
@@ -64,7 +64,7 @@ class TestReleaseGateProviderModelMismatch:
         from fastapi import HTTPException
 
         with pytest.raises(HTTPException) as e:
-            rg._assert_provider_matches_model("openai", "gemini-2.0-flash")
+            rg._assert_provider_matches_model("openai", "gemini-2.5-flash")
         assert e.value.status_code == 422
         assert isinstance(e.value.detail, dict)
         assert e.value.detail.get("error_code") == "provider_model_mismatch"
@@ -75,7 +75,7 @@ class TestReleaseGateProviderModelMismatch:
         # Missing model -> no inference -> skip
         rg._assert_provider_matches_model("google", "")
         # Missing provider -> skip
-        rg._assert_provider_matches_model("", "gemini-2.0-flash")
+        rg._assert_provider_matches_model("", "gemini-2.5-flash")
 
 
 @pytest.mark.unit
@@ -122,7 +122,7 @@ class TestReleaseGateOverrideSanitizer:
         assert rg._normalize_provider("something-else") is None
 
         assert rg._infer_provider_from_model("claude-sonnet-4-20250514") == "anthropic"
-        assert rg._infer_provider_from_model("gemini-2.0-flash") == "google"
+        assert rg._infer_provider_from_model("gemini-2.5-flash") == "google"
         assert rg._infer_provider_from_model("gpt-4.1-mini") == "openai"
 
 

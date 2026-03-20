@@ -95,7 +95,8 @@ const DEFAULT_REPLAY_PROVIDER_MODEL_LIBRARY: Record<ReplayProvider, string[]> = 
   ],
   google: [
     "gemini-2.5-flash",
-    "gemini-2.0-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-pro",
   ],
 };
 const REPLAY_THRESHOLD_PRESETS = {
