@@ -83,10 +83,10 @@ CORE_REPLAY_MODELS: Dict[str, List[str]] = {
         "claude-sonnet-4-20250514",
     ],
     "google": [
-        # Match Google AI Studio keys that typically expose 2.x Flash models;
-        # avoid listing models that may 404 for a given key/region.
+        # Prefer current stable Gemini 2.5 ids for Release Gate defaults.
         "gemini-2.5-flash",
-        "gemini-2.0-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-pro",
     ],
 }
 

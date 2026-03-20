@@ -80,7 +80,7 @@ class TestReleaseGateOverridesAndExport:
                     "trace_id": trace.id,
                     "model_source": "platform",
                     "replay_provider": "openai",
-                    "new_model": "gemini-2.0-flash",
+                    "new_model": "gemini-2.5-flash",
                     "repeat_runs": 1,
                     "max_snapshots": 1,
                 },
@@ -293,7 +293,7 @@ class TestReleaseGateOverridesAndExport:
                 "trace_id": trace.id,
                 "model_source": "platform",
                 "replay_provider": "google",
-                "new_model": "gemini-2.0-flash",
+                "new_model": "gemini-2.5-flash",
                 "repeat_runs": 1,
                 "max_snapshots": 1,
             },
@@ -303,7 +303,7 @@ class TestReleaseGateOverridesAndExport:
         override_case = override_res.json()["case_results"][0]
         override_attempt = override_case["attempts"][0]
         assert (override_attempt["candidate_snapshot"] or {}).get("provider") == "google"
-        assert (override_attempt["candidate_snapshot"] or {}).get("model") == "gemini-2.0-flash"
+        assert (override_attempt["candidate_snapshot"] or {}).get("model") == "gemini-2.5-flash"
 
         # 2) Detected mode should revert to baseline-detected provider/model metadata.
         detected_res = await async_client.post(
