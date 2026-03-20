@@ -1115,7 +1115,7 @@ def list_snapshots(
     }
 
 
-@router.get("/projects/{project_id}/snapshots/{snapshot_id}")
+@router.get("/projects/{project_id}/snapshots/{snapshot_id:int}")
 def get_snapshot(
     project_id: int,
     snapshot_id: int,
@@ -1217,7 +1217,7 @@ def list_deleted_snapshots(
     }
 
 
-@router.delete("/projects/{project_id}/snapshots/{snapshot_id}")
+@router.delete("/projects/{project_id}/snapshots/{snapshot_id:int}")
 def delete_snapshot(
     project_id: int,
     snapshot_id: int,
@@ -1291,7 +1291,7 @@ def batch_delete_snapshots(
     return {"ok": True, "deleted": len(matched_ids)}
 
 
-@router.post("/projects/{project_id}/snapshots/{snapshot_id}/restore")
+@router.post("/projects/{project_id}/snapshots/{snapshot_id:int}/restore")
 def restore_snapshot(
     project_id: int,
     snapshot_id: int,
