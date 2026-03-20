@@ -94,9 +94,8 @@ const DEFAULT_REPLAY_PROVIDER_MODEL_LIBRARY: Record<ReplayProvider, string[]> = 
     "claude-sonnet-4-20250514",
   ],
   google: [
+    "gemini-2.5-flash",
     "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
   ],
 };
 const REPLAY_THRESHOLD_PRESETS = {
