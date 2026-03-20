@@ -2549,114 +2549,60 @@ export function ReleaseGateExpandedView() {
                       </div>
                     ) : (
                       <>
+                        {/* Compact Global Status Banner */}
                         <div
                           className={clsx(
-                            "rounded-[24px] border px-4 py-3",
+                            "flex flex-col gap-2 rounded-2xl border px-4 py-3",
                             result.pass
                               ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
                               : "border-rose-500/25 bg-rose-500/10 text-rose-300"
                           )}
                         >
-                          <div className="text-[10px] font-black uppercase tracking-[0.18em]">
-                            Current gate result
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-wider">
+                              {result.pass ? "Gate Passed" : "Gate Failed"}
+                            </span>
+                            <span className="text-[10px] font-bold text-white/70">
+                              Fail rate {percentFromRate(result.fail_rate)}
+                            </span>
                           </div>
-                          <div className="mt-1 text-lg font-black">
-                            {result.pass ? "Passed" : "Failed"}
+                          <div className="flex flex-wrap items-center gap-3 text-[11px] text-white/60">
+                            <span>Inputs: {Number(result.total_inputs ?? 0)}</span>
+                            <span className="h-1 w-1 rounded-full bg-white/20" />
+                            <span>Repeats: {Number(result.repeat_runs ?? repeatRuns)}</span>
+                            {result?.perf && typeof result.perf === "object" && (
+                              <>
+                                <span className="h-1 w-1 rounded-full bg-white/20" />
+                                <span>Avg: {formatDurationMs((result.perf as any).avg_attempt_wall_ms)}</span>
+                              </>
+                            )}
                           </div>
-                          {typeof result.summary === "string" && result.summary.trim() && (
-                            <p className="mt-2 text-sm leading-relaxed text-white/80">
-                              {result.summary}
-                            </p>
-                          )}
                         </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <MetricTile
-                            label="Failure rate"
-                            value={percentFromRate(result.fail_rate)}
-                            tone={result.pass ? "success" : "danger"}
-                          />
-                          <MetricTile
-                            label="Flaky rate"
-                            value={percentFromRate(result.flaky_rate)}
-                          />
-                          <MetricTile label="Inputs" value={Number(result.total_inputs ?? 0)} />
-                          <MetricTile
-                            label="Repeats"
-                            value={Number(result.repeat_runs ?? repeatRuns)}
-                          />
-                        </div>
-                        {result?.perf && typeof result.perf === "object" && (
-                          <div className="grid grid-cols-2 gap-2">
-                            <MetricTile
-                              label="Total runtime"
-                              value={formatDurationMs((result.perf as any).total_wall_ms)}
-                            />
-                            <MetricTile
-                              label="Avg repeat"
-                              value={formatDurationMs((result.perf as any).avg_attempt_wall_ms)}
-                            />
-                          </div>
-                        )}
-
-                        {Array.isArray(result.failure_reasons) &&
-                          result.failure_reasons.length > 0 && (
-                            <div className="rounded-[24px] border border-white/8 bg-black/30 p-4">
-                              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                                Why it failed
-                              </div>
-                              <div className="mt-3 space-y-2">
-                                {result.failure_reasons
-                                  .slice(0, 6)
-                                  .map((reason: string, idx: number) => (
-                                    <div
-                                      key={`${reason}-${idx}`}
-                                      className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-sm leading-relaxed text-slate-200"
-                                    >
-                                      {reason}
-                                    </div>
-                                  ))}
-                              </div>
-                            </div>
-                          )}
 
                         {!result.pass && whatToFixHints.length > 0 && (
-                          <div className="rounded-[24px] border border-amber-500/25 bg-amber-500/10 p-4">
+                          <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4">
                             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200">
                               What to fix first
                             </div>
-                            <p className="mt-1 text-[11px] text-amber-100/80">
-                              Top recurring issues across failed or flaky inputs in this run.
-                            </p>
-                            <div className="mt-3 space-y-2">
+                            <div className="mt-3 flex flex-col gap-2">
                               {whatToFixHints.map((hint, idx) => (
                                 <div
                                   key={hint.key}
-                                  className="rounded-2xl border border-amber-500/20 bg-black/20 px-3 py-2.5"
+                                  className="flex items-start justify-between gap-3 text-sm text-amber-100/90"
                                 >
-                                  <div className="flex items-center justify-between gap-3">
-                                    <div className="min-w-0 text-sm font-semibold text-amber-50">
-                                      {idx + 1}. {hint.label}
-                                    </div>
-                                    <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-black uppercase text-amber-200">
-                                      {hint.count}x
-                                    </span>
-                                  </div>
-                                  <p className="mt-1 text-xs leading-relaxed text-amber-100/85">
-                                    {hint.hint}
-                                  </p>
-                                  {hint.sample && (
-                                    <p className="mt-1 line-clamp-2 text-[11px] text-amber-100/65">
-                                      Example: {hint.sample}
-                                    </p>
-                                  )}
+                                  <span className="min-w-0 flex-1 truncate">
+                                    {idx + 1}. {hint.label}
+                                  </span>
+                                  <span className="shrink-0 text-xs font-semibold text-amber-400">
+                                    {hint.count}x
+                                  </span>
                                 </div>
                               ))}
                             </div>
                           </div>
                         )}
 
-                        <div className="space-y-3">
+                        <div className="flex flex-col gap-2">
                           <div className="flex items-start justify-between gap-3">
                             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
                               Per-input breakdown
@@ -2752,141 +2698,73 @@ export function ReleaseGateExpandedView() {
                               : caseIsFlaky
                                 ? "FLAKY"
                                 : "FAIL";
-                            const isExpanded = expandedCaseIndex === idx;
+                            
+                            const baselineInputPreview = String(
+                              baselineSnapshotForRun?.user_message ?? 
+                              baselineSnapshotForRun?.request_prompt ?? 
+                              ""
+                            ).trim();
 
                             return (
-                              <div
+                              <button
                                 key={idx}
+                                type="button"
+                                onClick={() => {
+                                  if (attempts.length > 0) {
+                                    setDetailAttemptView({
+                                      attempt: attempts[0],
+                                      caseIndex: idx,
+                                      attemptIndex: 0,
+                                      baselineSnapshot: baselineSnapshotForRun,
+                                    });
+                                  }
+                                }}
                                 data-testid={`rg-result-case-${idx}`}
                                 className={clsx(
-                                  "overflow-hidden rounded-[24px] border",
+                                  "group flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
                                   caseIsPass
-                                    ? "border-emerald-500/20 bg-emerald-500/5"
+                                    ? "border-emerald-500/10 bg-emerald-500/[0.02] hover:bg-emerald-500/[0.06]"
                                     : caseIsFlaky
-                                      ? "border-amber-500/25 bg-amber-500/7"
-                                    : "border-rose-500/20 bg-rose-500/5"
+                                      ? "border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10"
+                                      : "border-rose-500/15 bg-rose-500/[0.03] hover:bg-rose-500/10"
                                 )}
                               >
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setExpandedCaseIndex(isExpanded ? null : idx);
-                                  }}
-                                  data-testid={`rg-result-case-toggle-${idx}`}
-                                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                                <span
+                                  className={clsx(
+                                    "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
+                                    caseIsPass
+                                      ? "bg-emerald-500/10 text-emerald-400"
+                                      : caseIsFlaky
+                                        ? "bg-amber-500/15 text-amber-300"
+                                        : "bg-rose-500/10 text-rose-400"
+                                  )}
                                 >
-                                  <div className="min-w-0">
-                                    <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                                  {caseStatus}
+                                </span>
+                                <div className="min-w-0 flex-1 py-1">
+                                  <div className="flex items-baseline gap-2">
+                                    <span className="shrink-0 text-xs font-semibold text-slate-200">
                                       Input {idx + 1}
-                                    </div>
-                                    <div
-                                      className="mt-1 text-sm font-semibold text-white"
-                                      data-testid={`rg-result-case-ratio-${idx}`}
-                                    >
-                                      {passedAttempts}/{totalAttempts} passed
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-3">
-                                    <span
-                                      data-testid={`rg-result-case-status-${idx}`}
-                                      data-case-status={caseStatus}
-                                      className={clsx(
-                                        "rounded-full border px-2.5 py-1 text-[10px] font-black uppercase",
-                                        caseIsPass
-                                          ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-                                          : caseIsFlaky
-                                            ? "border-amber-500/30 bg-amber-500/15 text-amber-200"
-                                          : "border-rose-500/25 bg-rose-500/10 text-rose-300"
-                                      )}
-                                    >
-                                      {caseStatus}
                                     </span>
-                                    <ChevronDown
-                                      className={clsx(
-                                        "h-4 w-4 text-slate-500 transition-transform",
-                                        isExpanded && "rotate-180"
-                                      )}
-                                    />
+                                    {baselineInputPreview && (
+                                      <span className="truncate text-[11px] text-slate-400">
+                                        {baselineInputPreview}
+                                      </span>
+                                    )}
                                   </div>
-                                </button>
-
-                                {isExpanded && (
-                                  <div className="space-y-3 border-t border-white/8 p-4">
-                                    {Array.isArray(run?.failure_reasons) &&
-                                      run.failure_reasons.length > 0 && (
-                                        <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                                          <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                                            Case reasons
-                                          </div>
-                                          <div className="mt-2 space-y-2">
-                                            {run.failure_reasons
-                                              .slice(0, 4)
-                                              .map((reason: string, reasonIdx: number) => (
-                                                <div
-                                                  key={`${reason}-${reasonIdx}`}
-                                                  className="text-sm leading-relaxed text-slate-200"
-                                                >
-                                                  {reason}
-                                                </div>
-                                              ))}
-                                          </div>
-                                        </div>
-                                      )}
-
-                                    <div className="space-y-2">
-                                      {attempts.length === 0 ? (
-                                        <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-4 text-sm text-slate-500">
-                                          No per-attempt detail stored for this input.
-                                        </div>
-                                      ) : (
-                                        attempts.map((attempt: any, attemptIdx: number) => {
-                                          return (
-                                            <button
-                                              key={attemptIdx}
-                                              type="button"
-                                              onClick={() => {
-                                                setDetailAttemptView({
-                                                  attempt,
-                                                  caseIndex: idx,
-                                                  attemptIndex: attemptIdx,
-                                                  baselineSnapshot: baselineSnapshotForRun,
-                                                });
-                                              }}
-                                              className={clsx(
-                                                "flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left transition",
-                                                "border-white/8 bg-white/[0.03] hover:bg-white/[0.05]"
-                                              )}
-                                            >
-                                              <div className="min-w-0">
-                                                <div className="text-xs font-semibold text-slate-100">
-                                                  Attempt {attemptIdx + 1}
-                                                </div>
-                                                <div className="mt-1 truncate text-[11px] text-slate-400">
-                                                  {shortText(
-                                                    attempt?.trace_id ?? "No trace id",
-                                                    "No trace id",
-                                                    54
-                                                  )}
-                                                </div>
-                                              </div>
-                                              <span
-                                                className={clsx(
-                                                  "rounded-full border px-2 py-1 text-[10px] font-black uppercase",
-                                                  attempt?.pass
-                                                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-                                                    : "border-rose-500/25 bg-rose-500/10 text-rose-300"
-                                                )}
-                                              >
-                                                {attempt?.pass ? "PASS" : "FAIL"}
-                                              </span>
-                                            </button>
-                                          );
-                                        })
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <span className={clsx(
+                                    "text-[10px] font-medium",
+                                    passedAttempts === totalAttempts ? "text-emerald-400/80" : "text-rose-400/80"
+                                  )}>
+                                    {passedAttempts}/{totalAttempts}
+                                  </span>
+                                  <span className="text-[10px] font-medium text-slate-500 opacity-0 transition-opacity group-hover:opacity-100">
+                                    &rarr;
+                                  </span>
+                                </div>
+                              </button>
                             );
                             })
                           )}
