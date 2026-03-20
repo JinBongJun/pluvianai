@@ -10,6 +10,7 @@ import Pagination from "@/components/ui/Pagination";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import { apiCallsAPI, organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import { toFixedSafe } from "@/lib/format";
 import { useToast } from "@/components/ToastContainer";
 import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, RefreshCw, Search, X } from "lucide-react";
@@ -29,7 +30,7 @@ export default function APICallsListPage() {
   const { orgId, projectId } = useOrgProjectParams();
   const isAuthenticated = useRequireAuth();
 
-  const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
+  const { data: org } = useSWR(orgId ? orgKeys.detail(orgId) : null, () =>
     organizationsAPI.get(orgId, { includeStats: false })
   );
 

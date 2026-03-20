@@ -21,6 +21,7 @@ import "reactflow/dist/style.css";
 
 import CanvasPageLayout from "@/components/layout/CanvasPageLayout";
 import { behaviorAPI, liveViewAPI, projectsAPI, organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import {
   API_URL,
   getApiErrorCode,
@@ -601,7 +602,7 @@ function LiveViewContent() {
       }
     }
   );
-  const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
+  const { data: org } = useSWR(orgId ? orgKeys.detail(orgId) : null, () =>
     organizationsAPI.get(orgId)
   );
 

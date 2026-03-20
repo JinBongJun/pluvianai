@@ -6,6 +6,7 @@ import useSWR from "swr";
 import ProjectLayout from "@/components/layout/ProjectLayout";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { projectsAPI, organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import {
   Zap,
   Copy,
@@ -44,7 +45,7 @@ export default function InfrastructureHubPage() {
       }
     }
   );
-  const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
+  const { data: org } = useSWR(orgId ? orgKeys.detail(orgId) : null, () =>
     organizationsAPI.get(orgId)
   );
 
