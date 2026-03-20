@@ -429,11 +429,13 @@ function AttemptDetailOverlay({
 }) {
   const [detailMainTab, setDetailMainTab] = useState<AttemptDetailMainTab>("summary");
   const [inputExpanded, setInputExpanded] = useState(false);
+  const [showRemovedDiffLines, setShowRemovedDiffLines] = useState(false);
 
   useEffect(() => {
     if (open) {
       setDetailMainTab("summary");
       setInputExpanded(false);
+      setShowRemovedDiffLines(false);
     }
   }, [open, inputIndex, attemptIndex]);
 
@@ -725,6 +727,16 @@ function AttemptDetailOverlay({
   const candidateLineCount = candidateResponse ? candidateResponse.split("\n").length : 0;
   const diffAddedCount = responseDiffLines.filter(line => line.startsWith("+")).length;
   const diffRemovedCount = responseDiffLines.filter(line => line.startsWith("-")).length;
+  const diffConfidenceLabel = (() => {
+    if (baselineResponse && candidateResponse) return "High";
+    if (baselineResponse || candidateResponse) return "Low";
+    return "Unavailable";
+  })();
+  const diffConfidenceMessage = (() => {
+    if (baselineResponse && candidateResponse) return "Both responses captured.";
+    if (!baselineResponse && !candidateResponse) return "Both response previews are missing.";
+    return "One side is missing; compare with caution.";
+  })();
   type SeverityRank = 0 | 1 | 2 | 3;
   type DecisionSeverity = "low" | "medium" | "high" | "critical";
   type DecisionIssue = {
@@ -1260,10 +1272,23 @@ function AttemptDetailOverlay({
                     <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
                       Response Comparison
                     </p>
-                    <div className="text-[11px] text-slate-400">
-                      Green indicates added or modified candidate output.
+                    <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                      <span>Green indicates added or modified candidate output.</span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-300">
+                        Diff confidence {diffConfidenceLabel}
+                      </span>
+                      {diffRemovedCount > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowRemovedDiffLines(v => !v)}
+                          className="rounded-full border border-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-300 transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                        >
+                          {showRemovedDiffLines ? "Hide removed lines" : `Show removed lines (${diffRemovedCount})`}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
+                  <div className="px-1 text-[11px] text-slate-500">{diffConfidenceMessage}</div>
                   <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
                     <div className="flex min-h-[420px] flex-col overflow-hidden rounded-3xl border border-white/8 bg-[#0e0f11]">
                       <div className="flex items-center justify-between border-b border-white/5 bg-black/40 px-4 py-3">
@@ -1305,14 +1330,15 @@ function AttemptDetailOverlay({
                             {responseDiffLines.map((line, idx) => {
                               const isAdded = line.startsWith("+");
                               const isRemoved = line.startsWith("-");
-                              if (isRemoved) return null; // Only show added or unchanged in candidate side
+                              if (isRemoved && !showRemovedDiffLines) return null;
                               const content = isAdded ? line.substring(2) : line.substring(2);
                               return (
                                 <div
                                   key={idx}
                                   className={clsx(
                                     "block w-full px-5 py-0.5",
-                                    isAdded && "bg-emerald-500/20 font-medium text-emerald-200"
+                                    isAdded && "bg-emerald-500/20 font-medium text-emerald-200",
+                                    isRemoved && "bg-rose-500/20 text-rose-200 line-through decoration-rose-300/70"
                                   )}
                                 >
                                   {content || "\n"}
