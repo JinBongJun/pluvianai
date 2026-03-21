@@ -96,6 +96,13 @@ quality_score = Histogram(
 # Error Metrics
 errors_total = Counter("errors_total", "Total number of errors", ["type", "endpoint"], registry=registry)
 
+rate_limit_exceeded_total = Counter(
+    "rate_limit_exceeded_total",
+    "Total number of rate limit responses",
+    ["bucket", "scope", "endpoint", "method"],
+    registry=registry,
+)
+
 # Resilience Metrics
 retry_attempts_total = Counter("retry_attempts_total", "Total number of retry attempts", ["service"], registry=registry)
 

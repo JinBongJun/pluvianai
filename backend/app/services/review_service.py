@@ -11,7 +11,7 @@ Workflow:
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.logging_config import logger
 
 
@@ -175,7 +175,7 @@ class ReviewService:
         review.decision = decision
         review.decision_note = decision_note
         review.reviewer_id = reviewer_id
-        review.reviewed_at = datetime.utcnow()
+        review.reviewed_at = datetime.now(timezone.utc)
         
         self.db.commit()
         self.db.refresh(review)

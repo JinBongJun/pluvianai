@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Iterable, List, Optional, Set
 
 from sqlalchemy.orm import Session
@@ -132,7 +132,7 @@ def restore_agent_if_soft_deleted(
     deleted_at = setting.deleted_at
     restore_window_days = max(int(settings.AGENT_AUTO_RESTORE_DAYS or 0), 0)
     if deleted_at is not None and restore_window_days > 0:
-        reference_now = now or datetime.utcnow()
+        reference_now = now or datetime.now(timezone.utc)
         if deleted_at.tzinfo is None and reference_now.tzinfo is not None:
             reference_now = reference_now.replace(tzinfo=None)
         elif deleted_at.tzinfo is not None and reference_now.tzinfo is None:

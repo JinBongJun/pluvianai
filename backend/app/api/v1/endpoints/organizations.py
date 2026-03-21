@@ -3,7 +3,7 @@ Organization endpoints for org-first architecture.
 """
 
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -26,6 +26,10 @@ from app.models.alert import Alert
 from app.models.quality_score import QualityScore
 from app.services.cost_analyzer import CostAnalyzer
 from app.services.subscription_service import SubscriptionService
+
+
+def _utcnow_naive() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 router = APIRouter()
@@ -293,7 +297,7 @@ def list_organizations(
         for pid, oid in proj_rows:
             org_to_project_ids.setdefault(oid, []).append(pid)
 
-        now = datetime.utcnow()
+        now = _utcnow_naive()
         seven_days_ago = now - timedelta(days=7)
 
         # API calls per org (7d) for active projects only
@@ -432,7 +436,7 @@ def get_organization(
             logger.error(f"🔴 Error querying projects: {str(e)}", exc_info=True)
             raise
 
-        now = datetime.utcnow()
+        now = _utcnow_naive()
         seven_days_ago = now - timedelta(days=7)
 
         calls_count = 0
@@ -616,7 +620,7 @@ def list_organization_members(
                 email=org.owner.email,
                 full_name=org.owner.full_name,
                 role=OrganizationMemberRole.OWNER.value,
-                joined_at=org.created_at.isoformat() if org.created_at else datetime.utcnow().isoformat(),
+                joined_at=org.created_at.isoformat() if org.created_at else _utcnow_naive().isoformat(),
             ),
         )
 
@@ -788,7 +792,7 @@ def list_org_projects(
             return []
 
         project_ids = [p.id for p in projects]
-        now = datetime.utcnow()
+        now = _utcnow_naive()
         day_ago = now - timedelta(days=1)
         seven_days_ago = now - timedelta(days=7)
 

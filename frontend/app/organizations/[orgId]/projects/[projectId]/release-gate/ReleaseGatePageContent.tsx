@@ -51,7 +51,13 @@ import {
   type ReleaseGateHistoryResponse,
   type ReleaseGateResult,
 } from "@/lib/api";
-import { getApiErrorCode, getApiErrorMessage, redirectToLogin } from "@/lib/api/client";
+import {
+  getApiErrorCode,
+  getApiErrorMessage,
+  getRateLimitInfo,
+  isRateLimitError,
+  redirectToLogin,
+} from "@/lib/api/client";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 
@@ -796,11 +802,11 @@ export default function ReleaseGatePageContent() {
   const cancelRequestedRef = useRef(false);
   const pollNowRef = useRef<null | (() => void)>(null);
   const cancelBurstRemainingRef = useRef(0);
-  const CANCEL_BURST_POLLS = 8;
+  const CANCEL_BURST_POLLS = 6;
   const CANCEL_BURST_INTERVAL_MS = 1000;
-  const BASE_POLL_INTERVAL_MS = 1500;
-  const FAST_POLL_INTERVAL_MS = 800;
-  const FAST_POLL_WINDOW_MS = 10000;
+  const BASE_POLL_INTERVAL_MS = 2000;
+  const FAST_POLL_INTERVAL_MS = 1500;
+  const FAST_POLL_WINDOW_MS = 4000;
 
   useEffect(() => {
     cancelRequestedRef.current = cancelRequested;
@@ -1130,6 +1136,29 @@ export default function ReleaseGatePageContent() {
           if (cancelled) return;
           consecutiveErrors += 1;
           const statusCode = e?.response?.status;
+          if (statusCode === 429) {
+            const rateInfo = getRateLimitInfo(e);
+            const retryAfterSec = Math.max(1, rateInfo.retryAfterSec ?? 2);
+            if (consecutiveErrors === 1 && !cancelRequestedRef.current) {
+              if (rateInfo.bucket === "release_gate_job_poll") {
+                setError(`Status polling slowed by server rate limits. Retrying in about ${retryAfterSec}s...`);
+              } else {
+                setError(`Server is rate limiting requests. Retrying in about ${retryAfterSec}s...`);
+              }
+            }
+            backoffMs = Math.min(
+              maxBackoffMs,
+              Math.max(BASE_POLL_INTERVAL_MS, retryAfterSec * 1000)
+            );
+            if (wakeRequested) {
+              wakeRequested = false;
+              continue;
+            }
+            const delay = nextDelayMs();
+            consumeDelayBudget();
+            await Promise.race([sleep(delay), waitForWake()]);
+            continue;
+          }
           if (statusCode === 401) {
             redirectToLogin({
               code: getApiErrorCode(e),
@@ -1932,7 +1961,7 @@ export default function ReleaseGatePageContent() {
   // We validate mismatch at run time and show a clear error instead of silently changing tabs/providers.
 
   const handleValidate = async () => {
-    if (!projectId || isNaN(projectId) || !canValidate || isValidating) return;
+    if (!projectId || isNaN(projectId) || !canValidate || runLocked) return;
     if (keyBlocked) {
       setError(keyRegistrationMessage || "Run blocked: required API key is not registered.");
       return;
@@ -2064,6 +2093,23 @@ export default function ReleaseGatePageContent() {
           parsedPlanError.message ||
             "You have used all hosted replay credits for this billing period. Use your own provider key or upgrade your plan for more hosted runs."
         );
+        setResult(null);
+        return;
+      }
+      if (isRateLimitError(e)) {
+        const rateInfo = getRateLimitInfo(e);
+        const retryAfterSec = Math.max(1, rateInfo.retryAfterSec ?? 60);
+        if (rateInfo.bucket === "release_gate_validate") {
+          setError(
+            `Release Gate run requests are temporarily rate-limited. Try again in about ${retryAfterSec}s.`
+          );
+        } else if (rateInfo.bucket === "release_gate_job_poll") {
+          setError(
+            `Release Gate is still running, but status polling is being slowed down. Retrying in about ${retryAfterSec}s.`
+          );
+        } else {
+          setError(`Too many requests right now. Please retry in about ${retryAfterSec}s.`);
+        }
         setResult(null);
         return;
       }
