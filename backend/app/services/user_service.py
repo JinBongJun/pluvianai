@@ -6,7 +6,7 @@ from app.infrastructure.repositories.user_repository import UserRepository
 from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.core.security import get_password_hash
 from app.core.logging_config import logger
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class UserService:
@@ -58,7 +58,7 @@ class UserService:
         user = self.user_repo.save(user)
         
         # Create free plan subscription for new user
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         if now.month == 12:
             period_end = period_start.replace(year=now.year + 1, month=1)

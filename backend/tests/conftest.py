@@ -14,6 +14,8 @@ import os
 from app.main import app
 from app.core.database import Base, get_db
 from app.core.config import settings
+from app.services.brute_force_protection import brute_force_service
+from app.services.cache_service import cache_service
 
 # Test database URL (in-memory SQLite for speed)
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -67,6 +69,18 @@ def db():
         db.close()
         # Drop tables
         Base.metadata.drop_all(bind=test_engine)
+
+
+@pytest.fixture(autouse=True)
+def reset_brute_force_state():
+    """Keep auth throttling state from leaking across tests."""
+    brute_force_service._local_counters.clear()
+    if cache_service.enabled:
+        cache_service.delete_pattern("bf:*")
+    yield
+    brute_force_service._local_counters.clear()
+    if cache_service.enabled:
+        cache_service.delete_pattern("bf:*")
 
 
 @pytest.fixture(scope="function")
