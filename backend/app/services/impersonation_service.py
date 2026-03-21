@@ -4,7 +4,7 @@ Impersonation service for admin access to user data
 
 import secrets
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.core.logging_config import logger
 from app.models.user import User
@@ -58,12 +58,13 @@ class ImpersonationService:
         session_id = f"imp_{secrets.token_urlsafe(16)}"
 
         # Create session
-        expires_at = datetime.utcnow() + timedelta(minutes=duration_minutes)
+        now_utc = datetime.now(timezone.utc)
+        expires_at = now_utc + timedelta(minutes=duration_minutes)
         _impersonation_sessions[session_id] = {
             "admin_user_id": admin_user_id,
             "target_user_id": target_user_id,
             "reason": reason,
-            "created_at": datetime.utcnow(),
+            "created_at": now_utc,
             "expires_at": expires_at,
         }
 
@@ -161,7 +162,7 @@ class ImpersonationService:
             return None
 
         # Check expiration
-        if session["expires_at"] < datetime.utcnow():
+        if session["expires_at"] < datetime.now(timezone.utc):
             del _impersonation_sessions[session_id]
             return None
 

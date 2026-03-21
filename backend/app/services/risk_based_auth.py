@@ -8,7 +8,7 @@ based on IP, User-Agent, and recent successful logins.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple, List
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
@@ -67,7 +67,12 @@ class RiskBasedAuthService:
                 risk_score += 20
                 reasons.append("new_user_agent")
             if last_success.created_at:
-                age = datetime.utcnow().replace(tzinfo=last_success.created_at.tzinfo) - last_success.created_at
+                now_utc = datetime.now(timezone.utc)
+                if last_success.created_at.tzinfo is None:
+                    reference_now = now_utc.replace(tzinfo=None)
+                else:
+                    reference_now = now_utc.astimezone(last_success.created_at.tzinfo)
+                age = reference_now - last_success.created_at
                 if age < timedelta(hours=1):
                     risk_score += 10
                     reasons.append("short_interval")

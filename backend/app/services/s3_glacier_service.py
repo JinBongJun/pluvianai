@@ -4,7 +4,7 @@ S3 Glacier Service for archiving snapshots (Enterprise only)
 
 import json
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import boto3
 from botocore.exceptions import ClientError, BotoCoreError
 from app.core.config import settings
@@ -139,7 +139,8 @@ class S3GlacierService:
                 }
 
                 # Create S3 key (organized by project and date)
-                date_str = datetime.utcnow().strftime("%Y/%m/%d")
+                archived_at = datetime.now(timezone.utc)
+                date_str = archived_at.strftime("%Y/%m/%d")
                 s3_key = f"archives/{project_id}/{date_str}/snapshot_{snapshot.id}.json"
 
                 # Upload to S3
@@ -151,7 +152,7 @@ class S3GlacierService:
                     Metadata={
                         'project_id': str(project_id),
                         'snapshot_id': str(snapshot.id),
-                        'archived_at': datetime.utcnow().isoformat()
+                        'archived_at': archived_at.isoformat()
                     }
                 )
 
