@@ -301,6 +301,10 @@ export interface ReleaseGateHistoryItem {
   repeat_runs?: number | null;
   passed_runs?: number | null;
   failed_runs?: number | null;
+  /** Per-attempt pass count across all inputs (replay repeats). */
+  passed_attempts?: number | null;
+  /** Total replay attempts across all inputs. */
+  total_attempts?: number | null;
   thresholds?: Record<string, number> | null;
 }
 

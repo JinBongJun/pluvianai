@@ -2373,12 +2373,18 @@ async def _run_release_gate(
             if perf_attempts
             else None
         )
+        total_attempts = sum(len(c.get("attempts") or []) for c in case_results)
+        passed_attempts = sum(
+            sum(1 for a in (c.get("attempts") or []) if a.get("pass")) for c in case_results
+        )
         primary_summary["release_gate"] = {
             "mode": "replay_test",
             "repeat_runs": payload.repeat_runs,
             "total_inputs": total_cases,
             "failed_inputs": failed_cases,
             "flaky_inputs": flaky_cases,
+            "passed_attempts": passed_attempts,
+            "total_attempts": total_attempts,
             "fail_rate": round(fail_rate, 4),
             "flaky_rate": round(flaky_rate, 4),
             "ratio_band": ratio_band,
@@ -2967,6 +2973,8 @@ async def list_release_gate_history(
                 "repeat_runs": gate_meta.get("repeat_runs"),
                 "passed_runs": gate_meta.get("passed_runs"),
                 "failed_runs": gate_meta.get("failed_runs"),
+                "passed_attempts": gate_meta.get("passed_attempts"),
+                "total_attempts": gate_meta.get("total_attempts"),
                 "thresholds": gate_meta.get("thresholds"),
             }
         )
