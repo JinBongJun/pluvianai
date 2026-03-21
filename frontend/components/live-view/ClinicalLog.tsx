@@ -67,6 +67,8 @@ interface ClinicalSnapshot {
 interface ClinicalLogProps {
   projectId: number;
   agentId: string;
+  /** Used for Release Gate CTA inside snapshot detail. */
+  orgId?: string;
 }
 
 const MIN_LAST_N_RUNS = 10;
@@ -343,7 +345,7 @@ function getEvalDetail(
   }
 }
 
-export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) => {
+export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, orgId }) => {
   const toast = useToast();
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [recentTraceLimit, setRecentTraceLimit] = React.useState<number>(DEFAULT_LAST_N_RUNS);
@@ -1555,6 +1557,11 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                 evalRows={evalRowsForModal}
                 savedEvalConfig={savedEvalConfig}
                 evalEnabled={evalEnabled}
+                releaseGateHref={
+                  orgId
+                    ? `/organizations/${orgId}/projects/${projectId}/release-gate`
+                    : undefined
+                }
               />
             );
           })()}

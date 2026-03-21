@@ -10,7 +10,7 @@ Security: bcrypt passwords, JWT (HS256), brute-force protection, login attempts 
 """
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -34,7 +34,7 @@ from app.core.security import (
 )
 from app.core.logging_config import logger
 from app.core.decorators import handle_errors
-from app.core.dependencies import get_user_service, get_audit_service, get_audit_service
+from app.core.dependencies import get_user_service, get_audit_service
 from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.models.user import User
 from app.models.login_attempt import LoginAttempt
@@ -67,7 +67,7 @@ def _token_max_age_seconds(token: str, fallback_seconds: int) -> int:
         return fallback_seconds
 
     try:
-        max_age = int(exp) - int(datetime.utcnow().timestamp())
+        max_age = int(exp) - int(datetime.now(timezone.utc).timestamp())
     except (TypeError, ValueError):
         return fallback_seconds
 
@@ -180,15 +180,14 @@ async def register(
         
         # Create user agreement record
         from app.models.user_agreement import UserAgreement
-        from datetime import datetime
         agreement = UserAgreement(
             user_id=user.id,
             liability_agreement_accepted=True,
-            liability_agreement_accepted_at=datetime.utcnow(),
+            liability_agreement_accepted_at=datetime.now(timezone.utc),
             terms_of_service_accepted=True,
-            terms_of_service_accepted_at=datetime.utcnow(),
+            terms_of_service_accepted_at=datetime.now(timezone.utc),
             privacy_policy_accepted=True,
-            privacy_policy_accepted_at=datetime.utcnow(),
+            privacy_policy_accepted_at=datetime.now(timezone.utc),
         )
         db.add(agreement)
         

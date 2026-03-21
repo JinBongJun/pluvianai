@@ -3,7 +3,7 @@ Slack Service for sending Slack notifications
 """
 
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import httpx
 from app.core.config import settings
 from app.core.logging_config import logger
@@ -92,7 +92,7 @@ class SlackService(NotificationChannel):
                     {
                         "color": color,
                         "footer": "PluvianAI",
-                        "ts": int(datetime.utcnow().timestamp())
+                        "ts": int(datetime.now(timezone.utc).timestamp())
                     }
                 ]
             }

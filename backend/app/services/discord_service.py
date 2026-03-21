@@ -3,7 +3,7 @@ Discord Service for sending Discord notifications
 """
 
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import httpx
 from app.core.config import settings
 from app.core.logging_config import logger
@@ -77,7 +77,7 @@ class DiscordService(NotificationChannel):
                         "inline": True
                     }
                 ],
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "footer": {
                     "text": "PluvianAI"
                 }
