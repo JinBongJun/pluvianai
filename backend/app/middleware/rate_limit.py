@@ -16,6 +16,8 @@ from typing import Dict, Optional, Tuple
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from app.core.logging_config import logger
+from app.core.metrics import rate_limit_exceeded_total
 from app.services.cache_service import cache_service
 from app.core.responses import error_response
 
@@ -42,8 +44,8 @@ BUCKET_WINDOW_SEC = 60
 
 # Heavy endpoints: (path_substring, method, limit_per_min, path_key). Longest path first.
 HEAVY_ENDPOINTS: Tuple[Tuple[str, str, int, str], ...] = (
-    ("release-gate/validate-async", "POST", 20, "release_gate_validate"),
-    ("release-gate/validate", "POST", 20, "release_gate_validate"),
+    ("release-gate/validate-async", "POST", 30, "release_gate_validate"),
+    ("release-gate/validate", "POST", 30, "release_gate_validate"),
     ("quality/evaluate", "POST", 20, "quality_evaluate"),
     ("behavior/validate", "POST", 20, "behavior_validate"),
     ("behavior/compare", "POST", 20, "behavior_compare"),
@@ -134,6 +136,29 @@ def _rate_limit_response(bucket: str, limit: int, scope: str) -> JSONResponse:
         },
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         headers=_rate_limit_headers(bucket, limit, retry_after_sec),
+    )
+
+
+def _observe_rate_limit_exceeded(bucket: str, scope: str, path: str, method: str) -> None:
+    normalized_path = _normalize_path(path)
+    try:
+        rate_limit_exceeded_total.labels(
+            bucket=bucket,
+            scope=scope,
+            endpoint=normalized_path,
+            method=method.upper(),
+        ).inc()
+    except Exception:
+        logger.debug("rate_limit_metric_emit_failed", exc_info=True)
+
+    logger.warning(
+        "rate_limit_exceeded",
+        extra={
+            "bucket": bucket,
+            "scope": scope,
+            "path": normalized_path,
+            "method": method.upper(),
+        },
     )
 
 
@@ -315,6 +340,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.url.path in ["/health", "/"] or request.method == "OPTIONS":
             return await call_next(request)
 
+        request_path = request.url.path
+        request_method = request.method
         client_id = self._get_client_id(request)
         client_ip = client_id.replace("rate_limit:", "", 1) if client_id.startswith("rate_limit:") else client_id
         bucket = classify_rate_limit_bucket(request)
@@ -322,11 +349,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Global rate limit (all endpoints)
         if not self._check_rate_limit(client_id):
+            _observe_rate_limit_exceeded("global_ip", "ip", request_path, request_method)
             return _rate_limit_response("global_ip", self.requests_per_minute, "ip")
 
         # Per-user rate limit (when JWT present; avoids NAT/shared-IP throttling)
         user_id = _extract_user_id_from_request(request)
         if user_id and not check_user_rate_limit(user_id, bucket_limit, bucket_key=bucket):
+            _observe_rate_limit_exceeded(bucket, "user", request_path, request_method)
             return _rate_limit_response(bucket, bucket_limit, "user")
 
         # Heavy-endpoint rate limit (stricter per-endpoint limit)
@@ -334,6 +363,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if heavy is not None:
             path_key, limit = heavy
             if not check_endpoint_rate_limit(client_ip, path_key, limit):
+                _observe_rate_limit_exceeded(path_key, "endpoint", request_path, request_method)
                 return _rate_limit_response(path_key, limit, "endpoint")
 
         return await call_next(request)

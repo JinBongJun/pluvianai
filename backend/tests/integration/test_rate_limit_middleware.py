@@ -53,3 +53,33 @@ class TestRateLimitMiddleware:
         assert response.headers["Retry-After"] == "60"
         assert response.headers["X-RateLimit-Bucket"] == "dashboard_read"
 
+    async def test_release_gate_validate_endpoint_returns_updated_limit(
+        self, async_client, auth_headers, test_project, monkeypatch
+    ):
+        import app.middleware.rate_limit as rate_limit
+
+        monkeypatch.setattr(
+            rate_limit.RateLimitMiddleware,
+            "_check_rate_limit",
+            lambda self, client_id: True,
+        )
+        monkeypatch.setattr(rate_limit, "_extract_user_id_from_request", lambda request: None)
+        monkeypatch.setattr(
+            rate_limit,
+            "check_endpoint_rate_limit",
+            lambda client_ip, path_key, limit_per_minute, window_sec=60: False,
+        )
+
+        response = await async_client.post(
+            f"/api/v1/projects/{test_project.id}/release-gate/validate-async",
+            json={},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        data = response.json()
+        assert data["error"]["details"]["bucket"] == "release_gate_validate"
+        assert data["error"]["details"]["scope"] == "endpoint"
+        assert data["error"]["details"]["limit"] == 30
+        assert response.headers["X-RateLimit-Bucket"] == "release_gate_validate"
+
