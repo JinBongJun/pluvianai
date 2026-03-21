@@ -1297,6 +1297,12 @@ async def export_behavior_report(
         "created_at": _iso(report.created_at),
         "export_tool_io_policy": "redacted" if export_role == "viewer" else "full",
     }
+    if isinstance(summary_for_export, dict):
+        rg = summary_for_export.get("release_gate")
+        if isinstance(rg, dict):
+            cr = rg.get("case_results")
+            if isinstance(cr, list) and cr:
+                payload["case_results"] = cr
     if format == "json":
         return payload
 
