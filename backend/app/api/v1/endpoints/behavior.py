@@ -22,10 +22,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.canonical import response_to_canonical_steps
-from app.utils.tool_calls import normalize_tool_name
+from app.utils.tool_calls import normalize_tool_name, parse_tool_args
+from app.utils.tool_events import normalize_tool_events
 from app.core.database import get_db
 from app.core.logging_config import logger
-from app.core.permissions import ProjectRole, check_project_access
+from app.core.permissions import ProjectRole, check_project_access, get_user_project_role
 from app.core.security import get_current_user
 from app.models.behavior_report import BehaviorReport
 from app.models.behavior_rule import BehaviorRule
@@ -41,6 +42,7 @@ from app.services.behavior_rules_service import (
     resolve_effective_rules,
     run_behavior_validation,
 )
+from app.utils.behavior_export_sanitization import sanitize_behavior_report_summary_for_export
 
 router = APIRouter()
 
@@ -190,6 +192,92 @@ def _resolve_dataset_agent_id(
     return normalized_requested or inferred_agent_id
 
 
+def _steps_from_payload_tool_events(
+    payload: Any,
+    base_meta: Dict[str, Any],
+    span_order: float,
+) -> List[Dict[str, Any]]:
+    """
+    Build canonical trajectory rows from snapshot payload.tool_events (SDK ingest).
+    step_order uses span_order + 1.0 + index*0.001 so rows sort after response-derived steps.
+    """
+    if not isinstance(payload, dict):
+        return []
+    normalized = normalize_tool_events(payload.get("tool_events"))
+    if not normalized:
+        return []
+    out: List[Dict[str, Any]] = []
+    base = float(span_order) + 1.0
+    for j, ev in enumerate(normalized):
+        kind = str(ev.get("kind") or "").strip().lower()
+        name = str(ev.get("name") or "").strip()
+        step_order = base + j * 0.001
+        call_id = ev.get("call_id")
+        cid = str(call_id).strip() if call_id is not None and str(call_id).strip() else None
+
+        if kind == "tool_call":
+            args = parse_tool_args(ev.get("input"))
+            if not isinstance(args, dict):
+                args = {}
+            if cid:
+                args = {**args, "call_id": cid}
+            out.append(
+                {
+                    **base_meta,
+                    "step_order": step_order,
+                    "step_type": "tool_call",
+                    "tool_name": name,
+                    "tool_args": args,
+                }
+            )
+        elif kind == "tool_result":
+            tr_payload: Dict[str, Any] = {"source": "ingest_tool_events"}
+            if ev.get("output") is not None:
+                tr_payload["output"] = ev.get("output")
+            st = ev.get("status")
+            if st:
+                tr_payload["status"] = st
+            if cid:
+                tr_payload["call_id"] = cid
+            ta: Dict[str, Any] = {}
+            if cid:
+                ta["call_id"] = cid
+            if st:
+                ta["status"] = st
+            out.append(
+                {
+                    **base_meta,
+                    "step_order": step_order,
+                    "step_type": "tool_result",
+                    "tool_name": name,
+                    "tool_args": ta,
+                    "tool_result": tr_payload,
+                }
+            )
+        elif kind == "action":
+            tr_payload = {"source": "ingest_tool_events", "kind": "action"}
+            if ev.get("input") is not None:
+                tr_payload["input"] = ev.get("input")
+            if ev.get("output") is not None:
+                tr_payload["output"] = ev.get("output")
+            st = ev.get("status")
+            if st:
+                tr_payload["status"] = st
+            if cid:
+                tr_payload["call_id"] = cid
+            out.append(
+                {
+                    **base_meta,
+                    "step_order": step_order,
+                    "step_type": "action",
+                    "tool_name": name,
+                    "tool_args": {},
+                    "tool_result": tr_payload,
+                }
+            )
+    return out
+
+
 def _build_trace_steps(project_id: int, trace_id: str, db: Session) -> List[Dict[str, Any]]:
     rows = (
         db.query(Snapshot)
@@ -218,6 +306,13 @@ def _build_trace_steps(project_id: int, trace_id: str, db: Session) -> List[Dict
             base_meta=base_step,
         )
         steps.extend(canonical_steps)
+        steps.extend(
+            _steps_from_payload_tool_events(
+                s.payload,
+                base_step,
+                float(base_step["step_order"]),
+            )
+        )
     return sorted(steps, key=lambda x: x.get("step_order") or 0)
 
 
@@ -1176,6 +1271,7 @@ async def export_behavior_report(
     current_user: User = Depends(get_current_user),
 ):
     check_project_access(project_id, current_user, db)
+    export_role = get_user_project_role(project_id, current_user.id, db)
     report = (
         db.query(BehaviorReport)
         .filter(BehaviorReport.project_id == project_id, BehaviorReport.id == report_id)
@@ -1184,6 +1280,9 @@ async def export_behavior_report(
     if not report:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Behavior report not found")
 
+    summary_for_export = sanitize_behavior_report_summary_for_export(
+        report.summary_json, role=export_role
+    )
     payload = {
         "id": report.id,
         "project_id": report.project_id,
@@ -1193,9 +1292,10 @@ async def export_behavior_report(
         "baseline_run_ref": report.baseline_run_ref,
         "ruleset_hash": report.ruleset_hash,
         "status": report.status,
-        "summary": report.summary_json,
+        "summary": summary_for_export,
         "violations": report.violations_json,
         "created_at": _iso(report.created_at),
+        "export_tool_io_policy": "redacted" if export_role == "viewer" else "full",
     }
     if format == "json":
         return payload

@@ -79,10 +79,13 @@ This lets you confirm **whether the node still behaves the same as before**. (Wh
 
 #### 2) MVP stance on tool-call
 
-- We do **not** execute tools.
+- We do **not** execute arbitrary external tools by default (no side effects).
 - We only **observe**:
   - tool-call names/args are visible (policy check purpose)
-  - Original snapshot has tool-result stubs; replay compares against policy
+- Tool results (tool_result):
+  - If recorded baseline tool_result evidence exists, we inject that recorded result into replay for stable grounding and evidence UI.
+  - If recorded evidence is missing, we fall back to deterministic dry-run/simulated tool_result for policy evaluation, and the UI must clearly mark the evidence as `simulated`/`missing`.
+- **Ingest**: customers may attach `tool_events` (tool_call + tool_result + optional action) on `POST .../api-calls` so baseline runs contain recorded results. Canonical JSON examples: `docs/TOOL_EVENTS_SCHEMA.md` and `docs/release-gate-tool-io-grounding-plan.md` (keep examples in sync when changing the contract).
 
 #### 3) Canonical step (cross-provider behavior check)
 

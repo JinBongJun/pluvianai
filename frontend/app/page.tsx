@@ -271,6 +271,11 @@ export default function Home() {
                 </Link>
               </li>
               <li>
+                <Link href="/trust" className="hover:text-emerald-400 transition-colors">
+                  Live View data (Trust)
+                </Link>
+              </li>
+              <li>
                 <Link href="/security" className="hover:text-emerald-400 transition-colors">
                   Security & Retention
                 </Link>
@@ -314,6 +319,9 @@ export default function Home() {
             </Link>
             <Link href="/privacy" className="hover:text-emerald-400 transition-colors">
               Privacy
+            </Link>
+            <Link href="/trust" className="hover:text-emerald-400 transition-colors">
+              Trust
             </Link>
             <Link href="/security" className="hover:text-emerald-400 transition-colors">
               Security

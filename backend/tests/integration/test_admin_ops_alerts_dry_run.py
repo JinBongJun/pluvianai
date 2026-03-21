@@ -84,3 +84,42 @@ class TestAdminOpsAlertsDryRun:
         assert data.get("accepted") is True
         assert data.get("event_type") == "provider_error_burst"
         assert sent["count"] == 2
+
+    async def test_release_gate_tool_missing_surge_dry_run_supported(
+        self, async_client, auth_headers, db, test_user, monkeypatch
+    ):
+        from app.api.v1.endpoints.admin import ops_alerts as ops_alerts_endpoint
+
+        test_user.is_superuser = True
+        db.commit()
+
+        sent = {"count": 0}
+
+        def _fake_observe_rg_tool_missing(*args, **kwargs):
+            sent["count"] += 1
+            return None
+
+        monkeypatch.setattr(
+            ops_alerts_endpoint.ops_alerting,
+            "observe_release_gate_tool_missing_surge",
+            _fake_observe_rg_tool_missing,
+            raising=True,
+        )
+
+        response = await async_client.post(
+            "/api/v1/admin/ops-alerts/test",
+            json={
+                "event_type": "release_gate_tool_missing_surge",
+                "project_id": 1,
+                "repeats": 3,
+                "evidence_rows": 10,
+                "missing_rows": 8,
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        data = response.json()
+        assert data.get("accepted") is True
+        assert data.get("event_type") == "release_gate_tool_missing_surge"
+        assert sent["count"] == 3

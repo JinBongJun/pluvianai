@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * Release Gate run / attempt UI. Tool timeline rows mirror Live View (`LiveViewToolTimelineRow`);
+ * keep redaction and empty-state copy aligned with `SnapshotDetailModal` / `ToolTimelinePanel`
+ * (see docs/live-view-context-privacy-plan.md).
+ */
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
@@ -862,6 +867,11 @@ function AttemptDetailOverlay({
   const toolEvidenceRows = Array.isArray(attempt?.tool_evidence)
     ? (attempt.tool_evidence as Array<Record<string, unknown>>)
     : [];
+  /**
+   * Maps Gate `tool_evidence` (replay service) into `LiveViewToolTimelineRow` for shared `ToolTimelinePanel`.
+   * Live View snapshot GET applies `redact_secrets` in the API; Gate rows use server-built previews here.
+   * Keep empty I/O copy + provenance labels aligned with `ToolTimelinePanel` / privacy plan §12.3.
+   */
   const gateToolTimelineRows = useMemo((): LiveViewToolTimelineRow[] => {
     return toolEvidenceRows.map((row, idx) => {
       const exec = String(row.execution_source ?? row.status ?? "").toLowerCase();
@@ -2314,6 +2324,9 @@ export function ReleaseGateExpandedView() {
   const setBaselineDetailSnapshot = ctx.setBaselineDetailSnapshot as (
     s: SnapshotForDetail | null
   ) => void;
+  const openBaselineDetailSnapshot = ctx.openBaselineDetailSnapshot as (
+    s: Record<string, unknown>
+  ) => void;
   const datasets = ctx.datasets as {
     id: string;
     label?: string;
@@ -2892,9 +2905,7 @@ export function ReleaseGateExpandedView() {
                                 >
                                   <div
                                     className="flex cursor-pointer items-start gap-3 p-4"
-                                    onClick={() =>
-                                      setBaselineDetailSnapshot(snap as unknown as SnapshotForDetail)
-                                    }
+                                    onClick={() => openBaselineDetailSnapshot(snap)}
                                   >
                                     <div className="pt-0.5" onClick={e => e.stopPropagation()}>
                                       <input
@@ -3111,8 +3122,8 @@ export function ReleaseGateExpandedView() {
                                             key={String(snapshot.id)}
                                             type="button"
                                             onClick={() =>
-                                              setBaselineDetailSnapshot(
-                                                snapshot as unknown as SnapshotForDetail
+                                              openBaselineDetailSnapshot(
+                                                snapshot as Record<string, unknown>
                                               )
                                             }
                                             className="flex w-full items-start justify-between gap-3 border-b border-white/[0.04] px-4 py-3 text-left transition-colors last:border-0 hover:bg-white/[0.05]"

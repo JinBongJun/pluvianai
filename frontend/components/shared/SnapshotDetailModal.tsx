@@ -15,6 +15,7 @@ import {
   Lock,
   Repeat,
   Scale,
+  Send,
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
@@ -24,6 +25,10 @@ import {
   Zap,
 } from "lucide-react";
 import clsx from "clsx";
+
+import type { LiveViewToolTimelineRow, RequestContextMeta } from "@/lib/api/live-view";
+import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel";
+import { RequestContextPanel } from "@/components/live-view/RequestContextPanel";
 
 export interface SnapshotForDetail {
   id: string | number;
@@ -42,6 +47,12 @@ export interface SnapshotForDetail {
   status_code?: number | null;
   has_tool_calls?: boolean;
   tool_calls_summary?: Array<{ name: string; arguments?: string | Record<string, unknown> }>;
+  /** Tool IO timeline (ingest `tool_events` and/or persisted trajectory steps). */
+  tool_timeline?: LiveViewToolTimelineRow[];
+  /** Server-side redaction pass for tool_timeline (see API). */
+  tool_timeline_redaction_version?: number;
+  /** Derived from payload SDK markers on GET snapshot (preferred over client-only heuristics). */
+  request_context_meta?: RequestContextMeta | null;
 }
 
 export type PolicyState = {
@@ -444,29 +455,7 @@ export function SnapshotDetailModal({
 
           <div className="flex flex-col gap-12 shrink-0">
             <div className="space-y-8">
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-3 border-b border-white/5 pb-3">
-                  <AlignLeft className="w-5 h-5 text-slate-400" />
-                  <span className="text-sm font-bold text-slate-200 uppercase tracking-widest">
-                    System Prompt
-                  </span>
-                </div>
-                <div className="bg-[#030806] border border-white/5 rounded-[20px] p-6 text-sm text-slate-400 font-mono leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30 overflow-x-auto shadow-inner">
-                  {safeStringify(s.system_prompt)}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-3 border-b border-white/5 pb-3">
-                  <AlignLeft className="w-5 h-5 text-slate-400" />
-                  <span className="text-sm font-bold text-slate-200 uppercase tracking-widest">
-                    User Input
-                  </span>
-                </div>
-                <div className="bg-[#030806] border border-white/5 rounded-[20px] p-6 text-sm text-slate-300 font-mono leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30 overflow-x-auto shadow-inner">
-                  {safeStringify(s.request_prompt ?? s.user_message)}
-                </div>
-              </div>
+              <RequestContextPanel snapshot={s} />
 
               {(s.has_tool_calls ||
                 (Array.isArray(s.tool_calls_summary) && s.tool_calls_summary.length > 0)) && (
@@ -493,6 +482,28 @@ export function SnapshotDetailModal({
                   </div>
                 </div>
               )}
+
+              {(() => {
+                const tl = s.tool_timeline ?? [];
+                const actionRows = tl.filter(r => r.step_type === "action");
+                const toolIoRows = tl.filter(r => r.step_type !== "action");
+                return (
+                  <>
+                    {toolIoRows.length > 0 ? (
+                      <ToolTimelinePanel rows={toolIoRows} title="Tool timeline" icon={Terminal} variant="snapshot" />
+                    ) : null}
+                    {actionRows.length > 0 ? (
+                      <ToolTimelinePanel
+                        rows={actionRows}
+                        title="Actions"
+                        subtitle="Side effects (outbound: email, Slack, HTTP, etc.) — not LLM tool reads"
+                        icon={Send}
+                        variant="snapshot"
+                      />
+                    ) : null}
+                  </>
+                );
+              })()}
 
               {customCode && (
                 <div className="flex flex-col gap-4">

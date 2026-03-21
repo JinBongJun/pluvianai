@@ -3,7 +3,7 @@
 > **중요**: 이 문서는 프론트엔드와 백엔드 간의 공식 스키마 계약입니다.
 > 모든 API 응답은 이 문서를 따라야 합니다.
 > 
-> 마지막 업데이트: 2026-01-31
+> 마지막 업데이트: 2026-03-21
 
 ---
 
@@ -63,6 +63,10 @@ interface APICall {
   error_message?: string | null;
 }
 ```
+
+### 2.2.1 Ingest: optional `tool_events` (API call ingest)
+
+프로젝트에 API 호출을 **ingest**할 때(예: `POST .../projects/{id}/api-calls` 등) 요청 바디에 선택적으로 포함할 수 있는 `tool_events` 배열의 필드 정의·검증 규칙은 **`docs/TOOL_EVENTS_SCHEMA.md`**를 따른다. Live View / Release Gate 타임라인과 맞추기 위한 `kind`, `call_id`, `ts_ms` 등은 해당 문서가 단일 참조(SoT)다. 필드별 민감도·상한 요약은 **`docs/live-view-ingest-field-matrix.md`** 참고.
 
 ### 2.3 QualityScore
 

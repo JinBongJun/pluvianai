@@ -1,6 +1,7 @@
 import asyncio
 import httpx
 import json
+from collections import defaultdict
 from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 from app.models.snapshot import Snapshot
@@ -18,6 +19,8 @@ from app.models.usage import Usage
 from app.models.project import Project
 from app.services.providers.capabilities import resolve_capabilities
 from app.core.canonical import response_to_canonical_tool_calls
+from app.utils.tool_events import normalize_tool_events
+from app.utils.tool_calls import normalize_tool_name
 
 
 def _persist_replay_usage(
@@ -220,6 +223,54 @@ class ReplayService:
             f"[tool_result simulated] tool={tool_name}; args={args_text}; "
             "execution_mode=dry_run; result=Tool execution is not connected yet."
         )
+
+    def _tool_output_to_recorded_text(self, output: Any) -> str:
+        """Serialize baseline tool output for replay injection."""
+        if output is None:
+            return ""
+        if isinstance(output, str):
+            return output
+        try:
+            return json.dumps(output, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return str(output)
+
+    def _recorded_tool_result_lookups_from_snapshot(
+        self, snapshot: Snapshot
+    ) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
+        """
+        Baseline tool_result text from ingest:
+        - by_id: tool_call id -> text (strong match)
+        - by_name_queue: normalized tool name -> FIFO queue of texts for rows without call_id
+          (weak match: cross-provider / missing id)
+        """
+        payload = getattr(snapshot, "payload", None)
+        if not isinstance(payload, dict):
+            return {}, {}
+        evs = normalize_tool_events(payload.get("tool_events"))
+        if not evs:
+            return {}, {}
+        by_id: Dict[str, str] = {}
+        by_name_queue: Dict[str, List[str]] = defaultdict(list)
+        for ev in evs:
+            if str(ev.get("kind") or "").strip().lower() != "tool_result":
+                continue
+            raw = self._tool_output_to_recorded_text(ev.get("output"))
+            if not raw.strip():
+                continue
+            cid = ev.get("call_id")
+            if cid is not None and str(cid).strip():
+                by_id[str(cid).strip()] = raw
+            else:
+                n = normalize_tool_name(ev.get("name"))
+                if n:
+                    by_name_queue[n].append(raw)
+        return by_id, {k: v for k, v in by_name_queue.items()}
+
+    def _recorded_tool_result_map_from_snapshot(self, snapshot: Snapshot) -> Dict[str, str]:
+        """Backward-compatible: call_id -> text only."""
+        by_id, _ = self._recorded_tool_result_lookups_from_snapshot(snapshot)
+        return by_id
 
     def _extract_text_and_tool_calls(
         self,
@@ -987,6 +1038,10 @@ class ReplayService:
                         if fallback_user:
                             conversation_messages.append({"role": "user", "content": fallback_user})
 
+                    recorded_by_id, recorded_name_queues = self._recorded_tool_result_lookups_from_snapshot(
+                        snapshot
+                    )
+
                     for round_index in range(1, max_tool_rounds + 1):
                         assistant_text, tool_calls, id_conflict = self._extract_text_and_tool_calls(
                             current_response_data, provider, normalizer
@@ -1017,18 +1072,39 @@ class ReplayService:
                         for tc in tool_calls:
                             tool_name = str(tc.get("name") or "").strip() or "unknown_tool"
                             tool_args = tc.get("arguments") if isinstance(tc.get("arguments"), dict) else {}
-                            simulated_result = self._build_simulated_tool_result_text(tool_name, tool_args)
                             call_id = str(tc.get("id") or "").strip()
                             if not call_id:
                                 call_id = f"call_{round_index}_{tool_name}"
                             tc["id"] = call_id
-                            tool_result_text_by_id[call_id] = simulated_result
+                            recorded_raw = recorded_by_id.get(call_id)
+                            match_tier: Optional[str] = "call_id" if recorded_raw and str(recorded_raw).strip() else None
+                            if not match_tier:
+                                n = normalize_tool_name(tool_name)
+                                if n and n in recorded_name_queues and recorded_name_queues[n]:
+                                    recorded_raw = recorded_name_queues[n].pop(0)
+                                    match_tier = "name_order"
+                            if recorded_raw is not None and str(recorded_raw).strip():
+                                result_text = str(recorded_raw)
+                                row_status = "recorded"
+                                exec_src = "recorded"
+                                tool_result_src = "baseline_snapshot"
+                            else:
+                                result_text = self._build_simulated_tool_result_text(tool_name, tool_args)
+                                row_status = "simulated"
+                                exec_src = "simulated"
+                                tool_result_src = "dry_run"
+                                match_tier = None
+                            tool_result_text_by_id[call_id] = result_text
                             tool_event_rows.append(
                                 {
                                     "name": tool_name,
-                                    "status": "simulated",
+                                    "call_id": call_id,
+                                    "status": row_status,
+                                    "execution_source": exec_src,
+                                    "tool_result_source": tool_result_src,
+                                    "match_tier": match_tier,
                                     "arguments_preview": json.dumps(tool_args, ensure_ascii=False),
-                                    "result_preview": simulated_result,
+                                    "result_preview": result_text,
                                 }
                             )
                         loop_events.append(
@@ -1046,13 +1122,15 @@ class ReplayService:
                             conversation_messages.append({"role": "assistant", "content": assistant_text.strip()})
 
                         for tc in tool_calls:
-                            tool_name = str(tc.get("name") or "").strip() or "unknown_tool"
-                            tool_args = tc.get("arguments") if isinstance(tc.get("arguments"), dict) else {}
-                            simulated_result = self._build_simulated_tool_result_text(tool_name, tool_args)
+                            tool_name_fb = str(tc.get("name") or "").strip() or "unknown_tool"
+                            call_id = str(tc.get("id") or "").strip()
+                            if not call_id:
+                                call_id = f"call_{round_index}_{tool_name_fb}"
+                            result_text = tool_result_text_by_id.get(call_id) or ""
                             conversation_messages.append(
                                 {
                                     "role": "user",
-                                    "content": simulated_result,
+                                    "content": result_text,
                                 }
                             )
 
