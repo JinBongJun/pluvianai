@@ -14,7 +14,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.usage_limits import (
@@ -121,15 +121,12 @@ class UserCreate(BaseModel):
 
 class UserResponse(BaseModel):
     """User response schema"""
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     email: str
     full_name: str | None
     is_active: bool
-
-    class Config:
-        from_attributes = True
-
 
 class TokenResponse(BaseModel):
     """Token response schema"""

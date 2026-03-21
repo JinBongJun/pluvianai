@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole, get_user_project_role
@@ -55,6 +55,7 @@ class ProjectUpdate(BaseModel):
 
 class ProjectResponse(BaseModel):
     """Project response schema"""
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     name: str
@@ -65,10 +66,6 @@ class ProjectResponse(BaseModel):
     organization_id: int | None = None  # organization this project belongs to
     usage_mode: str = "full"  # "full" | "test_only" (Design 5.1.5)
     diagnostic_config: dict | None = {}
-
-    class Config:
-        from_attributes = True
-
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 @handle_errors
@@ -523,6 +520,8 @@ class RubricCreate(BaseModel):
     max_score: int = 5
 
 class RubricResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: Optional[str]
@@ -530,9 +529,6 @@ class RubricResponse(BaseModel):
     min_score: int
     max_score: int
     is_active: bool
-
-    class Config:
-        from_attributes = True
 
 @router.post("/{project_id}/rubrics", response_model=RubricResponse)
 @handle_errors

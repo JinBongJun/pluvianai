@@ -4,6 +4,7 @@ PluvianAI FastAPI Application
 
 import os
 import sys
+from contextlib import asynccontextmanager
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
@@ -84,6 +85,15 @@ from app.models import (  # noqa: F401
 # Use /api/v1/admin/init-db endpoint to initialize database after deployment
 # Base.metadata.create_all(bind=engine)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await startup_event()
+    try:
+        yield
+    finally:
+        await shutdown_event()
+
+
 app = FastAPI(
     title=settings.APP_NAME,
     description="LLM Agent Monitoring Platform",
@@ -92,6 +102,7 @@ app = FastAPI(
     openapi_url="/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # Update app info metrics
@@ -251,7 +262,6 @@ async def update_business_metrics_periodically():
         await asyncio.sleep(60)
 
 
-@app.on_event("startup")
 async def startup_event():
     """Initialize application on startup (tolerant to missing DB in non-prod/CI)."""
     from sqlalchemy.exc import OperationalError
@@ -382,7 +392,6 @@ async def startup_event():
     logger.info("✅ Server listening and ready for connections")
 
 
-@app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("Shutting down PluvianAI API...")

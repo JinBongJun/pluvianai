@@ -82,7 +82,7 @@ class TestReleaseGateFreeTierLimits:
         assert response.status_code in (
             status.HTTP_202_ACCEPTED,
             status.HTTP_400_BAD_REQUEST,
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
         )
         data = response.json()
         assert _extract_error_code(data) != "LIMIT_PLATFORM_REPLAY_CREDITS"

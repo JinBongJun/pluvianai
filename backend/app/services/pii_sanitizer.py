@@ -14,6 +14,11 @@ except ImportError:
     logger.warning("Presidio not installed. Using regex-only PII sanitization.")
 
 
+def _is_expected_presidio_model_error(exc: Exception) -> bool:
+    msg = str(exc)
+    return "Can't find model 'en_core_web_lg'" in msg or "valid path to a data directory" in msg
+
+
 class PIISanitizer:
     """Service for masking sensitive information in LLM payloads with 2-stage processing"""
 
@@ -39,7 +44,10 @@ class PIISanitizer:
                 self.analyzer = AnalyzerEngine()
                 self.anonymizer = AnonymizerEngine()
             except Exception as e:
-                logger.warning(f"Failed to initialize Presidio: {str(e)}. Falling back to regex-only.")
+                if _is_expected_presidio_model_error(e):
+                    logger.info("Presidio spaCy model unavailable. Using regex-only PII sanitization.")
+                else:
+                    logger.warning(f"Failed to initialize Presidio: {str(e)}. Falling back to regex-only.")
                 self.use_presidio = False
 
     def sanitize(self, data: Union[str, Dict, List], project_id: Optional[int] = None) -> Any:
