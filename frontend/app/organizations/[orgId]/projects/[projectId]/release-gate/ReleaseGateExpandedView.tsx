@@ -3455,25 +3455,6 @@ export function ReleaseGateExpandedView() {
 
                 {rightPanelTab === "history" && (
                   <div className="flex-1 space-y-4 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                          Experiment history
-                        </div>
-                        <div className="text-sm font-semibold text-white">
-                          Retained runs for this node
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => mutateHistory()}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:bg-white/5"
-                      >
-                        <RefreshCcw className="h-3.5 w-3.5" />
-                        Refresh
-                      </button>
-                    </div>
-
                     {historyLoading ? (
                       <div className="space-y-2">
                         {[1, 2, 3].map(i => (
@@ -3483,57 +3464,7 @@ export function ReleaseGateExpandedView() {
                           />
                         ))}
                       </div>
-                    ) : nodeHistoryItems.length === 0 ? (
-                      <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
-                        <Flag className="mx-auto mb-2 h-10 w-10 text-slate-600" />
-                        <p className="text-sm text-slate-500">
-                          No retained history yet for this node.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {nodeHistoryItems.map(item => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => selectHistoryRun(String(item.id))}
-                            data-testid={`rg-node-history-row-${item.id}`}
-                            data-run-status={String(item.status || "").toLowerCase()}
-                            className={clsx(
-                              "flex w-full items-center justify-between gap-3 rounded-[22px] border px-4 py-3 text-left transition",
-                              selectedRunId === item.id
-                                ? "border-fuchsia-500/30 bg-fuchsia-500/10"
-                                : "border-white/8 bg-black/20 hover:bg-white/[0.05]"
-                            )}
-                          >
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
-                                {item.status === "pass" ? (
-                                  <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                                ) : (
-                                  <ShieldX className="h-4 w-4 text-rose-400" />
-                                )}
-                                <span
-                                  className={
-                                    item.status === "pass" ? "text-emerald-300" : "text-rose-300"
-                                  }
-                                >
-                                  {item.status === "pass" ? "Passed" : "Failed"}
-                                </span>
-                              </div>
-                              <div className="mt-1 truncate text-[11px] text-slate-400">
-                                {shortText(item.trace_id, "No trace id", 54)}
-                              </div>
-                            </div>
-                            <div className="shrink-0 text-[11px] text-slate-500">
-                              {formatDateTime(item.created_at)}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {selectedHistoryItem ? (
+                    ) : selectedHistoryItem ? (
                       <HistoryDetailCard
                         item={selectedHistoryItem}
                         report={selectedRunReport}
@@ -3549,13 +3480,74 @@ export function ReleaseGateExpandedView() {
                           });
                         }}
                       />
-                    ) : nodeHistoryItems.length > 0 ? (
+                    ) : nodeHistoryItems.length === 0 ? (
                       <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
+                        <Flag className="mx-auto mb-2 h-10 w-10 text-slate-600" />
                         <p className="text-sm text-slate-500">
-                          Select a run to inspect thresholds, inputs, and violations.
+                          No retained history yet for this node.
                         </p>
                       </div>
-                    ) : null}
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                              Experiment history
+                            </div>
+                            <div className="text-sm font-semibold text-white">
+                              Retained runs for this node
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => mutateHistory()}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:bg-white/5"
+                          >
+                            <RefreshCcw className="h-3.5 w-3.5" />
+                            Refresh
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          {nodeHistoryItems.map(item => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => selectHistoryRun(String(item.id))}
+                              data-testid={`rg-node-history-row-${item.id}`}
+                              data-run-status={String(item.status || "").toLowerCase()}
+                              className={clsx(
+                                "flex w-full items-center justify-between gap-4 rounded-[24px] border px-4 py-4 text-left transition",
+                                selectedRunId === item.id
+                                  ? "border-fuchsia-500/30 bg-fuchsia-500/10"
+                                  : "border-white/8 bg-[#16181D] hover:bg-[#1a1d24]"
+                              )}
+                            >
+                              <div className="min-w-0 flex flex-col gap-1.5">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {item.status === "pass" ? (
+                                    <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400">
+                                      <ShieldCheck className="h-3.5 w-3.5" />
+                                      Passed
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5 rounded-full bg-rose-500/10 px-2 py-0.5 text-xs font-medium text-rose-400">
+                                      <ShieldX className="h-3.5 w-3.5" />
+                                      Failed
+                                    </div>
+                                  )}
+                                  <span className="text-[11px] text-slate-500">
+                                    {formatDateTime(item.created_at)}
+                                  </span>
+                                </div>
+                                <div className="truncate text-[13px] font-medium text-slate-200">
+                                  {shortText(item.trace_id, "No trace id", 40)}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
