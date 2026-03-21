@@ -43,6 +43,7 @@ class OpsAlertingService:
         self._db_errors: Dict[str, Deque[float]] = defaultdict(deque)
         self._snapshot_status: Dict[int, Deque[_TimedBool]] = defaultdict(deque)
         self._alert_frequency: Dict[str, Deque[float]] = defaultdict(deque)
+        self._release_gate_tool_missing_ratios: Dict[int, Deque[Tuple[float, float]]] = defaultdict(deque)
 
     @property
     def enabled(self) -> bool:
@@ -546,6 +547,75 @@ class OpsAlertingService:
     def _prune_timed_bools(q: Deque[_TimedBool], now: float, window_s: int) -> None:
         while q and (now - q[0].ts) > window_s:
             q.popleft()
+
+    @staticmethod
+    def _prune_ts_float_pairs(q: Deque[Tuple[float, float]], now: float, window_s: int) -> None:
+        while q and (now - q[0][0]) > window_s:
+            q.popleft()
+
+    def observe_release_gate_tool_missing_surge(
+        self,
+        project_id: int,
+        *,
+        evidence_rows: int,
+        missing_rows: int,
+    ) -> None:
+        """
+        §15.4: when tool_evidence rows exist but a high fraction is execution_source=missing,
+        emit an ops alert (possible missing ingest or provider format drift).
+        """
+        if evidence_rows <= 0:
+            return
+        ratio = float(missing_rows) / float(evidence_rows)
+        now = time()
+        window_s = int(settings.OPS_RG_TOOL_MISSING_WINDOW_SECONDS)
+        min_samples = int(settings.OPS_RG_TOOL_MISSING_MIN_SAMPLES)
+        ratio_threshold = float(settings.OPS_RG_TOOL_MISSING_RATIO_THRESHOLD)
+        key = f"release_gate_tool_missing_surge:{project_id}"
+
+        with self._lock:
+            q = self._release_gate_tool_missing_ratios[project_id]
+            q.append((now, ratio))
+            self._prune_ts_float_pairs(q, now, window_s)
+            total = len(q)
+            if total < min_samples:
+                return
+            avg_ratio = sum(r for _ts, r in q) / total
+
+        if avg_ratio >= ratio_threshold:
+            self._emit_alert_if_needed(
+                dedup_key=key,
+                severity="warning",
+                title="Release Gate tool evidence mostly missing",
+                summary=(
+                    f"project={project_id} avg_missing_ratio={avg_ratio * 100:.1f}% "
+                    f"samples={total} window={window_s}s (last={ratio * 100:.1f}% rows={evidence_rows})"
+                ),
+                payload={
+                    "event_type": "release_gate_tool_missing_surge",
+                    "project_id": project_id,
+                    "avg_missing_ratio": round(avg_ratio, 4),
+                    "last_sample_ratio": round(ratio, 4),
+                    "evidence_rows_last": evidence_rows,
+                    "missing_rows_last": missing_rows,
+                    "samples": total,
+                    "window_seconds": window_s,
+                },
+                mark_active=True,
+            )
+        else:
+            self._emit_recovery_if_needed(
+                dedup_key=key,
+                severity="info",
+                title="Release Gate tool missing ratio normalized",
+                summary=f"project={project_id} avg_missing_ratio={avg_ratio * 100:.1f}% is below threshold",
+                payload={
+                    "event_type": "release_gate_tool_missing_recovered",
+                    "project_id": project_id,
+                    "avg_missing_ratio": round(avg_ratio, 4),
+                    "samples": total,
+                },
+            )
 
     def _record_alert_frequency(self, event_type: str) -> None:
         normalized_event = str(event_type or "").strip().lower()

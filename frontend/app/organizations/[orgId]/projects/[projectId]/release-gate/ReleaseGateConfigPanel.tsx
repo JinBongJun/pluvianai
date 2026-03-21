@@ -2,11 +2,14 @@
 
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
+import useSWR from "swr";
 import { Plus, Trash2, X, RefreshCcw, SearchCode } from "lucide-react";
 
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
 import { sanitizePayloadForPreview } from "./ReleaseGatePageContent";
 import { ClientPortal } from "@/components/shared/ClientPortal";
+import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel";
+import { liveViewAPI, type LiveViewToolTimelineRow } from "@/lib/api/live-view";
 
 type ReplayProvider = "openai" | "anthropic" | "google";
 type ThresholdPreset = "strict" | "default" | "lenient" | "custom";
@@ -250,6 +253,33 @@ export function ReleaseGateConfigPanel({
     if (!setToolsList) return;
     setToolsList(prev => prev.filter(tool => tool.id !== toolId));
   };
+
+  const projectId = Number(ctx?.projectId ?? 0);
+  const baselineSeedSnapshot = (ctx?.baselineSeedSnapshot as Record<string, unknown> | null) ?? null;
+  const runSnapshotIds = (ctx?.runSnapshotIds as string[] | undefined) ?? [];
+
+  const snapshotIdForBaselineTimeline = useMemo(() => {
+    const seedId = baselineSeedSnapshot?.id;
+    if (typeof seedId === "number" && Number.isFinite(seedId)) return seedId;
+    if (runSnapshotIds.length > 0) {
+      const n = Number(runSnapshotIds[0]);
+      return Number.isFinite(n) ? n : null;
+    }
+    return null;
+  }, [baselineSeedSnapshot, runSnapshotIds]);
+
+  const { data: baselineSnapshotDetail, isLoading: baselineTimelineLoading } = useSWR(
+    isOpen && projectId > 0 && snapshotIdForBaselineTimeline != null
+      ? ["release-gate-config-baseline-timeline", projectId, snapshotIdForBaselineTimeline]
+      : null,
+    () => liveViewAPI.getSnapshot(projectId, snapshotIdForBaselineTimeline!)
+  );
+
+  const baselineToolTimelineRows: LiveViewToolTimelineRow[] = useMemo(() => {
+    const raw = baselineSnapshotDetail as Record<string, unknown> | undefined;
+    const tl = raw?.tool_timeline;
+    return Array.isArray(tl) ? (tl as LiveViewToolTimelineRow[]) : [];
+  }, [baselineSnapshotDetail]);
 
   if (!isOpen || !ctx) return null;
 
@@ -941,6 +971,44 @@ export function ReleaseGateConfigPanel({
                         );
                       })}
                     </div>
+                  )}
+                </div>
+
+                {/* §12.3 Baseline tool activity (read-only) — execution results come from snapshots, not candidate JSON */}
+                <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm">
+                  <div className="mb-4">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
+                      Baseline tool activity
+                    </div>
+                    <div className="text-sm text-slate-400">
+                      Read-only tool I/O for the representative baseline snapshot (first selected).
+                      Matches Live View snapshot detail and Release Gate evidence.
+                    </div>
+                  </div>
+                  {!snapshotIdForBaselineTimeline ? (
+                    <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.01] px-5 py-8 text-center text-sm text-slate-500">
+                      Select baseline snapshots on the main screen to load tool activity.
+                    </div>
+                  ) : baselineTimelineLoading ? (
+                    <div className="rounded-xl border border-white/10 bg-[#0a0c10] px-5 py-8 text-center text-sm text-slate-500">
+                      Loading tool timeline…
+                    </div>
+                  ) : baselineToolTimelineRows.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-amber-500/20 bg-amber-500/5 px-5 py-8 text-center text-sm text-slate-400">
+                      No tool I/O captured for this snapshot. Instrument your app or upgrade the SDK
+                      to send <span className="font-mono text-slate-300">tool_events</span> on ingest.
+                    </div>
+                  ) : (
+                    <ToolTimelinePanel
+                      variant="compact"
+                      title="Tool timeline"
+                      subtitle={
+                        snapshotIdForBaselineTimeline != null
+                          ? `Snapshot #${snapshotIdForBaselineTimeline}`
+                          : undefined
+                      }
+                      rows={baselineToolTimelineRows}
+                    />
                   )}
                 </div>
               </section>

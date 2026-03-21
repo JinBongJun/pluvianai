@@ -1,11 +1,19 @@
 import { apiClient, unwrapResponse } from "./client";
 
+/** Optional hints when request bodies were omitted or truncated (SDK / ingest). */
+export type RequestContextMeta = {
+  omitted_by_policy?: boolean;
+  truncated?: boolean;
+};
+
 /** `GET .../snapshots` list item — light list can include `has_tool_results` without loading full timeline. */
 export type LiveViewSnapshotListItem = {
   id: number;
   has_tool_calls?: boolean;
   has_tool_results?: boolean;
   tool_calls_summary?: unknown[];
+  /** Present when stored payload omits/truncates bodies (same derivation as GET snapshot). */
+  request_context_meta?: RequestContextMeta | null;
   [key: string]: unknown;
 };
 
@@ -22,12 +30,6 @@ export type LiveViewToolTimelineRow = {
   execution_source?: string;
   tool_result_source?: string;
   match_tier?: string;
-};
-
-/** Optional hints when request bodies were omitted or truncated (SDK / ingest). */
-export type RequestContextMeta = {
-  omitted_by_policy?: boolean;
-  truncated?: boolean;
 };
 
 /** Snapshot detail includes redacted tool_timeline + version for §14.2. */

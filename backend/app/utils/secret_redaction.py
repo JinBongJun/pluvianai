@@ -24,6 +24,8 @@ _SECRET_VALUE_PATTERNS = [
     re.compile(r"\bAIza[a-zA-Z0-9_-]{20,}\b"),  # Google API key-like
     re.compile(r"(?i)\bBearer\s+[A-Za-z0-9\-\._~\+\/]+=*\b"),  # Bearer token header-like
     re.compile(r"(?i)\beyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\b"),  # JWT-like
+    # Tool / log previews (release-gate-tool-io-grounding-plan §14.2)
+    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
 ]
 
 

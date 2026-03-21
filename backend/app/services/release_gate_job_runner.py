@@ -106,6 +106,7 @@ class ReleaseGateJobRunner:
             ReleaseGateValidateRequest,
             _run_release_gate,
             ReleaseGateCancelled,
+            _tool_evidence_stats_from_gate_result,
         )
 
         db: Session = SessionLocal()
@@ -224,6 +225,17 @@ class ReleaseGateJobRunner:
                         reason = str(reasons[0])
                     else:
                         reason = str(result.get("summary") or "release gate failed")
+                ev_rows, miss_rows = _tool_evidence_stats_from_gate_result(result)
+                if ev_rows > 0:
+                    logger.info(
+                        "release_gate_tool_evidence_snapshot project_id=%s evidence_rows=%s missing_rows=%s",
+                        int(job.project_id),
+                        ev_rows,
+                        miss_rows,
+                    )
+                ops_alerting.observe_release_gate_tool_missing_surge(
+                    int(job.project_id), evidence_rows=ev_rows, missing_rows=miss_rows
+                )
                 ops_alerting.observe_release_gate_result(
                     project_id=int(job.project_id),
                     success=passed,
