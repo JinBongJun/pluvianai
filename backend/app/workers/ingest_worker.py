@@ -34,6 +34,7 @@ def _process_one(payload: dict) -> None:
             status_code=status_code,
             agent_name=payload.get("agent_name"),
             chain_id=payload.get("chain_id"),
+            tool_events=payload.get("tool_events"),
         )
         if project_id is not None:
             ops_alerting.observe_snapshot_status(project_id=project_id, status_code=status_code)

@@ -39,6 +39,23 @@ export PLUVIANAI_API_URL="https://api.pluvianai.com"  # Optional
 export PLUVIANAI_AGENT_NAME="my-agent"  # Optional
 ```
 
+### Security / privacy (ingest payload)
+
+The SDK sends **copies** of `request_data` / `response_data` to PluvianAI. Your application’s in-memory objects are unchanged.
+
+| Setting | Env | Effect |
+|--------|-----|--------|
+| Log request message bodies | `PLUVIANAI_LOG_REQUEST_BODIES` | `false` / `0` → replace `messages[].content` with `[omitted]` + length metadata before send |
+| Log response message bodies | `PLUVIANAI_LOG_RESPONSE_BODIES` | Same for `choices[].message.content` |
+| Log tool_event input/output | `PLUVIANAI_LOG_TOOL_PAYLOADS` | Same for `tool_events[].input` / `.output` |
+| **All of the above** | `PLUVIANAI_LOG_USER_CONTENT` | `0` / `false` → applies to request, response, and tool payloads (unless overridden per-flag) |
+| Max request JSON size | `PLUVIANAI_MAX_REQUEST_BODY_BYTES` | Default `524288` (512 KiB UTF-8); over limit → stub payload |
+| Max response JSON size | `PLUVIANAI_MAX_RESPONSE_BODY_BYTES` | Same |
+
+Constructor overrides: `pluvianai.init(log_request_bodies=False, …)` (see `pluvianai.PluvianAI`).
+
+See also: `docs/live-view-trust-data-collection.md`, `docs/live-view-ingest-field-matrix.md`.
+
 ### Manual Initialization
 
 ```python
@@ -137,6 +154,29 @@ add lightweight, explicit instrumentation in your code (for example, wrapping to
 
 This is intentional: tool execution typically happens outside the LLM client, so it cannot always be inferred from LLM
 API traffic alone.
+
+### Sending tool I/O with manual ingest (`tool_events`)
+
+When you use `track_call` / `POST /api/v1/projects/{project_id}/api-calls`, you can attach an optional **`tool_events`** array so Live View and Release Gate can show **recorded** tool results (instead of dry-run simulation) during replay.
+
+Minimal shape (see server docs for limits: max 50 events, redaction, etc.):
+
+```python
+pluvianai.track_call(
+    request_data={...},
+    response_data={...},
+    latency_ms=latency_ms,
+    status_code=200,
+    tool_events=[
+        {"kind": "tool_call", "name": "get_weather", "call_id": "call_abc", "input": {"city": "Seoul"}},
+        {"kind": "tool_result", "name": "get_weather", "call_id": "call_abc", "output": {"temp_c": 22}, "status": "ok"},
+        # Optional: side-effect audit trail (email, Slack, HTTP) — kind "action"
+        {"kind": "action", "name": "send_slack", "output": {"ok": True}, "status": "ok"},
+    ],
+)
+```
+
+Use the **same `call_id`** the provider returned on `tool_call` / `tool_use` so replay can match baseline results to the model’s tool calls. If the provider omits ids, the server may still match **recorded** results by **tool name** order (weak match).
 
 ## License
 

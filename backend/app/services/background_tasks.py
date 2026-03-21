@@ -5,7 +5,7 @@ Background tasks for async processing
 import asyncio
 import json
 import uuid
-from typing import Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.models.api_call import APICall
@@ -15,6 +15,7 @@ from app.domain.live_view_release_gate import restore_agent_if_soft_deleted
 from app.services.data_normalizer import DataNormalizer
 from app.utils.compression import optimize_api_call_data, compress_json
 from app.utils.tool_calls import extract_tool_calls_summary
+from app.utils.tool_events import normalize_tool_events
 from app.utils.secret_redaction import redact_secrets
 from app.utils.agent_signature import build_node_key
 from app.services.live_view_events import publish_agents_changed
@@ -38,6 +39,7 @@ class BackgroundTaskService:
         agent_name: Optional[str] = None,
         chain_id: Optional[str] = None,
         api_key: Optional[str] = None,
+        tool_events: Optional[List[Any]] = None,
     ):
         """
         Save API call to database asynchronously
@@ -56,6 +58,7 @@ class BackgroundTaskService:
             status_code,
             agent_name,
             chain_id,
+            tool_events,
         )
 
         # Note: Shadow Routing functionality has been integrated into Production Guard (Firewall)
@@ -70,6 +73,7 @@ class BackgroundTaskService:
         status_code: int,
         agent_name: Optional[str],
         chain_id: Optional[str],
+        tool_events: Optional[Any] = None,
     ) -> Optional[int]:
         """Synchronous version for executor - returns API call ID"""
         db: Session = SessionLocal()
@@ -136,6 +140,9 @@ class BackgroundTaskService:
                 "request": request_data,
                 "response": response_data,
             }
+            te_norm = normalize_tool_events(tool_events)
+            if te_norm is not None:
+                payload_for_snapshot["tool_events"] = te_norm
             tool_calls_summary = extract_tool_calls_summary(payload_for_snapshot)
             try:
                 from app.models.project import Project as ProjectModel

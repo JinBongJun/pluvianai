@@ -20,8 +20,11 @@ from app.core.permissions import check_project_access, ProjectRole
 from app.core.usage_limits import check_snapshot_limit
 from app.models.user import User
 from app.models.snapshot import Snapshot
+from app.models.trajectory_step import TrajectoryStep
 from app.models.saved_log import SavedLog
 from app.utils.tool_calls import extract_tool_calls_summary
+from app.utils.tool_events import normalize_tool_events
+from app.utils.secret_redaction import redact_secrets
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.agent_eval_config_history import AgentEvalConfigHistory
 from app.models.project import Project
@@ -56,6 +59,153 @@ def _ensure_project(project_id: int, current_user: User, db: Session) -> Project
 
 def _ensure_project_admin(project_id: int, current_user: User, db: Session) -> Project:
     return check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
+
+
+def _request_context_meta_from_payload(payload: Any) -> Optional[Dict[str, Any]]:
+    """Derive UI hints when SDK omitted/truncated bodies (see sdk/python & sdk/node ingest privacy)."""
+    if not isinstance(payload, dict):
+        return None
+    req = payload.get("request")
+    if not isinstance(req, dict):
+        req = {}
+    resp = payload.get("response")
+    if not isinstance(resp, dict):
+        resp = {}
+    msg_omitted = bool(req.get("_pluvianai_message_bodies_omitted"))
+    resp_omitted = bool(resp.get("_pluvianai_response_bodies_omitted"))
+    trunc_req = bool(req.get("_pluvianai_truncated"))
+    trunc_payload = bool(payload.get("_pluvianai_truncated"))
+    if not any([msg_omitted, resp_omitted, trunc_req, trunc_payload]):
+        return None
+    meta: Dict[str, Any] = {}
+    if msg_omitted or resp_omitted:
+        meta["omitted_by_policy"] = True
+    if trunc_req or trunc_payload:
+        meta["truncated"] = True
+    return meta
+
+
+def _tool_timeline_from_payload(payload: Any) -> List[Dict[str, Any]]:
+    """Fallback timeline when trajectory_steps not yet materialized (same shape as DB rows)."""
+    if not isinstance(payload, dict):
+        return []
+    evs = normalize_tool_events(payload.get("tool_events"))
+    if not evs:
+        return []
+    out: List[Dict[str, Any]] = []
+    for i, ev in enumerate(evs):
+        kind = str(ev.get("kind") or "").strip().lower()
+        name = ev.get("name")
+        row: Dict[str, Any] = {
+            "step_order": float(i),
+            "step_type": kind,
+            "tool_name": name,
+            "tool_args": {},
+            "tool_result": None,
+            "provenance": "payload",
+        }
+        cid = ev.get("call_id")
+        if kind == "tool_call":
+            inp = ev.get("input")
+            if isinstance(inp, dict):
+                args = dict(inp)
+            elif inp is not None:
+                args = {"input": inp}
+            else:
+                args = {}
+            if cid:
+                args["call_id"] = cid
+            row["tool_args"] = args
+        elif kind in ("tool_result", "action"):
+            ta: Dict[str, Any] = {}
+            if cid:
+                ta["call_id"] = cid
+            row["tool_args"] = ta
+            tr: Dict[str, Any] = {}
+            if ev.get("output") is not None:
+                tr["output"] = ev.get("output")
+            if ev.get("status"):
+                tr["status"] = ev.get("status")
+            if cid:
+                tr["call_id"] = cid
+            if kind == "action" and ev.get("input") is not None:
+                tr["input"] = ev.get("input")
+            row["tool_result"] = tr if tr else None
+        out.append(row)
+    return out
+
+
+def _tool_timeline_for_snapshot(db: Session, project_id: int, snap: Snapshot) -> List[Dict[str, Any]]:
+    """Prefer persisted trajectory_steps for this snapshot; else payload.tool_events."""
+    tid = snap.trace_id
+    sid = str(snap.id)
+    if tid:
+        q = (
+            db.query(TrajectoryStep)
+            .filter(
+                TrajectoryStep.project_id == project_id,
+                TrajectoryStep.trace_id == tid,
+                TrajectoryStep.source_id == sid,
+            )
+            .order_by(TrajectoryStep.step_order.asc())
+        )
+        rows = q.all()
+        toolish = [
+            r
+            for r in rows
+            if str(r.step_type or "") in ("tool_call", "tool_result", "action")
+        ]
+        if toolish:
+            return [
+                {
+                    "step_order": r.step_order,
+                    "step_type": r.step_type,
+                    "tool_name": r.tool_name,
+                    "tool_args": r.tool_args or {},
+                    "tool_result": r.tool_result,
+                    "latency_ms": r.latency_ms,
+                    "provenance": "trajectory",
+                }
+                for r in toolish
+            ]
+    return _tool_timeline_from_payload(snap.payload)
+
+
+# Bumped when response-time redaction rules change (docs §14.2).
+TOOL_TIMELINE_REDACTION_VERSION = 1
+
+
+def _payload_has_tool_result_event(payload: Any) -> bool:
+    """True if payload.tool_events contains a tool_result row (cheap scan; no full normalize)."""
+    if not isinstance(payload, dict):
+        return False
+    raw = payload.get("tool_events")
+    if not isinstance(raw, list):
+        return False
+    for x in raw[:60]:
+        if isinstance(x, dict) and str(x.get("kind") or "").strip().lower() == "tool_result":
+            return True
+    return False
+
+
+def _batch_snapshot_source_ids_with_tool_result_trajectory(
+    db: Session, project_id: int, snapshot_ids: List[int]
+) -> set[str]:
+    """One query: source_id values (snapshot ids as str) that have a tool_result trajectory row."""
+    if not snapshot_ids:
+        return set()
+    sid_strs = [str(i) for i in snapshot_ids]
+    rows = (
+        db.query(TrajectoryStep.source_id)
+        .filter(
+            TrajectoryStep.project_id == project_id,
+            TrajectoryStep.step_type == "tool_result",
+            TrajectoryStep.source_id.in_(sid_strs),
+        )
+        .distinct()
+        .all()
+    )
+    return {str(r[0]) for r in rows if r[0] is not None}
 
 
 class SaveLogsRequest(BaseModel):
@@ -1048,6 +1198,8 @@ def list_snapshots(
     """
     Snapshot list with filters for Live View.
     Use light=true for list view; open detail with GET /snapshots/{id} for full payload.
+    Each item always includes request_context_meta when stored payload has SDK privacy markers
+    (derived server-side; safe with light=true since payload may be omitted from the response).
     """
     _ensure_project(project_id, current_user, db)
     query = db.query(Snapshot).filter(Snapshot.project_id == project_id, Snapshot.is_deleted.is_(False))
@@ -1058,6 +1210,9 @@ def list_snapshots(
 
     total_count = query.count()
     items = query.order_by(Snapshot.created_at.desc()).offset(offset).limit(limit).all()
+    traj_tool_result_ids = _batch_snapshot_source_ids_with_tool_result_trajectory(
+        db, project_id, [s.id for s in items]
+    )
 
     def _tool_fields(snap, skip_payload: bool = False):
         summary = getattr(snap, "tool_calls_summary", None)
@@ -1069,6 +1224,9 @@ def list_snapshots(
         }
 
     def _item(s):
+        has_tool_results = _payload_has_tool_result_event(getattr(s, "payload", None)) or (
+            str(s.id) in traj_tool_result_ids
+        )
         base = {
             "id": s.id,
             "trace_id": s.trace_id,
@@ -1089,6 +1247,9 @@ def list_snapshots(
             "eval_config_version": getattr(s, "eval_config_version", None),
             "created_at": s.created_at,
             **_tool_fields(s, skip_payload=light),
+            "has_tool_results": has_tool_results,
+            # Derived from DB payload even when light=true (payload omitted from JSON for bandwidth).
+            "request_context_meta": _request_context_meta_from_payload(getattr(s, "payload", None)),
         }
         if light:
             base["system_prompt"] = None
@@ -1138,6 +1299,7 @@ def get_snapshot(
     summary = getattr(snap, "tool_calls_summary", None)
     if summary is None and snap.payload:
         summary = extract_tool_calls_summary(snap.payload)
+    tool_timeline = redact_secrets(_tool_timeline_for_snapshot(db, project_id, snap))
     created_at = getattr(snap, "created_at", None)
     return {
         "id": snap.id,
@@ -1166,6 +1328,9 @@ def get_snapshot(
         "created_at": created_at.isoformat() if created_at else None,
         "has_tool_calls": bool(summary),
         "tool_calls_summary": summary or [],
+        "tool_timeline": tool_timeline,
+        "tool_timeline_redaction_version": TOOL_TIMELINE_REDACTION_VERSION,
+        "request_context_meta": _request_context_meta_from_payload(snap.payload),
     }
 
 

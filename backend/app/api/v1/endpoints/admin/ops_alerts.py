@@ -1,7 +1,7 @@
-from typing import Literal, Optional
+from typing import Literal, Optional, Self
 
 from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.core.logging_config import logger
 from app.core.permissions import require_admin
@@ -21,6 +21,7 @@ class OpsAlertDryRunRequest(BaseModel):
         "provider_error_burst",
         "db_error_burst",
         "snapshot_error_ratio_high",
+        "release_gate_tool_missing_surge",
         "custom",
     ]
     project_id: int = Field(1, ge=1)
@@ -36,6 +37,14 @@ class OpsAlertDryRunRequest(BaseModel):
     custom_severity: Literal["info", "warning", "critical"] = "warning"
     custom_title: Optional[str] = None
     custom_summary: Optional[str] = None
+    evidence_rows: int = Field(4, ge=1, le=500)
+    missing_rows: int = Field(4, ge=0, le=500)
+
+    @model_validator(mode="after")
+    def _validate_tool_missing_rows(self) -> Self:
+        if self.event_type == "release_gate_tool_missing_surge" and self.missing_rows > self.evidence_rows:
+            raise ValueError("missing_rows must be <= evidence_rows")
+        return self
 
 
 @router.post("/ops-alerts/test", status_code=status.HTTP_202_ACCEPTED)
@@ -92,6 +101,13 @@ async def trigger_ops_alert_dry_run(
             ops_alerting.observe_snapshot_status(
                 project_id=body.project_id,
                 status_code=body.status_code,
+            )
+    elif et == "release_gate_tool_missing_surge":
+        for _ in range(body.repeats):
+            ops_alerting.observe_release_gate_tool_missing_surge(
+                body.project_id,
+                evidence_rows=body.evidence_rows,
+                missing_rows=body.missing_rows,
             )
     else:
         ops_alerting.emit_test_alert(

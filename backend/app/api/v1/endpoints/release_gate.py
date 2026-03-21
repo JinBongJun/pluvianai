@@ -40,6 +40,7 @@ from app.core.canonical import (
     response_to_canonical_tool_calls_summary,
 )
 from app.core.database import get_db
+from app.core.logging_config import logger
 from app.core.permissions import check_project_access
 from app.core.config import settings as app_settings
 from app.core.usage_limits import check_guard_credits_limit
@@ -93,6 +94,29 @@ CORE_REPLAY_MODELS: Dict[str, List[str]] = {
 
 class ReleaseGateCancelled(Exception):
     pass
+
+
+def _tool_evidence_stats_from_gate_result(result: Optional[Dict[str, Any]]) -> Tuple[int, int]:
+    """Return (total tool_evidence rows, rows with execution_source/status missing)."""
+    total = 0
+    missing = 0
+    if not isinstance(result, dict):
+        return 0, 0
+    for case in result.get("case_results") or []:
+        if not isinstance(case, dict):
+            continue
+        for att in case.get("attempts") or []:
+            if not isinstance(att, dict):
+                continue
+            for row in att.get("tool_evidence") or []:
+                if not isinstance(row, dict):
+                    continue
+                total += 1
+                exec_src = str(row.get("execution_source") or "").strip().lower()
+                status = str(row.get("status") or "").strip().lower()
+                if exec_src == "missing" or (not exec_src and status == "missing"):
+                    missing += 1
+    return total, missing
 
 
 def _is_pinned_anthropic_model_id(model_id: Any) -> bool:
@@ -962,11 +986,22 @@ def _build_stage1_tool_evidence(
                     name = str(item.get("name") or "").strip()
                     if not name:
                         continue
+                    st = str(item.get("status") or "simulated").strip().lower()
+                    exec_src = str(item.get("execution_source") or st).strip().lower()
+                    tr_src = str(item.get("tool_result_source") or "").strip().lower()
+                    if not tr_src:
+                        tr_src = "baseline_snapshot" if st == "recorded" else "dry_run"
+                    cid = item.get("call_id")
+                    mt = item.get("match_tier")
                     rows.append(
                         {
                             "order": len(rows) + 1,
                             "name": name,
-                            "status": str(item.get("status") or "simulated"),
+                            "status": st,
+                            "execution_source": exec_src,
+                            "tool_result_source": tr_src,
+                            "call_id": str(cid).strip() if cid is not None and str(cid).strip() else None,
+                            "match_tier": str(mt).strip().lower() if mt is not None else None,
                             "reason_code": "tool_loop_event",
                             "reason_message": "Derived from tool loop events.",
                             "arguments_preview": _safe_preview_json(
@@ -1010,8 +1045,14 @@ def _build_stage1_tool_evidence(
 
 def _build_stage1_tool_execution_summary(tool_evidence: List[Dict[str, Any]]) -> Dict[str, Any]:
     total_calls = len(tool_evidence or [])
-    executed = 0
     simulated = sum(1 for row in (tool_evidence or []) if str(row.get("status")) == "simulated")
+    recorded = sum(
+        1
+        for row in (tool_evidence or [])
+        if str(row.get("status")) == "recorded"
+        or str(row.get("execution_source") or "").strip().lower() == "recorded"
+    )
+    executed = recorded
     skipped = sum(1 for row in (tool_evidence or []) if str(row.get("status")) == "skipped")
     failed = sum(1 for row in (tool_evidence or []) if str(row.get("status")) == "failed")
     tool_results = sum(
@@ -1029,6 +1070,7 @@ def _build_stage1_tool_execution_summary(tool_evidence: List[Dict[str, Any]]) ->
                 "total_calls": 0,
                 "executed": 0,
                 "simulated": 0,
+                "recorded": 0,
                 "skipped": 0,
                 "failed": 0,
                 "tool_results": 0,
@@ -1044,6 +1086,7 @@ def _build_stage1_tool_execution_summary(tool_evidence: List[Dict[str, Any]]) ->
             "total_calls": total_calls,
             "executed": executed,
             "simulated": simulated,
+            "recorded": recorded,
             "skipped": skipped,
             "failed": failed,
             "tool_results": tool_results,
@@ -2611,6 +2654,17 @@ async def validate_release_gate(
                 reason = str(reasons[0])
             else:
                 reason = str((result or {}).get("summary") or "release gate failed")
+        ev_rows, miss_rows = _tool_evidence_stats_from_gate_result(result if isinstance(result, dict) else None)
+        if ev_rows > 0:
+            logger.info(
+                "release_gate_tool_evidence_snapshot project_id=%s evidence_rows=%s missing_rows=%s",
+                project_id,
+                ev_rows,
+                miss_rows,
+            )
+        ops_alerting.observe_release_gate_tool_missing_surge(
+            project_id, evidence_rows=ev_rows, missing_rows=miss_rows
+        )
         ops_alerting.observe_release_gate_result(project_id=project_id, success=passed, error_summary=reason)
         return result
     except HTTPException:
@@ -2740,6 +2794,17 @@ async def release_gate_webhook(
                 reason = str(reasons[0])
             else:
                 reason = str((result or {}).get("summary") or "release gate failed")
+        ev_rows, miss_rows = _tool_evidence_stats_from_gate_result(result if isinstance(result, dict) else None)
+        if ev_rows > 0:
+            logger.info(
+                "release_gate_tool_evidence_snapshot project_id=%s evidence_rows=%s missing_rows=%s",
+                project_id,
+                ev_rows,
+                miss_rows,
+            )
+        ops_alerting.observe_release_gate_tool_missing_surge(
+            project_id, evidence_rows=ev_rows, missing_rows=miss_rows
+        )
         ops_alerting.observe_release_gate_result(project_id=project_id, success=passed, error_summary=reason)
         return result
     except HTTPException:
