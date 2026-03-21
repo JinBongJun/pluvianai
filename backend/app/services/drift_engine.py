@@ -2,7 +2,7 @@
 Drift detection engine for monitoring LLM output changes.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
@@ -42,7 +42,7 @@ class DriftEngine:
             raise ValueError("Database session required")
 
         # Calculate date ranges
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         baseline_end = now - timedelta(days=1)  # Exclude today from baseline
         baseline_start = baseline_end - timedelta(days=self.baseline_days)
         current_start = baseline_end

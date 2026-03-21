@@ -11,7 +11,7 @@ Flow:
 
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 from app.services.signal_detection_service import SignalDetectionService
 from app.services.worst_prompt_service import WorstPromptService
 from app.services.review_service import ReviewService
@@ -106,7 +106,7 @@ class RegressionService:
             "failed_count": len([r for r in results if r["status"] in ["failed", "flagged"]]),
             "signals": signal_summary,
             "results": results,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         
         review = None
