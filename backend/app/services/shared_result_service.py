@@ -3,7 +3,7 @@ Shared Result service for creating and accessing shareable links
 """
 
 from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.core.logging_config import logger
 from app.models.shared_result import SharedResult
@@ -48,7 +48,7 @@ class SharedResultService:
         # Calculate expiration
         expires_at = None
         if expires_in_days:
-            expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+            expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
 
         shared = SharedResult(
             project_id=project_id,
@@ -91,7 +91,12 @@ class SharedResultService:
             return None
 
         # Check expiration
-        if shared.expires_at and shared.expires_at < datetime.utcnow():
-            return None
+        if shared.expires_at:
+            now_utc = datetime.now(timezone.utc)
+            expires_at = shared.expires_at
+            if expires_at.tzinfo is None:
+                now_utc = now_utc.replace(tzinfo=None)
+            if expires_at < now_utc:
+                return None
 
         return shared
