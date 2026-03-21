@@ -1025,13 +1025,21 @@ function LiveViewContent() {
           onTabChange={id => setPanelTab(id as "logs" | "eval" | "data" | "settings")}
         >
           {panelTab === "logs" ? (
-            <ClinicalLog projectId={projectId} agentId={selectedAgentId || ""} />
+            <ClinicalLog
+              projectId={projectId}
+              agentId={selectedAgentId || ""}
+              orgId={orgId}
+            />
           ) : null}
           {panelTab === "eval" ? (
             <AgentEvaluationPanel projectId={projectId} agentId={selectedAgentId || ""} />
           ) : null}
           {panelTab === "data" ? (
-            <ClinicalLogDataSection projectId={projectId} agentId={selectedAgentId || ""} />
+            <ClinicalLogDataSection
+              projectId={projectId}
+              agentId={selectedAgentId || ""}
+              orgId={orgId}
+            />
           ) : null}
           {panelTab === "settings" ? (
             <AgentSettingsPanel

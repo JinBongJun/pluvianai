@@ -139,3 +139,15 @@ Use these defaults unless there is a clear product reason to deviate:
 - Rule of thumb
   - Prefer `Button`, `Input`, `Label`, `Card`, `Typography` primitives first.
   - Avoid ad-hoc one-off sizes (custom `h-*`, `text-*`) when an existing token fits.
+
+---
+
+## 8) Live View — Snapshot detail modal (`SnapshotDetailModal`)
+
+- **Release Gate CTA**: When `releaseGateHref` is passed (e.g. from Live View with `orgId`), a short **pre-deploy verification** strip links to Release Gate. Omit the prop inside Release Gate-only UIs if the link is redundant.
+- **Tool activity**: The section is **always** shown with three sub-areas:
+  - **Tool calls (provider summary)** — or dashed empty state explaining missing `tool_calls_summary`.
+  - **Tool timeline (calls & I/O)** — `ToolTimelinePanel` when rows exist; otherwise a matching header + empty hint (ingest `tool_events`, provider tool_calls, etc.).
+  - **Actions (side effects)** — same pattern for outbound `action` rows.
+- **Evaluation**: Cards reflect **rows stored on the snapshot** (capture time). A footnote clarifies this when no `evalContextLabel` override is present. Re-eval / override flows may expand rows from current settings.
+- **Execution steps**: Empty state lists payload keys we scan (`steps`, `step_log`, `trajectory.steps`, `events`).
