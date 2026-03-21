@@ -31,6 +31,7 @@ GLOBAL_RATE_LIMIT_PER_MINUTE = 600
 # Per-user bucket limits
 BUCKET_LIMITS_PER_MINUTE: Dict[str, int] = {
     "dashboard_read": 1200,
+    "release_gate_job_poll": 240,
     "expensive_read": 90,
     "mutations": 45,
     "ingest": 1200,
@@ -85,6 +86,9 @@ def classify_rate_limit_bucket(request: Request) -> str:
             return "mutations"
 
     if method == "GET":
+        if "/release-gate/jobs/" in path:
+            return "release_gate_job_poll"
+
         if (
             path == "/organizations"
             or path == "/projects"
