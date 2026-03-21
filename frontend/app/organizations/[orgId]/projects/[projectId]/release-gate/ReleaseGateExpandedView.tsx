@@ -1999,6 +1999,19 @@ function HistoryDetailCard({
 
   return (
     <div className="space-y-5">
+      <div className="flex items-center justify-between pb-2">
+        <div className="text-lg font-black tracking-tight text-white">Run detail</div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/10 px-4 py-2 text-[11px] font-semibold text-slate-300 hover:bg-white/5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+          >
+            ← Back to history
+          </button>
+        )}
+      </div>
+
       <div
         className={clsx(
           "flex flex-col gap-5 rounded-[24px] border px-6 py-5",
@@ -3613,65 +3626,61 @@ export function ReleaseGateExpandedView() {
                 <Flag className="mx-auto mb-2 h-10 w-10 text-slate-600" />
                 <p className="text-sm text-slate-500">No validation history yet.</p>
               </div>
+            ) : selectedHistoryItem ? (
+              <HistoryDetailCard
+                item={selectedHistoryItem}
+                report={selectedRunReport}
+                onClose={() => setSelectedRunId(null)}
+                baselineSnapshotsById={baselineSnapshotsById}
+                recentSnapshots={recentSnapshots}
+                onSelectCase={(caseIndex, attempts, baselineSnapshot) => {
+                  setDetailAttemptView({
+                    attempts,
+                    caseIndex,
+                    initialAttemptIndex: 0,
+                    baselineSnapshot,
+                  });
+                }}
+              />
             ) : (
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                <div className="space-y-2">
-                  {historyItems.map(item => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => selectHistoryRun(String(item.id))}
-                      data-testid={`rg-main-history-row-${item.id}`}
-                      data-run-status={String(item.status || "").toLowerCase()}
-                      className={clsx(
-                        "flex w-full flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-left",
-                        selectedRunId === item.id
-                          ? "border-fuchsia-500/50 bg-fuchsia-500/10"
-                          : "border-white/10 bg-black/20 hover:bg-white/5"
-                      )}
-                    >
-                      <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-100">
+              <div className="space-y-2">
+                {historyItems.map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => selectHistoryRun(String(item.id))}
+                    data-testid={`rg-main-history-row-${item.id}`}
+                    data-run-status={String(item.status || "").toLowerCase()}
+                    className={clsx(
+                      "flex w-full items-center justify-between gap-4 rounded-[24px] border px-6 py-5 text-left transition",
+                      selectedRunId === item.id
+                        ? "border-fuchsia-500/30 bg-fuchsia-500/10"
+                        : "border-white/8 bg-[#16181D] hover:bg-[#1a1d24]"
+                    )}
+                  >
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-2">
                         {item.status === "pass" ? (
-                          <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                          <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400">
+                            <ShieldCheck className="h-3.5 w-3.5" />
+                            Passed
+                          </div>
                         ) : (
-                          <ShieldX className="h-4 w-4 text-rose-400" />
+                          <div className="flex items-center gap-1.5 rounded-full bg-rose-500/10 px-2 py-0.5 text-xs font-medium text-rose-400">
+                            <ShieldX className="h-3.5 w-3.5" />
+                            Failed
+                          </div>
                         )}
-                        <span
-                          className={item.status === "pass" ? "text-emerald-400" : "text-rose-400"}
-                        >
-                          {item.status === "pass" ? "Passed" : "Failed"}
+                        <span className="text-xs text-slate-500">
+                          {formatDateTime(item.created_at)}
                         </span>
-                        <span className="truncate text-slate-400">· {item.trace_id}</span>
                       </div>
-                      <div className="text-xs text-slate-400">{item.created_at || "-"}</div>
-                    </button>
-                  ))}
-                </div>
-                <div className="lg:col-span-2">
-                  {selectedHistoryItem ? (
-                    <HistoryDetailCard
-                      item={selectedHistoryItem}
-                      report={selectedRunReport}
-                      onClose={() => setSelectedRunId(null)}
-                      baselineSnapshotsById={baselineSnapshotsById}
-                      recentSnapshots={recentSnapshots}
-                      onSelectCase={(caseIndex, attempts, baselineSnapshot) => {
-                        setDetailAttemptView({
-                          attempts,
-                          caseIndex,
-                          initialAttemptIndex: 0,
-                          baselineSnapshot,
-                        });
-                      }}
-                    />
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
-                      <p className="text-sm text-slate-500">
-                        Select a run from the list to see detail.
-                      </p>
+                      <div className="text-sm font-medium text-slate-200">
+                        {shortText(item.trace_id, "No trace id", 40)}
+                      </div>
                     </div>
-                  )}
-                </div>
+                  </button>
+                ))}
               </div>
             )}
             <div className="flex items-center justify-between border-t border-white/10 pt-2 text-xs text-slate-400">
