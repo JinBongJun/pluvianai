@@ -64,9 +64,9 @@ def detailed_health_check(db: Session = Depends(get_db)):
         "timestamp": None,
     }
 
-    from datetime import datetime
+    from datetime import datetime, timezone
 
-    health_status["timestamp"] = datetime.utcnow().isoformat()
+    health_status["timestamp"] = datetime.now(timezone.utc).isoformat()
 
     # Database check
     try:

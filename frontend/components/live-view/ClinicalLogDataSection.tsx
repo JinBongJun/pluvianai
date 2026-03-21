@@ -25,6 +25,7 @@ import { useToast } from "@/components/ToastContainer";
 interface ClinicalLogDataSectionProps {
   projectId: number;
   agentId: string;
+  orgId?: string;
 }
 
 interface DatasetItem {
@@ -168,6 +169,7 @@ function formatDate(value?: string | null): string {
 export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
   projectId,
   agentId,
+  orgId,
 }) => {
   const toast = useToast();
   const { data, error, isLoading, mutate } = useSWR(
@@ -750,6 +752,9 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
             evalRows={detailEvalRows}
             evalEnabled={detailEvalRows.length > 0}
             savedEvalConfig={savedEvalConfig}
+            releaseGateHref={
+              orgId ? `/organizations/${orgId}/projects/${projectId}/release-gate` : undefined
+            }
           />
         )}
       </AnimatePresence>

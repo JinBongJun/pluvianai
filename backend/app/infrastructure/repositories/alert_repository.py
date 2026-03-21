@@ -1,7 +1,7 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.models.alert import Alert
 from app.infrastructure.repositories.sqlalchemy_repository import SQLAlchemyRepository
 
@@ -39,7 +39,7 @@ class AlertRepository(SQLAlchemyRepository[Alert]):
         seconds: int = 5
     ) -> List[Alert]:
         """Find recently created alerts"""
-        cutoff = datetime.utcnow() - timedelta(seconds=seconds)
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=seconds)
         return (
             self.db.query(Alert)
             .filter(

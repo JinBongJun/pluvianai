@@ -20,6 +20,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds
 
 # OAuth2 scheme; auto_error=False so get_current_user can fall back to cookies
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login", auto_error=False)
+API_KEY_LAST_USED_WRITE_INTERVAL = timedelta(minutes=5)
 
 
 class TokenValidationError(Exception):
@@ -36,6 +37,14 @@ def auth_error_detail(code: str, message: str, **extra: Any) -> dict:
     detail = {"code": code, "message": message}
     detail.update({k: v for k, v in extra.items() if v is not None})
     return detail
+
+
+def _should_update_api_key_last_used(last_used_at: Optional[datetime], now_utc: datetime) -> bool:
+    if last_used_at is None:
+        return True
+    if last_used_at.tzinfo is None:
+        last_used_at = last_used_at.replace(tzinfo=timezone.utc)
+    return now_utc - last_used_at >= API_KEY_LAST_USED_WRITE_INTERVAL
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -318,9 +327,10 @@ async def get_user_from_api_key(
             detail=auth_error_detail("api_key_user_invalid", "API key is no longer associated with an active user."),
         )
 
-    # Update last_used_at (timezone-aware UTC)
-    api_key_record.last_used_at = now_utc
-    db.commit()
+    # Avoid a write on every SDK request; refresh usage timestamp periodically.
+    if _should_update_api_key_last_used(api_key_record.last_used_at, now_utc):
+        api_key_record.last_used_at = now_utc
+        db.flush()
 
     # Parse scope: "*", "ingest,read", or JSON ["ingest","read"]. Default ["*"] for backward compatibility.
     scope_raw = (api_key_record.scope or "").strip() or "*"

@@ -6,7 +6,7 @@ This service provides a simple interface for accessing pricing data.
 """
 
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.logging_config import logger
 
 
@@ -84,7 +84,7 @@ class PricingUpdater:
     def __init__(self) -> None:
         """Initialize pricing updater with base pricing data."""
         self.pricing = self.BASE_PRICING.copy()
-        self.last_updated = datetime.utcnow()
+        self.last_updated = datetime.now(timezone.utc)
 
     def get_pricing(self) -> Dict[str, Dict[str, Dict[str, float]]]:
         """
@@ -115,7 +115,7 @@ class PricingUpdater:
             self.pricing[provider] = {}
 
         self.pricing[provider][model] = {"input": input_price, "output": output_price}
-        self.last_updated = datetime.utcnow()
+        self.last_updated = datetime.now(timezone.utc)
         logger.info(
             f"Updated pricing for {provider}/{model}: ${input_price}/${output_price} per 1M tokens"
         )
