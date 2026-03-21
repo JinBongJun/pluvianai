@@ -818,6 +818,24 @@ def _job_to_out(job: ReleaseGateJob) -> ReleaseGateJobOut:
     )
 
 
+def _get_active_release_gate_job(
+    db: Session,
+    *,
+    project_id: int,
+    user_id: int,
+) -> Optional[ReleaseGateJob]:
+    return (
+        db.query(ReleaseGateJob)
+        .filter(
+            ReleaseGateJob.project_id == project_id,
+            ReleaseGateJob.user_id == user_id,
+            ReleaseGateJob.status.in_(["queued", "running"]),
+        )
+        .order_by(ReleaseGateJob.created_at.desc())
+        .first()
+    )
+
+
 def _sanitize_release_gate_job_request(payload: ReleaseGateValidateRequest) -> Dict[str, Any]:
     data = payload.model_dump()
     # Never persist secrets.
@@ -2709,9 +2727,14 @@ async def validate_release_gate_async(
         )
     _enforce_platform_replay_credit_limit(payload, db, current_user)
 
+    user_id = int(getattr(current_user, "id"))
+    active_job = _get_active_release_gate_job(db, project_id=project_id, user_id=user_id)
+    if active_job is not None:
+        return ReleaseGateJobCreateResponse(job=_job_to_out(active_job))
+
     job = ReleaseGateJob(
         project_id=project_id,
-        user_id=int(getattr(current_user, "id")),
+        user_id=user_id,
         status="queued",
         progress_done=0,
         progress_total=int(payload.repeat_runs or 0) or None,
