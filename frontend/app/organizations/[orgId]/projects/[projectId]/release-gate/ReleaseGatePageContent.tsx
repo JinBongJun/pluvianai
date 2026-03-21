@@ -1296,7 +1296,11 @@ export default function ReleaseGatePageContent() {
   const historyItems = historyData?.items || [];
   const historyTotal = historyData?.total || 0;
 
-  const { data: selectedRunReport } = useSWR(
+  const {
+    data: selectedRunReport,
+    isLoading: selectedRunReportLoading,
+    error: selectedRunReportError,
+  } = useSWR(
     selectedRunId && projectId && !isNaN(projectId)
       ? ["release-gate-report", projectId, selectedRunId]
       : null,
@@ -2258,6 +2262,8 @@ export default function ReleaseGatePageContent() {
     selectedRunId,
     setSelectedRunId,
     selectedRunReport,
+    selectedRunReportLoading,
+    selectedRunReportError,
     expandedHistoryId,
     setExpandedHistoryId,
     runDataProvider,
