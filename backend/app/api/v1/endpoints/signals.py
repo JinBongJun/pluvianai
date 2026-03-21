@@ -5,7 +5,7 @@ Signal Detection API endpoints
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -35,6 +35,8 @@ class SignalConfigUpdate(BaseModel):
 
 
 class SignalConfigResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     project_id: int
     signal_type: str
@@ -43,10 +45,6 @@ class SignalConfigResponse(BaseModel):
     severity: Optional[str]
     enabled: bool
     created_at: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
 
 class SignalDetectionRequest(BaseModel):
     response_text: str = Field(..., description="Response text to analyze")

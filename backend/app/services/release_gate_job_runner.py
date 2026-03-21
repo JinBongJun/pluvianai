@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import os
 import socket
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -27,7 +27,7 @@ from app.services.ops_alerting import ops_alerting
 
 
 def _utcnow() -> datetime:
-    return datetime.utcnow()
+    return datetime.now(timezone.utc)
 
 
 class ReleaseGateJobRunner:

@@ -170,7 +170,7 @@ def _resolve_dataset_agent_id(
     )
     if len(snapshot_agent_ids) > 1:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "error_code": "dataset_agent_mismatch",
                 "message": "A dataset can only contain logs from one node.",
@@ -181,7 +181,7 @@ def _resolve_dataset_agent_id(
     inferred_agent_id = snapshot_agent_ids[0] if snapshot_agent_ids else None
     if normalized_requested and inferred_agent_id and normalized_requested != inferred_agent_id:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "error_code": "dataset_agent_mismatch",
                 "message": "Provided agent_id does not match selected snapshot_ids.",

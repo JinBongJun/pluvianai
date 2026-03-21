@@ -89,7 +89,7 @@ class TestReleaseGateOverridesAndExport:
         finally:
             monkeypatch.undo()
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert _extract_error_code(response.json()) == "provider_model_mismatch"
 
     async def test_missing_provider_keys_returns_expected_error(

@@ -6,7 +6,7 @@ from typing import List
 from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole
@@ -62,6 +62,7 @@ class ProjectMemberUpdate(BaseModel):
 
 class ProjectMemberResponse(BaseModel):
     """Project member response schema"""
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     project_id: int
@@ -70,10 +71,6 @@ class ProjectMemberResponse(BaseModel):
     user_name: str | None
     role: str
     created_at: str
-
-    class Config:
-        from_attributes = True
-
 
 @router.post(
     "/projects/{project_id}/members", response_model=ProjectMemberResponse, status_code=status.HTTP_201_CREATED
