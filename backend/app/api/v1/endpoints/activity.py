@@ -7,7 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, or_
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.decorators import handle_errors
@@ -25,6 +25,8 @@ router = APIRouter()
 
 class ActivityItem(BaseModel):
     """Activity log item"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: Optional[int]
     action: str
@@ -34,10 +36,6 @@ class ActivityItem(BaseModel):
     new_value: Optional[dict]
     ip_address: Optional[str]
     created_at: datetime
-
-    class Config:
-        from_attributes = True
-
 
 @router.get("")
 @handle_errors

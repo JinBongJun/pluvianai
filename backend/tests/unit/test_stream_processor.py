@@ -5,6 +5,7 @@ import pytest
 import asyncio
 import json
 from unittest.mock import Mock, patch, MagicMock, AsyncMock
+from sqlalchemy.orm import sessionmaker
 from app.services.stream_processor import StreamProcessor
 from app.models.snapshot import Snapshot
 from app.models.trace import Trace
@@ -28,6 +29,13 @@ class TestStreamProcessor:
         mock_redis.xread.return_value = []
         mock_redis.xdel.return_value = 1
         return mock_redis
+
+    @pytest.fixture
+    def patched_session_local(self, db):
+        """Use the test database engine for StreamProcessor's background session factory."""
+        testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=db.bind)
+        with patch("app.services.stream_processor.SessionLocal", testing_session_local):
+            yield
 
     @pytest.mark.asyncio
     async def test_process_streams_success(self, processor, mock_redis):
@@ -84,7 +92,7 @@ class TestStreamProcessor:
                 assert not mock_redis.xread.called
 
     @pytest.mark.asyncio
-    async def test_batch_insert_success(self, processor, db, test_project):
+    async def test_batch_insert_success(self, processor, db, test_project, patched_session_local):
         """Test batch inserting snapshots successfully"""
         # Create trace
         trace = Trace(id="test_trace", project_id=test_project.id)
@@ -125,7 +133,7 @@ class TestStreamProcessor:
         assert snapshot_count == 2
 
     @pytest.mark.asyncio
-    async def test_batch_insert_creates_trace(self, processor, db, test_project):
+    async def test_batch_insert_creates_trace(self, processor, db, test_project, patched_session_local):
         """Test batch insert creates trace if it doesn't exist"""
         snapshots_data = [
             (
@@ -154,7 +162,7 @@ class TestStreamProcessor:
         assert snapshot is not None
 
     @pytest.mark.asyncio
-    async def test_batch_insert_partial_failure(self, processor, db, test_project):
+    async def test_batch_insert_partial_failure(self, processor, db, test_project, patched_session_local):
         """Test batch insert with partial failures"""
         # Create trace
         trace = Trace(id="test_trace", project_id=test_project.id)

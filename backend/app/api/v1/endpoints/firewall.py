@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -34,6 +34,8 @@ class FirewallRuleUpdate(BaseModel):
 
 
 class FirewallRuleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     project_id: int
     name: str
@@ -42,10 +44,6 @@ class FirewallRuleResponse(BaseModel):
     severity: FirewallSeverity
     pattern: Optional[str]
     enabled: bool
-
-    class Config:
-        from_attributes = True
-
 
 @router.get("/{project_id}/firewall/rules", response_model=List[FirewallRuleResponse])
 def list_rules(

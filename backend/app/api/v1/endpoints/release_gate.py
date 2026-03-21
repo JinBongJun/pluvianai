@@ -17,7 +17,7 @@ Baseline vs Run eval:
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import re
 import time
@@ -625,7 +625,7 @@ def get_recommended_snapshots_for_agent(
         )
 
     window_days = 7
-    since = datetime.utcnow() - timedelta(days=window_days)
+    since = datetime.now(timezone.utc) - timedelta(days=window_days)
     snapshots = (
         db.query(Snapshot)
         .filter(
@@ -1171,7 +1171,7 @@ def _assert_provider_matches_model(replay_provider: Any, model: Any) -> None:
     if provider == inferred:
         return
     raise HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail={
             "error_code": "provider_model_mismatch",
             "message": "Selected replay_provider does not match provider inferred from new_model.",
@@ -1281,7 +1281,7 @@ async def _run_release_gate(
             ]
             if mismatched_dataset_ids:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail={
                         "error_code": "dataset_agent_mismatch",
                         "message": "Selected datasets must belong to the currently selected node.",
@@ -1291,7 +1291,7 @@ async def _run_release_gate(
                 )
         elif len(non_empty_dataset_agent_ids) > 1:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail={
                     "error_code": "dataset_agent_mismatch",
                     "message": "Selected datasets span multiple nodes. Please select datasets from one node only.",
@@ -1378,7 +1378,7 @@ async def _run_release_gate(
                 ]
                 if mismatched_snapshot_ids:
                     raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                         detail={
                             "error_code": "dataset_snapshot_agent_mismatch",
                             "message": "Selected datasets include logs from another node.",
@@ -1388,7 +1388,7 @@ async def _run_release_gate(
                     )
             elif len(snapshot_agent_ids) > 1:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail={
                         "error_code": "dataset_snapshot_agent_mismatch",
                         "message": "Selected datasets include logs from multiple nodes.",
@@ -1426,12 +1426,12 @@ async def _run_release_gate(
             explicit_provider = inferred_provider
     if payload.replay_provider and not explicit_provider:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Unsupported replay_provider. Use one of: openai, anthropic, google.",
         )
     if use_platform_model and not explicit_provider:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Platform model mode requires replay_provider or provider-inferrable new_model.",
         )
 
@@ -1444,7 +1444,7 @@ async def _run_release_gate(
         and _should_block_release_gate_custom_model(explicit_provider, payload.new_model, current_user)
     ):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "error_code": "release_gate_requires_pinned_model",
                 "message": (
@@ -1472,7 +1472,7 @@ async def _run_release_gate(
             error_summary=f"unresolved_snapshot_ids={len(unresolved_snapshot_ids)}",
         )
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "error_code": "provider_resolution_failed",
                 "message": "Could not resolve provider for one or more selected snapshots.",
@@ -2757,7 +2757,7 @@ async def cancel_release_gate_job(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release Gate job not found")
     current_status = str(getattr(job, "status", "") or "").lower()
     if current_status not in {"succeeded", "failed", "canceled"}:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if getattr(job, "cancel_requested_at", None) is None:
             job.cancel_requested_at = now
         # If the job has not started yet, we can finalize cancel immediately.
@@ -2920,7 +2920,7 @@ async def list_release_gate_history(
         retention_days = 7
     else:
         retention_days = summary.get("retention_days", 7)
-    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
 
     query = (
         db.query(BehaviorReport)

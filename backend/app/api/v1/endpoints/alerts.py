@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 from datetime import datetime
 
@@ -16,6 +16,8 @@ router = APIRouter()
 # Path prefix when mounted: /projects (so full path e.g. /api/v1/projects/{project_id}/alerts)
 
 class AlertResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     project_id: int
     alert_type: str
@@ -25,10 +27,6 @@ class AlertResponse(BaseModel):
     is_resolved: bool
     resolved_at: Optional[datetime] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
-
 
 @router.get("/{project_id}/alerts/stats")
 def get_alert_stats(

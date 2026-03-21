@@ -155,7 +155,6 @@ class StreamProcessor:
             # Pre-check hard limits before inserting (if enabled)
             from app.models.project import Project
             from app.services.billing_service import BillingService
-            from app.core.config import settings
             
             # Group by project_id to check limits per owner
             project_owners = {}  # project_id -> owner_id
@@ -208,37 +207,36 @@ class StreamProcessor:
             inserted_count = 0
             for snapshot_data, project_id, message_id in filtered_snapshots:
                 try:
-                    # Ensure trace exists
-                    trace = db.query(Trace).filter(Trace.id == snapshot_data["trace_id"]).first()
-                    if not trace and project_id:
-                        # Create trace if it doesn't exist
-                        trace = Trace(id=snapshot_data["trace_id"], project_id=project_id)
-                        db.add(trace)
+                    # Isolate malformed rows so one bad snapshot doesn't roll back the whole stream batch.
+                    with db.begin_nested():
+                        trace = db.query(Trace).filter(Trace.id == snapshot_data["trace_id"]).first()
+                        if not trace and project_id:
+                            trace = Trace(id=snapshot_data["trace_id"], project_id=project_id)
+                            db.add(trace)
+                            db.flush()
+
+                        snapshot = Snapshot(
+                            trace_id=snapshot_data["trace_id"],
+                            project_id=project_id,
+                            agent_id=snapshot_data.get("agent_id"),
+                            provider=snapshot_data["provider"],
+                            model=snapshot_data["model"],
+                            system_prompt=snapshot_data.get("system_prompt"),
+                            user_message=snapshot_data.get("user_message"),
+                            response=snapshot_data.get("response"),
+                            payload=snapshot_data["payload"],
+                            is_sanitized=snapshot_data["is_sanitized"],
+                            status_code=snapshot_data["status_code"],
+                            eval_checks_result=snapshot_data.get("eval_checks_result"),
+                            eval_config_version=snapshot_data.get("eval_config_version"),
+                            tool_calls_summary=snapshot_data.get("tool_calls_summary"),
+                        )
+                        db.add(snapshot)
+                        restore_agent_if_soft_deleted(db, project_id, snapshot_data.get("agent_id"))
                         db.flush()
-                    
-                    # Create snapshot
-                    snapshot = Snapshot(
-                        trace_id=snapshot_data["trace_id"],
-                        project_id=project_id,
-                        agent_id=snapshot_data.get("agent_id"),
-                        provider=snapshot_data["provider"],
-                        model=snapshot_data["model"],
-                        system_prompt=snapshot_data.get("system_prompt"),
-                        user_message=snapshot_data.get("user_message"),
-                        response=snapshot_data.get("response"),
-                        payload=snapshot_data["payload"],
-                        is_sanitized=snapshot_data["is_sanitized"],
-                        status_code=snapshot_data["status_code"],
-                        eval_checks_result=snapshot_data.get("eval_checks_result"),
-                        eval_config_version=snapshot_data.get("eval_config_version"),
-                        tool_calls_summary=snapshot_data.get("tool_calls_summary"),
-                    )
-                    db.add(snapshot)
-                    restore_agent_if_soft_deleted(db, project_id, snapshot_data.get("agent_id"))
                     inserted_count += 1
                 except Exception as e:
                     logger.error(f"Error inserting snapshot {message_id}: {str(e)}")
-                    db.rollback()
                     continue
 
             # Commit batch
@@ -285,7 +283,6 @@ class StreamProcessor:
                 try:
                     import asyncio
                     from app.api.v1.endpoints.behavior import run_behavior_validation_for_trace
-                    from app.core.database import SessionLocal
                     unique_traces = set()
                     for snapshot_data, proj_id, _ in filtered_snapshots:
                         if proj_id and snapshot_data.get("trace_id"):
