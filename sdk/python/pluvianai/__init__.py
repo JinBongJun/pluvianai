@@ -7,9 +7,16 @@ import time
 import httpx
 import threading
 from queue import Queue, Empty
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable, List
 from functools import wraps
 from contextlib import contextmanager
+
+
+def _deep_json_copy(obj: Any) -> Any:
+    try:
+        return json.loads(json.dumps(obj, default=str))
+    except Exception:
+        return {"_pluvianai_unserializable": True}
 
 
 class PluvianAI:
@@ -29,6 +36,11 @@ class PluvianAI:
         health_check_interval: float = 30.0,
         flush_at: Optional[int] = None,
         flush_interval: Optional[float] = None,
+        log_request_bodies: Optional[bool] = None,
+        log_response_bodies: Optional[bool] = None,
+        log_tool_event_payloads: Optional[bool] = None,
+        max_request_body_bytes: Optional[int] = None,
+        max_response_body_bytes: Optional[int] = None,
     ):
         """
         Initialize PluvianAI SDK
@@ -46,6 +58,11 @@ class PluvianAI:
             health_check_interval: Health check interval in seconds (default: 30.0)
             flush_at: Max events to batch before sending (default: 10, env PLUVIANAI_FLUSH_AT)
             flush_interval: Max seconds to wait before sending a batch (default: 5.0, env PLUVIANAI_FLUSH_INTERVAL)
+            log_request_bodies: Send full ``messages`` text to ingest (default True; env PLUVIANAI_LOG_REQUEST_BODIES or PLUVIANAI_LOG_USER_CONTENT)
+            log_response_bodies: Send full ``choices[].message.content`` to ingest (default True; env PLUVIANAI_LOG_RESPONSE_BODIES or PLUVIANAI_LOG_USER_CONTENT)
+            log_tool_event_payloads: Send tool_events input/output (default True; env PLUVIANAI_LOG_TOOL_PAYLOADS or PLUVIANAI_LOG_USER_CONTENT)
+            max_request_body_bytes: If JSON-serialized request_data exceeds this (UTF-8 bytes), replace with a stub (default 524288; env PLUVIANAI_MAX_REQUEST_BODY_BYTES)
+            max_response_body_bytes: Same for response_data (default 524288; env PLUVIANAI_MAX_RESPONSE_BODY_BYTES)
         """
         self.api_key = api_key or os.getenv("PLUVIANAI_API_KEY")
         self.project_id = project_id or os.getenv("PLUVIANAI_PROJECT_ID")
@@ -80,6 +97,30 @@ class PluvianAI:
         self._worker = threading.Thread(target=self._worker_loop, daemon=True)
         if self.enabled:
             self._worker.start()
+
+        self.log_request_bodies = self._resolve_log_flag(
+            log_request_bodies, "PLUVIANAI_LOG_REQUEST_BODIES", "PLUVIANAI_LOG_USER_CONTENT", True
+        )
+        self.log_response_bodies = self._resolve_log_flag(
+            log_response_bodies, "PLUVIANAI_LOG_RESPONSE_BODIES", "PLUVIANAI_LOG_USER_CONTENT", True
+        )
+        self.log_tool_event_payloads = self._resolve_log_flag(
+            log_tool_event_payloads, "PLUVIANAI_LOG_TOOL_PAYLOADS", "PLUVIANAI_LOG_USER_CONTENT", True
+        )
+        _mrb = max_request_body_bytes
+        if _mrb is None:
+            try:
+                _mrb = int(os.getenv("PLUVIANAI_MAX_REQUEST_BODY_BYTES", "524288"))
+            except ValueError:
+                _mrb = 524288
+        self.max_request_body_bytes = max(4096, _mrb)
+        _mrs = max_response_body_bytes
+        if _mrs is None:
+            try:
+                _mrs = int(os.getenv("PLUVIANAI_MAX_RESPONSE_BODY_BYTES", "524288"))
+            except ValueError:
+                _mrs = 524288
+        self.max_response_body_bytes = max(4096, _mrs)
 
         # Circuit Breaker configuration
         self.circuit_breaker_config = circuit_breaker or {
@@ -282,23 +323,136 @@ class PluvianAI:
             elif hasattr(self._local, 'agent_name'):
                 delattr(self._local, 'agent_name')
 
-    def _send_to_api(self, request_data: Dict[str, Any], response_data: Dict[str, Any], latency_ms: float, status_code: int):
+    @staticmethod
+    def _resolve_log_flag(
+        param: Optional[bool],
+        env_specific: str,
+        env_global: str,
+        default: bool = True,
+    ) -> bool:
+        if param is not None:
+            return param
+        v = os.getenv(env_specific)
+        if v is not None and str(v).strip() != "":
+            return str(v).strip().lower() not in ("0", "false", "no", "off")
+        v2 = os.getenv(env_global)
+        if v2 is not None and str(v2).strip() != "":
+            return str(v2).strip().lower() not in ("0", "false", "no", "off")
+        return default
+
+    def _strip_request_message_bodies(self, rd: Dict[str, Any]) -> Dict[str, Any]:
+        msgs = rd.get("messages")
+        if isinstance(msgs, list):
+            out = []
+            for m in msgs:
+                if isinstance(m, dict):
+                    nm = dict(m)
+                    clen = len(str(nm.get("content", ""))) if nm.get("content") is not None else 0
+                    nm["content"] = "[omitted]"
+                    nm["_pluvianai_content_length"] = clen
+                    out.append(nm)
+                else:
+                    out.append(m)
+            rd["messages"] = out
+            rd["_pluvianai_message_bodies_omitted"] = True
+        return rd
+
+    def _strip_response_message_bodies(self, rs: Dict[str, Any]) -> Dict[str, Any]:
+        ch = rs.get("choices")
+        if isinstance(ch, list):
+            out = []
+            for c in ch:
+                if isinstance(c, dict) and isinstance(c.get("message"), dict):
+                    msg = dict(c["message"])
+                    clen = len(str(msg.get("content", "")))
+                    msg["content"] = "[omitted]"
+                    msg["_pluvianai_content_length"] = clen
+                    out.append({**c, "message": msg})
+                else:
+                    out.append(c)
+            rs["choices"] = out
+            rs["_pluvianai_response_bodies_omitted"] = True
+        return rs
+
+    def _strip_tool_event_payloads(self, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        for ev in events:
+            if not isinstance(ev, dict):
+                continue
+            e = dict(ev)
+            if "input" in e:
+                e["input"] = "[omitted]"
+                e["_pluvianai_input_omitted"] = True
+            if "output" in e:
+                e["output"] = "[omitted]"
+                e["_pluvianai_output_omitted"] = True
+            out.append(e)
+        return out
+
+    def _truncate_if_needed(self, obj: Dict[str, Any], max_bytes: int, label: str) -> Dict[str, Any]:
+        try:
+            s = json.dumps(obj, default=str)
+        except Exception:
+            return obj
+        b = len(s.encode("utf-8"))
+        if b <= max_bytes:
+            return obj
+        return {
+            "_pluvianai_truncated": True,
+            "_pluvianai_approx_bytes": b,
+            "_pluvianai_max_bytes": max_bytes,
+            "_pluvianai_label": label,
+            "model": obj.get("model") if isinstance(obj, dict) else None,
+        }
+
+    def _sanitize_for_ingest(
+        self,
+        request_data: Dict[str, Any],
+        response_data: Dict[str, Any],
+        tool_events: Optional[List[Dict[str, Any]]],
+    ):
+        rd: Dict[str, Any] = _deep_json_copy(request_data or {})
+        rs: Dict[str, Any] = _deep_json_copy(response_data or {})
+        if not self.log_request_bodies:
+            rd = self._strip_request_message_bodies(rd)
+        if not self.log_response_bodies:
+            rs = self._strip_response_message_bodies(rs)
+        te_out: Optional[List[Dict[str, Any]]] = None
+        if tool_events is not None:
+            te_out = _deep_json_copy(tool_events)
+            if not self.log_tool_event_payloads:
+                te_out = self._strip_tool_event_payloads(te_out)
+        rd = self._truncate_if_needed(rd, self.max_request_body_bytes, "request_data")
+        rs = self._truncate_if_needed(rs, self.max_response_body_bytes, "response_data")
+        return rd, rs, te_out
+
+    def _send_to_api(
+        self,
+        request_data: Dict[str, Any],
+        response_data: Dict[str, Any],
+        latency_ms: float,
+        status_code: int,
+        tool_events: Optional[List[Dict[str, Any]]] = None,
+    ):
         """Enqueue API call data for background send (non-blocking)."""
         if not self.enabled:
             return
         try:
             chain_id = self._get_chain_id()
             agent_name = self._get_agent_name()
+            rd, rs, te = self._sanitize_for_ingest(request_data, response_data, tool_events)
             payload = {
                 "project_id": int(self.project_id),
-                "request_data": request_data,
-                "response_data": response_data,
+                "request_data": rd,
+                "response_data": rs,
                 "latency_ms": latency_ms,
                 "status_code": status_code,
                 "agent_name": agent_name,
             }
             if chain_id:
                 payload["chain_id"] = chain_id
+            if tool_events is not None:
+                payload["tool_events"] = te
             if not self._check_circuit_breaker():
                 return
             self._queue.put_nowait(payload)
@@ -373,7 +527,8 @@ class PluvianAI:
         latency_ms: float,
         status_code: int = 200,
         agent_name: Optional[str] = None,
-        chain_id: Optional[str] = None
+        chain_id: Optional[str] = None,
+        tool_events: Optional[List[Dict[str, Any]]] = None,
     ):
         """
         Manually track an API call
@@ -387,6 +542,7 @@ class PluvianAI:
             status_code: HTTP status code
             agent_name: Optional agent name
             chain_id: Optional chain ID to group related calls
+            tool_events: Optional tool_call / tool_result / action timeline for Live View & Release Gate replay
         """
         if not self.enabled:
             return
@@ -405,7 +561,8 @@ class PluvianAI:
                 request_data,
                 response_data,
                 latency_ms,
-                status_code
+                status_code,
+                tool_events=tool_events,
             )
         finally:
             # Restore old values
@@ -607,6 +764,11 @@ def init(
     health_check_interval: float = 30.0,
     flush_at: Optional[int] = None,
     flush_interval: Optional[float] = None,
+    log_request_bodies: Optional[bool] = None,
+    log_response_bodies: Optional[bool] = None,
+    log_tool_event_payloads: Optional[bool] = None,
+    max_request_body_bytes: Optional[int] = None,
+    max_response_body_bytes: Optional[int] = None,
 ):
     """
     Initialize PluvianAI with zero-config setup
@@ -646,6 +808,11 @@ def init(
         health_check_interval=health_check_interval,
         flush_at=flush_at,
         flush_interval=flush_interval,
+        log_request_bodies=log_request_bodies,
+        log_response_bodies=log_response_bodies,
+        log_tool_event_payloads=log_tool_event_payloads,
+        max_request_body_bytes=max_request_body_bytes,
+        max_response_body_bytes=max_response_body_bytes,
     )
     _global_instance.init()
 
@@ -675,7 +842,8 @@ def track_call(
     latency_ms: float,
     status_code: int = 200,
     agent_name: Optional[str] = None,
-    chain_id: Optional[str] = None
+    chain_id: Optional[str] = None,
+    tool_events: Optional[List[Dict[str, Any]]] = None,
 ):
     """
     Manually track an API call
@@ -689,6 +857,7 @@ def track_call(
         status_code: HTTP status code
         agent_name: Optional agent name
         chain_id: Optional chain ID to group related calls
+        tool_events: Optional tool_call / tool_result / action timeline
     """
     global _global_instance
     if _global_instance:
@@ -698,7 +867,8 @@ def track_call(
             latency_ms,
             status_code,
             agent_name,
-            chain_id
+            chain_id,
+            tool_events=tool_events,
         )
     else:
         # Create a temporary instance
@@ -709,7 +879,8 @@ def track_call(
             latency_ms,
             status_code,
             agent_name,
-            chain_id
+            chain_id,
+            tool_events=tool_events,
         )
 
 

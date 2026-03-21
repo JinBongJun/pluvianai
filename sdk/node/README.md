@@ -38,6 +38,10 @@ export PLUVIANAI_API_URL="https://api.pluvianai.com"  # Optional
 export PLUVIANAI_AGENT_NAME="my-agent"  # Optional
 ```
 
+### Security / privacy
+
+The Node SDK applies the same ingest-side sanitization as Python: request/response bodies and tool event payloads can be omitted or truncated based on config and env (e.g. `PLUVIANAI_LOG_USER_CONTENT`, `PLUVIANAI_LOG_REQUEST_BODIES`, `PLUVIANAI_LOG_RESPONSE_BODIES`, `PLUVIANAI_LOG_TOOL_EVENT_PAYLOADS`, `PLUVIANAI_MAX_INGEST_BYTES`). See [`docs/live-view-trust-data-collection.md`](../../docs/live-view-trust-data-collection.md) and [`sdk/python/README.md`](../python/README.md#security--privacy-ingest-payload) for the full policy matrix.
+
 ### Manual Initialization
 
 ```javascript
@@ -91,6 +95,33 @@ await pluvianai.trackCall(
   'my-agent',
   'user-query-123'
 );
+```
+
+## Tool calls & `tool_events` (optional)
+
+Zero-config patching records **LLM API** traffic. Tool **execution** often happens outside the client, so for Live View and Release Gate to show **recorded** tool results (instead of dry-run simulation), attach an optional **`tool_events`** array when calling `trackCall` (7th argument), or send the same field on `POST /api/v1/projects/{project_id}/api-calls`.
+
+Use the **same `call_id`** the provider returned on `tool_call` / `tool_use` when possible. Server enforces max event count and size; see backend docs.
+
+```javascript
+await pluvianai.trackCall(
+  { model: 'gpt-4o-mini', messages: [{ role: 'user', content: 'Hi' }] },
+  { choices: [{ message: { content: '…' } }] },
+  120,
+  200,
+  'my-agent',
+  'trace-abc',
+  [
+    { kind: 'tool_call', name: 'get_weather', call_id: 'call_abc', input: { city: 'Seoul' } },
+    { kind: 'tool_result', name: 'get_weather', call_id: 'call_abc', output: { temp_c: 22 }, status: 'ok' },
+  ]
+);
+```
+
+If you omit `agent_name` / `chain_id`, pass `undefined` before `tool_events`:
+
+```javascript
+await pluvianai.trackCall(req, res, latencyMs, 200, undefined, undefined, toolEvents);
 ```
 
 ## License

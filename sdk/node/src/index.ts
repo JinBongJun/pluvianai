@@ -3,6 +3,7 @@
  */
 
 import axios, { AxiosInstance } from 'axios';
+import { sanitizeForIngest, resolveLogFlag } from './ingestPrivacy';
 
 interface PluvianAIConfig {
   apiKey?: string;
@@ -19,6 +20,12 @@ interface PluvianAIConfig {
     halfOpenMaxCalls?: number;
   };
   healthCheckInterval?: number;  // milliseconds
+  /** When false, replace messages[].content with [omitted] before ingest (env PLUVIANAI_LOG_REQUEST_BODIES / PLUVIANAI_LOG_USER_CONTENT). */
+  logRequestBodies?: boolean;
+  logResponseBodies?: boolean;
+  logToolEventPayloads?: boolean;
+  maxRequestBodyBytes?: number;
+  maxResponseBodyBytes?: number;
 }
 
 interface APICallData {
@@ -58,6 +65,12 @@ class PluvianAI {
   // Context for chain_id and agent_name (using AsyncLocalStorage for async context)
   private context: Map<string, any> = new Map();
 
+  private logRequestBodies: boolean;
+  private logResponseBodies: boolean;
+  private logToolEventPayloads: boolean;
+  private maxRequestBodyBytes: number;
+  private maxResponseBodyBytes: number;
+
   constructor(config: PluvianAIConfig = {}) {
     this.apiKey = config.apiKey || process.env.PLUVIANAI_API_KEY;
     this.projectId = config.projectId
@@ -87,6 +100,33 @@ class PluvianAI {
         'Content-Type': 'application/json',
       },
     });
+
+    this.logRequestBodies = resolveLogFlag(
+      config.logRequestBodies,
+      process.env.PLUVIANAI_LOG_REQUEST_BODIES,
+      process.env.PLUVIANAI_LOG_USER_CONTENT,
+      true
+    );
+    this.logResponseBodies = resolveLogFlag(
+      config.logResponseBodies,
+      process.env.PLUVIANAI_LOG_RESPONSE_BODIES,
+      process.env.PLUVIANAI_LOG_USER_CONTENT,
+      true
+    );
+    this.logToolEventPayloads = resolveLogFlag(
+      config.logToolEventPayloads,
+      process.env.PLUVIANAI_LOG_TOOL_PAYLOADS,
+      process.env.PLUVIANAI_LOG_USER_CONTENT,
+      true
+    );
+    const mrb =
+      config.maxRequestBodyBytes ??
+      parseInt(process.env.PLUVIANAI_MAX_REQUEST_BODY_BYTES || '524288', 10);
+    const mrs =
+      config.maxResponseBodyBytes ??
+      parseInt(process.env.PLUVIANAI_MAX_RESPONSE_BODY_BYTES || '524288', 10);
+    this.maxRequestBodyBytes = Math.max(4096, Number.isFinite(mrb) ? mrb : 524288);
+    this.maxResponseBodyBytes = Math.max(4096, Number.isFinite(mrs) ? mrs : 524288);
 
     // Start health check monitoring
     if (this.enabled) {
@@ -285,7 +325,8 @@ class PluvianAI {
     requestData: any,
     responseData: any,
     latencyMs: number,
-    statusCode: number
+    statusCode: number,
+    toolEvents?: unknown[]
   ): Promise<void> {
     if (!this.enabled) {
       return;
@@ -296,10 +337,32 @@ class PluvianAI {
       const chainId = this.getChainId();
       const agentName = this.getAgentName();
 
+      const rdIn =
+        requestData && typeof requestData === 'object' && !Array.isArray(requestData)
+          ? (requestData as Record<string, unknown>)
+          : { _pluvianai_wrapped: requestData as unknown };
+      const rsIn =
+        responseData && typeof responseData === 'object' && !Array.isArray(responseData)
+          ? (responseData as Record<string, unknown>)
+          : { _pluvianai_wrapped: responseData as unknown };
+
+      const { request_data, response_data, tool_events } = sanitizeForIngest(
+        rdIn,
+        rsIn,
+        toolEvents,
+        {
+          logRequestBodies: this.logRequestBodies,
+          logResponseBodies: this.logResponseBodies,
+          logToolEventPayloads: this.logToolEventPayloads,
+          maxRequestBodyBytes: this.maxRequestBodyBytes,
+          maxResponseBodyBytes: this.maxResponseBodyBytes,
+        }
+      );
+
       const payload: any = {
         project_id: Number(this.projectId),
-        request_data: requestData,
-        response_data: responseData,
+        request_data,
+        response_data,
         latency_ms: latencyMs,
         status_code: statusCode,
         agent_name: agentName,
@@ -310,15 +373,21 @@ class PluvianAI {
         payload.chain_id = chainId;
       }
 
+      if (toolEvents !== undefined) {
+        payload.tool_events = tool_events ?? [];
+      }
+
       // Check Circuit Breaker state before sending
       if (!this.checkCircuitBreaker()) {
         // Circuit is open, bypass PluvianAI (fail-open)
         return;
       }
 
+      const ingestUrl = `${this.apiUrl}/api/v1/projects/${this.projectId}/api-calls`;
+
       // Send asynchronously (fire and forget)
       try {
-        await this.axiosInstance.post(`${this.apiUrl}/api/v1/api-calls`, payload);
+        await this.axiosInstance.post(ingestUrl, payload);
         // Success - reset circuit breaker
         this.resetCircuitBreaker();
       } catch (error) {
@@ -342,6 +411,7 @@ class PluvianAI {
    * @param statusCode - HTTP status code
    * @param agentName - Optional agent name
    * @param chainId - Optional chain ID to group related calls
+   * @param toolEvents - Optional tool_call/tool_result events (same schema as ingest `tool_events`)
    */
   async trackCall(
     requestData: any,
@@ -349,7 +419,8 @@ class PluvianAI {
     latencyMs: number,
     statusCode: number = 200,
     agentName?: string,
-    chainId?: string
+    chainId?: string,
+    toolEvents?: unknown[]
   ): Promise<void> {
     if (!this.enabled) {
       return;
@@ -367,7 +438,7 @@ class PluvianAI {
     }
 
     try {
-      await this.sendToAPI(requestData, responseData, latencyMs, statusCode);
+      await this.sendToAPI(requestData, responseData, latencyMs, statusCode, toolEvents);
     } finally {
       // Restore old values
       if (oldChainId !== undefined) {
@@ -605,6 +676,7 @@ export async function chain<T>(
  * @param statusCode - HTTP status code
  * @param agentName - Optional agent name
  * @param chainId - Optional chain ID to group related calls
+ * @param toolEvents - Optional `tool_events` array for Live View / Release Gate (see README)
  */
 export async function trackCall(
   requestData: any,
@@ -612,14 +684,31 @@ export async function trackCall(
   latencyMs: number,
   statusCode: number = 200,
   agentName?: string,
-  chainId?: string
+  chainId?: string,
+  toolEvents?: unknown[]
 ): Promise<void> {
   if (globalInstance) {
-    await globalInstance.trackCall(requestData, responseData, latencyMs, statusCode, agentName, chainId);
+    await globalInstance.trackCall(
+      requestData,
+      responseData,
+      latencyMs,
+      statusCode,
+      agentName,
+      chainId,
+      toolEvents
+    );
   } else {
     // Create a temporary instance
     const instance = new PluvianAI();
-    await instance.trackCall(requestData, responseData, latencyMs, statusCode, agentName, chainId);
+    await instance.trackCall(
+      requestData,
+      responseData,
+      latencyMs,
+      statusCode,
+      agentName,
+      chainId,
+      toolEvents
+    );
   }
 }
 

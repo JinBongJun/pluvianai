@@ -227,3 +227,19 @@ class TestOpsAlertingService:
         meta_alerts = [e for e in events if e["payload"].get("event_type") == "ops_alert_frequency_high"]
         assert len(meta_alerts) == 1
         assert meta_alerts[0]["payload"]["source_event_type"] == "provider_error_burst"
+
+    def test_ops_release_gate_tool_missing_surge(self, monkeypatch):
+        service = ops_module.OpsAlertingService()
+        events = _collect_dispatches(service)
+
+        monkeypatch.setattr(ops_module.settings, "OPS_RG_TOOL_MISSING_MIN_SAMPLES", 5, raising=False)
+        monkeypatch.setattr(ops_module.settings, "OPS_RG_TOOL_MISSING_RATIO_THRESHOLD", 0.72, raising=False)
+        monkeypatch.setattr(ops_module.settings, "OPS_RG_TOOL_MISSING_WINDOW_SECONDS", 3600, raising=False)
+        monkeypatch.setattr(ops_module.settings, "OPS_ALERT_COOLDOWN_SECONDS", 600, raising=False)
+
+        for _ in range(5):
+            service.observe_release_gate_tool_missing_surge(77, evidence_rows=4, missing_rows=4)
+
+        surge = [e for e in events if e["payload"].get("event_type") == "release_gate_tool_missing_surge"]
+        assert len(surge) == 1
+        assert surge[0]["payload"]["project_id"] == 77

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { behaviorAPI, liveViewAPI } from "@/lib/api";
+import type { RequestContextMeta } from "@/lib/api/live-view";
 import { getRateLimitInfo, isRateLimitError } from "@/lib/api/client";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { toEvalRows } from "@/lib/evalRows";
@@ -56,7 +57,11 @@ interface ClinicalSnapshot {
   payload?: Record<string, any> | null;
   created_at: string;
   has_tool_calls?: boolean;
+  /** From list API: payload/trajectory includes tool_result evidence */
+  has_tool_results?: boolean;
   tool_calls_summary?: Array<{ name: string; arguments?: string | Record<string, any> }>;
+  /** From list API (light mode): server-derived from stored payload markers */
+  request_context_meta?: RequestContextMeta | null;
 }
 
 interface ClinicalLogProps {
@@ -1313,6 +1318,26 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                                 : "—"}
                             </div>
                           )}
+                          {s.has_tool_results ? (
+                            <div
+                              className="shrink-0 px-2.5 py-0.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-400/90 text-[11px] font-bold uppercase tracking-widest"
+                              title="Tool result evidence captured (ingest or trajectory)"
+                            >
+                              Result
+                            </div>
+                          ) : null}
+                          {s.request_context_meta?.omitted_by_policy || s.request_context_meta?.truncated ? (
+                            <div
+                              className="shrink-0 px-2.5 py-0.5 rounded-full border border-amber-500/25 bg-amber-500/10 text-amber-300/90 text-[11px] font-bold uppercase tracking-widest"
+                              title={
+                                s.request_context_meta?.truncated
+                                  ? "Request context truncated or replaced before ingest (size limit)."
+                                  : "Some message or response bodies were omitted before ingest (SDK privacy)."
+                              }
+                            >
+                              {s.request_context_meta?.truncated ? "Truncated" : "Privacy"}
+                            </div>
+                          ) : null}
 
                           <p className="text-[14px] text-slate-300 truncate flex-1 ml-2">
                             {s.request_prompt || s.user_message || "—"}
