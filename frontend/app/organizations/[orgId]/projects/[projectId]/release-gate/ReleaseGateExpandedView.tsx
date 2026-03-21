@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Flag,
   RefreshCcw,
   ShieldCheck,
@@ -1208,11 +1209,85 @@ function AttemptDetailOverlay({
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 sm:gap-3">
                 <h2 className="text-base font-semibold text-white text-balance">
-                  Input {inputIndex + 1} · Attempt {navIndex + 1}
+                  Input {inputIndex + 1}
                 </h2>
+                
+                {attemptCount > 1 && (
+                  <div className="relative ml-2">
+                    <button
+                      type="button"
+                      onClick={() => setInputExpanded(!inputExpanded)}
+                      className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-white/5 transition"
+                    >
+                      <span>Attempt {navIndex + 1}</span>
+                      <span className="text-[10px] text-slate-500">/ {attemptCount}</span>
+                      <ChevronDown className={clsx("h-4 w-4 text-slate-400 transition-transform", inputExpanded && "rotate-180")} />
+                    </button>
+                    
+                    {inputExpanded && (
+                      <div className="absolute left-0 top-full mt-2 w-64 rounded-xl border border-white/10 bg-[#1e2028] p-2 shadow-2xl z-[12000]">
+                        <div className="mb-2 flex items-center justify-between px-2 pt-1">
+                          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                            Attempts
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFailedOnly(!failedOnly);
+                            }}
+                            className={clsx(
+                              "rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider transition",
+                              failedOnly
+                                ? "bg-rose-500/20 text-rose-300"
+                                : "text-slate-400 hover:text-slate-200"
+                            )}
+                          >
+                            Failed only
+                          </button>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-0.5">
+                          {attempts.map((att, i) => {
+                            const isPass = Boolean(att?.pass);
+                            if (failedOnly && isPass) return null;
+                            return (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => {
+                                  setNavIndex(i);
+                                  setInputExpanded(false);
+                                }}
+                                className={clsx(
+                                  "flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition",
+                                  navIndex === i
+                                    ? "bg-white/10 text-white"
+                                    : "text-slate-300 hover:bg-white/5"
+                                )}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {isPass ? (
+                                    <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                                  ) : (
+                                    <ShieldX className="h-4 w-4 text-rose-400" />
+                                  )}
+                                  <span>Attempt {i + 1}</span>
+                                </div>
+                                {navIndex === i && (
+                                  <span className="text-[10px] text-slate-500">Current</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <span
                   className={clsx(
-                    "rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tabular-nums",
+                    "ml-1 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tabular-nums",
                     pass
                       ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
                       : "border-rose-500/30 bg-rose-500/10 text-rose-300"
@@ -1226,53 +1301,6 @@ function AttemptDetailOverlay({
                 <span className="text-[11px] text-slate-500 truncate max-w-[min(360px,40vw)]">
                   {baselineModel} → {candidateModel}
                 </span>
-              </div>
-              <div className="mt-4 border-t border-white/5 pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
-                    Attempts
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFailedOnly(!failedOnly)}
-                      className={clsx(
-                        "rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] transition",
-                        failedOnly
-                          ? "bg-rose-500/20 text-rose-200"
-                          : "bg-white/5 text-slate-400 hover:text-slate-200"
-                      )}
-                    >
-                      Failed only
-                    </button>
-                  </div>
-                </div>
-                <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                  {attempts.map((att, i) => {
-                    const isPass = Boolean(att?.pass);
-                    if (failedOnly && isPass) return null;
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setNavIndex(i)}
-                        className={clsx(
-                          "shrink-0 flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-                          navIndex === i
-                            ? "bg-white/10 border-white/20 text-white"
-                            : "border-white/5 bg-black/20 text-slate-400 hover:bg-white/5 hover:text-slate-200"
-                        )}
-                      >
-                        {isPass ? (
-                          <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-                        ) : (
-                          <ShieldX className="h-3.5 w-3.5 text-rose-400" />
-                        )}
-                        Attempt {i + 1}
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
             </div>
 
@@ -1970,87 +1998,74 @@ function HistoryDetailCard({
   const historyToolGrounding = summarizeRunToolGroundingFromCases(reportCases);
 
   return (
-    <div className="rounded-[24px] border border-white/10 bg-black/30 p-5 space-y-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div
-            className={clsx(
-              "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em]",
-              item?.status === "pass"
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                : "border-rose-500/30 bg-rose-500/10 text-rose-300"
-            )}
-          >
-            {item?.status === "pass" ? (
-              <ShieldCheck className="h-3.5 w-3.5" />
-            ) : (
-              <ShieldX className="h-3.5 w-3.5" />
-            )}
-            {item?.status === "pass" ? "Passed" : "Failed"}
-          </div>
-          <div className="mt-3 text-lg font-black tracking-tight text-white">Run detail</div>
-          <div className="mt-1 text-xs text-slate-400">{formatDateTime(item?.created_at)}</div>
-        </div>
-        {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-white/10 px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-white/5"
-          >
-            Close
-          </button>
+    <div className="space-y-5">
+      <div
+        className={clsx(
+          "flex flex-col gap-5 rounded-[24px] border px-6 py-5",
+          item?.status === "pass"
+            ? "border-emerald-500/25 bg-emerald-500/[0.04]"
+            : "border-rose-500/25 bg-rose-500/[0.04]"
         )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <MetricTile label="Repeats" value={repeatRuns} />
-        <MetricTile label="Inputs" value={totalInputs || "—"} />
-        <MetricTile
-          label="Failed inputs"
-          value={failedInputs}
-          tone={failedInputs > 0 ? "danger" : "default"}
-        />
-        <MetricTile label="Flaky inputs" value={flakyInputs} />
-      </div>
-
-      <div className="space-y-2 text-xs">
-        <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2">
-          <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-            Trace ID
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 space-y-2">
+            <div
+              className={clsx(
+                "flex items-center gap-2 text-sm font-bold uppercase tracking-wider",
+                item?.status === "pass" ? "text-emerald-400" : "text-rose-400"
+              )}
+            >
+              <span>{item?.status === "pass" ? "GATE PASSED" : "GATE FAILED"}</span>
+              <span className="inline-block h-2 w-2 rounded-full bg-current" />
+            </div>
+            <div className="flex flex-wrap items-center gap-4 text-sm text-slate-300">
+              <span>Inputs: {totalInputs}</span>
+              <span className="h-1 w-1 rounded-full bg-slate-600" />
+              <span>Repeats: {repeatRuns}</span>
+              <span className="h-1 w-1 rounded-full bg-slate-600" />
+              <span>{formatDateTime(item?.created_at)}</span>
+            </div>
           </div>
-          <div className="mt-1 break-all text-slate-200">
-            {item?.trace_id || report?.trace_id || "—"}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2">
-          <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-            Baseline trace
-          </div>
-          <div className="mt-1 break-all text-slate-200">
-            {item?.baseline_trace_id || report?.baseline_run_ref || "—"}
-          </div>
-        </div>
-      </div>
-
-      {gateSummary && (
-        <div className="flex flex-wrap gap-2">
-          <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-slate-200">
-            Fail rate {percentFromRate(gateSummary.fail_rate)}
-          </span>
-          <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-slate-200">
-            Flaky rate {percentFromRate(gateSummary.flaky_rate)}
-          </span>
-          {typeof gateSummary.ratio_band === "string" && (
-            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-slate-200">
-              Band {gateSummary.ratio_band}
-            </span>
+          {gateSummary && (
+            <div className="text-right">
+              <div className="text-[13px] font-semibold text-slate-100">
+                Fail rate {percentFromRate(gateSummary.fail_rate)}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-400">
+                Flaky rate {percentFromRate(gateSummary.flaky_rate)}
+              </div>
+            </div>
           )}
         </div>
-      )}
+
+        {thresholdsRaw && (
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            {typeof thresholdsRaw.fail_rate_max !== "undefined" && (
+              <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-slate-300">
+                Fail max {percentFromRate(thresholdsRaw.fail_rate_max)}
+              </span>
+            )}
+            {typeof thresholdsRaw.flaky_rate_max !== "undefined" && (
+              <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-slate-300">
+                Flaky max {percentFromRate(thresholdsRaw.flaky_rate_max)}
+              </span>
+            )}
+            {typeof gateSummary?.ratio_band === "string" && (
+              <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-slate-300">
+                Band {gateSummary.ratio_band}
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="text-xs text-slate-500">
+          Trace: <span className="font-mono text-[10px] text-slate-400">{item?.trace_id || report?.trace_id || "—"}</span>
+        </div>
+      </div>
 
       {historyToolGrounding ? (
-        <div className="rounded-2xl border border-white/8 bg-black/25 px-3 py-2">
-          <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+        <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-sm text-slate-500">
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
             Tool grounding
           </div>
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-300">
@@ -2076,26 +2091,6 @@ function HistoryDetailCard({
           </div>
         </div>
       ) : null}
-
-      {thresholdsRaw && (
-        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-          <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-            Thresholds
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-200">
-            {typeof thresholdsRaw.fail_rate_max !== "undefined" && (
-              <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1">
-                Fail max {percentFromRate(thresholdsRaw.fail_rate_max)}
-              </span>
-            )}
-            {typeof thresholdsRaw.flaky_rate_max !== "undefined" && (
-              <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1">
-                Flaky max {percentFromRate(thresholdsRaw.flaky_rate_max)}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
 
       <div className="space-y-2">
         <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
