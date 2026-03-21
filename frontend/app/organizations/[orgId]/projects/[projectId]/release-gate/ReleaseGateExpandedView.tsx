@@ -865,6 +865,7 @@ function AttemptDetailOverlay({
   const toolTotalCalls = Number(toolCountsRaw.total_calls ?? toolEvidenceRows.length ?? 0) || 0;
   const toolExecutedCount = Number(toolCountsRaw.executed ?? 0) || 0;
   const toolSimulatedCount = Number(toolCountsRaw.simulated ?? 0) || 0;
+  const toolRecordedCount = Number(toolCountsRaw.recorded ?? 0) || 0;
   const toolSkippedCount = Number(toolCountsRaw.skipped ?? 0) || 0;
   const toolFailedCount = Number(toolCountsRaw.failed ?? 0) || 0;
   const toolResultCountFromSummary = Number(toolCountsRaw.tool_results ?? 0) || 0;
@@ -895,14 +896,30 @@ function AttemptDetailOverlay({
   const flattenedToolLoopRows = toolLoopEvents
     .flatMap(ev =>
       Array.isArray(ev?.tool_rows)
-        ? (ev.tool_rows as Array<Record<string, unknown>>).map(row => ({
-            round: Number(ev?.round ?? 0) || 0,
-            mode: String(ev?.mode ?? "").trim(),
-            name: String(row?.name ?? "").trim(),
-            status: String(row?.status ?? "").trim().toLowerCase(),
-            argumentsPreview: String(row?.arguments_preview ?? "").trim(),
-            resultPreview: String(row?.result_preview ?? "").trim(),
-          }))
+        ? (ev.tool_rows as Array<Record<string, unknown>>).map(row => {
+            const st = String(row?.status ?? "").trim().toLowerCase();
+            const exec = String(row?.execution_source ?? "").trim().toLowerCase();
+            const trSrc = String(row?.tool_result_source ?? "").trim().toLowerCase();
+            const provenance =
+              exec === "recorded" || st === "recorded"
+                ? "recorded"
+                : exec === "missing" || st === "missing"
+                  ? "missing"
+                  : "simulated";
+            return {
+              round: Number(ev?.round ?? 0) || 0,
+              mode: String(ev?.mode ?? "").trim(),
+              name: String(row?.name ?? "").trim(),
+              status: st,
+              callId: String(row?.call_id ?? "").trim(),
+              matchTier: String(row?.match_tier ?? "").trim().toLowerCase(),
+              executionSource: exec || (st === "recorded" ? "recorded" : "simulated"),
+              toolResultSource: trSrc || (st === "recorded" ? "baseline_snapshot" : "dry_run"),
+              provenance,
+              argumentsPreview: String(row?.arguments_preview ?? "").trim(),
+              resultPreview: String(row?.result_preview ?? "").trim(),
+            };
+          })
         : []
     )
     .filter(row => row.name);
@@ -969,7 +986,12 @@ function AttemptDetailOverlay({
         toneClass: "border-rose-500/30 bg-rose-500/10 text-rose-200",
       };
     }
-    if (toolTotalCalls > 0 && toolExecutedCount === 0) {
+    if (
+      toolTotalCalls > 0 &&
+      toolExecutedCount === 0 &&
+      toolRecordedCount === 0 &&
+      toolSimulatedCount > 0
+    ) {
       return {
         label: "Low",
         detail: "Tool calls were detected, but execution evidence is simulated only (Stage 1).",
@@ -1383,6 +1405,7 @@ function AttemptDetailOverlay({
                       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-300">
                         <span>Calls {toolTotalCalls}</span>
                         <span>Executed {toolExecutedCount}</span>
+                        <span>Recorded {toolRecordedCount}</span>
                         <span>Simulated {toolSimulatedCount}</span>
                         <span>Skipped {toolSkippedCount}</span>
                         <span>Failed {toolFailedCount}</span>
@@ -1745,8 +1768,8 @@ function AttemptDetailOverlay({
                             : "No tool calls detected"}
                         </div>
                         <div className="mt-1 text-xs text-slate-400">
-                          Executed {toolExecutedCount} / Simulated {toolSimulatedCount} / Skipped{" "}
-                          {toolSkippedCount}
+                          Executed {toolExecutedCount} / Recorded {toolRecordedCount} / Simulated{" "}
+                          {toolSimulatedCount} / Skipped {toolSkippedCount}
                         </div>
                         <div className="mt-1 text-xs text-slate-500">
                           Loop {toolLoopStatus}
@@ -1762,11 +1785,35 @@ function AttemptDetailOverlay({
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-[11px] font-medium text-slate-200">
                                     Round {row.round || 1} · {row.name}
+                                    {row.callId ? (
+                                      <span className="ml-1 font-mono text-[10px] font-normal text-slate-500">
+                                        · id {row.callId}
+                                      </span>
+                                    ) : null}
                                   </span>
-                                  <span className="text-[10px] uppercase tracking-wider text-slate-400">
-                                    {row.status || "simulated"}
+                                  <span
+                                    className={clsx(
+                                      "text-[10px] uppercase tracking-wider",
+                                      row.provenance === "recorded"
+                                        ? "text-violet-300"
+                                        : row.provenance === "missing"
+                                          ? "text-amber-300"
+                                          : "text-slate-400"
+                                    )}
+                                  >
+                                    {row.provenance === "recorded"
+                                      ? "Recorded"
+                                      : row.provenance === "missing"
+                                        ? "Missing"
+                                        : row.status || "Simulated"}
                                   </span>
                                 </div>
+                                {row.matchTier === "name_order" ? (
+                                  <p className="mt-1 text-[10px] text-amber-200/90" title="call_id mismatch">
+                                    Weak match: baseline result matched by tool name order (cross-provider or missing
+                                    id).
+                                  </p>
+                                ) : null}
                                 {row.mode ? (
                                   <p className="mt-1 text-[10px] text-slate-500">Mode: {row.mode}</p>
                                 ) : null}
@@ -1812,10 +1859,16 @@ function HistoryDetailCard({
   item,
   report,
   onClose,
+  baselineSnapshotsById,
+  recentSnapshots,
+  onSelectCase,
 }: {
   item: any;
   report: any;
   onClose?: () => void;
+  baselineSnapshotsById?: Map<string, Record<string, unknown>>;
+  recentSnapshots?: any[];
+  onSelectCase?: (idx: number, attempts: any[], baselineSnapshot: Record<string, unknown> | null) => void;
 }) {
   const summary =
     report?.summary && typeof report.summary === "object" && !Array.isArray(report.summary)
@@ -2009,6 +2062,151 @@ function HistoryDetailCard({
                 </p>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+          Per-input breakdown
+        </div>
+        {reportCases.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-4 text-sm text-slate-500">
+            No per-input result rows returned for this run.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {reportCases.map((run: any, idx: number) => {
+              const attempts = Array.isArray(run?.attempts) ? run.attempts : [];
+              const baselineSnapshotForRun =
+                (baselineSnapshotsById?.get(String(run?.snapshot_id ?? "")) as
+                  | Record<string, unknown>
+                  | undefined) ??
+                (recentSnapshots?.find(
+                  s => String((s as Record<string, unknown>)?.id ?? "") === String(run?.snapshot_id ?? "")
+                ) as Record<string, unknown> | undefined) ??
+                null;
+              const caseStatusRaw = String(
+                run?.case_status ?? (run?.pass ? "pass" : "fail")
+              )
+                .trim()
+                .toLowerCase();
+              const caseIsPass =
+                caseStatusRaw === "pass" ||
+                (caseStatusRaw !== "fail" &&
+                  caseStatusRaw !== "flaky" &&
+                  Boolean(run?.pass));
+              const caseIsFlaky = caseStatusRaw === "flaky";
+              const totalAttempts =
+                attempts.length || Number(item?.repeat_runs ?? gateSummary?.repeat_runs) || 1;
+              const passRatioFallback = Number((run?.summary as any)?.pass_ratio);
+              const passedAttempts = attempts.length
+                ? attempts.filter((attempt: any) => Boolean(attempt?.pass)).length
+                : Number.isFinite(passRatioFallback)
+                  ? Math.max(
+                      0,
+                      Math.min(totalAttempts, Math.round(passRatioFallback * totalAttempts))
+                    )
+                  : caseIsPass
+                    ? totalAttempts
+                    : 0;
+              const caseStatus = caseIsPass
+                ? "PASS"
+                : caseIsFlaky
+                  ? "FLAKY"
+                  : "FAIL";
+              
+              const baselineInputPreview = String(
+                baselineSnapshotForRun?.user_message ?? 
+                baselineSnapshotForRun?.request_prompt ?? 
+                ""
+              ).trim();
+              const caseGrounding = summarizeGroundingForCase(run);
+
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => {
+                    if (attempts.length > 0 && onSelectCase) {
+                      onSelectCase(idx, attempts, baselineSnapshotForRun);
+                    }
+                  }}
+                  data-testid={`rg-history-case-${idx}`}
+                  className={clsx(
+                    "group flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
+                    caseIsPass
+                      ? "border-emerald-500/10 bg-emerald-500/[0.02] hover:bg-emerald-500/[0.06]"
+                      : caseIsFlaky
+                        ? "border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10"
+                        : "border-rose-500/15 bg-rose-500/[0.03] hover:bg-rose-500/10"
+                  )}
+                >
+                  <span
+                    className={clsx(
+                      "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
+                      caseIsPass
+                        ? "bg-emerald-500/10 text-emerald-400"
+                        : caseIsFlaky
+                          ? "bg-amber-500/15 text-amber-300"
+                          : "bg-rose-500/10 text-rose-400"
+                    )}
+                  >
+                    {caseStatus}
+                  </span>
+                  <div className="min-w-0 flex-1 py-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="shrink-0 text-xs font-semibold text-slate-200">
+                        Input {idx + 1}
+                      </span>
+                      {baselineInputPreview && (
+                        <span className="truncate text-[11px] text-slate-400">
+                          {baselineInputPreview}
+                        </span>
+                      )}
+                    </div>
+                    {caseGrounding.rollup && caseGrounding.rollup !== "na" ? (
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        <span
+                          className={clsx(
+                            "rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]",
+                            caseGrounding.rollup === "pass"
+                              ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+                              : "border-rose-500/25 bg-rose-500/10 text-rose-300"
+                          )}
+                        >
+                          Grounding {caseGrounding.rollup === "pass" ? "OK" : "fail"}
+                        </span>
+                        {caseGrounding.semantic === "pass" ? (
+                          <span className="rounded border border-violet-500/25 bg-violet-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-violet-200">
+                            Semantic OK
+                          </span>
+                        ) : null}
+                        {caseGrounding.semantic === "unavailable" ? (
+                          <span
+                            className="rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500"
+                            title="Semantic judge did not run (e.g. no OpenAI key configured)."
+                          >
+                            Semantic off
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className={clsx(
+                      "text-[10px] font-medium",
+                      passedAttempts === totalAttempts ? "text-emerald-400/80" : "text-rose-400/80"
+                    )}>
+                      {passedAttempts}/{totalAttempts}
+                    </span>
+                    <span className="text-[10px] font-medium text-slate-500 opacity-0 transition-opacity group-hover:opacity-100">
+                      &rarr;
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -3309,6 +3507,16 @@ export function ReleaseGateExpandedView() {
                         item={selectedHistoryItem}
                         report={selectedRunReport}
                         onClose={() => setSelectedRunId(null)}
+                        baselineSnapshotsById={baselineSnapshotsById}
+                        recentSnapshots={recentSnapshots}
+                        onSelectCase={(caseIndex, attempts, baselineSnapshot) => {
+                          setDetailAttemptView({
+                            attempts,
+                            caseIndex,
+                            initialAttemptIndex: 0,
+                            baselineSnapshot,
+                          });
+                        }}
                       />
                     ) : nodeHistoryItems.length > 0 ? (
                       <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
@@ -3427,6 +3635,16 @@ export function ReleaseGateExpandedView() {
                       item={selectedHistoryItem}
                       report={selectedRunReport}
                       onClose={() => setSelectedRunId(null)}
+                      baselineSnapshotsById={baselineSnapshotsById}
+                      recentSnapshots={recentSnapshots}
+                      onSelectCase={(caseIndex, attempts, baselineSnapshot) => {
+                        setDetailAttemptView({
+                          attempts,
+                          caseIndex,
+                          initialAttemptIndex: 0,
+                          baselineSnapshot,
+                        });
+                      }}
                     />
                   ) : (
                     <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
