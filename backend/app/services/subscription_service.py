@@ -2,7 +2,7 @@
 Subscription service for managing user plans, limits, and usage
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -85,7 +85,7 @@ class SubscriptionService:
         plan_type = normalize_plan_type(plan_info["plan_type"])
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         period_start, period_end = self._period_bounds(now)
         metric_name = self._usage_metric_name(metric_type)
         current_usage = (
@@ -152,7 +152,7 @@ class SubscriptionService:
         plan_type = plan_info["plan_type"]
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         period_start, period_end = self._period_bounds(now)
 
         # Aggregate usage by metric_name for the current month.
@@ -206,8 +206,7 @@ class SubscriptionService:
             reset_count = 0
             
             # Get current year-month for pattern matching
-            from datetime import datetime
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             current_year_month = now.strftime("%Y-%m")
             
             # Delete monthly usage keys for all users
@@ -247,7 +246,7 @@ class SubscriptionService:
         """Create or update user subscription"""
         subscription = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         # Use provided period dates or default to current month
         if current_period_start is not None:
             period_start = current_period_start

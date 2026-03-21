@@ -5,7 +5,7 @@ User settings endpoints
 import secrets
 import hashlib
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict, EmailStr
@@ -342,7 +342,7 @@ async def rotate_api_key(
 
     # Deactivate old key as part of rotation.
     old_key.is_active = False
-    old_key.last_used_at = datetime.utcnow()
+    old_key.last_used_at = datetime.now(timezone.utc)
 
     db.flush()
     db.refresh(new_key)
