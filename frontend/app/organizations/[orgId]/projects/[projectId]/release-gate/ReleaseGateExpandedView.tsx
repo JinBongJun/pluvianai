@@ -459,6 +459,134 @@ function getCasesFromReport(report: any): any[] {
   return [];
 }
 
+function ResultCaseRowButton({
+  run,
+  idx,
+  repeatRunsFallback,
+  baselineSnapshotForRun,
+  onSelect,
+  testId,
+}: {
+  run: any;
+  idx: number;
+  repeatRunsFallback: unknown;
+  baselineSnapshotForRun: Record<string, unknown> | null;
+  onSelect: (payload: {
+    attempts: any[];
+    caseIndex: number;
+    baselineSnapshot: Record<string, unknown> | null;
+  }) => void;
+  testId: string;
+}) {
+  const attempts = Array.isArray(run?.attempts) ? run.attempts : [];
+  const caseStatusRaw = String(run?.case_status ?? (run?.pass ? "pass" : "fail"))
+    .trim()
+    .toLowerCase();
+  const caseIsPass =
+    caseStatusRaw === "pass" ||
+    (caseStatusRaw !== "fail" && caseStatusRaw !== "flaky" && Boolean(run?.pass));
+  const caseIsFlaky = caseStatusRaw === "flaky";
+  const totalAttempts = attempts.length || Number(repeatRunsFallback) || 1;
+  const passRatioFallback = Number((run?.summary as any)?.pass_ratio);
+  const passedAttempts = attempts.length
+    ? attempts.filter((attempt: any) => Boolean(attempt?.pass)).length
+    : Number.isFinite(passRatioFallback)
+      ? Math.max(0, Math.min(totalAttempts, Math.round(passRatioFallback * totalAttempts)))
+      : caseIsPass
+        ? totalAttempts
+        : 0;
+  const caseStatus = caseIsPass ? "PASS" : caseIsFlaky ? "FLAKY" : "FAIL";
+  const baselineInputPreview = String(
+    baselineSnapshotForRun?.user_message ?? baselineSnapshotForRun?.request_prompt ?? ""
+  ).trim();
+  const caseGrounding = summarizeGroundingForCase(run);
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (attempts.length > 0) {
+          onSelect({
+            attempts,
+            caseIndex: idx,
+            baselineSnapshot: baselineSnapshotForRun,
+          });
+        }
+      }}
+      data-testid={testId}
+      className={clsx(
+        "group flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
+        caseIsPass
+          ? "border-emerald-500/10 bg-emerald-500/[0.02] hover:bg-emerald-500/[0.06]"
+          : caseIsFlaky
+            ? "border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10"
+            : "border-rose-500/15 bg-rose-500/[0.03] hover:bg-rose-500/10"
+      )}
+    >
+      <span
+        className={clsx(
+          "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
+          caseIsPass
+            ? "bg-emerald-500/10 text-emerald-400"
+            : caseIsFlaky
+              ? "bg-amber-500/15 text-amber-300"
+              : "bg-rose-500/10 text-rose-400"
+        )}
+      >
+        {caseStatus}
+      </span>
+      <div className="min-w-0 flex-1 py-1">
+        <div className="flex items-baseline gap-2">
+          <span className="shrink-0 text-xs font-semibold text-slate-200">Input {idx + 1}</span>
+          {baselineInputPreview && (
+            <span className="truncate text-[11px] text-slate-400">{baselineInputPreview}</span>
+          )}
+        </div>
+        {caseGrounding.rollup && caseGrounding.rollup !== "na" ? (
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            <span
+              className={clsx(
+                "rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]",
+                caseGrounding.rollup === "pass"
+                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+                  : "border-rose-500/25 bg-rose-500/10 text-rose-300"
+              )}
+            >
+              Grounding {caseGrounding.rollup === "pass" ? "OK" : "fail"}
+            </span>
+            {caseGrounding.semantic === "pass" ? (
+              <span className="rounded border border-violet-500/25 bg-violet-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-violet-200">
+                Semantic OK
+              </span>
+            ) : null}
+            {caseGrounding.semantic === "unavailable" ? (
+              <span
+                className="rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500"
+                title="Semantic judge did not run (e.g. no OpenAI key configured)."
+              >
+                Semantic off
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <span
+          className={clsx(
+            "text-[10px] font-medium",
+            passedAttempts === totalAttempts ? "text-emerald-400/80" : "text-rose-400/80"
+          )}
+        >
+          {passedAttempts}/{totalAttempts}
+        </span>
+        <span className="text-[10px] font-medium text-slate-500 opacity-0 transition-opacity group-hover:opacity-100">
+          &rarr;
+        </span>
+      </div>
+    </button>
+  );
+}
+
 /** History list row — same layout language as Results “Per-input breakdown” rows. */
 function HistoryRunRowButton({
   item,
@@ -2033,6 +2161,259 @@ function AttemptDetailOverlay({
   );
 }
 
+function HistoryRunDetailLoading({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between pb-2">
+        <div className="text-lg font-black tracking-tight text-white">Run detail</div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-xl border border-white/10 px-4 py-2 text-[11px] font-semibold text-slate-300 transition hover:bg-white/5"
+        >
+          ← Back to history
+        </button>
+      </div>
+      <div className="rounded-[24px] border border-white/8 bg-white/[0.02] p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-5 w-32 rounded bg-white/10" />
+          <div className="h-24 rounded-2xl bg-white/5" />
+          <div className="h-20 rounded-2xl bg-white/5" />
+          <div className="h-20 rounded-2xl bg-white/5" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HistoryRunDetailView({
+  item,
+  report,
+  onClose,
+  baselineSnapshotsById,
+  recentSnapshots,
+  onSelectCase,
+}: {
+  item: any;
+  report: any;
+  onClose: () => void;
+  baselineSnapshotsById: Map<string, Record<string, unknown>>;
+  recentSnapshots: any[];
+  onSelectCase: (payload: {
+    attempts: any[];
+    caseIndex: number;
+    baselineSnapshot: Record<string, unknown> | null;
+  }) => void;
+}) {
+  const summary =
+    report?.summary && typeof report.summary === "object" && !Array.isArray(report.summary)
+      ? (report.summary as Record<string, unknown>)
+      : null;
+  const gateSummaryRaw = summary?.release_gate;
+  const gateSummary =
+    gateSummaryRaw && typeof gateSummaryRaw === "object" && !Array.isArray(gateSummaryRaw)
+      ? (gateSummaryRaw as Record<string, unknown>)
+      : null;
+  const thresholdsRaw =
+    item?.thresholds && typeof item.thresholds === "object" && !Array.isArray(item.thresholds)
+      ? (item.thresholds as Record<string, unknown>)
+      : gateSummary?.thresholds &&
+          typeof gateSummary.thresholds === "object" &&
+          !Array.isArray(gateSummary.thresholds)
+        ? (gateSummary.thresholds as Record<string, unknown>)
+        : null;
+  const violations = Array.isArray(report?.violations)
+    ? (report.violations as Array<Record<string, unknown>>)
+    : [];
+  const reportCases = getCasesFromReport(report);
+  const totalInputs =
+    Number(gateSummary?.total_inputs ?? 0) ||
+    Number(item?.passed_runs ?? 0) + Number(item?.failed_runs ?? 0);
+  const failedInputs = Number(gateSummary?.failed_inputs ?? item?.failed_runs ?? 0);
+  const flakyInputs = Number(gateSummary?.flaky_inputs ?? 0);
+  const repeatRuns = Number(item?.repeat_runs ?? gateSummary?.repeat_runs ?? 0) || "—";
+  const historyToolGrounding = summarizeRunToolGroundingFromCases(reportCases);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between pb-2">
+        <div className="text-lg font-black tracking-tight text-white">Run detail</div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-xl border border-white/10 px-4 py-2 text-[11px] font-semibold text-slate-300 transition hover:bg-white/5"
+        >
+          ← Back to history
+        </button>
+      </div>
+
+      <div
+        className={clsx(
+          "flex flex-col gap-5 rounded-[24px] border px-6 py-5",
+          item?.status === "pass"
+            ? "border-emerald-500/25 bg-emerald-500/[0.04]"
+            : "border-rose-500/25 bg-rose-500/[0.04]"
+        )}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 space-y-2">
+            <div
+              className={clsx(
+                "flex items-center gap-2 text-sm font-bold uppercase tracking-wider",
+                item?.status === "pass" ? "text-emerald-400" : "text-rose-400"
+              )}
+            >
+              <span>{item?.status === "pass" ? "GATE PASSED" : "GATE FAILED"}</span>
+              <span className="inline-block h-2 w-2 rounded-full bg-current" />
+            </div>
+            <div className="flex flex-wrap items-center gap-4 text-sm text-slate-300">
+              <span>Inputs: {totalInputs}</span>
+              <span className="h-1 w-1 rounded-full bg-slate-600" />
+              <span>Repeats: {repeatRuns}</span>
+              <span className="h-1 w-1 rounded-full bg-slate-600" />
+              <span>{formatDateTime(item?.created_at)}</span>
+            </div>
+          </div>
+          {gateSummary ? (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <MetricTile label="Fail Rate" value={percentFromRate(gateSummary.fail_rate)} tone="danger" />
+              <MetricTile label="Flaky Inputs" value={flakyInputs} tone="default" />
+              <MetricTile label="Failed Inputs" value={failedInputs} tone="danger" />
+            </div>
+          ) : null}
+        </div>
+
+        {thresholdsRaw ? (
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            {typeof thresholdsRaw.fail_rate_max !== "undefined" ? (
+              <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-slate-300">
+                Fail max {percentFromRate(thresholdsRaw.fail_rate_max)}
+              </span>
+            ) : null}
+            {typeof thresholdsRaw.flaky_rate_max !== "undefined" ? (
+              <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-slate-300">
+                Flaky max {percentFromRate(thresholdsRaw.flaky_rate_max)}
+              </span>
+            ) : null}
+            {typeof gateSummary?.ratio_band === "string" ? (
+              <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-slate-300">
+                Band {gateSummary.ratio_band}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="text-xs text-slate-500">
+          Trace:{" "}
+          <span className="font-mono text-[10px] text-slate-400">
+            {item?.trace_id || report?.trace_id || "—"}
+          </span>
+        </div>
+      </div>
+
+      {historyToolGrounding ? (
+        <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-sm text-slate-500">
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+            Tool grounding
+          </div>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-300">
+            <span>
+              With tools:{" "}
+              <span className="font-semibold text-white/90">{historyToolGrounding.withTools}</span>
+            </span>
+            <span className="text-emerald-400/90">Pass {historyToolGrounding.pass}</span>
+            <span className="text-rose-400/90">Fail {historyToolGrounding.fail}</span>
+            {historyToolGrounding.semanticOk > 0 ? (
+              <span className="text-violet-300/90">
+                Semantic OK {historyToolGrounding.semanticOk}
+              </span>
+            ) : null}
+            {historyToolGrounding.semanticOff > 0 ? (
+              <span
+                className="text-slate-500"
+                title="Semantic judge did not run (e.g. no OpenAI key)."
+              >
+                Semantic judge off {historyToolGrounding.semanticOff}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="space-y-2">
+        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+          Violations
+        </div>
+        {violations.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-4 text-sm text-slate-500">
+            No stored violations for this run.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {violations.slice(0, 5).map((violation, idx) => (
+              <div
+                key={`${String(violation.rule_id ?? idx)}-${idx}`}
+                className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 text-sm font-semibold text-slate-100">
+                    {String(violation.rule_name ?? violation.rule_id ?? `Violation ${idx + 1}`)}
+                  </div>
+                  {typeof violation.severity === "string" ? (
+                    <span className="rounded-full border border-white/10 bg-black/30 px-2 py-1 text-[10px] font-black uppercase text-slate-300">
+                      {violation.severity}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                  {String(violation.message ?? "No message")}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+          Per-input breakdown
+        </div>
+        {reportCases.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-4 text-sm text-slate-500">
+            No per-input result rows returned for this run.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {reportCases.map((run: any, idx: number) => {
+              const baselineSnapshotForRun =
+                (baselineSnapshotsById.get(String(run?.snapshot_id ?? "")) as
+                  | Record<string, unknown>
+                  | undefined) ??
+                (recentSnapshots.find(
+                  s =>
+                    String((s as Record<string, unknown>)?.id ?? "") ===
+                    String(run?.snapshot_id ?? "")
+                ) as Record<string, unknown> | undefined) ??
+                null;
+              return (
+                <ResultCaseRowButton
+                  key={`history-case-${idx}`}
+                  run={run}
+                  idx={idx}
+                  repeatRunsFallback={item?.repeat_runs ?? gateSummary?.repeat_runs}
+                  baselineSnapshotForRun={baselineSnapshotForRun}
+                  onSelect={onSelectCase}
+                  testId={`rg-history-case-${idx}`}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ReleaseGateExpandedView() {
   const ctx = useContext(ReleaseGatePageContext) as Record<string, unknown>;
 
@@ -2195,8 +2576,6 @@ export function ReleaseGateExpandedView() {
     initialAttemptIndex: number;
     baselineSnapshot: Record<string, unknown> | null;
   } | null>(null);
-  /** After selecting a history run, open `AttemptDetailOverlay` when `selectedRunReport` loads. */
-  const [pendingHistoryAttemptOpen, setPendingHistoryAttemptOpen] = useState(false);
 
   const [logsStatusFilter, setLogsStatusFilter] = useState<LogsStatusFilter>("all");
   const [logsSortMode, setLogsSortMode] = useState<"newest" | "oldest">("newest");
@@ -2233,6 +2612,15 @@ export function ReleaseGateExpandedView() {
         return !itemAgentId || itemAgentId === agentId;
       }),
     [agentId, historyItems]
+  );
+  const selectedHistoryItem = useMemo(
+    () => historyItems.find(item => String(item?.id ?? "") === String(selectedRunId ?? "")) ?? null,
+    [historyItems, selectedRunId]
+  );
+  const selectedNodeHistoryItem = useMemo(
+    () =>
+      nodeHistoryItems.find(item => String(item?.id ?? "") === String(selectedRunId ?? "")) ?? null,
+    [nodeHistoryItems, selectedRunId]
   );
   const recentSnapshotsErrorMessage = useMemo(
     () =>
@@ -2322,7 +2710,6 @@ export function ReleaseGateExpandedView() {
     setExpandedCaseIndex(null);
     setSelectedRunId(null);
     setRepeatDropdownOpen(false);
-    setPendingHistoryAttemptOpen(false);
   }, [
     agentId,
     setExpandedCaseIndex,
@@ -2333,7 +2720,6 @@ export function ReleaseGateExpandedView() {
   useEffect(() => {
     setResultCaseFilter("all");
     setDetailAttemptView(null);
-    setPendingHistoryAttemptOpen(false);
   }, [result?.report_id]);
 
   const handleBack = () => {
@@ -2349,59 +2735,12 @@ export function ReleaseGateExpandedView() {
     setExpandedCaseIndex(null);
     setSelectedRunId(null);
     setRepeatDropdownOpen(false);
-    setPendingHistoryAttemptOpen(false);
   };
 
   const selectHistoryRun = (id: string) => {
     setSelectedRunId(id);
     setExpandedHistoryId?.(id);
-    setPendingHistoryAttemptOpen(true);
   };
-
-  useEffect(() => {
-    if (!pendingHistoryAttemptOpen || !selectedRunId) return;
-    if (selectedRunReport == null) return;
-
-    const cases = getCasesFromReport(selectedRunReport);
-    let run: any = null;
-    let caseIndex = 0;
-    for (let i = 0; i < cases.length; i++) {
-      const c = cases[i];
-      const att = Array.isArray(c?.attempts) ? c.attempts : [];
-      if (att.length > 0) {
-        run = c;
-        caseIndex = i;
-        break;
-      }
-    }
-    if (!run) {
-      setPendingHistoryAttemptOpen(false);
-      return;
-    }
-    const attempts = Array.isArray(run.attempts) ? run.attempts : [];
-    const baselineSnapshotForRun =
-      (baselineSnapshotsById.get(String(run?.snapshot_id ?? "")) as
-        | Record<string, unknown>
-        | undefined) ??
-      (recentSnapshots.find(
-        s => String((s as Record<string, unknown>)?.id ?? "") === String(run?.snapshot_id ?? "")
-      ) as Record<string, unknown> | undefined) ??
-      null;
-
-    setDetailAttemptView({
-      attempts,
-      caseIndex,
-      initialAttemptIndex: 0,
-      baselineSnapshot: baselineSnapshotForRun,
-    });
-    setPendingHistoryAttemptOpen(false);
-  }, [
-    pendingHistoryAttemptOpen,
-    selectedRunId,
-    selectedRunReport,
-    baselineSnapshotsById,
-    recentSnapshots,
-  ]);
 
   const handleRepeatSelect = (runs: number) => {
     if (isValidating || activeJobId) return;
@@ -2981,9 +3320,6 @@ export function ReleaseGateExpandedView() {
               onTabChange={id => {
                 const next = id as "results" | "history";
                 setRightPanelTab(next);
-                if (next === "history" && !selectedRunId && nodeHistoryItems[0]?.id) {
-                  selectHistoryRun(String(nodeHistoryItems[0].id));
-                }
               }}
             >
               <div className="flex h-full flex-col overflow-y-auto custom-scrollbar">
@@ -3104,140 +3440,35 @@ export function ReleaseGateExpandedView() {
                             </div>
                           ) : (
                             visibleResultCases.map(({ run, caseIndex: idx }: VisibleResultCase) => {
-                            const attempts = Array.isArray(run?.attempts) ? run.attempts : [];
-                            const baselineSnapshotForRun =
-                              (baselineSnapshotsById.get(String(run?.snapshot_id ?? "")) as
-                                | Record<string, unknown>
-                                | undefined) ??
-                              (recentSnapshots.find(
-                                s => String((s as Record<string, unknown>)?.id ?? "") === String(run?.snapshot_id ?? "")
-                              ) as Record<string, unknown> | undefined) ??
-                              null;
-                            const caseStatusRaw = String(
-                              run?.case_status ?? (run?.pass ? "pass" : "fail")
-                            )
-                              .trim()
-                              .toLowerCase();
-                            const caseIsPass =
-                              caseStatusRaw === "pass" ||
-                              (caseStatusRaw !== "fail" &&
-                                caseStatusRaw !== "flaky" &&
-                                Boolean(run?.pass));
-                            const caseIsFlaky = caseStatusRaw === "flaky";
-                            const totalAttempts =
-                              attempts.length || Number(result.repeat_runs ?? repeatRuns) || 1;
-                            const passRatioFallback = Number((run?.summary as any)?.pass_ratio);
-                            const passedAttempts = attempts.length
-                              ? attempts.filter((attempt: any) => Boolean(attempt?.pass)).length
-                              : Number.isFinite(passRatioFallback)
-                                ? Math.max(
-                                    0,
-                                    Math.min(totalAttempts, Math.round(passRatioFallback * totalAttempts))
-                                  )
-                                : caseIsPass
-                                  ? totalAttempts
-                                  : 0;
-                            const caseStatus = caseIsPass
-                              ? "PASS"
-                              : caseIsFlaky
-                                ? "FLAKY"
-                                : "FAIL";
-                            
-                            const baselineInputPreview = String(
-                              baselineSnapshotForRun?.user_message ?? 
-                              baselineSnapshotForRun?.request_prompt ?? 
-                              ""
-                            ).trim();
-                            const caseGrounding = summarizeGroundingForCase(run);
+                              const baselineSnapshotForRun =
+                                (baselineSnapshotsById.get(String(run?.snapshot_id ?? "")) as
+                                  | Record<string, unknown>
+                                  | undefined) ??
+                                (recentSnapshots.find(
+                                  s =>
+                                    String((s as Record<string, unknown>)?.id ?? "") ===
+                                    String(run?.snapshot_id ?? "")
+                                ) as Record<string, unknown> | undefined) ??
+                                null;
 
-                            return (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => {
-                                  if (attempts.length > 0) {
+                              return (
+                                <ResultCaseRowButton
+                                  key={idx}
+                                  run={run}
+                                  idx={idx}
+                                  repeatRunsFallback={result.repeat_runs ?? repeatRuns}
+                                  baselineSnapshotForRun={baselineSnapshotForRun}
+                                  onSelect={({ attempts, caseIndex, baselineSnapshot }) =>
                                     setDetailAttemptView({
                                       attempts,
-                                      caseIndex: idx,
+                                      caseIndex,
                                       initialAttemptIndex: 0,
-                                      baselineSnapshot: baselineSnapshotForRun,
-                                    });
+                                      baselineSnapshot,
+                                    })
                                   }
-                                }}
-                                data-testid={`rg-result-case-${idx}`}
-                                className={clsx(
-                                  "group flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
-                                  caseIsPass
-                                    ? "border-emerald-500/10 bg-emerald-500/[0.02] hover:bg-emerald-500/[0.06]"
-                                    : caseIsFlaky
-                                      ? "border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10"
-                                      : "border-rose-500/15 bg-rose-500/[0.03] hover:bg-rose-500/10"
-                                )}
-                              >
-                                <span
-                                  className={clsx(
-                                    "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
-                                    caseIsPass
-                                      ? "bg-emerald-500/10 text-emerald-400"
-                                      : caseIsFlaky
-                                        ? "bg-amber-500/15 text-amber-300"
-                                        : "bg-rose-500/10 text-rose-400"
-                                  )}
-                                >
-                                  {caseStatus}
-                                </span>
-                                <div className="min-w-0 flex-1 py-1">
-                                  <div className="flex items-baseline gap-2">
-                                    <span className="shrink-0 text-xs font-semibold text-slate-200">
-                                      Input {idx + 1}
-                                    </span>
-                                    {baselineInputPreview && (
-                                      <span className="truncate text-[11px] text-slate-400">
-                                        {baselineInputPreview}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {caseGrounding.rollup && caseGrounding.rollup !== "na" ? (
-                                    <div className="mt-1 flex flex-wrap gap-1.5">
-                                      <span
-                                        className={clsx(
-                                          "rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]",
-                                          caseGrounding.rollup === "pass"
-                                            ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-                                            : "border-rose-500/25 bg-rose-500/10 text-rose-300"
-                                        )}
-                                      >
-                                        Grounding {caseGrounding.rollup === "pass" ? "OK" : "fail"}
-                                      </span>
-                                      {caseGrounding.semantic === "pass" ? (
-                                        <span className="rounded border border-violet-500/25 bg-violet-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-violet-200">
-                                          Semantic OK
-                                        </span>
-                                      ) : null}
-                                      {caseGrounding.semantic === "unavailable" ? (
-                                        <span
-                                          className="rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500"
-                                          title="Semantic judge did not run (e.g. no OpenAI key configured)."
-                                        >
-                                          Semantic off
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                  ) : null}
-                                </div>
-                                <div className="flex shrink-0 items-center gap-2">
-                                  <span className={clsx(
-                                    "text-[10px] font-medium",
-                                    passedAttempts === totalAttempts ? "text-emerald-400/80" : "text-rose-400/80"
-                                  )}>
-                                    {passedAttempts}/{totalAttempts}
-                                  </span>
-                                  <span className="text-[10px] font-medium text-slate-500 opacity-0 transition-opacity group-hover:opacity-100">
-                                    &rarr;
-                                  </span>
-                                </div>
-                              </button>
-                            );
+                                  testId={`rg-result-case-${idx}`}
+                                />
+                              );
                             })
                           )}
                         </div>
@@ -3248,7 +3479,27 @@ export function ReleaseGateExpandedView() {
 
                 {rightPanelTab === "history" && (
                   <div className="flex-1 space-y-4 p-4">
-                    {historyLoading ? (
+                    {selectedNodeHistoryItem ? (
+                      selectedRunReport ? (
+                        <HistoryRunDetailView
+                          item={selectedNodeHistoryItem}
+                          report={selectedRunReport}
+                          onClose={() => setSelectedRunId(null)}
+                          baselineSnapshotsById={baselineSnapshotsById}
+                          recentSnapshots={recentSnapshots}
+                          onSelectCase={({ attempts, caseIndex, baselineSnapshot }) =>
+                            setDetailAttemptView({
+                              attempts,
+                              caseIndex,
+                              initialAttemptIndex: 0,
+                              baselineSnapshot,
+                            })
+                          }
+                        />
+                      ) : (
+                        <HistoryRunDetailLoading onClose={() => setSelectedRunId(null)} />
+                      )
+                    ) : historyLoading ? (
                       <div className="space-y-2">
                         {[1, 2, 3].map(i => (
                           <div
@@ -3367,6 +3618,26 @@ export function ReleaseGateExpandedView() {
                 <Flag className="mx-auto mb-2 h-10 w-10 text-slate-600" />
                 <p className="text-sm text-slate-500">No validation history yet.</p>
               </div>
+            ) : selectedHistoryItem ? (
+              selectedRunReport ? (
+                <HistoryRunDetailView
+                  item={selectedHistoryItem}
+                  report={selectedRunReport}
+                  onClose={() => setSelectedRunId(null)}
+                  baselineSnapshotsById={baselineSnapshotsById}
+                  recentSnapshots={recentSnapshots}
+                  onSelectCase={({ attempts, caseIndex, baselineSnapshot }) =>
+                    setDetailAttemptView({
+                      attempts,
+                      caseIndex,
+                      initialAttemptIndex: 0,
+                      baselineSnapshot,
+                    })
+                  }
+                />
+              ) : (
+                <HistoryRunDetailLoading onClose={() => setSelectedRunId(null)} />
+              )
             ) : (
               <div className="space-y-2">
                 {historyItems.map(item => (
@@ -3380,29 +3651,31 @@ export function ReleaseGateExpandedView() {
                 ))}
               </div>
             )}
-            <div className="flex items-center justify-between border-t border-white/10 pt-2 text-xs text-slate-400">
-              <span>
-                {historyTotal} {historyTotal === 1 ? "record" : "records"}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  disabled={historyOffset <= 0}
-                  onClick={() =>
-                    setHistoryOffset((value: number) => Math.max(0, value - historyLimit))
-                  }
-                  className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 hover:bg-white/5 disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <button
-                  disabled={historyOffset + historyLimit >= historyTotal}
-                  onClick={() => setHistoryOffset((value: number) => value + historyLimit)}
-                  className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 hover:bg-white/5 disabled:opacity-50"
-                >
-                  Next
-                </button>
+            {!selectedHistoryItem && (
+              <div className="flex items-center justify-between border-t border-white/10 pt-2 text-xs text-slate-400">
+                <span>
+                  {historyTotal} {historyTotal === 1 ? "record" : "records"}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    disabled={historyOffset <= 0}
+                    onClick={() =>
+                      setHistoryOffset((value: number) => Math.max(0, value - historyLimit))
+                    }
+                    className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 hover:bg-white/5 disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    disabled={historyOffset + historyLimit >= historyTotal}
+                    onClick={() => setHistoryOffset((value: number) => value + historyLimit)}
+                    className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 hover:bg-white/5 disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
