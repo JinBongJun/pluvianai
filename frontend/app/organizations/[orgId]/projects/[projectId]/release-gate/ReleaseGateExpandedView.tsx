@@ -456,6 +456,11 @@ function getCasesFromReport(report: any): any[] {
   if (!report || typeof report !== "object") return [];
   if (Array.isArray(report.run_results)) return report.run_results;
   if (Array.isArray(report.case_results)) return report.case_results;
+  const rg = (report.summary as Record<string, unknown> | undefined)?.release_gate;
+  if (rg && typeof rg === "object" && !Array.isArray(rg)) {
+    const nested = (rg as Record<string, unknown>).case_results;
+    if (Array.isArray(nested)) return nested;
+  }
   return [];
 }
 
@@ -693,32 +698,6 @@ function extractErrorMessage(error: unknown, fallback: string): string {
   const msg = String(anyErr?.message ?? "").trim();
   if (msg) return msg;
   return fallback;
-}
-
-function MetricTile({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: string | number;
-  tone?: "default" | "success" | "danger";
-}) {
-  return (
-    <div
-      className={clsx(
-        "rounded-2xl border p-3",
-        tone === "success" && "border-emerald-500/20 bg-emerald-500/10",
-        tone === "danger" && "border-rose-500/20 bg-rose-500/10",
-        tone === "default" && "border-white/8 bg-black/30"
-      )}
-    >
-      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-        {label}
-      </div>
-      <div className="mt-1 text-lg font-black text-white">{value}</div>
-    </div>
-  );
 }
 
 type AttemptDetailMainTab = "summary" | "comparison" | "debug";
@@ -2214,34 +2193,37 @@ function HistoryRunDetailView({
     gateSummaryRaw && typeof gateSummaryRaw === "object" && !Array.isArray(gateSummaryRaw)
       ? (gateSummaryRaw as Record<string, unknown>)
       : null;
-  const thresholdsRaw =
-    item?.thresholds && typeof item.thresholds === "object" && !Array.isArray(item.thresholds)
-      ? (item.thresholds as Record<string, unknown>)
-      : gateSummary?.thresholds &&
-          typeof gateSummary.thresholds === "object" &&
-          !Array.isArray(gateSummary.thresholds)
-        ? (gateSummary.thresholds as Record<string, unknown>)
-        : null;
-  const violations = Array.isArray(report?.violations)
-    ? (report.violations as Array<Record<string, unknown>>)
-    : [];
   const reportCases = getCasesFromReport(report);
-  const totalInputs =
-    Number(gateSummary?.total_inputs ?? 0) ||
-    Number(item?.passed_runs ?? 0) + Number(item?.failed_runs ?? 0);
-  const failedInputs = Number(gateSummary?.failed_inputs ?? item?.failed_runs ?? 0);
-  const flakyInputs = Number(gateSummary?.flaky_inputs ?? 0);
-  const repeatRuns = Number(item?.repeat_runs ?? gateSummary?.repeat_runs ?? 0) || "—";
-  const historyToolGrounding = summarizeRunToolGroundingFromCases(reportCases);
+
+  const historyResult = useMemo(() => {
+    const pass = item?.status === "pass";
+    return {
+      pass,
+      fail_rate: Number(gateSummary?.fail_rate ?? 0),
+      total_inputs: Number(gateSummary?.total_inputs ?? 0),
+      repeat_runs: Number(item?.repeat_runs ?? gateSummary?.repeat_runs ?? 0),
+      perf: gateSummary?.perf as Record<string, unknown> | undefined,
+    };
+  }, [item, gateSummary]);
+
+  const repeatRunsFallback = Number(item?.repeat_runs ?? gateSummary?.repeat_runs ?? 0);
+  const toolGroundingRunSummary = useMemo(
+    () => summarizeRunToolGroundingFromCases(reportCases),
+    [reportCases]
+  );
+  const whatToFixHints = useMemo(
+    () => buildWhatToFixHints(historyResult, reportCases),
+    [historyResult, reportCases]
+  );
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between pb-2">
-        <div className="text-lg font-black tracking-tight text-white">Run detail</div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 text-[11px] text-slate-500">{formatDateTime(item?.created_at)}</div>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-xl border border-white/10 px-4 py-2 text-[11px] font-semibold text-slate-300 transition hover:bg-white/5"
+          className="shrink-0 rounded-xl border border-white/10 px-4 py-2 text-[11px] font-semibold text-slate-300 transition hover:bg-white/5"
         >
           ← Back to history
         </button>
@@ -2249,132 +2231,87 @@ function HistoryRunDetailView({
 
       <div
         className={clsx(
-          "flex flex-col gap-5 rounded-[24px] border px-6 py-5",
-          item?.status === "pass"
-            ? "border-emerald-500/25 bg-emerald-500/[0.04]"
-            : "border-rose-500/25 bg-rose-500/[0.04]"
+          "flex flex-col gap-2 rounded-2xl border px-4 py-3",
+          historyResult.pass
+            ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+            : "border-rose-500/25 bg-rose-500/10 text-rose-300"
         )}
       >
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 space-y-2">
-            <div
-              className={clsx(
-                "flex items-center gap-2 text-sm font-bold uppercase tracking-wider",
-                item?.status === "pass" ? "text-emerald-400" : "text-rose-400"
-              )}
-            >
-              <span>{item?.status === "pass" ? "GATE PASSED" : "GATE FAILED"}</span>
-              <span className="inline-block h-2 w-2 rounded-full bg-current" />
-            </div>
-            <div className="flex flex-wrap items-center gap-4 text-sm text-slate-300">
-              <span>Inputs: {totalInputs}</span>
-              <span className="h-1 w-1 rounded-full bg-slate-600" />
-              <span>Repeats: {repeatRuns}</span>
-              <span className="h-1 w-1 rounded-full bg-slate-600" />
-              <span>{formatDateTime(item?.created_at)}</span>
-            </div>
-          </div>
-          {gateSummary ? (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <MetricTile label="Fail Rate" value={percentFromRate(gateSummary.fail_rate)} tone="danger" />
-              <MetricTile label="Flaky Inputs" value={flakyInputs} tone="default" />
-              <MetricTile label="Failed Inputs" value={failedInputs} tone="danger" />
-            </div>
-          ) : null}
-        </div>
-
-        {thresholdsRaw ? (
-          <div className="flex flex-wrap gap-2 text-[11px]">
-            {typeof thresholdsRaw.fail_rate_max !== "undefined" ? (
-              <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-slate-300">
-                Fail max {percentFromRate(thresholdsRaw.fail_rate_max)}
-              </span>
-            ) : null}
-            {typeof thresholdsRaw.flaky_rate_max !== "undefined" ? (
-              <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-slate-300">
-                Flaky max {percentFromRate(thresholdsRaw.flaky_rate_max)}
-              </span>
-            ) : null}
-            {typeof gateSummary?.ratio_band === "string" ? (
-              <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-slate-300">
-                Band {gateSummary.ratio_band}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="text-xs text-slate-500">
-          Trace:{" "}
-          <span className="font-mono text-[10px] text-slate-400">
-            {item?.trace_id || report?.trace_id || "—"}
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-wider">
+            {historyResult.pass ? "Gate Passed" : "Gate Failed"}
+          </span>
+          <span className="text-[10px] font-bold text-white/70">
+            Fail rate {percentFromRate(historyResult.fail_rate)}
           </span>
         </div>
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-white/60">
+          <span>Inputs: {historyResult.total_inputs}</span>
+          <span className="h-1 w-1 rounded-full bg-white/20" />
+          <span>Repeats: {repeatRunsFallback}</span>
+          {historyResult.perf &&
+          typeof historyResult.perf === "object" &&
+          historyResult.perf.avg_attempt_wall_ms != null ? (
+            <>
+              <span className="h-1 w-1 rounded-full bg-white/20" />
+              <span>Avg: {formatDurationMs(historyResult.perf.avg_attempt_wall_ms)}</span>
+            </>
+          ) : null}
+        </div>
+        {toolGroundingRunSummary ? (
+          <div className="mt-2 rounded-xl border border-white/8 bg-black/25 px-3 py-2">
+            <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+              Tool grounding
+            </div>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-300">
+              <span>
+                With tools:{" "}
+                <span className="font-semibold text-white/90">
+                  {toolGroundingRunSummary.withTools}
+                </span>
+              </span>
+              <span className="text-emerald-400/90">Pass {toolGroundingRunSummary.pass}</span>
+              <span className="text-rose-400/90">Fail {toolGroundingRunSummary.fail}</span>
+              {toolGroundingRunSummary.semanticOk > 0 ? (
+                <span className="text-violet-300/90">
+                  Semantic OK {toolGroundingRunSummary.semanticOk}
+                </span>
+              ) : null}
+              {toolGroundingRunSummary.semanticOff > 0 ? (
+                <span
+                  className="text-slate-500"
+                  title="Semantic judge did not run (e.g. no OpenAI key)."
+                >
+                  Semantic judge off {toolGroundingRunSummary.semanticOff}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </div>
 
-      {historyToolGrounding ? (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-sm text-slate-500">
-          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-            Tool grounding
+      {!historyResult.pass && whatToFixHints.length > 0 && (
+        <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4">
+          <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200">
+            What to fix first
           </div>
-          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-300">
-            <span>
-              With tools:{" "}
-              <span className="font-semibold text-white/90">{historyToolGrounding.withTools}</span>
-            </span>
-            <span className="text-emerald-400/90">Pass {historyToolGrounding.pass}</span>
-            <span className="text-rose-400/90">Fail {historyToolGrounding.fail}</span>
-            {historyToolGrounding.semanticOk > 0 ? (
-              <span className="text-violet-300/90">
-                Semantic OK {historyToolGrounding.semanticOk}
-              </span>
-            ) : null}
-            {historyToolGrounding.semanticOff > 0 ? (
-              <span
-                className="text-slate-500"
-                title="Semantic judge did not run (e.g. no OpenAI key)."
-              >
-                Semantic judge off {historyToolGrounding.semanticOff}
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="space-y-2">
-        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-          Violations
-        </div>
-        {violations.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-4 text-sm text-slate-500">
-            No stored violations for this run.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {violations.slice(0, 5).map((violation, idx) => (
+          <div className="mt-3 flex flex-col gap-2">
+            {whatToFixHints.map((hint, idx) => (
               <div
-                key={`${String(violation.rule_id ?? idx)}-${idx}`}
-                className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-3"
+                key={hint.key}
+                className="flex items-start justify-between gap-3 text-sm text-amber-100/90"
               >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0 text-sm font-semibold text-slate-100">
-                    {String(violation.rule_name ?? violation.rule_id ?? `Violation ${idx + 1}`)}
-                  </div>
-                  {typeof violation.severity === "string" ? (
-                    <span className="rounded-full border border-white/10 bg-black/30 px-2 py-1 text-[10px] font-black uppercase text-slate-300">
-                      {violation.severity}
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                  {String(violation.message ?? "No message")}
-                </p>
+                <span className="min-w-0 flex-1 truncate">
+                  {idx + 1}. {hint.label}
+                </span>
+                <span className="shrink-0 text-xs font-semibold text-amber-400">{hint.count}x</span>
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
           Per-input breakdown
         </div>
@@ -2400,7 +2337,7 @@ function HistoryRunDetailView({
                   key={`history-case-${idx}`}
                   run={run}
                   idx={idx}
-                  repeatRunsFallback={item?.repeat_runs ?? gateSummary?.repeat_runs}
+                  repeatRunsFallback={repeatRunsFallback}
                   baselineSnapshotForRun={baselineSnapshotForRun}
                   onSelect={onSelectCase}
                   testId={`rg-history-case-${idx}`}
