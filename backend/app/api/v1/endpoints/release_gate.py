@@ -2367,6 +2367,12 @@ async def _run_release_gate(
             "baseline_trace_id": baseline_trace_id,
             "snapshot_id": primary_case.get("snapshot_id"),
         }
+        total_wall_ms = int((time.monotonic() - perf_started) * 1000)
+        avg_attempt_wall_ms = (
+            (sum(int(a.get("batch_wall_ms") or 0) for a in perf_attempts) / len(perf_attempts))
+            if perf_attempts
+            else None
+        )
         primary_summary["release_gate"] = {
             "mode": "replay_test",
             "repeat_runs": payload.repeat_runs,
@@ -2380,6 +2386,11 @@ async def _run_release_gate(
                 "fail_rate_max": payload.fail_rate_max,
                 "flaky_rate_max": payload.flaky_rate_max,
             },
+            "perf": {
+                "total_wall_ms": total_wall_ms,
+                "avg_attempt_wall_ms": avg_attempt_wall_ms,
+            },
+            "case_results": case_results,
         }
         report = BehaviorReport(
             project_id=project_id,
@@ -2424,12 +2435,6 @@ async def _run_release_gate(
 
         threshold_text = (
             f"fail<={int(payload.fail_rate_max * 100)}%, flaky<={int(payload.flaky_rate_max * 100)}%"
-        )
-        total_wall_ms = int((time.monotonic() - perf_started) * 1000)
-        avg_attempt_wall_ms = (
-            (sum(int(a.get("batch_wall_ms") or 0) for a in perf_attempts) / len(perf_attempts))
-            if perf_attempts
-            else None
         )
         return {
             "pass": gate_pass,
