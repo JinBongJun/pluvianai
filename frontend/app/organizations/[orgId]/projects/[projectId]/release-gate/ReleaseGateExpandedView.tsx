@@ -616,6 +616,8 @@ function HistoryRunRowButton({
     created_at?: string | null;
     passed_runs?: number | null;
     failed_runs?: number | null;
+    passed_attempts?: number | null;
+    total_attempts?: number | null;
   };
   selected: boolean;
   loading?: boolean;
@@ -624,14 +626,20 @@ function HistoryRunRowButton({
 }) {
   const caseIsPass = item.status === "pass";
   const caseStatus = caseIsPass ? "PASS" : "FAIL";
-  const totalInputs = Number(item.passed_runs ?? 0) + Number(item.failed_runs ?? 0);
+  const totalAttempts = Number(item.total_attempts);
+  const passedAttempts = Number(item.passed_attempts);
   const passedInputs = Number(item.passed_runs ?? 0);
+  const failedInputs = Number(item.failed_runs ?? 0);
+  const inputTotal = passedInputs + failedInputs;
   const ratioText =
-    totalInputs > 0
-      ? `${passedInputs}/${totalInputs}`
-      : caseIsPass
-        ? "1/1"
-        : "0/1";
+    Number.isFinite(totalAttempts) &&
+    totalAttempts > 0 &&
+    Number.isFinite(passedAttempts) &&
+    passedAttempts >= 0
+      ? `${Math.min(Math.round(passedAttempts), Math.round(totalAttempts))}/${Math.round(totalAttempts)}`
+      : inputTotal > 0
+        ? `${passedInputs}/${inputTotal}`
+        : "—";
   const preview = shortText(String(item.trace_id ?? ""), "No trace id", 48);
 
   return (
