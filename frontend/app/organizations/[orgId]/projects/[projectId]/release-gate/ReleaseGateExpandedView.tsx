@@ -14,6 +14,7 @@ import {
   RefreshCcw,
   ShieldCheck,
   ShieldX,
+  Wrench,
 } from "lucide-react";
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
 import { sanitizePayloadForPreview } from "./ReleaseGatePageContent";
@@ -25,6 +26,8 @@ import {
   type SnapshotForDetail,
 } from "@/components/shared/SnapshotDetailModal";
 import { ClientPortal } from "@/components/shared/ClientPortal";
+import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel";
+import type { LiveViewToolTimelineRow } from "@/lib/api/live-view";
 
 type GateTab = "validate" | "history";
 type ThresholdPreset = "strict" | "default" | "lenient" | "custom";
@@ -525,12 +528,15 @@ function AttemptDetailOverlay({
   const maxNav = Math.max(0, attemptCount - 1);
   const safeInitial = Math.min(Math.max(0, initialAttemptIndex), maxNav);
 
+  const [failedOnly, setFailedOnly] = useState(false);
+
   useEffect(() => {
     if (open) {
       setDetailMainTab("summary");
       setInputExpanded(false);
       setShowRemovedDiffLines(false);
       setNavIndex(safeInitial);
+      setFailedOnly(false);
     }
   }, [open, inputIndex, safeInitial, attemptCount]);
 
@@ -856,6 +862,31 @@ function AttemptDetailOverlay({
   const toolEvidenceRows = Array.isArray(attempt?.tool_evidence)
     ? (attempt.tool_evidence as Array<Record<string, unknown>>)
     : [];
+  const gateToolTimelineRows = useMemo((): LiveViewToolTimelineRow[] => {
+    return toolEvidenceRows.map((row, idx) => {
+      const exec = String(row.execution_source ?? row.status ?? "").toLowerCase();
+      const stepType = exec === "recorded" ? "tool_result" : "tool_call";
+      const argsP = row.arguments_preview;
+      const resP = row.result_preview;
+      const argsObj: Record<string, unknown> = {};
+      if (typeof argsP === "string" && argsP.trim()) argsObj.arguments_preview = argsP;
+      const cid = row.call_id;
+      if (cid != null && String(cid).trim()) argsObj.call_id = String(cid).trim();
+      const trObj: Record<string, unknown> | null =
+        typeof resP === "string" && resP.trim() ? { result_preview: resP } : null;
+      return {
+        step_order: Number(row.order) || idx + 1,
+        step_type: stepType,
+        tool_name: String(row.name ?? ""),
+        tool_args: argsObj,
+        tool_result: trObj,
+        provenance: exec === "recorded" ? "trajectory" : "payload",
+        execution_source: exec,
+        tool_result_source: String(row.tool_result_source ?? "").toLowerCase(),
+        match_tier: String(row.match_tier ?? "").toLowerCase(),
+      };
+    });
+  }, [toolEvidenceRows]);
   const toolCountsRaw =
     toolExecutionSummary &&
     typeof toolExecutionSummary.counts === "object" &&
@@ -994,7 +1025,8 @@ function AttemptDetailOverlay({
     ) {
       return {
         label: "Low",
-        detail: "Tool calls were detected, but execution evidence is simulated only (Stage 1).",
+        detail:
+          "Tool calls were detected, but no recorded baseline tool results were injected — evidence is dry-run (Simulated) only.",
         toneClass: "border-rose-500/30 bg-rose-500/10 text-rose-200",
       };
     }
@@ -1165,41 +1197,6 @@ function AttemptDetailOverlay({
                 Unit diagnostics
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 sm:gap-3">
-                {attemptCount > 1 ? (
-                  <div
-                    className="inline-flex shrink-0 items-center gap-0.5 rounded-xl border border-white/10 bg-black/40 p-0.5"
-                    role="group"
-                    aria-label="Select repeat attempt"
-                  >
-                    <button
-                      type="button"
-                      aria-label="Previous attempt"
-                      disabled={navIndex <= 0}
-                      onClick={() => setNavIndex(i => Math.max(0, i - 1))}
-                      className={clsx(
-                        "rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white",
-                        navIndex <= 0 && "cursor-not-allowed opacity-40 hover:bg-transparent"
-                      )}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </button>
-                    <span className="min-w-[3.25rem] px-1 text-center text-[11px] font-semibold tabular-nums text-slate-200">
-                      {navIndex + 1}/{attemptCount}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label="Next attempt"
-                      disabled={navIndex >= maxNav}
-                      onClick={() => setNavIndex(i => Math.min(maxNav, i + 1))}
-                      className={clsx(
-                        "rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white",
-                        navIndex >= maxNav && "cursor-not-allowed opacity-40 hover:bg-transparent"
-                      )}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                  </div>
-                ) : null}
                 <h2 className="text-base font-semibold text-white text-balance">
                   Input {inputIndex + 1} · Attempt {navIndex + 1}
                 </h2>
@@ -1219,6 +1216,53 @@ function AttemptDetailOverlay({
                 <span className="text-[11px] text-slate-500 truncate max-w-[min(360px,40vw)]">
                   {baselineModel} → {candidateModel}
                 </span>
+              </div>
+              <div className="mt-4 border-t border-white/5 pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
+                    Attempts
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFailedOnly(!failedOnly)}
+                      className={clsx(
+                        "rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] transition",
+                        failedOnly
+                          ? "bg-rose-500/20 text-rose-200"
+                          : "bg-white/5 text-slate-400 hover:text-slate-200"
+                      )}
+                    >
+                      Failed only
+                    </button>
+                  </div>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                  {attempts.map((att, i) => {
+                    const isPass = Boolean(att?.pass);
+                    if (failedOnly && isPass) return null;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setNavIndex(i)}
+                        className={clsx(
+                          "shrink-0 flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                          navIndex === i
+                            ? "bg-white/10 border-white/20 text-white"
+                            : "border-white/5 bg-black/20 text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                        )}
+                      >
+                        {isPass ? (
+                          <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                        ) : (
+                          <ShieldX className="h-3.5 w-3.5 text-rose-400" />
+                        )}
+                        Attempt {i + 1}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -1414,6 +1458,17 @@ function AttemptDetailOverlay({
                       <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
                         Loop {toolLoopStatus} {toolLoopRounds > 0 ? `(rounds ${toolLoopRounds})` : ""}
                       </p>
+                      {gateToolTimelineRows.length > 0 ? (
+                        <div className="mt-4 border-t border-white/5 pt-4">
+                          <ToolTimelinePanel
+                            rows={gateToolTimelineRows}
+                            title="Tool timeline"
+                            subtitle="Aligned with Live View snapshot detail (provenance badges)."
+                            icon={Wrench}
+                            variant="compact"
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
@@ -3226,49 +3281,6 @@ export function ReleaseGateExpandedView() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
                               Per-input breakdown
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="inline-flex rounded-xl border border-white/10 bg-black/30 p-0.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setResultCaseFilter("all")}
-                                  className={clsx(
-                                    "rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] transition",
-                                    resultCaseFilter === "all"
-                                      ? "bg-white/10 text-white"
-                                      : "text-slate-400 hover:text-slate-200"
-                                  )}
-                                >
-                                  All {resultCases.length}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setResultCaseFilter("failed")}
-                                  className={clsx(
-                                    "rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] transition",
-                                    resultCaseFilter === "failed"
-                                      ? "bg-rose-500/20 text-rose-200"
-                                      : "text-slate-400 hover:text-slate-200"
-                                  )}
-                                >
-                                  Failed only {failedCaseCount}
-                                </button>
-                              </div>
-                              {nodeHistoryItems.length > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setRightPanelTab("history");
-                                    if (!selectedRunId && nodeHistoryItems[0]?.id) {
-                                      selectHistoryRun(String(nodeHistoryItems[0].id));
-                                    }
-                                  }}
-                                  data-testid="rg-view-history-btn"
-                                  className="text-[11px] font-semibold text-slate-300 hover:text-white"
-                                >
-                                  View history
-                                </button>
-                              )}
                             </div>
                           </div>
 

@@ -1,5 +1,44 @@
 import { apiClient, unwrapResponse } from "./client";
 
+/** `GET .../snapshots` list item — light list can include `has_tool_results` without loading full timeline. */
+export type LiveViewSnapshotListItem = {
+  id: number;
+  has_tool_calls?: boolean;
+  has_tool_results?: boolean;
+  tool_calls_summary?: unknown[];
+  [key: string]: unknown;
+};
+
+/** `GET /projects/:id/snapshots/:snapshotId` — `tool_timeline[]` (ingest + persisted trajectory). */
+export type LiveViewToolTimelineRow = {
+  step_order: number;
+  step_type: string;
+  tool_name?: string | null;
+  tool_args?: Record<string, unknown>;
+  tool_result?: Record<string, unknown> | null;
+  latency_ms?: number | null;
+  provenance?: "trajectory" | "payload";
+  /** Release Gate replay / tool evidence (optional) */
+  execution_source?: string;
+  tool_result_source?: string;
+  match_tier?: string;
+};
+
+/** Optional hints when request bodies were omitted or truncated (SDK / ingest). */
+export type RequestContextMeta = {
+  omitted_by_policy?: boolean;
+  truncated?: boolean;
+};
+
+/** Snapshot detail includes redacted tool_timeline + version for §14.2. */
+export type LiveViewSnapshotDetail = {
+  tool_timeline?: LiveViewToolTimelineRow[];
+  tool_timeline_redaction_version?: number;
+  /** Set from stored payload markers when SDK omitted/truncated bodies (see docs/live-view-context-privacy-plan.md). */
+  request_context_meta?: RequestContextMeta | null;
+  [key: string]: unknown;
+};
+
 export const liveViewAPI = {
   getAgents: async (projectId: number, limit: number = 30, includeDeleted: boolean = false) => {
     const response = await apiClient.get(`/projects/${projectId}/live-view/agents`, {
