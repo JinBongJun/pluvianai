@@ -3,7 +3,7 @@ Background scheduler service for periodic tasks
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -149,14 +149,12 @@ class SchedulerService:
 
                         # Get alerts created by drift detection
                         from app.models.alert import Alert
-                        from datetime import timedelta
-
                         alerts = (
                             db.query(Alert)
                             .filter(
                                 Alert.project_id == project.id,
                                 Alert.alert_type == "drift",
-                                Alert.created_at >= datetime.utcnow() - timedelta(seconds=10),
+                                Alert.created_at >= datetime.now(timezone.utc) - timedelta(seconds=10),
                             )
                             .all()
                         )

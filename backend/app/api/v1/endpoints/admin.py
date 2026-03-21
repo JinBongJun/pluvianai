@@ -6,7 +6,7 @@ Admin endpoints for database initialization
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -22,6 +22,10 @@ from app.services.ops_alerting import ops_alerting
 import random
 
 router = APIRouter()
+
+
+def _utcnow_naive() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 # Include impersonation routes
 from app.api.v1.endpoints.admin.impersonation import router as impersonation_router
@@ -122,7 +126,7 @@ async def generate_sample_data(
         provider = random.choice(providers)
         model = random.choice(models[provider])
         days_ago = random.randint(0, 7)
-        created_at = datetime.utcnow() - timedelta(days=days_ago, hours=random.randint(0, 23))
+        created_at = _utcnow_naive() - timedelta(days=days_ago, hours=random.randint(0, 23))
 
         api_call = APICall(
             project_id=project_id,
@@ -162,7 +166,7 @@ async def generate_sample_data(
         provider = random.choice(providers)
         model = random.choice(models[provider])
         days_ago = random.randint(0, 7)
-        created_at = datetime.utcnow() - timedelta(days=days_ago, hours=random.randint(0, 23))
+        created_at = _utcnow_naive() - timedelta(days=days_ago, hours=random.randint(0, 23))
 
         # Invalid JSON response
         api_call = APICall(
@@ -266,7 +270,7 @@ async def generate_sample_data(
                 change_percentage=scenario["change"],
                 drift_score=abs(scenario["change"]) + random.uniform(0, 10),
                 severity=scenario["severity"],
-                detected_at=datetime.utcnow() - timedelta(days=random.randint(0, 3), hours=random.randint(0, 23)),
+                detected_at=_utcnow_naive() - timedelta(days=random.randint(0, 3), hours=random.randint(0, 23)),
                 metadata={"evidence": scenario["evidence"]},
             )
             db.add(detection)
@@ -305,7 +309,7 @@ async def generate_sample_data(
                 message=scenario["message"],
                 is_sent=False,
                 is_resolved=random.choice([True, False]),
-                created_at=datetime.utcnow() - timedelta(days=random.randint(0, 2), hours=random.randint(0, 23)),
+                created_at=_utcnow_naive() - timedelta(days=random.randint(0, 2), hours=random.randint(0, 23)),
             )
             db.add(alert)
 

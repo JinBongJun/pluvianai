@@ -2,7 +2,7 @@
 Unit tests for DataLifecycleService
 """
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.services.data_lifecycle_service import DataLifecycleService
 from app.models.behavior_report import BehaviorReport
 from app.models.agent_display_setting import AgentDisplaySetting
@@ -12,6 +12,10 @@ from app.models.project import Project
 from app.models.organization import Organization
 from app.models.user import User
 from app.models.subscription import Subscription
+
+
+def _utcnow_naive() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 @pytest.mark.unit
@@ -56,7 +60,7 @@ class TestDataLifecycleService:
             payload={"messages": []},
             is_sanitized=False,
             status_code=200,
-            created_at=datetime.utcnow() - timedelta(days=10)
+            created_at=_utcnow_naive() - timedelta(days=10)
         )
         db.add(expired_snapshot)
         
@@ -68,7 +72,7 @@ class TestDataLifecycleService:
             payload={"messages": []},
             is_sanitized=False,
             status_code=200,
-            created_at=datetime.utcnow() - timedelta(days=3)
+            created_at=_utcnow_naive() - timedelta(days=3)
         )
         db.add(recent_snapshot)
         db.commit()
@@ -100,7 +104,7 @@ class TestDataLifecycleService:
             payload={"messages": []},
             is_sanitized=False,
             status_code=200,
-            created_at=datetime.utcnow() - timedelta(days=10)
+            created_at=_utcnow_naive() - timedelta(days=10)
         )
         db.add(expired_snapshot)
         db.commit()
@@ -133,7 +137,7 @@ class TestDataLifecycleService:
             payload={"messages": []},
             is_sanitized=False,
             status_code=200,
-            created_at=datetime.utcnow() - timedelta(days=15)
+            created_at=_utcnow_naive() - timedelta(days=15)
         )
         db.add(snapshot_15_days)
         db.commit()
@@ -169,7 +173,7 @@ class TestDataLifecycleService:
             payload={"messages": []},
             is_sanitized=False,
             status_code=200,
-            created_at=datetime.utcnow() - timedelta(days=10)
+            created_at=_utcnow_naive() - timedelta(days=10)
         )
         db.add(expired_snapshot)
         db.commit()
@@ -217,7 +221,7 @@ class TestDataLifecycleService:
             status="pass",
             summary_json={"release_gate": {"mode": "replay_test"}},
             violations_json=[],
-            created_at=datetime.utcnow() - timedelta(days=10),
+            created_at=_utcnow_naive() - timedelta(days=10),
         )
         expired_behavior = BehaviorReport(
             project_id=test_project.id,
@@ -226,7 +230,7 @@ class TestDataLifecycleService:
             status="fail",
             summary_json={"behavior": {"mode": "policy"}},
             violations_json=[],
-            created_at=datetime.utcnow() - timedelta(days=10),
+            created_at=_utcnow_naive() - timedelta(days=10),
         )
         recent_release_gate = BehaviorReport(
             project_id=test_project.id,
@@ -235,7 +239,7 @@ class TestDataLifecycleService:
             status="pass",
             summary_json={"release_gate": {"mode": "replay_test"}},
             violations_json=[],
-            created_at=datetime.utcnow() - timedelta(days=2),
+            created_at=_utcnow_naive() - timedelta(days=2),
         )
         db.add_all([expired_release_gate, expired_behavior, recent_release_gate])
         db.commit()
@@ -263,7 +267,7 @@ class TestDataLifecycleService:
             status="pass",
             summary_json={"release_gate": {"mode": "replay_test"}},
             violations_json=[],
-            created_at=datetime.utcnow() - timedelta(days=10),
+            created_at=_utcnow_naive() - timedelta(days=10),
         )
         expired_behavior = BehaviorReport(
             project_id=test_project.id,
@@ -272,7 +276,7 @@ class TestDataLifecycleService:
             status="fail",
             summary_json={"behavior": {"mode": "policy"}},
             violations_json=[],
-            created_at=datetime.utcnow() - timedelta(days=10),
+            created_at=_utcnow_naive() - timedelta(days=10),
         )
         recent_release_gate = BehaviorReport(
             project_id=test_project.id,
@@ -281,7 +285,7 @@ class TestDataLifecycleService:
             status="pass",
             summary_json={"release_gate": {"mode": "replay_test"}},
             violations_json=[],
-            created_at=datetime.utcnow() - timedelta(days=2),
+            created_at=_utcnow_naive() - timedelta(days=2),
         )
         db.add_all([expired_release_gate, expired_behavior, recent_release_gate])
         db.commit()
@@ -315,7 +319,7 @@ class TestDataLifecycleService:
             payload={"messages": []},
             is_sanitized=False,
             status_code=200,
-            created_at=datetime.utcnow() - timedelta(days=10)
+            created_at=_utcnow_naive() - timedelta(days=10)
         )
         expired_release_gate = BehaviorReport(
             project_id=test_project.id,
@@ -324,7 +328,7 @@ class TestDataLifecycleService:
             status="pass",
             summary_json={"release_gate": {"mode": "replay_test"}},
             violations_json=[],
-            created_at=datetime.utcnow() - timedelta(days=10),
+            created_at=_utcnow_naive() - timedelta(days=10),
         )
         db.add_all([expired_snapshot, expired_release_gate])
         db.commit()
@@ -348,7 +352,7 @@ class TestDataLifecycleService:
             owner_id=test_user.id,
             plan_type="free",
             is_deleted=True,
-            deleted_at=datetime.utcnow() - timedelta(days=31),
+            deleted_at=_utcnow_naive() - timedelta(days=31),
         )
         db.add(org)
         db.flush()
@@ -359,7 +363,7 @@ class TestDataLifecycleService:
             organization_id=org.id,
             is_active=False,
             is_deleted=True,
-            deleted_at=datetime.utcnow() - timedelta(days=31),
+            deleted_at=_utcnow_naive() - timedelta(days=31),
         )
         db.add(project)
         db.commit()
@@ -378,13 +382,13 @@ class TestDataLifecycleService:
             project_id=test_project.id,
             system_prompt_hash="agent-expired",
             is_deleted=True,
-            deleted_at=datetime.utcnow() - timedelta(days=31),
+            deleted_at=_utcnow_naive() - timedelta(days=31),
         )
         fresh = AgentDisplaySetting(
             project_id=test_project.id,
             system_prompt_hash="agent-fresh",
             is_deleted=True,
-            deleted_at=datetime.utcnow() - timedelta(days=5),
+            deleted_at=_utcnow_naive() - timedelta(days=5),
         )
         db.add_all([expired, fresh])
         db.commit()

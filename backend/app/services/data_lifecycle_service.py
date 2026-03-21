@@ -2,7 +2,7 @@
 Data Lifecycle Service for TTL enforcement and auto-archiving
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -17,6 +17,11 @@ from app.models.subscription import Subscription
 from app.core.subscription_limits import PLAN_LIMITS
 from app.core.config import settings
 from app.core.logging_config import logger
+
+
+def _utcnow_naive() -> datetime:
+    """Return a naive UTC timestamp without using deprecated utcnow()."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class DataLifecycleService:
@@ -50,7 +55,7 @@ class DataLifecycleService:
         subscription = self.db.query(Subscription).filter(Subscription.user_id == user.id).first()
         plan_type = subscription.plan_type if subscription else "free"
         retention_days = self.get_retention_days(plan_type)
-        cutoff_date = (now or datetime.utcnow()) - timedelta(days=retention_days)
+        cutoff_date = (now or _utcnow_naive()) - timedelta(days=retention_days)
 
         return {
             "plan_type": plan_type,
@@ -75,7 +80,7 @@ class DataLifecycleService:
             return []
 
         expired_snapshots = []
-        now = datetime.utcnow()
+        now = _utcnow_naive()
 
         for project in projects:
             retention = self._get_project_retention_context(project, now=now)
@@ -129,7 +134,7 @@ class DataLifecycleService:
             return []
 
         expired_reports: List[BehaviorReport] = []
-        now = datetime.utcnow()
+        now = _utcnow_naive()
 
         for project in projects:
             retention = self._get_project_retention_context(project, now=now)
@@ -238,7 +243,7 @@ class DataLifecycleService:
         longer than the grace window.
         """
         grace_window_days = grace_days if grace_days is not None else settings.SOFT_DELETE_GRACE_DAYS
-        cutoff = datetime.utcnow() - timedelta(days=grace_window_days)
+        cutoff = _utcnow_naive() - timedelta(days=grace_window_days)
 
         expired_projects = (
             self.db.query(Project)
@@ -290,7 +295,7 @@ class DataLifecycleService:
         Hard-delete snapshots that have been soft-deleted longer than the grace window.
         """
         grace_window_days = grace_days if grace_days is not None else settings.SOFT_DELETE_GRACE_DAYS
-        cutoff = datetime.utcnow() - timedelta(days=grace_window_days)
+        cutoff = _utcnow_naive() - timedelta(days=grace_window_days)
 
         expired_snapshots = (
             self.db.query(Snapshot)
@@ -328,7 +333,7 @@ class DataLifecycleService:
         grace_window_days = (
             grace_days if grace_days is not None else settings.AGENT_SOFT_DELETE_GRACE_DAYS
         )
-        cutoff = datetime.utcnow() - timedelta(days=grace_window_days)
+        cutoff = _utcnow_naive() - timedelta(days=grace_window_days)
 
         expired_agent_settings = (
             self.db.query(AgentDisplaySetting)
@@ -480,7 +485,7 @@ class DataLifecycleService:
         )
 
         # Count snapshots that will expire soon (within 1 day)
-        cutoff_date = datetime.utcnow() - timedelta(days=retention_days - 1)
+        cutoff_date = _utcnow_naive() - timedelta(days=retention_days - 1)
         expiring_soon = (
             self.db.query(Snapshot)
             .join(Trace)
@@ -498,5 +503,5 @@ class DataLifecycleService:
             "retention_days": retention_days,
             "total_snapshots": total_snapshots,
             "expiring_soon": expiring_soon,
-            "cutoff_date": (datetime.utcnow() - timedelta(days=retention_days)).isoformat(),
+            "cutoff_date": (_utcnow_naive() - timedelta(days=retention_days)).isoformat(),
         }

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -13,7 +13,7 @@ def test_restore_agent_if_soft_deleted_restores_recent_row(db, test_project):
         project_id=test_project.id,
         system_prompt_hash="agent-recent",
         is_deleted=True,
-        deleted_at=datetime.utcnow() - timedelta(days=1),
+        deleted_at=datetime.now(timezone.utc) - timedelta(days=1),
     )
     db.add(setting)
     db.commit()
@@ -33,7 +33,7 @@ def test_restore_agent_if_soft_deleted_keeps_expired_row_deleted(db, test_projec
         project_id=test_project.id,
         system_prompt_hash="agent-old",
         is_deleted=True,
-        deleted_at=datetime.utcnow() - timedelta(days=45),
+        deleted_at=datetime.now(timezone.utc) - timedelta(days=45),
     )
     db.add(setting)
     db.commit()
