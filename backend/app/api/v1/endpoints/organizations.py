@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -45,6 +45,8 @@ class OrganizationUpdate(BaseModel):
 
 
 class OrganizationSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     plan_type: str
@@ -53,10 +55,6 @@ class OrganizationSummary(BaseModel):
     cost_7d: float
     alerts_open: int
     drift_projects: int
-
-    class Config:
-        from_attributes = True
-
 
 class OrganizationUsage(BaseModel):
     calls: int = 0
@@ -73,6 +71,8 @@ class OrganizationAlert(BaseModel):
 
 
 class OrganizationDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: Optional[str] = None
@@ -80,11 +80,9 @@ class OrganizationDetail(BaseModel):
     plan_type: str
     stats: Optional[dict] = None  # For backward compatibility
 
-    class Config:
-        from_attributes = True
-
-
 class OrgProjectSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: Optional[str]
@@ -93,10 +91,6 @@ class OrgProjectSummary(BaseModel):
     quality: Optional[float]
     alerts_open: int
     drift: bool
-
-    class Config:
-        from_attributes = True
-
 
 class OrganizationMemberRole(str, Enum):
     OWNER = "owner"

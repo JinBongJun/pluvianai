@@ -154,7 +154,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         code="VALIDATION_ERROR",
         message="Validation error",
         details={"errors": errors, "error_messages": error_messages},
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         origin="Proxy",  # PluvianAI validation error
     )
 

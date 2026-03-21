@@ -2,7 +2,7 @@
 Billing service for Stripe integration and real-time usage tracking
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 from app.models.user import User
@@ -36,7 +36,7 @@ class BillingService:
         Get current usage for user from Redis counters
         Returns real-time usage data
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         today = now.strftime("%Y-%m-%d")
         year_month = now.strftime("%Y-%m")
 
@@ -89,7 +89,7 @@ class BillingService:
             logger.warning(f"Redis not available, usage tracking disabled for user {user_id}")
             return (True, None)
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         today = now.strftime("%Y-%m-%d")
         year_month = now.strftime("%Y-%m")
 
@@ -186,7 +186,7 @@ class BillingService:
 
     def _get_seconds_until_month_end(self) -> int:
         """Calculate seconds until end of current month"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if now.month == 12:
             next_month = now.replace(year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0)
         else:

@@ -2,7 +2,7 @@ import asyncio
 import json
 from typing import List, Optional, Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from sqlalchemy.orm import Session
 
@@ -44,6 +44,8 @@ class APICallIngestBody(BaseModel):
 
 
 class APICallResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     project_id: int
     provider: Optional[str] = None
@@ -55,10 +57,6 @@ class APICallResponse(BaseModel):
     status_code: Optional[int] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
-
 @router.get("/{project_id}/api-calls/stats")
 def get_api_call_stats(
     project_id: int,
@@ -68,10 +66,10 @@ def get_api_call_stats(
 ):
     """Get API call statistics for a project."""
     check_project_access(project_id, current_user, db)
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from sqlalchemy import func
     from app.models.api_call import APICall
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.now(timezone.utc) - timedelta(days=days)
     stats = db.query(
         func.count(APICall.id).label("total_calls"),
         func.sum(APICall.cost).label("total_cost"),

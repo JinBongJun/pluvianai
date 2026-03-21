@@ -4,7 +4,7 @@ User API Key endpoints for managing user-provided API keys
 
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -30,6 +30,8 @@ class CreateUserApiKeyRequest(BaseModel):
 
 class UserApiKeyResponse(BaseModel):
     """User API key response (without decrypted key)"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     project_id: int
     agent_id: Optional[str]
@@ -38,10 +40,6 @@ class UserApiKeyResponse(BaseModel):
     is_active: bool
     created_at: str
     key_hint: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
 
 @router.post("")
 @handle_errors

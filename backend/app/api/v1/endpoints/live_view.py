@@ -722,14 +722,14 @@ def _validate_eval_config_for_save(eval_part: Dict[str, Any]) -> None:
         )
         if not has_required_input:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="When required is enabled, set keywords_csv or json_fields_csv.",
             )
 
     format_cfg = normalized_eval.get("format", {})
     if format_cfg.get("enabled") and not _csv_has_items(format_cfg.get("sections_csv")):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="When format is enabled, set sections_csv.",
         )
 
@@ -750,7 +750,7 @@ def update_agent_settings(
     _ensure_project_admin(project_id, current_user, db)
     if diagnostic_config is not None and not isinstance(diagnostic_config, dict):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="diagnostic_config must be a JSON object",
         )
 

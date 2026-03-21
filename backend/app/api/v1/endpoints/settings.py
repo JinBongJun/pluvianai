@@ -8,7 +8,7 @@ from typing import Optional, List
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 from app.core.database import get_db
 from app.core.security import get_current_user, verify_password, get_password_hash
 from app.core.decorators import handle_errors
@@ -23,15 +23,13 @@ router = APIRouter()
 
 class ProfileResponse(BaseModel):
     """User profile response"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     email: str
     full_name: Optional[str]
     is_active: bool
     created_at: str
-
-    class Config:
-        from_attributes = True
-
 
 class UpdateProfileRequest(BaseModel):
     """Update profile request"""
@@ -51,6 +49,8 @@ class ChangePasswordRequest(BaseModel):
 
 class NotificationSettingsResponse(BaseModel):
     """Notification settings response"""
+    model_config = ConfigDict(from_attributes=True)
+
     email_drift: bool
     email_cost_anomaly: bool
     email_quality_drop: bool
@@ -61,10 +61,6 @@ class NotificationSettingsResponse(BaseModel):
     slack_webhook_url: Optional[str]
     discord_enabled: bool
     discord_webhook_url: Optional[str]
-
-    class Config:
-        from_attributes = True
-
 
 class UpdateNotificationSettingsRequest(BaseModel):
     """Update notification settings request"""
@@ -90,6 +86,8 @@ class CreateAPIKeyRequest(BaseModel):
 
 class APIKeyResponse(BaseModel):
     """API key response (without actual key value)"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: Optional[str]
     is_active: bool
@@ -97,10 +95,6 @@ class APIKeyResponse(BaseModel):
     last_used_at: Optional[str]
     # key_prefix shows first 12 chars for identification (ag_live_xxxx...)
     key_prefix: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
 
 class APIKeyCreatedResponse(BaseModel):
     """Response when API key is created (includes full key, shown only once)"""

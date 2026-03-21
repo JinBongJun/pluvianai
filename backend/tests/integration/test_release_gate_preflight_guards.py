@@ -62,7 +62,7 @@ class TestReleaseGatePreflightGuards:
             headers=auth_headers,
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         data = response.json()
         assert _extract_error_code(data) == "provider_resolution_failed"
 
@@ -105,6 +105,6 @@ class TestReleaseGatePreflightGuards:
             headers=auth_headers,
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         data = response.json()
         assert _extract_error_code(data) == "release_gate_requires_pinned_model"
