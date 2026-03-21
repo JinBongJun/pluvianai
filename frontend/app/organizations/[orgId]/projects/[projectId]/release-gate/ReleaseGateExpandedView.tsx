@@ -5,7 +5,16 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import clsx from "clsx";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, ChevronDown, Flag, RefreshCcw, ShieldCheck, ShieldX } from "lucide-react";
+import {
+  Activity,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Flag,
+  RefreshCcw,
+  ShieldCheck,
+  ShieldX,
+} from "lucide-react";
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
 import { sanitizePayloadForPreview } from "./ReleaseGatePageContent";
 import { ReleaseGateConfigPanel } from "./ReleaseGateConfigPanel";
@@ -496,28 +505,36 @@ function AttemptDetailOverlay({
   open,
   onClose,
   inputIndex,
-  attemptIndex,
-  attempt,
+  attempts,
+  initialAttemptIndex = 0,
   baselineSnapshot,
 }: {
   open: boolean;
   onClose: () => void;
   inputIndex: number;
-  attemptIndex: number;
-  attempt: any;
+  attempts: any[];
+  initialAttemptIndex?: number;
   baselineSnapshot: Record<string, unknown> | null;
 }) {
   const [detailMainTab, setDetailMainTab] = useState<AttemptDetailMainTab>("summary");
   const [inputExpanded, setInputExpanded] = useState(false);
   const [showRemovedDiffLines, setShowRemovedDiffLines] = useState(false);
+  const [navIndex, setNavIndex] = useState(0);
+
+  const attemptCount = Array.isArray(attempts) ? attempts.length : 0;
+  const maxNav = Math.max(0, attemptCount - 1);
+  const safeInitial = Math.min(Math.max(0, initialAttemptIndex), maxNav);
 
   useEffect(() => {
     if (open) {
       setDetailMainTab("summary");
       setInputExpanded(false);
       setShowRemovedDiffLines(false);
+      setNavIndex(safeInitial);
     }
-  }, [open, inputIndex, attemptIndex]);
+  }, [open, inputIndex, safeInitial, attemptCount]);
+
+  const attempt = attemptCount > 0 ? attempts[Math.min(Math.max(0, navIndex), maxNav)] : null;
 
   const baselineInput = String(
     baselineSnapshot?.user_message ?? baselineSnapshot?.request_prompt ?? "No input text captured."
@@ -1126,8 +1143,43 @@ function AttemptDetailOverlay({
                 Unit diagnostics
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 sm:gap-3">
+                {attemptCount > 1 ? (
+                  <div
+                    className="inline-flex shrink-0 items-center gap-0.5 rounded-xl border border-white/10 bg-black/40 p-0.5"
+                    role="group"
+                    aria-label="Select repeat attempt"
+                  >
+                    <button
+                      type="button"
+                      aria-label="Previous attempt"
+                      disabled={navIndex <= 0}
+                      onClick={() => setNavIndex(i => Math.max(0, i - 1))}
+                      className={clsx(
+                        "rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white",
+                        navIndex <= 0 && "cursor-not-allowed opacity-40 hover:bg-transparent"
+                      )}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <span className="min-w-[3.25rem] px-1 text-center text-[11px] font-semibold tabular-nums text-slate-200">
+                      {navIndex + 1}/{attemptCount}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Next attempt"
+                      disabled={navIndex >= maxNav}
+                      onClick={() => setNavIndex(i => Math.min(maxNav, i + 1))}
+                      className={clsx(
+                        "rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white",
+                        navIndex >= maxNav && "cursor-not-allowed opacity-40 hover:bg-transparent"
+                      )}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : null}
                 <h2 className="text-base font-semibold text-white text-balance">
-                  Input {inputIndex + 1} · Attempt {attemptIndex + 1}
+                  Input {inputIndex + 1} · Attempt {navIndex + 1}
                 </h2>
                 <span
                   className={clsx(
@@ -2118,9 +2170,9 @@ export function ReleaseGateExpandedView() {
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [resultCaseFilter, setResultCaseFilter] = useState<ResultCaseFilter>("all");
   const [detailAttemptView, setDetailAttemptView] = useState<{
-    attempt: any;
+    attempts: any[];
     caseIndex: number;
-    attemptIndex: number;
+    initialAttemptIndex: number;
     baselineSnapshot: Record<string, unknown> | null;
   } | null>(null);
 
@@ -3083,9 +3135,9 @@ export function ReleaseGateExpandedView() {
                                 onClick={() => {
                                   if (attempts.length > 0) {
                                     setDetailAttemptView({
-                                      attempt: attempts[0],
+                                      attempts,
                                       caseIndex: idx,
-                                      attemptIndex: 0,
+                                      initialAttemptIndex: 0,
                                       baselineSnapshot: baselineSnapshotForRun,
                                     });
                                   }
@@ -3278,8 +3330,8 @@ export function ReleaseGateExpandedView() {
               open={Boolean(detailAttemptView)}
               onClose={() => setDetailAttemptView(null)}
               inputIndex={detailAttemptView.caseIndex}
-              attemptIndex={detailAttemptView.attemptIndex}
-              attempt={detailAttemptView.attempt}
+              attempts={detailAttemptView.attempts}
+              initialAttemptIndex={detailAttemptView.initialAttemptIndex}
               baselineSnapshot={detailAttemptView.baselineSnapshot}
             />
           </ClientPortal>
