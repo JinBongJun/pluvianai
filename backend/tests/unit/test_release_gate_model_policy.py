@@ -156,6 +156,21 @@ class TestReleaseGateOverrideSanitizer:
         assert meta["baseline_snapshot_excerpt"]["extra"] is None
         assert meta["sampling_overrides"]["replay_temperature"] == 0.7
         assert meta["has_new_system_prompt"] is True
+        assert meta.get("replay_overrides_by_snapshot_id_applied") is None
+
+    def test_sanitize_replay_overrides_by_snapshot_id_strips_bad_entries(self):
+        from app.api.v1.endpoints import release_gate as rg
+
+        raw = {
+            "42": {"attachments": [{"id": "a"}], "messages": [{"role": "user", "content": "x"}]},
+            "": {"x": 1},
+            "99": "not-a-dict",
+        }
+        out = rg._sanitize_replay_overrides_by_snapshot_id(raw)
+        assert out is not None
+        assert set(out.keys()) == {"42"}
+        assert "messages" not in out["42"]
+        assert out["42"]["attachments"] == [{"id": "a"}]
 
     def test_normalize_and_infer_provider_helpers(self):
         from app.api.v1.endpoints import release_gate as rg

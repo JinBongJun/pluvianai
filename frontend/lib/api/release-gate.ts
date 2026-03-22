@@ -30,6 +30,8 @@ type ReleaseGateValidatePayload = {
   replay_max_tokens?: number;
   replay_top_p?: number;
   replay_overrides?: Record<string, unknown>;
+  /** Per snapshot id; merged after global replay_overrides on the server. */
+  replay_overrides_by_snapshot_id?: Record<string, Record<string, unknown>>;
   tool_context?: ToolContextPayload;
   rule_ids?: string[];
   max_snapshots?: number;
