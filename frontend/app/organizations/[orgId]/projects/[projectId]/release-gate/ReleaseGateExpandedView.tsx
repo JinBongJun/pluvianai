@@ -2794,6 +2794,23 @@ export function ReleaseGateExpandedView() {
                           ) : null}
                         </div>
 
+                        {result?.experiment?.tool_context &&
+                        typeof result.experiment.tool_context === "object" && (
+                          <div
+                            className="rounded-2xl border border-violet-500/20 bg-violet-500/5 px-3 py-2"
+                            data-testid="rg-result-experiment-summary"
+                          >
+                            <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+                              Experiment
+                            </div>
+                            <div className="mt-1 text-[11px] text-slate-300">
+                              {(result.experiment.tool_context as { mode?: string }).mode === "inject"
+                                ? `Inject · ${String((result.experiment.tool_context as { inject?: { scope?: string } }).inject?.scope || "per_snapshot")}`
+                                : "Recorded only (no injected context)"}
+                            </div>
+                          </div>
+                        )}
+
                         {!result.pass && whatToFixHints.length > 0 && (
                           <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4">
                             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200">
