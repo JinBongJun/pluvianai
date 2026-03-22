@@ -838,7 +838,7 @@ function AttemptDetailOverlay({
       return {
         label: "Low",
         detail:
-          "Tool calls were detected, but no recorded baseline tool results were injected — evidence is dry-run (Simulated) only.",
+          "Tool calls were detected, but no recorded baseline tool results were present in the trace — evidence is dry-run (Simulated) only.",
         toneClass: "border-rose-500/30 bg-rose-500/10 text-rose-200",
       };
     }
@@ -2835,8 +2835,8 @@ export function ReleaseGateExpandedView() {
                             </div>
                             <div className="mt-1 text-[11px] text-slate-300">
                               {(result.experiment.tool_context as { mode?: string }).mode === "inject"
-                                ? `Inject · ${String((result.experiment.tool_context as { inject?: { scope?: string } }).inject?.scope || "per_snapshot")}`
-                                : "Recorded only (no injected context)"}
+                                ? `Append · ${String((result.experiment.tool_context as { inject?: { scope?: string } }).inject?.scope || "per_snapshot")}`
+                                : "Recorded only (no extra system context)"}
                             </div>
                           </div>
                         )}

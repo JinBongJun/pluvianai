@@ -27,7 +27,7 @@ def resolve_tool_context_injection_text(
     tool_context: Optional[Dict[str, Any]], snapshot_id: int
 ) -> str:
     """
-    Resolve per-snapshot injected context for Release Gate replay (dict from API).
+    Resolve per-snapshot additional system context for Release Gate replay (dict from API).
     Appended to the system prompt so runs can include redacted or missing tool/doc material.
     """
     if not tool_context or not isinstance(tool_context, dict):
@@ -191,7 +191,7 @@ class ReplayService:
         if not text:
             return
         block = (
-            "\n\n---\n[Release Gate: injected context — may include material not present in captured logs]\n"
+            "\n\n---\n[Release Gate: additional system context — may include material not present in captured logs]\n"
             + text
             + "\n---\n"
         )
@@ -832,7 +832,7 @@ class ReplayService:
         """
         Execute a single replay with optional overrides.
         replay_overrides: optional dict merged into the request body (e.g. tools, extra params).
-        tool_context: optional Release Gate dict (mode/inject) to append injected context to system prompt.
+        tool_context: optional Release Gate dict (mode/inject) to append additional system context to system prompt.
         """
         async with self.semaphore:
             # 1. Prepare Payload
