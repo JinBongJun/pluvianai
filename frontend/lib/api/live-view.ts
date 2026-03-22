@@ -4,6 +4,27 @@ import { apiClient, unwrapResponse } from "./client";
 export type RequestContextMeta = {
   omitted_by_policy?: boolean;
   truncated?: boolean;
+  request_text_omitted?: boolean;
+  response_text_omitted?: boolean;
+  request_truncated?: boolean;
+  payload_truncated?: boolean;
+};
+
+/** Backend-derived replay-relevant request summary for a snapshot. */
+export type LiveViewRequestOverview = {
+  provider?: string | null;
+  model?: string | null;
+  message_count?: number | null;
+  tools_count?: number | null;
+  temperature?: number | null;
+  top_p?: number | null;
+  max_tokens?: number | null;
+  request_control_keys?: string[] | null;
+  extended_context_keys?: string[] | null;
+  additional_request_keys?: string[] | null;
+  omitted_by_policy?: boolean;
+  truncated?: boolean;
+  capture_state?: "complete" | "policy_limited" | "truncated" | string;
 };
 
 /** `GET .../snapshots` list item — light list can include `has_tool_results` without loading full timeline. */
@@ -14,6 +35,7 @@ export type LiveViewSnapshotListItem = {
   tool_calls_summary?: unknown[];
   /** Present when stored payload omits/truncates bodies (same derivation as GET snapshot). */
   request_context_meta?: RequestContextMeta | null;
+  request_overview?: LiveViewRequestOverview | null;
   [key: string]: unknown;
 };
 
@@ -38,6 +60,7 @@ export type LiveViewSnapshotDetail = {
   tool_timeline_redaction_version?: number;
   /** Set from stored payload markers when SDK omitted/truncated bodies (see docs/live-view-context-privacy-plan.md). */
   request_context_meta?: RequestContextMeta | null;
+  request_overview?: LiveViewRequestOverview | null;
   [key: string]: unknown;
 };
 
