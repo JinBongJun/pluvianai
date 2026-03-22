@@ -234,6 +234,8 @@ export interface ReleaseGateRunResult {
   run_index: number;
   pass: boolean;
   case_status?: "pass" | "fail" | "flaky";
+  /** Per-snapshot A/B/C/D context summaries (ingest, RG injection, tool I/O aggregates). */
+  context?: Record<string, unknown>;
   failure_reasons: string[];
   violation_count_delta: number;
   severity_delta: {
@@ -265,6 +267,11 @@ export interface ReleaseGateRunResult {
 export interface ReleaseGateResult {
   pass: boolean;
   summary?: string;
+  /** Echo of run-level experiment config (e.g. tool_context) for UI without loading the full report. */
+  experiment?: {
+    tool_context?: Record<string, unknown> | null;
+    storage_policy?: { full_text_in_report?: boolean };
+  };
   failed_signals?: string[];
   exit_code: 0 | 1;
   report_id: string;
