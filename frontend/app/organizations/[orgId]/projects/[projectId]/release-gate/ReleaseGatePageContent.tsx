@@ -50,6 +50,7 @@ import {
   releaseGateAPI,
   type ReleaseGateHistoryResponse,
   type ReleaseGateResult,
+  type ToolContextPayload,
 } from "@/lib/api";
 import {
   getApiErrorCode,
@@ -329,6 +330,53 @@ function extractToolsFromPayload(payload: Record<string, unknown> | null): Edita
     });
   }
   return out;
+}
+
+function extractToolResultTextFromSnapshotRecord(snapshot: Record<string, unknown>): string {
+  const payload = snapshot.payload;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "";
+  const raw = (payload as Record<string, unknown>).tool_events;
+  if (!Array.isArray(raw)) return "";
+  const parts: string[] = [];
+  for (const ev of raw) {
+    if (!ev || typeof ev !== "object") continue;
+    const row = ev as Record<string, unknown>;
+    if (String(row.kind || "").toLowerCase() !== "tool_result") continue;
+    const out = row.output;
+    if (typeof out === "string") parts.push(out);
+    else if (out != null) {
+      try {
+        parts.push(JSON.stringify(out, null, 2));
+      } catch {
+        parts.push(String(out));
+      }
+    }
+  }
+  return parts.join("\n\n---\n\n");
+}
+
+function buildToolContextPayload(
+  mode: "recorded" | "inject",
+  scope: "global" | "per_snapshot",
+  globalText: string,
+  bySnapshotId: Record<string, string>
+): ToolContextPayload {
+  if (mode === "recorded") return { mode: "recorded" };
+  const inject: {
+    scope: "per_snapshot" | "global";
+    global_text?: string;
+    by_snapshot_id?: Record<string, string>;
+  } = { scope };
+  const gt = globalText.trim();
+  if (gt) inject.global_text = gt;
+  if (scope === "per_snapshot") {
+    const by: Record<string, string> = {};
+    for (const [k, v] of Object.entries(bySnapshotId)) {
+      if (v.trim()) by[k] = v.trim();
+    }
+    if (Object.keys(by).length) inject.by_snapshot_id = by;
+  }
+  return { mode: "inject", inject };
 }
 
 function extractOverridesFromPayload(
@@ -747,6 +795,15 @@ export default function ReleaseGatePageContent() {
   const [temperatureDraft, setTemperatureDraft] = useState<string | null>(null);
   const [maxTokensDraft, setMaxTokensDraft] = useState<string | null>(null);
   const [toolsList, setToolsList] = useState<EditableTool[]>([]);
+  const [toolContextMode, setToolContextMode] = useState<"recorded" | "inject">("recorded");
+  const [toolContextScope, setToolContextScope] = useState<"global" | "per_snapshot">(
+    "per_snapshot"
+  );
+  const [toolContextGlobalText, setToolContextGlobalText] = useState("");
+  const [toolContextBySnapshotId, setToolContextBySnapshotId] = useState<Record<string, string>>(
+    {}
+  );
+  const [toolContextLoadBusy, setToolContextLoadBusy] = useState(false);
   const [overridesOpen, setOverridesOpen] = useState(false);
   const [toolsHydratedKey, setToolsHydratedKey] = useState("");
   const [overridesHydratedKey, setOverridesHydratedKey] = useState("");
@@ -860,23 +917,33 @@ export default function ReleaseGatePageContent() {
       setRequestBody({});
       setRequestJsonDraft(null);
       setRequestJsonError("");
-      setToolsList([]);
-      setToolsHydratedKey("");
-      setOverridesHydratedKey("");
-      setResult(null);
-      setError("");
-      setActiveJobId(null);
-      setCancelRequested(false);
-      setIsValidating(false);
-      return;
-    }
-    // For a new agent, clear previous node's config so that node-level seeding can populate fresh defaults.
-    setRequestBody({});
-    setRequestJsonDraft(null);
-    setRequestJsonError("");
     setToolsList([]);
+    setToolContextMode("recorded");
+    setToolContextScope("per_snapshot");
+    setToolContextGlobalText("");
+    setToolContextBySnapshotId({});
+    setToolContextLoadBusy(false);
     setToolsHydratedKey("");
     setOverridesHydratedKey("");
+    setResult(null);
+    setError("");
+    setActiveJobId(null);
+    setCancelRequested(false);
+    setIsValidating(false);
+    return;
+  }
+  // For a new agent, clear previous node's config so that node-level seeding can populate fresh defaults.
+  setRequestBody({});
+  setRequestJsonDraft(null);
+  setRequestJsonError("");
+  setToolsList([]);
+  setToolContextMode("recorded");
+  setToolContextScope("per_snapshot");
+  setToolContextGlobalText("");
+  setToolContextBySnapshotId({});
+  setToolContextLoadBusy(false);
+  setToolsHydratedKey("");
+  setOverridesHydratedKey("");
     setResult(null);
     setError("");
     setActiveJobId(null);
@@ -1245,6 +1312,47 @@ export default function ReleaseGatePageContent() {
     }
     return [];
   }, [dataSource, runSnapshotIds, datasetSnapshots]);
+
+  useEffect(() => {
+    setToolContextBySnapshotId(prev => {
+      const next = { ...prev };
+      const ids = new Set(selectedSnapshotIdsForRun.map(String));
+      for (const k of Object.keys(next)) {
+        if (!ids.has(k)) delete next[k];
+      }
+      for (const id of selectedSnapshotIdsForRun) {
+        const sid = String(id);
+        if (!(sid in next)) next[sid] = "";
+      }
+      return next;
+    });
+  }, [selectedSnapshotIdsForRun]);
+
+  const handleLoadToolContextFromSnapshots = useCallback(async () => {
+    if (!projectId || Number.isNaN(projectId)) return;
+    const ids = selectedSnapshotIdsForRun.map(String).filter(Boolean);
+    if (ids.length === 0) return;
+    setToolContextLoadBusy(true);
+    try {
+      if (toolContextScope === "global") {
+        const snap = await liveViewAPI.getSnapshot(projectId, ids[0]);
+        setToolContextGlobalText(
+          extractToolResultTextFromSnapshotRecord(snap as Record<string, unknown>)
+        );
+      } else {
+        const merged: Record<string, string> = {};
+        for (const id of ids) {
+          const snap = await liveViewAPI.getSnapshot(projectId, id);
+          merged[id] = extractToolResultTextFromSnapshotRecord(snap as Record<string, unknown>);
+        }
+        setToolContextBySnapshotId(prev => ({ ...prev, ...merged }));
+      }
+    } catch {
+      // ignore
+    } finally {
+      setToolContextLoadBusy(false);
+    }
+  }, [projectId, selectedSnapshotIdsForRun, toolContextScope]);
 
   const baselineSnapshotsById = useMemo(() => {
     const map = new Map<string, Record<string, unknown>>();
@@ -1818,6 +1926,13 @@ export default function ReleaseGatePageContent() {
       preview.replay_overrides = overrides;
     }
 
+    preview.tool_context = buildToolContextPayload(
+      toolContextMode,
+      toolContextScope,
+      toolContextGlobalText,
+      toolContextBySnapshotId
+    );
+
     return preview;
   }, [
     modelOverrideEnabled,
@@ -1826,6 +1941,10 @@ export default function ReleaseGatePageContent() {
     requestBody,
     requestSystemPrompt,
     toolsList,
+    toolContextMode,
+    toolContextScope,
+    toolContextGlobalText,
+    toolContextBySnapshotId,
   ]);
 
   const handleRequestJsonBlur = useCallback(() => {
@@ -2068,6 +2187,12 @@ export default function ReleaseGatePageContent() {
         if (built.length) overrides.tools = built;
       }
       if (Object.keys(overrides).length) payload.replay_overrides = overrides;
+      payload.tool_context = buildToolContextPayload(
+        toolContextMode,
+        toolContextScope,
+        toolContextGlobalText,
+        toolContextBySnapshotId
+      );
       const jobRes = await releaseGateAPI.validateAsync(projectId, payload);
       const jobId = String(jobRes?.job?.id || "").trim();
       if (!jobId) {
@@ -2270,6 +2395,17 @@ export default function ReleaseGatePageContent() {
     applySystemPromptToBody,
     toolsList,
     setToolsList,
+    toolContextMode,
+    setToolContextMode,
+    toolContextScope,
+    setToolContextScope,
+    toolContextGlobalText,
+    setToolContextGlobalText,
+    toolContextBySnapshotId,
+    setToolContextBySnapshotId,
+    toolContextLoadBusy,
+    handleLoadToolContextFromSnapshots,
+    selectedSnapshotIdsForRun,
     repeatRuns,
     setRepeatRuns,
     repeatDropdownOpen,

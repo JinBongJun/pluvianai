@@ -1,6 +1,17 @@
 import type { ReleaseGateResult, ReleaseGateHistoryResponse } from "./types";
 import { apiClient } from "./client";
 
+export type ToolContextInjectPayload = {
+  scope: "per_snapshot" | "global";
+  global_text?: string;
+  by_snapshot_id?: Record<string, string>;
+};
+
+export type ToolContextPayload = {
+  mode: "recorded" | "inject";
+  inject?: ToolContextInjectPayload;
+};
+
 type ReleaseGateValidatePayload = {
   agent_id?: string;
   use_recent_snapshots?: boolean;
@@ -19,6 +30,7 @@ type ReleaseGateValidatePayload = {
   replay_max_tokens?: number;
   replay_top_p?: number;
   replay_overrides?: Record<string, unknown>;
+  tool_context?: ToolContextPayload;
   rule_ids?: string[];
   max_snapshots?: number;
   repeat_runs?: number;

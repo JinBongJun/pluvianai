@@ -695,6 +695,37 @@ def get_recommended_snapshots_for_agent(
     }
 
 
+class ToolContextInject(BaseModel):
+    """
+    When mode=inject, resolved text is appended to the replay system prompt so runs can
+    include docs/code/tool outcomes that were never captured in logs (e.g. redacted at source).
+    """
+
+    scope: Literal["per_snapshot", "global"] = Field(
+        "per_snapshot",
+        description=(
+            "global: use global_text for every snapshot. "
+            "per_snapshot: use by_snapshot_id[snapshot_id], then optional global_text if missing."
+        ),
+    )
+    global_text: Optional[str] = Field(
+        None,
+        description="Shared injected context when scope=global, or fallback when scope=per_snapshot.",
+    )
+    by_snapshot_id: Optional[Dict[str, str]] = Field(
+        None,
+        description="Map snapshot id (string) -> injected context for that snapshot.",
+    )
+
+
+class ToolContextConfig(BaseModel):
+    mode: Literal["recorded", "inject"] = Field(
+        "recorded",
+        description="recorded: no injection. inject: append resolved ToolContextInject text to system prompt.",
+    )
+    inject: Optional[ToolContextInject] = Field(None, description="Used when mode=inject.")
+
+
 class ReleaseGateValidateRequest(BaseModel):
     agent_id: Optional[str] = Field(
         None, description="Agent (node) to validate. Use with use_recent_snapshots or dataset_id."
@@ -747,6 +778,13 @@ class ReleaseGateValidateRequest(BaseModel):
             "Optional configuration-only overrides merged into the replay request body "
             "(e.g. tools, sampling/format knobs). Snapshot content fields such as "
             "messages/user_message/response/trace_id/agent_id/agent_name are ignored."
+        ),
+    )
+    tool_context: Optional[ToolContextConfig] = Field(
+        None,
+        description=(
+            "Optional injected context for replay (e.g. tool/doc/code not present in captured logs). "
+            "When mode=inject, resolved text is appended to the system prompt per snapshot."
         ),
     )
     rule_ids: Optional[List[str]] = Field(None, description="Optional specific rule IDs")
@@ -1610,6 +1648,11 @@ async def _run_release_gate(
                 or str(app_settings.ENVIRONMENT).lower() != "production"
             )
             t0 = time.monotonic()
+            tool_context_payload: Optional[Dict[str, Any]] = (
+                payload.tool_context.model_dump(exclude_none=True)
+                if payload.tool_context is not None
+                else None
+            )
             replay_results = await replay_service.run_batch_replay(
                 snapshots=snapshots,
                 new_model=payload.new_model,
@@ -1618,6 +1661,7 @@ async def _run_release_gate(
                 max_tokens=payload.replay_max_tokens,
                 top_p=payload.replay_top_p,
                 replay_overrides=_sanitize_replay_overrides(payload.replay_overrides),
+                tool_context=tool_context_payload,
                 replay_provider=payload.replay_provider,
                 api_key=None,
                 rubric=None,
