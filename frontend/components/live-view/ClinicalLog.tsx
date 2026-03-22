@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { behaviorAPI, liveViewAPI } from "@/lib/api";
-import type { RequestContextMeta } from "@/lib/api/live-view";
+import type { LiveViewRequestOverview, RequestContextMeta } from "@/lib/api/live-view";
 import { getRateLimitInfo, isRateLimitError } from "@/lib/api/client";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { toEvalRows } from "@/lib/evalRows";
@@ -62,6 +62,8 @@ interface ClinicalSnapshot {
   tool_calls_summary?: Array<{ name: string; arguments?: string | Record<string, any> }>;
   /** From list API (light mode): server-derived from stored payload markers */
   request_context_meta?: RequestContextMeta | null;
+  /** From list API: server-derived request shape summary */
+  request_overview?: LiveViewRequestOverview | null;
 }
 
 interface ClinicalLogProps {
@@ -256,6 +258,88 @@ function extractToolNames(snapshot: ClinicalSnapshot): string[] {
     if (name) out.add(String(name));
   }
   return Array.from(out);
+}
+
+function getRequestOverview(snapshot: ClinicalSnapshot): LiveViewRequestOverview | null {
+  const overview = snapshot.request_overview;
+  if (!overview || typeof overview !== "object") return null;
+  return overview;
+}
+
+function getToolDefinitionCount(snapshot: ClinicalSnapshot, toolNames: string[]): number {
+  const overview = getRequestOverview(snapshot);
+  const serverCount = overview?.tools_count;
+  if (typeof serverCount === "number" && Number.isFinite(serverCount) && serverCount >= 0) {
+    return serverCount;
+  }
+  if (toolNames.length > 0) return toolNames.length;
+  return snapshot.has_tool_calls ? 1 : 0;
+}
+
+function getCaptureStateBadge(snapshot: ClinicalSnapshot): { label: string; title: string } | null {
+  const overview = getRequestOverview(snapshot);
+  const meta = snapshot.request_context_meta;
+  const captureState = String(overview?.capture_state || "").trim().toLowerCase();
+
+  if (captureState === "truncated" || meta?.truncated) {
+    const title =
+      meta?.request_truncated && meta?.payload_truncated
+        ? "Request and payload were both truncated before ingest."
+        : meta?.request_truncated
+          ? "Request fields were truncated or replaced before ingest."
+          : meta?.payload_truncated
+            ? "Outer payload was truncated before ingest."
+            : "Request context was truncated or replaced before ingest.";
+    return { label: "Truncated", title };
+  }
+
+  if (captureState === "policy_limited" || meta?.omitted_by_policy) {
+    const title =
+      meta?.request_text_omitted && meta?.response_text_omitted
+        ? "Request and response text were omitted before ingest by privacy settings."
+        : meta?.request_text_omitted
+          ? "Request text was omitted before ingest by privacy settings."
+          : meta?.response_text_omitted
+            ? "Response text was omitted before ingest by privacy settings."
+            : "Some message or response bodies were omitted before ingest.";
+    return { label: "Privacy", title };
+  }
+
+  return null;
+}
+
+function getRequestShapeBadges(snapshot: ClinicalSnapshot): Array<{ label: string; title: string }> {
+  const overview = getRequestOverview(snapshot);
+  if (!overview) return [];
+
+  const extendedCount = Array.isArray(overview.extended_context_keys)
+    ? overview.extended_context_keys.length
+    : 0;
+  const additionalCount = Array.isArray(overview.additional_request_keys)
+    ? overview.additional_request_keys.length
+    : 0;
+  const controlCount = Array.isArray(overview.request_control_keys)
+    ? overview.request_control_keys.length
+    : 0;
+
+  const badges: Array<{ label: string; title: string }> = [];
+
+  if (extendedCount > 0) {
+    badges.push({
+      label: "Context",
+      title: `${extendedCount} extended context field${extendedCount === 1 ? "" : "s"} captured on this request.`,
+    });
+  }
+
+  if (additionalCount > 0 || controlCount > 0) {
+    const fieldCount = additionalCount + controlCount;
+    badges.push({
+      label: "Fields",
+      title: `${fieldCount} replay-relevant field${fieldCount === 1 ? "" : "s"} outside the main message list.`,
+    });
+  }
+
+  return badges;
 }
 
 /** Build "actual vs config" line for an eval check from snapshot + saved eval config. */
@@ -1168,7 +1252,10 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
                 const fullTime = formatPrettyTime(s.created_at);
                 const stepLogs = extractStepLogs(s);
                 const toolNames = extractToolNames(s);
-                const hasPolicyContext = toolNames.length > 0;
+                const toolDefinitionCount = getToolDefinitionCount(s, toolNames);
+                const hasPolicyContext = toolDefinitionCount > 0;
+                const captureStateBadge = getCaptureStateBadge(s);
+                const requestShapeBadges = getRequestShapeBadges(s);
                 const customCode = extractCustomCode(s);
                 const traceKey = String(s.trace_id || "");
                 const policyState = policyByTrace[traceKey] ||
@@ -1305,19 +1392,21 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
                               EVAL: {failedCount > 0 ? "FAIL" : "PASS"}
                             </div>
                           )}
-                          {(s.has_tool_calls || toolNames.length > 0) && (
+                          {toolDefinitionCount > 0 && (
                             <div
                               className="shrink-0 px-2.5 py-0.5 rounded-full border border-amber-500/20 bg-amber-500/10 text-amber-400/90 text-[11px] font-bold uppercase tracking-widest flex items-center gap-1"
                               title={
-                                toolNames.length > 0 ? `Tools: ${toolNames.join(", ")}` : "Tool use"
+                                toolNames.length > 0
+                                  ? `Tools: ${toolNames.join(", ")}`
+                                  : `${toolDefinitionCount} tool definition${toolDefinitionCount === 1 ? "" : "s"} captured on this request.`
                               }
                             >
-                              Tool{toolNames.length !== 1 ? "s" : ""}:{" "}
+                              Tool{toolDefinitionCount !== 1 ? "s" : ""}:{" "}
                               {toolNames.length > 0
                                 ? toolNames.length > 2
                                   ? `${toolNames.length} calls`
                                   : toolNames.join(", ")
-                                : "—"}
+                                : toolDefinitionCount}
                             </div>
                           )}
                           {s.has_tool_results ? (
@@ -1328,16 +1417,21 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
                               Result
                             </div>
                           ) : null}
-                          {s.request_context_meta?.omitted_by_policy || s.request_context_meta?.truncated ? (
+                          {requestShapeBadges.map(badge => (
+                            <div
+                              key={badge.label}
+                              className="shrink-0 px-2.5 py-0.5 rounded-full border border-cyan-500/25 bg-cyan-500/10 text-cyan-200/90 text-[11px] font-bold uppercase tracking-widest"
+                              title={badge.title}
+                            >
+                              {badge.label}
+                            </div>
+                          ))}
+                          {captureStateBadge ? (
                             <div
                               className="shrink-0 px-2.5 py-0.5 rounded-full border border-amber-500/25 bg-amber-500/10 text-amber-300/90 text-[11px] font-bold uppercase tracking-widest"
-                              title={
-                                s.request_context_meta?.truncated
-                                  ? "Request context truncated or replaced before ingest (size limit)."
-                                  : "Some message or response bodies were omitted before ingest (SDK privacy)."
-                              }
+                              title={captureStateBadge.title}
                             >
-                              {s.request_context_meta?.truncated ? "Truncated" : "Privacy"}
+                              {captureStateBadge.label}
                             </div>
                           ) : null}
 
