@@ -44,6 +44,54 @@ from app.services.live_eval_service import (
 
 router = APIRouter()
 
+EXTENDED_CONTEXT_KEYS = (
+    "context",
+    "retrieved_chunks",
+    "documents",
+    "attachments",
+    "rag_context",
+    "sources",
+)
+
+REQUEST_CONTROL_KEYS = (
+    "temperature",
+    "top_p",
+    "max_tokens",
+    "tool_choice",
+    "response_format",
+    "stream",
+    "metadata",
+    "seed",
+    "presence_penalty",
+    "frequency_penalty",
+    "parallel_tool_calls",
+)
+
+EXCLUDED_ADDITIONAL_KEYS = {
+    "provider",
+    "model",
+    "messages",
+    "message",
+    "user_message",
+    "response",
+    "responses",
+    "input",
+    "inputs",
+    "system",
+    "system_prompt",
+    "temperature",
+    "top_p",
+    "max_tokens",
+    "tool_choice",
+    "tools",
+    "response_format",
+    "stream",
+    "metadata",
+    "trace_id",
+    "agent_id",
+    "agent_name",
+}
+
 def _iso(dt: Any) -> Optional[str]:
     if dt is None:
         return None
@@ -59,6 +107,104 @@ def _ensure_project(project_id: int, current_user: User, db: Session) -> Project
 
 def _ensure_project_admin(project_id: int, current_user: User, db: Session) -> Project:
     return check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
+
+
+def _as_object(value: Any) -> Optional[Dict[str, Any]]:
+    return value if isinstance(value, dict) else None
+
+
+def _get_request_object(payload: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return None
+    request = _as_object(payload.get("request"))
+    if request is not None:
+        return request
+    request_data = _as_object(payload.get("request_data"))
+    if request_data is not None:
+        return request_data
+    return payload
+
+
+def _maybe_number(value: Any) -> Optional[float]:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            return float(value.strip())
+        except Exception:
+            return None
+    return None
+
+
+def _request_overview_from_payload(
+    payload: Any,
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+    request_context_meta: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return None
+    request = _get_request_object(payload) or {}
+    meta = request_context_meta or _request_context_meta_from_payload(payload) or {}
+
+    def _collect_extended_keys() -> List[str]:
+        seen = []
+        for source in (payload, request):
+            if not isinstance(source, dict):
+                continue
+            for key in EXTENDED_CONTEXT_KEYS:
+                if source.get(key) not in (None, "") and key not in seen:
+                    seen.append(key)
+        return seen
+
+    def _collect_request_control_keys() -> List[str]:
+        return [key for key in REQUEST_CONTROL_KEYS if request.get(key) not in (None, "")]
+
+    def _collect_additional_request_keys() -> List[str]:
+        out: List[str] = []
+        for key, value in request.items():
+            if key in EXCLUDED_ADDITIONAL_KEYS:
+                continue
+            if key in REQUEST_CONTROL_KEYS or key in EXTENDED_CONTEXT_KEYS:
+                continue
+            if value in (None, ""):
+                continue
+            trimmed = str(key or "").strip()
+            if trimmed and trimmed not in out:
+                out.append(trimmed)
+        return out
+
+    messages = request.get("messages")
+    tools = request.get("tools")
+    resolved_provider = str(provider).strip() if isinstance(provider, str) and provider.strip() else "Not detected"
+    if resolved_provider == "Not detected" and isinstance(request.get("provider"), str) and request.get("provider").strip():
+        resolved_provider = str(request.get("provider")).strip()
+    resolved_model = str(model).strip() if isinstance(model, str) and model.strip() else ""
+    if not resolved_model and isinstance(request.get("model"), str) and request.get("model").strip():
+        resolved_model = str(request.get("model")).strip()
+    if not resolved_model:
+        resolved_model = "Not detected"
+
+    omitted_by_policy = bool(meta.get("omitted_by_policy"))
+    truncated = bool(meta.get("truncated"))
+
+    return {
+        "provider": resolved_provider,
+        "model": resolved_model,
+        "message_count": len(messages) if isinstance(messages, list) else 0,
+        "tools_count": len(tools) if isinstance(tools, list) else 0,
+        "temperature": _maybe_number(request.get("temperature")),
+        "top_p": _maybe_number(request.get("top_p")),
+        "max_tokens": _maybe_number(request.get("max_tokens")),
+        "request_control_keys": _collect_request_control_keys(),
+        "extended_context_keys": _collect_extended_keys(),
+        "additional_request_keys": _collect_additional_request_keys(),
+        "omitted_by_policy": omitted_by_policy,
+        "truncated": truncated,
+        "capture_state": "truncated" if truncated else ("policy_limited" if omitted_by_policy else "complete"),
+    }
 
 
 def _request_context_meta_from_payload(payload: Any) -> Optional[Dict[str, Any]]:
@@ -80,8 +226,16 @@ def _request_context_meta_from_payload(payload: Any) -> Optional[Dict[str, Any]]
     meta: Dict[str, Any] = {}
     if msg_omitted or resp_omitted:
         meta["omitted_by_policy"] = True
+    if msg_omitted:
+        meta["request_text_omitted"] = True
+    if resp_omitted:
+        meta["response_text_omitted"] = True
     if trunc_req or trunc_payload:
         meta["truncated"] = True
+    if trunc_req:
+        meta["request_truncated"] = True
+    if trunc_payload:
+        meta["payload_truncated"] = True
     return meta
 
 
@@ -1230,6 +1384,7 @@ def list_snapshots(
         has_tool_results = _payload_has_tool_result_event(getattr(s, "payload", None)) or (
             str(s.id) in traj_tool_result_ids
         )
+        request_context_meta = _request_context_meta_from_payload(getattr(s, "payload", None))
         base = {
             "id": s.id,
             "trace_id": s.trace_id,
@@ -1252,7 +1407,13 @@ def list_snapshots(
             **_tool_fields(s, skip_payload=light),
             "has_tool_results": has_tool_results,
             # Derived from DB payload even when light=true (payload omitted from JSON for bandwidth).
-            "request_context_meta": _request_context_meta_from_payload(getattr(s, "payload", None)),
+            "request_context_meta": request_context_meta,
+            "request_overview": _request_overview_from_payload(
+                getattr(s, "payload", None),
+                provider=getattr(s, "provider", None),
+                model=getattr(s, "model", None),
+                request_context_meta=request_context_meta,
+            ),
         }
         if light:
             base["system_prompt"] = None
@@ -1304,6 +1465,7 @@ def get_snapshot(
         summary = extract_tool_calls_summary(snap.payload)
     tool_timeline = redact_secrets(_tool_timeline_for_snapshot(db, project_id, snap))
     created_at = getattr(snap, "created_at", None)
+    request_context_meta = _request_context_meta_from_payload(snap.payload)
     return {
         "id": snap.id,
         "trace_id": snap.trace_id,
@@ -1333,7 +1495,13 @@ def get_snapshot(
         "tool_calls_summary": summary or [],
         "tool_timeline": tool_timeline,
         "tool_timeline_redaction_version": TOOL_TIMELINE_REDACTION_VERSION,
-        "request_context_meta": _request_context_meta_from_payload(snap.payload),
+        "request_context_meta": request_context_meta,
+        "request_overview": _request_overview_from_payload(
+            snap.payload,
+            provider=getattr(snap, "provider", None),
+            model=getattr(snap, "model", None),
+            request_context_meta=request_context_meta,
+        ),
     }
 
 
