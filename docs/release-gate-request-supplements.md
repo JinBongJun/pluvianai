@@ -2,11 +2,12 @@
 
 ## Purpose
 
-Baseline snapshots may omit or corrupt **non–user-text** parts of the provider request (attachments, RAG blobs, custom keys). Release Gate settings include an optional **Request supplements** JSON object that is merged into `replay_overrides` **after** the config-only JSON.
+Baseline snapshots may omit or corrupt **non–user-text** parts of the provider request (attachments, RAG blobs, custom keys). Release Gate settings include an optional **Request supplements** JSON object that is merged into `replay_overrides` **after** the config-only JSON. You can also set **per snapshot** supplements: the validate API accepts `replay_overrides_by_snapshot_id` (map of snapshot id → JSON object). The worker merges **`replay_overrides` first**, then the object for that snapshot id (per-snapshot keys win on conflict).
 
 ## Rules
 
-- **Merged into** `replay_overrides` sent to the validate API, then shallow-merged into the replay request body in `replay_service.replay_snapshot` (same as other override keys).
+- **Global** supplements are merged into `replay_overrides` sent to the validate API, then shallow-merged into the replay request body in `replay_service.replay_snapshot` (same as other override keys).
+- **Per snapshot** supplements are merged **after** global for that snapshot only (`run_batch_replay` in `replay_service`).
 - **Supplements win** over the same key coming from config-only `requestBody` / tools merge.
 - **Never** supply conversation or trace fields via supplements; they are stripped client- and server-side:
   - `messages`, `message`, `user_message`, `response`, `responses`, `input`, `inputs`, `trace_id`, `agent_id`, `agent_name`
@@ -29,7 +30,8 @@ When adding or renaming disallowed keys, update **both** places and this doc.
 Each run returns **`replay_request_meta`** on the validate/job result and stores the same object under **`summary_json.release_gate.replay_request_meta`** on the behavior report.
 
 - **`baseline_snapshot_excerpt`**: for each key in `replay_overrides_applied`, the value from the **first baseline snapshot’s** request body (or `null` if missing).
-- **`replay_overrides_applied`**: sanitized overrides sent to replay.
+- **`replay_overrides_applied`**: sanitized global overrides sent to replay.
+- **`replay_overrides_by_snapshot_id_applied`**: sanitized per-snapshot override objects (when provided).
 - **`sampling_overrides`**, **`has_new_system_prompt`**, **`new_system_prompt_preview`**: other replay parameters.
 
 The Release Gate **Results** side panel shows a **Snapshot vs Applied** comparison when any of these are present.

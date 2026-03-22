@@ -63,6 +63,7 @@ import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 import {
   applySupplementToRequestBody,
+  mergeReplaySupplementsForSnapshot,
   sanitizeReplayRequestSupplement,
 } from "./releaseGateReplayMerge";
 
@@ -526,6 +527,10 @@ function buildFinalCandidateRequest(options: {
   newModel: string;
   /** Merged after requestBody; wins on conflict. Does not replace messages/user text (sanitized). */
   requestSupplement?: Record<string, unknown> | null;
+  /** Per selected snapshot ids; merged after global for the seed snapshot preview. */
+  requestSupplementBySnapshotId?: Record<string, Record<string, unknown>> | null;
+  /** First baseline snapshot id (for merged supplement preview). */
+  seedSnapshotId?: string | null;
 }): Record<string, unknown> {
   const {
     baselineSeedSnapshot,
@@ -536,6 +541,8 @@ function buildFinalCandidateRequest(options: {
     modelOverrideEnabled,
     newModel,
     requestSupplement,
+    requestSupplementBySnapshotId,
+    seedSnapshotId,
   } = options;
 
   const baseFromSnapshot = asPayloadObject(baselineSeedSnapshot?.payload);
@@ -584,9 +591,13 @@ function buildFinalCandidateRequest(options: {
     finalReq[k] = v;
   }
 
-  const sup = sanitizeReplayRequestSupplement(requestSupplement ?? undefined);
-  if (Object.keys(sup).length > 0) {
-    finalReq = applySupplementToRequestBody(finalReq, sup);
+  const mergedSup = mergeReplaySupplementsForSnapshot(
+    requestSupplement ?? undefined,
+    requestSupplementBySnapshotId ?? undefined,
+    seedSnapshotId ?? null
+  );
+  if (Object.keys(mergedSup).length > 0) {
+    finalReq = applySupplementToRequestBody(finalReq, mergedSup);
   }
 
   return finalReq;
@@ -772,6 +783,7 @@ export default function ReleaseGatePageContent() {
   const [repeatRuns, setRepeatRuns] = useState<number>(1);
   const [repeatDropdownOpen, setRepeatDropdownOpen] = useState(false);
   const repeatDropdownRef = useRef<HTMLDivElement>(null);
+  const prevAgentIdForSupplementRef = useRef<string | null>(null);
   const REPEAT_OPTIONS = [1, 10, 50, 100] as const;
   const isHeavyRepeat = repeatRuns === 50 || repeatRuns === 100;
   useEffect(() => {
@@ -810,6 +822,16 @@ export default function ReleaseGatePageContent() {
   const [requestSupplement, setRequestSupplement] = useState<Record<string, unknown>>({});
   const [supplementJsonDraft, setSupplementJsonDraft] = useState<string | null>(null);
   const [supplementJsonError, setSupplementJsonError] = useState("");
+  /** Sanitized per snapshot id → supplement object (merged after global on the server). */
+  const [requestSupplementBySnapshotId, setRequestSupplementBySnapshotId] = useState<
+    Record<string, Record<string, unknown>>
+  >({});
+  const [supplementSnapshotDraftRaw, setSupplementSnapshotDraftRaw] = useState<Record<string, string>>(
+    {}
+  );
+  const [supplementSnapshotJsonError, setSupplementSnapshotJsonError] = useState<
+    Record<string, string>
+  >({});
   const [temperatureDraft, setTemperatureDraft] = useState<string | null>(null);
   const [maxTokensDraft, setMaxTokensDraft] = useState<string | null>(null);
   const [toolsList, setToolsList] = useState<EditableTool[]>([]);
@@ -1345,6 +1367,46 @@ export default function ReleaseGatePageContent() {
     });
   }, [selectedSnapshotIdsForRun]);
 
+  useEffect(() => {
+    setRequestSupplementBySnapshotId(prev => {
+      const ids = new Set(selectedSnapshotIdsForRun.map(String));
+      const next = { ...prev };
+      for (const k of Object.keys(next)) {
+        if (!ids.has(k)) delete next[k];
+      }
+      return next;
+    });
+    setSupplementSnapshotDraftRaw(prev => {
+      const ids = new Set(selectedSnapshotIdsForRun.map(String));
+      const next = { ...prev };
+      for (const k of Object.keys(next)) {
+        if (!ids.has(k)) delete next[k];
+      }
+      return next;
+    });
+    setSupplementSnapshotJsonError(prev => {
+      const ids = new Set(selectedSnapshotIdsForRun.map(String));
+      const next = { ...prev };
+      for (const k of Object.keys(next)) {
+        if (!ids.has(k)) delete next[k];
+      }
+      return next;
+    });
+  }, [selectedSnapshotIdsForRun]);
+
+  useEffect(() => {
+    const cur = agentId.trim();
+    if (prevAgentIdForSupplementRef.current !== null && prevAgentIdForSupplementRef.current !== cur) {
+      setRequestSupplement({});
+      setSupplementJsonDraft(null);
+      setSupplementJsonError("");
+      setRequestSupplementBySnapshotId({});
+      setSupplementSnapshotDraftRaw({});
+      setSupplementSnapshotJsonError({});
+    }
+    prevAgentIdForSupplementRef.current = cur;
+  }, [agentId]);
+
   const handleLoadToolContextFromSnapshots = useCallback(async () => {
     if (!projectId || Number.isNaN(projectId)) return;
     const ids = selectedSnapshotIdsForRun.map(String).filter(Boolean);
@@ -1413,6 +1475,10 @@ export default function ReleaseGatePageContent() {
     [selectedSnapshotIdsForRun, baselineSnapshotsById]
   );
   const baselineSeedSnapshot = baselineSnapshotsForRun[0] ?? null;
+  const baselineSeedSnapshotId = useMemo(
+    () => (baselineSeedSnapshot?.id != null ? String(baselineSeedSnapshot.id) : null),
+    [baselineSeedSnapshot]
+  );
   const baselinePayload = useMemo(() => {
     const raw = asPayloadObject(baselineSeedSnapshot?.payload);
     return raw ? getRequestPart(raw) : null;
@@ -1839,6 +1905,8 @@ export default function ReleaseGatePageContent() {
         modelOverrideEnabled,
         newModel,
         requestSupplement,
+        requestSupplementBySnapshotId,
+        seedSnapshotId: baselineSeedSnapshotId,
       }),
     [
       baselineSeedSnapshot,
@@ -1849,6 +1917,8 @@ export default function ReleaseGatePageContent() {
       modelOverrideEnabled,
       newModel,
       requestSupplement,
+      requestSupplementBySnapshotId,
+      baselineSeedSnapshotId,
     ]
   );
 
@@ -1951,6 +2021,15 @@ export default function ReleaseGatePageContent() {
       preview.replay_overrides = mergedOverrides;
     }
 
+    const perBySnap: Record<string, Record<string, unknown>> = {};
+    for (const sid of selectedSnapshotIdsForRun) {
+      const s = sanitizeReplayRequestSupplement(requestSupplementBySnapshotId[sid]);
+      if (Object.keys(s).length) perBySnap[sid] = s;
+    }
+    if (Object.keys(perBySnap).length) {
+      preview.replay_overrides_by_snapshot_id = perBySnap;
+    }
+
     preview.tool_context = buildToolContextPayload(
       toolContextMode,
       toolContextScope,
@@ -1971,6 +2050,8 @@ export default function ReleaseGatePageContent() {
     toolContextGlobalText,
     toolContextBySnapshotId,
     requestSupplement,
+    selectedSnapshotIdsForRun,
+    requestSupplementBySnapshotId,
   ]);
 
   const handleSupplementJsonBlur = useCallback(() => {
@@ -2000,6 +2081,77 @@ export default function ReleaseGatePageContent() {
     setRequestSupplement({});
     setSupplementJsonDraft(null);
     setSupplementJsonError("");
+    setRequestSupplementBySnapshotId({});
+    setSupplementSnapshotDraftRaw({});
+    setSupplementSnapshotJsonError({});
+  }, []);
+
+  const handleSupplementSnapshotBlur = useCallback(
+    (sid: string) => {
+      const raw =
+        supplementSnapshotDraftRaw[sid] ??
+        JSON.stringify(requestSupplementBySnapshotId[sid] ?? {}, null, 2);
+      const trimmed = raw.trim();
+      if (!trimmed) {
+        setRequestSupplementBySnapshotId(prev => {
+          const n = { ...prev };
+          delete n[sid];
+          return n;
+        });
+        setSupplementSnapshotDraftRaw(prev => {
+          const n = { ...prev };
+          delete n[sid];
+          return n;
+        });
+        setSupplementSnapshotJsonError(prev => {
+          const n = { ...prev };
+          delete n[sid];
+          return n;
+        });
+        return;
+      }
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          setSupplementSnapshotJsonError(prev => ({ ...prev, [sid]: "Must be a JSON object." }));
+          return;
+        }
+        setRequestSupplementBySnapshotId(prev => ({
+          ...prev,
+          [sid]: sanitizeReplayRequestSupplement(parsed as Record<string, unknown>),
+        }));
+        setSupplementSnapshotDraftRaw(prev => {
+          const n = { ...prev };
+          delete n[sid];
+          return n;
+        });
+        setSupplementSnapshotJsonError(prev => {
+          const n = { ...prev };
+          delete n[sid];
+          return n;
+        });
+      } catch {
+        setSupplementSnapshotJsonError(prev => ({ ...prev, [sid]: "Invalid JSON." }));
+      }
+    },
+    [supplementSnapshotDraftRaw, requestSupplementBySnapshotId]
+  );
+
+  const applyLoadedGlobalSupplement = useCallback((obj: Record<string, unknown>) => {
+    setRequestSupplement(sanitizeReplayRequestSupplement(obj));
+    setSupplementJsonDraft(null);
+    setSupplementJsonError("");
+  }, []);
+
+  const applyLoadedSnapshotSupplement = useCallback((sid: string, obj: Record<string, unknown>) => {
+    const cleaned = sanitizeReplayRequestSupplement(obj);
+    setRequestSupplementBySnapshotId(prev => ({ ...prev, [sid]: cleaned }));
+    setSupplementSnapshotDraftRaw(prev => ({ ...prev, [sid]: JSON.stringify(cleaned, null, 2) }));
+    setSupplementSnapshotJsonError(prev => {
+      const n = { ...prev };
+      delete n[sid];
+      return n;
+    });
   }, []);
 
   const handleRequestJsonBlur = useCallback(() => {
@@ -2244,6 +2396,14 @@ export default function ReleaseGatePageContent() {
       const supForRun = sanitizeReplayRequestSupplement(requestSupplement);
       const mergedReplayOverrides = { ...overrides, ...supForRun };
       if (Object.keys(mergedReplayOverrides).length) payload.replay_overrides = mergedReplayOverrides;
+      const perSidPayload: Record<string, Record<string, unknown>> = {};
+      for (const sid of Object.keys(requestSupplementBySnapshotId)) {
+        const cleaned = sanitizeReplayRequestSupplement(requestSupplementBySnapshotId[sid]);
+        if (Object.keys(cleaned).length) perSidPayload[sid] = cleaned;
+      }
+      if (Object.keys(perSidPayload).length) {
+        payload.replay_overrides_by_snapshot_id = perSidPayload;
+      }
       payload.tool_context = buildToolContextPayload(
         toolContextMode,
         toolContextScope,
@@ -2455,7 +2615,16 @@ export default function ReleaseGatePageContent() {
     supplementJsonDraft,
     setSupplementJsonDraft,
     supplementJsonError,
+    setSupplementJsonError,
+    requestSupplementBySnapshotId,
+    supplementSnapshotDraftRaw,
+    setSupplementSnapshotDraftRaw,
+    supplementSnapshotJsonError,
+    setSupplementSnapshotJsonError,
     handleSupplementJsonBlur,
+    handleSupplementSnapshotBlur,
+    applyLoadedGlobalSupplement,
+    applyLoadedSnapshotSupplement,
     clearRequestSupplement,
     handleRequestJsonBlur,
     applySystemPromptToBody,

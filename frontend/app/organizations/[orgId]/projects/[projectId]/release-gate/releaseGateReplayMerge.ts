@@ -49,3 +49,19 @@ export function applySupplementToRequestBody(
   }
   return next;
 }
+
+/**
+ * Global supplement merged first, then per-snapshot (same key order as backend batch replay).
+ */
+export function mergeReplaySupplementsForSnapshot(
+  globalSup: Record<string, unknown> | null | undefined,
+  perBySnapshotId: Record<string, Record<string, unknown>> | null | undefined,
+  snapshotId: string | null | undefined
+): Record<string, unknown> {
+  const g = sanitizeReplayRequestSupplement(globalSup);
+  const sid = snapshotId?.trim();
+  if (!sid) return g;
+  const p = sanitizeReplayRequestSupplement(perBySnapshotId?.[sid]);
+  if (Object.keys(p).length === 0) return g;
+  return { ...g, ...p };
+}
