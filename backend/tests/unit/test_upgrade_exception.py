@@ -70,7 +70,7 @@ class TestUpgradeRequiredException:
         request.url.path = "/api/v1/projects/1/auto-mapping"
         request.method = "GET"
         
-        with patch('app.core.exceptions.error_response') as mock_error_response:
+        with patch('app.core.responses.error_response') as mock_error_response:
             mock_response = MagicMock()
             mock_error_response.return_value = mock_response
             
@@ -106,7 +106,7 @@ class TestUpgradeRequiredException:
         request.url.path = "/api/v1/test"
         request.method = "GET"
         
-        with patch('app.core.exceptions.error_response') as mock_error_response:
+        with patch('app.core.responses.error_response') as mock_error_response:
             mock_response = MagicMock()
             mock_error_response.return_value = mock_response
             
@@ -125,7 +125,7 @@ class TestUpgradeRequiredException:
         request.url.path = "/api/v1/projects/999"
         request.method = "GET"
         
-        with patch('app.core.exceptions.error_response') as mock_error_response:
+        with patch('app.core.responses.error_response') as mock_error_response:
             mock_response = MagicMock()
             mock_error_response.return_value = mock_response
             
@@ -144,7 +144,7 @@ class TestUpgradeRequiredException:
         request.url.path = "/api/v1/projects/1"
         request.method = "DELETE"
         
-        with patch('app.core.exceptions.error_response') as mock_error_response:
+        with patch('app.core.responses.error_response') as mock_error_response:
             mock_response = MagicMock()
             mock_error_response.return_value = mock_response
             
@@ -163,7 +163,7 @@ class TestUpgradeRequiredException:
         request.url.path = "/api/v1/projects"
         request.method = "POST"
         
-        with patch('app.core.exceptions.error_response') as mock_error_response:
+        with patch('app.core.responses.error_response') as mock_error_response:
             mock_response = MagicMock()
             mock_error_response.return_value = mock_response
             
@@ -182,7 +182,7 @@ class TestUpgradeRequiredException:
         request.url.path = "/api/v1/test"
         request.method = "GET"
         
-        with patch('app.core.exceptions.error_response') as mock_error_response:
+        with patch('app.core.responses.error_response') as mock_error_response:
             mock_response = MagicMock()
             mock_error_response.return_value = mock_response
             
