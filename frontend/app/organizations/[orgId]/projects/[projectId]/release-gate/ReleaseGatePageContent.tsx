@@ -83,6 +83,8 @@ type ProjectUserApiKeyItem = {
 };
 const RECENT_SNAPSHOT_LIMIT = 100;
 const BASELINE_SNAPSHOT_LIMIT = 200;
+/** Stable fallback for SWR `data?.items` — inline `[]` is a new reference each render and breaks useMemo/useEffect dependencies. */
+const EMPTY_SWF_ITEMS: never[] = [];
 const REPLAY_PROVIDER_LABEL: Record<ReplayProvider, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
@@ -877,13 +879,12 @@ export default function ReleaseGatePageContent() {
     }
   }, [cancelRequested]);
 
+  const agentIdFromUrl = searchParams.get("agent_id")?.trim() ?? "";
   useEffect(() => {
-    const qAgent = searchParams.get("agent_id") || "";
-    if (qAgent) {
-      setAgentId(qAgent);
-      setViewMode("expanded");
-    }
-  }, [searchParams]);
+    if (!agentIdFromUrl) return;
+    setAgentId(agentIdFromUrl);
+    setViewMode("expanded");
+  }, [agentIdFromUrl]);
 
   const handleCancelActiveJob = async () => {
     if (!projectId || isNaN(projectId)) return;
@@ -1011,7 +1012,7 @@ export default function ReleaseGatePageContent() {
     () => behaviorAPI.listDatasets(projectId, { agent_id: agentId.trim(), limit: 50 }),
     { isPaused: () => runLocked }
   );
-  const datasets = datasetsData?.items ?? [];
+  const datasets = datasetsData?.items ?? EMPTY_SWF_ITEMS;
 
   // For dataset run: fetch snapshots from the FIRST selected dataset only (for baseline display).
   const previewDatasetId = runDatasetIds.length > 0 ? runDatasetIds[0] : null;
@@ -1040,7 +1041,7 @@ export default function ReleaseGatePageContent() {
     },
     { isPaused: () => runLocked }
   );
-  const datasetSnapshots = datasetSnapshotsData?.items ?? [];
+  const datasetSnapshots = datasetSnapshotsData?.items ?? EMPTY_SWF_ITEMS;
   const datasetSnapshots404 = !!(datasetSnapshotsData as { _404?: boolean } | undefined)?._404;
 
   const expandedDatasetSnapshotsKey =
@@ -1067,7 +1068,7 @@ export default function ReleaseGatePageContent() {
     },
     { isPaused: () => runLocked }
   );
-  const expandedDatasetSnapshots = expandedDatasetSnapshotsData?.items ?? [];
+  const expandedDatasetSnapshots = expandedDatasetSnapshotsData?.items ?? EMPTY_SWF_ITEMS;
   const expandedDatasetSnapshots404 = !!(
     expandedDatasetSnapshotsData as { _404?: boolean } | undefined
   )?._404;
@@ -1286,7 +1287,7 @@ export default function ReleaseGatePageContent() {
     () => releaseGateAPI.getRecentSnapshots(projectId, agentId!.trim(), RECENT_SNAPSHOT_LIMIT),
     { isPaused: () => runLocked }
   );
-  const recentSnapshotsAll = recentSnapshotsData?.items ?? [];
+  const recentSnapshotsAll = recentSnapshotsData?.items ?? EMPTY_SWF_ITEMS;
   const recentSnapshots = recentSnapshotsAll;
 
   const baselineSnapshotPoolKey =
@@ -1303,7 +1304,7 @@ export default function ReleaseGatePageContent() {
       }),
     { isPaused: () => runLocked }
   );
-  const baselineSnapshotPool = baselineSnapshotPoolData?.items ?? [];
+  const baselineSnapshotPool = baselineSnapshotPoolData?.items ?? EMPTY_SWF_ITEMS;
 
   const selectedSnapshotIdsForRun = useMemo(() => {
     if (dataSource === "recent") return runSnapshotIds.map(x => String(x));
@@ -1430,7 +1431,7 @@ export default function ReleaseGatePageContent() {
     { keepPreviousData: true, isPaused: () => runLocked }
   );
 
-  const historyItems = historyData?.items || [];
+  const historyItems = historyData?.items ?? EMPTY_SWF_ITEMS;
   const historyTotal = historyData?.total || 0;
 
   const {
