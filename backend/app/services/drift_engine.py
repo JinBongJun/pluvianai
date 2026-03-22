@@ -2,13 +2,30 @@
 Drift detection engine for monitoring LLM output changes.
 """
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+
 from app.models.api_call import APICall
-from app.models.quality_score import QualityScore
 from app.models.drift_detection import DriftDetection
+from app.models.quality_score import QualityScore
+
+
+@dataclass
+class DriftFinding:
+    """In-memory drift result; persisted rows use the slim DriftDetection ORM model."""
+
+    detection_type: str
+    drift_score: float
+    severity: str
+    change_percentage: float
+    current_value: float
+    baseline_value: float
+    detection_details: Optional[Dict[str, Any]] = None
+    affected_fields: Optional[List[str]] = None
 
 
 class DriftEngine:
@@ -77,64 +94,62 @@ class DriftEngine:
             # No baseline data, cannot detect drift
             return []
 
-        detections = []
+        findings: List[DriftFinding] = []
 
         # 1. Length drift detection
         length_drift = self._detect_length_drift(baseline_calls, current_calls)
         if length_drift:
-            detections.append(length_drift)
+            findings.append(length_drift)
 
         # 2. Structure drift detection
         structure_drift = self._detect_structure_drift(baseline_calls, current_calls)
         if structure_drift:
-            detections.append(structure_drift)
+            findings.append(structure_drift)
 
         # 3. Latency drift detection
         latency_drift = self._detect_latency_drift(baseline_calls, current_calls)
         if latency_drift:
-            detections.append(latency_drift)
+            findings.append(latency_drift)
 
         # 4. Quality score drift detection
         quality_drift = self._detect_quality_drift(
             project_id, baseline_start, baseline_end, current_start, now, model, agent_name, db
         )
         if quality_drift:
-            detections.append(quality_drift)
+            findings.append(quality_drift)
 
-        # Save detections to database and create alerts
         from app.models.alert import Alert
 
-        alerts_created = []
-        for detection in detections:
-            detection.project_id = project_id
-            detection.model = model
-            detection.agent_name = agent_name
-            detection.baseline_period_start = baseline_start
-            detection.baseline_period_end = baseline_end
-            db.add(detection)
+        orm_rows: List[DriftDetection] = []
+        for finding in findings:
+            row = DriftDetection(
+                project_id=project_id,
+                drift_score=float(finding.drift_score),
+                model_name=model,
+            )
+            db.add(row)
+            orm_rows.append(row)
+        db.flush()
 
-            # Create alert for medium/high/critical severity detections
-            if detection.severity in ["medium", "high", "critical"]:
-                # Generate alert title and message
-                model_str = f" ({detection.model})" if detection.model else ""
-                agent_str = f" [{detection.agent_name}]" if detection.agent_name else ""
+        for finding, row in zip(findings, orm_rows):
+            if finding.severity in ["medium", "high", "critical"]:
+                model_str = f" ({model})" if model else ""
+                agent_str = f" [{agent_name}]" if agent_name else ""
 
-                title = f"Drift Detected: {detection.detection_type}{model_str}{agent_str}"
+                title = f"Drift Detected: {finding.detection_type}{model_str}{agent_str}"
 
-                # Build message from detection details
                 message_parts = [
-                    f"Detected {detection.detection_type} drift with {detection.change_percentage:.1f}% change.",
+                    f"Detected {finding.detection_type} drift with {finding.change_percentage:.1f}% change.",
                 ]
 
-                if detection.detection_details and "evidence" in detection.detection_details:
-                    message_parts.append(detection.detection_details["evidence"])
+                if finding.detection_details and "evidence" in finding.detection_details:
+                    message_parts.append(str(finding.detection_details["evidence"]))
 
                 message = " ".join(message_parts)
 
-                # Determine notification channels based on severity
-                if detection.severity == "critical":
+                if finding.severity == "critical":
                     channels = ["email", "slack"]
-                elif detection.severity == "high":
+                elif finding.severity == "high":
                     channels = ["email"]
                 else:
                     channels = ["email"]
@@ -142,45 +157,30 @@ class DriftEngine:
                 alert = Alert(
                     project_id=project_id,
                     alert_type="drift",
-                    severity=detection.severity,
+                    severity=finding.severity,
                     title=title,
                     message=message,
                     alert_data={
-                        "detection_id": None,  # Will be set after detection is committed
-                        "detection_type": detection.detection_type,
-                        "model": detection.model,
-                        "agent_name": detection.agent_name,
-                        "change_percentage": detection.change_percentage,
-                        "drift_score": detection.drift_score,
-                        "current_value": detection.current_value,
-                        "baseline_value": detection.baseline_value,
+                        "detection_id": row.id,
+                        "detection_type": finding.detection_type,
+                        "model": model,
+                        "agent_name": agent_name,
+                        "change_percentage": finding.change_percentage,
+                        "drift_score": finding.drift_score,
+                        "current_value": finding.current_value,
+                        "baseline_value": finding.baseline_value,
                     },
                     notification_channels=channels,
                 )
                 db.add(alert)
-                alerts_created.append(alert)
 
         db.commit()
 
-        # Update alert_data with detection_id after commit
-        for alert in alerts_created:
-            # Find the corresponding detection
-            for detection in detections:
-                if (
-                    detection.detection_type == alert.alert_data.get("detection_type")
-                    and detection.model == alert.alert_data.get("model")
-                    and detection.agent_name == alert.alert_data.get("agent_name")
-                ):
-                    alert.alert_data["detection_id"] = detection.id
-                    break
-
-        db.commit()
-
-        return detections
+        return orm_rows
 
     def _detect_length_drift(
         self, baseline_calls: List[APICall], current_calls: List[APICall]
-    ) -> Optional[DriftDetection]:
+    ) -> Optional[DriftFinding]:
         """Detect response length drift"""
         if not current_calls:
             return None
@@ -233,7 +233,7 @@ class DriftEngine:
         if baseline_sample and current_sample:
             evidence += f" Example baseline: '{baseline_sample[:50]}...' Example current: '{current_sample[:50]}...'"
 
-        return DriftDetection(
+        return DriftFinding(
             detection_type="length",
             current_value=current_avg,
             baseline_value=baseline_avg,
@@ -253,7 +253,7 @@ class DriftEngine:
 
     def _detect_structure_drift(
         self, baseline_calls: List[APICall], current_calls: List[APICall]
-    ) -> Optional[DriftDetection]:
+    ) -> Optional[DriftFinding]:
         """Detect JSON structure drift"""
         if not current_calls:
             return None
@@ -332,7 +332,7 @@ class DriftEngine:
         if baseline_sample and current_sample:
             evidence += f" Baseline fields: {', '.join(baseline_sample)}. Current fields: {', '.join(current_sample)}."
 
-        return DriftDetection(
+        return DriftFinding(
             detection_type="structure",
             current_value=len(current_fields),
             baseline_value=len(baseline_fields),
@@ -353,7 +353,7 @@ class DriftEngine:
 
     def _detect_latency_drift(
         self, baseline_calls: List[APICall], current_calls: List[APICall]
-    ) -> Optional[DriftDetection]:
+    ) -> Optional[DriftFinding]:
         """Detect latency drift"""
         if not current_calls:
             return None
@@ -396,7 +396,7 @@ class DriftEngine:
         else:
             severity = "low"  # Latency decrease is good
 
-        return DriftDetection(
+        return DriftFinding(
             detection_type="latency",
             current_value=current_avg,
             baseline_value=baseline_avg,
@@ -420,7 +420,7 @@ class DriftEngine:
         model: Optional[str],
         agent_name: Optional[str],
         db: Session,
-    ) -> Optional[DriftDetection]:
+    ) -> Optional[DriftFinding]:
         """Detect quality score drift"""
         # Get baseline quality scores
         baseline_query = (
@@ -490,7 +490,7 @@ class DriftEngine:
         else:
             severity = "low"  # Quality increase is good
 
-        return DriftDetection(
+        return DriftFinding(
             detection_type="quality",
             current_value=current_avg,
             baseline_value=baseline_avg,
