@@ -30,11 +30,14 @@ import clsx from "clsx";
 import type { LiveViewToolTimelineRow, RequestContextMeta } from "@/lib/api/live-view";
 import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel";
 import { RequestContextPanel } from "@/components/live-view/RequestContextPanel";
+import { buildNodeRequestOverview } from "@/lib/requestOverview";
 
 export interface SnapshotForDetail {
   id: string | number;
   trace_id?: string;
   agent_id?: string;
+  provider?: string;
+  model?: string;
   created_at?: string;
   latency_ms?: number | null;
   tokens_used?: number | null;
@@ -427,6 +430,16 @@ export function SnapshotDetailModal({
   const isSavedAppearance = appearance === "saved";
   const stepLogs = extractStepLogs(s);
   const customCode = extractCustomCode(s);
+  const requestOverview = React.useMemo(
+    () =>
+      buildNodeRequestOverview({
+        payload: (s.payload as Record<string, unknown> | null | undefined) ?? null,
+        provider: s.provider,
+        model: s.model,
+        requestContextMeta: s.request_context_meta ?? null,
+      }),
+    [s]
+  );
 
   const tl = s.tool_timeline ?? [];
   const actionRows = tl.filter(r => r.step_type === "action");
@@ -557,6 +570,113 @@ export function SnapshotDetailModal({
 
           <div className="flex flex-col gap-12 shrink-0">
             <div className="space-y-8">
+              <div className="rounded-[24px] border border-white/5 bg-[#0f1115] p-6 shadow-inner">
+                <div className="flex items-center gap-3 border-b border-white/5 pb-3">
+                  <SlidersHorizontal className="h-5 w-5 text-fuchsia-400" />
+                  <span className="text-sm font-bold uppercase tracking-widest text-slate-200">
+                    Node Request Overview
+                  </span>
+                </div>
+                <p className="mt-3 text-xs leading-relaxed text-slate-500">
+                  Replay-relevant request shape captured for this node call.
+                </p>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Model
+                    </div>
+                    <div className="mt-1 text-sm font-mono text-slate-200 break-all">
+                      {requestOverview.model}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Provider
+                    </div>
+                    <div className="mt-1 text-sm text-slate-200">{requestOverview.provider}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Request state
+                    </div>
+                    <div className="mt-1 text-sm text-slate-200">
+                      {requestOverview.truncated
+                        ? "Truncated"
+                        : requestOverview.omittedByPolicy
+                          ? "Policy-limited"
+                          : "Complete"}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Messages
+                    </div>
+                    <div className="mt-1 text-sm text-slate-200">{requestOverview.messageCount}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Tools
+                    </div>
+                    <div className="mt-1 text-sm text-slate-200">{requestOverview.toolsCount}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Sampling
+                    </div>
+                    <div className="mt-1 text-sm text-slate-200">
+                      {[
+                        requestOverview.temperature != null
+                          ? `temp ${requestOverview.temperature}`
+                          : null,
+                        requestOverview.topP != null ? `top_p ${requestOverview.topP}` : null,
+                        requestOverview.maxTokens != null
+                          ? `max ${requestOverview.maxTokens}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "Default / not captured"}
+                    </div>
+                  </div>
+                </div>
+
+                {requestOverview.extendedContextKeys.length > 0 ? (
+                  <div className="mt-4">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Extended context keys
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {requestOverview.extendedContextKeys.map(key => (
+                        <span
+                          key={key}
+                          className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-200"
+                        >
+                          {key}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {requestOverview.additionalRequestKeys.length > 0 ? (
+                  <div className="mt-4">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Additional request keys
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {requestOverview.additionalRequestKeys.map(key => (
+                        <span
+                          key={key}
+                          className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-100"
+                        >
+                          {key}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
               <RequestContextPanel snapshot={s} />
 
               <div className="flex flex-col gap-6">

@@ -10,6 +10,7 @@ import { sanitizePayloadForPreview } from "./ReleaseGatePageContent";
 import { ClientPortal } from "@/components/shared/ClientPortal";
 import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel";
 import { liveViewAPI, type LiveViewToolTimelineRow } from "@/lib/api/live-view";
+import { buildNodeRequestOverview } from "@/lib/requestOverview";
 
 type ReplayProvider = "openai" | "anthropic" | "google";
 type ThresholdPreset = "strict" | "default" | "lenient" | "custom";
@@ -156,7 +157,10 @@ export function ReleaseGateConfigPanel({
   const runDataProvider = toReplayProvider(ctx?.runDataProvider);
   const runDataModel = (ctx?.runDataModel as string) ?? "";
   const runDataPrompt = (ctx?.runDataPrompt as string) ?? "";
+  const baselineSeedSnapshotForOverview =
+    (ctx?.baselineSeedSnapshot as Record<string, unknown> | null) ?? null;
   const baselinePayload = (ctx?.baselinePayload as Record<string, unknown> | null) ?? null;
+  const finalCandidateRequest = (ctx?.finalCandidateRequest as Record<string, unknown> | null) ?? null;
   const baselineConfigSummary = (ctx?.baselineConfigSummary as string) ?? "";
   const validateOverridePreview = (ctx?.validateOverridePreview as
     | Record<string, unknown>
@@ -269,6 +273,61 @@ export function ReleaseGateConfigPanel({
   const usingProvider = toReplayProvider(previewReplayProviderRaw ?? runDataProvider);
   const candidateJsonValue = requestJsonDraft ?? requestBodyJson;
   const bodyOverridesJsonValue = bodyOverridesJsonDraft ?? requestBodyOverridesJson;
+  const baselineRequestOverview = useMemo(
+    () =>
+      buildNodeRequestOverview({
+        payload: baselinePayload,
+        provider: baselineSeedSnapshotForOverview?.provider ?? runDataProvider,
+        model: baselineSeedSnapshotForOverview?.model ?? runDataModel,
+        requestContextMeta: (baselineSeedSnapshotForOverview?.request_context_meta as any) ?? null,
+      }),
+    [baselinePayload, baselineSeedSnapshotForOverview, runDataProvider, runDataModel]
+  );
+  const candidateRequestOverview = useMemo(
+    () =>
+      buildNodeRequestOverview({
+        payload: finalCandidateRequest,
+        provider: usingProvider,
+        model: usingModel,
+      }),
+    [finalCandidateRequest, usingProvider, usingModel]
+  );
+  const parityWarnings = useMemo(() => {
+    const warnings: string[] = [];
+    if (baselineRequestOverview.truncated) {
+      warnings.push(
+        "Baseline request content was truncated before ingest. Replay may still differ from production."
+      );
+    } else if (baselineRequestOverview.omittedByPolicy) {
+      warnings.push(
+        "Baseline request content was limited by SDK/privacy policy. Replay will only use the captured shape."
+      );
+    }
+
+    if (baselineRequestOverview.toolsCount > 0 && candidateRequestOverview.toolsCount === 0) {
+      warnings.push("Baseline request had tools, but the candidate request currently removes them.");
+    }
+
+    const missingExtended = baselineRequestOverview.extendedContextKeys.filter(
+      key => !candidateRequestOverview.extendedContextKeys.includes(key)
+    );
+    if (missingExtended.length > 0) {
+      warnings.push(
+        `Baseline included extended context keys that are not present in candidate replay: ${missingExtended.join(", ")}.`
+      );
+    }
+
+    const missingAdditional = baselineRequestOverview.additionalRequestKeys.filter(
+      key => !candidateRequestOverview.additionalRequestKeys.includes(key)
+    );
+    if (missingAdditional.length > 0) {
+      warnings.push(
+        `Baseline included additional request keys that are not present in candidate replay: ${missingAdditional.join(", ")}.`
+      );
+    }
+
+    return warnings;
+  }, [baselineRequestOverview, candidateRequestOverview]);
 
   const cleanBaselineForComparison = useMemo(() => {
     if (!baselinePayload) return "{}";
@@ -491,6 +550,87 @@ export function ReleaseGateConfigPanel({
                         <span className="text-[11px] text-slate-300">{baselineConfigSummary}</span>
                       </div>
                     )}
+                    <div className="mb-4 rounded-xl border border-white/5 bg-black/20 p-4">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                        Baseline Request Summary
+                      </div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <div className="text-xs text-slate-400">
+                          Messages
+                          <div className="mt-1 text-sm font-semibold text-slate-200">
+                            {baselineRequestOverview.messageCount}
+                          </div>
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          Tools
+                          <div className="mt-1 text-sm font-semibold text-slate-200">
+                            {baselineRequestOverview.toolsCount}
+                          </div>
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          Request state
+                          <div className="mt-1 text-sm font-semibold text-slate-200">
+                            {baselineRequestOverview.truncated
+                              ? "Truncated"
+                              : baselineRequestOverview.omittedByPolicy
+                                ? "Policy-limited"
+                                : "Complete"}
+                          </div>
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          Sampling
+                          <div className="mt-1 text-sm font-semibold text-slate-200">
+                            {[
+                              baselineRequestOverview.temperature != null
+                                ? `temp ${baselineRequestOverview.temperature}`
+                                : null,
+                              baselineRequestOverview.topP != null
+                                ? `top_p ${baselineRequestOverview.topP}`
+                                : null,
+                              baselineRequestOverview.maxTokens != null
+                                ? `max ${baselineRequestOverview.maxTokens}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ") || "Default / not captured"}
+                          </div>
+                        </div>
+                      </div>
+                      {baselineRequestOverview.extendedContextKeys.length > 0 ? (
+                        <div className="mt-3">
+                          <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                            Extended context keys
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {baselineRequestOverview.extendedContextKeys.map(key => (
+                              <span
+                                key={key}
+                                className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-1 text-[10px] font-semibold text-violet-200"
+                              >
+                                {key}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {baselineRequestOverview.additionalRequestKeys.length > 0 ? (
+                        <div className="mt-3">
+                          <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                            Additional request keys
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {baselineRequestOverview.additionalRequestKeys.map(key => (
+                              <span
+                                key={key}
+                                className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-semibold text-cyan-100"
+                              >
+                                {key}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                     <div className="mb-3 flex items-center justify-between">
                       <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
                         Baseline Request (Preview)
@@ -562,6 +702,53 @@ export function ReleaseGateConfigPanel({
                   </div>
 
                   <div className="p-5">
+                    <div className="mb-4 rounded-xl border border-white/5 bg-black/20 p-4">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                        Candidate Request Summary
+                      </div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <div className="text-xs text-slate-400">
+                          Messages preserved
+                          <div className="mt-1 text-sm font-semibold text-slate-200">
+                            {candidateRequestOverview.messageCount}
+                          </div>
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          Tools
+                          <div className="mt-1 text-sm font-semibold text-slate-200">
+                            {candidateRequestOverview.toolsCount}
+                          </div>
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          Extended context keys
+                          <div className="mt-1 text-sm font-semibold text-slate-200">
+                            {candidateRequestOverview.extendedContextKeys.length || "0"}
+                          </div>
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          Additional request keys
+                          <div className="mt-1 text-sm font-semibold text-slate-200">
+                            {candidateRequestOverview.additionalRequestKeys.length || "0"}
+                          </div>
+                        </div>
+                      </div>
+                      {parityWarnings.length > 0 ? (
+                        <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-xs text-amber-100">
+                          <div className="font-bold uppercase tracking-[0.15em] text-amber-300">
+                            Baseline parity hints
+                          </div>
+                          <div className="mt-2 space-y-1.5">
+                            {parityWarnings.map(warning => (
+                              <div key={warning}>{warning}</div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 text-xs text-emerald-100">
+                          Candidate replay still includes the key request shape detected on the baseline node call.
+                        </div>
+                      )}
+                    </div>
                     <pre className="min-h-[400px] max-h-[600px] rounded-xl border border-white/5 bg-[#0a0c10] p-5 text-[13px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-all overflow-auto custom-scrollbar shadow-inner">
                       {validateOverridePreview
                         ? finalCandidateJson
