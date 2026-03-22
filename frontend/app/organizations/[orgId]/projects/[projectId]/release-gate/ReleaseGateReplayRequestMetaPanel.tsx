@@ -22,7 +22,7 @@ function previewJson(value: unknown): string {
 }
 
 /**
- * Shows first baseline snapshot top-level values vs replay_overrides applied for this run (when present).
+ * Shows first baseline log excerpt vs merged replay body overrides for this run (when present).
  */
 export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayRequestMeta | null }) {
   const rows = useMemo(() => {
@@ -64,12 +64,11 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
       data-testid="rg-replay-request-meta"
     >
       <div className="text-[9px] font-black uppercase tracking-[0.2em] text-cyan-300/90">
-        Request overrides (this run)
+        Request body overrides (this run)
       </div>
       <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-        For each key in <span className="font-mono text-slate-400">replay_overrides</span>: value
-        stored on the <span className="text-slate-400">first baseline snapshot</span> vs what was
-        merged for replay.
+        For each key in <span className="font-mono text-slate-400">replay_overrides</span>: value on
+        the <span className="text-slate-400">first baseline log</span> vs merged for replay.
       </p>
 
       {rows.length > 0 ? (
@@ -84,7 +83,7 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
               >
                 <div>
                   <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                    Snapshot · {key}
+                    Baseline · {key}
                   </div>
                   <pre className="mt-1 max-h-32 overflow-auto text-[10px] leading-snug text-slate-400 custom-scrollbar whitespace-pre-wrap break-all">
                     {previewJson(baselineVal)}
@@ -107,7 +106,7 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
       {perSnapshotApplied.length > 0 ? (
         <div className="mt-3 space-y-2">
           <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-            Per-snapshot overrides (applied)
+            Per-log overrides (applied)
           </div>
           {perSnapshotApplied.map(({ sid, keys }) => {
             const block = meta.replay_overrides_by_snapshot_id_applied?.[sid];
