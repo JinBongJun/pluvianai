@@ -27,7 +27,11 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 
-import type { LiveViewToolTimelineRow, RequestContextMeta } from "@/lib/api/live-view";
+import type {
+  LiveViewRequestOverview,
+  LiveViewToolTimelineRow,
+  RequestContextMeta,
+} from "@/lib/api/live-view";
 import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel";
 import { RequestContextPanel } from "@/components/live-view/RequestContextPanel";
 import { buildNodeRequestOverview } from "@/lib/requestOverview";
@@ -57,6 +61,8 @@ export interface SnapshotForDetail {
   tool_timeline_redaction_version?: number;
   /** Derived from payload SDK markers on GET snapshot (preferred over client-only heuristics). */
   request_context_meta?: RequestContextMeta | null;
+  /** Backend-derived replay-relevant request summary when available. */
+  request_overview?: LiveViewRequestOverview | null;
 }
 
 export type PolicyState = {
@@ -437,6 +443,7 @@ export function SnapshotDetailModal({
         provider: s.provider,
         model: s.model,
         requestContextMeta: s.request_context_meta ?? null,
+        serverRequestOverview: s.request_overview ?? null,
       }),
     [s]
   );
@@ -581,6 +588,23 @@ export function SnapshotDetailModal({
                   Replay-relevant request shape captured for this node call.
                 </p>
 
+                {requestOverview.truncated || requestOverview.omittedByPolicy ? (
+                  <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
+                    {requestOverview.truncated ? (
+                      <div>
+                        This snapshot does not include the full original request. Large fields may have been shortened
+                        or replaced before ingest.
+                      </div>
+                    ) : null}
+                    {requestOverview.omittedByPolicy ? (
+                      <div className={clsx(requestOverview.truncated ? "mt-1.5" : null)}>
+                        Privacy settings omitted some request text before ingest. Treat the sections below as the best
+                        retained baseline, not a byte-exact replay record.
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -668,6 +692,24 @@ export function SnapshotDetailModal({
                         <span
                           key={key}
                           className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-100"
+                        >
+                          {key}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {requestOverview.requestControlKeys.length > 0 ? (
+                  <div className="mt-4">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Request controls
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {requestOverview.requestControlKeys.map(key => (
+                        <span
+                          key={key}
+                          className="rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-2.5 py-1 text-[11px] font-medium text-fuchsia-100"
                         >
                           {key}
                         </span>

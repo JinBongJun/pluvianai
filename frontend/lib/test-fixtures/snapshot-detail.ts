@@ -1,4 +1,8 @@
-import type { RequestContextMeta, LiveViewToolTimelineRow } from "@/lib/api/live-view";
+import type {
+  LiveViewRequestOverview,
+  LiveViewToolTimelineRow,
+  RequestContextMeta,
+} from "@/lib/api/live-view";
 
 export type SnapshotDetailFixtureSnapshot = {
   id: string | number;
@@ -20,6 +24,7 @@ export type SnapshotDetailFixtureSnapshot = {
   tool_timeline?: LiveViewToolTimelineRow[];
   tool_timeline_redaction_version?: number;
   request_context_meta?: RequestContextMeta | null;
+  request_overview?: LiveViewRequestOverview | null;
 };
 
 export type SnapshotDetailFixtureCase = {

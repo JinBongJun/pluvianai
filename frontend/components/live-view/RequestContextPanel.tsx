@@ -2,9 +2,14 @@
 
 import React, { useMemo, useState } from "react";
 import clsx from "clsx";
-import { AlignLeft, BookOpen, FileText, Layers } from "lucide-react";
+import { AlignLeft, BookOpen, FileText, Layers, SlidersHorizontal } from "lucide-react";
 
 import type { RequestContextMeta } from "@/lib/api/live-view";
+import {
+  collectAdditionalRequestEntries,
+  collectRequestControlEntries,
+  getRequestObject,
+} from "@/lib/requestOverview";
 
 /** Snapshot shape used by SnapshotDetailModal (subset). */
 export type RequestContextSnapshot = {
@@ -89,7 +94,7 @@ function messageContentPreview(m: Record<string, unknown>): string {
 export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnapshot }) {
   const meta = snapshot.request_context_meta;
   const payload = (snapshot.payload || {}) as Record<string, unknown>;
-  const req = (payload.request ?? payload.request_data) as Record<string, unknown> | undefined;
+  const req = getRequestObject(payload) ?? undefined;
   const messages = useMemo(() => {
     const raw = req?.messages;
     if (Array.isArray(raw)) return raw.filter(m => m && typeof m === "object") as Record<string, unknown>[];
@@ -110,11 +115,13 @@ export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnap
         }
       }
     };
-    const innerReq = (payload.request ?? payload.request_data) as Record<string, unknown> | undefined;
+    const innerReq = getRequestObject(payload) ?? undefined;
     scan(payload, "payload.");
     scan(innerReq, "request.");
     return blocks;
   }, [payload]);
+  const requestControls = useMemo(() => collectRequestControlEntries(req ?? null), [req]);
+  const additionalRequestFields = useMemo(() => collectAdditionalRequestEntries(req ?? null), [req]);
 
   const omittedFromPayload =
     Boolean(req?.["_pluvianai_message_bodies_omitted"]) || Boolean(payload?.["_pluvianai_message_bodies_omitted"]);
@@ -123,15 +130,83 @@ export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnap
   const omittedRequest =
     meta?.omitted_by_policy === true || (meta == null && omittedFromPayload);
   const truncatedRequest = meta?.truncated === true || (meta == null && truncatedFromPayload);
+  const requestTextOmitted =
+    meta?.request_text_omitted === true ||
+    (meta?.request_text_omitted == null && Boolean(req?.["_pluvianai_message_bodies_omitted"]));
+  const responseTextOmitted =
+    meta?.response_text_omitted === true ||
+    (meta?.response_text_omitted == null &&
+      Boolean((payload.response as Record<string, unknown> | undefined)?.["_pluvianai_response_bodies_omitted"]));
+  const requestTruncated =
+    meta?.request_truncated === true ||
+    (meta?.request_truncated == null && Boolean(req?.["_pluvianai_truncated"]));
+  const payloadTruncated =
+    meta?.payload_truncated === true ||
+    (meta?.payload_truncated == null && Boolean(payload?.["_pluvianai_truncated"]));
+  const captureWarnings = [
+    truncatedRequest
+      ? requestTruncated && payloadTruncated
+        ? "This snapshot was truncated both at the request level and at the outer payload level before ingest."
+        : requestTruncated
+          ? "This snapshot does not contain the full original request. Request fields were shortened or replaced before ingest."
+          : payloadTruncated
+            ? "This snapshot payload was truncated before ingest. Some nested request fields may be incomplete."
+            : "This snapshot does not contain the full original request. Large fields may have been shortened or replaced before ingest."
+      : null,
+    omittedRequest
+      ? requestTextOmitted && responseTextOmitted
+        ? "Privacy settings omitted both request text and response text before ingest."
+        : requestTextOmitted
+          ? "Privacy settings omitted some request text before ingest. Use this view as a request-shape reference, not a byte-exact replay record."
+          : responseTextOmitted
+            ? "Privacy settings omitted some response text before ingest. Request-shape fields may still be accurate."
+            : "Privacy settings omitted some request or response text before ingest."
+      : null,
+    (truncatedRequest || omittedRequest) && (requestControls.length > 0 || additionalRequestFields.length > 0)
+      ? "Controls and additional fields below reflect only the portion that was retained."
+      : null,
+  ].filter(Boolean) as string[];
+
+  const renderFieldSection = (
+    title: string,
+    icon: React.ComponentType<{ className?: string }>,
+    accentClassName: string,
+    description: string | null,
+    fields: Array<{ key: string; value: unknown }>
+  ) => {
+    if (fields.length === 0) return null;
+    const Icon = icon;
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-3 border-b border-white/5 pb-3">
+          <Icon className={clsx("h-5 w-5", accentClassName)} />
+          <span className="text-sm font-bold uppercase tracking-widest text-slate-200">{title}</span>
+        </div>
+        {description ? <p className="text-xs text-slate-500">{description}</p> : null}
+        <div className="space-y-4">
+          {fields.map(field => (
+            <div key={field.key} className="rounded-xl border border-white/5 bg-[#0a0a0c] p-4">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-cyan-300/90">
+                {field.key}
+              </div>
+              <CollapsiblePre text={safeStringify(field.value) || "—"} className="text-slate-300" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   if (messages && messages.length > 0) {
     return (
       <div className="space-y-8">
-        {omittedRequest || truncatedRequest ? (
+        {captureWarnings.length > 0 ? (
           <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90">
-            {truncatedRequest
-              ? "Request payload was truncated or replaced before ingest (size limit)."
-              : "Message bodies were omitted before ingest (SDK privacy). Metadata such as role and length may still appear."}
+            <div className="space-y-1.5">
+              {captureWarnings.map(message => (
+                <div key={message}>{message}</div>
+              ))}
+            </div>
           </div>
         ) : null}
         <div className="flex flex-col gap-4">
@@ -176,6 +251,22 @@ export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnap
             ))}
           </div>
         ) : null}
+
+        {renderFieldSection(
+          "Request controls",
+          SlidersHorizontal,
+          "text-fuchsia-400",
+          "Provider-level controls captured on this request, including sampling and output/tool options.",
+          requestControls
+        )}
+
+        {renderFieldSection(
+          "Additional request fields",
+          FileText,
+          "text-cyan-400",
+          "Top-level request fields that can materially change replay behavior and are not part of the message list.",
+          additionalRequestFields
+        )}
       </div>
     );
   }
@@ -183,11 +274,13 @@ export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnap
   /* Legacy: columnar system + user only */
   return (
     <div className="space-y-8">
-      {omittedRequest || truncatedRequest ? (
+      {captureWarnings.length > 0 ? (
         <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90">
-          {truncatedRequest
-            ? "Request payload was truncated before ingest (size limit)."
-            : "User/system text may have been omitted before ingest (SDK privacy)."}
+          <div className="space-y-1.5">
+            {captureWarnings.map(message => (
+              <div key={message}>{message}</div>
+            ))}
+          </div>
         </div>
       ) : null}
       <div className="flex flex-col gap-4">
@@ -224,6 +317,22 @@ export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnap
           ))}
         </div>
       ) : null}
+
+      {renderFieldSection(
+        "Request controls",
+        SlidersHorizontal,
+        "text-fuchsia-400",
+        "Provider-level controls captured on this request, including sampling and output/tool options.",
+        requestControls
+      )}
+
+      {renderFieldSection(
+        "Additional request fields",
+        FileText,
+        "text-cyan-400",
+        "Top-level request fields that can materially change replay behavior and are not part of the main prompt text.",
+        additionalRequestFields
+      )}
     </div>
   );
 }

@@ -280,6 +280,7 @@ export function ReleaseGateConfigPanel({
         provider: baselineSeedSnapshotForOverview?.provider ?? runDataProvider,
         model: baselineSeedSnapshotForOverview?.model ?? runDataModel,
         requestContextMeta: (baselineSeedSnapshotForOverview?.request_context_meta as any) ?? null,
+        serverRequestOverview: (baselineSeedSnapshotForOverview?.request_overview as any) ?? null,
       }),
     [baselinePayload, baselineSeedSnapshotForOverview, runDataProvider, runDataModel]
   );
