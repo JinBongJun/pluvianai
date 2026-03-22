@@ -679,6 +679,23 @@ def _sanitize_replay_overrides(
     return cleaned or None
 
 
+def _sanitize_replay_overrides_by_snapshot_id(
+    raw: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Dict[str, Any]]]:
+    """Sanitize each inner dict; keys are string snapshot ids."""
+    if not raw or not isinstance(raw, dict):
+        return None
+    out: Dict[str, Dict[str, Any]] = {}
+    for k, v in raw.items():
+        sk = str(k).strip()
+        if not sk or not isinstance(v, dict):
+            continue
+        cleaned = _sanitize_replay_overrides(v)
+        if cleaned:
+            out[sk] = cleaned
+    return out or None
+
+
 def _snapshot_request_part(snapshot: Snapshot) -> Dict[str, Any]:
     """Return the provider request body from stored snapshot payload (proxy or flat)."""
     raw = snapshot.payload if isinstance(getattr(snapshot, "payload", None), dict) else {}
@@ -710,9 +727,13 @@ def _build_replay_request_meta(
     if getattr(payload, "replay_top_p", None) is not None:
         sampling["replay_top_p"] = payload.replay_top_p
     nsp = str(getattr(payload, "new_system_prompt", None) or "").strip()
+    per_sid = _sanitize_replay_overrides_by_snapshot_id(
+        getattr(payload, "replay_overrides_by_snapshot_id", None)
+    )
     return {
         "replay_overrides_applied": overrides,
         "baseline_snapshot_excerpt": baseline_excerpt,
+        "replay_overrides_by_snapshot_id_applied": per_sid,
         "sampling_overrides": sampling or None,
         "has_new_system_prompt": bool(nsp),
         "new_system_prompt_preview": (nsp[:240] + "…") if len(nsp) > 240 else (nsp or None),
@@ -949,6 +970,14 @@ class ReleaseGateValidateRequest(BaseModel):
             "Optional configuration-only overrides merged into the replay request body "
             "(e.g. tools, sampling/format knobs). Snapshot content fields such as "
             "messages/user_message/response/trace_id/agent_id/agent_name are ignored."
+        ),
+    )
+    replay_overrides_by_snapshot_id: Optional[Dict[str, Dict[str, Any]]] = Field(
+        None,
+        description=(
+            "Optional per-snapshot overrides merged after replay_overrides for that snapshot id "
+            "(string keys). Same disallowed keys as replay_overrides. Wins over replay_overrides "
+            "on key conflict."
         ),
     )
     tool_context: Optional[ToolContextConfig] = Field(
@@ -1833,6 +1862,9 @@ async def _run_release_gate(
                 max_tokens=payload.replay_max_tokens,
                 top_p=payload.replay_top_p,
                 replay_overrides=_sanitize_replay_overrides(payload.replay_overrides),
+                replay_overrides_by_snapshot_id=_sanitize_replay_overrides_by_snapshot_id(
+                    payload.replay_overrides_by_snapshot_id
+                ),
                 tool_context=tool_context_payload,
                 replay_provider=payload.replay_provider,
                 api_key=None,

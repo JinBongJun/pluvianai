@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useContext, useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import useSWR from "swr";
-import { Plus, Trash2, X, RefreshCcw, SearchCode, Loader2 } from "lucide-react";
+import { Plus, Trash2, X, RefreshCcw, SearchCode, Loader2, Upload } from "lucide-react";
 
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
 import { sanitizePayloadForPreview } from "./ReleaseGatePageContent";
@@ -119,7 +119,30 @@ export function ReleaseGateConfigPanel({
     | ((value: string | null) => void)
     | undefined;
   const supplementJsonError = (ctx?.supplementJsonError as string) ?? "";
+  const setSupplementJsonError = ctx?.setSupplementJsonError as ((s: string) => void) | undefined;
+  const requestSupplementBySnapshotId =
+    (ctx?.requestSupplementBySnapshotId as Record<string, Record<string, unknown>> | undefined) ??
+    {};
+  const supplementSnapshotDraftRaw =
+    (ctx?.supplementSnapshotDraftRaw as Record<string, string> | undefined) ?? {};
+  const setSupplementSnapshotDraftRaw = ctx?.setSupplementSnapshotDraftRaw as
+    | React.Dispatch<React.SetStateAction<Record<string, string>>>
+    | undefined;
+  const supplementSnapshotJsonError =
+    (ctx?.supplementSnapshotJsonError as Record<string, string> | undefined) ?? {};
+  const setSupplementSnapshotJsonError = ctx?.setSupplementSnapshotJsonError as
+    | React.Dispatch<React.SetStateAction<Record<string, string>>>
+    | undefined;
   const handleSupplementJsonBlur = ctx?.handleSupplementJsonBlur as (() => void) | undefined;
+  const handleSupplementSnapshotBlur = ctx?.handleSupplementSnapshotBlur as
+    | ((sid: string) => void)
+    | undefined;
+  const applyLoadedGlobalSupplement = ctx?.applyLoadedGlobalSupplement as
+    | ((obj: Record<string, unknown>) => void)
+    | undefined;
+  const applyLoadedSnapshotSupplement = ctx?.applyLoadedSnapshotSupplement as
+    | ((sid: string, obj: Record<string, unknown>) => void)
+    | undefined;
   const clearRequestSupplement = ctx?.clearRequestSupplement as (() => void) | undefined;
   const handleRequestJsonBlur = ctx?.handleRequestJsonBlur as (() => void) | undefined;
   const applySystemPromptToBody = ctx?.applySystemPromptToBody as
@@ -166,6 +189,63 @@ export function ReleaseGateConfigPanel({
     | (() => void | Promise<void>)
     | undefined;
   const selectedSnapshotIdsForRun = (ctx?.selectedSnapshotIdsForRun as string[] | undefined) ?? [];
+
+  const supplementFileInputRef = useRef<HTMLInputElement>(null);
+  const [supplementFileLoadTarget, setSupplementFileLoadTarget] = useState<
+    "global" | { sid: string } | null
+  >(null);
+
+  const hasAnySupplementContent = useMemo(() => {
+    const hasGlobal =
+      Object.keys(requestSupplement).length > 0 ||
+      Boolean(supplementJsonDraft?.trim()) ||
+      Boolean(supplementJsonError);
+    const hasPer = Object.values(requestSupplementBySnapshotId).some(
+      o => o && Object.keys(o).length > 0
+    );
+    const hasPerDraft = Object.values(supplementSnapshotDraftRaw).some(t => t.trim());
+    return hasGlobal || hasPer || hasPerDraft;
+  }, [
+    requestSupplement,
+    supplementJsonDraft,
+    supplementJsonError,
+    requestSupplementBySnapshotId,
+    supplementSnapshotDraftRaw,
+  ]);
+
+  const triggerSupplementFilePick = (target: "global" | { sid: string }) => {
+    if (runLocked) return;
+    setSupplementFileLoadTarget(target);
+    requestAnimationFrame(() => supplementFileInputRef.current?.click());
+  };
+
+  const onSupplementFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    const target = supplementFileLoadTarget;
+    setSupplementFileLoadTarget(null);
+    if (!file || !target) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Must be a JSON object.");
+      }
+      const obj = parsed as Record<string, unknown>;
+      if (target === "global") {
+        applyLoadedGlobalSupplement?.(obj);
+      } else {
+        applyLoadedSnapshotSupplement?.(target.sid, obj);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not load file.";
+      if (target === "global") {
+        setSupplementJsonError?.(msg);
+      } else {
+        setSupplementSnapshotJsonError?.(prev => ({ ...prev, [target.sid]: msg }));
+      }
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -903,29 +983,53 @@ export function ReleaseGateConfigPanel({
 
                 {/* Request supplements (replay_overrides merge) */}
                 <div className="rounded-2xl border border-violet-500/15 bg-violet-500/[0.03] p-6 shadow-sm flex flex-col">
-                  <div className="flex items-start justify-between gap-4 mb-4">
+                  <input
+                    ref={supplementFileInputRef}
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={e => void onSupplementFileChange(e)}
+                  />
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
                     <div>
                       <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-violet-300/90 mb-1">
                         Request supplements
                       </div>
                       <div className="text-sm text-slate-400">
-                        Optional top-level fields merged into <span className="font-mono text-slate-300">replay_overrides</span> after config JSON (e.g.{" "}
-                        <span className="font-mono text-slate-500">attachments</span>,{" "}
-                        <span className="font-mono text-slate-500">documents</span>, RAG keys). Does not replace{" "}
-                        <span className="font-mono text-slate-500">messages</span> / user text from snapshots. Values here win over the same key from config JSON.
+                        Optional top-level fields merged into{" "}
+                        <span className="font-mono text-slate-300">replay_overrides</span> after config
+                        JSON (e.g. <span className="font-mono text-slate-500">attachments</span>,{" "}
+                        <span className="font-mono text-slate-500">documents</span>, RAG keys). Does not
+                        replace <span className="font-mono text-slate-500">messages</span> / user text from
+                        snapshots. Global JSON wins over the same key from config JSON; per-snapshot JSON
+                        wins over global for that snapshot only.
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (runLocked) return;
-                        clearRequestSupplement?.();
-                      }}
-                      disabled={runLocked || (Object.keys(requestSupplement).length === 0 && !supplementJsonDraft)}
-                      className="shrink-0 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                    >
-                      Clear
-                    </button>
+                    <div className="flex shrink-0 flex-wrap gap-2 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => triggerSupplementFilePick("global")}
+                        disabled={runLocked}
+                        className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        Load JSON file
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (runLocked) return;
+                          clearRequestSupplement?.();
+                        }}
+                        disabled={runLocked || !hasAnySupplementContent}
+                        className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                      >
+                        Clear all
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mb-2">
+                    Global (applies to every snapshot unless overridden below)
                   </div>
                   <textarea
                     value={supplementJsonValue}
@@ -941,6 +1045,64 @@ export function ReleaseGateConfigPanel({
                       {supplementJsonError}
                     </div>
                   ) : null}
+
+                  <div className="mt-6 border-t border-violet-500/15 pt-5">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-violet-300/80 mb-2">
+                      Per run snapshot
+                    </div>
+                    <p className="text-xs text-slate-500 mb-3">
+                      Optional extra keys for each selected snapshot id. Merged after the global object;
+                      same rules and disallowed keys apply.
+                    </p>
+                    {selectedSnapshotIdsForRun.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.01] px-4 py-6 text-sm text-slate-500">
+                        Select run snapshots on the main screen to add per-snapshot supplements.
+                      </div>
+                    ) : (
+                      <div className="space-y-4 max-h-[420px] overflow-y-auto custom-scrollbar pr-1">
+                        {selectedSnapshotIdsForRun.map(sid => (
+                          <div key={sid} className="rounded-xl border border-violet-500/20 bg-[#0a0c10]/80 p-4">
+                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                                Snapshot {sid}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => triggerSupplementFilePick({ sid })}
+                                disabled={runLocked}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                              >
+                                <Upload className="w-3 h-3" />
+                                Load file
+                              </button>
+                            </div>
+                            <textarea
+                              value={
+                                supplementSnapshotDraftRaw[sid] ??
+                                JSON.stringify(requestSupplementBySnapshotId[sid] ?? {}, null, 2)
+                              }
+                              disabled={runLocked}
+                              onChange={e =>
+                                setSupplementSnapshotDraftRaw?.(prev => ({
+                                  ...prev,
+                                  [sid]: e.target.value,
+                                }))
+                              }
+                              onBlur={() => handleSupplementSnapshotBlur?.(sid)}
+                              spellCheck={false}
+                              placeholder='{ "attachments": [] }'
+                              className="min-h-[100px] w-full rounded-lg border border-white/10 bg-[#080a0d] p-3 text-[12px] font-mono leading-relaxed text-slate-200 outline-none focus:border-violet-400/40 transition-all custom-scrollbar resize-y"
+                            />
+                            {supplementSnapshotJsonError[sid] ? (
+                              <div className="mt-2 text-[11px] font-medium text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-2 py-1.5">
+                                {supplementSnapshotJsonError[sid]}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Tools */}
