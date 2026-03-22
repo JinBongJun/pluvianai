@@ -679,6 +679,46 @@ def _sanitize_replay_overrides(
     return cleaned or None
 
 
+def _snapshot_request_part(snapshot: Snapshot) -> Dict[str, Any]:
+    """Return the provider request body from stored snapshot payload (proxy or flat)."""
+    raw = snapshot.payload if isinstance(getattr(snapshot, "payload", None), dict) else {}
+    req = raw.get("request")
+    if isinstance(req, dict):
+        return dict(req)
+    return dict(raw)
+
+
+def _build_replay_request_meta(
+    snapshots: List[Snapshot],
+    payload: Any,
+) -> Dict[str, Any]:
+    """
+    Snapshot vs applied overrides for result UI: first snapshot's top-level request keys
+    vs sanitized replay_overrides sent to the replay worker.
+    """
+    overrides = _sanitize_replay_overrides(getattr(payload, "replay_overrides", None)) or {}
+    baseline_excerpt: Dict[str, Any] = {}
+    if snapshots:
+        req = _snapshot_request_part(snapshots[0])
+        for k in overrides.keys():
+            baseline_excerpt[k] = req[k] if k in req else None
+    sampling: Dict[str, Any] = {}
+    if getattr(payload, "replay_temperature", None) is not None:
+        sampling["replay_temperature"] = payload.replay_temperature
+    if getattr(payload, "replay_max_tokens", None) is not None:
+        sampling["replay_max_tokens"] = payload.replay_max_tokens
+    if getattr(payload, "replay_top_p", None) is not None:
+        sampling["replay_top_p"] = payload.replay_top_p
+    nsp = str(getattr(payload, "new_system_prompt", None) or "").strip()
+    return {
+        "replay_overrides_applied": overrides,
+        "baseline_snapshot_excerpt": baseline_excerpt,
+        "sampling_overrides": sampling or None,
+        "has_new_system_prompt": bool(nsp),
+        "new_system_prompt_preview": (nsp[:240] + "…") if len(nsp) > 240 else (nsp or None),
+    }
+
+
 def _enforce_platform_replay_credit_limit(
     payload: "ReleaseGateValidateRequest", db: Session, current_user: User
 ) -> None:
@@ -2580,6 +2620,7 @@ async def _run_release_gate(
         passed_attempts = sum(
             sum(1 for a in (c.get("attempts") or []) if a.get("pass")) for c in case_results
         )
+        replay_request_meta = _build_replay_request_meta(snapshots, payload)
         primary_summary["release_gate"] = {
             "mode": "replay_test",
             "repeat_runs": payload.repeat_runs,
@@ -2604,6 +2645,7 @@ async def _run_release_gate(
                 "storage_policy": {"full_text_in_report": True},
             },
             "case_results": case_results,
+            "replay_request_meta": replay_request_meta,
         }
         report = BehaviorReport(
             project_id=project_id,
@@ -2686,6 +2728,7 @@ async def _run_release_gate(
                 "tool_context": tool_context_payload,
                 "storage_policy": {"full_text_in_report": True},
             },
+            "replay_request_meta": replay_request_meta,
             "case_results": case_results,
             "evidence_pack": {
                 "top_regressed_rules": [],

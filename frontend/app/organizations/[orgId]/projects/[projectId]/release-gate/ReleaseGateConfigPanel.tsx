@@ -112,6 +112,15 @@ export function ReleaseGateConfigPanel({
     | ((value: string | null) => void)
     | undefined;
   const requestJsonError = (ctx?.requestJsonError as string) ?? "";
+  const requestSupplement = (ctx?.requestSupplement as Record<string, unknown> | undefined) ?? {};
+  const requestSupplementJson = (ctx?.requestSupplementJson as string) ?? "{}";
+  const supplementJsonDraft = (ctx?.supplementJsonDraft as string | null) ?? null;
+  const setSupplementJsonDraft = ctx?.setSupplementJsonDraft as
+    | ((value: string | null) => void)
+    | undefined;
+  const supplementJsonError = (ctx?.supplementJsonError as string) ?? "";
+  const handleSupplementJsonBlur = ctx?.handleSupplementJsonBlur as (() => void) | undefined;
+  const clearRequestSupplement = ctx?.clearRequestSupplement as (() => void) | undefined;
   const handleRequestJsonBlur = ctx?.handleRequestJsonBlur as (() => void) | undefined;
   const applySystemPromptToBody = ctx?.applySystemPromptToBody as
     | ((body: Record<string, unknown>, systemPrompt: string) => Record<string, unknown>)
@@ -179,6 +188,7 @@ export function ReleaseGateConfigPanel({
   const usingModel = previewNewModel.trim().length ? previewNewModel.trim() : runDataModel;
   const usingProvider = toReplayProvider(previewReplayProviderRaw ?? runDataProvider);
   const candidateJsonValue = requestJsonDraft ?? requestBodyJson;
+  const supplementJsonValue = supplementJsonDraft ?? requestSupplementJson;
 
   const cleanBaselineForComparison = useMemo(() => {
     if (!baselinePayload) return "{}";
@@ -889,6 +899,48 @@ export function ReleaseGateConfigPanel({
                       {requestJsonError}
                     </div>
                   )}
+                </div>
+
+                {/* Request supplements (replay_overrides merge) */}
+                <div className="rounded-2xl border border-violet-500/15 bg-violet-500/[0.03] p-6 shadow-sm flex flex-col">
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-violet-300/90 mb-1">
+                        Request supplements
+                      </div>
+                      <div className="text-sm text-slate-400">
+                        Optional top-level fields merged into <span className="font-mono text-slate-300">replay_overrides</span> after config JSON (e.g.{" "}
+                        <span className="font-mono text-slate-500">attachments</span>,{" "}
+                        <span className="font-mono text-slate-500">documents</span>, RAG keys). Does not replace{" "}
+                        <span className="font-mono text-slate-500">messages</span> / user text from snapshots. Values here win over the same key from config JSON.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (runLocked) return;
+                        clearRequestSupplement?.();
+                      }}
+                      disabled={runLocked || (Object.keys(requestSupplement).length === 0 && !supplementJsonDraft)}
+                      className="shrink-0 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <textarea
+                    value={supplementJsonValue}
+                    disabled={runLocked}
+                    onChange={e => setSupplementJsonDraft?.(e.target.value)}
+                    onBlur={() => handleSupplementJsonBlur?.()}
+                    spellCheck={false}
+                    placeholder='{\n  "attachments": []\n}'
+                    className="min-h-[160px] w-full flex-1 rounded-xl border border-violet-500/20 bg-[#0a0c10] p-5 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-violet-400/50 focus:ring-1 focus:ring-violet-400/40 transition-all custom-scrollbar resize-y"
+                  />
+                  {supplementJsonError ? (
+                    <div className="mt-3 text-xs font-medium text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+                      {supplementJsonError}
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* Tools */}
