@@ -3,7 +3,7 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import useSWR from "swr";
-import { Plus, Trash2, X, RefreshCcw, SearchCode } from "lucide-react";
+import { Plus, Trash2, X, RefreshCcw, SearchCode, Loader2 } from "lucide-react";
 
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
 import { sanitizePayloadForPreview } from "./ReleaseGatePageContent";
@@ -134,6 +134,29 @@ export function ReleaseGateConfigPanel({
     (ctx?.selectedDataSummary as string) ??
     "No baseline data yet. Select representative \"good\" snapshots from Live Logs or Saved Data.";
   const runLocked = Boolean(ctx?.isValidating) || Boolean(ctx?.activeJobId);
+
+  const toolContextMode = (ctx?.toolContextMode as "recorded" | "inject") ?? "recorded";
+  const setToolContextMode = ctx?.setToolContextMode as
+    | ((v: "recorded" | "inject") => void)
+    | undefined;
+  const toolContextScope = (ctx?.toolContextScope as "global" | "per_snapshot") ?? "per_snapshot";
+  const setToolContextScope = ctx?.setToolContextScope as
+    | ((v: "global" | "per_snapshot") => void)
+    | undefined;
+  const toolContextGlobalText = (ctx?.toolContextGlobalText as string) ?? "";
+  const setToolContextGlobalText = ctx?.setToolContextGlobalText as
+    | ((v: string) => void)
+    | undefined;
+  const toolContextBySnapshotId =
+    (ctx?.toolContextBySnapshotId as Record<string, string> | undefined) ?? {};
+  const setToolContextBySnapshotId = ctx?.setToolContextBySnapshotId as
+    | React.Dispatch<React.SetStateAction<Record<string, string>>>
+    | undefined;
+  const toolContextLoadBusy = Boolean(ctx?.toolContextLoadBusy);
+  const handleLoadToolContextFromSnapshots = ctx?.handleLoadToolContextFromSnapshots as
+    | (() => void | Promise<void>)
+    | undefined;
+  const selectedSnapshotIdsForRun = (ctx?.selectedSnapshotIdsForRun as string[] | undefined) ?? [];
 
   useEffect(() => {
     if (!isOpen) return;
@@ -970,6 +993,162 @@ export function ReleaseGateConfigPanel({
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Injected context (Release Gate): docs / code / tool outcomes missing from captured logs */}
+                <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm">
+                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
+                        Injected context
+                      </div>
+                      <div className="text-sm text-slate-400">
+                        Optional text appended to the system prompt on replay when ingest omitted tool
+                        results or customer content. Use recorded logs when available, or paste your own
+                        material for controlled experiments.
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                      <button
+                        type="button"
+                        disabled={
+                          runLocked ||
+                          toolContextMode !== "inject" ||
+                          selectedSnapshotIdsForRun.length === 0 ||
+                          toolContextLoadBusy
+                        }
+                        onClick={() => void handleLoadToolContextFromSnapshots?.()}
+                        className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-white hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                      >
+                        {toolContextLoadBusy ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCcw className="w-3.5 h-3.5" />
+                        )}
+                        Load from snapshots
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3 mb-4">
+                    <label className="inline-flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="toolContextMode"
+                        checked={toolContextMode === "recorded"}
+                        onChange={() => setToolContextMode?.("recorded")}
+                        disabled={runLocked}
+                        className="accent-fuchsia-500"
+                      />
+                      Recorded only
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="toolContextMode"
+                        checked={toolContextMode === "inject"}
+                        onChange={() => setToolContextMode?.("inject")}
+                        disabled={runLocked}
+                        className="accent-fuchsia-500"
+                      />
+                      Inject context
+                    </label>
+                  </div>
+
+                  {toolContextMode === "inject" ? (
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap gap-3">
+                        <label className="inline-flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="toolContextScope"
+                            checked={toolContextScope === "per_snapshot"}
+                            onChange={() => setToolContextScope?.("per_snapshot")}
+                            disabled={runLocked}
+                            className="accent-fuchsia-500"
+                          />
+                          Per snapshot
+                        </label>
+                        <label className="inline-flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="toolContextScope"
+                            checked={toolContextScope === "global"}
+                            onChange={() => setToolContextScope?.("global")}
+                            disabled={runLocked}
+                            className="accent-fuchsia-500"
+                          />
+                          Global (same for all)
+                        </label>
+                      </div>
+
+                      {toolContextScope === "global" ? (
+                        <label className="block space-y-2">
+                          <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                            Global injected text
+                          </span>
+                          <textarea
+                            value={toolContextGlobalText}
+                            onChange={e => setToolContextGlobalText?.(e.target.value)}
+                            disabled={runLocked}
+                            spellCheck={false}
+                            placeholder="Paste docs, code, or tool outcomes to include on every selected snapshot…"
+                            className="min-h-[180px] w-full rounded-xl border border-white/10 bg-[#0a0c10] p-4 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
+                          />
+                        </label>
+                      ) : (
+                        <div className="space-y-4">
+                          <label className="block space-y-2">
+                            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                              Fallback (optional)
+                            </span>
+                            <span className="text-xs text-slate-500 block">
+                              Used when a snapshot id has no per-row text below.
+                            </span>
+                            <textarea
+                              value={toolContextGlobalText}
+                              onChange={e => setToolContextGlobalText?.(e.target.value)}
+                              disabled={runLocked}
+                              spellCheck={false}
+                              className="min-h-[80px] w-full rounded-xl border border-white/10 bg-[#0a0c10] p-3 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
+                            />
+                          </label>
+                          {selectedSnapshotIdsForRun.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.01] px-4 py-6 text-sm text-slate-500">
+                              Select run snapshots on the main screen to edit per-snapshot context.
+                            </div>
+                          ) : (
+                            <div className="space-y-4 max-h-[360px] overflow-y-auto custom-scrollbar pr-1">
+                              {selectedSnapshotIdsForRun.map(sid => (
+                                <label key={sid} className="block space-y-2">
+                                  <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                                    Snapshot {sid}
+                                  </span>
+                                  <textarea
+                                    value={toolContextBySnapshotId[sid] ?? ""}
+                                    onChange={e =>
+                                      setToolContextBySnapshotId?.(prev => ({
+                                        ...prev,
+                                        [sid]: e.target.value,
+                                      }))
+                                    }
+                                    disabled={runLocked}
+                                    spellCheck={false}
+                                    placeholder="Injected context for this snapshot…"
+                                    className="min-h-[120px] w-full rounded-xl border border-white/10 bg-[#0a0c10] p-3 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.01] px-4 py-5 text-sm text-slate-500">
+                      No injection: replay uses captured request data only.
                     </div>
                   )}
                 </div>
