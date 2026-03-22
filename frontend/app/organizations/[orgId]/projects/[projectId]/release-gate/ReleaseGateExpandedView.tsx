@@ -6,7 +6,6 @@
  * (see docs/live-view-context-privacy-plan.md).
  */
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import Link from "next/link";
 import clsx from "clsx";
 import { AnimatePresence, motion } from "framer-motion";
@@ -2304,11 +2303,11 @@ export function ReleaseGateExpandedView() {
           </div>
         </div>
 
-        {tab === "validate" && agentId && (
+        {agentId && (
           <ClientPortal>
             <RailwaySidePanel
               title={selectedAgent?.display_name || agentId}
-              isOpen={true}
+              isOpen={tab === "validate"}
               onClose={handleBack}
               side="left"
               width={320}
@@ -3052,10 +3051,13 @@ export function ReleaseGateExpandedView() {
           </div>
         )}
 
-        {baselineDetailSnapshot && (
-          <ClientPortal>
-            <AnimatePresence>
+        <ClientPortal>
+          <AnimatePresence>
+            {baselineDetailSnapshot ? (
               <SnapshotDetailModal
+                key={String(
+                  (baselineDetailSnapshot as unknown as { id?: string | number }).id ?? "snapshot"
+                )}
                 snapshot={baselineDetailSnapshot}
                 onClose={() => setBaselineDetailSnapshot(null)}
                 overlayZIndex={10000}
@@ -3081,9 +3083,9 @@ export function ReleaseGateExpandedView() {
                     : "Eval result from snapshot capture time.";
                 })()}
               />
-            </AnimatePresence>
-          </ClientPortal>
-        )}
+            ) : null}
+          </AnimatePresence>
+        </ClientPortal>
       </div>
     </div>
   );
