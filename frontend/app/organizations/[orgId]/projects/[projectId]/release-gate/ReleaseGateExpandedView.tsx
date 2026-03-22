@@ -1921,6 +1921,87 @@ export function ReleaseGateExpandedView() {
     }
     return null;
   }, [result, selectedRunId, selectedRunReport]);
+  const activeReleaseGateSummary = useMemo(() => {
+    const sid = selectedRunId != null ? String(selectedRunId) : "";
+    const lastRid = result?.report_id != null ? String(result.report_id) : "";
+    const viewingDifferentReportThanLastRun = Boolean(sid && lastRid && sid !== lastRid);
+
+    if (
+      viewingDifferentReportThanLastRun &&
+      selectedRunReport?.summary &&
+      String(selectedRunReport.id) === sid
+    ) {
+      const rg = (selectedRunReport.summary as Record<string, unknown> | undefined)?.release_gate;
+      if (rg && typeof rg === "object") return rg as Record<string, unknown>;
+    }
+
+    if (selectedRunReport?.summary && sid && String(selectedRunReport.id) === sid) {
+      const rg = (selectedRunReport.summary as Record<string, unknown> | undefined)?.release_gate;
+      if (rg && typeof rg === "object") return rg as Record<string, unknown>;
+    }
+    return null;
+  }, [result, selectedRunId, selectedRunReport]);
+  const activeToolContextSummary =
+    ((activeReleaseGateSummary?.experiment as Record<string, unknown> | undefined)?.tool_context as
+      | Record<string, unknown>
+      | null
+      | undefined) ??
+    (result?.experiment?.tool_context as Record<string, unknown> | null | undefined) ??
+    null;
+  const runConfigSummaryItems = useMemo(() => {
+    const items: string[] = [];
+    const repeatRuns =
+      Number((activeReleaseGateSummary?.repeat_runs as number | undefined) ?? result?.repeat_runs) || 0;
+    if (repeatRuns > 0) items.push(`Repeat ${repeatRuns}`);
+
+    const thresholds =
+      ((activeReleaseGateSummary?.thresholds as Record<string, unknown> | undefined) ?? null) ||
+      (result?.thresholds_used as Record<string, unknown> | undefined) ||
+      null;
+    const failRateMax = Number(
+      thresholds?.fail_rate_max ?? thresholds?.failRateMax ?? thresholds?.fail_rate
+    );
+    const flakyRateMax = Number(
+      thresholds?.flaky_rate_max ?? thresholds?.flakyRateMax ?? thresholds?.flaky_rate
+    );
+    if (Number.isFinite(failRateMax)) items.push(`Fail max ${Math.round(failRateMax * 100)}%`);
+    if (Number.isFinite(flakyRateMax)) items.push(`Flaky max ${Math.round(flakyRateMax * 100)}%`);
+
+    const sampling = replayRequestMeta?.sampling_overrides;
+    if (sampling && typeof sampling === "object") {
+      const count = Object.keys(sampling).length;
+      if (count > 0) items.push(`Sampling ${count} key${count === 1 ? "" : "s"}`);
+    }
+
+    const applied = replayRequestMeta?.replay_overrides_applied;
+    if (applied && typeof applied === "object") {
+      const count = Object.keys(applied).length;
+      if (count > 0) items.push(`Body overrides ${count}`);
+    }
+
+    const perLog = replayRequestMeta?.replay_overrides_by_snapshot_id_applied;
+    if (perLog && typeof perLog === "object") {
+      const count = Object.keys(perLog).length;
+      if (count > 0) items.push(`Per-log overrides ${count}`);
+    }
+
+    if (replayRequestMeta?.has_new_system_prompt) {
+      items.push("System prompt override");
+    }
+
+    if (activeToolContextSummary && typeof activeToolContextSummary === "object") {
+      const mode = String(activeToolContextSummary.mode || "recorded").trim().toLowerCase();
+      if (mode === "inject") {
+        const inject = activeToolContextSummary.inject as Record<string, unknown> | undefined;
+        const scope = String(inject?.scope || "per_snapshot");
+        items.push(`Extra system context · ${scope}`);
+      } else {
+        items.push("Recorded context only");
+      }
+    }
+
+    return items;
+  }, [activeReleaseGateSummary, activeToolContextSummary, replayRequestMeta, result]);
   const setExpandedHistoryId = ctx.setExpandedHistoryId as
     | ((id: string | null) => void)
     | undefined;
@@ -2824,8 +2905,26 @@ export function ReleaseGateExpandedView() {
                           ) : null}
                         </div>
 
-                        {result?.experiment?.tool_context &&
-                        typeof result.experiment.tool_context === "object" && (
+                        {runConfigSummaryItems.length > 0 ? (
+                          <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-3">
+                            <div className="text-[9px] font-black uppercase tracking-[0.2em] text-cyan-300/90">
+                              Run config summary
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {runConfigSummaryItems.map(item => (
+                                <span
+                                  key={item}
+                                  className="rounded-full border border-cyan-500/20 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-cyan-100"
+                                >
+                                  {item}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {activeToolContextSummary &&
+                        typeof activeToolContextSummary === "object" && (
                           <div
                             className="rounded-2xl border border-violet-500/20 bg-violet-500/5 px-3 py-2"
                             data-testid="rg-result-experiment-summary"
@@ -2834,8 +2933,8 @@ export function ReleaseGateExpandedView() {
                               Experiment
                             </div>
                             <div className="mt-1 text-[11px] text-slate-300">
-                              {(result.experiment.tool_context as { mode?: string }).mode === "inject"
-                                ? `Append · ${String((result.experiment.tool_context as { inject?: { scope?: string } }).inject?.scope || "per_snapshot")}`
+                              {(activeToolContextSummary as { mode?: string }).mode === "inject"
+                                ? `Append · ${String((activeToolContextSummary as { inject?: { scope?: string } }).inject?.scope || "per_snapshot")}`
                                 : "Recorded only (no extra system context)"}
                             </div>
                           </div>
