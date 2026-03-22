@@ -234,7 +234,7 @@ export interface ReleaseGateRunResult {
   run_index: number;
   pass: boolean;
   case_status?: "pass" | "fail" | "flaky";
-  /** Per-snapshot A/B/C/D context summaries (ingest, RG injection, tool I/O aggregates). */
+  /** Per-snapshot A/B/C/D context summaries (ingest, RG extra system context, tool I/O aggregates). */
   context?: Record<string, unknown>;
   failure_reasons: string[];
   violation_count_delta: number;
@@ -264,10 +264,10 @@ export interface ReleaseGateRunResult {
   trace_id?: string;
 }
 
-/** Echoed from backend: baseline snapshot excerpt vs replay_overrides for the run. */
+/** Echoed from backend: baseline log excerpt vs merged replay body overrides for the run. */
 export interface ReleaseGateReplayRequestMeta {
   replay_overrides_applied?: Record<string, unknown>;
-  /** Sanitized per-snapshot overrides echoed for this run (when sent). */
+  /** Sanitized per-log overrides echoed for this run (when sent). */
   replay_overrides_by_snapshot_id_applied?: Record<string, Record<string, unknown>> | null;
   baseline_snapshot_excerpt?: Record<string, unknown>;
   sampling_overrides?: Record<string, unknown> | null;
@@ -278,12 +278,12 @@ export interface ReleaseGateReplayRequestMeta {
 export interface ReleaseGateResult {
   pass: boolean;
   summary?: string;
-  /** Echo of run-level experiment config (e.g. tool_context) for UI without loading the full report. */
+  /** Echo of run-level experiment config (e.g. tool_context: additional system text) for UI without loading the full report. */
   experiment?: {
     tool_context?: Record<string, unknown> | null;
     storage_policy?: { full_text_in_report?: boolean };
   };
-  /** Snapshot vs applied replay overrides (also stored under report summary.release_gate). */
+  /** Baseline vs applied replay body overrides (also stored under report summary.release_gate). */
   replay_request_meta?: ReleaseGateReplayRequestMeta;
   failed_signals?: string[];
   exit_code: 0 | 1;

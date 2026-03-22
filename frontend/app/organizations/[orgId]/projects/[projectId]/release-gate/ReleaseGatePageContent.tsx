@@ -62,9 +62,9 @@ import {
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 import {
-  applySupplementToRequestBody,
-  mergeReplaySupplementsForSnapshot,
-  sanitizeReplayRequestSupplement,
+  applyBodyOverridesToRequestBody,
+  mergeReplayBodyOverridesForSnapshot,
+  sanitizeReplayBodyOverrides,
 } from "./releaseGateReplayMerge";
 
 type GateTab = "validate" | "history";
@@ -526,10 +526,10 @@ function buildFinalCandidateRequest(options: {
   modelOverrideEnabled: boolean;
   newModel: string;
   /** Merged after requestBody; wins on conflict. Does not replace messages/user text (sanitized). */
-  requestSupplement?: Record<string, unknown> | null;
+  requestBodyOverrides?: Record<string, unknown> | null;
   /** Per selected snapshot ids; merged after global for the seed snapshot preview. */
-  requestSupplementBySnapshotId?: Record<string, Record<string, unknown>> | null;
-  /** First baseline snapshot id (for merged supplement preview). */
+  requestBodyOverridesBySnapshotId?: Record<string, Record<string, unknown>> | null;
+  /** First baseline snapshot id (for merged body-overrides preview). */
   seedSnapshotId?: string | null;
 }): Record<string, unknown> {
   const {
@@ -540,8 +540,8 @@ function buildFinalCandidateRequest(options: {
     requestSystemPrompt,
     modelOverrideEnabled,
     newModel,
-    requestSupplement,
-    requestSupplementBySnapshotId,
+    requestBodyOverrides,
+    requestBodyOverridesBySnapshotId,
     seedSnapshotId,
   } = options;
 
@@ -591,13 +591,13 @@ function buildFinalCandidateRequest(options: {
     finalReq[k] = v;
   }
 
-  const mergedSup = mergeReplaySupplementsForSnapshot(
-    requestSupplement ?? undefined,
-    requestSupplementBySnapshotId ?? undefined,
+  const mergedSup = mergeReplayBodyOverridesForSnapshot(
+    requestBodyOverrides ?? undefined,
+    requestBodyOverridesBySnapshotId ?? undefined,
     seedSnapshotId ?? null
   );
   if (Object.keys(mergedSup).length > 0) {
-    finalReq = applySupplementToRequestBody(finalReq, mergedSup);
+    finalReq = applyBodyOverridesToRequestBody(finalReq, mergedSup);
   }
 
   return finalReq;
@@ -783,7 +783,7 @@ export default function ReleaseGatePageContent() {
   const [repeatRuns, setRepeatRuns] = useState<number>(1);
   const [repeatDropdownOpen, setRepeatDropdownOpen] = useState(false);
   const repeatDropdownRef = useRef<HTMLDivElement>(null);
-  const prevAgentIdForSupplementRef = useRef<string | null>(null);
+  const prevAgentIdForBodyOverridesRef = useRef<string | null>(null);
   const REPEAT_OPTIONS = [1, 10, 50, 100] as const;
   const isHeavyRepeat = repeatRuns === 50 || repeatRuns === 100;
   useEffect(() => {
@@ -819,17 +819,17 @@ export default function ReleaseGatePageContent() {
   const [requestJsonDraft, setRequestJsonDraft] = useState<string | null>(null);
   const [requestJsonError, setRequestJsonError] = useState("");
   /** Top-level request fields merged into replay_overrides after config JSON (e.g. attachments, RAG). */
-  const [requestSupplement, setRequestSupplement] = useState<Record<string, unknown>>({});
-  const [supplementJsonDraft, setSupplementJsonDraft] = useState<string | null>(null);
-  const [supplementJsonError, setSupplementJsonError] = useState("");
-  /** Sanitized per snapshot id → supplement object (merged after global on the server). */
-  const [requestSupplementBySnapshotId, setRequestSupplementBySnapshotId] = useState<
+  const [requestBodyOverrides, setRequestBodyOverrides] = useState<Record<string, unknown>>({});
+  const [bodyOverridesJsonDraft, setBodyOverridesJsonDraft] = useState<string | null>(null);
+  const [bodyOverridesJsonError, setBodyOverridesJsonError] = useState("");
+  /** Sanitized per snapshot id → body overrides (merged after global on the server). */
+  const [requestBodyOverridesBySnapshotId, setRequestBodyOverridesBySnapshotId] = useState<
     Record<string, Record<string, unknown>>
   >({});
-  const [supplementSnapshotDraftRaw, setSupplementSnapshotDraftRaw] = useState<Record<string, string>>(
-    {}
-  );
-  const [supplementSnapshotJsonError, setSupplementSnapshotJsonError] = useState<
+  const [bodyOverridesSnapshotDraftRaw, setBodyOverridesSnapshotDraftRaw] = useState<
+    Record<string, string>
+  >({});
+  const [bodyOverridesSnapshotJsonError, setBodyOverridesSnapshotJsonError] = useState<
     Record<string, string>
   >({});
   const [temperatureDraft, setTemperatureDraft] = useState<string | null>(null);
@@ -1368,7 +1368,7 @@ export default function ReleaseGatePageContent() {
   }, [selectedSnapshotIdsForRun]);
 
   useEffect(() => {
-    setRequestSupplementBySnapshotId(prev => {
+    setRequestBodyOverridesBySnapshotId(prev => {
       const ids = new Set(selectedSnapshotIdsForRun.map(String));
       const next = { ...prev };
       for (const k of Object.keys(next)) {
@@ -1376,7 +1376,7 @@ export default function ReleaseGatePageContent() {
       }
       return next;
     });
-    setSupplementSnapshotDraftRaw(prev => {
+    setBodyOverridesSnapshotDraftRaw(prev => {
       const ids = new Set(selectedSnapshotIdsForRun.map(String));
       const next = { ...prev };
       for (const k of Object.keys(next)) {
@@ -1384,7 +1384,7 @@ export default function ReleaseGatePageContent() {
       }
       return next;
     });
-    setSupplementSnapshotJsonError(prev => {
+    setBodyOverridesSnapshotJsonError(prev => {
       const ids = new Set(selectedSnapshotIdsForRun.map(String));
       const next = { ...prev };
       for (const k of Object.keys(next)) {
@@ -1396,15 +1396,15 @@ export default function ReleaseGatePageContent() {
 
   useEffect(() => {
     const cur = agentId.trim();
-    if (prevAgentIdForSupplementRef.current !== null && prevAgentIdForSupplementRef.current !== cur) {
-      setRequestSupplement({});
-      setSupplementJsonDraft(null);
-      setSupplementJsonError("");
-      setRequestSupplementBySnapshotId({});
-      setSupplementSnapshotDraftRaw({});
-      setSupplementSnapshotJsonError({});
+    if (prevAgentIdForBodyOverridesRef.current !== null && prevAgentIdForBodyOverridesRef.current !== cur) {
+      setRequestBodyOverrides({});
+      setBodyOverridesJsonDraft(null);
+      setBodyOverridesJsonError("");
+      setRequestBodyOverridesBySnapshotId({});
+      setBodyOverridesSnapshotDraftRaw({});
+      setBodyOverridesSnapshotJsonError({});
     }
-    prevAgentIdForSupplementRef.current = cur;
+    prevAgentIdForBodyOverridesRef.current = cur;
   }, [agentId]);
 
   const handleLoadToolContextFromSnapshots = useCallback(async () => {
@@ -1879,9 +1879,9 @@ export default function ReleaseGatePageContent() {
     () => JSON.stringify(requestBodyWithoutTools, null, 2),
     [requestBodyWithoutTools]
   );
-  const requestSupplementJson = useMemo(
-    () => JSON.stringify(requestSupplement, null, 2),
-    [requestSupplement]
+  const requestBodyOverridesJson = useMemo(
+    () => JSON.stringify(requestBodyOverrides, null, 2),
+    [requestBodyOverrides]
   );
 
   const baselineConfigSummary = useMemo(() => {
@@ -1904,8 +1904,8 @@ export default function ReleaseGatePageContent() {
         requestSystemPrompt,
         modelOverrideEnabled,
         newModel,
-        requestSupplement,
-        requestSupplementBySnapshotId,
+        requestBodyOverrides,
+        requestBodyOverridesBySnapshotId,
         seedSnapshotId: baselineSeedSnapshotId,
       }),
     [
@@ -1916,8 +1916,8 @@ export default function ReleaseGatePageContent() {
       requestSystemPrompt,
       modelOverrideEnabled,
       newModel,
-      requestSupplement,
-      requestSupplementBySnapshotId,
+      requestBodyOverrides,
+      requestBodyOverridesBySnapshotId,
       baselineSeedSnapshotId,
     ]
   );
@@ -2015,15 +2015,15 @@ export default function ReleaseGatePageContent() {
       if (built.length) overrides.tools = built;
     }
 
-    const supPreview = sanitizeReplayRequestSupplement(requestSupplement);
-    const mergedOverrides = { ...overrides, ...supPreview };
+    const bodyOverridesPreview = sanitizeReplayBodyOverrides(requestBodyOverrides);
+    const mergedOverrides = { ...overrides, ...bodyOverridesPreview };
     if (Object.keys(mergedOverrides).length) {
       preview.replay_overrides = mergedOverrides;
     }
 
     const perBySnap: Record<string, Record<string, unknown>> = {};
     for (const sid of selectedSnapshotIdsForRun) {
-      const s = sanitizeReplayRequestSupplement(requestSupplementBySnapshotId[sid]);
+      const s = sanitizeReplayBodyOverrides(requestBodyOverridesBySnapshotId[sid]);
       if (Object.keys(s).length) perBySnap[sid] = s;
     }
     if (Object.keys(perBySnap).length) {
@@ -2049,61 +2049,61 @@ export default function ReleaseGatePageContent() {
     toolContextScope,
     toolContextGlobalText,
     toolContextBySnapshotId,
-    requestSupplement,
+    requestBodyOverrides,
     selectedSnapshotIdsForRun,
-    requestSupplementBySnapshotId,
+    requestBodyOverridesBySnapshotId,
   ]);
 
-  const handleSupplementJsonBlur = useCallback(() => {
-    const raw = supplementJsonDraft ?? requestSupplementJson;
+  const handleBodyOverridesJsonBlur = useCallback(() => {
+    const raw = bodyOverridesJsonDraft ?? requestBodyOverridesJson;
     const trimmed = raw.trim();
     if (!trimmed) {
-      setRequestSupplement({});
-      setSupplementJsonDraft(null);
-      setSupplementJsonError("");
+      setRequestBodyOverrides({});
+      setBodyOverridesJsonDraft(null);
+      setBodyOverridesJsonError("");
       return;
     }
     try {
       const parsed = JSON.parse(trimmed) as unknown;
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        setSupplementJsonError("Must be a JSON object.");
+        setBodyOverridesJsonError("Must be a JSON object.");
         return;
       }
-      setRequestSupplement(sanitizeReplayRequestSupplement(parsed as Record<string, unknown>));
-      setSupplementJsonDraft(null);
-      setSupplementJsonError("");
+      setRequestBodyOverrides(sanitizeReplayBodyOverrides(parsed as Record<string, unknown>));
+      setBodyOverridesJsonDraft(null);
+      setBodyOverridesJsonError("");
     } catch {
-      setSupplementJsonError("Invalid JSON.");
+      setBodyOverridesJsonError("Invalid JSON.");
     }
-  }, [supplementJsonDraft, requestSupplementJson]);
+  }, [bodyOverridesJsonDraft, requestBodyOverridesJson]);
 
-  const clearRequestSupplement = useCallback(() => {
-    setRequestSupplement({});
-    setSupplementJsonDraft(null);
-    setSupplementJsonError("");
-    setRequestSupplementBySnapshotId({});
-    setSupplementSnapshotDraftRaw({});
-    setSupplementSnapshotJsonError({});
+  const clearBodyOverrides = useCallback(() => {
+    setRequestBodyOverrides({});
+    setBodyOverridesJsonDraft(null);
+    setBodyOverridesJsonError("");
+    setRequestBodyOverridesBySnapshotId({});
+    setBodyOverridesSnapshotDraftRaw({});
+    setBodyOverridesSnapshotJsonError({});
   }, []);
 
-  const handleSupplementSnapshotBlur = useCallback(
+  const handleBodyOverridesSnapshotBlur = useCallback(
     (sid: string) => {
       const raw =
-        supplementSnapshotDraftRaw[sid] ??
-        JSON.stringify(requestSupplementBySnapshotId[sid] ?? {}, null, 2);
+        bodyOverridesSnapshotDraftRaw[sid] ??
+        JSON.stringify(requestBodyOverridesBySnapshotId[sid] ?? {}, null, 2);
       const trimmed = raw.trim();
       if (!trimmed) {
-        setRequestSupplementBySnapshotId(prev => {
+        setRequestBodyOverridesBySnapshotId(prev => {
           const n = { ...prev };
           delete n[sid];
           return n;
         });
-        setSupplementSnapshotDraftRaw(prev => {
+        setBodyOverridesSnapshotDraftRaw(prev => {
           const n = { ...prev };
           delete n[sid];
           return n;
         });
-        setSupplementSnapshotJsonError(prev => {
+        setBodyOverridesSnapshotJsonError(prev => {
           const n = { ...prev };
           delete n[sid];
           return n;
@@ -2113,41 +2113,41 @@ export default function ReleaseGatePageContent() {
       try {
         const parsed = JSON.parse(trimmed) as unknown;
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          setSupplementSnapshotJsonError(prev => ({ ...prev, [sid]: "Must be a JSON object." }));
+          setBodyOverridesSnapshotJsonError(prev => ({ ...prev, [sid]: "Must be a JSON object." }));
           return;
         }
-        setRequestSupplementBySnapshotId(prev => ({
+        setRequestBodyOverridesBySnapshotId(prev => ({
           ...prev,
-          [sid]: sanitizeReplayRequestSupplement(parsed as Record<string, unknown>),
+          [sid]: sanitizeReplayBodyOverrides(parsed as Record<string, unknown>),
         }));
-        setSupplementSnapshotDraftRaw(prev => {
+        setBodyOverridesSnapshotDraftRaw(prev => {
           const n = { ...prev };
           delete n[sid];
           return n;
         });
-        setSupplementSnapshotJsonError(prev => {
+        setBodyOverridesSnapshotJsonError(prev => {
           const n = { ...prev };
           delete n[sid];
           return n;
         });
       } catch {
-        setSupplementSnapshotJsonError(prev => ({ ...prev, [sid]: "Invalid JSON." }));
+        setBodyOverridesSnapshotJsonError(prev => ({ ...prev, [sid]: "Invalid JSON." }));
       }
     },
-    [supplementSnapshotDraftRaw, requestSupplementBySnapshotId]
+    [bodyOverridesSnapshotDraftRaw, requestBodyOverridesBySnapshotId]
   );
 
-  const applyLoadedGlobalSupplement = useCallback((obj: Record<string, unknown>) => {
-    setRequestSupplement(sanitizeReplayRequestSupplement(obj));
-    setSupplementJsonDraft(null);
-    setSupplementJsonError("");
+  const applyLoadedGlobalBodyOverrides = useCallback((obj: Record<string, unknown>) => {
+    setRequestBodyOverrides(sanitizeReplayBodyOverrides(obj));
+    setBodyOverridesJsonDraft(null);
+    setBodyOverridesJsonError("");
   }, []);
 
-  const applyLoadedSnapshotSupplement = useCallback((sid: string, obj: Record<string, unknown>) => {
-    const cleaned = sanitizeReplayRequestSupplement(obj);
-    setRequestSupplementBySnapshotId(prev => ({ ...prev, [sid]: cleaned }));
-    setSupplementSnapshotDraftRaw(prev => ({ ...prev, [sid]: JSON.stringify(cleaned, null, 2) }));
-    setSupplementSnapshotJsonError(prev => {
+  const applyLoadedSnapshotBodyOverrides = useCallback((sid: string, obj: Record<string, unknown>) => {
+    const cleaned = sanitizeReplayBodyOverrides(obj);
+    setRequestBodyOverridesBySnapshotId(prev => ({ ...prev, [sid]: cleaned }));
+    setBodyOverridesSnapshotDraftRaw(prev => ({ ...prev, [sid]: JSON.stringify(cleaned, null, 2) }));
+    setBodyOverridesSnapshotJsonError(prev => {
       const n = { ...prev };
       delete n[sid];
       return n;
@@ -2393,12 +2393,12 @@ export default function ReleaseGatePageContent() {
         }
         if (built.length) overrides.tools = built;
       }
-      const supForRun = sanitizeReplayRequestSupplement(requestSupplement);
-      const mergedReplayOverrides = { ...overrides, ...supForRun };
+      const bodyOverridesForRun = sanitizeReplayBodyOverrides(requestBodyOverrides);
+      const mergedReplayOverrides = { ...overrides, ...bodyOverridesForRun };
       if (Object.keys(mergedReplayOverrides).length) payload.replay_overrides = mergedReplayOverrides;
       const perSidPayload: Record<string, Record<string, unknown>> = {};
-      for (const sid of Object.keys(requestSupplementBySnapshotId)) {
-        const cleaned = sanitizeReplayRequestSupplement(requestSupplementBySnapshotId[sid]);
+      for (const sid of Object.keys(requestBodyOverridesBySnapshotId)) {
+        const cleaned = sanitizeReplayBodyOverrides(requestBodyOverridesBySnapshotId[sid]);
         if (Object.keys(cleaned).length) perSidPayload[sid] = cleaned;
       }
       if (Object.keys(perSidPayload).length) {
@@ -2510,7 +2510,7 @@ export default function ReleaseGatePageContent() {
     setAgentId(agent.agent_id);
     setSelectedAgent(agent);
     setDatasetIds([]); // Reset datasets on agent change
-    clearRequestSupplement();
+    clearBodyOverrides();
     setViewMode("expanded");
   };
 
@@ -2609,23 +2609,23 @@ export default function ReleaseGatePageContent() {
     requestJsonDraft,
     setRequestJsonDraft,
     requestJsonError,
-    requestSupplement,
-    setRequestSupplement,
-    requestSupplementJson,
-    supplementJsonDraft,
-    setSupplementJsonDraft,
-    supplementJsonError,
-    setSupplementJsonError,
-    requestSupplementBySnapshotId,
-    supplementSnapshotDraftRaw,
-    setSupplementSnapshotDraftRaw,
-    supplementSnapshotJsonError,
-    setSupplementSnapshotJsonError,
-    handleSupplementJsonBlur,
-    handleSupplementSnapshotBlur,
-    applyLoadedGlobalSupplement,
-    applyLoadedSnapshotSupplement,
-    clearRequestSupplement,
+    requestBodyOverrides,
+    setRequestBodyOverrides,
+    requestBodyOverridesJson,
+    bodyOverridesJsonDraft,
+    setBodyOverridesJsonDraft,
+    bodyOverridesJsonError,
+    setBodyOverridesJsonError,
+    requestBodyOverridesBySnapshotId,
+    bodyOverridesSnapshotDraftRaw,
+    setBodyOverridesSnapshotDraftRaw,
+    bodyOverridesSnapshotJsonError,
+    setBodyOverridesSnapshotJsonError,
+    handleBodyOverridesJsonBlur,
+    handleBodyOverridesSnapshotBlur,
+    applyLoadedGlobalBodyOverrides,
+    applyLoadedSnapshotBodyOverrides,
+    clearBodyOverrides,
     handleRequestJsonBlur,
     applySystemPromptToBody,
     toolsList,

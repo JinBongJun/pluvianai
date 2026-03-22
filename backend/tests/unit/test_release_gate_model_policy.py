@@ -113,7 +113,7 @@ class TestReleaseGateOverrideSanitizer:
         }
         assert rg._sanitize_replay_overrides(raw) is None
 
-    def test_sanitize_replay_overrides_keeps_supplement_style_keys(self):
+    def test_sanitize_replay_overrides_keeps_non_message_body_keys(self):
         """Top-level attachments/documents etc. are allowed; conversation keys are stripped."""
         from app.api.v1.endpoints import release_gate as rg
 

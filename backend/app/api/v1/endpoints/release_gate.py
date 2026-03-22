@@ -902,18 +902,18 @@ class ToolContextInject(BaseModel):
     )
     global_text: Optional[str] = Field(
         None,
-        description="Shared injected context when scope=global, or fallback when scope=per_snapshot.",
+        description="Shared additional system text when scope=global, or fallback when scope=per_snapshot.",
     )
     by_snapshot_id: Optional[Dict[str, str]] = Field(
         None,
-        description="Map snapshot id (string) -> injected context for that snapshot.",
+        description="Map snapshot id (string) -> additional system text for that log.",
     )
 
 
 class ToolContextConfig(BaseModel):
     mode: Literal["recorded", "inject"] = Field(
         "recorded",
-        description="recorded: no injection. inject: append resolved ToolContextInject text to system prompt.",
+        description="recorded: use captured request only. inject: append resolved ToolContextInject text to system prompt.",
     )
     inject: Optional[ToolContextInject] = Field(None, description="Used when mode=inject.")
 
@@ -975,7 +975,7 @@ class ReleaseGateValidateRequest(BaseModel):
     replay_overrides_by_snapshot_id: Optional[Dict[str, Dict[str, Any]]] = Field(
         None,
         description=(
-            "Optional per-snapshot overrides merged after replay_overrides for that snapshot id "
+            "Optional per-log request body overrides merged after replay_overrides for that snapshot id "
             "(string keys). Same disallowed keys as replay_overrides. Wins over replay_overrides "
             "on key conflict."
         ),
@@ -983,7 +983,7 @@ class ReleaseGateValidateRequest(BaseModel):
     tool_context: Optional[ToolContextConfig] = Field(
         None,
         description=(
-            "Optional injected context for replay (e.g. tool/doc/code not present in captured logs). "
+            "Optional additional system context for replay (e.g. tool/doc/code not present in captured logs). "
             "When mode=inject, resolved text is appended to the system prompt per snapshot."
         ),
     )
