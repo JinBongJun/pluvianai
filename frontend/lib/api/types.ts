@@ -264,6 +264,15 @@ export interface ReleaseGateRunResult {
   trace_id?: string;
 }
 
+/** Echoed from backend: baseline snapshot excerpt vs replay_overrides for the run. */
+export interface ReleaseGateReplayRequestMeta {
+  replay_overrides_applied?: Record<string, unknown>;
+  baseline_snapshot_excerpt?: Record<string, unknown>;
+  sampling_overrides?: Record<string, unknown> | null;
+  has_new_system_prompt?: boolean;
+  new_system_prompt_preview?: string | null;
+}
+
 export interface ReleaseGateResult {
   pass: boolean;
   summary?: string;
@@ -272,6 +281,8 @@ export interface ReleaseGateResult {
     tool_context?: Record<string, unknown> | null;
     storage_policy?: { full_text_in_report?: boolean };
   };
+  /** Snapshot vs applied replay overrides (also stored under report summary.release_gate). */
+  replay_request_meta?: ReleaseGateReplayRequestMeta;
   failed_signals?: string[];
   exit_code: 0 | 1;
   report_id: string;

@@ -113,6 +113,50 @@ class TestReleaseGateOverrideSanitizer:
         }
         assert rg._sanitize_replay_overrides(raw) is None
 
+    def test_sanitize_replay_overrides_keeps_supplement_style_keys(self):
+        """Top-level attachments/documents etc. are allowed; conversation keys are stripped."""
+        from app.api.v1.endpoints import release_gate as rg
+
+        raw = {
+            "attachments": [{"id": "a1"}],
+            "documents": [{"text": "x"}],
+            "messages": [{"role": "user", "content": "hack"}],
+            "temperature": 0.1,
+        }
+        cleaned = rg._sanitize_replay_overrides(raw)
+        assert isinstance(cleaned, dict)
+        assert cleaned.get("attachments") == [{"id": "a1"}]
+        assert cleaned.get("documents") == [{"text": "x"}]
+        assert cleaned.get("temperature") == 0.1
+        assert "messages" not in cleaned
+
+    def test_build_replay_request_meta_baseline_vs_applied(self):
+        from types import SimpleNamespace
+
+        from app.api.v1.endpoints import release_gate as rg
+
+        snap = SimpleNamespace()
+        snap.payload = {
+            "request": {
+                "model": "gpt-4o",
+                "attachments": [{"id": "from_snap"}],
+                "temperature": 0.3,
+            }
+        }
+        payload = SimpleNamespace(
+            replay_overrides={"attachments": [{"id": "applied"}], "extra": 1},
+            replay_temperature=0.7,
+            replay_max_tokens=None,
+            replay_top_p=None,
+            new_system_prompt="sys",
+        )
+        meta = rg._build_replay_request_meta([snap], payload)
+        assert meta["replay_overrides_applied"]["attachments"] == [{"id": "applied"}]
+        assert meta["baseline_snapshot_excerpt"]["attachments"] == [{"id": "from_snap"}]
+        assert meta["baseline_snapshot_excerpt"]["extra"] is None
+        assert meta["sampling_overrides"]["replay_temperature"] == 0.7
+        assert meta["has_new_system_prompt"] is True
+
     def test_normalize_and_infer_provider_helpers(self):
         from app.api.v1.endpoints import release_gate as rg
 
