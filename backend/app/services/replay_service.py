@@ -23,6 +23,39 @@ from app.utils.tool_events import normalize_tool_events
 from app.utils.tool_calls import normalize_tool_name
 
 
+def resolve_tool_context_injection_text(
+    tool_context: Optional[Dict[str, Any]], snapshot_id: int
+) -> str:
+    """
+    Resolve per-snapshot injected context for Release Gate replay (dict from API).
+    Appended to the system prompt so runs can include redacted or missing tool/doc material.
+    """
+    if not tool_context or not isinstance(tool_context, dict):
+        return ""
+    mode = str(tool_context.get("mode") or "recorded").strip().lower()
+    if mode != "inject":
+        return ""
+    inject = tool_context.get("inject")
+    if not isinstance(inject, dict):
+        return ""
+    scope = str(inject.get("scope") or "per_snapshot").strip().lower()
+    global_text = inject.get("global_text")
+    by_snapshot = inject.get("by_snapshot_id") or {}
+    if not isinstance(by_snapshot, dict):
+        by_snapshot = {}
+    sid = str(snapshot_id)
+    if scope == "global":
+        if isinstance(global_text, str) and global_text.strip():
+            return global_text.strip()
+        return ""
+    per_val = by_snapshot.get(sid)
+    if isinstance(per_val, str) and per_val.strip():
+        return per_val.strip()
+    if isinstance(global_text, str) and global_text.strip():
+        return global_text.strip()
+    return ""
+
+
 def _persist_replay_usage(
     db: Optional[Session],
     project_id: Optional[int],
@@ -152,6 +185,42 @@ class ReplayService:
             "system_prompt": "\n\n".join([p for p in system_parts if p]).strip(),
             "messages": messages,
         }
+
+    def _append_tool_context_to_payload(self, payload: Dict[str, Any], injection: str) -> None:
+        text = (injection or "").strip()
+        if not text:
+            return
+        block = (
+            "\n\n---\n[Release Gate: injected context — may include material not present in captured logs]\n"
+            + text
+            + "\n---\n"
+        )
+        messages = payload.get("messages")
+        if isinstance(messages, list):
+            for m in messages:
+                if not isinstance(m, dict):
+                    continue
+                if str(m.get("role") or "").lower() == "system":
+                    cur = self._content_to_text(m.get("content"))
+                    m["content"] = cur + block
+                    return
+            messages.insert(0, {"role": "system", "content": block.strip()})
+            payload["messages"] = messages
+            return
+        sys_key = payload.get("system")
+        if isinstance(sys_key, str) and sys_key.strip():
+            payload["system"] = sys_key + block
+            return
+        si = payload.get("systemInstruction")
+        if isinstance(si, dict):
+            parts = si.get("parts")
+            if isinstance(parts, list) and parts:
+                p0 = parts[0]
+                if isinstance(p0, dict) and "text" in p0:
+                    p0["text"] = str(p0.get("text") or "") + block
+                    return
+        prev = payload.get("system")
+        payload["system"] = (str(prev) if prev is not None else "") + block
 
     def _extract_generation_knobs(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         generation_cfg = payload.get("generationConfig")
@@ -753,6 +822,7 @@ class ReplayService:
         max_tokens: Optional[int] = None,
         top_p: Optional[float] = None,
         replay_overrides: Optional[Dict[str, Any]] = None,
+        tool_context: Optional[Dict[str, Any]] = None,
         api_key: Optional[str] = None,
         project_id: Optional[int] = None,
         db: Optional[Session] = None,
@@ -762,6 +832,7 @@ class ReplayService:
         """
         Execute a single replay with optional overrides.
         replay_overrides: optional dict merged into the request body (e.g. tools, extra params).
+        tool_context: optional Release Gate dict (mode/inject) to append injected context to system prompt.
         """
         async with self.semaphore:
             # 1. Prepare Payload
@@ -795,6 +866,10 @@ class ReplayService:
                     # If no system prompt found, prepend it
                     messages.insert(0, {"role": "system", "content": new_system_prompt})
                 payload["messages"] = messages
+
+            injection = resolve_tool_context_injection_text(tool_context, snapshot.id)
+            if injection:
+                self._append_tool_context_to_payload(payload, injection)
 
             target_provider = (replay_provider or snapshot.provider or "").strip().lower()
             if target_provider not in PROVIDER_URLS:
@@ -1301,6 +1376,7 @@ class ReplayService:
         max_tokens: Optional[int] = None,
         top_p: Optional[float] = None,
         replay_overrides: Optional[Dict[str, Any]] = None,
+        tool_context: Optional[Dict[str, Any]] = None,
         api_key: Optional[str] = None,
         rubric: Optional[EvaluationRubric] = None,
         judge_model: str = "gpt-4o-mini",
@@ -1323,6 +1399,7 @@ class ReplayService:
                     max_tokens=max_tokens,
                     top_p=top_p,
                     replay_overrides=replay_overrides,
+                    tool_context=tool_context,
                     api_key=api_key,
                     project_id=project_id,
                     db=db,
