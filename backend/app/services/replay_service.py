@@ -1376,6 +1376,7 @@ class ReplayService:
         max_tokens: Optional[int] = None,
         top_p: Optional[float] = None,
         replay_overrides: Optional[Dict[str, Any]] = None,
+        replay_overrides_by_snapshot_id: Optional[Dict[str, Dict[str, Any]]] = None,
         tool_context: Optional[Dict[str, Any]] = None,
         api_key: Optional[str] = None,
         rubric: Optional[EvaluationRubric] = None,
@@ -1388,6 +1389,16 @@ class ReplayService:
         track_platform_credits: bool = False,
     ) -> List[Dict[str, Any]]:
         """Run multiple replays in parallel, evaluate, and apply signals."""
+        by_sid = replay_overrides_by_snapshot_id or {}
+
+        def _merged_overrides_for(snapshot: Snapshot) -> Optional[Dict[str, Any]]:
+            base = dict(replay_overrides or {})
+            sid = str(snapshot.id)
+            extra = by_sid.get(sid)
+            if isinstance(extra, dict) and extra:
+                base.update(extra)
+            return base if base else None
+
         results = await asyncio.gather(
             *[
                 self.replay_snapshot(
@@ -1398,7 +1409,7 @@ class ReplayService:
                     temperature=temperature,
                     max_tokens=max_tokens,
                     top_p=top_p,
-                    replay_overrides=replay_overrides,
+                    replay_overrides=_merged_overrides_for(s),
                     tool_context=tool_context,
                     api_key=api_key,
                     project_id=project_id,

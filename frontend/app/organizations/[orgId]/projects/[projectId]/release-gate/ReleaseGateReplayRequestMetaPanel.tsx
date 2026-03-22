@@ -4,6 +4,7 @@ import React, { useMemo } from "react";
 
 export type ReplayRequestMeta = {
   replay_overrides_applied?: Record<string, unknown> | null;
+  replay_overrides_by_snapshot_id_applied?: Record<string, Record<string, unknown>> | null;
   baseline_snapshot_excerpt?: Record<string, unknown> | null;
   sampling_overrides?: Record<string, unknown> | null;
   has_new_system_prompt?: boolean;
@@ -31,6 +32,17 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
     return Object.keys(applied).sort();
   }, [meta]);
 
+  const perSnapshotApplied = useMemo(() => {
+    const raw = meta?.replay_overrides_by_snapshot_id_applied;
+    if (!raw || typeof raw !== "object") return [] as Array<{ sid: string; keys: string[] }>;
+    return Object.keys(raw)
+      .sort()
+      .map(sid => ({
+        sid,
+        keys: Object.keys(raw[sid] && typeof raw[sid] === "object" ? raw[sid]! : {}).sort(),
+      }));
+  }, [meta]);
+
   const hasSampling =
     meta?.sampling_overrides &&
     typeof meta.sampling_overrides === "object" &&
@@ -39,6 +51,7 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
   if (!meta) return null;
   if (
     rows.length === 0 &&
+    perSnapshotApplied.length === 0 &&
     !meta.has_new_system_prompt &&
     !hasSampling
   ) {
@@ -86,6 +99,35 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
                   </pre>
                 </div>
               </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {perSnapshotApplied.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+            Per-snapshot overrides (applied)
+          </div>
+          {perSnapshotApplied.map(({ sid, keys }) => {
+            const block = meta.replay_overrides_by_snapshot_id_applied?.[sid];
+            return (
+              <details
+                key={sid}
+                className="group rounded-xl border border-white/[0.06] bg-black/20 px-2 py-2"
+              >
+                <summary className="cursor-pointer list-none text-[10px] font-mono text-slate-300 marker:content-none [&::-webkit-details-marker]:hidden">
+                  <span className="text-cyan-400/90">id {sid}</span>
+                  {keys.length ? (
+                    <span className="ml-2 text-slate-500">
+                      ({keys.length} key{keys.length === 1 ? "" : "s"})
+                    </span>
+                  ) : null}
+                </summary>
+                <pre className="mt-2 max-h-40 overflow-auto text-[10px] leading-snug text-slate-200 custom-scrollbar whitespace-pre-wrap break-all">
+                  {previewJson(block)}
+                </pre>
+              </details>
             );
           })}
         </div>

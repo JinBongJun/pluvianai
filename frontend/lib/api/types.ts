@@ -267,6 +267,8 @@ export interface ReleaseGateRunResult {
 /** Echoed from backend: baseline snapshot excerpt vs replay_overrides for the run. */
 export interface ReleaseGateReplayRequestMeta {
   replay_overrides_applied?: Record<string, unknown>;
+  /** Sanitized per-snapshot overrides echoed for this run (when sent). */
+  replay_overrides_by_snapshot_id_applied?: Record<string, Record<string, unknown>> | null;
   baseline_snapshot_excerpt?: Record<string, unknown>;
   sampling_overrides?: Record<string, unknown> | null;
   has_new_system_prompt?: boolean;
