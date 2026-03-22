@@ -61,6 +61,10 @@ import {
 } from "@/lib/api/client";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { PlanLimitBanner } from "@/components/PlanLimitBanner";
+import {
+  applySupplementToRequestBody,
+  sanitizeReplayRequestSupplement,
+} from "./releaseGateReplayMerge";
 
 type GateTab = "validate" | "history";
 type EditableTool = { id: string; name: string; description: string; parameters: string };
@@ -520,6 +524,8 @@ function buildFinalCandidateRequest(options: {
   requestSystemPrompt: string;
   modelOverrideEnabled: boolean;
   newModel: string;
+  /** Merged after requestBody; wins on conflict. Does not replace messages/user text (sanitized). */
+  requestSupplement?: Record<string, unknown> | null;
 }): Record<string, unknown> {
   const {
     baselineSeedSnapshot,
@@ -529,6 +535,7 @@ function buildFinalCandidateRequest(options: {
     requestSystemPrompt,
     modelOverrideEnabled,
     newModel,
+    requestSupplement,
   } = options;
 
   const baseFromSnapshot = asPayloadObject(baselineSeedSnapshot?.payload);
@@ -575,6 +582,11 @@ function buildFinalCandidateRequest(options: {
       continue;
     }
     finalReq[k] = v;
+  }
+
+  const sup = sanitizeReplayRequestSupplement(requestSupplement ?? undefined);
+  if (Object.keys(sup).length > 0) {
+    finalReq = applySupplementToRequestBody(finalReq, sup);
   }
 
   return finalReq;
@@ -794,6 +806,10 @@ export default function ReleaseGatePageContent() {
   const [requestBody, setRequestBody] = useState<Record<string, unknown>>({});
   const [requestJsonDraft, setRequestJsonDraft] = useState<string | null>(null);
   const [requestJsonError, setRequestJsonError] = useState("");
+  /** Top-level request fields merged into replay_overrides after config JSON (e.g. attachments, RAG). */
+  const [requestSupplement, setRequestSupplement] = useState<Record<string, unknown>>({});
+  const [supplementJsonDraft, setSupplementJsonDraft] = useState<string | null>(null);
+  const [supplementJsonError, setSupplementJsonError] = useState("");
   const [temperatureDraft, setTemperatureDraft] = useState<string | null>(null);
   const [maxTokensDraft, setMaxTokensDraft] = useState<string | null>(null);
   const [toolsList, setToolsList] = useState<EditableTool[]>([]);
@@ -1797,6 +1813,10 @@ export default function ReleaseGatePageContent() {
     () => JSON.stringify(requestBodyWithoutTools, null, 2),
     [requestBodyWithoutTools]
   );
+  const requestSupplementJson = useMemo(
+    () => JSON.stringify(requestSupplement, null, 2),
+    [requestSupplement]
+  );
 
   const baselineConfigSummary = useMemo(() => {
     const source =
@@ -1818,6 +1838,7 @@ export default function ReleaseGatePageContent() {
         requestSystemPrompt,
         modelOverrideEnabled,
         newModel,
+        requestSupplement,
       }),
     [
       baselineSeedSnapshot,
@@ -1827,6 +1848,7 @@ export default function ReleaseGatePageContent() {
       requestSystemPrompt,
       modelOverrideEnabled,
       newModel,
+      requestSupplement,
     ]
   );
 
@@ -1923,8 +1945,10 @@ export default function ReleaseGatePageContent() {
       if (built.length) overrides.tools = built;
     }
 
-    if (Object.keys(overrides).length) {
-      preview.replay_overrides = overrides;
+    const supPreview = sanitizeReplayRequestSupplement(requestSupplement);
+    const mergedOverrides = { ...overrides, ...supPreview };
+    if (Object.keys(mergedOverrides).length) {
+      preview.replay_overrides = mergedOverrides;
     }
 
     preview.tool_context = buildToolContextPayload(
@@ -1946,7 +1970,37 @@ export default function ReleaseGatePageContent() {
     toolContextScope,
     toolContextGlobalText,
     toolContextBySnapshotId,
+    requestSupplement,
   ]);
+
+  const handleSupplementJsonBlur = useCallback(() => {
+    const raw = supplementJsonDraft ?? requestSupplementJson;
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      setRequestSupplement({});
+      setSupplementJsonDraft(null);
+      setSupplementJsonError("");
+      return;
+    }
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        setSupplementJsonError("Must be a JSON object.");
+        return;
+      }
+      setRequestSupplement(sanitizeReplayRequestSupplement(parsed as Record<string, unknown>));
+      setSupplementJsonDraft(null);
+      setSupplementJsonError("");
+    } catch {
+      setSupplementJsonError("Invalid JSON.");
+    }
+  }, [supplementJsonDraft, requestSupplementJson]);
+
+  const clearRequestSupplement = useCallback(() => {
+    setRequestSupplement({});
+    setSupplementJsonDraft(null);
+    setSupplementJsonError("");
+  }, []);
 
   const handleRequestJsonBlur = useCallback(() => {
     const raw = requestJsonDraft ?? requestBodyJson;
@@ -2187,7 +2241,9 @@ export default function ReleaseGatePageContent() {
         }
         if (built.length) overrides.tools = built;
       }
-      if (Object.keys(overrides).length) payload.replay_overrides = overrides;
+      const supForRun = sanitizeReplayRequestSupplement(requestSupplement);
+      const mergedReplayOverrides = { ...overrides, ...supForRun };
+      if (Object.keys(mergedReplayOverrides).length) payload.replay_overrides = mergedReplayOverrides;
       payload.tool_context = buildToolContextPayload(
         toolContextMode,
         toolContextScope,
@@ -2294,6 +2350,7 @@ export default function ReleaseGatePageContent() {
     setAgentId(agent.agent_id);
     setSelectedAgent(agent);
     setDatasetIds([]); // Reset datasets on agent change
+    clearRequestSupplement();
     setViewMode("expanded");
   };
 
@@ -2392,6 +2449,14 @@ export default function ReleaseGatePageContent() {
     requestJsonDraft,
     setRequestJsonDraft,
     requestJsonError,
+    requestSupplement,
+    setRequestSupplement,
+    requestSupplementJson,
+    supplementJsonDraft,
+    setSupplementJsonDraft,
+    supplementJsonError,
+    handleSupplementJsonBlur,
+    clearRequestSupplement,
     handleRequestJsonBlur,
     applySystemPromptToBody,
     toolsList,

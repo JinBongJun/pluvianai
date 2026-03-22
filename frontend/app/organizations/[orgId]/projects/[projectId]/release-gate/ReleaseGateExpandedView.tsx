@@ -24,6 +24,7 @@ import {
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
 import { sanitizePayloadForPreview } from "./ReleaseGatePageContent";
 import { ReleaseGateConfigPanel } from "./ReleaseGateConfigPanel";
+import { ReleaseGateReplayRequestMetaPanel } from "./ReleaseGateReplayRequestMetaPanel";
 import { ReleaseGateMap } from "@/components/release-gate/ReleaseGateMap";
 import RailwaySidePanel from "@/components/shared/RailwaySidePanel";
 import {
@@ -1890,6 +1891,36 @@ export function ReleaseGateExpandedView() {
   const selectedRunReport = ctx.selectedRunReport as any;
   const selectedRunReportLoading = Boolean(ctx.selectedRunReportLoading);
   const selectedRunReportError = ctx.selectedRunReportError as unknown;
+
+  const replayRequestMeta = useMemo(() => {
+    const sid = selectedRunId != null ? String(selectedRunId) : "";
+    const lastRid = result?.report_id != null ? String(result.report_id) : "";
+    const viewingDifferentReportThanLastRun = Boolean(sid && lastRid && sid !== lastRid);
+
+    if (
+      viewingDifferentReportThanLastRun &&
+      selectedRunReport?.summary &&
+      String(selectedRunReport.id) === sid
+    ) {
+      const rg = (selectedRunReport.summary as Record<string, unknown> | undefined)?.release_gate as
+        | Record<string, unknown>
+        | undefined;
+      const m = rg?.replay_request_meta;
+      if (m && typeof m === "object") return m as Record<string, unknown>;
+    }
+
+    const fromJob = result?.replay_request_meta;
+    if (fromJob && typeof fromJob === "object") return fromJob as Record<string, unknown>;
+
+    if (selectedRunReport?.summary && sid && String(selectedRunReport.id) === sid) {
+      const rg = (selectedRunReport.summary as Record<string, unknown> | undefined)?.release_gate as
+        | Record<string, unknown>
+        | undefined;
+      const m = rg?.replay_request_meta;
+      if (m && typeof m === "object") return m as Record<string, unknown>;
+    }
+    return null;
+  }, [result, selectedRunId, selectedRunReport]);
   const setExpandedHistoryId = ctx.setExpandedHistoryId as
     | ((id: string | null) => void)
     | undefined;
@@ -2809,6 +2840,8 @@ export function ReleaseGateExpandedView() {
                             </div>
                           </div>
                         )}
+
+                        <ReleaseGateReplayRequestMetaPanel meta={replayRequestMeta} />
 
                         {!result.pass && whatToFixHints.length > 0 && (
                           <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4">

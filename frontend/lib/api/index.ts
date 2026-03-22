@@ -29,6 +29,7 @@ export type {
   ReleaseGateViolation,
   ReleaseGateRunResult,
   ReleaseGateResult,
+  ReleaseGateReplayRequestMeta,
   ReleaseGateHistoryItem,
   ReleaseGateHistoryResponse,
 } from "./types";
