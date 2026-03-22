@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 import re
 import time
@@ -55,7 +56,7 @@ from app.models.validation_dataset import ValidationDataset
 from app.services.data_lifecycle_service import DataLifecycleService
 from app.domain.live_view_release_gate import build_agent_visibility_context, is_agent_deleted
 from app.services.ops_alerting import ops_alerting
-from app.services.replay_service import replay_service
+from app.services.replay_service import replay_service, resolve_tool_context_injection_text
 from app.services.data_normalizer import DataNormalizer
 from app.services.user_api_key_service import UserApiKeyService
 from app.services.behavior_rules_service import (
@@ -67,6 +68,7 @@ from app.services.live_eval_service import (
     eval_config_version_hash,
     normalize_eval_config,
 )
+from app.utils.tool_events import normalize_tool_events
 
 router = APIRouter()
 SUPPORTED_REPLAY_PROVIDERS = {"openai", "anthropic", "google"}
@@ -177,6 +179,135 @@ def _safe_preview_json(value: Any, max_chars: int = 12000) -> Optional[str]:
     if len(text) > max_chars:
         return text[:max_chars] + "\n…(truncated)…"
     return text
+
+
+def _preview_text_snippet(text: str, max_chars: int = 500) -> str:
+    t = (text or "").strip()
+    if len(t) <= max_chars:
+        return t
+    return t[:max_chars] + "…"
+
+
+def _build_captured_customer_material_from_snapshot(snapshot: Snapshot) -> Dict[str, Any]:
+    """
+    A: Tool result text captured at ingest (payload.tool_events), if any.
+    """
+    payload = snapshot.payload if isinstance(getattr(snapshot, "payload", None), dict) else {}
+    evs = normalize_tool_events(payload.get("tool_events"))
+    if not evs:
+        return {
+            "present": False,
+            "sources": [],
+            "tool_result_excerpt_chars": 0,
+            "preview": None,
+        }
+    parts: List[str] = []
+    for ev in evs:
+        if str(ev.get("kind") or "").strip().lower() != "tool_result":
+            continue
+        out = ev.get("output")
+        if isinstance(out, str):
+            parts.append(out)
+        elif out is not None:
+            try:
+                parts.append(json.dumps(out, ensure_ascii=False))
+            except Exception:
+                parts.append(str(out))
+    combined = "\n\n---\n\n".join(parts)
+    if not combined.strip():
+        return {
+            "present": False,
+            "sources": ["snapshot.payload.tool_events"],
+            "tool_result_excerpt_chars": 0,
+            "preview": None,
+        }
+    return {
+        "present": True,
+        "sources": ["snapshot.payload.tool_events"],
+        "tool_result_excerpt_chars": len(combined),
+        "preview": _preview_text_snippet(combined, 500),
+    }
+
+
+def _build_rg_injection_report(
+    tool_context_payload: Optional[Dict[str, Any]], snapshot_id: int
+) -> Dict[str, Any]:
+    """B: Release Gate inject — text merged into replay system prompt for this snapshot."""
+    resolved = resolve_tool_context_injection_text(tool_context_payload, snapshot_id)
+    if not resolved:
+        return {
+            "applied": False,
+            "resolution": "none",
+            "matched_key": None,
+            "char_count": 0,
+            "preview": None,
+            "sha256": None,
+        }
+    inject: Dict[str, Any] = {}
+    if isinstance(tool_context_payload, dict):
+        raw = tool_context_payload.get("inject")
+        if isinstance(raw, dict):
+            inject = raw
+    scope = str(inject.get("scope") or "per_snapshot").strip().lower()
+    sid = str(snapshot_id)
+    by_snapshot = inject.get("by_snapshot_id") or {}
+    if not isinstance(by_snapshot, dict):
+        by_snapshot = {}
+    per_val = by_snapshot.get(sid)
+    if isinstance(per_val, str) and per_val.strip():
+        resolution = "per_snapshot"
+        matched_key = sid
+    elif scope == "global":
+        resolution = "global"
+        matched_key = None
+    else:
+        resolution = "per_snapshot_fallback"
+        matched_key = None
+    return {
+        "applied": True,
+        "resolution": resolution,
+        "matched_key": matched_key,
+        "char_count": len(resolved),
+        "preview": _preview_text_snippet(resolved, 500),
+        "sha256": hashlib.sha256(resolved.encode("utf-8")).hexdigest(),
+    }
+
+
+def _aggregate_tool_flow_from_attempts(attempts: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """C/D: aggregate tool inbound/outbound previews from attempts[].tool_evidence."""
+    recorded = 0
+    simulated = 0
+    rows_with_result = 0
+    rows_with_args = 0
+    for att in attempts or []:
+        for row in att.get("tool_evidence") or []:
+            if not isinstance(row, dict):
+                continue
+            st = str(row.get("status") or "").strip().lower()
+            if st == "recorded":
+                recorded += 1
+            elif st == "simulated":
+                simulated += 1
+            rp = row.get("result_preview")
+            if isinstance(rp, str) and rp.strip():
+                rows_with_result += 1
+            ap = row.get("arguments_preview")
+            if ap is not None and str(ap).strip():
+                rows_with_args += 1
+    return {
+        "C_tool_inbound": {
+            "summary": {
+                "recorded_rows": recorded,
+                "simulated_rows": simulated,
+                "rows_with_result_preview": rows_with_result,
+            },
+            "detail": "attempts[].tool_evidence[].result_preview",
+        },
+        "D_tool_outbound": {
+            "summary": {"rows_with_arguments_preview": rows_with_args},
+            "detail": "attempts[].tool_evidence[].arguments_preview",
+        },
+    }
 
 
 _GROUNDING_STOPWORDS: Set[str] = {
@@ -1639,6 +1770,12 @@ async def _run_release_gate(
         perf_started = time.monotonic()
         perf_total = int(payload.repeat_runs or 0) or 0
 
+        tool_context_payload: Optional[Dict[str, Any]] = (
+            payload.tool_context.model_dump(exclude_none=True)
+            if payload.tool_context is not None
+            else None
+        )
+
         for run_idx in range(payload.repeat_runs):
             if cancel_check and cancel_check():
                 raise ReleaseGateCancelled()
@@ -1648,11 +1785,6 @@ async def _run_release_gate(
                 or str(app_settings.ENVIRONMENT).lower() != "production"
             )
             t0 = time.monotonic()
-            tool_context_payload: Optional[Dict[str, Any]] = (
-                payload.tool_context.model_dump(exclude_none=True)
-                if payload.tool_context is not None
-                else None
-            )
             replay_results = await replay_service.run_batch_replay(
                 snapshots=snapshots,
                 new_model=payload.new_model,
@@ -2366,6 +2498,14 @@ async def _run_release_gate(
             ]
             pass_ratio = passed_attempts / total_attempts if total_attempts else 0.0
 
+            _ctx_layers: Dict[str, Any] = {
+                "A_captured_customer_material": _build_captured_customer_material_from_snapshot(
+                    snapshot
+                ),
+                "B_rg_injection": _build_rg_injection_report(tool_context_payload, snapshot.id),
+            }
+            _ctx_layers.update(_aggregate_tool_flow_from_attempts(attempts))
+
             case_results.append(
                 {
                     "run_index": len(case_results) + 1,
@@ -2373,6 +2513,7 @@ async def _run_release_gate(
                     "snapshot_id": snapshot.id,
                     "pass": case_status == "pass",
                     "case_status": case_status,
+                    "context": _ctx_layers,
                     "failure_reasons": failed_reasons if case_status != "pass" else [],
                     "violation_count_delta": 0,
                     "severity_delta": {"critical": 0, "high": 0, "medium": 0, "low": 0},
@@ -2458,6 +2599,10 @@ async def _run_release_gate(
                 "total_wall_ms": total_wall_ms,
                 "avg_attempt_wall_ms": avg_attempt_wall_ms,
             },
+            "experiment": {
+                "tool_context": tool_context_payload,
+                "storage_policy": {"full_text_in_report": True},
+            },
             "case_results": case_results,
         }
         report = BehaviorReport(
@@ -2537,6 +2682,10 @@ async def _run_release_gate(
             },
             "replay_error_codes": replay_error_codes_global,
             "missing_provider_keys": missing_provider_keys_global,
+            "experiment": {
+                "tool_context": tool_context_payload,
+                "storage_policy": {"full_text_in_report": True},
+            },
             "case_results": case_results,
             "evidence_pack": {
                 "top_regressed_rules": [],
