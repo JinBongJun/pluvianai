@@ -1147,6 +1147,9 @@ async def create_snapshot(
     agent_id = payload.get("agent_id")
     status_code = payload.get("status_code", 200)
 
+    if trace_id:
+        snapshot_service.create_trace(project_id=project_id, trace_id=str(trace_id))
+
     # Use service to save snapshot (which also triggers signal evaluation)
     snapshot = snapshot_service.save_snapshot(
         trace_id=trace_id,
