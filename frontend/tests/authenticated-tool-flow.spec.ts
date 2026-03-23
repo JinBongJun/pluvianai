@@ -15,6 +15,11 @@ type SeedContext = {
   snapshotDisplayTime: string;
 };
 
+type SeedSnapshotOptions = {
+  agentId?: string;
+  promptPrefix?: string;
+};
+
 async function waitForSnapshotMeta(
   api: APIRequestContext,
   token: string,
@@ -162,9 +167,14 @@ async function ensureOrgAndProject(api: APIRequestContext, token: string): Promi
   return { orgId, projectId };
 }
 
-async function seedToolSnapshot(api: APIRequestContext, token: string, projectId: number): Promise<SeedContext> {
+async function seedToolSnapshot(
+  api: APIRequestContext,
+  token: string,
+  projectId: number,
+  options: SeedSnapshotOptions = {}
+): Promise<SeedContext> {
   const traceId = `pw-tool-flow-${Date.now()}`;
-  const promptText = `PWTOOL-E2E-${Date.now()}`;
+  const promptText = `${options.promptPrefix || "PWTOOL-E2E"}-${Date.now()}`;
 
   const createSnapshotResponse = await authedJson(
     api,
@@ -173,6 +183,7 @@ async function seedToolSnapshot(api: APIRequestContext, token: string, projectId
     token,
     {
       trace_id: traceId,
+      ...(options.agentId ? { agent_id: options.agentId } : {}),
       provider: "openai",
       model: "gpt-4o-mini",
       status_code: 200,
@@ -246,11 +257,26 @@ async function seedToolSnapshot(api: APIRequestContext, token: string, projectId
     orgId: 0,
     projectId,
     snapshotId,
-    snapshotAgentId: String(finalDetail.agent_id || ""),
+    snapshotAgentId: String(finalDetail.agent_id || options.agentId || ""),
     traceId,
     promptText,
     snapshotDisplayTime: formatPrettyTime(finalDetail.created_at),
   };
+}
+
+async function createDataset(
+  api: APIRequestContext,
+  token: string,
+  projectId: number,
+  options: { snapshotIds: number[]; agentId: string; label: string }
+): Promise<{ id: string; label?: string | null }> {
+  const response = await authedJson(api, "POST", `/api/v1/projects/${projectId}/behavior/datasets`, token, {
+    snapshot_ids: options.snapshotIds,
+    agent_id: options.agentId,
+    label: options.label,
+  });
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()) as { id: string; label?: string | null };
 }
 
 async function loginThroughUi(page: Page) {
@@ -318,5 +344,62 @@ test.describe("Authenticated tool browser flow", () => {
     await expect(page.getByText("Trajectory").first()).toBeVisible();
     await expect(page.getByText("send_slack").first()).toBeVisible();
     await expect(page.getByText('"temp_c": 22')).toBeVisible();
+  });
+
+  test("release gate dataset multi-select resolves per-log rows from all selected datasets", async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    requireCredentials();
+
+    const api = await playwrightRequest.newContext({ baseURL: API_BASE_URL });
+    const token = await loginToBackend(api);
+    const { orgId, projectId } = await ensureOrgAndProject(api, token);
+    const sharedAgentId = `pw-rg-multi-${Date.now()}`;
+    const seededA = await seedToolSnapshot(api, token, projectId, {
+      agentId: sharedAgentId,
+      promptPrefix: "PW-RG-DATASET-A",
+    });
+    const seededB = await seedToolSnapshot(api, token, projectId, {
+      agentId: sharedAgentId,
+      promptPrefix: "PW-RG-DATASET-B",
+    });
+    const datasetALabel = `PW RG Dataset A ${Date.now()}`;
+    const datasetBLabel = `PW RG Dataset B ${Date.now()}`;
+    await createDataset(api, token, projectId, {
+      snapshotIds: [seededA.snapshotId],
+      agentId: sharedAgentId,
+      label: datasetALabel,
+    });
+    await createDataset(api, token, projectId, {
+      snapshotIds: [seededB.snapshotId],
+      agentId: sharedAgentId,
+      label: datasetBLabel,
+    });
+
+    await loginThroughUi(page);
+    await page.goto(
+      `/organizations/${orgId}/projects/${projectId}/release-gate?agent_id=${encodeURIComponent(sharedAgentId)}`,
+      { waitUntil: "domcontentloaded" }
+    );
+
+    await page.getByRole("tab", { name: "Saved Data" }).click();
+    await expect(page.getByTestId("rg-datasets-state-list")).toBeVisible({ timeout: 45000 });
+
+    const datasetACard = page.locator("div").filter({ has: page.getByText(datasetALabel, { exact: false }) });
+    const datasetBCard = page.locator("div").filter({ has: page.getByText(datasetBLabel, { exact: false }) });
+    await datasetACard.locator('input[type="checkbox"]').first().check();
+    await datasetBCard.locator('input[type="checkbox"]').first().check();
+
+    await page.getByRole("button", { name: "Settings" }).click();
+    await expect(page.getByRole("heading", { name: "Release Gate configuration" })).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.getByText(/Previewing baseline for log #/)).toBeVisible();
+
+    await page.getByRole("tab", { name: "Environment parity" }).click();
+    await page.getByRole("button", { name: "Extra request fields" }).click();
+    await expect(page.getByText(`Log id ${seededA.snapshotId}`)).toBeVisible();
+    await expect(page.getByText(`Log id ${seededB.snapshotId}`)).toBeVisible();
   });
 });
