@@ -367,21 +367,11 @@ function HistoryRunRowButton({
   );
 }
 
-function formatHistoryDateFilterSummary(
-  preset: "all" | "24h" | "7d" | "30d" | "custom",
-  createdFrom: string,
-  createdTo: string
-): string {
+function formatHistoryDateFilterSummary(preset: "all" | "24h" | "7d" | "30d"): string {
   if (preset === "24h") return "Last 24 hours";
   if (preset === "7d") return "Last 7 days";
   if (preset === "30d") return "Last 30 days";
-  if (preset !== "custom") return "All retained dates";
-  const from = createdFrom.trim();
-  const to = createdTo.trim();
-  if (from && to) return `${from} - ${to}`;
-  if (from) return `From ${from}`;
-  if (to) return `Until ${to}`;
-  return "Custom range";
+  return "All retained dates";
 }
 
 function percentFromRate(value: unknown): string {
@@ -2375,14 +2365,10 @@ export function ReleaseGateExpandedView() {
   const setHistoryStatus = ctx.setHistoryStatus as (s: "all" | "pass" | "fail") => void;
   const historyTraceId = ctx.historyTraceId as string;
   const setHistoryTraceId = ctx.setHistoryTraceId as (s: string) => void;
-  const historyDatePreset = ctx.historyDatePreset as "all" | "24h" | "7d" | "30d" | "custom";
+  const historyDatePreset = ctx.historyDatePreset as "all" | "24h" | "7d" | "30d";
   const setHistoryDatePreset = ctx.setHistoryDatePreset as (
-    preset: "all" | "24h" | "7d" | "30d" | "custom"
+    preset: "all" | "24h" | "7d" | "30d"
   ) => void;
-  const historyCreatedFrom = ctx.historyCreatedFrom as string;
-  const setHistoryCreatedFrom = ctx.setHistoryCreatedFrom as (s: string) => void;
-  const historyCreatedTo = ctx.historyCreatedTo as string;
-  const setHistoryCreatedTo = ctx.setHistoryCreatedTo as (s: string) => void;
   const historyOffset = ctx.historyOffset as number;
   const setHistoryOffset = ctx.setHistoryOffset as (n: number | ((v: number) => number)) => void;
   const historyLimit = ctx.historyLimit as number;
@@ -2574,9 +2560,8 @@ export function ReleaseGateExpandedView() {
     [agentId, historyItems]
   );
   const historyDateSummary = useMemo(
-    () =>
-      formatHistoryDateFilterSummary(historyDatePreset, historyCreatedFrom, historyCreatedTo),
-    [historyCreatedFrom, historyCreatedTo, historyDatePreset]
+    () => formatHistoryDateFilterSummary(historyDatePreset),
+    [historyDatePreset]
   );
   const historyFilterSummary = useMemo(() => {
     const parts: string[] = [];
@@ -3667,7 +3652,7 @@ export function ReleaseGateExpandedView() {
                               value={historyDatePreset}
                               onChange={e => {
                                 setHistoryDatePreset(
-                                  e.target.value as "all" | "24h" | "7d" | "30d" | "custom"
+                                  e.target.value as "all" | "24h" | "7d" | "30d"
                                 );
                                 setHistoryOffset(0);
                               }}
@@ -3677,7 +3662,6 @@ export function ReleaseGateExpandedView() {
                               <option value="24h">24h</option>
                               <option value="7d">7d</option>
                               <option value="30d">30d</option>
-                              <option value="custom">Custom</option>
                             </select>
                             <button
                               type="button"
@@ -3695,28 +3679,6 @@ export function ReleaseGateExpandedView() {
                             </button>
                           </div>
                         </div>
-                        {historyDatePreset === "custom" && (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <input
-                              type="date"
-                              value={historyCreatedFrom}
-                              onChange={e => {
-                                setHistoryCreatedFrom(e.target.value);
-                                setHistoryOffset(0);
-                              }}
-                              className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[11px] text-slate-200"
-                            />
-                            <input
-                              type="date"
-                              value={historyCreatedTo}
-                              onChange={e => {
-                                setHistoryCreatedTo(e.target.value);
-                                setHistoryOffset(0);
-                              }}
-                              className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[11px] text-slate-200"
-                            />
-                          </div>
-                        )}
                         <div className="space-y-2">
                           {nodeHistoryItems.map(item => (
                             <HistoryRunRowButton
@@ -3776,7 +3738,7 @@ export function ReleaseGateExpandedView() {
               <select
                 value={historyDatePreset}
                 onChange={e => {
-                  setHistoryDatePreset(e.target.value as "all" | "24h" | "7d" | "30d" | "custom");
+                  setHistoryDatePreset(e.target.value as "all" | "24h" | "7d" | "30d");
                   setHistoryOffset(0);
                 }}
                 className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100"
@@ -3785,7 +3747,6 @@ export function ReleaseGateExpandedView() {
                 <option value="24h">Last 24h</option>
                 <option value="7d">Last 7d</option>
                 <option value="30d">Last 30d</option>
-                <option value="custom">Custom range</option>
               </select>
               <input
                 value={historyTraceId}
@@ -3805,34 +3766,6 @@ export function ReleaseGateExpandedView() {
                 {historyRefreshing ? "Refreshing..." : "Refresh"}
               </button>
             </div>
-            {historyDatePreset === "custom" && (
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-xs text-slate-400">
-                  <span>From</span>
-                  <input
-                    type="date"
-                    value={historyCreatedFrom}
-                    onChange={e => {
-                      setHistoryCreatedFrom(e.target.value);
-                      setHistoryOffset(0);
-                    }}
-                    className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100"
-                  />
-                </label>
-                <label className="flex items-center gap-2 text-xs text-slate-400">
-                  <span>To</span>
-                  <input
-                    type="date"
-                    value={historyCreatedTo}
-                    onChange={e => {
-                      setHistoryCreatedTo(e.target.value);
-                      setHistoryOffset(0);
-                    }}
-                    className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100"
-                  />
-                </label>
-              </div>
-            )}
             <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
               <span className="rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1">
                 {historyDateSummary}
