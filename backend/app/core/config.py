@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     ENVIRONMENT: str = "development"  # development, staging, production
     PORT: int = 8000  # Railway/Vercel uses $PORT
+    EXPOSE_API_DOCS: Optional[bool] = None
+    EXPOSE_METRICS_ENDPOINT: Optional[bool] = None
+    EXPOSE_DETAILED_HEALTH_ENDPOINT: Optional[bool] = None
 
     # Database
     # Standard local dev URL - ensures we don't accidentally use Railway internal URLs
@@ -196,6 +199,24 @@ class Settings(BaseSettings):
         if not origins:
             return ["*"]
         return origins
+
+    @property
+    def expose_api_docs(self) -> bool:
+        if self.EXPOSE_API_DOCS is not None:
+            return self.EXPOSE_API_DOCS
+        return self.ENVIRONMENT != "production"
+
+    @property
+    def expose_metrics_endpoint(self) -> bool:
+        if self.EXPOSE_METRICS_ENDPOINT is not None:
+            return self.EXPOSE_METRICS_ENDPOINT
+        return self.ENVIRONMENT != "production"
+
+    @property
+    def expose_detailed_health_endpoint(self) -> bool:
+        if self.EXPOSE_DETAILED_HEALTH_ENDPOINT is not None:
+            return self.EXPOSE_DETAILED_HEALTH_ENDPOINT
+        return self.ENVIRONMENT != "production"
 
 
 settings = Settings()

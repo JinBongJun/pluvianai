@@ -56,6 +56,8 @@ const PUBLIC_PATHS = [
   /^\/trust-center\/compliance/,
 ];
 
+const CSRF_COOKIE_NAME = "csrf_token";
+
 function isPublicPath(url: string): boolean {
   if (!url) return false;
   let path = url.split("?")[0] || "";
@@ -75,6 +77,37 @@ function isPublicPath(url: string): boolean {
 function isRefreshRequest(url: string | undefined): boolean {
   if (!url) return false;
   return /\/auth\/refresh(?:\?|$)/.test(url);
+}
+
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const prefix = `${name}=`;
+  const cookies = document.cookie ? document.cookie.split("; ") : [];
+  for (const entry of cookies) {
+    if (entry.startsWith(prefix)) {
+      return decodeURIComponent(entry.slice(prefix.length));
+    }
+  }
+  return null;
+}
+
+function attachCsrfHeader(
+  headers: Record<string, string> | undefined,
+  url: string | undefined,
+  method: string | undefined
+): Record<string, string> | undefined {
+  const normalizedMethod = String(method || "get").toUpperCase();
+  if (normalizedMethod === "GET" || normalizedMethod === "HEAD" || normalizedMethod === "OPTIONS") {
+    return headers;
+  }
+  if (typeof window === "undefined") return headers;
+  if (isPublicPath(url || "")) return headers;
+  const csrfToken = readCookie(CSRF_COOKIE_NAME);
+  if (!csrfToken) return headers;
+  return {
+    ...(headers || {}),
+    "X-CSRF-Token": csrfToken,
+  };
 }
 
 type ApiErrorPayload = {
@@ -200,6 +233,11 @@ apiClient.interceptors.request.use(
   config => {
     if (typeof window === "undefined") return config;
     if (isPublicPath(config.url || "")) return config;
+    config.headers = attachCsrfHeader(
+      (config.headers as Record<string, string> | undefined) ?? undefined,
+      config.url,
+      config.method
+    ) as any;
     if (process.env.NODE_ENV === "development") {
       console.debug(
         "[API] Protected request using cookie-backed auth. URL:",
@@ -252,7 +290,11 @@ apiClient.interceptors.response.use(
           `${API_URL}/api/v1/auth/refresh`,
           {},
           {
-            headers: { "Content-Type": "application/json" },
+            headers: attachCsrfHeader(
+              { "Content-Type": "application/json" },
+              `${API_URL}/api/v1/auth/refresh`,
+              "POST"
+            ) as any,
             withCredentials: true,
           }
         );

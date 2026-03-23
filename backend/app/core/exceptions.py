@@ -136,24 +136,34 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle validation errors following API_REFERENCE.md format"""
     errors = exc.errors()
-    # Extract more detailed error messages
-    error_messages = []
+    summarized_errors = []
     for error in errors:
         loc = " -> ".join(str(loc) for loc in error.get("loc", []))
         msg = error.get("msg", "Validation error")
         error_type = error.get("type", "unknown")
-        error_messages.append(f"{loc}: {msg} (type: {error_type})")
+        summarized_errors.append(
+            {
+                "field": loc,
+                "message": msg,
+                "type": error_type,
+            }
+        )
 
     logger.warning(
-        f"ValidationError: {error_messages}",
+        f"ValidationError: {summarized_errors}",
         extra={"path": request.url.path, "method": request.method, "query_params": dict(request.query_params)},
     )
-    
+
     from app.core.responses import error_response
+    details = (
+        {"errors": errors, "error_messages": summarized_errors}
+        if request.app and getattr(request.app.state, "expose_debug_details", False)
+        else {"errors": summarized_errors}
+    )
     return error_response(
         code="VALIDATION_ERROR",
         message="Validation error",
-        details={"errors": errors, "error_messages": error_messages},
+        details=details,
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         origin="Proxy",  # PluvianAI validation error
     )

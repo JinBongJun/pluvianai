@@ -30,7 +30,10 @@ from app.core.security import (
     create_refresh_token,
     decode_token,
     get_current_user,
+    generate_csrf_token,
+    require_csrf_for_cookie_auth,
     auth_error_detail,
+    CSRF_COOKIE_NAME,
 )
 from app.core.logging_config import logger
 from app.core.decorators import handle_errors
@@ -77,6 +80,7 @@ def _token_max_age_seconds(token: str, fallback_seconds: int) -> int:
 def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
     secure = settings.ENVIRONMENT == "production"
     cookie_domain = settings.AUTH_COOKIE_DOMAIN or None
+    csrf_token = generate_csrf_token()
 
     response.set_cookie(
         key=ACCESS_COOKIE_NAME,
@@ -102,12 +106,25 @@ def _set_auth_cookies(response: Response, access_token: str, refresh_token: str)
             refresh_token, settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
         ),
     )
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME,
+        value=csrf_token,
+        httponly=False,
+        secure=secure,
+        samesite="lax",
+        path="/",
+        domain=cookie_domain,
+        max_age=_token_max_age_seconds(
+            refresh_token, settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+        ),
+    )
 
 
 def _clear_auth_cookies(response: Response) -> None:
     cookie_domain = settings.AUTH_COOKIE_DOMAIN or None
     response.delete_cookie(ACCESS_COOKIE_NAME, path="/", domain=cookie_domain)
     response.delete_cookie(REFRESH_COOKIE_NAME, path="/", domain=cookie_domain)
+    response.delete_cookie(CSRF_COOKIE_NAME, path="/", domain=cookie_domain)
 
 
 class UserCreate(BaseModel):
@@ -222,7 +239,10 @@ async def register(
         return user
     except EntityAlreadyExistsError as e:
         logger.warning(f"Registration failed: Email already exists - {mask_email(user_data.email)}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account with this email already exists.",
+        )
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -482,6 +502,7 @@ async def refresh_token(
     request: Request,
     response: Response,
     token_data: TokenRefresh = None,
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
     audit_service = Depends(get_audit_service)
 ):
@@ -546,7 +567,10 @@ async def refresh_token(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(response: Response):
+async def logout(
+    response: Response,
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
+):
     _clear_auth_cookies(response)
     response.status_code = status.HTTP_204_NO_CONTENT
     return None
