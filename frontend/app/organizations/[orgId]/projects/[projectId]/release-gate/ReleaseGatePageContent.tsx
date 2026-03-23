@@ -1713,6 +1713,7 @@ export default function ReleaseGatePageContent() {
     data: historyData,
     mutate: mutateHistory,
     isLoading: historyLoading,
+    isValidating: historyRefreshing,
   } = useSWR<ReleaseGateHistoryResponse>(
     historyKey,
     () =>
@@ -2899,6 +2900,7 @@ export default function ReleaseGatePageContent() {
     setHistoryOffset,
     historyLimit,
     historyLoading,
+    historyRefreshing,
     historyItems,
     historyTotal,
     mutateHistory,

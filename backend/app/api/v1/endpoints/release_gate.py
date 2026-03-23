@@ -3272,6 +3272,7 @@ async def list_release_gate_history(
                 "created_at": _iso(row.created_at),
                 "mode": gate_meta.get("mode", "replay_test"),
                 "repeat_runs": gate_meta.get("repeat_runs"),
+                "total_inputs": gate_meta.get("total_inputs"),
                 "passed_runs": gate_meta.get("passed_runs"),
                 "failed_runs": gate_meta.get("failed_runs"),
                 "passed_attempts": gate_meta.get("passed_attempts"),
