@@ -3458,65 +3458,6 @@ export function ReleaseGateExpandedView() {
                           ) : null}
                         </div>
 
-                        {runConfigExperimentSummaryItems.length > 0 ||
-                        runConfigRestorationSummaryItems.length > 0 ? (
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {runConfigExperimentSummaryItems.length > 0 ? (
-                              <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/5 px-3 py-3">
-                                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-fuchsia-300/90">
-                                  Experiment-wide
-                                </div>
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  {runConfigExperimentSummaryItems.map(item => (
-                                    <span
-                                      key={item}
-                                      className="rounded-full border border-fuchsia-500/20 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-fuchsia-100"
-                                    >
-                                      {item}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : null}
-                            {runConfigRestorationSummaryItems.length > 0 ? (
-                              <div className="rounded-2xl border border-violet-500/20 bg-violet-500/5 px-3 py-3">
-                                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-violet-300/90">
-                                  Baseline restoration
-                                </div>
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  {runConfigRestorationSummaryItems.map(item => (
-                                    <span
-                                      key={item}
-                                      className="rounded-full border border-violet-500/20 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-violet-100"
-                                    >
-                                      {item}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-
-                        {activeToolContextSummary &&
-                        typeof activeToolContextSummary === "object" && (
-                          <div
-                            className="rounded-2xl border border-violet-500/20 bg-violet-500/5 px-3 py-2"
-                            data-testid="rg-result-experiment-summary"
-                          >
-                            <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
-                              Experiment
-                            </div>
-                            <div className="mt-1 text-[11px] text-slate-300">
-                              {(activeToolContextSummary as { mode?: string }).mode === "inject"
-                                ? `Append · ${String((activeToolContextSummary as { inject?: { scope?: string } }).inject?.scope || "per_snapshot")}`
-                                : "Recorded only (no extra system context)"}
-                            </div>
-                          </div>
-                        )}
-
-                        <ReleaseGateReplayRequestMetaPanel meta={replayRequestMeta} />
-
                         {!result.pass && whatToFixHints.length > 0 && (
                           <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4">
                             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200">
@@ -3587,6 +3528,65 @@ export function ReleaseGateExpandedView() {
                             })
                           )}
                         </div>
+                        {runConfigExperimentSummaryItems.length > 0 ||
+                        runConfigRestorationSummaryItems.length > 0 ? (
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {runConfigExperimentSummaryItems.length > 0 ? (
+                              <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/5 px-3 py-3">
+                                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-fuchsia-300/90">
+                                  Experiment-wide
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {runConfigExperimentSummaryItems.map(item => (
+                                    <span
+                                      key={item}
+                                      className="rounded-full border border-fuchsia-500/20 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-fuchsia-100"
+                                    >
+                                      {item}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                            {runConfigRestorationSummaryItems.length > 0 ? (
+                              <div className="rounded-2xl border border-violet-500/20 bg-violet-500/5 px-3 py-3">
+                                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-violet-300/90">
+                                  Baseline restoration
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {runConfigRestorationSummaryItems.map(item => (
+                                    <span
+                                      key={item}
+                                      className="rounded-full border border-violet-500/20 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-violet-100"
+                                    >
+                                      {item}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {activeToolContextSummary &&
+                        typeof activeToolContextSummary === "object" && (
+                          <div
+                            className="rounded-2xl border border-violet-500/20 bg-violet-500/5 px-3 py-2"
+                            data-testid="rg-result-experiment-summary"
+                          >
+                            <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+                              Experiment
+                            </div>
+                            <div className="mt-1 text-[11px] text-slate-300">
+                              {(activeToolContextSummary as { mode?: string }).mode === "inject"
+                                ? `Append · ${String((activeToolContextSummary as { inject?: { scope?: string } }).inject?.scope || "per_snapshot")}`
+                                : "Recorded only (no extra system context)"}
+                            </div>
+                          </div>
+                        )}
+
+                        <ReleaseGateReplayRequestMetaPanel meta={replayRequestMeta} />
+
                       </>
                     )}
                   </div>
