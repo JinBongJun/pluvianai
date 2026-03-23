@@ -252,6 +252,7 @@ function HistoryRunRowButton({
     trace_id?: string | null;
     created_at?: string | null;
     repeat_runs?: number | null;
+    total_inputs?: number | null;
     passed_runs?: number | null;
     failed_runs?: number | null;
   };
@@ -266,16 +267,13 @@ function HistoryRunRowButton({
   const caseStatus = caseIsPass ? "PASS" : caseIsFlaky ? "FLAKY" : "FAIL";
   const passedInputs = Number(item.passed_runs ?? 0);
   const failedInputs = Number(item.failed_runs ?? 0);
-  const inputTotal = passedInputs + failedInputs;
+  const explicitInputTotal = Number(item.total_inputs ?? 0);
+  const inputTotal = passedInputs + failedInputs || explicitInputTotal;
   const repeatRuns = Number(item.repeat_runs ?? 0);
-  const inputSummary =
-    inputTotal > 0
-      ? `${passedInputs}/${inputTotal} passed`
-      : passedInputs > 0
-        ? `${passedInputs} passed`
-        : "Input summary unavailable";
+  const hasExplicitPassSummary = passedInputs + failedInputs > 0;
+  const inputSummary = hasExplicitPassSummary ? `${passedInputs}/${inputTotal} passed` : null;
   const inputCountLabel =
-    inputTotal > 0 ? `${inputTotal} input${inputTotal === 1 ? "" : "s"}` : "Inputs unavailable";
+    inputTotal > 0 ? `${inputTotal} input${inputTotal === 1 ? "" : "s"}` : "Run details limited";
   const preview = item.trace_id ? shortText(String(item.trace_id), "", 48) : "";
 
   return (
@@ -286,7 +284,7 @@ function HistoryRunRowButton({
       data-testid={testId}
       data-run-status={String(item.status || "").toLowerCase()}
       className={clsx(
-        "group flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
+        "group w-full rounded-xl border px-3 py-3 text-left transition",
         loading && "opacity-80",
         selected
           ? "border-fuchsia-500/30 bg-fuchsia-500/10"
@@ -297,59 +295,73 @@ function HistoryRunRowButton({
             : "border-rose-500/15 bg-rose-500/[0.03] hover:bg-rose-500/10"
       )}
     >
-      <span
-        className={clsx(
-          "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
-          caseIsPass
-            ? "bg-emerald-500/10 text-emerald-400"
-            : caseIsFlaky
-              ? "bg-amber-500/15 text-amber-300"
-              : "bg-rose-500/10 text-rose-400"
-        )}
-      >
-        {caseStatus}
-      </span>
-      <div className="min-w-0 flex-1 py-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-slate-100">{inputCountLabel}</span>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={clsx(
+                "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
+                caseIsPass
+                  ? "bg-emerald-500/10 text-emerald-400"
+                  : caseIsFlaky
+                    ? "bg-amber-500/15 text-amber-300"
+                    : "bg-rose-500/10 text-rose-400"
+              )}
+            >
+              {caseStatus}
+            </span>
+            <span
+              className={clsx(
+                "text-[11px] font-semibold",
+                inputTotal > 0 ? "text-slate-100" : "text-slate-400"
+              )}
+            >
+              {inputCountLabel}
+            </span>
+            {inputSummary ? (
+              <span
+                className={clsx(
+                  "rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                  caseIsPass
+                    ? "border-emerald-500/15 bg-emerald-500/10 text-emerald-200"
+                    : caseIsFlaky
+                      ? "border-amber-500/20 bg-amber-500/10 text-amber-200"
+                      : "border-rose-500/20 bg-rose-500/10 text-rose-200"
+                )}
+              >
+                {inputSummary}
+              </span>
+            ) : null}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
           {repeatRuns > 0 ? (
             <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
               {repeatRuns}x each
             </span>
           ) : null}
+            {!inputSummary && inputTotal <= 0 ? (
+              <span className="text-[10px] text-slate-500">Legacy run: input breakdown unavailable</span>
+            ) : null}
+          </div>
+          <div className="mt-2 flex min-w-0 items-center gap-2 text-[10px] text-slate-500">
+            <span className="shrink-0 whitespace-nowrap">{formatDateTime(item.created_at)}</span>
+            {preview ? (
+              <>
+                <span className="h-1 w-1 shrink-0 rounded-full bg-white/10" />
+                <span className="min-w-0 truncate">{preview}</span>
+              </>
+            ) : null}
+          </div>
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-slate-500">
-          <span>{formatDateTime(item.created_at)}</span>
-          {preview ? (
-            <>
-              <span className="h-1 w-1 rounded-full bg-white/10" />
-              <span className="truncate">{preview}</span>
-            </>
-          ) : null}
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {loading ? (
-          <Activity className="h-3.5 w-3.5 animate-spin text-slate-400" aria-hidden />
-        ) : (
-          <>
-            <span
-              className={clsx(
-                "text-[10px] font-semibold",
-                caseIsPass
-                  ? "text-emerald-300"
-                  : caseIsFlaky
-                    ? "text-amber-300"
-                    : "text-rose-300"
-              )}
-            >
-              {inputSummary}
-            </span>
-            <span className="text-[10px] font-medium text-slate-500 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="mt-0.5 flex shrink-0 items-center gap-2">
+          {loading ? (
+            <Activity className="h-3.5 w-3.5 animate-spin text-slate-400" aria-hidden />
+          ) : (
+            <span className="text-[10px] font-medium text-slate-500 opacity-60 transition-opacity group-hover:opacity-100">
               &rarr;
             </span>
-          </>
-        )}
+          )}
+        </div>
       </div>
     </button>
   );
@@ -2375,6 +2387,7 @@ export function ReleaseGateExpandedView() {
   const setHistoryOffset = ctx.setHistoryOffset as (n: number | ((v: number) => number)) => void;
   const historyLimit = ctx.historyLimit as number;
   const historyLoading = ctx.historyLoading as boolean;
+  const historyRefreshing = Boolean(ctx.historyRefreshing);
   const historyItems = ctx.historyItems as any[];
   const historyTotal = ctx.historyTotal as number;
   const mutateHistory = ctx.mutateHistory as () => void;
@@ -3637,7 +3650,7 @@ export function ReleaseGateExpandedView() {
                               ))}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center justify-end gap-2">
                             <select
                               value={historyStatus}
                               onChange={e => {
@@ -3650,16 +3663,60 @@ export function ReleaseGateExpandedView() {
                               <option value="pass">Passed</option>
                               <option value="fail">Failed</option>
                             </select>
+                            <select
+                              value={historyDatePreset}
+                              onChange={e => {
+                                setHistoryDatePreset(
+                                  e.target.value as "all" | "24h" | "7d" | "30d" | "custom"
+                                );
+                                setHistoryOffset(0);
+                              }}
+                              className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[11px] text-slate-200"
+                            >
+                              <option value="all">All dates</option>
+                              <option value="24h">24h</option>
+                              <option value="7d">7d</option>
+                              <option value="30d">30d</option>
+                              <option value="custom">Custom</option>
+                            </select>
                             <button
                               type="button"
                               onClick={() => mutateHistory()}
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:bg-white/5"
+                              disabled={historyRefreshing}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:bg-white/5 disabled:opacity-60"
                             >
-                              <RefreshCcw className="h-3.5 w-3.5" />
-                              Refresh
+                              <RefreshCcw
+                                className={clsx(
+                                  "h-3.5 w-3.5",
+                                  historyRefreshing && "animate-spin"
+                                )}
+                              />
+                              {historyRefreshing ? "Refreshing..." : "Refresh"}
                             </button>
                           </div>
                         </div>
+                        {historyDatePreset === "custom" && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input
+                              type="date"
+                              value={historyCreatedFrom}
+                              onChange={e => {
+                                setHistoryCreatedFrom(e.target.value);
+                                setHistoryOffset(0);
+                              }}
+                              className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[11px] text-slate-200"
+                            />
+                            <input
+                              type="date"
+                              value={historyCreatedTo}
+                              onChange={e => {
+                                setHistoryCreatedTo(e.target.value);
+                                setHistoryOffset(0);
+                              }}
+                              className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[11px] text-slate-200"
+                            />
+                          </div>
+                        )}
                         <div className="space-y-2">
                           {nodeHistoryItems.map(item => (
                             <HistoryRunRowButton
@@ -3741,9 +3798,11 @@ export function ReleaseGateExpandedView() {
               />
               <button
                 onClick={() => mutateHistory()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/5"
+                disabled={historyRefreshing}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/5 disabled:opacity-60"
               >
-                <RefreshCcw className="h-3.5 w-3.5" /> Refresh
+                <RefreshCcw className={clsx("h-3.5 w-3.5", historyRefreshing && "animate-spin")} />
+                {historyRefreshing ? "Refreshing..." : "Refresh"}
               </button>
             </div>
             {historyDatePreset === "custom" && (
