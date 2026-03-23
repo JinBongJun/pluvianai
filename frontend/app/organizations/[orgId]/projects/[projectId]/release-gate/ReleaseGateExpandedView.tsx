@@ -382,7 +382,8 @@ function AttemptDetailOverlay({
   baselineSnapshot: Record<string, unknown> | null;
 }) {
   const [detailMainTab, setDetailMainTab] = useState<AttemptDetailMainTab>("summary");
-  const [inputExpanded, setInputExpanded] = useState(false);
+  const [attemptMenuOpen, setAttemptMenuOpen] = useState(false);
+  const [userInputExpanded, setUserInputExpanded] = useState(false);
   const [showRemovedDiffLines, setShowRemovedDiffLines] = useState(false);
   const [navIndex, setNavIndex] = useState(0);
 
@@ -395,7 +396,8 @@ function AttemptDetailOverlay({
   useEffect(() => {
     if (open) {
       setDetailMainTab("summary");
-      setInputExpanded(false);
+      setAttemptMenuOpen(false);
+      setUserInputExpanded(false);
       setShowRemovedDiffLines(false);
       setNavIndex(safeInitial);
       setFailedOnly(false);
@@ -1072,15 +1074,15 @@ function AttemptDetailOverlay({
                   <div className="relative ml-2">
                     <button
                       type="button"
-                      onClick={() => setInputExpanded(!inputExpanded)}
+                      onClick={() => setAttemptMenuOpen(!attemptMenuOpen)}
                       className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-white/5 transition"
                     >
                       <span>Attempt {navIndex + 1}</span>
                       <span className="text-[10px] text-slate-500">/ {attemptCount}</span>
-                      <ChevronDown className={clsx("h-4 w-4 text-slate-400 transition-transform", inputExpanded && "rotate-180")} />
+                      <ChevronDown className={clsx("h-4 w-4 text-slate-400 transition-transform", attemptMenuOpen && "rotate-180")} />
                     </button>
                     
-                    {inputExpanded && (
+                    {attemptMenuOpen && (
                       <div className="absolute left-0 top-full mt-2 w-64 rounded-xl border border-white/10 bg-[#1e2028] p-2 shadow-2xl z-[12000]">
                         <div className="mb-2 flex items-center justify-between px-2 pt-1">
                           <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
@@ -1112,7 +1114,7 @@ function AttemptDetailOverlay({
                                 type="button"
                                 onClick={() => {
                                   setNavIndex(i);
-                                  setInputExpanded(false);
+                                  setAttemptMenuOpen(false);
                                 }}
                                 className={clsx(
                                   "flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition",
@@ -1376,16 +1378,16 @@ function AttemptDetailOverlay({
                           </div>
                           <button
                             type="button"
-                            onClick={() => setInputExpanded(v => !v)}
+                            onClick={() => setUserInputExpanded(v => !v)}
                             className="text-[10px] font-bold uppercase tracking-wider text-fuchsia-300/80 transition-colors hover:text-fuchsia-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
                           >
-                            {inputExpanded ? "Collapse" : "Expand"}
+                            {userInputExpanded ? "Collapse" : "Expand"}
                           </button>
                         </div>
                         <p
                           className={clsx(
                             "mt-3 text-sm leading-relaxed text-slate-300 whitespace-pre-wrap break-words",
-                            !inputExpanded && "line-clamp-5"
+                            !userInputExpanded && "line-clamp-5"
                           )}
                         >
                           {inputPreview}
