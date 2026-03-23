@@ -319,6 +319,7 @@ export interface ReleaseGateHistoryItem {
   created_at?: string | null;
   mode?: "replay_test";
   repeat_runs?: number | null;
+  total_inputs?: number | null;
   passed_runs?: number | null;
   failed_runs?: number | null;
   /** Per-attempt pass count across all inputs (replay repeats). */
