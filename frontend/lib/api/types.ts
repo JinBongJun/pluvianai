@@ -312,7 +312,7 @@ export interface ReleaseGateResult {
 
 export interface ReleaseGateHistoryItem {
   id: string;
-  status: "pass" | "fail";
+  status: "pass" | "fail" | "flaky";
   trace_id: string;
   baseline_trace_id?: string | null;
   agent_id?: string | null;
@@ -333,4 +333,5 @@ export interface ReleaseGateHistoryResponse {
   total: number;
   limit: number;
   offset: number;
+  retention_days?: number;
 }

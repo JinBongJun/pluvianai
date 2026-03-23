@@ -71,6 +71,7 @@ type GateTab = "validate" | "history";
 type EditableTool = { id: string; name: string; description: string; parameters: string };
 type ThresholdPreset = "strict" | "default" | "lenient" | "custom";
 type GateThresholds = { failRateMax: number; flakyRateMax: number };
+type HistoryDatePreset = "all" | "24h" | "7d" | "30d" | "custom";
 type ReleaseGateDatasetSummary = {
   id: string;
   label?: string;
@@ -83,6 +84,28 @@ type ReleaseGateDatasetSnapshotsAggregate = {
   missingDatasetIds?: string[];
   failedDatasetIds?: string[];
 };
+
+function toHistoryBoundaryIso(value: string, boundary: "start" | "end"): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const date = new Date(`${trimmed}T${boundary === "start" ? "00:00:00.000" : "23:59:59.999"}`);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+function getPresetHistoryDateRange(
+  preset: HistoryDatePreset
+): { createdFrom?: string; createdTo?: string } {
+  if (preset === "all" || preset === "custom") return {};
+  const now = new Date();
+  const createdTo = now.toISOString();
+  const ms =
+    preset === "24h"
+      ? 24 * 60 * 60 * 1000
+      : preset === "7d"
+        ? 7 * 24 * 60 * 60 * 1000
+        : 30 * 24 * 60 * 60 * 1000;
+  return { createdFrom: new Date(now.getTime() - ms).toISOString(), createdTo };
+}
 type ReplayProvider = "openai" | "anthropic" | "google";
 type ProjectUserApiKeyItem = {
   id: number;
@@ -892,6 +915,9 @@ export default function ReleaseGatePageContent() {
 
   const [historyStatus, setHistoryStatus] = useState<"all" | "pass" | "fail">("all");
   const [historyTraceId, setHistoryTraceId] = useState("");
+  const [historyDatePreset, setHistoryDatePreset] = useState<HistoryDatePreset>("all");
+  const [historyCreatedFrom, setHistoryCreatedFrom] = useState("");
+  const [historyCreatedTo, setHistoryCreatedTo] = useState("");
   const [historyOffset, setHistoryOffset] = useState(0);
   const historyLimit = 20;
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -1651,9 +1677,36 @@ export default function ReleaseGatePageContent() {
   const historyKey = useMemo(
     () =>
       projectId && !isNaN(projectId)
-        ? ["release-gate-history", projectId, historyStatus, historyTraceId, historyOffset]
+        ? [
+            "release-gate-history",
+            projectId,
+            historyStatus,
+            historyTraceId,
+            historyDatePreset,
+            historyCreatedFrom,
+            historyCreatedTo,
+            historyOffset,
+          ]
         : null,
-    [projectId, historyStatus, historyTraceId, historyOffset]
+    [
+      projectId,
+      historyStatus,
+      historyTraceId,
+      historyDatePreset,
+      historyCreatedFrom,
+      historyCreatedTo,
+      historyOffset,
+    ]
+  );
+  const historyDateParams = useMemo(
+    () =>
+      historyDatePreset === "custom"
+        ? {
+            createdFrom: toHistoryBoundaryIso(historyCreatedFrom, "start"),
+            createdTo: toHistoryBoundaryIso(historyCreatedTo, "end"),
+          }
+        : getPresetHistoryDateRange(historyDatePreset),
+    [historyCreatedFrom, historyCreatedTo, historyDatePreset]
   );
 
   const {
@@ -1666,6 +1719,8 @@ export default function ReleaseGatePageContent() {
       releaseGateAPI.listHistory(projectId, {
         status: historyStatus === "all" ? undefined : historyStatus,
         trace_id: historyTraceId.trim() || undefined,
+        created_from: historyDateParams.createdFrom,
+        created_to: historyDateParams.createdTo,
         limit: historyLimit,
         offset: historyOffset,
       }),
@@ -2834,6 +2889,12 @@ export default function ReleaseGatePageContent() {
     setHistoryStatus,
     historyTraceId,
     setHistoryTraceId,
+    historyDatePreset,
+    setHistoryDatePreset,
+    historyCreatedFrom,
+    setHistoryCreatedFrom,
+    historyCreatedTo,
+    setHistoryCreatedTo,
     historyOffset,
     setHistoryOffset,
     historyLimit,

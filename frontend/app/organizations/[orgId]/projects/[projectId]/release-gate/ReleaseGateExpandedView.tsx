@@ -251,33 +251,32 @@ function HistoryRunRowButton({
     status?: string;
     trace_id?: string | null;
     created_at?: string | null;
+    repeat_runs?: number | null;
     passed_runs?: number | null;
     failed_runs?: number | null;
-    passed_attempts?: number | null;
-    total_attempts?: number | null;
   };
   selected: boolean;
   loading?: boolean;
   onClick: () => void;
   testId: string;
 }) {
-  const caseIsPass = item.status === "pass";
-  const caseStatus = caseIsPass ? "PASS" : "FAIL";
-  const totalAttempts = Number(item.total_attempts);
-  const passedAttempts = Number(item.passed_attempts);
+  const rawStatus = String(item.status ?? "").trim().toLowerCase();
+  const caseIsPass = rawStatus === "pass";
+  const caseIsFlaky = rawStatus === "flaky";
+  const caseStatus = caseIsPass ? "PASS" : caseIsFlaky ? "FLAKY" : "FAIL";
   const passedInputs = Number(item.passed_runs ?? 0);
   const failedInputs = Number(item.failed_runs ?? 0);
   const inputTotal = passedInputs + failedInputs;
-  const ratioText =
-    Number.isFinite(totalAttempts) &&
-    totalAttempts > 0 &&
-    Number.isFinite(passedAttempts) &&
-    passedAttempts >= 0
-      ? `${Math.min(Math.round(passedAttempts), Math.round(totalAttempts))}/${Math.round(totalAttempts)}`
-      : inputTotal > 0
-        ? `${passedInputs}/${inputTotal}`
-        : "—";
-  const preview = shortText(String(item.trace_id ?? ""), "No trace id", 48);
+  const repeatRuns = Number(item.repeat_runs ?? 0);
+  const inputSummary =
+    inputTotal > 0
+      ? `${passedInputs}/${inputTotal} passed`
+      : passedInputs > 0
+        ? `${passedInputs} passed`
+        : "Input summary unavailable";
+  const inputCountLabel =
+    inputTotal > 0 ? `${inputTotal} input${inputTotal === 1 ? "" : "s"}` : "Inputs unavailable";
+  const preview = item.trace_id ? shortText(String(item.trace_id), "", 48) : "";
 
   return (
     <button
@@ -293,23 +292,41 @@ function HistoryRunRowButton({
           ? "border-fuchsia-500/30 bg-fuchsia-500/10"
           : caseIsPass
             ? "border-emerald-500/10 bg-emerald-500/[0.02] hover:bg-emerald-500/[0.06]"
+            : caseIsFlaky
+              ? "border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10"
             : "border-rose-500/15 bg-rose-500/[0.03] hover:bg-rose-500/10"
       )}
     >
       <span
         className={clsx(
           "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
-          caseIsPass ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
+          caseIsPass
+            ? "bg-emerald-500/10 text-emerald-400"
+            : caseIsFlaky
+              ? "bg-amber-500/15 text-amber-300"
+              : "bg-rose-500/10 text-rose-400"
         )}
       >
         {caseStatus}
       </span>
       <div className="min-w-0 flex-1 py-1">
-        <div className="flex items-baseline gap-2">
-          <span className="shrink-0 text-xs font-semibold text-slate-200">Run</span>
-          <span className="truncate text-[11px] text-slate-400">{preview}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-slate-100">{inputCountLabel}</span>
+          {repeatRuns > 0 ? (
+            <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
+              {repeatRuns}x each
+            </span>
+          ) : null}
         </div>
-        <div className="mt-0.5 text-[10px] text-slate-500">{formatDateTime(item.created_at)}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-slate-500">
+          <span>{formatDateTime(item.created_at)}</span>
+          {preview ? (
+            <>
+              <span className="h-1 w-1 rounded-full bg-white/10" />
+              <span className="truncate">{preview}</span>
+            </>
+          ) : null}
+        </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {loading ? (
@@ -318,11 +335,15 @@ function HistoryRunRowButton({
           <>
             <span
               className={clsx(
-                "text-[10px] font-medium",
-                caseIsPass ? "text-emerald-400/80" : "text-rose-400/80"
+                "text-[10px] font-semibold",
+                caseIsPass
+                  ? "text-emerald-300"
+                  : caseIsFlaky
+                    ? "text-amber-300"
+                    : "text-rose-300"
               )}
             >
-              {ratioText}
+              {inputSummary}
             </span>
             <span className="text-[10px] font-medium text-slate-500 opacity-0 transition-opacity group-hover:opacity-100">
               &rarr;
@@ -332,6 +353,23 @@ function HistoryRunRowButton({
       </div>
     </button>
   );
+}
+
+function formatHistoryDateFilterSummary(
+  preset: "all" | "24h" | "7d" | "30d" | "custom",
+  createdFrom: string,
+  createdTo: string
+): string {
+  if (preset === "24h") return "Last 24 hours";
+  if (preset === "7d") return "Last 7 days";
+  if (preset === "30d") return "Last 30 days";
+  if (preset !== "custom") return "All retained dates";
+  const from = createdFrom.trim();
+  const to = createdTo.trim();
+  if (from && to) return `${from} - ${to}`;
+  if (from) return `From ${from}`;
+  if (to) return `Until ${to}`;
+  return "Custom range";
 }
 
 function percentFromRate(value: unknown): string {
@@ -1970,9 +2008,18 @@ function AttemptDetailOverlay({
                         <button
                           type="button"
                           onClick={() => setShowRemovedDiffLines(v => !v)}
-                          className="rounded-full border border-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-300 transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                          aria-pressed={showRemovedDiffLines}
+                          className={clsx(
+                            "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70",
+                            showRemovedDiffLines
+                              ? "border-fuchsia-400/50 bg-fuchsia-500/20 text-fuchsia-50 shadow-[0_0_0_1px_rgba(217,70,239,0.15)] hover:bg-fuchsia-500/25"
+                              : "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-100 hover:bg-fuchsia-500/18"
+                          )}
                         >
-                          {showRemovedDiffLines ? "Hide removed lines" : `Show removed lines (${diffRemovedCount})`}
+                          <span>{showRemovedDiffLines ? "Hide removed lines" : "Show removed lines"}</span>
+                          <span className="rounded-full bg-black/25 px-1.5 py-0.5 text-[9px] font-bold tracking-normal text-white/85">
+                            {diffRemovedCount}
+                          </span>
                         </button>
                       ) : null}
                     </div>
@@ -2316,6 +2363,14 @@ export function ReleaseGateExpandedView() {
   const setHistoryStatus = ctx.setHistoryStatus as (s: "all" | "pass" | "fail") => void;
   const historyTraceId = ctx.historyTraceId as string;
   const setHistoryTraceId = ctx.setHistoryTraceId as (s: string) => void;
+  const historyDatePreset = ctx.historyDatePreset as "all" | "24h" | "7d" | "30d" | "custom";
+  const setHistoryDatePreset = ctx.setHistoryDatePreset as (
+    preset: "all" | "24h" | "7d" | "30d" | "custom"
+  ) => void;
+  const historyCreatedFrom = ctx.historyCreatedFrom as string;
+  const setHistoryCreatedFrom = ctx.setHistoryCreatedFrom as (s: string) => void;
+  const historyCreatedTo = ctx.historyCreatedTo as string;
+  const setHistoryCreatedTo = ctx.setHistoryCreatedTo as (s: string) => void;
   const historyOffset = ctx.historyOffset as number;
   const setHistoryOffset = ctx.setHistoryOffset as (n: number | ((v: number) => number)) => void;
   const historyLimit = ctx.historyLimit as number;
@@ -2505,6 +2560,18 @@ export function ReleaseGateExpandedView() {
       }),
     [agentId, historyItems]
   );
+  const historyDateSummary = useMemo(
+    () =>
+      formatHistoryDateFilterSummary(historyDatePreset, historyCreatedFrom, historyCreatedTo),
+    [historyCreatedFrom, historyCreatedTo, historyDatePreset]
+  );
+  const historyFilterSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (historyStatus !== "all") parts.push(historyStatus === "pass" ? "Passed only" : "Failed only");
+    if (historyDateSummary) parts.push(historyDateSummary);
+    if (historyTraceId.trim()) parts.push(`Trace ${historyTraceId.trim()}`);
+    return parts;
+  }, [historyDateSummary, historyStatus, historyTraceId]);
   const recentSnapshotsErrorMessage = useMemo(
     () =>
       recentSnapshotsError
@@ -3547,23 +3614,51 @@ export function ReleaseGateExpandedView() {
                       </div>
                     ) : (
                       <>
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
                             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
                               Experiment history
                             </div>
                             <div className="text-sm font-semibold text-white">
                               Retained runs for this node
                             </div>
+                            <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-slate-500">
+                              <span>
+                                {nodeHistoryItems.length}
+                                {historyTotal !== nodeHistoryItems.length ? ` of ${historyTotal}` : ""} runs
+                              </span>
+                              {historyFilterSummary.map(part => (
+                                <span
+                                  key={part}
+                                  className="rounded-full border border-white/8 bg-white/[0.03] px-2 py-0.5 text-slate-400"
+                                >
+                                  {part}
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => mutateHistory()}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:bg-white/5"
-                          >
-                            <RefreshCcw className="h-3.5 w-3.5" />
-                            Refresh
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={historyStatus}
+                              onChange={e => {
+                                setHistoryStatus(e.target.value as "all" | "pass" | "fail");
+                                setHistoryOffset(0);
+                              }}
+                              className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[11px] text-slate-200"
+                            >
+                              <option value="all">All</option>
+                              <option value="pass">Passed</option>
+                              <option value="fail">Failed</option>
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => mutateHistory()}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:bg-white/5"
+                            >
+                              <RefreshCcw className="h-3.5 w-3.5" />
+                              Refresh
+                            </button>
+                          </div>
                         </div>
                         <div className="space-y-2">
                           {nodeHistoryItems.map(item => (
@@ -3621,6 +3716,20 @@ export function ReleaseGateExpandedView() {
                 <option value="pass">Passed</option>
                 <option value="fail">Failed</option>
               </select>
+              <select
+                value={historyDatePreset}
+                onChange={e => {
+                  setHistoryDatePreset(e.target.value as "all" | "24h" | "7d" | "30d" | "custom");
+                  setHistoryOffset(0);
+                }}
+                className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100"
+              >
+                <option value="all">All dates</option>
+                <option value="24h">Last 24h</option>
+                <option value="7d">Last 7d</option>
+                <option value="30d">Last 30d</option>
+                <option value="custom">Custom range</option>
+              </select>
               <input
                 value={historyTraceId}
                 onChange={e => {
@@ -3636,6 +3745,44 @@ export function ReleaseGateExpandedView() {
               >
                 <RefreshCcw className="h-3.5 w-3.5" /> Refresh
               </button>
+            </div>
+            {historyDatePreset === "custom" && (
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-xs text-slate-400">
+                  <span>From</span>
+                  <input
+                    type="date"
+                    value={historyCreatedFrom}
+                    onChange={e => {
+                      setHistoryCreatedFrom(e.target.value);
+                      setHistoryOffset(0);
+                    }}
+                    className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-xs text-slate-400">
+                  <span>To</span>
+                  <input
+                    type="date"
+                    value={historyCreatedTo}
+                    onChange={e => {
+                      setHistoryCreatedTo(e.target.value);
+                      setHistoryOffset(0);
+                    }}
+                    className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100"
+                  />
+                </label>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
+              <span className="rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1">
+                {historyDateSummary}
+              </span>
+              {historyTraceId.trim() ? (
+                <span className="rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1">
+                  Trace {historyTraceId.trim()}
+                </span>
+              ) : null}
             </div>
             {historyLoading ? (
               <div className="space-y-2">
