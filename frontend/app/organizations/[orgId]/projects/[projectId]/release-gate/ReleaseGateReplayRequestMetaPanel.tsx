@@ -79,13 +79,13 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
             return (
               <div
                 key={key}
-                className="grid gap-2 rounded-xl border border-white/[0.06] bg-black/20 p-2 sm:grid-cols-2"
+                className="flex flex-col gap-2 rounded-xl border border-white/[0.06] bg-black/20 p-2"
               >
                 <div>
                   <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
                     Baseline · {key}
                   </div>
-                  <pre className="mt-1 max-h-32 overflow-auto text-[10px] leading-snug text-slate-400 custom-scrollbar whitespace-pre-wrap break-all">
+                  <pre className="mt-1 max-h-32 overflow-x-auto text-[10px] leading-snug text-slate-400 custom-scrollbar whitespace-pre">
                     {previewJson(baselineVal)}
                   </pre>
                 </div>
@@ -93,7 +93,7 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
                   <div className="text-[9px] font-bold uppercase tracking-wider text-cyan-400/80">
                     Applied · {key}
                   </div>
-                  <pre className="mt-1 max-h-32 overflow-auto text-[10px] leading-snug text-slate-200 custom-scrollbar whitespace-pre-wrap break-all">
+                  <pre className="mt-1 max-h-32 overflow-x-auto text-[10px] leading-snug text-slate-200 custom-scrollbar whitespace-pre">
                     {previewJson(appliedVal)}
                   </pre>
                 </div>
@@ -123,7 +123,7 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
                     </span>
                   ) : null}
                 </summary>
-                <pre className="mt-2 max-h-40 overflow-auto text-[10px] leading-snug text-slate-200 custom-scrollbar whitespace-pre-wrap break-all">
+                <pre className="mt-2 max-h-40 overflow-x-auto text-[10px] leading-snug text-slate-200 custom-scrollbar whitespace-pre">
                   {previewJson(block)}
                 </pre>
               </details>
@@ -137,7 +137,7 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
           <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
             Sampling overrides
           </div>
-          <pre className="mt-1 text-[10px] text-slate-300 whitespace-pre-wrap break-all">
+          <pre className="mt-1 overflow-x-auto text-[10px] text-slate-300 custom-scrollbar whitespace-pre">
             {previewJson(meta.sampling_overrides)}
           </pre>
         </div>
@@ -148,7 +148,7 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
           <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
             System prompt override (preview)
           </div>
-          <pre className="mt-1 max-h-28 overflow-auto text-[10px] text-slate-300 custom-scrollbar whitespace-pre-wrap break-all">
+          <pre className="mt-1 max-h-28 overflow-x-auto text-[10px] text-slate-300 custom-scrollbar whitespace-pre">
             {meta.new_system_prompt_preview || "—"}
           </pre>
         </div>
