@@ -4,6 +4,8 @@ Security utilities for JWT authentication
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Any, Tuple
+import secrets
+import hmac
 from jose import JWTError, jwt
 from jose.exceptions import ExpiredSignatureError
 from passlib.context import CryptContext
@@ -21,6 +23,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds
 # OAuth2 scheme; auto_error=False so get_current_user can fall back to cookies
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login", auto_error=False)
 API_KEY_LAST_USED_WRITE_INTERVAL = timedelta(minutes=5)
+CSRF_COOKIE_NAME = "csrf_token"
 
 
 class TokenValidationError(Exception):
@@ -396,6 +399,49 @@ async def get_current_user_or_api_key(
             except HTTPException:
                 pass
         raise jwt_error
+
+
+def generate_csrf_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+async def require_csrf_for_cookie_auth(request: Request) -> None:
+    """
+    Enforce double-submit CSRF protection for cookie-authenticated state-changing requests.
+    Header/Bearer and SDK API-key requests are not CSRF-vulnerable, so they bypass this check.
+    """
+    authorization = (request.headers.get("Authorization") or "").strip()
+    if authorization:
+        return None
+
+    has_cookie_auth = bool(
+        request.cookies.get("access_token") or request.cookies.get("refresh_token")
+    )
+    if not has_cookie_auth:
+        return None
+
+    cookie_token = (request.cookies.get(CSRF_COOKIE_NAME) or "").strip()
+    header_token = (request.headers.get("X-CSRF-Token") or "").strip()
+
+    if not cookie_token or not header_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=auth_error_detail(
+                "csrf_missing",
+                "Security verification failed. Refresh the page and try again.",
+            ),
+        )
+
+    if not hmac.compare_digest(cookie_token, header_token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=auth_error_detail(
+                "csrf_invalid",
+                "Security verification failed. Refresh the page and try again.",
+            ),
+        )
+
+    return None
 
 
 class RequireScope:

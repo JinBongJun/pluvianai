@@ -131,11 +131,17 @@ async def create_project(
         # Transaction is committed by get_db() dependency
     except EntityAlreadyExistsError as e:
         logger.warning(f"Duplicate project name: {project_data.name}")
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A project with this name already exists.",
+        )
     except ValueError as e:
         # Organization access errors
         logger.warning(f"Organization access error: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to create a project in that organization.",
+        )
     except IntegrityError as e:
         db.rollback()
         logger.error(f"Database error creating project: {str(e)}")

@@ -10,7 +10,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict, EmailStr
 from app.core.database import get_db
-from app.core.security import get_current_user, verify_password, get_password_hash
+from app.core.security import (
+    get_current_user,
+    verify_password,
+    get_password_hash,
+    require_csrf_for_cookie_auth,
+)
 from app.core.decorators import handle_errors
 from app.core.logging_config import logger
 from app.core.responses import success_response
@@ -134,6 +139,7 @@ async def get_profile(
 async def update_profile(
     request: UpdateProfileRequest,
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """Update user profile"""
@@ -161,6 +167,7 @@ async def update_profile(
 async def delete_account(
     request: DeleteAccountRequest,
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """Delete user account (requires password confirmation)"""
@@ -186,6 +193,7 @@ async def delete_account(
 async def change_password(
     request: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """Change user password"""
@@ -253,6 +261,7 @@ async def get_api_keys(
 async def create_api_key(
     request: CreateAPIKeyRequest,
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """
@@ -309,6 +318,7 @@ async def create_api_key(
 async def rotate_api_key(
     key_id: int,
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """
@@ -363,6 +373,7 @@ async def rotate_api_key(
 async def delete_api_key(
     key_id: int,
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """
@@ -399,6 +410,7 @@ async def update_api_key(
     key_id: int,
     request: CreateAPIKeyRequest,  # Reuse for name update
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """Update API key name"""
@@ -471,6 +483,7 @@ async def get_notification_settings(
 async def update_notification_settings(
     request: UpdateNotificationSettingsRequest,
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """Update user notification settings"""

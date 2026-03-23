@@ -11,7 +11,10 @@ from typing import Optional, Dict
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db, SessionLocal
+from app.core.permissions import check_project_access
+from app.core.security import get_current_user_or_api_key
 from app.models.project import Project
+from app.models.user import User
 from app.services.cache_service import cache_service
 from app.services.firewall_service import firewall_service
 from app.core.dependencies import get_snapshot_service
@@ -36,6 +39,16 @@ PROVIDER_URLS = {
 
 _breaker = CircuitBreaker(failure_threshold=5, recovery_time_seconds=30, exception_types=(httpx.RequestError,))
 _bulkhead = Bulkhead(max_concurrent=20)
+
+
+def _get_platform_provider_key(provider: str) -> Optional[str]:
+    if provider == "openai":
+        return settings.OPENAI_API_KEY
+    if provider == "anthropic":
+        return settings.ANTHROPIC_API_KEY
+    if provider == "google":
+        return settings.GOOGLE_API_KEY
+    return None
 
 
 async def _stream_with_firewall(
@@ -199,6 +212,7 @@ async def _proxy_request(
     x_project_id: Optional[str],
     x_agent_name: Optional[str],
     x_chain_id: Optional[str],
+    current_user: User,
     db: Session,
 ) -> Response:
     """
@@ -206,6 +220,25 @@ async def _proxy_request(
     """
     if provider not in PROVIDER_URLS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported provider: {provider}")
+
+    project: Optional[Project] = None
+    project_id: Optional[int] = None
+    auth_method = getattr(request.state, "auth_method", None)
+    if auth_method == "api_key" and not x_project_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Project-ID is required when authenticating with an API key.",
+        )
+
+    if x_project_id:
+        try:
+            project_id = int(x_project_id)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="X-Project-ID must be a valid integer.",
+            ) from exc
+        project = check_project_access(project_id, current_user, db)
 
     # 0. Panic Mode Check (High Performance via Redis)
     if x_project_id:
@@ -223,19 +256,13 @@ async def _proxy_request(
             logger.warning(f"Panic check failed for project {x_project_id}: {str(e)}")
 
     # Check usage limit if project ID is provided
-    if x_project_id:
-        try:
-            project_id = int(x_project_id)
-            project = db.query(Project).filter(Project.id == project_id).first()
-            if project:
-                can_make_call, error_msg = check_api_call_limit(project.owner_id, db)
-                if not can_make_call:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail=error_msg or "API call limit exceeded. Please upgrade your plan.",
-                    )
-        except (ValueError, TypeError):
-            pass
+    if project is not None:
+        can_make_call, error_msg = check_api_call_limit(project.owner_id, db)
+        if not can_make_call:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=error_msg or "API call limit exceeded. Please upgrade your plan.",
+            )
 
     # Build target URL
     base_url = PROVIDER_URLS[provider]
@@ -274,26 +301,23 @@ async def _proxy_request(
         except Exception:
             snapshot_payload = None
 
-    # Auth handling
-    api_key = None
-    auth_header = request.headers.get("Authorization")
-    if auth_header:
-        api_key = auth_header.replace("Bearer ", "").replace("Api-Key ", "")
-    else:
-        if provider == "openai" and settings.OPENAI_API_KEY:
-            api_key = settings.OPENAI_API_KEY
-        elif provider == "anthropic" and settings.ANTHROPIC_API_KEY:
-            api_key = settings.ANTHROPIC_API_KEY
-        elif provider == "google" and settings.GOOGLE_API_KEY:
-            api_key = settings.GOOGLE_API_KEY
-
+    # Auth handling: route access is authenticated separately (JWT or Pluvian API key).
+    # Upstream provider credentials come only from server-side settings.
+    api_key = _get_platform_provider_key(provider)
     if not api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"API key required for {provider}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Platform provider key is not configured for {provider}.",
+        )
 
     # Headers preparation
     headers = dict(request.headers)
     headers.pop("host", None)
     headers.pop("content-length", None)
+    headers.pop("Authorization", None)
+    headers.pop("authorization", None)
+    headers.pop("x-api-key", None)
+    headers.pop("x-goog-api-key", None)
     if provider == "openai":
         headers["Authorization"] = f"Bearer {api_key}"
     elif provider == "anthropic":
@@ -477,9 +501,20 @@ async def proxy_get(
     x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
     x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
     x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: Session = Depends(get_db),
 ) -> Response:
-    return await _proxy_request(provider, path, request, background_tasks, x_project_id, x_agent_name, x_chain_id, db)
+    return await _proxy_request(
+        provider,
+        path,
+        request,
+        background_tasks,
+        x_project_id,
+        x_agent_name,
+        x_chain_id,
+        current_user,
+        db,
+    )
 
 
 @router.post("/{provider}/{path:path}")
@@ -491,9 +526,20 @@ async def proxy_post(
     x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
     x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
     x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: Session = Depends(get_db),
 ) -> Response:
-    return await _proxy_request(provider, path, request, background_tasks, x_project_id, x_agent_name, x_chain_id, db)
+    return await _proxy_request(
+        provider,
+        path,
+        request,
+        background_tasks,
+        x_project_id,
+        x_agent_name,
+        x_chain_id,
+        current_user,
+        db,
+    )
 
 
 @router.put("/{provider}/{path:path}")
@@ -505,9 +551,20 @@ async def proxy_put(
     x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
     x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
     x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: Session = Depends(get_db),
 ) -> Response:
-    return await _proxy_request(provider, path, request, background_tasks, x_project_id, x_agent_name, x_chain_id, db)
+    return await _proxy_request(
+        provider,
+        path,
+        request,
+        background_tasks,
+        x_project_id,
+        x_agent_name,
+        x_chain_id,
+        current_user,
+        db,
+    )
 
 
 @router.patch("/{provider}/{path:path}")
@@ -519,9 +576,20 @@ async def proxy_patch(
     x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
     x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
     x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: Session = Depends(get_db),
 ) -> Response:
-    return await _proxy_request(provider, path, request, background_tasks, x_project_id, x_agent_name, x_chain_id, db)
+    return await _proxy_request(
+        provider,
+        path,
+        request,
+        background_tasks,
+        x_project_id,
+        x_agent_name,
+        x_chain_id,
+        current_user,
+        db,
+    )
 
 
 @router.delete("/{provider}/{path:path}")
@@ -533,6 +601,17 @@ async def proxy_delete(
     x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
     x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
     x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: Session = Depends(get_db),
 ) -> Response:
-    return await _proxy_request(provider, path, request, background_tasks, x_project_id, x_agent_name, x_chain_id, db)
+    return await _proxy_request(
+        provider,
+        path,
+        request,
+        background_tasks,
+        x_project_id,
+        x_agent_name,
+        x_chain_id,
+        current_user,
+        db,
+    )

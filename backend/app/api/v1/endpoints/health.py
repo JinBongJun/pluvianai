@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.logging_config import logger
 from app.services.cache_service import cache_service
 from app.services.statuspage_service import statuspage_service
 
@@ -42,17 +43,18 @@ def health_check(db: Session = Depends(get_db)):
     # Check Redis
     redis_status = "ok" if cache_service.enabled else "not_configured"
 
-    return {
+    response = {
         "status": "healthy",
-        "app": settings.APP_NAME,
-        "version": settings.APP_VERSION,
         "database": db_status,
         "redis": redis_status,
     }
+    if settings.ENVIRONMENT != "production":
+        response["app"] = settings.APP_NAME
+        response["version"] = settings.APP_VERSION
+    return response
 
 
-@router.get("/detailed")
-def detailed_health_check(db: Session = Depends(get_db)):
+def _build_detailed_health_status(db: Session) -> Dict[str, Any]:
     """
     Detailed health check with system information
     """
@@ -157,3 +159,9 @@ def detailed_health_check(db: Session = Depends(get_db)):
             logger.warning(f"Failed to sync to StatusPage: {str(e)}")
 
     return health_status
+
+
+if settings.expose_detailed_health_endpoint:
+    @router.get("/detailed")
+    def detailed_health_check(db: Session = Depends(get_db)):
+        return _build_detailed_health_status(db)
