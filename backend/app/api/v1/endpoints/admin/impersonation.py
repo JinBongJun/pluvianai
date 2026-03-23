@@ -97,9 +97,10 @@ async def start_impersonation(
             "expires_in_minutes": request_data.duration_minutes,
         })
     except ValueError as e:
+        logger.warning("Failed to start impersonation", extra={"reason": str(e)})
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail="Could not start impersonation for this user.",
         )
 
 
@@ -148,7 +149,8 @@ async def end_impersonation(
         
         return success_response(data={"message": "Impersonation session ended"})
     except ValueError as e:
+        logger.warning("Failed to end impersonation", extra={"reason": str(e)})
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail="Could not end impersonation for this session.",
         )

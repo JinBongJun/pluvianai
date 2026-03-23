@@ -1,9 +1,13 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Body
 from typing import List, Dict, Any
-# from app.api.deps import get_current_user_project
-from app.models.project import Project
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.permissions import check_project_access
+from app.core.security import get_current_user
 from app.schemas.test_run import TestRunCreate, TestRunResponse
+from app.models.user import User
 
 router = APIRouter()
 
@@ -11,12 +15,14 @@ router = APIRouter()
 async def create_test_run(
     project_id: int,
     run_data: Dict[str, Any] = Body(...),
-    # current_project: Project = Depends(get_current_user_project) # Auth temporarily disabled for dev speed if needed
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Execute a Test Lab graph.
     Recieves nodes and edges, topologically sorts them, and executes the chain.
     """
+    check_project_access(project_id, current_user, db)
     print(f"Received Test Run for Project {project_id}")
     print(f"Nodes: {len(run_data.get('nodes', []))}, Edges: {len(run_data.get('edges', []))}")
     

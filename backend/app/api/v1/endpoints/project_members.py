@@ -140,9 +140,17 @@ async def add_project_member(
         )
         # Transaction is committed by get_db() dependency
     except EntityAlreadyExistsError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.warning("Project member add rejected: already exists", extra={"reason": str(e)})
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That user is already a member of this project.",
+        )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        logger.warning("Project member add rejected", extra={"reason": str(e)})
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found or cannot be added to this project.",
+        )
 
     # Invalidate cache
     cache_service.invalidate_project_cache(project_id)

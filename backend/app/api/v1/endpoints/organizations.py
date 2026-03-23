@@ -243,9 +243,10 @@ def create_organization(
         # Transaction is committed by get_db() dependency
         return org
     except EntityAlreadyExistsError as e:
+        logger.warning("Organization create rejected: already exists", extra={"reason": str(e)})
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(e)
+            detail="An organization with this name already exists.",
         )
 
 
@@ -687,7 +688,11 @@ def add_organization_member(
             role=member_data.role.value,
         )
     except EntityAlreadyExistsError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.warning("Organization member add rejected: already exists", extra={"reason": str(e)})
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That user is already a member of this organization.",
+        )
 
     return OrganizationMemberResponse(
         id=member.id,
