@@ -170,6 +170,7 @@ export function ReleaseGateConfigPanel({
     (ctx?.selectedDataSummary as string) ??
     "No baseline data yet. Select representative \"good\" snapshots from Live Logs or Saved Data.";
   const runLocked = Boolean(ctx?.isValidating) || Boolean(ctx?.activeJobId);
+  const repeatRuns = Number(ctx?.repeatRuns ?? 0);
 
   const toolContextMode = (ctx?.toolContextMode as "recorded" | "inject") ?? "recorded";
   const setToolContextMode = ctx?.setToolContextMode as
@@ -293,28 +294,24 @@ export function ReleaseGateConfigPanel({
       }),
     [finalCandidateRequest, usingProvider, usingModel]
   );
-  const parityWarnings = useMemo(() => {
-    const warnings: string[] = [];
+  const parityEnvironmentNotes = useMemo(() => {
+    const notes: string[] = [];
     if (baselineRequestOverview.truncated) {
-      warnings.push(
+      notes.push(
         "Baseline request content was truncated before ingest. Replay may still differ from production."
       );
     } else if (baselineRequestOverview.omittedByPolicy) {
-      warnings.push(
+      notes.push(
         "Baseline request content was limited by SDK/privacy policy. Replay will only use the captured shape."
       );
-    }
-
-    if (baselineRequestOverview.toolsCount > 0 && candidateRequestOverview.toolsCount === 0) {
-      warnings.push("Baseline request had tools, but the candidate request currently removes them.");
     }
 
     const missingExtended = baselineRequestOverview.extendedContextKeys.filter(
       key => !candidateRequestOverview.extendedContextKeys.includes(key)
     );
     if (missingExtended.length > 0) {
-      warnings.push(
-        `Baseline included extended context keys that are not present in candidate replay: ${missingExtended.join(", ")}.`
+      notes.push(
+        `Baseline included extended context keys that are not present in the candidate replay payload: ${missingExtended.join(", ")}. Add them via Layer 1 (config JSON) or Layer 2 (restoration) if needed.`
       );
     }
 
@@ -322,12 +319,22 @@ export function ReleaseGateConfigPanel({
       key => !candidateRequestOverview.additionalRequestKeys.includes(key)
     );
     if (missingAdditional.length > 0) {
-      warnings.push(
-        `Baseline included additional request keys that are not present in candidate replay: ${missingAdditional.join(", ")}.`
+      notes.push(
+        `Baseline included additional request keys that are not present in the candidate replay payload: ${missingAdditional.join(", ")}. Restore with Layer 2 replay_overrides when appropriate.`
       );
     }
 
-    return warnings;
+    return notes;
+  }, [baselineRequestOverview, candidateRequestOverview]);
+
+  const parityCandidateShapeNotes = useMemo(() => {
+    const notes: string[] = [];
+    if (baselineRequestOverview.toolsCount > 0 && candidateRequestOverview.toolsCount === 0) {
+      notes.push(
+        "Baseline had tools in the request, but the candidate replay payload currently lists none. This may be an intentional model/tools experiment (Layer 1) or an oversight—confirm before shipping."
+      );
+    }
+    return notes;
   }, [baselineRequestOverview, candidateRequestOverview]);
 
   const cleanBaselineForComparison = useMemo(() => {
@@ -477,11 +484,11 @@ export function ReleaseGateConfigPanel({
                 id="release-gate-config-title"
                 className="text-2xl font-bold tracking-tight text-white"
               >
-                Candidate Overrides
+                Release Gate configuration
               </h2>
               <p className="mt-1.5 text-sm text-slate-400">
-                Compare the original payload on the left with your candidate configuration on the
-                right.
+                Left: baseline reference. Center: merged candidate payload. Right: Layer 1
+                experiment-wide settings, then Layer 2 per-log restoration.
               </p>
             </div>
             <button
@@ -733,16 +740,32 @@ export function ReleaseGateConfigPanel({
                           </div>
                         </div>
                       </div>
-                      {parityWarnings.length > 0 ? (
-                        <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-xs text-amber-100">
-                          <div className="font-bold uppercase tracking-[0.15em] text-amber-300">
-                            Baseline parity hints
-                          </div>
-                          <div className="mt-2 space-y-1.5">
-                            {parityWarnings.map(warning => (
-                              <div key={warning}>{warning}</div>
-                            ))}
-                          </div>
+                      {parityEnvironmentNotes.length > 0 || parityCandidateShapeNotes.length > 0 ? (
+                        <div className="mt-3 space-y-2">
+                          {parityEnvironmentNotes.length > 0 ? (
+                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-xs text-amber-100">
+                              <div className="font-bold uppercase tracking-[0.15em] text-amber-300">
+                                Capture / environment
+                              </div>
+                              <div className="mt-2 space-y-1.5">
+                                {parityEnvironmentNotes.map(note => (
+                                  <div key={note}>{note}</div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                          {parityCandidateShapeNotes.length > 0 ? (
+                            <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-3 text-xs text-sky-100">
+                              <div className="font-bold uppercase tracking-[0.15em] text-sky-300">
+                                Candidate shape (may be intentional)
+                              </div>
+                              <div className="mt-2 space-y-1.5">
+                                {parityCandidateShapeNotes.map(note => (
+                                  <div key={note}>{note}</div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
                       ) : (
                         <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 text-xs text-emerald-100">
@@ -767,6 +790,24 @@ export function ReleaseGateConfigPanel({
                     for this run.
                   </div>
                 )}
+
+                <div className="rounded-2xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/[0.08] to-transparent p-5">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-fuchsia-300/90 mb-2">
+                    Layer 1 · Experiment-wide candidate
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    One candidate per run: same model override, system prompt, sampling, thresholds, tools,
+                    and config-only JSON for every selected log. Do not use this layer to mix different
+                    models or sampling strategies across logs.
+                  </p>
+                  {repeatRuns > 0 ? (
+                    <p className="mt-2 text-[11px] text-slate-500">
+                      Repeat runs:{" "}
+                      <span className="font-mono text-slate-300">{repeatRuns}×</span> (from the run
+                      controls on the main screen)
+                    </p>
+                  ) : null}
+                </div>
 
                 {/* Strictness */}
                 <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm">
@@ -1140,8 +1181,10 @@ export function ReleaseGateConfigPanel({
                         )}
                       </div>
                       <div className="text-sm text-slate-400">
-                        Advanced request configuration. Excludes tools, prompt, and per-snapshot
-                        content.
+                        Run-wide JSON merged for every log. Excludes tools (edited below), system prompt
+                        (field above), and per-snapshot restoration (Layer 2). Prefer{" "}
+                        <span className="font-mono text-slate-500">replay_overrides</span> for
+                        attachments and other non-message fields that vary by snapshot.
                       </div>
                     </div>
                     <button
@@ -1167,6 +1210,126 @@ export function ReleaseGateConfigPanel({
                       {requestJsonError}
                     </div>
                   )}
+                </div>
+
+                {/* Tools */}
+                <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm">
+                  <div className="flex items-center justify-between gap-4 mb-5">
+                    <div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
+                        Tools
+                      </div>
+                      <div className="text-sm text-slate-400">
+                        Experiment-wide tool definitions (same for every selected log). Edited separately
+                        from config-only JSON.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addTool}
+                      disabled={runLocked}
+                      className="shrink-0 flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-all"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Tool
+                    </button>
+                  </div>
+
+                  {toolsList.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.01] px-5 py-8 text-center text-sm text-slate-500">
+                      No tools configured for this candidate run.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {toolsList.map((tool, index) => {
+                        const parametersError = getToolParametersError(tool.parameters);
+                        return (
+                          <div
+                            key={tool.id}
+                            className="rounded-xl border border-white/10 bg-[#0a0c10] p-5"
+                          >
+                            <div className="mb-4 flex items-center justify-between gap-3">
+                              <div className="text-sm font-bold text-white flex items-center gap-2">
+                                <span className="bg-white/10 text-slate-300 w-5 h-5 rounded flex items-center justify-center text-xs">
+                                  {index + 1}
+                                </span>
+                                Tool Definition
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeTool(tool.id)}
+                                disabled={runLocked}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-transparent px-2.5 py-1.5 text-xs font-medium text-rose-400/80 hover:bg-rose-500/10 hover:text-rose-400 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Remove
+                              </button>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2 mb-4">
+                              <label className="space-y-2">
+                                <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
+                                  Name
+                                </span>
+                                <input
+                                  value={tool.name}
+                                  onChange={e => updateTool(tool.id, { name: e.target.value })}
+                                  disabled={runLocked}
+                                  placeholder="e.g. get_weather"
+                                  className="w-full rounded-xl border border-white/10 bg-[#0f1115] px-4 py-2.5 text-sm font-mono text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
+                                />
+                              </label>
+                              <label className="space-y-2">
+                                <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
+                                  Description
+                                </span>
+                                <input
+                                  value={tool.description}
+                                  onChange={e =>
+                                    updateTool(tool.id, { description: e.target.value })
+                                  }
+                                  disabled={runLocked}
+                                  placeholder="What this tool does"
+                                  className="w-full rounded-xl border border-white/10 bg-[#0f1115] px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
+                                />
+                              </label>
+                            </div>
+
+                            <label className="block space-y-2">
+                              <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
+                                Parameters (JSON Schema)
+                              </span>
+                              <textarea
+                                value={tool.parameters}
+                                onChange={e => updateTool(tool.id, { parameters: e.target.value })}
+                                disabled={runLocked}
+                                spellCheck={false}
+                                className="min-h-[160px] w-full rounded-xl border border-white/10 bg-[#0f1115] p-4 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
+                              />
+                              {parametersError && (
+                                <div className="mt-2 text-xs font-medium text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+                                  {parametersError}
+                                </div>
+                              )}
+                            </label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-500/[0.07] to-transparent p-5">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-violet-300/90 mb-2">
+                    Layer 2 · Baseline restoration
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Merge snapshot-specific or missing-ingest fields: shared and per-log{" "}
+                    <span className="font-mono text-slate-500">replay_overrides</span>, plus optional{" "}
+                    <span className="font-mono text-slate-500">tool_context</span> (recorded vs injected).
+                    Read-only baseline tool activity below is for inspection only—execution still comes
+                    from captured snapshots.
+                  </p>
                 </div>
 
                 {/* Additional request body fields (API: replay_overrides) */}
@@ -1293,112 +1456,6 @@ export function ReleaseGateConfigPanel({
                       </div>
                     )}
                   </div>
-                </div>
-
-                {/* Tools */}
-                <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm">
-                  <div className="flex items-center justify-between gap-4 mb-5">
-                    <div>
-                      <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
-                        Tools
-                      </div>
-                      <div className="text-sm text-slate-400">
-                        Edit tool definitions separately from the config JSON.
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={addTool}
-                      disabled={runLocked}
-                      className="shrink-0 flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-all"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Tool
-                    </button>
-                  </div>
-
-                  {toolsList.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.01] px-5 py-8 text-center text-sm text-slate-500">
-                      No tools configured for this candidate run.
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {toolsList.map((tool, index) => {
-                        const parametersError = getToolParametersError(tool.parameters);
-                        return (
-                          <div
-                            key={tool.id}
-                            className="rounded-xl border border-white/10 bg-[#0a0c10] p-5"
-                          >
-                            <div className="mb-4 flex items-center justify-between gap-3">
-                              <div className="text-sm font-bold text-white flex items-center gap-2">
-                                <span className="bg-white/10 text-slate-300 w-5 h-5 rounded flex items-center justify-center text-xs">
-                                  {index + 1}
-                                </span>
-                                Tool Definition
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => removeTool(tool.id)}
-                                disabled={runLocked}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-transparent px-2.5 py-1.5 text-xs font-medium text-rose-400/80 hover:bg-rose-500/10 hover:text-rose-400 transition-colors"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                Remove
-                              </button>
-                            </div>
-
-                            <div className="grid gap-4 md:grid-cols-2 mb-4">
-                              <label className="space-y-2">
-                                <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-                                  Name
-                                </span>
-                                <input
-                                  value={tool.name}
-                                  onChange={e => updateTool(tool.id, { name: e.target.value })}
-                                  disabled={runLocked}
-                                  placeholder="e.g. get_weather"
-                                  className="w-full rounded-xl border border-white/10 bg-[#0f1115] px-4 py-2.5 text-sm font-mono text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
-                                />
-                              </label>
-                              <label className="space-y-2">
-                                <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-                                  Description
-                                </span>
-                                <input
-                                  value={tool.description}
-                                  onChange={e =>
-                                    updateTool(tool.id, { description: e.target.value })
-                                  }
-                                  disabled={runLocked}
-                                  placeholder="What this tool does"
-                                  className="w-full rounded-xl border border-white/10 bg-[#0f1115] px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
-                                />
-                              </label>
-                            </div>
-
-                            <label className="block space-y-2">
-                              <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-                                Parameters (JSON Schema)
-                              </span>
-                              <textarea
-                                value={tool.parameters}
-                                onChange={e => updateTool(tool.id, { parameters: e.target.value })}
-                                disabled={runLocked}
-                                spellCheck={false}
-                                className="min-h-[160px] w-full rounded-xl border border-white/10 bg-[#0f1115] p-4 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
-                              />
-                              {parametersError && (
-                                <div className="mt-2 text-xs font-medium text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
-                                  {parametersError}
-                                </div>
-                              )}
-                            </label>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
                 </div>
 
                 {/* Additional system context (API: tool_context) — docs/code/tool outcomes missing from captured logs */}

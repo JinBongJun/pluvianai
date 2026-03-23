@@ -55,6 +55,61 @@ import {
   findFirstCaseWithAttempts,
 } from "./releaseGateExpandedHelpers";
 
+function snapshotHasPerLogBodyOverride(
+  sid: string,
+  byId: Record<string, Record<string, unknown>>,
+  draftRaw: Record<string, string>
+): boolean {
+  const merged = byId[sid];
+  if (merged && typeof merged === "object" && Object.keys(merged).length > 0) return true;
+  const d = draftRaw[sid]?.trim() ?? "";
+  if (!d) return false;
+  try {
+    const p = JSON.parse(d) as unknown;
+    if (p && typeof p === "object" && !Array.isArray(p) && Object.keys(p as object).length > 0)
+      return true;
+  } catch {
+    return true;
+  }
+  return false;
+}
+
+function RestorationSnapshotBadges({
+  rb,
+}: {
+  rb?: { body: boolean; ctx: boolean; sharedCtx: boolean };
+}) {
+  if (!rb || (!rb.body && !rb.ctx && !rb.sharedCtx)) return null;
+  return (
+    <>
+      {rb.body ? (
+        <span
+          className="rounded border border-violet-500/25 bg-violet-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase text-violet-200"
+          title="Per-log replay_overrides (body fields)"
+        >
+          Body
+        </span>
+      ) : null}
+      {rb.ctx ? (
+        <span
+          className="rounded border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase text-sky-200"
+          title="Per-log tool_context text"
+        >
+          Ctx
+        </span>
+      ) : null}
+      {rb.sharedCtx ? (
+        <span
+          className="rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-black uppercase text-slate-300"
+          title="Shared extra system context (applies to all selected logs)"
+        >
+          Ctx·all
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 function ResultCaseRowButton({
   run,
   idx,
@@ -1787,6 +1842,16 @@ export function ReleaseGateExpandedView() {
   const mutateRecentSnapshots = ctx.mutateRecentSnapshots as (() => unknown) | undefined;
   const baselineSnapshotsById = ctx.baselineSnapshotsById as Map<string, Record<string, unknown>>;
   const runSnapshotIds = ctx.runSnapshotIds as string[];
+  const selectedSnapshotIdsForRun = (ctx.selectedSnapshotIdsForRun as string[] | undefined) ?? [];
+  const requestBodyOverridesBySnapshotId =
+    (ctx.requestBodyOverridesBySnapshotId as Record<string, Record<string, unknown>> | undefined) ??
+    {};
+  const bodyOverridesSnapshotDraftRaw =
+    (ctx.bodyOverridesSnapshotDraftRaw as Record<string, string> | undefined) ?? {};
+  const toolContextMode = (ctx.toolContextMode as string) ?? "recorded";
+  const toolContextScope = (ctx.toolContextScope as string) ?? "per_snapshot";
+  const toolContextGlobalText = (ctx.toolContextGlobalText as string) ?? "";
+  const toolContextBySnapshotId = (ctx.toolContextBySnapshotId as Record<string, string>) ?? {};
   const setDataSource = ctx.setDataSource as (s: "recent" | "datasets") => void;
   const snapshotEvalFailed = ctx.snapshotEvalFailed as (
     s: Record<string, unknown> | null
@@ -1948,11 +2013,11 @@ export function ReleaseGateExpandedView() {
       | undefined) ??
     (result?.experiment?.tool_context as Record<string, unknown> | null | undefined) ??
     null;
-  const runConfigSummaryItems = useMemo(() => {
+  const runConfigExperimentSummaryItems = useMemo(() => {
     const items: string[] = [];
-    const repeatRuns =
+    const repeatRunsSummary =
       Number((activeReleaseGateSummary?.repeat_runs as number | undefined) ?? result?.repeat_runs) || 0;
-    if (repeatRuns > 0) items.push(`Repeat ${repeatRuns}`);
+    if (repeatRunsSummary > 0) items.push(`Repeat ${repeatRunsSummary}`);
 
     const thresholds =
       ((activeReleaseGateSummary?.thresholds as Record<string, unknown> | undefined) ?? null) ||
@@ -1973,20 +2038,26 @@ export function ReleaseGateExpandedView() {
       if (count > 0) items.push(`Sampling ${count} key${count === 1 ? "" : "s"}`);
     }
 
+    if (replayRequestMeta?.has_new_system_prompt) {
+      items.push("System prompt override");
+    }
+
+    return items;
+  }, [activeReleaseGateSummary, replayRequestMeta, result]);
+
+  const runConfigRestorationSummaryItems = useMemo(() => {
+    const items: string[] = [];
+
     const applied = replayRequestMeta?.replay_overrides_applied;
     if (applied && typeof applied === "object") {
       const count = Object.keys(applied).length;
-      if (count > 0) items.push(`Body overrides ${count}`);
+      if (count > 0) items.push(`Shared body fields ${count}`);
     }
 
     const perLog = replayRequestMeta?.replay_overrides_by_snapshot_id_applied;
     if (perLog && typeof perLog === "object") {
       const count = Object.keys(perLog).length;
-      if (count > 0) items.push(`Per-log overrides ${count}`);
-    }
-
-    if (replayRequestMeta?.has_new_system_prompt) {
-      items.push("System prompt override");
+      if (count > 0) items.push(`Per-log body fields ${count}`);
     }
 
     if (activeToolContextSummary && typeof activeToolContextSummary === "object") {
@@ -2001,7 +2072,7 @@ export function ReleaseGateExpandedView() {
     }
 
     return items;
-  }, [activeReleaseGateSummary, activeToolContextSummary, replayRequestMeta, result]);
+  }, [activeToolContextSummary, replayRequestMeta]);
   const setExpandedHistoryId = ctx.setExpandedHistoryId as
     | ((id: string | null) => void)
     | undefined;
@@ -2258,6 +2329,35 @@ export function ReleaseGateExpandedView() {
   };
 
   const runLocked = isValidating || Boolean(activeJobId);
+
+  const restorationBadgesBySnapshotId = useMemo(() => {
+    const m = new Map<string, { body: boolean; ctx: boolean; sharedCtx: boolean }>();
+    for (const sid of selectedSnapshotIdsForRun) {
+      const body = snapshotHasPerLogBodyOverride(
+        sid,
+        requestBodyOverridesBySnapshotId,
+        bodyOverridesSnapshotDraftRaw
+      );
+      const perCtx =
+        toolContextMode === "inject" &&
+        toolContextScope === "per_snapshot" &&
+        Boolean(toolContextBySnapshotId[sid]?.trim());
+      const sharedCtx =
+        toolContextMode === "inject" &&
+        toolContextScope === "global" &&
+        toolContextGlobalText.trim().length > 0;
+      m.set(sid, { body, ctx: perCtx, sharedCtx });
+    }
+    return m;
+  }, [
+    selectedSnapshotIdsForRun,
+    requestBodyOverridesBySnapshotId,
+    bodyOverridesSnapshotDraftRaw,
+    toolContextMode,
+    toolContextScope,
+    toolContextGlobalText,
+    toolContextBySnapshotId,
+  ]);
 
   const activeChecksCards = useMemo(() => {
     const configSrc = agentEvalData?.config as Record<string, unknown> | undefined;
@@ -2534,8 +2634,10 @@ export function ReleaseGateExpandedView() {
                                 | Record<string, unknown>
                                 | undefined;
                               const snap = (full ?? skinny) as Record<string, unknown>;
-                              const checked = runSnapshotIds.includes(String(skinny.id));
+                              const rowId = String(skinny.id);
+                              const checked = runSnapshotIds.includes(rowId);
                               const failed = snapshotEvalFailed(full ?? null);
+                              const rb = restorationBadgesBySnapshotId.get(rowId);
 
                               return (
                                 <div
@@ -2575,16 +2677,19 @@ export function ReleaseGateExpandedView() {
                                         <span className="font-mono text-[11px] font-bold text-slate-300">
                                           {formatDateTime(snap.created_at)}
                                         </span>
-                                        <span
-                                          className={clsx(
-                                            "rounded border px-2 py-0.5 text-[9px] font-black uppercase",
-                                            failed
-                                              ? "border-rose-500/20 bg-rose-500/10 text-rose-400"
-                                              : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                                          )}
-                                        >
-                                          {failed ? "FAIL" : "PASS"}
-                                        </span>
+                                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                          <RestorationSnapshotBadges rb={rb} />
+                                          <span
+                                            className={clsx(
+                                              "rounded border px-2 py-0.5 text-[9px] font-black uppercase",
+                                              failed
+                                                ? "border-rose-500/20 bg-rose-500/10 text-rose-400"
+                                                : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                                            )}
+                                          >
+                                            {failed ? "FAIL" : "PASS"}
+                                          </span>
+                                        </div>
                                       </div>
                                       <p className="line-clamp-2 text-[12px] leading-relaxed text-slate-300">
                                         {shortText(
@@ -2760,37 +2865,48 @@ export function ReleaseGateExpandedView() {
                                           No snapshots stored in this dataset.
                                         </div>
                                       ) : (
-                                        expandedDatasetSnapshots.map(snapshot => (
-                                          <button
-                                            key={String(snapshot.id)}
-                                            type="button"
-                                            onClick={() =>
-                                              openBaselineDetailSnapshot(
-                                                snapshot as Record<string, unknown>
-                                              )
-                                            }
-                                            className="flex w-full items-start justify-between gap-3 border-b border-white/[0.04] px-4 py-3 text-left transition-colors last:border-0 hover:bg-white/[0.05]"
-                                          >
-                                            <div className="min-w-0 flex-1">
-                                              <div className="truncate text-[13px] font-medium text-slate-100">
-                                                {shortText(
-                                                  snapshot.user_message ??
-                                                    snapshot.request_prompt ??
+                                        expandedDatasetSnapshots.map((snapshot, idx) => {
+                                          const snapRowId = String(
+                                            (snapshot as { id?: unknown }).id ?? ""
+                                          );
+                                          const rbDs = restorationBadgesBySnapshotId.get(snapRowId);
+                                          return (
+                                            <button
+                                              key={snapRowId || `dataset-snap-${idx}`}
+                                              type="button"
+                                              onClick={() =>
+                                                openBaselineDetailSnapshot(
+                                                  snapshot as Record<string, unknown>
+                                                )
+                                              }
+                                              className="flex w-full items-start justify-between gap-3 border-b border-white/[0.04] px-4 py-3 text-left transition-colors last:border-0 hover:bg-white/[0.05]"
+                                            >
+                                              <div className="min-w-0 flex-1">
+                                                <div className="truncate text-[13px] font-medium text-slate-100">
+                                                  {shortText(
+                                                    snapshot.user_message ??
+                                                      snapshot.request_prompt ??
+                                                      "—",
                                                     "—",
-                                                  "—",
-                                                  88
-                                                )}
+                                                    88
+                                                  )}
+                                                </div>
+                                                <div className="mt-1 flex items-center justify-between gap-2">
+                                                  <span className="text-[11px] text-slate-400">
+                                                    {formatDateTime(snapshot.created_at)}
+                                                  </span>
+                                                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                                    <RestorationSnapshotBadges rb={rbDs} />
+                                                  </div>
+                                                </div>
                                               </div>
-                                              <div className="mt-1 text-[11px] text-slate-400">
-                                                {formatDateTime(snapshot.created_at)}
+                                              <div className="shrink-0 text-right text-[11px] text-slate-500">
+                                                {String(snapshot.trace_id ?? "").slice(0, 12) ||
+                                                  "trace"}
                                               </div>
-                                            </div>
-                                            <div className="shrink-0 text-[11px] text-slate-500">
-                                              {String(snapshot.trace_id ?? "").slice(0, 12) ||
-                                                "trace"}
-                                            </div>
-                                          </button>
-                                        ))
+                                            </button>
+                                          );
+                                        })
                                       )}
                                     </div>
                                   </div>
@@ -2905,21 +3021,43 @@ export function ReleaseGateExpandedView() {
                           ) : null}
                         </div>
 
-                        {runConfigSummaryItems.length > 0 ? (
-                          <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-3">
-                            <div className="text-[9px] font-black uppercase tracking-[0.2em] text-cyan-300/90">
-                              Run config summary
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {runConfigSummaryItems.map(item => (
-                                <span
-                                  key={item}
-                                  className="rounded-full border border-cyan-500/20 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-cyan-100"
-                                >
-                                  {item}
-                                </span>
-                              ))}
-                            </div>
+                        {runConfigExperimentSummaryItems.length > 0 ||
+                        runConfigRestorationSummaryItems.length > 0 ? (
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {runConfigExperimentSummaryItems.length > 0 ? (
+                              <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/5 px-3 py-3">
+                                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-fuchsia-300/90">
+                                  Experiment-wide
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {runConfigExperimentSummaryItems.map(item => (
+                                    <span
+                                      key={item}
+                                      className="rounded-full border border-fuchsia-500/20 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-fuchsia-100"
+                                    >
+                                      {item}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                            {runConfigRestorationSummaryItems.length > 0 ? (
+                              <div className="rounded-2xl border border-violet-500/20 bg-violet-500/5 px-3 py-3">
+                                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-violet-300/90">
+                                  Baseline restoration
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {runConfigRestorationSummaryItems.map(item => (
+                                    <span
+                                      key={item}
+                                      className="rounded-full border border-violet-500/20 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-violet-100"
+                                    >
+                                      {item}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
 
