@@ -238,7 +238,14 @@ export const releaseGateAPI = {
 
   listHistory: async (
     projectId: number,
-    params?: { status?: "pass" | "fail"; trace_id?: string; limit?: number; offset?: number }
+    params?: {
+      status?: "pass" | "fail";
+      trace_id?: string;
+      created_from?: string;
+      created_to?: string;
+      limit?: number;
+      offset?: number;
+    }
   ): Promise<ReleaseGateHistoryResponse> => {
     const response = await apiClient.get(`/projects/${projectId}/release-gate/history`, {
       params,
