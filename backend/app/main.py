@@ -94,16 +94,21 @@ async def lifespan(app: FastAPI):
         await shutdown_event()
 
 
+docs_url = "/docs" if settings.expose_api_docs else None
+redoc_url = "/redoc" if settings.expose_api_docs else None
+openapi_url = "/openapi.json" if settings.expose_api_docs else None
+
 app = FastAPI(
     title=settings.APP_NAME,
     description="LLM Agent Monitoring Platform",
     version=settings.APP_VERSION,
     debug=settings.DEBUG,
-    openapi_url="/openapi.json",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    openapi_url=openapi_url,
+    docs_url=docs_url,
+    redoc_url=redoc_url,
     lifespan=lifespan,
 )
+app.state.expose_debug_details = settings.ENVIRONMENT != "production"
 
 # Update app info metrics
 update_app_info(settings.APP_VERSION, settings.SENTRY_ENVIRONMENT)
@@ -208,14 +213,15 @@ if settings.DEBUG:
 async def add_api_version_headers(request, call_next):
     """Add API version headers for versioning strategy"""
     response = await call_next(request)
-    
-    # Add API version header
-    if request.url.path.startswith("/api/v1"):
-        response.headers["X-API-Version"] = "v1"
-        response.headers["X-API-Status"] = "stable"
-    elif request.url.path.startswith("/api/v2"):
-        response.headers["X-API-Version"] = "v2"
-        response.headers["X-API-Status"] = "development"
+
+    if settings.ENVIRONMENT != "production":
+        # Add API version header outside production to aid local/dev migrations.
+        if request.url.path.startswith("/api/v1"):
+            response.headers["X-API-Version"] = "v1"
+            response.headers["X-API-Status"] = "stable"
+        elif request.url.path.startswith("/api/v2"):
+            response.headers["X-API-Version"] = "v2"
+            response.headers["X-API-Status"] = "development"
     
     # Future: Add deprecation notice when v1 endpoints are deprecated
     # Example:
@@ -419,7 +425,10 @@ async def root(request: Request):
     origin = request.headers.get("origin", "none")
     ip = request.client.host if request.client else "unknown"
     logger.info(f"🌐 ROOT ENDPOINT: {request.method} {request.url.path} from origin: {origin}, IP: {ip}")
-    return {"message": settings.APP_NAME, "version": settings.APP_VERSION}
+    response = {"message": settings.APP_NAME}
+    if settings.ENVIRONMENT != "production":
+        response["version"] = settings.APP_VERSION
+    return response
 
 @app.get("/health")
 async def health(request: Request):
@@ -476,9 +485,10 @@ async def health_ready():
     }, status_code
 
 
-@app.get("/metrics")
-async def metrics():
-    """Prometheus metrics endpoint"""
-    from app.core.metrics import get_metrics_response
+if settings.expose_metrics_endpoint:
+    @app.get("/metrics")
+    async def metrics():
+        """Prometheus metrics endpoint"""
+        from app.core.metrics import get_metrics_response
 
-    return get_metrics_response()
+        return get_metrics_response()

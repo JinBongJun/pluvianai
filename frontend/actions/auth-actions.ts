@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { randomBytes } from "crypto";
 import {
   FormActionState,
   zodErrorToFormState,
@@ -15,6 +16,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const DEFAULT_ACCESS_TOKEN_MAX_AGE_SEC = 60 * 30;
 const DEFAULT_REFRESH_TOKEN_MAX_AGE_SEC = 60 * 60 * 24 * 7;
 const AUTH_COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN || undefined;
+const CSRF_COOKIE_NAME = "csrf_token";
 
 function getTokenMaxAge(token: string | undefined, fallbackSeconds: number): number {
   if (!token) return fallbackSeconds;
@@ -35,6 +37,46 @@ function getTokenMaxAge(token: string | undefined, fallbackSeconds: number): num
   } catch {
     return fallbackSeconds;
   }
+}
+
+function generateCsrfToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+function setAuthCookies(accessToken: string, refreshToken: string): void {
+  const csrfToken = generateCsrfToken();
+  const secure = process.env.NODE_ENV === "production";
+
+  cookies().set("access_token", accessToken, {
+    httpOnly: true,
+    secure,
+    sameSite: "lax",
+    path: "/",
+    domain: AUTH_COOKIE_DOMAIN,
+    maxAge: getTokenMaxAge(accessToken, DEFAULT_ACCESS_TOKEN_MAX_AGE_SEC),
+  });
+  cookies().set("refresh_token", refreshToken, {
+    httpOnly: true,
+    secure,
+    sameSite: "lax",
+    path: "/",
+    domain: AUTH_COOKIE_DOMAIN,
+    maxAge: getTokenMaxAge(refreshToken, DEFAULT_REFRESH_TOKEN_MAX_AGE_SEC),
+  });
+  cookies().set(CSRF_COOKIE_NAME, csrfToken, {
+    httpOnly: false,
+    secure,
+    sameSite: "lax",
+    path: "/",
+    domain: AUTH_COOKIE_DOMAIN,
+    maxAge: getTokenMaxAge(refreshToken, DEFAULT_REFRESH_TOKEN_MAX_AGE_SEC),
+  });
+}
+
+function clearAuthCookies(): void {
+  cookies().delete({ name: "access_token", path: "/", domain: AUTH_COOKIE_DOMAIN });
+  cookies().delete({ name: "refresh_token", path: "/", domain: AUTH_COOKIE_DOMAIN });
+  cookies().delete({ name: CSRF_COOKIE_NAME, path: "/", domain: AUTH_COOKIE_DOMAIN });
 }
 
 // ===== Zod schemas =====
@@ -107,7 +149,6 @@ export async function loginAction(
     const { access_token, refresh_token } = data;
 
     console.log("✅ [loginAction] Login successful, setting cookies");
-    console.log("🔵 [loginAction] Token preview:", access_token?.substring(0, 20) + "...");
 
     // Decode JWT token and extract user info
     let userInfo = null;
@@ -122,7 +163,6 @@ export async function loginAction(
       );
 
       const payload = JSON.parse(jsonPayload);
-      console.log("✅ [loginAction] Token decoded, user_id:", payload.sub);
 
       // Extract user info from payload
       userInfo = {
@@ -130,29 +170,11 @@ export async function loginAction(
         email: parsed.data.email, // Use email from login form input
         full_name: payload.full_name || parsed.data.email.split("@")[0], // Use token value when present, fallback to email prefix
       };
-      console.log("✅ [loginAction] User info extracted:", userInfo.email);
     } catch (error) {
       console.error("🔴 [loginAction] Failed to decode token:", error);
     }
 
-    // Set cookies with standard settings
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax" as const,
-      path: "/",
-    };
-
-    cookies().set("access_token", access_token, {
-      ...cookieOptions,
-      domain: AUTH_COOKIE_DOMAIN,
-      maxAge: getTokenMaxAge(access_token, DEFAULT_ACCESS_TOKEN_MAX_AGE_SEC),
-    });
-    cookies().set("refresh_token", refresh_token, {
-      ...cookieOptions,
-      domain: AUTH_COOKIE_DOMAIN,
-      maxAge: getTokenMaxAge(refresh_token, DEFAULT_REFRESH_TOKEN_MAX_AGE_SEC),
-    });
+    setAuthCookies(access_token, refresh_token);
 
     console.log("✅ [loginAction] Authentication cookies set");
     return formSuccessResponse({
@@ -242,22 +264,7 @@ export async function registerAction(
     const { access_token, refresh_token } = loginData;
 
     // 5. Store tokens in cookies
-    cookies().set("access_token", access_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      domain: AUTH_COOKIE_DOMAIN,
-      maxAge: getTokenMaxAge(access_token, DEFAULT_ACCESS_TOKEN_MAX_AGE_SEC),
-    });
-    cookies().set("refresh_token", refresh_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      domain: AUTH_COOKIE_DOMAIN,
-      maxAge: getTokenMaxAge(refresh_token, DEFAULT_REFRESH_TOKEN_MAX_AGE_SEC),
-    });
+    setAuthCookies(access_token, refresh_token);
 
     // Include tokens in return payload (for client-side localStorage usage)
     return formSuccessResponse({ user_id: userData.id, authenticated: true });
@@ -277,8 +284,7 @@ export async function registerAction(
  * Deletes cookies and redirects to the login page.
  */
 export async function logoutAction(): Promise<void> {
-  cookies().delete({ name: "access_token", path: "/", domain: AUTH_COOKIE_DOMAIN });
-  cookies().delete({ name: "refresh_token", path: "/", domain: AUTH_COOKIE_DOMAIN });
+  clearAuthCookies();
   redirect("/login");
 }
 
