@@ -1051,6 +1051,271 @@ function AttemptDetailOverlay({
     if (top?.message) return toHeadline(top.message);
     return toHeadline("Blocking issues detected.");
   })();
+  type WhyDecisionItem = {
+    key: string;
+    label: string;
+    detail: string;
+    severity: DecisionSeverity;
+    source: "policy" | "gate" | "eval" | "summary";
+  };
+  const whyDecisionItems = useMemo<WhyDecisionItem[]>(() => {
+    if (pass) {
+      const passItems: WhyDecisionItem[] = [];
+      passItems.push({
+        key: "summary-pass",
+        label: "No blocking regressions",
+        detail: "This attempt did not trigger any blocking gate or policy conditions.",
+        severity: "low",
+        source: "summary",
+      });
+      if (policyRows.length === 0) {
+        passItems.push({
+          key: "policy-clean",
+          label: "Policy remained clean",
+          detail: "No policy violations were detected in the replayed attempt.",
+          severity: "low",
+          source: "policy",
+        });
+      }
+      if (evalTotalCount > 0) {
+        passItems.push({
+          key: "eval-coverage",
+          label: `${evalPassCount}/${evalTotalCount} eval checks passed`,
+          detail:
+            failedSignals.length > 0
+              ? `${failedSignals.length} signal(s) still need review.`
+              : "All captured user-facing eval checks passed for this attempt.",
+          severity: failedSignals.length > 0 ? "medium" : "low",
+          source: "eval",
+        });
+      }
+      passItems.push({
+        key: "evidence-quality",
+        label: `Evidence quality: ${gateConfidence.label}`,
+        detail: gateConfidence.detail,
+        severity:
+          gateConfidence.label === "High"
+            ? "low"
+            : gateConfidence.label === "Medium"
+              ? "medium"
+              : "high",
+        source: "summary",
+      });
+      return passItems.slice(0, 3);
+    }
+
+    const items: WhyDecisionItem[] = [];
+    policyRows.forEach((row, idx) => {
+      items.push({
+        key: `policy-${row.key}-${idx}`,
+        label: row.label,
+        detail: row.message || "Policy violation detected.",
+        severity: normalizeSeverity(row.severity, "high"),
+        source: "policy",
+      });
+    });
+    failedGates.forEach(gate => {
+      items.push({
+        key: `gate-${gate.id}`,
+        label: gate.label,
+        detail: gate.reason || `${gate.label} failed.`,
+        severity: gate.id === "tool_integrity" ? "critical" : "high",
+        source: "gate",
+      });
+    });
+    failedSignals.forEach(row => {
+      const signalDetail =
+        signalsDetailsRaw && typeof signalsDetailsRaw === "object"
+          ? formatSignalWhy(row.id, (signalsDetailsRaw as any)?.[row.id])
+          : "";
+      items.push({
+        key: `eval-${row.id}`,
+        label: row.label,
+        detail: signalDetail || "This eval check failed without additional evidence text.",
+        severity: "medium",
+        source: "eval",
+      });
+    });
+    if (items.length === 0) {
+      items.push({
+        key: "summary-fallback",
+        label: "Blocking issue detected",
+        detail: decisionHeadline.replace(/^Reason:\s*/i, ""),
+        severity: "high",
+        source: "summary",
+      });
+    }
+    return items
+      .filter(item => item.detail.trim())
+      .sort((a, b) => severityRank(b.severity) - severityRank(a.severity))
+      .slice(0, 3);
+  }, [
+    pass,
+    policyRows,
+    evalTotalCount,
+    evalPassCount,
+    failedSignals,
+    gateConfidence,
+    failedGates,
+    signalsDetailsRaw,
+    decisionHeadline,
+  ]);
+  const whyDecisionToneClass = (severity: DecisionSeverity): string => {
+    if (severity === "critical" || severity === "high") {
+      return "border-rose-500/20 bg-rose-500/[0.05]";
+    }
+    if (severity === "medium") {
+      return "border-amber-500/20 bg-amber-500/[0.05]";
+    }
+    return "border-emerald-500/20 bg-emerald-500/[0.05]";
+  };
+  const whyDecisionBadgeClass = (severity: DecisionSeverity): string => {
+    if (severity === "critical" || severity === "high") {
+      return "border-rose-500/30 bg-rose-500/10 text-rose-200";
+    }
+    if (severity === "medium") {
+      return "border-amber-500/30 bg-amber-500/10 text-amber-100";
+    }
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
+  };
+  const comparisonPrimaryChanges = useMemo(() => {
+    const items: string[] = [];
+    if (candidateLineCount > baselineLineCount) {
+      items.push(`Candidate response is longer by ${candidateLineCount - baselineLineCount} line${candidateLineCount - baselineLineCount === 1 ? "" : "s"}.`);
+    } else if (baselineLineCount > candidateLineCount) {
+      items.push(`Candidate response is shorter by ${baselineLineCount - candidateLineCount} line${baselineLineCount - candidateLineCount === 1 ? "" : "s"}.`);
+    }
+    if (diffAddedCount > 0) {
+      items.push(`${diffAddedCount} added or modified line${diffAddedCount === 1 ? "" : "s"} detected on the candidate side.`);
+    }
+    if (diffRemovedCount > 0) {
+      items.push(`${diffRemovedCount} baseline line${diffRemovedCount === 1 ? "" : "s"} are missing from the candidate output.`);
+    }
+    if (sequenceEdits > 0) {
+      items.push(`Behavior diff reports ${sequenceEdits} sequence edit${sequenceEdits === 1 ? "" : "s"}.`);
+    }
+    if (items.length === 0) {
+      items.push("No meaningful response shape changes were detected in this attempt.");
+    }
+    return items.slice(0, 3);
+  }, [candidateLineCount, baselineLineCount, diffAddedCount, diffRemovedCount, sequenceEdits]);
+  const comparisonImpactItems = useMemo(() => {
+    const items: string[] = [];
+    if (policyRows.length > 0) {
+      items.push(`${policyRows.length} policy violation${policyRows.length === 1 ? "" : "s"} are attached to this attempt.`);
+    } else {
+      items.push("No policy regressions were attached to this attempt.");
+    }
+    if (toolDivergencePct > 0) {
+      items.push(`Tool divergence is ${toolDivergenceLabel}, so tool behavior changed beyond a pure wording edit.`);
+    } else {
+      items.push("Tool behavior stayed aligned with the baseline for this attempt.");
+    }
+    if (hasProviderError) {
+      items.push("Provider warnings were captured, so inspect the debug trace before trusting subtle output differences.");
+    } else if (diffConfidenceLabel === "High") {
+      items.push("Both response previews were captured, so the line diff is safe to review directly.");
+    } else {
+      items.push("Response capture is partial, so treat the diff as directional rather than complete.");
+    }
+    return items.slice(0, 3);
+  }, [
+    policyRows.length,
+    toolDivergencePct,
+    toolDivergenceLabel,
+    hasProviderError,
+    diffConfidenceLabel,
+  ]);
+  const runContextItems = useMemo(() => {
+    const items: Array<{ label: string; value: string; detail?: string }> = [
+      {
+        label: "Models",
+        value: `${baselineModel} → ${candidateModel}`,
+        detail: candidateProvider || undefined,
+      },
+      {
+        label: "Latency",
+        value: replayLatencyLabel,
+        detail: attempt?.trace_id ? `Trace ${String(attempt.trace_id)}` : "Trace not captured",
+      },
+      {
+        label: "Eval Coverage",
+        value: evalTotalCount > 0 ? `${evalPassCount}/${evalTotalCount}` : "—",
+        detail:
+          failedSignals.length > 0
+            ? `${failedSignals.length} failing signal${failedSignals.length === 1 ? "" : "s"}`
+            : "No failing eval signals",
+      },
+    ];
+    return items;
+  }, [
+    baselineModel,
+    candidateModel,
+    candidateProvider,
+    replayLatencyLabel,
+    attempt,
+    evalTotalCount,
+    evalPassCount,
+    failedSignals.length,
+  ]);
+  const riskItems = useMemo(() => {
+    const items: Array<{
+      key: string;
+      label: string;
+      detail: string;
+      tone: "neutral" | "warning" | "danger";
+    }> = [];
+    items.push({
+      key: "policy",
+      label: "Policy",
+      detail:
+        policyRows.length > 0
+          ? `${policyRows.length} violation${policyRows.length === 1 ? "" : "s"} require review.`
+          : "No policy violations were attached to this attempt.",
+      tone: policyRows.length > 0 ? "danger" : "neutral",
+    });
+    items.push({
+      key: "tool-divergence",
+      label: "Tool Divergence",
+      detail:
+        sequenceEdits > 0 || toolDivergencePct > 0
+          ? `${sequenceEdits} sequence edit${sequenceEdits === 1 ? "" : "s"} and ${toolDivergenceLabel} tool divergence.`
+          : "Tool behavior stayed aligned with the baseline.",
+      tone: sequenceEdits > 0 || toolDivergencePct > 0 ? "warning" : "neutral",
+    });
+    items.push({
+      key: "evidence",
+      label: "Evidence Quality",
+      detail: gateConfidence.detail,
+      tone:
+        gateConfidence.label === "High"
+          ? "neutral"
+          : gateConfidence.label === "Medium"
+            ? "warning"
+            : "danger",
+    });
+    if (providerErrorMessage) {
+      items.push({
+        key: "provider-warning",
+        label: "Provider Warning",
+        detail: providerErrorMessage,
+        tone: "warning",
+      });
+    }
+    return items;
+  }, [
+    policyRows.length,
+    sequenceEdits,
+    toolDivergencePct,
+    toolDivergenceLabel,
+    gateConfidence,
+    providerErrorMessage,
+  ]);
+  const riskToneClass = (tone: "neutral" | "warning" | "danger"): string => {
+    if (tone === "danger") return "border-rose-500/20 bg-rose-500/[0.05]";
+    if (tone === "warning") return "border-amber-500/20 bg-amber-500/[0.05]";
+    return "border-white/6 bg-black/20";
+  };
 
   if (!open) return null;
 
@@ -1071,75 +1336,95 @@ function AttemptDetailOverlay({
                 </h2>
                 
                 {attemptCount > 1 && (
-                  <div className="relative ml-2">
+                  <div className="ml-2 flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setAttemptMenuOpen(!attemptMenuOpen)}
-                      className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-white/5 transition"
+                      onClick={() => setNavIndex(v => Math.max(0, v - 1))}
+                      disabled={navIndex <= 0}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-slate-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="Previous attempt"
                     >
-                      <span>Attempt {navIndex + 1}</span>
-                      <span className="text-[10px] text-slate-500">/ {attemptCount}</span>
-                      <ChevronDown className={clsx("h-4 w-4 text-slate-400 transition-transform", attemptMenuOpen && "rotate-180")} />
+                      <ChevronLeft className="h-4 w-4" />
                     </button>
-                    
-                    {attemptMenuOpen && (
-                      <div className="absolute left-0 top-full mt-2 w-64 rounded-xl border border-white/10 bg-[#1e2028] p-2 shadow-2xl z-[12000]">
-                        <div className="mb-2 flex items-center justify-between px-2 pt-1">
-                          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                            Attempts
-                          </span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setFailedOnly(!failedOnly);
-                            }}
-                            className={clsx(
-                              "rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider transition",
-                              failedOnly
-                                ? "bg-rose-500/20 text-rose-300"
-                                : "text-slate-400 hover:text-slate-200"
-                            )}
-                          >
-                            Failed only
-                          </button>
-                        </div>
-                        <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-0.5">
-                          {attempts.map((att, i) => {
-                            const isPass = Boolean(att?.pass);
-                            if (failedOnly && isPass) return null;
-                            return (
-                              <button
-                                key={i}
-                                type="button"
-                                onClick={() => {
-                                  setNavIndex(i);
-                                  setAttemptMenuOpen(false);
-                                }}
-                                className={clsx(
-                                  "flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition",
-                                  navIndex === i
-                                    ? "bg-white/10 text-white"
-                                    : "text-slate-300 hover:bg-white/5"
-                                )}
-                              >
-                                <div className="flex items-center gap-2">
-                                  {isPass ? (
-                                    <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                                  ) : (
-                                    <ShieldX className="h-4 w-4 text-rose-400" />
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setAttemptMenuOpen(!attemptMenuOpen)}
+                        className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-white/5 transition"
+                      >
+                        <span>Attempt {navIndex + 1}</span>
+                        <span className="text-[10px] text-slate-500">/ {attemptCount}</span>
+                        <ChevronDown className={clsx("h-4 w-4 text-slate-400 transition-transform", attemptMenuOpen && "rotate-180")} />
+                      </button>
+
+                      {attemptMenuOpen && (
+                        <div className="absolute left-0 top-full mt-2 w-64 rounded-xl border border-white/10 bg-[#1e2028] p-2 shadow-2xl z-[12000]">
+                          <div className="mb-2 flex items-center justify-between px-2 pt-1">
+                            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                              Attempts
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFailedOnly(!failedOnly);
+                              }}
+                              className={clsx(
+                                "rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider transition",
+                                failedOnly
+                                  ? "bg-rose-500/20 text-rose-300"
+                                  : "text-slate-400 hover:text-slate-200"
+                              )}
+                            >
+                              Failed only
+                            </button>
+                          </div>
+                          <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-0.5">
+                            {attempts.map((att, i) => {
+                              const isPass = Boolean(att?.pass);
+                              if (failedOnly && isPass) return null;
+                              return (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  onClick={() => {
+                                    setNavIndex(i);
+                                    setAttemptMenuOpen(false);
+                                  }}
+                                  className={clsx(
+                                    "flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition",
+                                    navIndex === i
+                                      ? "bg-white/10 text-white"
+                                      : "text-slate-300 hover:bg-white/5"
                                   )}
-                                  <span>Attempt {i + 1}</span>
-                                </div>
-                                {navIndex === i && (
-                                  <span className="text-[10px] text-slate-500">Current</span>
-                                )}
-                              </button>
-                            );
-                          })}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    {isPass ? (
+                                      <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                                    ) : (
+                                      <ShieldX className="h-4 w-4 text-rose-400" />
+                                    )}
+                                    <span>Attempt {i + 1}</span>
+                                  </div>
+                                  {navIndex === i && (
+                                    <span className="text-[10px] text-slate-500">Current</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setNavIndex(v => Math.min(maxNav, v + 1))}
+                      disabled={navIndex >= maxNav}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-slate-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="Next attempt"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
                   </div>
                 )}
                 
@@ -1171,7 +1456,7 @@ function AttemptDetailOverlay({
                 [
                   { id: "summary" as const, label: "Summary" },
                   { id: "comparison" as const, label: "Comparison" },
-                  { id: "debug" as const, label: "Raw Trace" },
+                  { id: "debug" as const, label: "Debug Trace" },
                 ] as const
               ).map(tab => {
                 return (
@@ -1210,7 +1495,7 @@ function AttemptDetailOverlay({
             [
               { id: "summary" as const, label: "Summary" },
               { id: "comparison" as const, label: "Comparison" },
-              { id: "debug" as const, label: "Raw Trace" },
+              { id: "debug" as const, label: "Debug Trace" },
             ] as const
           ).map(tab => {
             return (
@@ -1264,7 +1549,7 @@ function AttemptDetailOverlay({
                       </div>
                       <div className="min-w-[220px] rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
                         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                          Decision Confidence
+                          Evidence Quality
                         </div>
                         <div className="mt-2 flex items-center gap-2">
                           <span
@@ -1275,7 +1560,7 @@ function AttemptDetailOverlay({
                           >
                             {gateConfidence.label}
                           </span>
-                          <span className="text-xs text-slate-400">Trust calibration</span>
+                          <span className="text-xs text-slate-400">Trace coverage</span>
                         </div>
                         <p className="mt-2 text-xs leading-relaxed text-slate-300">{gateConfidence.detail}</p>
                       </div>
@@ -1368,32 +1653,54 @@ function AttemptDetailOverlay({
                     </div>
                   </div>
 
+                  <section className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                          Why this decision
+                        </h3>
+                        <p className="mt-1 text-xs text-slate-500">
+                          The strongest reasons this attempt passed or failed.
+                        </p>
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        Derived from {decisionSourceLabels.join(" / ")}
+                      </div>
+                    </div>
+                    <div className="grid gap-3 xl:grid-cols-3">
+                      {whyDecisionItems.map(item => (
+                        <div
+                          key={item.key}
+                          className={clsx(
+                            "rounded-2xl border p-4",
+                            whyDecisionToneClass(item.severity)
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-slate-100">{item.label}</div>
+                              <div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                                {item.source}
+                              </div>
+                            </div>
+                            <span
+                              className={clsx(
+                                "inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                                whyDecisionBadgeClass(item.severity)
+                              )}
+                            >
+                              {item.severity}
+                            </span>
+                          </div>
+                          <p className="mt-3 text-xs leading-relaxed text-slate-300">{item.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
                   {/* Main Content Grid */}
                   <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
                     <div className="space-y-5">
-                      <div className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                            User Input
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setUserInputExpanded(v => !v)}
-                            className="text-[10px] font-bold uppercase tracking-wider text-fuchsia-300/80 transition-colors hover:text-fuchsia-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
-                          >
-                            {userInputExpanded ? "Collapse" : "Expand"}
-                          </button>
-                        </div>
-                        <p
-                          className={clsx(
-                            "mt-3 text-sm leading-relaxed text-slate-300 whitespace-pre-wrap break-words",
-                            !userInputExpanded && "line-clamp-5"
-                          )}
-                        >
-                          {inputPreview}
-                        </p>
-                      </div>
-
                       <section className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
                         <div className="mb-4 flex items-center justify-between gap-2">
                           <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
@@ -1464,28 +1771,53 @@ function AttemptDetailOverlay({
                           )}
                         </div>
                       </section>
+
+                      <div className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                            User Input
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setUserInputExpanded(v => !v)}
+                            className="text-[10px] font-bold uppercase tracking-wider text-fuchsia-300/80 transition-colors hover:text-fuchsia-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                          >
+                            {userInputExpanded ? "Collapse" : "Expand"}
+                          </button>
+                        </div>
+                        <p
+                          className={clsx(
+                            "mt-3 text-sm leading-relaxed text-slate-300 whitespace-pre-wrap break-words",
+                            !userInputExpanded && "line-clamp-5"
+                          )}
+                        >
+                          {inputPreview}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="space-y-5">
                       <div className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
                         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                          Replay Context
+                          Run Context
                         </div>
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                          <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
-                            <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Models</div>
-                            <div className="mt-1 text-sm font-medium text-slate-100 break-words">
-                              {baselineModel} → {candidateModel}
+                        <div className="mt-3 grid gap-3">
+                          {runContextItems.map(item => (
+                            <div
+                              key={item.label}
+                              className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3"
+                            >
+                              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                                {item.label}
+                              </div>
+                              <div className="mt-1 text-sm font-medium text-slate-100 break-words">
+                                {item.value}
+                              </div>
+                              {item.detail ? (
+                                <div className="mt-1 text-xs text-slate-400 break-words">{item.detail}</div>
+                              ) : null}
                             </div>
-                            <div className="mt-1 text-xs text-slate-400">{candidateProvider}</div>
-                          </div>
-                          <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
-                            <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Trace</div>
-                            <div className="mt-1 text-sm font-medium text-slate-100 break-all">
-                              {attempt?.trace_id ? String(attempt.trace_id) : "Not captured"}
-                            </div>
-                            <div className="mt-1 text-xs text-slate-400">{replayLatencyLabel}</div>
-                          </div>
+                          ))}
                         </div>
                         {providerErrorMessage ? (
                           <div className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-100">
@@ -1500,30 +1832,45 @@ function AttemptDetailOverlay({
                       <section className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
                         <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
                           <div className="h-1.5 w-1.5 rounded-full bg-amber-400/80" />
-                          System & Policy
+                          Risks
                         </h3>
                         <div className="space-y-3">
-                          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
-                            <div className="flex items-center justify-between gap-4">
-                              <span className="text-sm font-medium text-slate-200">Tool Divergence</span>
-                              <div className="flex flex-col items-end">
+                          {riskItems.map(item => (
+                            <div
+                              key={item.key}
+                              className={clsx(
+                                "rounded-2xl border p-4",
+                                riskToneClass(item.tone)
+                              )}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm font-medium text-slate-200">{item.label}</span>
                                 <span
                                   className={clsx(
-                                    "text-sm font-medium tabular-nums",
-                                    sequenceEdits === 0 ? "text-slate-400" : "text-rose-300"
+                                    "text-[10px] font-bold uppercase tracking-wider",
+                                    item.tone === "danger"
+                                      ? "text-rose-300"
+                                      : item.tone === "warning"
+                                        ? "text-amber-200"
+                                        : "text-emerald-300"
                                   )}
                                 >
-                                  {sequenceEdits} sequence edits
+                                  {item.tone === "danger"
+                                    ? "Review"
+                                    : item.tone === "warning"
+                                      ? "Watch"
+                                      : "Stable"}
                                 </span>
-                                <span className="text-[10px] uppercase text-slate-500">{toolDivergenceLabel} divergence</span>
                               </div>
+                              <p className="mt-2 text-[11px] leading-relaxed text-slate-300">
+                                {item.detail}
+                              </p>
                             </div>
-                          </div>
-
+                          ))}
                           {policyRows.length > 0 ? (
                             <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.04] p-4">
                               <div className="mb-3 flex items-center justify-between gap-4">
-                                <span className="text-sm font-medium text-rose-200">Policy Violations</span>
+                                <span className="text-sm font-medium text-rose-200">Policy Details</span>
                                 <span className="text-xs font-bold text-rose-400">{policyRows.length} found</span>
                               </div>
                               <div className="space-y-2">
@@ -1546,17 +1893,7 @@ function AttemptDetailOverlay({
                                 ))}
                               </div>
                             </div>
-                          ) : (
-                            <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
-                              <div className="flex items-center justify-between gap-4">
-                                <span className="text-sm font-medium text-slate-200">Policy Violations</span>
-                                <span className="flex items-center gap-2">
-                                  <span className="text-[10px] font-bold uppercase text-emerald-400/80">Clean</span>
-                                  <div className="h-2 w-2 rounded-full bg-emerald-400/80" />
-                                </span>
-                              </div>
-                            </div>
-                          )}
+                          ) : null}
                         </div>
                       </section>
                     </div>
@@ -1566,6 +1903,38 @@ function AttemptDetailOverlay({
 
               {detailMainTab === "comparison" && (
                 <div className="mx-auto flex w-full max-w-[1200px] min-h-[calc(90vh-220px)] flex-col gap-4">
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <section className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                        Primary Changes
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {comparisonPrimaryChanges.map(item => (
+                          <div
+                            key={item}
+                            className="rounded-xl border border-white/6 bg-black/20 px-3 py-2 text-sm leading-relaxed text-slate-200"
+                          >
+                            {item}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                    <section className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                        Impact
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {comparisonImpactItems.map(item => (
+                          <div
+                            key={item}
+                            className="rounded-xl border border-white/6 bg-black/20 px-3 py-2 text-sm leading-relaxed text-slate-200"
+                          >
+                            {item}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
                   <div className="grid gap-3 xl:grid-cols-4">
                     <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
                       <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Baseline</div>
@@ -1677,9 +2046,10 @@ function AttemptDetailOverlay({
                 <div className="mx-auto flex w-full max-w-[1200px] min-h-[calc(90vh-220px)] flex-col gap-5">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-bold text-slate-200">Raw Trace Payload</h3>
+                      <h3 className="text-sm font-bold text-slate-200">Debug Trace Payload</h3>
                       <p className="mt-1 text-xs text-slate-400">
-                        Internal trace data for support and debugging. Inspect the untouched replay payload and provider metadata.
+                        Advanced support/debug data. Use this when Summary and Comparison are not enough and you
+                        need the untouched replay payload plus provider metadata.
                       </p>
                     </div>
                   </div>
