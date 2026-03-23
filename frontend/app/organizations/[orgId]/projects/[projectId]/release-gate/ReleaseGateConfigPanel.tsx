@@ -228,7 +228,7 @@ export function ReleaseGateConfigPanel({
     (ctx?.selectedDataSummary as string) ??
     "No baseline data yet. Select representative \"good\" snapshots from Live Logs or Saved Data.";
   const runLocked = Boolean(ctx?.isValidating) || Boolean(ctx?.activeJobId);
-  const editsLocked = runLocked || selectedBaselineCount === 0;
+  const editsLocked = runLocked;
   const repeatRuns = Number(ctx?.repeatRuns ?? 0);
 
   const toolContextMode = (ctx?.toolContextMode as "recorded" | "inject") ?? "recorded";
@@ -843,9 +843,10 @@ export function ReleaseGateConfigPanel({
 
               {/* Right Column: tabs */}
               <section className="min-w-0 space-y-4 pb-8">
-                {editsLocked && selectedBaselineCount === 0 ? (
+                {!runLocked && selectedBaselineCount === 0 ? (
                   <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-400">
-                    Select at least one baseline snapshot on the main screen to enable candidate edits.
+                    You can tune candidate settings now, but Release Gate needs at least one baseline
+                    snapshot on the main screen before you can run a real validation.
                   </div>
                 ) : null}
 
