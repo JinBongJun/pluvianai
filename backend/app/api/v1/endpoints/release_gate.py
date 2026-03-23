@@ -3209,6 +3209,8 @@ async def list_release_gate_history(
     project_id: int,
     status_filter: Optional[str] = Query(None, alias="status", description="pass | fail"),
     trace_id: Optional[str] = Query(None),
+    created_from: Optional[datetime] = Query(None),
+    created_to: Optional[datetime] = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -3223,6 +3225,10 @@ async def list_release_gate_history(
     else:
         retention_days = summary.get("retention_days", 7)
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    if created_from and created_from.tzinfo is None:
+        created_from = created_from.replace(tzinfo=timezone.utc)
+    if created_to and created_to.tzinfo is None:
+        created_to = created_to.replace(tzinfo=timezone.utc)
 
     query = (
         db.query(BehaviorReport)
@@ -3237,6 +3243,10 @@ async def list_release_gate_history(
         query = query.filter(BehaviorReport.status == status_filter)
     if trace_id:
         query = query.filter(BehaviorReport.trace_id == trace_id)
+    if created_from:
+        query = query.filter(BehaviorReport.created_at >= created_from)
+    if created_to:
+        query = query.filter(BehaviorReport.created_at <= created_to)
 
     # Release-gate runs are marked in summary_json.release_gate.
     scan_limit = min(1000, max(200, (offset + limit) * 5))
