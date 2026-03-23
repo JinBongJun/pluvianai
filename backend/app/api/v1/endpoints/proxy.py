@@ -51,6 +51,14 @@ def _get_platform_provider_key(provider: str) -> Optional[str]:
     return None
 
 
+def _proxy_error_response(status_code: int, message: str, origin: str = "Proxy") -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": message},
+        headers={"X-Pluvian-Origin": origin},
+    )
+
+
 async def _stream_with_firewall(
     response: httpx.Response,
     project_id: int,
@@ -450,45 +458,41 @@ async def _proxy_request(
                 )
             except CircuitBreakerOpen:
                 circuit_breaker_open_total.labels(service="proxy").inc()
-                from fastapi.responses import JSONResponse
-                error_response = JSONResponse(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    content={"error": "Upstream temporarily unavailable (circuit open)"},
-                    headers={"X-Pluvian-Origin": "Proxy"},  # Pluvian proxy error
+                return _proxy_error_response(
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                    "Upstream temporarily unavailable. Please retry shortly.",
                 )
-                return error_response
             except httpx.RequestError as e:
                 # Network error
                 last_error = e
                 retry_attempts_total.labels(service="proxy").inc()
                 if attempt == 2:
-                    from fastapi.responses import JSONResponse
-                    error_response = JSONResponse(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        content={"error": str(last_error)},
-                        headers={"X-Pluvian-Origin": "Network"},  # Network error
+                    logger.warning(
+                        "Proxy upstream network failure after retries",
+                        extra={"provider": provider, "path": path, "error_type": type(last_error).__name__},
                     )
-                    return error_response
+                    return _proxy_error_response(
+                        status.HTTP_502_BAD_GATEWAY,
+                        "Upstream network error. Please retry shortly.",
+                        origin="Network",
+                    )
             except Exception as e:
                 # PluvianAI proxy error
                 last_error = e
                 retry_attempts_total.labels(service="proxy").inc()
                 if attempt == 2:
-                    from fastapi.responses import JSONResponse
-                    error_response = JSONResponse(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        content={"error": str(last_error)},
-                        headers={
-                            "X-PluvianAI-Origin": "Proxy",
-                        },
+                    logger.exception(
+                        "Proxy internal failure after retries",
+                        extra={"provider": provider, "path": path, "error_type": type(last_error).__name__},
                     )
-                    return error_response
-        
-        from fastapi.responses import JSONResponse
-        return JSONResponse(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            content={"error": "Proxy failed after retries"},
-            headers={"X-Pluvian-Origin": "Proxy"},
+                    return _proxy_error_response(
+                        status.HTTP_502_BAD_GATEWAY,
+                        "Proxy request failed. Please retry shortly.",
+                    )
+
+        return _proxy_error_response(
+            status.HTTP_502_BAD_GATEWAY,
+            "Proxy failed after retries",
         )
 
 
@@ -542,76 +546,3 @@ async def proxy_post(
     )
 
 
-@router.put("/{provider}/{path:path}")
-async def proxy_put(
-    provider: str,
-    path: str,
-    request: Request,
-    background_tasks: BackgroundTasks,
-    x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
-    x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
-    x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
-    current_user: User = Depends(get_current_user_or_api_key),
-    db: Session = Depends(get_db),
-) -> Response:
-    return await _proxy_request(
-        provider,
-        path,
-        request,
-        background_tasks,
-        x_project_id,
-        x_agent_name,
-        x_chain_id,
-        current_user,
-        db,
-    )
-
-
-@router.patch("/{provider}/{path:path}")
-async def proxy_patch(
-    provider: str,
-    path: str,
-    request: Request,
-    background_tasks: BackgroundTasks,
-    x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
-    x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
-    x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
-    current_user: User = Depends(get_current_user_or_api_key),
-    db: Session = Depends(get_db),
-) -> Response:
-    return await _proxy_request(
-        provider,
-        path,
-        request,
-        background_tasks,
-        x_project_id,
-        x_agent_name,
-        x_chain_id,
-        current_user,
-        db,
-    )
-
-
-@router.delete("/{provider}/{path:path}")
-async def proxy_delete(
-    provider: str,
-    path: str,
-    request: Request,
-    background_tasks: BackgroundTasks,
-    x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
-    x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
-    x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
-    current_user: User = Depends(get_current_user_or_api_key),
-    db: Session = Depends(get_db),
-) -> Response:
-    return await _proxy_request(
-        provider,
-        path,
-        request,
-        background_tasks,
-        x_project_id,
-        x_agent_name,
-        x_chain_id,
-        current_user,
-        db,
-    )
