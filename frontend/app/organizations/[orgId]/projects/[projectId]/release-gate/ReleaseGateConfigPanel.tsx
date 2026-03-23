@@ -217,6 +217,10 @@ export function ReleaseGateConfigPanel({
   const runDataPrompt = (ctx?.runDataPrompt as string) ?? "";
   const baselineSeedSnapshotForOverview =
     (ctx?.baselineSeedSnapshot as Record<string, unknown> | null) ?? null;
+  const representativeBaselineId =
+    baselineSeedSnapshotForOverview?.id != null
+      ? String(baselineSeedSnapshotForOverview.id)
+      : null;
   const baselinePayload = (ctx?.baselinePayload as Record<string, unknown> | null) ?? null;
   const finalCandidateRequest = (ctx?.finalCandidateRequest as Record<string, unknown> | null) ?? null;
   const baselineConfigSummary = (ctx?.baselineConfigSummary as string) ?? "";
@@ -253,6 +257,15 @@ export function ReleaseGateConfigPanel({
     | (() => void | Promise<void>)
     | undefined;
   const selectedSnapshotIdsForRun = (ctx?.selectedSnapshotIdsForRun as string[] | undefined) ?? [];
+  const representativeBaselineUserSnapshotId =
+    (ctx?.representativeBaselineUserSnapshotId as string | null | undefined) ?? null;
+  const setRepresentativeBaselineUserSnapshotId = ctx?.setRepresentativeBaselineUserSnapshotId as
+    | ((id: string | null) => void)
+    | undefined;
+  const autoRepresentativeBaselineSnapshotId =
+    (ctx?.autoRepresentativeBaselineSnapshotId as string | null | undefined) ?? null;
+  const representativeBaselinePickerOptions =
+    (ctx?.representativeBaselinePickerOptions as { id: string; createdAt: string }[]) ?? [];
 
   const bodyOverridesFileInputRef = useRef<HTMLInputElement>(null);
   const [bodyOverridesFileLoadTarget, setBodyOverridesFileLoadTarget] = useState<
@@ -696,7 +709,54 @@ export function ReleaseGateConfigPanel({
                     </div>
                   </div>
 
+                  {selectedBaselineCount > 1 ? (
+                    <div className="border-b border-white/5 bg-white/[0.02] px-5 py-3">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-2">
+                        Representative preview log
+                      </div>
+                      {representativeBaselinePickerOptions.length === 0 ? (
+                        <p className="text-xs text-slate-500">Loading snapshot metadata…</p>
+                      ) : (
+                        <select
+                          disabled={editsLocked}
+                          value={representativeBaselineUserSnapshotId ?? ""}
+                          onChange={e => {
+                            const v = e.target.value.trim();
+                            setRepresentativeBaselineUserSnapshotId?.(v ? v : null);
+                          }}
+                          aria-label="Representative baseline log for preview"
+                          className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-3 py-2.5 text-xs font-mono text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/40"
+                        >
+                          <option value="">
+                            Newest (auto
+                            {autoRepresentativeBaselineSnapshotId
+                              ? ` · #${autoRepresentativeBaselineSnapshotId}`
+                              : ""}
+                            )
+                          </option>
+                          {representativeBaselinePickerOptions.map(opt => (
+                            <option key={opt.id} value={opt.id}>
+                              #{opt.id}
+                              {opt.createdAt ? ` · ${opt.createdAt}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
+                        Defaults to the newest selected log by timestamp (then highest id if times tie). Use the
+                        menu to preview a different selected log. Candidate settings still apply to every selected
+                        log in the run.
+                      </p>
+                    </div>
+                  ) : null}
+
                   <div className="p-5 flex flex-col">
+                    {selectedBaselineCount > 1 && representativeBaselineId ? (
+                      <div className="mb-4 rounded-xl border border-sky-500/15 bg-sky-500/10 px-4 py-3 text-xs text-sky-100">
+                        Previewing baseline for log #{representativeBaselineId}. Candidate settings apply to every
+                        selected log.
+                      </div>
+                    ) : null}
                     {baselineConfigSummary && (
                       <div className="mb-3 text-[11px] text-slate-400">
                         <span className="font-bold uppercase tracking-[0.15em] text-slate-500 mr-2">
@@ -788,7 +848,9 @@ export function ReleaseGateConfigPanel({
                     </div>
                     <div className="mb-3 flex items-center justify-between">
                       <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
-                        Baseline Request (Preview)
+                        {selectedBaselineCount > 1
+                          ? "Representative Baseline Request (Preview)"
+                          : "Baseline Request (Preview)"}
                       </div>
                       {selectedBaselineCount > 0 && (
                         <button
@@ -905,6 +967,12 @@ export function ReleaseGateConfigPanel({
                       Expand full JSON
                     </button>
                   </div>
+                  {selectedBaselineCount > 1 && representativeBaselineId ? (
+                    <div className="border-b border-white/5 px-5 py-3 text-xs text-slate-400">
+                      Representative preview uses log #{representativeBaselineId} (newest by default, or your pick
+                      above). The candidate run still applies to all selected logs.
+                    </div>
+                  ) : null}
 
                   <div className="grid grid-cols-2 gap-px bg-white/5 border-b border-white/5">
                     <div className="bg-[#0f1115] p-4">
