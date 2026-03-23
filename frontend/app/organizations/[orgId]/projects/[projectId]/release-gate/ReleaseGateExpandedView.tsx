@@ -24,7 +24,6 @@ import {
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
 import { sanitizePayloadForPreview } from "./ReleaseGatePageContent";
 import { ReleaseGateConfigPanel } from "./ReleaseGateConfigPanel";
-import { ReleaseGateReplayRequestMetaPanel } from "./ReleaseGateReplayRequestMetaPanel";
 import { ReleaseGateMap } from "@/components/release-gate/ReleaseGateMap";
 import RailwaySidePanel from "@/components/shared/RailwaySidePanel";
 import {
@@ -2383,122 +2382,6 @@ export function ReleaseGateExpandedView() {
   const selectedRunReportLoading = Boolean(ctx.selectedRunReportLoading);
   const selectedRunReportError = ctx.selectedRunReportError as unknown;
 
-  const replayRequestMeta = useMemo(() => {
-    const sid = selectedRunId != null ? String(selectedRunId) : "";
-    const lastRid = result?.report_id != null ? String(result.report_id) : "";
-    const viewingDifferentReportThanLastRun = Boolean(sid && lastRid && sid !== lastRid);
-
-    if (
-      viewingDifferentReportThanLastRun &&
-      selectedRunReport?.summary &&
-      String(selectedRunReport.id) === sid
-    ) {
-      const rg = (selectedRunReport.summary as Record<string, unknown> | undefined)?.release_gate as
-        | Record<string, unknown>
-        | undefined;
-      const m = rg?.replay_request_meta;
-      if (m && typeof m === "object") return m as Record<string, unknown>;
-    }
-
-    const fromJob = result?.replay_request_meta;
-    if (fromJob && typeof fromJob === "object") return fromJob as Record<string, unknown>;
-
-    if (selectedRunReport?.summary && sid && String(selectedRunReport.id) === sid) {
-      const rg = (selectedRunReport.summary as Record<string, unknown> | undefined)?.release_gate as
-        | Record<string, unknown>
-        | undefined;
-      const m = rg?.replay_request_meta;
-      if (m && typeof m === "object") return m as Record<string, unknown>;
-    }
-    return null;
-  }, [result, selectedRunId, selectedRunReport]);
-  const activeReleaseGateSummary = useMemo(() => {
-    const sid = selectedRunId != null ? String(selectedRunId) : "";
-    const lastRid = result?.report_id != null ? String(result.report_id) : "";
-    const viewingDifferentReportThanLastRun = Boolean(sid && lastRid && sid !== lastRid);
-
-    if (
-      viewingDifferentReportThanLastRun &&
-      selectedRunReport?.summary &&
-      String(selectedRunReport.id) === sid
-    ) {
-      const rg = (selectedRunReport.summary as Record<string, unknown> | undefined)?.release_gate;
-      if (rg && typeof rg === "object") return rg as Record<string, unknown>;
-    }
-
-    if (selectedRunReport?.summary && sid && String(selectedRunReport.id) === sid) {
-      const rg = (selectedRunReport.summary as Record<string, unknown> | undefined)?.release_gate;
-      if (rg && typeof rg === "object") return rg as Record<string, unknown>;
-    }
-    return null;
-  }, [result, selectedRunId, selectedRunReport]);
-  const activeToolContextSummary =
-    ((activeReleaseGateSummary?.experiment as Record<string, unknown> | undefined)?.tool_context as
-      | Record<string, unknown>
-      | null
-      | undefined) ??
-    (result?.experiment?.tool_context as Record<string, unknown> | null | undefined) ??
-    null;
-  const runConfigExperimentSummaryItems = useMemo(() => {
-    const items: string[] = [];
-    const repeatRunsSummary =
-      Number((activeReleaseGateSummary?.repeat_runs as number | undefined) ?? result?.repeat_runs) || 0;
-    if (repeatRunsSummary > 0) items.push(`Repeat ${repeatRunsSummary}`);
-
-    const thresholds =
-      ((activeReleaseGateSummary?.thresholds as Record<string, unknown> | undefined) ?? null) ||
-      (result?.thresholds_used as Record<string, unknown> | undefined) ||
-      null;
-    const failRateMax = Number(
-      thresholds?.fail_rate_max ?? thresholds?.failRateMax ?? thresholds?.fail_rate
-    );
-    const flakyRateMax = Number(
-      thresholds?.flaky_rate_max ?? thresholds?.flakyRateMax ?? thresholds?.flaky_rate
-    );
-    if (Number.isFinite(failRateMax)) items.push(`Fail max ${Math.round(failRateMax * 100)}%`);
-    if (Number.isFinite(flakyRateMax)) items.push(`Flaky max ${Math.round(flakyRateMax * 100)}%`);
-
-    const sampling = replayRequestMeta?.sampling_overrides;
-    if (sampling && typeof sampling === "object") {
-      const count = Object.keys(sampling).length;
-      if (count > 0) items.push(`Sampling ${count} key${count === 1 ? "" : "s"}`);
-    }
-
-    if (replayRequestMeta?.has_new_system_prompt) {
-      items.push("System prompt override");
-    }
-
-    return items;
-  }, [activeReleaseGateSummary, replayRequestMeta, result]);
-
-  const runConfigRestorationSummaryItems = useMemo(() => {
-    const items: string[] = [];
-
-    const applied = replayRequestMeta?.replay_overrides_applied;
-    if (applied && typeof applied === "object") {
-      const count = Object.keys(applied).length;
-      if (count > 0) items.push(`Shared body fields ${count}`);
-    }
-
-    const perLog = replayRequestMeta?.replay_overrides_by_snapshot_id_applied;
-    if (perLog && typeof perLog === "object") {
-      const count = Object.keys(perLog).length;
-      if (count > 0) items.push(`Per-log body fields ${count}`);
-    }
-
-    if (activeToolContextSummary && typeof activeToolContextSummary === "object") {
-      const mode = String(activeToolContextSummary.mode || "recorded").trim().toLowerCase();
-      if (mode === "inject") {
-        const inject = activeToolContextSummary.inject as Record<string, unknown> | undefined;
-        const scope = String(inject?.scope || "per_snapshot");
-        items.push(`Extra system context · ${scope}`);
-      } else {
-        items.push("Recorded context only");
-      }
-    }
-
-    return items;
-  }, [activeToolContextSummary, replayRequestMeta]);
   const setExpandedHistoryId = ctx.setExpandedHistoryId as
     | ((id: string | null) => void)
     | undefined;
@@ -3528,65 +3411,6 @@ export function ReleaseGateExpandedView() {
                             })
                           )}
                         </div>
-                        {runConfigExperimentSummaryItems.length > 0 ||
-                        runConfigRestorationSummaryItems.length > 0 ? (
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {runConfigExperimentSummaryItems.length > 0 ? (
-                              <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/5 px-3 py-3">
-                                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-fuchsia-300/90">
-                                  Experiment-wide
-                                </div>
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  {runConfigExperimentSummaryItems.map(item => (
-                                    <span
-                                      key={item}
-                                      className="rounded-full border border-fuchsia-500/20 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-fuchsia-100"
-                                    >
-                                      {item}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : null}
-                            {runConfigRestorationSummaryItems.length > 0 ? (
-                              <div className="rounded-2xl border border-violet-500/20 bg-violet-500/5 px-3 py-3">
-                                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-violet-300/90">
-                                  Baseline restoration
-                                </div>
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  {runConfigRestorationSummaryItems.map(item => (
-                                    <span
-                                      key={item}
-                                      className="rounded-full border border-violet-500/20 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-violet-100"
-                                    >
-                                      {item}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-
-                        {activeToolContextSummary &&
-                        typeof activeToolContextSummary === "object" && (
-                          <div
-                            className="rounded-2xl border border-violet-500/20 bg-violet-500/5 px-3 py-2"
-                            data-testid="rg-result-experiment-summary"
-                          >
-                            <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
-                              Experiment
-                            </div>
-                            <div className="mt-1 text-[11px] text-slate-300">
-                              {(activeToolContextSummary as { mode?: string }).mode === "inject"
-                                ? `Append · ${String((activeToolContextSummary as { inject?: { scope?: string } }).inject?.scope || "per_snapshot")}`
-                                : "Recorded only (no extra system context)"}
-                            </div>
-                          </div>
-                        )}
-
-                        <ReleaseGateReplayRequestMetaPanel meta={replayRequestMeta} />
-
                       </>
                     )}
                   </div>
