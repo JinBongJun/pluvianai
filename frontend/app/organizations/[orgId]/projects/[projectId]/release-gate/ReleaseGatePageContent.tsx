@@ -77,6 +77,12 @@ type ReleaseGateDatasetSummary = {
   snapshot_ids?: unknown[];
   snapshot_count?: number;
 };
+type ReleaseGateDatasetSnapshotsAggregate = {
+  items: any[];
+  total: number;
+  missingDatasetIds?: string[];
+  failedDatasetIds?: string[];
+};
 type ReplayProvider = "openai" | "anthropic" | "google";
 type ProjectUserApiKeyItem = {
   id: number;
@@ -179,6 +185,33 @@ function normalizeGateThresholds(failRateMax: unknown, flakyRateMax: unknown): G
     failRateMax: clampRate(failRateMax, REPLAY_THRESHOLD_PRESETS.default.failRateMax),
     flakyRateMax: clampRate(flakyRateMax, REPLAY_THRESHOLD_PRESETS.default.flakyRateMax),
   };
+}
+
+function parseSnapshotCreatedAtMs(snapshot: Record<string, unknown> | null | undefined): number {
+  if (!snapshot) return 0;
+  const raw = snapshot.created_at;
+  if (typeof raw !== "string" || !raw.trim()) return 0;
+  const t = Date.parse(raw);
+  return Number.isFinite(t) ? t : 0;
+}
+
+function snapshotNumericId(snapshot: Record<string, unknown>): number {
+  const id = snapshot?.id;
+  if (typeof id === "number" && Number.isFinite(id)) return id;
+  const n = Number(id);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function compareSnapshotsNewestFirst(a: Record<string, unknown>, b: Record<string, unknown>): number {
+  const ta = parseSnapshotCreatedAtMs(a);
+  const tb = parseSnapshotCreatedAtMs(b);
+  if (tb !== ta) return tb - ta;
+  return snapshotNumericId(b) - snapshotNumericId(a);
+}
+
+function pickNewestSnapshot(snapshots: Record<string, unknown>[]): Record<string, unknown> | null {
+  if (!snapshots.length) return null;
+  return [...snapshots].sort(compareSnapshotsNewestFirst)[0] ?? null;
 }
 
 function normalizeReplayProvider(raw: unknown): ReplayProvider | null {
@@ -847,6 +880,9 @@ export default function ReleaseGatePageContent() {
   const [overridesOpen, setOverridesOpen] = useState(false);
   const [toolsHydratedKey, setToolsHydratedKey] = useState("");
   const [overridesHydratedKey, setOverridesHydratedKey] = useState("");
+  const [representativeBaselineUserSnapshotId, setRepresentativeBaselineUserSnapshotId] = useState<
+    string | null
+  >(null);
 
   const [runDatasetIds, setRunDatasetIds] = useState<string[]>([]);
   const [runSnapshotIds, setRunSnapshotIds] = useState<string[]>([]);
@@ -964,6 +1000,7 @@ export default function ReleaseGatePageContent() {
     setToolContextLoadBusy(false);
     setToolsHydratedKey("");
     setOverridesHydratedKey("");
+    setRepresentativeBaselineUserSnapshotId(null);
     setResult(null);
     setError("");
     setActiveJobId(null);
@@ -983,6 +1020,7 @@ export default function ReleaseGatePageContent() {
   setToolContextLoadBusy(false);
   setToolsHydratedKey("");
   setOverridesHydratedKey("");
+  setRepresentativeBaselineUserSnapshotId(null);
     setResult(null);
     setError("");
     setActiveJobId(null);
@@ -1052,12 +1090,13 @@ export default function ReleaseGatePageContent() {
   );
   const datasets = datasetsData?.items ?? EMPTY_SWF_ITEMS;
 
-  // For dataset run: fetch snapshots from the FIRST selected dataset only (for baseline display).
-  const previewDatasetId = runDatasetIds.length > 0 ? runDatasetIds[0] : null;
-
+  const normalizedRunDatasetIds = useMemo(
+    () => Array.from(new Set(runDatasetIds.map(id => String(id).trim()).filter(Boolean))),
+    [runDatasetIds]
+  );
   const datasetSnapshotsKey =
-    projectId && !isNaN(projectId) && previewDatasetId
-      ? ["behavior-dataset-snapshots", projectId, previewDatasetId]
+    projectId && !isNaN(projectId) && normalizedRunDatasetIds.length > 0
+      ? ["behavior-dataset-snapshots", projectId, normalizedRunDatasetIds.join(",")]
       : null;
   const {
     data: datasetSnapshotsData,
@@ -1067,20 +1106,61 @@ export default function ReleaseGatePageContent() {
   } = useSWR(
     datasetSnapshotsKey,
     async () => {
-      try {
-        return await behaviorAPI.getDatasetSnapshots(projectId, previewDatasetId!);
-      } catch (e: unknown) {
-        const status = (e as { response?: { status?: number } })?.response?.status;
-        if (status === 404) {
-          return { items: [], total: 0, _404: true };
+      const responses = await Promise.allSettled(
+        normalizedRunDatasetIds.map(async datasetId => {
+          try {
+            return {
+              datasetId,
+              response: await behaviorAPI.getDatasetSnapshots(projectId, datasetId),
+            };
+          } catch (error) {
+            throw { datasetId, error };
+          }
+        })
+      );
+      const mergedItems: any[] = [];
+      const seenSnapshotIds = new Set<string>();
+      const missingDatasetIds: string[] = [];
+      const failedDatasetIds: string[] = [];
+      for (const result of responses) {
+        if (result.status === "fulfilled") {
+          const items = Array.isArray(result.value.response?.items) ? result.value.response.items : [];
+          for (const item of items) {
+            const snapshotId = item && typeof item === "object" ? String((item as any).id ?? "") : "";
+            if (!snapshotId || seenSnapshotIds.has(snapshotId)) continue;
+            seenSnapshotIds.add(snapshotId);
+            mergedItems.push(item);
+          }
+          continue;
         }
-        throw e;
+        const rejected = result.reason as {
+          datasetId?: string;
+          error?: { response?: { status?: number } };
+        };
+        const matchedDatasetId = rejected?.datasetId ?? null;
+        const status = rejected?.error?.response?.status;
+        if (status === 404) {
+          if (matchedDatasetId) missingDatasetIds.push(matchedDatasetId);
+          continue;
+        }
+        if (matchedDatasetId) failedDatasetIds.push(matchedDatasetId);
+        throw rejected?.error ?? result.reason;
       }
+      return {
+        items: mergedItems,
+        total: mergedItems.length,
+        missingDatasetIds,
+        failedDatasetIds,
+      } satisfies ReleaseGateDatasetSnapshotsAggregate;
     },
     { isPaused: () => runLocked }
   );
-  const datasetSnapshots = datasetSnapshotsData?.items ?? EMPTY_SWF_ITEMS;
-  const datasetSnapshots404 = !!(datasetSnapshotsData as { _404?: boolean } | undefined)?._404;
+  const datasetSnapshots = (datasetSnapshotsData as ReleaseGateDatasetSnapshotsAggregate | undefined)?.items ?? EMPTY_SWF_ITEMS;
+  const datasetSnapshots404 = (() => {
+    const data = datasetSnapshotsData as ReleaseGateDatasetSnapshotsAggregate | undefined;
+    const missingCount = data?.missingDatasetIds?.length ?? 0;
+    return normalizedRunDatasetIds.length > 0 && missingCount === normalizedRunDatasetIds.length;
+  })();
 
   const expandedDatasetSnapshotsKey =
     projectId && !isNaN(projectId) && expandedDatasetId
@@ -1112,15 +1192,18 @@ export default function ReleaseGatePageContent() {
   )?._404;
 
   const selectedDatasetSnapshotCount = useMemo(
-    () =>
-      runDatasetIds.reduce((total, datasetId) => {
+    () => {
+      if (normalizedRunDatasetIds.length === 0) return 0;
+      if (datasetSnapshotsKey && datasetSnapshotsData) return datasetSnapshots.length;
+      return normalizedRunDatasetIds.reduce((total, datasetId) => {
         const dataset = datasets.find((item: ReleaseGateDatasetSummary) => item.id === datasetId);
         if (!dataset) return total;
         if (typeof dataset.snapshot_count === "number") return total + dataset.snapshot_count;
         if (Array.isArray(dataset.snapshot_ids)) return total + dataset.snapshot_ids.length;
         return total;
-      }, 0),
-    [datasets, runDatasetIds]
+      }, 0);
+    },
+    [datasets, normalizedRunDatasetIds, datasetSnapshotsKey, datasetSnapshotsData, datasetSnapshots.length]
   );
   const selectedBaselineCount =
     runSnapshotIds.length > 0 ? runSnapshotIds.length : selectedDatasetSnapshotCount;
@@ -1407,32 +1490,6 @@ export default function ReleaseGatePageContent() {
     prevAgentIdForBodyOverridesRef.current = cur;
   }, [agentId]);
 
-  const handleLoadToolContextFromSnapshots = useCallback(async () => {
-    if (!projectId || Number.isNaN(projectId)) return;
-    const ids = selectedSnapshotIdsForRun.map(String).filter(Boolean);
-    if (ids.length === 0) return;
-    setToolContextLoadBusy(true);
-    try {
-      if (toolContextScope === "global") {
-        const snap = await liveViewAPI.getSnapshot(projectId, ids[0]);
-        setToolContextGlobalText(
-          extractToolResultTextFromSnapshotRecord(snap as Record<string, unknown>)
-        );
-      } else {
-        const merged: Record<string, string> = {};
-        for (const id of ids) {
-          const snap = await liveViewAPI.getSnapshot(projectId, id);
-          merged[id] = extractToolResultTextFromSnapshotRecord(snap as Record<string, unknown>);
-        }
-        setToolContextBySnapshotId(prev => ({ ...prev, ...merged }));
-      }
-    } catch {
-      // ignore
-    } finally {
-      setToolContextLoadBusy(false);
-    }
-  }, [projectId, selectedSnapshotIdsForRun, toolContextScope]);
-
   const baselineSnapshotsById = useMemo(() => {
     const map = new Map<string, Record<string, unknown>>();
     const isRichSnapshot = (s: Record<string, unknown> | undefined) => {
@@ -1474,11 +1531,113 @@ export default function ReleaseGatePageContent() {
         .filter((s): s is Record<string, unknown> => Boolean(s)),
     [selectedSnapshotIdsForRun, baselineSnapshotsById]
   );
-  const baselineSeedSnapshot = baselineSnapshotsForRun[0] ?? null;
+
+  const autoRepresentativeBaselineSnapshot = useMemo(
+    () => pickNewestSnapshot(baselineSnapshotsForRun),
+    [baselineSnapshotsForRun]
+  );
+  const autoRepresentativeBaselineSnapshotId = useMemo(
+    () =>
+      autoRepresentativeBaselineSnapshot?.id != null
+        ? String(autoRepresentativeBaselineSnapshot.id)
+        : null,
+    [autoRepresentativeBaselineSnapshot]
+  );
+
+  useEffect(() => {
+    const allowed = new Set(selectedSnapshotIdsForRun.map(String));
+    if (
+      representativeBaselineUserSnapshotId &&
+      !allowed.has(representativeBaselineUserSnapshotId)
+    ) {
+      setRepresentativeBaselineUserSnapshotId(null);
+    }
+  }, [selectedSnapshotIdsForRun, representativeBaselineUserSnapshotId]);
+
+  const effectiveRepresentativeBaselineSnapshotId = useMemo(() => {
+    const allowed = new Set(selectedSnapshotIdsForRun.map(String));
+    const user = representativeBaselineUserSnapshotId;
+    if (user && allowed.has(user) && baselineSnapshotsById.has(user)) return user;
+    return autoRepresentativeBaselineSnapshotId;
+  }, [
+    representativeBaselineUserSnapshotId,
+    selectedSnapshotIdsForRun,
+    baselineSnapshotsById,
+    autoRepresentativeBaselineSnapshotId,
+  ]);
+
+  const baselineSeedSnapshot = useMemo(() => {
+    if (effectiveRepresentativeBaselineSnapshotId) {
+      const fromMap = baselineSnapshotsById.get(effectiveRepresentativeBaselineSnapshotId);
+      if (fromMap) return fromMap;
+    }
+    return (
+      autoRepresentativeBaselineSnapshot ??
+      baselineSnapshotsForRun[0] ??
+      null
+    );
+  }, [
+    effectiveRepresentativeBaselineSnapshotId,
+    baselineSnapshotsById,
+    autoRepresentativeBaselineSnapshot,
+    baselineSnapshotsForRun,
+  ]);
+
   const baselineSeedSnapshotId = useMemo(
     () => (baselineSeedSnapshot?.id != null ? String(baselineSeedSnapshot.id) : null),
     [baselineSeedSnapshot]
   );
+
+  const representativeBaselinePickerOptions = useMemo(() => {
+    const rows: Record<string, unknown>[] = [];
+    for (const sid of selectedSnapshotIdsForRun) {
+      const s = baselineSnapshotsById.get(String(sid));
+      if (s) rows.push(s);
+    }
+    rows.sort(compareSnapshotsNewestFirst);
+    return rows.map(s => ({
+      id: String(s.id),
+      createdAt:
+        typeof s.created_at === "string" && s.created_at.trim() ? s.created_at.trim() : "",
+    }));
+  }, [selectedSnapshotIdsForRun, baselineSnapshotsById]);
+
+  const handleLoadToolContextFromSnapshots = useCallback(async () => {
+    if (!projectId || Number.isNaN(projectId)) return;
+    const ids = selectedSnapshotIdsForRun.map(String).filter(Boolean);
+    if (ids.length === 0) return;
+    setToolContextLoadBusy(true);
+    try {
+      if (toolContextScope === "global") {
+        const preferred =
+          effectiveRepresentativeBaselineSnapshotId &&
+          ids.includes(effectiveRepresentativeBaselineSnapshotId)
+            ? effectiveRepresentativeBaselineSnapshotId
+            : ids[0];
+        const snap = await liveViewAPI.getSnapshot(projectId, preferred);
+        setToolContextGlobalText(
+          extractToolResultTextFromSnapshotRecord(snap as Record<string, unknown>)
+        );
+      } else {
+        const merged: Record<string, string> = {};
+        for (const id of ids) {
+          const snap = await liveViewAPI.getSnapshot(projectId, id);
+          merged[id] = extractToolResultTextFromSnapshotRecord(snap as Record<string, unknown>);
+        }
+        setToolContextBySnapshotId(prev => ({ ...prev, ...merged }));
+      }
+    } catch {
+      // ignore
+    } finally {
+      setToolContextLoadBusy(false);
+    }
+  }, [
+    projectId,
+    selectedSnapshotIdsForRun,
+    toolContextScope,
+    effectiveRepresentativeBaselineSnapshotId,
+  ]);
+
   const baselinePayload = useMemo(() => {
     const raw = asPayloadObject(baselineSeedSnapshot?.payload);
     return raw ? getRequestPart(raw) : null;
@@ -2240,8 +2399,8 @@ export default function ReleaseGatePageContent() {
   }, [toolsList]);
 
   useEffect(() => {
-    const selectionKey = selectedSnapshotIdsForRun.join(",");
-    if (!selectionKey) return;
+    const selectionKey = `${selectedSnapshotIdsForRun.join(",")}|rep:${effectiveRepresentativeBaselineSnapshotId ?? ""}`;
+    if (!selectedSnapshotIdsForRun.length) return;
     if (!baselineSeedSnapshot || !baselinePayload) return;
 
     if (selectionKey !== toolsHydratedKey) {
@@ -2264,6 +2423,7 @@ export default function ReleaseGatePageContent() {
     }
   }, [
     selectedSnapshotIdsForRun,
+    effectiveRepresentativeBaselineSnapshotId,
     baselineSeedSnapshot,
     baselinePayload,
     baselineTools,
@@ -2586,6 +2746,11 @@ export default function ReleaseGatePageContent() {
     baselineConfigSummary,
     validateOverridePreview,
     configSourceLabel,
+    representativeBaselineUserSnapshotId,
+    setRepresentativeBaselineUserSnapshotId,
+    effectiveRepresentativeBaselineSnapshotId,
+    autoRepresentativeBaselineSnapshotId,
+    representativeBaselinePickerOptions,
     selectedBaselineCount,
     selectedDataSummary,
     REPLAY_PROVIDER_MODEL_LIBRARY: replayProviderModelLibrary,
