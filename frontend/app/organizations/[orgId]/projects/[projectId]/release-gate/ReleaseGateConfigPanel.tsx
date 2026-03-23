@@ -3,7 +3,16 @@
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import useSWR from "swr";
-import { Plus, Trash2, X, RefreshCcw, SearchCode, Loader2, Upload } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  X,
+  RefreshCcw,
+  SearchCode,
+  Loader2,
+  Upload,
+  ChevronDown,
+} from "lucide-react";
 
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
 import { sanitizePayloadForPreview } from "./ReleaseGatePageContent";
@@ -62,6 +71,49 @@ function isPinnedAnthropicModelId(modelId: string): boolean {
   return /-\d{8}$/.test(String(modelId || "").trim());
 }
 
+type ConfigModalTab = "core" | "parity" | "preview";
+
+function CollapsiblePanel({
+  title,
+  subtitle,
+  open,
+  onToggle,
+  children,
+  className,
+}: {
+  title: string;
+  subtitle: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={clsx(
+        "rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden shadow-sm",
+        className
+      )}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c10]"
+      >
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-white">{title}</div>
+          <div className="mt-0.5 text-xs text-slate-500">{subtitle}</div>
+        </div>
+        <ChevronDown
+          className={clsx("h-5 w-5 shrink-0 text-slate-500 transition-transform", open && "rotate-180")}
+          aria-hidden
+        />
+      </button>
+      {open ? <div className="border-t border-white/5 px-5 pb-5 pt-1">{children}</div> : null}
+    </div>
+  );
+}
+
 export function ReleaseGateConfigPanel({
   isOpen,
   onClose,
@@ -72,6 +124,12 @@ export function ReleaseGateConfigPanel({
   const ctx = useContext(ReleaseGatePageContext) as Record<string, unknown> | null;
   const [activeProviderTab, setActiveProviderTab] = useState<ReplayProvider>("openai");
   const [showRawBaseline, setShowRawBaseline] = useState(false);
+  const [configTab, setConfigTab] = useState<ConfigModalTab>("core");
+  const [showExpandedCandidatePreview, setShowExpandedCandidatePreview] = useState(false);
+  const [parityOpenTools, setParityOpenTools] = useState(false);
+  const [parityOpenOverrides, setParityOpenOverrides] = useState(false);
+  const [parityOpenContext, setParityOpenContext] = useState(false);
+  const [parityOpenTimeline, setParityOpenTimeline] = useState(false);
 
   const REPLAY_PROVIDER_MODEL_LIBRARY = ctx?.REPLAY_PROVIDER_MODEL_LIBRARY as Record<
     ReplayProvider,
@@ -170,6 +228,7 @@ export function ReleaseGateConfigPanel({
     (ctx?.selectedDataSummary as string) ??
     "No baseline data yet. Select representative \"good\" snapshots from Live Logs or Saved Data.";
   const runLocked = Boolean(ctx?.isValidating) || Boolean(ctx?.activeJobId);
+  const editsLocked = runLocked || selectedBaselineCount === 0;
   const repeatRuns = Number(ctx?.repeatRuns ?? 0);
 
   const toolContextMode = (ctx?.toolContextMode as "recorded" | "inject") ?? "recorded";
@@ -219,7 +278,7 @@ export function ReleaseGateConfigPanel({
   ]);
 
   const triggerBodyOverridesFilePick = (target: "global" | { sid: string }) => {
-    if (runLocked) return;
+    if (editsLocked) return;
     setBodyOverridesFileLoadTarget(target);
     requestAnimationFrame(() => bodyOverridesFileInputRef.current?.click());
   };
@@ -256,6 +315,10 @@ export function ReleaseGateConfigPanel({
     if (!isOpen) return;
     setActiveProviderTab(modelOverrideEnabled ? replayProvider : runDataProvider);
   }, [isOpen, modelOverrideEnabled, replayProvider, runDataProvider]);
+
+  useEffect(() => {
+    if (isOpen) setConfigTab("core");
+  }, [isOpen]);
 
   const finalCandidateJson = useMemo(
     () => stringifyJson(validateOverridePreview ?? {}),
@@ -311,7 +374,7 @@ export function ReleaseGateConfigPanel({
     );
     if (missingExtended.length > 0) {
       notes.push(
-        `Baseline included extended context keys that are not present in the candidate replay payload: ${missingExtended.join(", ")}. Add them via Layer 1 (config JSON) or Layer 2 (restoration) if needed.`
+        `Baseline included extended context keys that are not present in the candidate replay payload: ${missingExtended.join(", ")}. Add them in Core (config JSON) or Environment parity (extra request fields) if needed.`
       );
     }
 
@@ -320,7 +383,7 @@ export function ReleaseGateConfigPanel({
     );
     if (missingAdditional.length > 0) {
       notes.push(
-        `Baseline included additional request keys that are not present in the candidate replay payload: ${missingAdditional.join(", ")}. Restore with Layer 2 replay_overrides when appropriate.`
+        `Baseline included additional request keys that are not present in the candidate replay payload: ${missingAdditional.join(", ")}. Restore with extra request fields (replay_overrides) when appropriate.`
       );
     }
 
@@ -331,7 +394,7 @@ export function ReleaseGateConfigPanel({
     const notes: string[] = [];
     if (baselineRequestOverview.toolsCount > 0 && candidateRequestOverview.toolsCount === 0) {
       notes.push(
-        "Baseline had tools in the request, but the candidate replay payload currently lists none. This may be an intentional model/tools experiment (Layer 1) or an oversight—confirm before shipping."
+        "Baseline had tools in the request, but the candidate replay payload currently lists none. This may be an intentional model/tools experiment (Core setup) or an oversight—confirm before shipping."
       );
     }
     return notes;
@@ -349,7 +412,7 @@ export function ReleaseGateConfigPanel({
   const isJsonModified = candidateJsonValue !== cleanBaselineForComparison;
 
   const handleResetJsonToBaseline = () => {
-    if (runLocked || !setRequestBody) return;
+    if (editsLocked || !setRequestBody) return;
     if (!baselinePayload) return;
     const sanitized = sanitizePayloadForPreview(baselinePayload);
     const clean = { ...sanitized };
@@ -364,7 +427,7 @@ export function ReleaseGateConfigPanel({
     systemPromptOverride.trim().length > 0 && systemPromptOverride.trim() !== runDataPrompt.trim();
 
   const handleResetSystemPrompt = () => {
-    if (runLocked || !setRequestBody) return;
+    if (editsLocked || !setRequestBody) return;
     setRequestBody(prev => {
       const next = { ...prev };
       delete (next as any).system_prompt;
@@ -392,7 +455,7 @@ export function ReleaseGateConfigPanel({
     key: "temperature" | "max_tokens" | "top_p",
     rawValue: string
   ) => {
-    if (runLocked) return;
+    if (editsLocked) return;
     if (!setRequestBody) return;
     setRequestBody(prev => {
       const next = { ...prev };
@@ -409,13 +472,13 @@ export function ReleaseGateConfigPanel({
   };
 
   const updateTool = (toolId: string, patch: Partial<EditableTool>) => {
-    if (runLocked) return;
+    if (editsLocked) return;
     if (!setToolsList) return;
     setToolsList(prev => prev.map(tool => (tool.id === toolId ? { ...tool, ...patch } : tool)));
   };
 
   const addTool = () => {
-    if (runLocked) return;
+    if (editsLocked) return;
     if (!setToolsList) return;
     setToolsList(prev => [
       ...prev,
@@ -429,7 +492,7 @@ export function ReleaseGateConfigPanel({
   };
 
   const removeTool = (toolId: string) => {
-    if (runLocked) return;
+    if (editsLocked) return;
     if (!setToolsList) return;
     setToolsList(prev => prev.filter(tool => tool.id !== toolId));
   };
@@ -461,12 +524,94 @@ export function ReleaseGateConfigPanel({
     return Array.isArray(tl) ? (tl as LiveViewToolTimelineRow[]) : [];
   }, [baselineSnapshotDetail]);
 
+  const perLogOverridesCount = useMemo(() => {
+    return Object.keys(requestBodyOverridesBySnapshotId).filter(
+      sid => Object.keys(requestBodyOverridesBySnapshotId[sid] ?? {}).length > 0
+    ).length;
+  }, [requestBodyOverridesBySnapshotId]);
+
+  const paritySummaryLines = useMemo(
+    () => [
+      {
+        label: "Model",
+        value: modelOverrideEnabled ? "Overridden vs baseline" : "Same as detected baseline",
+      },
+      {
+        label: "System prompt",
+        value: isSystemPromptOverridden ? "Overridden" : "Baseline / node default",
+      },
+      {
+        label: "Config JSON",
+        value: isJsonModified ? "Edited" : "Matches sanitized baseline",
+      },
+      {
+        label: "Tools",
+        value: toolsList.length > 0 ? `${toolsList.length} defined` : "None",
+      },
+      {
+        label: "Extra request data",
+        value: hasAnyBodyOverridesContent
+          ? perLogOverridesCount > 0
+            ? `Set (shared + ${perLogOverridesCount} log${perLogOverridesCount === 1 ? "" : "s"})`
+            : "Set (shared)"
+          : "None",
+      },
+      {
+        label: "Extra system context",
+        value: toolContextMode === "inject" ? "Appending on replay" : "Recorded only",
+      },
+      {
+        label: "Baseline tool timeline",
+        value: !snapshotIdForBaselineTimeline
+          ? "No snapshot selected"
+          : baselineTimelineLoading
+            ? "Loading…"
+            : baselineToolTimelineRows.length > 0
+              ? `${baselineToolTimelineRows.length} events`
+              : "None captured",
+      },
+    ],
+    [
+      modelOverrideEnabled,
+      isSystemPromptOverridden,
+      isJsonModified,
+      toolsList.length,
+      hasAnyBodyOverridesContent,
+      perLogOverridesCount,
+      toolContextMode,
+      snapshotIdForBaselineTimeline,
+      baselineTimelineLoading,
+      baselineToolTimelineRows.length,
+    ]
+  );
+
+  const toolsSummarySubtitle =
+    toolsList.length === 0 ? "No tools configured" : `${toolsList.length} tool definition(s)`;
+  const overridesSummarySubtitle = hasAnyBodyOverridesContent
+    ? perLogOverridesCount > 0
+      ? `Shared and/or per-log overrides (${perLogOverridesCount} log${perLogOverridesCount === 1 ? "" : "s"})`
+      : "Shared overrides active"
+    : "No extra request fields";
+  const contextSummarySubtitle =
+    toolContextMode === "inject"
+      ? toolContextScope === "global"
+        ? "Shared append to system prompt"
+        : "Per-log append (with optional fallback)"
+      : "Replay uses captured request data only";
+  const timelineSummarySubtitle = !snapshotIdForBaselineTimeline
+    ? "Select a baseline snapshot on the main screen"
+    : baselineTimelineLoading
+      ? "Loading…"
+      : baselineToolTimelineRows.length > 0
+        ? `${baselineToolTimelineRows.length} recorded events`
+        : "No tool I/O captured for this snapshot";
+
   if (!isOpen || !ctx) return null;
 
   return (
     <ClientPortal>
       <div
-        className="fixed inset-0 z-[10002] flex items-start justify-center overflow-y-auto bg-black/70 p-6 pt-16 pb-20 backdrop-blur-sm"
+        className="fixed inset-0 z-[10002] flex items-start justify-center overflow-y-auto overscroll-y-contain bg-black/70 p-6 pt-16 pb-20 backdrop-blur-sm"
         onClick={onClose}
         role="presentation"
       >
@@ -487,8 +632,8 @@ export function ReleaseGateConfigPanel({
                 Release Gate configuration
               </h2>
               <p className="mt-1.5 text-sm text-slate-400">
-                Left: baseline reference. Center: merged candidate payload. Right: Layer 1
-                experiment-wide settings, then Layer 2 per-log restoration.
+                Choose a baseline, tune the candidate on the tabs, then open Preview to verify the final
+                request payload.
               </p>
             </div>
             <button
@@ -496,24 +641,26 @@ export function ReleaseGateConfigPanel({
               onClick={onClose}
               className="p-2.5 rounded-xl border border-white/10 text-slate-400 bg-white/[0.02] hover:bg-white/10 hover:text-white transition-all duration-200"
               title="Close settings"
+              aria-label="Close Release Gate settings"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5" aria-hidden />
             </button>
           </div>
 
           {/* Main Content */}
-          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.8fr)] items-start">
+          <div className="flex-1 overflow-y-auto overscroll-y-contain p-8 custom-scrollbar">
+            <div className="flex flex-col gap-6">
               {selectedBaselineCount === 0 && (
-                <div className="col-span-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-200/90 font-medium flex items-center gap-3">
+                <div className="w-full rounded-xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-200/90 font-medium flex items-center gap-3">
                   <SearchCode className="w-5 h-5 text-amber-400 shrink-0" />
                   <span>
                     No baseline data selected. First, send traffic to Live View, then choose baseline snapshots from Live Logs or Saved Data before running a Release Gate.
                   </span>
                 </div>
               )}
-              {/* Left Column: Baseline */}
-              <section className="sticky top-0 space-y-6">
+              <div className="grid gap-8 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)] items-start">
+              {/* Left Column: Baseline + parity summary */}
+              <section className="space-y-6 xl:sticky xl:top-0 xl:self-start">
                 <div className="rounded-2xl border border-white/5 bg-[#0f1115] overflow-hidden flex flex-col shadow-inner">
                   <div className="flex items-center justify-between border-b border-white/5 px-5 py-4 bg-white/[0.02]">
                     <div>
@@ -655,11 +802,11 @@ export function ReleaseGateConfigPanel({
                     </div>
 
                     {runDataPrompt ? (
-                      <pre className="min-h-[400px] max-h-[600px] rounded-xl border border-white/5 bg-[#0a0c10] p-5 text-[13px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-all overflow-auto custom-scrollbar shadow-inner">
+                      <pre className="min-h-[120px] max-h-[220px] rounded-xl border border-white/5 bg-[#0a0c10] p-4 text-[12px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-all overflow-auto custom-scrollbar shadow-inner">
                         {runDataPrompt}
                       </pre>
                     ) : (
-                      <div className="min-h-[300px] rounded-xl border border-dashed border-white/10 bg-white/[0.01] flex flex-col items-center justify-center gap-3 text-center p-6">
+                      <div className="min-h-[140px] rounded-xl border border-dashed border-white/10 bg-white/[0.01] flex flex-col items-center justify-center gap-3 text-center p-6">
                         <SearchCode className="w-8 h-8 text-slate-600" />
                         <div>
                           <div className="text-sm font-semibold text-slate-300 mb-1">
@@ -673,27 +820,95 @@ export function ReleaseGateConfigPanel({
                     )}
                   </div>
                 </div>
+
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-5 shadow-inner">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-emerald-300/90 mb-3">
+                    Candidate vs baseline (quick read)
+                  </div>
+                  <ul className="space-y-2.5">
+                    {paritySummaryLines.map(row => (
+                      <li
+                        key={row.label}
+                        className="flex items-start justify-between gap-3 text-xs border-b border-white/5 pb-2 last:border-0 last:pb-0"
+                      >
+                        <span className="shrink-0 font-semibold uppercase tracking-wider text-slate-500">
+                          {row.label}
+                        </span>
+                        <span className="text-right text-slate-200 leading-snug">{row.value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </section>
 
-              {/* Middle Column: Final Candidate Request */}
-              <section className="space-y-6">
+              {/* Right Column: tabs */}
+              <section className="min-w-0 space-y-4 pb-8">
+                {editsLocked && selectedBaselineCount === 0 ? (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-400">
+                    Select at least one baseline snapshot on the main screen to enable candidate edits.
+                  </div>
+                ) : null}
+
+                <div
+                  className="flex flex-wrap gap-2 border-b border-white/10 pb-3"
+                  role="tablist"
+                  aria-label="Release Gate setup sections"
+                >
+                  {(
+                    [
+                      { id: "core" as const, label: "Core setup" },
+                      { id: "parity" as const, label: "Environment parity" },
+                      { id: "preview" as const, label: "Preview" },
+                    ] as const
+                  ).map(tab => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={configTab === tab.id}
+                      id={`rg-config-tab-${tab.id}`}
+                      onClick={() => setConfigTab(tab.id)}
+                      className={clsx(
+                        "rounded-xl border px-4 py-2 text-xs font-bold uppercase tracking-[0.08em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/60",
+                        configTab === tab.id
+                          ? "border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-100"
+                          : "border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/20 hover:text-slate-200"
+                      )}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div
+                  role="tabpanel"
+                  id={`rg-config-panel-${configTab}`}
+                  aria-labelledby={`rg-config-tab-${configTab}`}
+                  className="space-y-6"
+                >
+                {configTab === "preview" ? (
                 <div className="rounded-2xl border border-white/5 bg-[#0f1115] overflow-hidden flex flex-col shadow-inner">
-                  <div className="flex items-center justify-between border-b border-white/5 px-5 py-4 bg-white/[0.02]">
+                  <div className="flex flex-col gap-3 border-b border-white/5 px-5 py-4 bg-white/[0.02] sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1">
-                        Final Override Payload
+                        Final override payload
                       </div>
-                      <div className="text-base font-semibold text-white">After Overrides</div>
+                      <div className="text-base font-semibold text-white">After overrides</div>
                     </div>
-                    <div className="text-xs text-slate-500 max-w-xs text-right">
-                      What Release Gate validate will send to the model.
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowExpandedCandidatePreview(true)}
+                      disabled={!validateOverridePreview}
+                      className="shrink-0 rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Expand full JSON
+                    </button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-px bg-white/5 border-b border-white/5">
                     <div className="bg-[#0f1115] p-4">
                       <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1.5">
-                        Using Model
+                        Using model
                       </div>
                       <div className="text-sm font-mono text-slate-200 truncate">
                         {usingModel || "Not specified"}
@@ -701,7 +916,7 @@ export function ReleaseGateConfigPanel({
                     </div>
                     <div className="bg-[#0f1115] p-4">
                       <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1.5">
-                        Using Provider
+                        Using provider
                       </div>
                       <div className="text-sm text-slate-200">
                         {formatProviderLabel(usingProvider)}
@@ -712,7 +927,7 @@ export function ReleaseGateConfigPanel({
                   <div className="p-5">
                     <div className="mb-4 rounded-xl border border-white/5 bg-black/20 p-4">
                       <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">
-                        Candidate Request Summary
+                        Candidate request summary
                       </div>
                       <div className="mt-2 grid gap-2 sm:grid-cols-2">
                         <div className="text-xs text-slate-400">
@@ -767,23 +982,25 @@ export function ReleaseGateConfigPanel({
                             </div>
                           ) : null}
                         </div>
-                      ) : (
+                      ) : selectedBaselineCount > 0 ? (
                         <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 text-xs text-emerald-100">
                           Candidate replay still includes the key request shape detected on the baseline node call.
                         </div>
-                      )}
+                      ) : null}
                     </div>
-                    <pre className="min-h-[400px] max-h-[600px] rounded-xl border border-white/5 bg-[#0a0c10] p-5 text-[13px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-all overflow-auto custom-scrollbar shadow-inner">
+                    <pre className="min-h-[160px] max-h-[min(360px,45vh)] rounded-xl border border-white/5 bg-[#0a0c10] p-4 text-[12px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-all overflow-auto custom-scrollbar shadow-inner">
                       {validateOverridePreview
                         ? finalCandidateJson
-                        : "No override payload available yet. Select a node and baseline, then adjust overrides on the right."}
+                        : selectedBaselineCount === 0
+                          ? "Select a baseline on the main screen to build a preview payload."
+                          : "No override payload available yet. Adjust Core setup, then check again."}
                     </pre>
                   </div>
                 </div>
-              </section>
+                ) : null}
 
-              {/* Right Column: Candidate Overrides */}
-              <section className="space-y-6 pb-8">
+                {configTab === "core" ? (
+                <>
                 {modelOverrideEnabled && (
                   <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/10 px-5 py-4 text-sm text-fuchsia-200 font-medium">
                     Platform-provided model mode is active. Personal provider key is not required
@@ -793,12 +1010,12 @@ export function ReleaseGateConfigPanel({
 
                 <div className="rounded-2xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/[0.08] to-transparent p-5">
                   <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-fuchsia-300/90 mb-2">
-                    Layer 1 · Experiment-wide candidate
+                    Candidate run (all selected logs)
                   </div>
                   <p className="text-xs text-slate-400 leading-relaxed">
-                    One candidate per run: same model override, system prompt, sampling, thresholds, tools,
-                    and config-only JSON for every selected log. Do not use this layer to mix different
-                    models or sampling strategies across logs.
+                    One candidate per run: the same model, system prompt, sampling, thresholds, and
+                    config JSON apply to every selected log. Use Environment parity when specific logs need
+                    different attachments, metadata, or injected context.
                   </p>
                   {repeatRuns > 0 ? (
                     <p className="mt-2 text-[11px] text-slate-500">
@@ -847,6 +1064,7 @@ export function ReleaseGateConfigPanel({
                         <button
                           key={key}
                           type="button"
+                          disabled={editsLocked}
                           onClick={() => {
                             setThresholdPreset?.(key as ThresholdPreset);
                             if (key !== "custom" && normalizeGateThresholds) {
@@ -859,7 +1077,7 @@ export function ReleaseGateConfigPanel({
                             }
                           }}
                           className={clsx(
-                            "rounded-xl border px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] transition-all",
+                            "rounded-xl border px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-not-allowed disabled:opacity-40",
                             thresholdPreset === key
                               ? "border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-100 shadow-[0_0_15px_rgba(217,70,239,0.15)]"
                               : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
@@ -883,6 +1101,7 @@ export function ReleaseGateConfigPanel({
                           max={100}
                           step={1}
                           value={Number.isFinite(failRateMax) ? Math.round(failRateMax * 100) : 0}
+                          disabled={editsLocked}
                           onChange={e => {
                             const next = Math.max(0, Math.min(100, Number(e.target.value) || 0));
                             setThresholdPreset?.("custom");
@@ -901,6 +1120,7 @@ export function ReleaseGateConfigPanel({
                           max={100}
                           step={1}
                           value={Number.isFinite(flakyRateMax) ? Math.round(flakyRateMax * 100) : 0}
+                          disabled={editsLocked}
                           onChange={e => {
                             const next = Math.max(0, Math.min(100, Number(e.target.value) || 0));
                             setThresholdPreset?.("custom");
@@ -992,9 +1212,9 @@ export function ReleaseGateConfigPanel({
                       <button
                         key={modelId}
                         type="button"
-                        disabled={runLocked}
+                        disabled={editsLocked}
                         onClick={() => {
-                          if (runLocked) return;
+                          if (editsLocked) return;
                           setReplayProvider?.(activeProviderTab);
                           setNewModel?.(modelId);
                           setModelOverrideEnabled?.(true);
@@ -1022,9 +1242,9 @@ export function ReleaseGateConfigPanel({
                     </div>
                     <input
                       value={newModel}
-                      disabled={runLocked}
+                      disabled={editsLocked}
                       onChange={e => {
-                        if (runLocked) return;
+                        if (editsLocked) return;
                         setReplayProvider?.(activeProviderTab);
                         setNewModel?.(e.target.value);
                         setModelOverrideEnabled?.(true);
@@ -1058,9 +1278,9 @@ export function ReleaseGateConfigPanel({
                     {modelOverrideEnabled && (
                       <button
                         type="button"
-                        disabled={runLocked}
+                        disabled={editsLocked}
                         onClick={() => {
-                          if (runLocked) return;
+                          if (editsLocked) return;
                           setModelOverrideEnabled?.(false);
                           setNewModel?.(runDataModel || "");
                           setReplayProvider?.(runDataProvider);
@@ -1080,9 +1300,9 @@ export function ReleaseGateConfigPanel({
                   </div>
                   <textarea
                     value={requestSystemPrompt}
-                    disabled={runLocked}
+                    disabled={editsLocked}
                     onChange={e => {
-                      if (runLocked) return;
+                      if (editsLocked) return;
                       if (!setRequestBody || !applySystemPromptToBody) return;
                       setRequestBody(prev => applySystemPromptToBody(prev, e.target.value));
                     }}
@@ -1092,7 +1312,7 @@ export function ReleaseGateConfigPanel({
                   <div className="mt-3 flex items-center justify-between gap-3">
                     <button
                       type="button"
-                      disabled={runLocked || !isSystemPromptOverridden}
+                      disabled={editsLocked || !isSystemPromptOverridden}
                       onClick={handleResetSystemPrompt}
                       className="shrink-0 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                     >
@@ -1128,7 +1348,7 @@ export function ReleaseGateConfigPanel({
                           typeof requestBody.temperature === "number" ? requestBody.temperature : ""
                         }
                         onChange={e => updateRequestNumberField("temperature", e.target.value)}
-                        disabled={runLocked}
+                        disabled={editsLocked}
                         className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-2.5 text-sm font-mono text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
                       />
                     </label>
@@ -1144,7 +1364,7 @@ export function ReleaseGateConfigPanel({
                           typeof requestBody.max_tokens === "number" ? requestBody.max_tokens : ""
                         }
                         onChange={e => updateRequestNumberField("max_tokens", e.target.value)}
-                        disabled={runLocked}
+                        disabled={editsLocked}
                         className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-2.5 text-sm font-mono text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
                       />
                     </label>
@@ -1159,7 +1379,7 @@ export function ReleaseGateConfigPanel({
                         step={0.1}
                         value={typeof requestBody.top_p === "number" ? requestBody.top_p : ""}
                         onChange={e => updateRequestNumberField("top_p", e.target.value)}
-                        disabled={runLocked}
+                        disabled={editsLocked}
                         className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-2.5 text-sm font-mono text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
                       />
                     </label>
@@ -1181,16 +1401,16 @@ export function ReleaseGateConfigPanel({
                         )}
                       </div>
                       <div className="text-sm text-slate-400">
-                        Run-wide JSON merged for every log. Excludes tools (edited below), system prompt
-                        (field above), and per-snapshot restoration (Layer 2). Prefer{" "}
-                        <span className="font-mono text-slate-500">replay_overrides</span> for
-                        attachments and other non-message fields that vary by snapshot.
+                        Run-wide JSON merged for every log. Excludes tools (Environment parity tab), system
+                        prompt (field above), and per-snapshot restoration fields. Prefer{" "}
+                        <span className="font-mono text-slate-500">replay_overrides</span> in Environment
+                        parity for attachments and other non-message fields that vary by snapshot.
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={handleResetJsonToBaseline}
-                      disabled={runLocked || !isJsonModified || !baselinePayload}
+                      disabled={editsLocked || !isJsonModified || !baselinePayload}
                       className="shrink-0 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                     >
                       <RefreshCcw className="w-3.5 h-3.5" />
@@ -1199,7 +1419,7 @@ export function ReleaseGateConfigPanel({
                   </div>
                   <textarea
                     value={candidateJsonValue}
-                    disabled={runLocked}
+                    disabled={editsLocked}
                     onChange={e => setRequestJsonDraft?.(e.target.value)}
                     onBlur={() => handleRequestJsonBlur?.()}
                     spellCheck={false}
@@ -1211,24 +1431,33 @@ export function ReleaseGateConfigPanel({
                     </div>
                   )}
                 </div>
+                </>
+                ) : null}
 
-                {/* Tools */}
-                <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm">
-                  <div className="flex items-center justify-between gap-4 mb-5">
-                    <div>
-                      <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
-                        Tools
-                      </div>
-                      <div className="text-sm text-slate-400">
-                        Experiment-wide tool definitions (same for every selected log). Edited separately
-                        from config-only JSON.
-                      </div>
-                    </div>
+                {configTab === "parity" ? (
+                <>
+                <p className="rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 text-xs leading-relaxed text-slate-500">
+                  Align replays with captured production traffic: tool schemas, optional extra request fields
+                  sent as <span className="font-mono text-slate-500">replay_overrides</span>, per-log
+                  overrides, optional injected system context, and read-only baseline tool activity for
+                  inspection.
+                </p>
+
+                <CollapsiblePanel
+                  title="Tools"
+                  subtitle={toolsSummarySubtitle}
+                  open={parityOpenTools}
+                  onToggle={() => setParityOpenTools(o => !o)}
+                >
+                  <p className="mb-4 text-sm text-slate-400">
+                    Experiment-wide definitions (same for every selected log). Separate from config-only JSON.
+                  </p>
+                  <div className="mb-4 flex justify-end">
                     <button
                       type="button"
                       onClick={addTool}
-                      disabled={runLocked}
-                      className="shrink-0 flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-all"
+                      disabled={editsLocked}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-all"
                     >
                       <Plus className="w-4 h-4" />
                       Add Tool
@@ -1258,7 +1487,7 @@ export function ReleaseGateConfigPanel({
                               <button
                                 type="button"
                                 onClick={() => removeTool(tool.id)}
-                                disabled={runLocked}
+                                disabled={editsLocked}
                                 className="inline-flex items-center gap-1.5 rounded-lg border border-transparent px-2.5 py-1.5 text-xs font-medium text-rose-400/80 hover:bg-rose-500/10 hover:text-rose-400 transition-colors"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1274,7 +1503,7 @@ export function ReleaseGateConfigPanel({
                                 <input
                                   value={tool.name}
                                   onChange={e => updateTool(tool.id, { name: e.target.value })}
-                                  disabled={runLocked}
+                                  disabled={editsLocked}
                                   placeholder="e.g. get_weather"
                                   className="w-full rounded-xl border border-white/10 bg-[#0f1115] px-4 py-2.5 text-sm font-mono text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
                                 />
@@ -1288,7 +1517,7 @@ export function ReleaseGateConfigPanel({
                                   onChange={e =>
                                     updateTool(tool.id, { description: e.target.value })
                                   }
-                                  disabled={runLocked}
+                                  disabled={editsLocked}
                                   placeholder="What this tool does"
                                   className="w-full rounded-xl border border-white/10 bg-[#0f1115] px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
                                 />
@@ -1302,7 +1531,7 @@ export function ReleaseGateConfigPanel({
                               <textarea
                                 value={tool.parameters}
                                 onChange={e => updateTool(tool.id, { parameters: e.target.value })}
-                                disabled={runLocked}
+                                disabled={editsLocked}
                                 spellCheck={false}
                                 className="min-h-[160px] w-full rounded-xl border border-white/10 bg-[#0f1115] p-4 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
                               />
@@ -1317,23 +1546,17 @@ export function ReleaseGateConfigPanel({
                       })}
                     </div>
                   )}
-                </div>
+                </CollapsiblePanel>
 
-                <div className="rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-500/[0.07] to-transparent p-5">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-violet-300/90 mb-2">
-                    Layer 2 · Baseline restoration
-                  </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Merge snapshot-specific or missing-ingest fields: shared and per-log{" "}
-                    <span className="font-mono text-slate-500">replay_overrides</span>, plus optional{" "}
-                    <span className="font-mono text-slate-500">tool_context</span> (recorded vs injected).
-                    Read-only baseline tool activity below is for inspection only—execution still comes
-                    from captured snapshots.
-                  </p>
-                </div>
-
+                <CollapsiblePanel
+                  title="Extra request fields"
+                  subtitle={overridesSummarySubtitle}
+                  open={parityOpenOverrides}
+                  onToggle={() => setParityOpenOverrides(o => !o)}
+                  className="border-violet-500/15 bg-violet-500/[0.03]"
+                >
                 {/* Additional request body fields (API: replay_overrides) */}
-                <div className="rounded-2xl border border-violet-500/15 bg-violet-500/[0.03] p-6 shadow-sm flex flex-col">
+                <div className="flex flex-col pt-2">
                   <input
                     ref={bodyOverridesFileInputRef}
                     type="file"
@@ -1361,7 +1584,7 @@ export function ReleaseGateConfigPanel({
                       <button
                         type="button"
                         onClick={() => triggerBodyOverridesFilePick("global")}
-                        disabled={runLocked}
+                        disabled={editsLocked}
                         className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                       >
                         <Upload className="w-3.5 h-3.5" />
@@ -1370,10 +1593,10 @@ export function ReleaseGateConfigPanel({
                       <button
                         type="button"
                         onClick={() => {
-                          if (runLocked) return;
+                          if (editsLocked) return;
                           clearBodyOverrides?.();
                         }}
-                        disabled={runLocked || !hasAnyBodyOverridesContent}
+                        disabled={editsLocked || !hasAnyBodyOverridesContent}
                         className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                       >
                         Clear all
@@ -1385,7 +1608,7 @@ export function ReleaseGateConfigPanel({
                   </div>
                   <textarea
                     value={bodyOverridesJsonValue}
-                    disabled={runLocked}
+                    disabled={editsLocked}
                     onChange={e => setBodyOverridesJsonDraft?.(e.target.value)}
                     onBlur={() => handleBodyOverridesJsonBlur?.()}
                     spellCheck={false}
@@ -1422,7 +1645,7 @@ export function ReleaseGateConfigPanel({
                               <button
                                 type="button"
                                 onClick={() => triggerBodyOverridesFilePick({ sid })}
-                                disabled={runLocked}
+                                disabled={editsLocked}
                                 className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                               >
                                 <Upload className="w-3 h-3" />
@@ -1434,7 +1657,7 @@ export function ReleaseGateConfigPanel({
                                 bodyOverridesSnapshotDraftRaw[sid] ??
                                 JSON.stringify(requestBodyOverridesBySnapshotId[sid] ?? {}, null, 2)
                               }
-                              disabled={runLocked}
+                              disabled={editsLocked}
                               onChange={e =>
                                 setBodyOverridesSnapshotDraftRaw?.(prev => ({
                                   ...prev,
@@ -1457,14 +1680,18 @@ export function ReleaseGateConfigPanel({
                     )}
                   </div>
                 </div>
+                </CollapsiblePanel>
 
-                {/* Additional system context (API: tool_context) — docs/code/tool outcomes missing from captured logs */}
-                <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm">
+                <CollapsiblePanel
+                  title="Additional system context"
+                  subtitle={contextSummarySubtitle}
+                  open={parityOpenContext}
+                  onToggle={() => setParityOpenContext(o => !o)}
+                >
+                {/* tool_context — optional text appended on replay */}
+                <div className="pt-2">
                   <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
-                        Additional system context
-                      </div>
                       <div className="text-sm text-slate-400">
                         Optional text appended to the system prompt on replay when ingest omitted tool
                         results or customer content. Use recorded logs when available, or paste your own
@@ -1475,7 +1702,7 @@ export function ReleaseGateConfigPanel({
                       <button
                         type="button"
                         disabled={
-                          runLocked ||
+                          editsLocked ||
                           toolContextMode !== "inject" ||
                           selectedSnapshotIdsForRun.length === 0 ||
                           toolContextLoadBusy
@@ -1500,7 +1727,7 @@ export function ReleaseGateConfigPanel({
                         name="toolContextMode"
                         checked={toolContextMode === "recorded"}
                         onChange={() => setToolContextMode?.("recorded")}
-                        disabled={runLocked}
+                        disabled={editsLocked}
                         className="accent-fuchsia-500"
                       />
                       Recorded only
@@ -1511,7 +1738,7 @@ export function ReleaseGateConfigPanel({
                         name="toolContextMode"
                         checked={toolContextMode === "inject"}
                         onChange={() => setToolContextMode?.("inject")}
-                        disabled={runLocked}
+                        disabled={editsLocked}
                         className="accent-fuchsia-500"
                       />
                       Append to system prompt
@@ -1527,7 +1754,7 @@ export function ReleaseGateConfigPanel({
                             name="toolContextScope"
                             checked={toolContextScope === "per_snapshot"}
                             onChange={() => setToolContextScope?.("per_snapshot")}
-                            disabled={runLocked}
+                            disabled={editsLocked}
                             className="accent-fuchsia-500"
                           />
                           Per log id
@@ -1538,7 +1765,7 @@ export function ReleaseGateConfigPanel({
                             name="toolContextScope"
                             checked={toolContextScope === "global"}
                             onChange={() => setToolContextScope?.("global")}
-                            disabled={runLocked}
+                            disabled={editsLocked}
                             className="accent-fuchsia-500"
                           />
                           Shared (all selected)
@@ -1553,7 +1780,7 @@ export function ReleaseGateConfigPanel({
                           <textarea
                             value={toolContextGlobalText}
                             onChange={e => setToolContextGlobalText?.(e.target.value)}
-                            disabled={runLocked}
+                            disabled={editsLocked}
                             spellCheck={false}
                             placeholder="Paste docs, code, or tool outcomes to include for every selected log…"
                             className="min-h-[180px] w-full rounded-xl border border-white/10 bg-[#0a0c10] p-4 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
@@ -1571,7 +1798,7 @@ export function ReleaseGateConfigPanel({
                             <textarea
                               value={toolContextGlobalText}
                               onChange={e => setToolContextGlobalText?.(e.target.value)}
-                              disabled={runLocked}
+                              disabled={editsLocked}
                               spellCheck={false}
                               className="min-h-[80px] w-full rounded-xl border border-white/10 bg-[#0a0c10] p-3 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
                             />
@@ -1595,7 +1822,7 @@ export function ReleaseGateConfigPanel({
                                         [sid]: e.target.value,
                                       }))
                                     }
-                                    disabled={runLocked}
+                                    disabled={editsLocked}
                                     spellCheck={false}
                                     placeholder="Additional system context for this log…"
                                     className="min-h-[120px] w-full rounded-xl border border-white/10 bg-[#0a0c10] p-3 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
@@ -1613,13 +1840,17 @@ export function ReleaseGateConfigPanel({
                     </div>
                   )}
                 </div>
+                </CollapsiblePanel>
 
-                {/* §12.3 Baseline tool activity (read-only) — execution results come from snapshots, not candidate JSON */}
-                <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm">
+                <CollapsiblePanel
+                  title="Baseline tool activity"
+                  subtitle={timelineSummarySubtitle}
+                  open={parityOpenTimeline}
+                  onToggle={() => setParityOpenTimeline(o => !o)}
+                >
+                {/* Read-only — execution still comes from captured snapshots */}
+                <div className="pt-2">
                   <div className="mb-4">
-                    <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
-                      Baseline tool activity
-                    </div>
                     <div className="text-sm text-slate-400">
                       Read-only tool I/O for the representative baseline snapshot (first selected).
                       Matches Live View snapshot detail and Release Gate evidence.
@@ -1651,7 +1882,13 @@ export function ReleaseGateConfigPanel({
                     />
                   )}
                 </div>
+                </CollapsiblePanel>
+
+                </>
+                ) : null}
+                </div>
               </section>
+            </div>
             </div>
           </div>
         </div>
@@ -1666,8 +1903,9 @@ export function ReleaseGateConfigPanel({
                 type="button"
                 onClick={() => setShowRawBaseline(false)}
                 className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/10 hover:text-white transition-all"
+                aria-label="Close raw baseline payload"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5" aria-hidden />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6 bg-[#0a0c10] custom-scrollbar">
@@ -1678,6 +1916,29 @@ export function ReleaseGateConfigPanel({
           </div>
         </div>
       )}
+
+      {showExpandedCandidatePreview && validateOverridePreview ? (
+        <div className="fixed inset-0 z-[10100] flex items-center justify-center bg-black/80 p-6 backdrop-blur-md">
+          <div className="flex max-h-[85vh] w-full max-w-5xl flex-col rounded-[24px] border border-white/10 bg-[#0a0c10] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/5 px-6 py-5">
+              <h3 className="text-xl font-bold text-white tracking-tight">Final candidate payload (full)</h3>
+              <button
+                type="button"
+                onClick={() => setShowExpandedCandidatePreview(false)}
+                className="rounded-xl border border-white/10 p-2.5 text-slate-400 hover:bg-white/10 hover:text-white transition-all"
+                aria-label="Close full candidate payload"
+              >
+                <X className="w-5 h-5" aria-hidden />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 bg-[#0a0c10] custom-scrollbar">
+              <pre className="text-[13px] font-mono leading-relaxed text-slate-300 whitespace-pre-wrap break-words">
+                {finalCandidateJson}
+              </pre>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </ClientPortal>
   );
 }
