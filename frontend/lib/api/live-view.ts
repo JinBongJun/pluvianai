@@ -104,7 +104,15 @@ export const liveViewAPI = {
     const response = await apiClient.post(`/projects/${projectId}/live-view/agents/hard-delete`, {
       agent_ids: agentIds,
     });
-    return unwrapResponse(response) as { ok: boolean; deleted_agent_settings: number };
+    return unwrapResponse(response) as {
+      ok: boolean;
+      deleted_agent_settings: number;
+      deleted_snapshots: number;
+      deleted_saved_logs: number;
+      deleted_trajectory_steps: number;
+      deleted_agent_eval_history: number;
+      deleted_user_api_keys: number;
+    };
   },
 
   restoreAgent: async (projectId: number, agentId: string) => {

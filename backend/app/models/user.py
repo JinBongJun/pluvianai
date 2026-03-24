@@ -27,8 +27,9 @@ class User(Base):
     referral_credits = Column(Integer, nullable=True, server_default="0")
     referred_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
-    # Stripe integration
+    # Legacy Stripe column (unused if you only use Paddle)
     stripe_customer_id = Column(String(255), nullable=True, index=True)
+    paddle_customer_id = Column(String(255), nullable=True, index=True)
 
     # Relationships
     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")

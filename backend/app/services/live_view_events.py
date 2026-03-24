@@ -16,6 +16,7 @@ def publish_agents_changed(project_id: int, agent_ids: Optional[Iterable[str]] =
     if not cache_service.enabled:
         return
     try:
+        cache_service.delete_pattern(f"project:{int(project_id)}:live_view:agents:v2:*")
         channel = f"project:{int(project_id)}:live_view:events"
         payload = {
             "type": "agents_changed",
