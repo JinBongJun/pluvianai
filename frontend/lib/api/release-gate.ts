@@ -12,7 +12,7 @@ export type ToolContextPayload = {
   inject?: ToolContextInjectPayload;
 };
 
-type ReleaseGateValidatePayload = {
+export type ReleaseGateValidatePayload = {
   agent_id?: string;
   use_recent_snapshots?: boolean;
   recent_snapshot_limit?: number;

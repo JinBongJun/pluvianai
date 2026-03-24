@@ -28,10 +28,10 @@ import {
   Database,
 } from "lucide-react";
 
+import { ReleaseGateLayoutGateBody } from "./ReleaseGateLayoutGateBody";
 import { ReleaseGateLayoutWrapper } from "./ReleaseGateLayoutWrapper";
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
-import { ReleaseGateExpandedView } from "./ReleaseGateExpandedView";
-import { ReleaseGateMap } from "@/components/release-gate/ReleaseGateMap";
+import type { ReleaseGatePageContextValue } from "./releaseGatePageContext.types";
 import {
   SnapshotDetailModal,
   type SnapshotForDetail,
@@ -48,58 +48,56 @@ import {
   projectUserApiKeysAPI,
   projectsAPI,
   releaseGateAPI,
-  type ReleaseGateHistoryResponse,
-  type ReleaseGateResult,
   type ToolContextPayload,
 } from "@/lib/api";
 import {
   getApiErrorCode,
   getApiErrorMessage,
-  getRateLimitInfo,
-  isRateLimitError,
   redirectToLogin,
 } from "@/lib/api/client";
-import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { PlanLimitBanner } from "@/components/PlanLimitBanner";
+import { sanitizeReplayBodyOverrides } from "./releaseGateReplayMerge";
+
+import { useReleaseGateBaselineSnapshots } from "./useReleaseGateBaselineSnapshots";
+import { useReleaseGateBehaviorDatasets } from "./useReleaseGateBehaviorDatasets";
+import { useReleaseGateHistory } from "./useReleaseGateHistory";
+import { useReleaseGateAgents } from "./useReleaseGateAgents";
 import {
-  applyBodyOverridesToRequestBody,
-  mergeReplayBodyOverridesForSnapshot,
-  sanitizeReplayBodyOverrides,
-} from "./releaseGateReplayMerge";
+  createDefaultValidateRunDeps,
+  useReleaseGateValidateRun,
+} from "./useReleaseGateValidateRun";
+import type { EditableTool, ReplayProvider } from "./releaseGatePageContent.lib";
+import type { GateTab, ThresholdPreset } from "./releaseGateExpandedHelpers";
+import {
+  applySystemPromptToBody,
+  DEFAULT_EVAL_CHECK_VALUE,
+  DEFAULT_REPLAY_PROVIDER_MODEL_LIBRARY,
+  describeMissingProviderKeys,
+  editableRequestBodyWithoutTools,
+  EMPTY_SWF_ITEMS,
+  extractOverridesFromPayload,
+  extractSystemPromptFromPayload,
+  extractToolResultTextFromSnapshotRecord,
+  extractToolsFromPayload,
+  asPayloadObject,
+  buildBaselineConfigSummary,
+  buildFinalCandidateRequest,
+  buildToolContextPayload,
+  getRequestPart,
+  inferProviderFromModelId,
+  LIVE_VIEW_CHECK_ORDER,
+  normalizeGateThresholds,
+  normalizeReplayProvider,
+  parseSnapshotCreatedAtMs,
+  payloadWithoutModel,
+  PROVIDER_PAYLOAD_TEMPLATES,
+  REPLAY_THRESHOLD_PRESETS,
+  shouldShowEvalSetting,
+  snapshotEvalFailed,
+} from "./releaseGatePageContent.lib";
 
-type GateTab = "validate" | "history";
-type EditableTool = { id: string; name: string; description: string; parameters: string };
-type ThresholdPreset = "strict" | "default" | "lenient" | "custom";
-type GateThresholds = { failRateMax: number; flakyRateMax: number };
-type HistoryDatePreset = "all" | "24h" | "7d" | "30d";
-type ReleaseGateDatasetSummary = {
-  id: string;
-  label?: string;
-  snapshot_ids?: unknown[];
-  snapshot_count?: number;
-};
-type ReleaseGateDatasetSnapshotsAggregate = {
-  items: any[];
-  total: number;
-  missingDatasetIds?: string[];
-  failedDatasetIds?: string[];
-};
+export { sanitizePayloadForPreview } from "./releaseGatePageContent.lib";
 
-function getPresetHistoryDateRange(
-  preset: HistoryDatePreset
-): { createdFrom?: string; createdTo?: string } {
-  if (preset === "all") return {};
-  const now = new Date();
-  const createdTo = now.toISOString();
-  const ms =
-    preset === "24h"
-      ? 24 * 60 * 60 * 1000
-      : preset === "7d"
-        ? 7 * 24 * 60 * 60 * 1000
-        : 30 * 24 * 60 * 60 * 1000;
-  return { createdFrom: new Date(now.getTime() - ms).toISOString(), createdTo };
-}
-type ReplayProvider = "openai" | "anthropic" | "google";
 type ProjectUserApiKeyItem = {
   id: number;
   provider: string;
@@ -107,689 +105,6 @@ type ProjectUserApiKeyItem = {
   is_active: boolean;
   name?: string | null;
   created_at?: string | null;
-};
-const RECENT_SNAPSHOT_LIMIT = 100;
-const BASELINE_SNAPSHOT_LIMIT = 200;
-/** Stable fallback for SWR `data?.items` — inline `[]` is a new reference each render and breaks useMemo/useEffect dependencies. */
-const EMPTY_SWF_ITEMS: never[] = [];
-const REPLAY_PROVIDER_LABEL: Record<ReplayProvider, string> = {
-  openai: "OpenAI",
-  anthropic: "Anthropic",
-  google: "Google",
-};
-const DEFAULT_REPLAY_PROVIDER_MODEL_LIBRARY: Record<ReplayProvider, string[]> = {
-  openai: [
-    "gpt-4o-mini",
-    "gpt-4o",
-    "gpt-4.1",
-    "gpt-4.1-mini",
-  ],
-  anthropic: [
-    // Keep conservative, pinned IDs for reproducible Release Gate runs.
-    "claude-sonnet-4-5-20250929",
-    "claude-haiku-4-5-20251001",
-    "claude-sonnet-4-20250514",
-  ],
-  google: [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-pro",
-  ],
-};
-const REPLAY_THRESHOLD_PRESETS = {
-  strict: {
-    label: "Strict",
-    failRateMax: 0.05,
-    flakyRateMax: 0.01,
-  },
-  default: {
-    label: "Normal",
-    failRateMax: 0.05,
-    flakyRateMax: 0.03,
-  },
-  lenient: {
-    label: "Lenient",
-    failRateMax: 0.1,
-    flakyRateMax: 0.05,
-  },
-  custom: {
-    label: "Custom",
-    failRateMax: 0.05,
-    flakyRateMax: 0.03,
-  },
-} as const;
-
-/** Provider-level default knobs for replay when no snapshot payload exists or has no config. */
-const PROVIDER_PAYLOAD_TEMPLATES: Record<ReplayProvider, Record<string, unknown>> = {
-  openai: {
-    temperature: 0.3,
-    top_p: 1,
-    max_tokens: 512,
-  },
-  anthropic: {
-    temperature: 0.3,
-    top_p: 1,
-    max_tokens: 1024,
-  },
-  google: {
-    temperature: 0.3,
-    top_p: 1,
-    max_tokens: 512,
-  },
-};
-
-const PRESET_TOOLTIPS: Record<keyof typeof REPLAY_THRESHOLD_PRESETS, string> = {
-  strict: "Fail 5%, Flaky 1%",
-  default: "Fail 5%, Flaky 3%",
-  lenient: "Fail 10%, Flaky 5%",
-  custom: "Set your own fail and flaky rate limits",
-};
-
-function toNum(value: string, fallback: number): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function clampRate(value: unknown, fallback: number): number {
-  const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(1, Math.max(0, n));
-}
-
-function normalizeGateThresholds(failRateMax: unknown, flakyRateMax: unknown): GateThresholds {
-  return {
-    failRateMax: clampRate(failRateMax, REPLAY_THRESHOLD_PRESETS.default.failRateMax),
-    flakyRateMax: clampRate(flakyRateMax, REPLAY_THRESHOLD_PRESETS.default.flakyRateMax),
-  };
-}
-
-function parseSnapshotCreatedAtMs(snapshot: Record<string, unknown> | null | undefined): number {
-  if (!snapshot) return 0;
-  const raw = snapshot.created_at;
-  if (typeof raw !== "string" || !raw.trim()) return 0;
-  const t = Date.parse(raw);
-  return Number.isFinite(t) ? t : 0;
-}
-
-function snapshotNumericId(snapshot: Record<string, unknown>): number {
-  const id = snapshot?.id;
-  if (typeof id === "number" && Number.isFinite(id)) return id;
-  const n = Number(id);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function compareSnapshotsNewestFirst(a: Record<string, unknown>, b: Record<string, unknown>): number {
-  const ta = parseSnapshotCreatedAtMs(a);
-  const tb = parseSnapshotCreatedAtMs(b);
-  if (tb !== ta) return tb - ta;
-  return snapshotNumericId(b) - snapshotNumericId(a);
-}
-
-function pickNewestSnapshot(snapshots: Record<string, unknown>[]): Record<string, unknown> | null {
-  if (!snapshots.length) return null;
-  return [...snapshots].sort(compareSnapshotsNewestFirst)[0] ?? null;
-}
-
-function normalizeReplayProvider(raw: unknown): ReplayProvider | null {
-  const value = String(raw ?? "")
-    .trim()
-    .toLowerCase();
-  if (value === "openai" || value === "anthropic" || value === "google") return value;
-  return null;
-}
-
-function inferProviderFromModelId(modelId: unknown): ReplayProvider | null {
-  const model = String(modelId ?? "")
-    .trim()
-    .toLowerCase();
-  if (!model) return null;
-  if (
-    model.startsWith("gpt") ||
-    model.startsWith("o1") ||
-    model.startsWith("o3") ||
-    model.startsWith("o4") ||
-    model.startsWith("text-embedding") ||
-    model.startsWith("openai/")
-  ) {
-    return "openai";
-  }
-  if (model.includes("claude") || model.startsWith("anthropic/")) return "anthropic";
-  if (
-    model.includes("gemini") ||
-    model.includes("google") ||
-    model.startsWith("models/gemini") ||
-    model.startsWith("google/")
-  ) {
-    return "google";
-  }
-  return null;
-}
-
-function validateCustomModelForProvider(
-  provider: ReplayProvider,
-  modelId: string
-): { ok: true } | { ok: false; message: string } {
-  const trimmed = String(modelId ?? "").trim();
-  if (!trimmed) return { ok: false, message: "Model id is required." };
-  const inferred = inferProviderFromModelId(trimmed);
-  if (inferred && inferred !== provider) {
-    return {
-      ok: false,
-      message: `Run blocked: model "${trimmed}" looks like ${REPLAY_PROVIDER_LABEL[inferred]}, but provider is set to ${REPLAY_PROVIDER_LABEL[provider]}.`,
-    };
-  }
-  return { ok: true };
-}
-
-function collectMissingProviderKeys(result: ReleaseGateResult | null): ReplayProvider[] {
-  if (!result) return [];
-  const direct = Array.isArray(result.missing_provider_keys)
-    ? result.missing_provider_keys
-        .map(v => normalizeReplayProvider(v))
-        .filter((v): v is ReplayProvider => Boolean(v))
-    : [];
-  if (direct.length > 0) return Array.from(new Set(direct));
-
-  const fromReasons = (result.failure_reasons ?? []).join(" ").toLowerCase();
-  const inferred: ReplayProvider[] = [];
-  if (fromReasons.includes("openai")) inferred.push("openai");
-  if (fromReasons.includes("anthropic") || fromReasons.includes("claude"))
-    inferred.push("anthropic");
-  if (fromReasons.includes("google") || fromReasons.includes("gemini")) inferred.push("google");
-  return Array.from(new Set(inferred));
-}
-
-function describeMissingProviderKeys(missingProviders: ReplayProvider[]): string {
-  if (missingProviders.length === 0) return "";
-  const labels = missingProviders.map(p => REPLAY_PROVIDER_LABEL[p]).join(", ");
-  return `Run blocked: ${labels} API key is not registered for the selected agent (or project default). Open Live View, click the agent, then register the key in the Settings tab.`;
-}
-
-function ReleaseGateStatusPanel({
-  title,
-  description,
-  tone = "neutral",
-  primaryActionLabel,
-  onPrimaryAction,
-  primaryHref,
-}: {
-  title: string;
-  description: React.ReactNode;
-  tone?: "neutral" | "warning" | "danger";
-  primaryActionLabel?: string;
-  onPrimaryAction?: () => void;
-  primaryHref?: string;
-}) {
-  const toneClasses =
-    tone === "danger"
-      ? "border-rose-500/30 bg-[#140f15]"
-      : tone === "warning"
-        ? "border-amber-500/30 bg-[#15130f]"
-        : "border-white/10 bg-[#0f1219]";
-
-  return (
-    <div className="flex h-full min-h-[420px] items-center justify-center px-6 py-10">
-      <div className={clsx("w-full max-w-2xl rounded-2xl border p-7 shadow-2xl", toneClasses)}>
-        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-300">{title}</p>
-        <div className="mt-3 text-sm leading-relaxed text-slate-200">{description}</div>
-        {primaryActionLabel && primaryHref ? (
-          <Link
-            href={primaryHref}
-            className="mt-6 inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
-          >
-            {primaryActionLabel}
-          </Link>
-        ) : null}
-        {primaryActionLabel && onPrimaryAction ? (
-          <button
-            type="button"
-            onClick={onPrimaryAction}
-            className="mt-6 inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
-          >
-            {primaryActionLabel}
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function extractToolsFromPayload(payload: Record<string, unknown> | null): EditableTool[] {
-  if (!payload) return [];
-  const rawTools = payload.tools;
-  if (!Array.isArray(rawTools)) return [];
-  const out: EditableTool[] = [];
-  for (const item of rawTools) {
-    if (!item || typeof item !== "object") continue;
-    const obj = item as Record<string, unknown>;
-    const fnRaw = obj.function;
-    const fn = fnRaw && typeof fnRaw === "object" ? (fnRaw as Record<string, unknown>) : {};
-    const name = String(fn.name ?? obj.name ?? "").trim();
-    if (!name) continue;
-    const description =
-      typeof fn.description === "string"
-        ? fn.description
-        : typeof obj.description === "string"
-          ? obj.description
-          : "";
-    const paramsObj =
-      fn.parameters && typeof fn.parameters === "object"
-        ? fn.parameters
-        : obj.parameters && typeof obj.parameters === "object"
-          ? obj.parameters
-          : null;
-    out.push({
-      id: crypto.randomUUID(),
-      name,
-      description,
-      parameters: paramsObj ? JSON.stringify(paramsObj, null, 2) : "{}",
-    });
-  }
-  return out;
-}
-
-function extractToolResultTextFromSnapshotRecord(snapshot: Record<string, unknown>): string {
-  const payload = snapshot.payload;
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "";
-  const raw = (payload as Record<string, unknown>).tool_events;
-  if (!Array.isArray(raw)) return "";
-  const parts: string[] = [];
-  for (const ev of raw) {
-    if (!ev || typeof ev !== "object") continue;
-    const row = ev as Record<string, unknown>;
-    if (String(row.kind || "").toLowerCase() !== "tool_result") continue;
-    const out = row.output;
-    if (typeof out === "string") parts.push(out);
-    else if (out != null) {
-      try {
-        parts.push(JSON.stringify(out, null, 2));
-      } catch {
-        parts.push(String(out));
-      }
-    }
-  }
-  return parts.join("\n\n---\n\n");
-}
-
-function buildToolContextPayload(
-  mode: "recorded" | "inject",
-  scope: "global" | "per_snapshot",
-  globalText: string,
-  bySnapshotId: Record<string, string>
-): ToolContextPayload {
-  if (mode === "recorded") return { mode: "recorded" };
-  const inject: {
-    scope: "per_snapshot" | "global";
-    global_text?: string;
-    by_snapshot_id?: Record<string, string>;
-  } = { scope };
-  const gt = globalText.trim();
-  if (gt) inject.global_text = gt;
-  if (scope === "per_snapshot") {
-    const by: Record<string, string> = {};
-    for (const [k, v] of Object.entries(bySnapshotId)) {
-      if (v.trim()) by[k] = v.trim();
-    }
-    if (Object.keys(by).length) inject.by_snapshot_id = by;
-  }
-  return { mode: "inject", inject };
-}
-
-function extractOverridesFromPayload(
-  payload: Record<string, unknown> | null
-): Record<string, unknown> {
-  if (!payload) return {};
-  const clone = { ...payload };
-  // Keep replay-overridable request knobs only; exclude prompt/body bulk fields.
-  delete clone.model;
-  delete clone.messages;
-  delete clone.tools;
-  delete clone.stream;
-  delete clone.temperature;
-  delete clone.max_tokens;
-  delete clone.top_p;
-  return clone;
-}
-
-function asPayloadObject(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-/** When payload is { request, response }, return the request part; else return payload. */
-function getRequestPart(payload: Record<string, unknown> | null): Record<string, unknown> {
-  if (!payload) return {};
-  if (payload.request && typeof payload.request === "object" && !Array.isArray(payload.request))
-    return payload.request as Record<string, unknown>;
-  return payload;
-}
-
-/** Derive eval pass/fail from snapshot (eval_checks_result or is_worst). */
-function snapshotEvalFailed(snap: Record<string, unknown> | null): boolean {
-  if (!snap) return false;
-  const checks = snap.eval_checks_result;
-  if (checks && typeof checks === "object" && !Array.isArray(checks)) {
-    const vals = Object.values(checks);
-    if (vals.some(v => v === "fail")) return true;
-  }
-  return Boolean(snap.is_worst);
-}
-
-export function sanitizePayloadForPreview(raw: unknown): Record<string, unknown> {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-  const src = raw as Record<string, unknown>;
-  const base =
-    src.request && typeof src.request === "object" && !Array.isArray(src.request)
-      ? (src.request as Record<string, unknown>)
-      : src;
-  const clone = JSON.parse(JSON.stringify(base)) as Record<string, unknown>;
-  delete (clone as any).model;
-  delete (clone as any).messages;
-  delete (clone as any).message;
-  delete (clone as any).user_message;
-  delete (clone as any).response;
-  delete (clone as any).responses;
-  delete (clone as any).input;
-  delete (clone as any).inputs;
-  delete (clone as any).trace_id;
-  delete (clone as any).agent_id;
-  delete (clone as any).agent_name;
-  return clone;
-}
-
-/** Request body for replay: same as payload but without model (model is UI-only) and without snapshot content. */
-function payloadWithoutModel(payload: Record<string, unknown> | null): Record<string, unknown> {
-  const part = getRequestPart(payload);
-  if (!Object.keys(part).length) return {};
-  const clone = JSON.parse(JSON.stringify(part)) as Record<string, unknown>;
-  delete clone.model;
-  // JSON payload in Release Gate should only contain configuration, not per-snapshot
-  // content such as messages or responses. These are always taken from snapshots.
-  delete (clone as any).messages;
-  delete (clone as any).message;
-  delete (clone as any).user_message;
-  delete (clone as any).response;
-  delete (clone as any).responses;
-  delete (clone as any).input;
-  delete (clone as any).inputs;
-  delete (clone as any).trace_id;
-  delete (clone as any).agent_id;
-  delete (clone as any).agent_name;
-  return clone;
-}
-
-/** JSON editor view for candidate config: config-only and tools-free. */
-function editableRequestBodyWithoutTools(
-  body: Record<string, unknown> | null
-): Record<string, unknown> {
-  if (!body || typeof body !== "object" || Array.isArray(body)) return {};
-  const clone = JSON.parse(JSON.stringify(body)) as Record<string, unknown>;
-  delete clone.model;
-  delete clone.tools;
-  delete (clone as any).system_prompt;
-  delete (clone as any).messages;
-  delete (clone as any).message;
-  delete (clone as any).user_message;
-  delete (clone as any).response;
-  delete (clone as any).responses;
-  delete (clone as any).input;
-  delete (clone as any).inputs;
-  delete (clone as any).trace_id;
-  delete (clone as any).agent_id;
-  delete (clone as any).agent_name;
-  return clone;
-}
-
-/** Apply system prompt text to request body (top-level and messages if present). */
-function applySystemPromptToBody(
-  body: Record<string, unknown>,
-  systemPrompt: string
-): Record<string, unknown> {
-  const next = { ...body };
-  next.system_prompt = systemPrompt || undefined;
-  const msgs = next.messages;
-  if (Array.isArray(msgs)) {
-    let found = false;
-    const nextMsgs = msgs.map((msg: unknown) => {
-      if (!msg || typeof msg !== "object") return msg;
-      const m = { ...(msg as Record<string, unknown>) };
-      if (m.role === "system") {
-        found = true;
-        m.content = systemPrompt;
-      }
-      return m;
-    });
-    if (!found && systemPrompt) nextMsgs.unshift({ role: "system", content: systemPrompt });
-    next.messages = nextMsgs;
-  }
-  return next;
-}
-
-function buildFinalCandidateRequest(options: {
-  baselineSeedSnapshot: Record<string, unknown> | null;
-  baselinePayload: Record<string, unknown> | null;
-  nodeBasePayload: Record<string, unknown> | null;
-  requestBody: Record<string, unknown>;
-  requestSystemPrompt: string;
-  modelOverrideEnabled: boolean;
-  newModel: string;
-  /** Merged after requestBody; wins on conflict. Does not replace messages/user text (sanitized). */
-  requestBodyOverrides?: Record<string, unknown> | null;
-  /** Per selected snapshot ids; merged after global for the seed snapshot preview. */
-  requestBodyOverridesBySnapshotId?: Record<string, Record<string, unknown>> | null;
-  /** First baseline snapshot id (for merged body-overrides preview). */
-  seedSnapshotId?: string | null;
-}): Record<string, unknown> {
-  const {
-    baselineSeedSnapshot,
-    baselinePayload,
-    nodeBasePayload,
-    requestBody,
-    requestSystemPrompt,
-    modelOverrideEnabled,
-    newModel,
-    requestBodyOverrides,
-    requestBodyOverridesBySnapshotId,
-    seedSnapshotId,
-  } = options;
-
-  const baseFromSnapshot = asPayloadObject(baselineSeedSnapshot?.payload);
-  const baseRequest = baseFromSnapshot
-    ? getRequestPart(baseFromSnapshot)
-    : baselinePayload || nodeBasePayload || {};
-
-  let finalReq: Record<string, unknown> = JSON.parse(JSON.stringify(baseRequest || {}));
-
-  if (modelOverrideEnabled && newModel.trim()) {
-    finalReq.model = newModel.trim();
-  }
-
-  const trimmedPrompt = requestSystemPrompt.trim();
-  if (trimmedPrompt) {
-    finalReq = applySystemPromptToBody(finalReq, trimmedPrompt);
-  }
-
-  if (typeof requestBody.temperature === "number") {
-    finalReq.temperature = requestBody.temperature;
-  }
-  if (typeof requestBody.max_tokens === "number") {
-    finalReq.max_tokens = requestBody.max_tokens;
-  }
-  if (typeof requestBody.top_p === "number") {
-    finalReq.top_p = requestBody.top_p;
-  }
-
-  for (const [k, v] of Object.entries(requestBody)) {
-    if (
-      k === "model" ||
-      k === "system_prompt" ||
-      k === "messages" ||
-      k === "message" ||
-      k === "user_message" ||
-      k === "response" ||
-      k === "responses" ||
-      k === "input" ||
-      k === "inputs" ||
-      k === "trace_id" ||
-      k === "agent_id" ||
-      k === "agent_name"
-    ) {
-      continue;
-    }
-    finalReq[k] = v;
-  }
-
-  const mergedSup = mergeReplayBodyOverridesForSnapshot(
-    requestBodyOverrides ?? undefined,
-    requestBodyOverridesBySnapshotId ?? undefined,
-    seedSnapshotId ?? null
-  );
-  if (Object.keys(mergedSup).length > 0) {
-    finalReq = applyBodyOverridesToRequestBody(finalReq, mergedSup);
-  }
-
-  return finalReq;
-}
-
-function extractSystemPromptFromPayload(payload: Record<string, unknown> | null): string {
-  if (!payload) return "";
-  const direct = payload.system_prompt;
-  if (typeof direct === "string" && direct.trim()) return direct.trim();
-  const msgs = payload.messages;
-  if (!Array.isArray(msgs)) return "";
-  for (const msg of msgs) {
-    if (!msg || typeof msg !== "object") continue;
-    const m = msg as Record<string, unknown>;
-    if (m.role !== "system") continue;
-    const content = m.content;
-    if (typeof content === "string" && content.trim()) return content.trim();
-  }
-  return "";
-}
-
-function buildBaselineConfigSummary(payload: Record<string, unknown> | null): string {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "";
-  const obj = payload as Record<string, unknown>;
-  const parts: string[] = [];
-
-  const temp = obj.temperature;
-  if (typeof temp === "number" && Number.isFinite(temp)) {
-    parts.push(`Temp ${temp}`);
-  }
-
-  const maxTok = obj.max_tokens;
-  if (
-    maxTok != null &&
-    (typeof maxTok === "number"
-      ? Number.isInteger(maxTok)
-      : Number.isInteger(Number(maxTok))) &&
-    Number(maxTok) > 0
-  ) {
-    parts.push(`Max ${Number(maxTok)}`);
-  }
-
-  const topP = obj.top_p;
-  if (typeof topP === "number" && Number.isFinite(topP)) {
-    parts.push(`Top p ${topP}`);
-  }
-
-  const tools = obj.tools;
-  if (Array.isArray(tools) && tools.length > 0) {
-    const names: string[] = [];
-    for (const t of tools) {
-      if (!t || typeof t !== "object") continue;
-      const tool = t as Record<string, unknown>;
-      const fnRaw = tool.function;
-      const fn = fnRaw && typeof fnRaw === "object" ? (fnRaw as Record<string, unknown>) : {};
-      const name = String(fn.name ?? tool.name ?? "").trim();
-      if (name) names.push(name);
-    }
-    if (names.length > 0) {
-      const previewNames = names.slice(0, 3).join(", ");
-      const suffix = names.length > 3 ? `, +${names.length - 3}` : "";
-      parts.push(`Tools ${names.length}개 (${previewNames}${suffix})`);
-    } else {
-      parts.push(`Tools ${tools.length}개`);
-    }
-  }
-
-  return parts.join(" · ");
-}
-
-function formatEvalSetting(value: unknown): string {
-  if (typeof value === "boolean") return value ? "On" : "Off";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "string") return value;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return "Configured";
-
-  const obj = value as Record<string, unknown>;
-  const enabled = typeof obj.enabled === "boolean" ? obj.enabled : undefined;
-  const details = Object.entries(obj)
-    .filter(([k, v]) => k !== "enabled" && v !== undefined && v !== null)
-    .slice(0, 2)
-    .map(([k, v]) => {
-      if (typeof v === "string" || typeof v === "number" || typeof v === "boolean")
-        return `${k}:${String(v)}`;
-      return `${k}:set`;
-    })
-    .join(" · ");
-
-  if (enabled === false) return details ? `Off · ${details}` : "Off";
-  if (enabled === true) return details ? `On · ${details}` : "On";
-  return details || "Configured";
-}
-
-function shouldShowEvalSetting(value: unknown): boolean {
-  if (typeof value === "boolean") return value;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return true;
-  const obj = value as Record<string, unknown>;
-  if (typeof obj.enabled === "boolean") return obj.enabled;
-  return true;
-}
-
-/** Full list so Release Gate shows all check types from saved config (matches backend CHECK_KEYS order). */
-const LIVE_VIEW_CHECK_ORDER = [
-  "empty",
-  "latency",
-  "status_code",
-  "refusal",
-  "json",
-  "length",
-  "repetition",
-  "required",
-  "format",
-  "leakage",
-  "tool",
-] as const;
-
-/** Defaults for each check so missing keys in old saved config still appear. */
-const DEFAULT_EVAL_CHECK_VALUE: Record<string, { enabled: boolean }> = {
-  empty: { enabled: true },
-  latency: { enabled: true },
-  status_code: { enabled: true },
-  refusal: { enabled: true },
-  json: { enabled: true },
-  length: { enabled: true },
-  repetition: { enabled: true },
-  required: { enabled: false },
-  format: { enabled: false },
-  leakage: { enabled: false },
-  tool: { enabled: true },
-};
-
-const LIVE_VIEW_CHECK_LABELS: Record<string, string> = {
-  empty: "Empty / Short Answers",
-  latency: "Latency Spikes",
-  status_code: "HTTP Error Codes",
-  refusal: "Refusal / Non-Answer",
-  json: "JSON Validity",
-  length: "Output Length Drift",
-  repetition: "Repetition / Loops",
-  required: "Required Keywords / Fields",
-  format: "Format / Sections",
-  leakage: "PII / Secret Leakage",
-  coherence: "Coherence",
 };
 
 export default function ReleaseGatePageContent() {
@@ -800,6 +115,9 @@ export default function ReleaseGatePageContent() {
   const rawProjectId = params?.projectId;
   const projectIdStr = Array.isArray(rawProjectId) ? rawProjectId[0] : rawProjectId;
   const projectId = projectIdStr ? Number(projectIdStr) : 0;
+
+  const mutateHistoryRef = useRef<(() => unknown) | undefined>(undefined);
+  const validateRunDepsRef = useRef(createDefaultValidateRunDeps());
 
   const { data: project } = useSWR(
     projectId && !isNaN(projectId) ? ["project", projectId] : null,
@@ -823,12 +141,6 @@ export default function ReleaseGatePageContent() {
 
   const [tab, setTab] = useState<GateTab>("validate");
   const [viewMode, setViewMode] = useState<"map" | "expanded">("map");
-  const [isValidating, setIsValidating] = useState(false);
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
-  const [cancelRequested, setCancelRequested] = useState(false);
-  const [result, setResult] = useState<ReleaseGateResult | null>(null);
-  const [error, setError] = useState("");
-  const [planError, setPlanError] = useState<PlanLimitError | null>(null);
   const [repeatRuns, setRepeatRuns] = useState<number>(1);
   const [repeatDropdownOpen, setRepeatDropdownOpen] = useState(false);
   const repeatDropdownRef = useRef<HTMLDivElement>(null);
@@ -906,11 +218,6 @@ export default function ReleaseGatePageContent() {
 
   const [criteriaOpen, setCriteriaOpen] = useState(false);
 
-  const [historyStatus, setHistoryStatus] = useState<"all" | "pass" | "fail">("all");
-  const [historyTraceId, setHistoryTraceId] = useState("");
-  const [historyDatePreset, setHistoryDatePreset] = useState<HistoryDatePreset>("all");
-  const [historyOffset, setHistoryOffset] = useState(0);
-  const historyLimit = 20;
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [resultDetailsOpen, setResultDetailsOpen] = useState(false);
   const [selectedRunResultIndex, setSelectedRunResultIndex] = useState<number | null>(null);
@@ -921,7 +228,6 @@ export default function ReleaseGatePageContent() {
   } | null>(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [lastRunReportId, setLastRunReportId] = useState<string | null>(null);
   const [baselineDetailSnapshot, setBaselineDetailSnapshot] = useState<SnapshotForDetail | null>(
     null
   );
@@ -943,65 +249,50 @@ export default function ReleaseGatePageContent() {
     },
     [projectId]
   );
+  const {
+    isValidating,
+    activeJobId,
+    cancelRequested,
+    result,
+    error,
+    planError,
+    handleValidate,
+    handleCancelActiveJob,
+    clearRunUi,
+  } = useReleaseGateValidateRun({
+    projectId,
+    depsRef: validateRunDepsRef,
+    mutateHistoryRef,
+  });
   const runLocked = isValidating || Boolean(activeJobId);
+  const {
+    historyStatus,
+    setHistoryStatus,
+    historyTraceId,
+    setHistoryTraceId,
+    historyDatePreset,
+    setHistoryDatePreset,
+    historyOffset,
+    setHistoryOffset,
+    historyLimit,
+    historyLoading,
+    historyRefreshing,
+    historyItems,
+    historyTotal,
+    mutateHistory,
+  } = useReleaseGateHistory({ projectId, runLocked });
+  mutateHistoryRef.current = mutateHistory;
   const { data: coreModelsData } = useSWR(
     projectId && !isNaN(projectId) ? ["release-gate-core-models", projectId] : null,
     () => releaseGateAPI.getCoreModels(projectId),
     { isPaused: () => runLocked }
   );
-  const cancelRequestedRef = useRef(false);
-  const pollNowRef = useRef<null | (() => void)>(null);
-  const cancelBurstRemainingRef = useRef(0);
-  const CANCEL_BURST_POLLS = 6;
-  const CANCEL_BURST_INTERVAL_MS = 1000;
-  const BASE_POLL_INTERVAL_MS = 2000;
-  const FAST_POLL_INTERVAL_MS = 1500;
-  const FAST_POLL_WINDOW_MS = 4000;
-
-  useEffect(() => {
-    cancelRequestedRef.current = cancelRequested;
-    if (cancelRequested) {
-      cancelBurstRemainingRef.current = Math.max(
-        cancelBurstRemainingRef.current,
-        CANCEL_BURST_POLLS
-      );
-    } else {
-      cancelBurstRemainingRef.current = 0;
-    }
-  }, [cancelRequested]);
-
   const agentIdFromUrl = searchParams.get("agent_id")?.trim() ?? "";
   useEffect(() => {
     if (!agentIdFromUrl) return;
     setAgentId(agentIdFromUrl);
     setViewMode("expanded");
   }, [agentIdFromUrl]);
-
-  const handleCancelActiveJob = async () => {
-    if (!projectId || isNaN(projectId)) return;
-    const jobId = String(activeJobId || "").trim();
-    // "Production-grade" cancel semantics:
-    // - If job id is not available yet (async job still starting), remember the user's intent.
-    //   We will cancel as soon as the job id is set.
-    if (!cancelRequestedRef.current) {
-      cancelRequestedRef.current = true;
-      setCancelRequested(true);
-    }
-    cancelBurstRemainingRef.current = Math.max(cancelBurstRemainingRef.current, CANCEL_BURST_POLLS);
-    if (!jobId) return;
-    try {
-      await releaseGateAPI.cancelJob(projectId, jobId);
-      if (pollNowRef.current) pollNowRef.current();
-      // Polling will observe canceled status and clear UI.
-    } catch (e: any) {
-      const msg =
-        e?.response?.data?.detail?.message ||
-        e?.response?.data?.detail ||
-        e?.message ||
-        "Failed to cancel run.";
-      setError(String(msg));
-    }
-  };
 
   // When switching nodes, reset JSON/tools state so that seeding reflects the newly selected node.
   useEffect(() => {
@@ -1018,11 +309,7 @@ export default function ReleaseGatePageContent() {
     setToolsHydratedKey("");
     setOverridesHydratedKey("");
     setRepresentativeBaselineUserSnapshotId(null);
-    setResult(null);
-    setError("");
-    setActiveJobId(null);
-    setCancelRequested(false);
-    setIsValidating(false);
+    clearRunUi();
     return;
   }
   // For a new agent, clear previous node's config so that node-level seeding can populate fresh defaults.
@@ -1038,11 +325,8 @@ export default function ReleaseGatePageContent() {
   setToolsHydratedKey("");
   setOverridesHydratedKey("");
   setRepresentativeBaselineUserSnapshotId(null);
-    setResult(null);
-    setError("");
-    setActiveJobId(null);
-    setIsValidating(false);
-  }, [agentId]);
+  clearRunUi();
+  }, [agentId, clearRunUi]);
 
   useEffect(() => {
     setSelectedRunResultIndex(null);
@@ -1050,30 +334,14 @@ export default function ReleaseGatePageContent() {
     setSelectedAttempt(null);
   }, [result?.report_id]);
 
-  const agentsKey = projectId && !isNaN(projectId) ? ["release-gate-agents", projectId] : null;
   const {
-    data: agentsData,
-    isLoading: agentsLoading,
-    error: agentsError,
-    mutate: mutateAgents,
-  } = useSWR(
-    agentsKey,
-    () => releaseGateAPI.getAgents(projectId, 50),
-    { isPaused: () => runLocked }
-  );
-  const agentsLoaded = agentsKey !== null && typeof agentsData !== "undefined";
-  const agents = useMemo<AgentForPicker[]>(() => {
-    const list = agentsData?.items ?? [];
-    return list
-      .map((a: { agent_id?: string; display_name?: string }) => ({
-        agent_id: a.agent_id ?? "",
-        display_name: a.display_name || a.agent_id || "Agent",
-        model: null,
-        worst_count: 0,
-        is_ghost: false,
-      }))
-      .filter((a: AgentForPicker) => a.agent_id);
-  }, [agentsData]);
+    agentsData,
+    agentsLoading,
+    agentsError,
+    mutateAgents,
+    agentsLoaded,
+    agents,
+  } = useReleaseGateAgents({ projectId, runLocked });
 
   useEffect(() => {
     if (agentId && agents.length > 0) {
@@ -1091,137 +359,55 @@ export default function ReleaseGatePageContent() {
     setRunSnapshotIds(snapshotIds.length ? [...snapshotIds] : []);
   }, [snapshotIds.join(",")]);
 
-  const datasetsKey =
-    projectId && !isNaN(projectId) && agentId?.trim()
-      ? ["behavior-datasets", projectId, agentId.trim()]
-      : null;
   const {
-    data: datasetsData,
-    isLoading: datasetsLoading,
-    error: datasetsError,
-    mutate: mutateDatasets,
-  } = useSWR(
-    datasetsKey,
-    () => behaviorAPI.listDatasets(projectId, { agent_id: agentId.trim(), limit: 50 }),
-    { isPaused: () => runLocked }
-  );
-  const datasets = datasetsData?.items ?? EMPTY_SWF_ITEMS;
+    datasets,
+    datasetsLoading,
+    datasetsError,
+    mutateDatasets,
+    normalizedRunDatasetIds,
+    datasetSnapshots,
+    datasetSnapshotsLoading,
+    datasetSnapshotsError,
+    datasetSnapshots404,
+    mutateDatasetSnapshots,
+    expandedDatasetSnapshots,
+    expandedDatasetSnapshotsLoading,
+    expandedDatasetSnapshotsError,
+    expandedDatasetSnapshots404,
+    mutateExpandedDatasetSnapshots,
+    selectedDatasetSnapshotCount,
+  } = useReleaseGateBehaviorDatasets({
+    projectId,
+    agentId,
+    runLocked,
+    expandedDatasetId,
+    runDatasetIds,
+  });
 
-  const normalizedRunDatasetIds = useMemo(
-    () => Array.from(new Set(runDatasetIds.map(id => String(id).trim()).filter(Boolean))),
-    [runDatasetIds]
-  );
-  const datasetSnapshotsKey =
-    projectId && !isNaN(projectId) && normalizedRunDatasetIds.length > 0
-      ? ["behavior-dataset-snapshots", projectId, normalizedRunDatasetIds.join(",")]
-      : null;
   const {
-    data: datasetSnapshotsData,
-    isLoading: datasetSnapshotsLoading,
-    error: datasetSnapshotsError,
-    mutate: mutateDatasetSnapshots,
-  } = useSWR(
-    datasetSnapshotsKey,
-    async () => {
-      const responses = await Promise.allSettled(
-        normalizedRunDatasetIds.map(async datasetId => {
-          try {
-            return {
-              datasetId,
-              response: await behaviorAPI.getDatasetSnapshots(projectId, datasetId),
-            };
-          } catch (error) {
-            throw { datasetId, error };
-          }
-        })
-      );
-      const mergedItems: any[] = [];
-      const seenSnapshotIds = new Set<string>();
-      const missingDatasetIds: string[] = [];
-      const failedDatasetIds: string[] = [];
-      for (const result of responses) {
-        if (result.status === "fulfilled") {
-          const items = Array.isArray(result.value.response?.items) ? result.value.response.items : [];
-          for (const item of items) {
-            const snapshotId = item && typeof item === "object" ? String((item as any).id ?? "") : "";
-            if (!snapshotId || seenSnapshotIds.has(snapshotId)) continue;
-            seenSnapshotIds.add(snapshotId);
-            mergedItems.push(item);
-          }
-          continue;
-        }
-        const rejected = result.reason as {
-          datasetId?: string;
-          error?: { response?: { status?: number } };
-        };
-        const matchedDatasetId = rejected?.datasetId ?? null;
-        const status = rejected?.error?.response?.status;
-        if (status === 404) {
-          if (matchedDatasetId) missingDatasetIds.push(matchedDatasetId);
-          continue;
-        }
-        if (matchedDatasetId) failedDatasetIds.push(matchedDatasetId);
-        throw rejected?.error ?? result.reason;
-      }
-      return {
-        items: mergedItems,
-        total: mergedItems.length,
-        missingDatasetIds,
-        failedDatasetIds,
-      } satisfies ReleaseGateDatasetSnapshotsAggregate;
-    },
-    { isPaused: () => runLocked }
-  );
-  const datasetSnapshots = (datasetSnapshotsData as ReleaseGateDatasetSnapshotsAggregate | undefined)?.items ?? EMPTY_SWF_ITEMS;
-  const datasetSnapshots404 = (() => {
-    const data = datasetSnapshotsData as ReleaseGateDatasetSnapshotsAggregate | undefined;
-    const missingCount = data?.missingDatasetIds?.length ?? 0;
-    return normalizedRunDatasetIds.length > 0 && missingCount === normalizedRunDatasetIds.length;
-  })();
+    recentSnapshots,
+    recentSnapshotsTotalAvailable,
+    recentSnapshotsLoading,
+    recentSnapshotsError,
+    mutateRecentSnapshots,
+    selectedSnapshotIdsForRun,
+    baselineSnapshotsById,
+    baselineSnapshotsForRun,
+    autoRepresentativeBaselineSnapshotId,
+    effectiveRepresentativeBaselineSnapshotId,
+    baselineSeedSnapshot,
+    baselineSeedSnapshotId,
+    representativeBaselinePickerOptions,
+  } = useReleaseGateBaselineSnapshots({
+    projectId,
+    agentId,
+    runLocked,
+    dataSource,
+    runSnapshotIds,
+    datasetSnapshots,
+    representativeBaselineUserSnapshotId,
+  });
 
-  const expandedDatasetSnapshotsKey =
-    projectId && !isNaN(projectId) && expandedDatasetId
-      ? ["dataset-snapshots-expanded", projectId, expandedDatasetId]
-      : null;
-  const {
-    data: expandedDatasetSnapshotsData,
-    isLoading: expandedDatasetSnapshotsLoading,
-    error: expandedDatasetSnapshotsError,
-    mutate: mutateExpandedDatasetSnapshots,
-  } = useSWR(
-    expandedDatasetSnapshotsKey,
-    async () => {
-      try {
-        return await behaviorAPI.getDatasetSnapshots(projectId!, expandedDatasetId!);
-      } catch (e: unknown) {
-        const status = (e as { response?: { status?: number } })?.response?.status;
-        if (status === 404) {
-          return { items: [], total: 0, _404: true };
-        }
-        throw e;
-      }
-    },
-    { isPaused: () => runLocked }
-  );
-  const expandedDatasetSnapshots = expandedDatasetSnapshotsData?.items ?? EMPTY_SWF_ITEMS;
-  const expandedDatasetSnapshots404 = !!(
-    expandedDatasetSnapshotsData as { _404?: boolean } | undefined
-  )?._404;
-
-  const selectedDatasetSnapshotCount = useMemo(
-    () => {
-      if (normalizedRunDatasetIds.length === 0) return 0;
-      if (datasetSnapshotsKey && datasetSnapshotsData) return datasetSnapshots.length;
-      return normalizedRunDatasetIds.reduce((total, datasetId) => {
-        const dataset = datasets.find((item: ReleaseGateDatasetSummary) => item.id === datasetId);
-        if (!dataset) return total;
-        if (typeof dataset.snapshot_count === "number") return total + dataset.snapshot_count;
-        if (Array.isArray(dataset.snapshot_ids)) return total + dataset.snapshot_ids.length;
-        return total;
-      }, 0);
-    },
-    [datasets, normalizedRunDatasetIds, datasetSnapshotsKey, datasetSnapshotsData, datasetSnapshots.length]
-  );
   const selectedBaselineCount =
     runSnapshotIds.length > 0 ? runSnapshotIds.length : selectedDatasetSnapshotCount;
   const selectedDataSummary =
@@ -1240,222 +426,6 @@ export default function ReleaseGatePageContent() {
     }
     return "";
   }, [dataSource, snapshotIds.length, datasetIds.length]);
-
-  useEffect(() => {
-    if (!activeJobId) return;
-    if (!projectId || isNaN(projectId)) return;
-    let cancelled = false;
-
-    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-    const finalize = async (
-      status: "succeeded" | "failed" | "canceled",
-      finalResult: any,
-      finalJob: any
-    ) => {
-      if (cancelled) return;
-      if (status === "succeeded") {
-        setResult(finalResult);
-        const rid = String(finalResult?.report_id ?? finalJob?.report_id ?? "").trim();
-        if (rid) setLastRunReportId(rid);
-        setError("");
-        mutateHistory();
-      } else if (status === "canceled") {
-        setResult(null);
-        setError("Run canceled.");
-      } else {
-        const jobError = finalJob?.error_detail as any;
-        setResult(null);
-        setError(
-          String(jobError?.message || jobError?.detail || "Release Gate validation failed.")
-        );
-      }
-      setActiveJobId(null);
-      setIsValidating(false);
-      setCancelRequested(false);
-    };
-
-    const run = async () => {
-      let backoffMs = BASE_POLL_INTERVAL_MS;
-      const maxBackoffMs = 12000;
-      let consecutiveErrors = 0;
-      const pollStartedAtMs = Date.now();
-      let wakeRequested = false;
-      let wakeFn: (() => void) | null = null;
-      const waitForWake = () =>
-        new Promise<void>(resolve => {
-          wakeFn = resolve;
-        });
-      pollNowRef.current = () => {
-        wakeRequested = true;
-        if (wakeFn) {
-          const fn = wakeFn;
-          wakeFn = null;
-          fn();
-        }
-      };
-      const nextDelayMs = () => {
-        if (cancelRequestedRef.current && cancelBurstRemainingRef.current > 0) {
-          return CANCEL_BURST_INTERVAL_MS;
-        }
-        if (Date.now() - pollStartedAtMs <= FAST_POLL_WINDOW_MS) {
-          return FAST_POLL_INTERVAL_MS;
-        }
-        return backoffMs;
-      };
-      const consumeDelayBudget = () => {
-        if (cancelRequestedRef.current && cancelBurstRemainingRef.current > 0) {
-          cancelBurstRemainingRef.current -= 1;
-        }
-      };
-      while (!cancelled) {
-        try {
-          const res = await releaseGateAPI.getJob(projectId, activeJobId, 0);
-          if (res?.job?.cancel_requested_at && !cancelRequestedRef.current) {
-            cancelRequestedRef.current = true;
-            setCancelRequested(true);
-          }
-          const status = String(res?.job?.status || "").toLowerCase();
-          if (status === "succeeded" || status === "failed" || status === "canceled") {
-            const finalRes = await releaseGateAPI.getJob(projectId, activeJobId, 1);
-            const finalStatus = String(finalRes?.job?.status || "").toLowerCase();
-            const finalResult = (finalRes as any)?.result ?? null;
-            if (
-              finalStatus === "succeeded" ||
-              finalStatus === "failed" ||
-              finalStatus === "canceled"
-            ) {
-              await finalize(finalStatus, finalResult, finalRes?.job);
-              return;
-            }
-          }
-          consecutiveErrors = 0;
-          backoffMs = BASE_POLL_INTERVAL_MS;
-          if (wakeRequested) {
-            wakeRequested = false;
-            continue;
-          }
-          const delay = nextDelayMs();
-          consumeDelayBudget();
-          await Promise.race([sleep(delay), waitForWake()]);
-        } catch (e: any) {
-          if (cancelled) return;
-          consecutiveErrors += 1;
-          const statusCode = e?.response?.status;
-          if (statusCode === 429) {
-            const rateInfo = getRateLimitInfo(e);
-            const retryAfterSec = Math.max(1, rateInfo.retryAfterSec ?? 2);
-            if (consecutiveErrors === 1 && !cancelRequestedRef.current) {
-              if (rateInfo.bucket === "release_gate_job_poll") {
-                setError(`Status polling slowed by server rate limits. Retrying in about ${retryAfterSec}s...`);
-              } else {
-                setError(`Server is rate limiting requests. Retrying in about ${retryAfterSec}s...`);
-              }
-            }
-            backoffMs = Math.min(
-              maxBackoffMs,
-              Math.max(BASE_POLL_INTERVAL_MS, retryAfterSec * 1000)
-            );
-            if (wakeRequested) {
-              wakeRequested = false;
-              continue;
-            }
-            const delay = nextDelayMs();
-            consumeDelayBudget();
-            await Promise.race([sleep(delay), waitForWake()]);
-            continue;
-          }
-          if (statusCode === 401) {
-            redirectToLogin({
-              code: getApiErrorCode(e),
-              message: getApiErrorMessage(e),
-            });
-            setError("Session expired. Please log in again.");
-            setActiveJobId(null);
-            setIsValidating(false);
-            return;
-          }
-          if (statusCode === 403) {
-            setError("You do not have access to this project.");
-            setActiveJobId(null);
-            setIsValidating(false);
-            return;
-          }
-          if (statusCode === 404) {
-            setError("Job not found (it may have expired or been deleted).");
-            setActiveJobId(null);
-            setIsValidating(false);
-            setCancelRequested(false);
-            return;
-          }
-          if (consecutiveErrors === 1) {
-            // Avoid spamming while user is actively canceling.
-            if (!cancelRequestedRef.current) setError("Polling delayed (server busy). Retrying…");
-          }
-          backoffMs = Math.min(Math.max(BASE_POLL_INTERVAL_MS, backoffMs * 2), maxBackoffMs);
-          if (wakeRequested) {
-            wakeRequested = false;
-            continue;
-          }
-          const delay = nextDelayMs();
-          consumeDelayBudget();
-          await Promise.race([sleep(delay), waitForWake()]);
-        }
-      }
-    };
-
-    run();
-    return () => {
-      cancelled = true;
-      if (pollNowRef.current) pollNowRef.current = null;
-    };
-  }, [activeJobId, projectId]);
-
-  const recentSnapshotsKey =
-    projectId && !isNaN(projectId) && agentId?.trim()
-      ? ["release-gate-recent-snapshots", projectId, agentId.trim(), RECENT_SNAPSHOT_LIMIT]
-      : null;
-  const {
-    data: recentSnapshotsData,
-    isLoading: recentSnapshotsLoading,
-    error: recentSnapshotsError,
-    mutate: mutateRecentSnapshots,
-  } = useSWR(
-    recentSnapshotsKey,
-    () => releaseGateAPI.getRecentSnapshots(projectId, agentId!.trim(), RECENT_SNAPSHOT_LIMIT),
-    { isPaused: () => runLocked }
-  );
-  const recentSnapshotsAll = recentSnapshotsData?.items ?? EMPTY_SWF_ITEMS;
-  const recentSnapshots = recentSnapshotsAll;
-  const recentSnapshotsTotalAvailable =
-    typeof (recentSnapshotsData as { total_available?: number } | undefined)?.total_available ===
-    "number"
-      ? (recentSnapshotsData as { total_available: number }).total_available
-      : undefined;
-
-  const baselineSnapshotPoolKey =
-    projectId && !isNaN(projectId) && agentId?.trim()
-      ? ["release-gate-baseline-payloads", projectId, agentId.trim(), BASELINE_SNAPSHOT_LIMIT]
-      : null;
-  const { data: baselineSnapshotPoolData } = useSWR(
-    baselineSnapshotPoolKey,
-    () =>
-      liveViewAPI.listSnapshots(projectId, {
-        agent_id: agentId.trim(),
-        limit: BASELINE_SNAPSHOT_LIMIT,
-        offset: 0,
-      }),
-    { isPaused: () => runLocked }
-  );
-  const baselineSnapshotPool = baselineSnapshotPoolData?.items ?? EMPTY_SWF_ITEMS;
-
-  const selectedSnapshotIdsForRun = useMemo(() => {
-    if (dataSource === "recent") return runSnapshotIds.map(x => String(x));
-    if (dataSource === "datasets") {
-      return datasetSnapshots.map((s: any) => String(s.id));
-    }
-    return [];
-  }, [dataSource, runSnapshotIds, datasetSnapshots]);
 
   useEffect(() => {
     setToolContextBySnapshotId(prev => {
@@ -1512,60 +482,6 @@ export default function ReleaseGatePageContent() {
     prevAgentIdForBodyOverridesRef.current = cur;
   }, [agentId]);
 
-  const baselineSnapshotsById = useMemo(() => {
-    const map = new Map<string, Record<string, unknown>>();
-    const isRichSnapshot = (s: Record<string, unknown> | undefined) => {
-      if (!s) return false;
-      if (typeof s.model === "string" && s.model.trim()) return true;
-      if (typeof s.system_prompt === "string" && s.system_prompt.trim()) return true;
-      const p = s.payload;
-      return Boolean(p && typeof p === "object" && !Array.isArray(p));
-    };
-    const upsertSnapshot = (s: Record<string, unknown>) => {
-      const id = s?.id;
-      if (id == null) return;
-      const key = String(id);
-      const existing = map.get(key);
-      if (!existing) {
-        map.set(key, s);
-        return;
-      }
-      const existingRich = isRichSnapshot(existing);
-      const incomingRich = isRichSnapshot(s);
-      if (existingRich && !incomingRich) {
-        // Keep rich baseline metadata; only fill missing skinny fields.
-        map.set(key, { ...s, ...existing });
-        return;
-      }
-      map.set(key, { ...existing, ...s });
-    };
-
-    for (const s of baselineSnapshotPool as Array<Record<string, unknown>>) upsertSnapshot(s);
-    for (const s of datasetSnapshots as Array<Record<string, unknown>>) upsertSnapshot(s);
-    for (const s of recentSnapshotsAll as Array<Record<string, unknown>>) upsertSnapshot(s);
-    return map;
-  }, [baselineSnapshotPool, datasetSnapshots, recentSnapshotsAll]);
-
-  const baselineSnapshotsForRun = useMemo(
-    () =>
-      selectedSnapshotIdsForRun
-        .map(id => baselineSnapshotsById.get(id))
-        .filter((s): s is Record<string, unknown> => Boolean(s)),
-    [selectedSnapshotIdsForRun, baselineSnapshotsById]
-  );
-
-  const autoRepresentativeBaselineSnapshot = useMemo(
-    () => pickNewestSnapshot(baselineSnapshotsForRun),
-    [baselineSnapshotsForRun]
-  );
-  const autoRepresentativeBaselineSnapshotId = useMemo(
-    () =>
-      autoRepresentativeBaselineSnapshot?.id != null
-        ? String(autoRepresentativeBaselineSnapshot.id)
-        : null,
-    [autoRepresentativeBaselineSnapshot]
-  );
-
   useEffect(() => {
     const allowed = new Set(selectedSnapshotIdsForRun.map(String));
     if (
@@ -1575,54 +491,6 @@ export default function ReleaseGatePageContent() {
       setRepresentativeBaselineUserSnapshotId(null);
     }
   }, [selectedSnapshotIdsForRun, representativeBaselineUserSnapshotId]);
-
-  const effectiveRepresentativeBaselineSnapshotId = useMemo(() => {
-    const allowed = new Set(selectedSnapshotIdsForRun.map(String));
-    const user = representativeBaselineUserSnapshotId;
-    if (user && allowed.has(user) && baselineSnapshotsById.has(user)) return user;
-    return autoRepresentativeBaselineSnapshotId;
-  }, [
-    representativeBaselineUserSnapshotId,
-    selectedSnapshotIdsForRun,
-    baselineSnapshotsById,
-    autoRepresentativeBaselineSnapshotId,
-  ]);
-
-  const baselineSeedSnapshot = useMemo(() => {
-    if (effectiveRepresentativeBaselineSnapshotId) {
-      const fromMap = baselineSnapshotsById.get(effectiveRepresentativeBaselineSnapshotId);
-      if (fromMap) return fromMap;
-    }
-    return (
-      autoRepresentativeBaselineSnapshot ??
-      baselineSnapshotsForRun[0] ??
-      null
-    );
-  }, [
-    effectiveRepresentativeBaselineSnapshotId,
-    baselineSnapshotsById,
-    autoRepresentativeBaselineSnapshot,
-    baselineSnapshotsForRun,
-  ]);
-
-  const baselineSeedSnapshotId = useMemo(
-    () => (baselineSeedSnapshot?.id != null ? String(baselineSeedSnapshot.id) : null),
-    [baselineSeedSnapshot]
-  );
-
-  const representativeBaselinePickerOptions = useMemo(() => {
-    const rows: Record<string, unknown>[] = [];
-    for (const sid of selectedSnapshotIdsForRun) {
-      const s = baselineSnapshotsById.get(String(sid));
-      if (s) rows.push(s);
-    }
-    rows.sort(compareSnapshotsNewestFirst);
-    return rows.map(s => ({
-      id: String(s.id),
-      createdAt:
-        typeof s.created_at === "string" && s.created_at.trim() ? s.created_at.trim() : "",
-    }));
-  }, [selectedSnapshotIdsForRun, baselineSnapshotsById]);
 
   const handleLoadToolContextFromSnapshots = useCallback(async () => {
     if (!projectId || Number.isNaN(projectId)) return;
@@ -1669,53 +537,6 @@ export default function ReleaseGatePageContent() {
     () => extractOverridesFromPayload(baselinePayload),
     [baselinePayload]
   );
-
-  const historyKey = useMemo(
-    () =>
-      projectId && !isNaN(projectId)
-        ? [
-            "release-gate-history",
-            projectId,
-            historyStatus,
-            historyTraceId,
-            historyDatePreset,
-            historyOffset,
-          ]
-        : null,
-    [
-      projectId,
-      historyStatus,
-      historyTraceId,
-      historyDatePreset,
-      historyOffset,
-    ]
-  );
-  const historyDateParams = useMemo(
-    () => getPresetHistoryDateRange(historyDatePreset),
-    [historyDatePreset]
-  );
-
-  const {
-    data: historyData,
-    mutate: mutateHistory,
-    isLoading: historyLoading,
-    isValidating: historyRefreshing,
-  } = useSWR<ReleaseGateHistoryResponse>(
-    historyKey,
-    () =>
-      releaseGateAPI.listHistory(projectId, {
-        status: historyStatus === "all" ? undefined : historyStatus,
-        trace_id: historyTraceId.trim() || undefined,
-        created_from: historyDateParams.createdFrom,
-        created_to: historyDateParams.createdTo,
-        limit: historyLimit,
-        offset: historyOffset,
-      }),
-    { keepPreviousData: true, isPaused: () => runLocked }
-  );
-
-  const historyItems = historyData?.items ?? EMPTY_SWF_ITEMS;
-  const historyTotal = historyData?.total || 0;
 
   const {
     data: selectedRunReport,
@@ -2072,6 +893,31 @@ export default function ReleaseGatePageContent() {
     // system prompt so the textarea is prefilled instead of empty.
     return runDataPrompt || "";
   }, [requestBody, runDataPrompt]);
+
+  validateRunDepsRef.current = {
+    canValidate,
+    keyBlocked,
+    keyRegistrationMessage,
+    modelOverrideEnabled,
+    newModel,
+    replayProvider,
+    failRateMax,
+    flakyRateMax,
+    agentId,
+    runSnapshotIds,
+    runDatasetIds,
+    requestBody,
+    requestSystemPrompt,
+    toolsList,
+    requestBodyOverrides,
+    requestBodyOverridesBySnapshotId,
+    toolContextMode,
+    toolContextScope,
+    toolContextGlobalText,
+    toolContextBySnapshotId,
+    repeatRuns,
+  };
+
   const requestBodyWithoutTools = useMemo(
     () => editableRequestBodyWithoutTools(requestBody),
     [requestBody]
@@ -2488,226 +1334,6 @@ export default function ReleaseGatePageContent() {
   // Keep provider selection user-driven while overriding.
   // We validate mismatch at run time and show a clear error instead of silently changing tabs/providers.
 
-  const handleValidate = async () => {
-    if (!projectId || isNaN(projectId) || !canValidate || runLocked) return;
-    if (keyBlocked) {
-      setError(keyRegistrationMessage || "Run blocked: required API key is not registered.");
-      return;
-    }
-    if (modelOverrideEnabled && !newModel.trim()) {
-      setError("Run blocked: select a model id for override or switch back to detected model.");
-      return;
-    }
-    if (modelOverrideEnabled) {
-      const modelValidation = validateCustomModelForProvider(replayProvider, newModel);
-      if (!modelValidation.ok) {
-        setError(modelValidation.message);
-        return;
-      }
-    }
-    setIsValidating(true);
-    setCancelRequested(false);
-    cancelRequestedRef.current = false;
-    setPlanError(null);
-    setError("");
-    let startedAsyncJob = false;
-    try {
-      const thresholds = normalizeGateThresholds(failRateMax, flakyRateMax);
-      const payload: Parameters<typeof releaseGateAPI.validate>[1] = {
-        agent_id: agentId.trim() || undefined,
-        evaluation_mode: "replay_test",
-        model_source: modelOverrideEnabled ? "platform" : "detected",
-        max_snapshots: 100,
-        repeat_runs: repeatRuns,
-        fail_rate_max: thresholds.failRateMax,
-        flaky_rate_max: thresholds.flakyRateMax,
-      };
-      if (runSnapshotIds.length > 0) {
-        payload.snapshot_ids = runSnapshotIds;
-      } else if (runDatasetIds.length > 0) {
-        payload.dataset_ids = runDatasetIds;
-      }
-      if (modelOverrideEnabled) {
-        const trimmedModel = newModel.trim();
-        const effectiveProvider = replayProvider;
-        payload.new_model = trimmedModel;
-        payload.replay_provider = effectiveProvider;
-      }
-      payload.new_system_prompt =
-        (typeof requestBody.system_prompt === "string"
-          ? requestBody.system_prompt
-          : requestSystemPrompt
-        ).trim() || undefined;
-      const temp = requestBody.temperature;
-      const maxTok = requestBody.max_tokens;
-      const topP = requestBody.top_p;
-      if (temp != null && typeof temp === "number" && Number.isFinite(temp) && temp >= 0)
-        payload.replay_temperature = temp;
-      if (
-        maxTok != null &&
-        (typeof maxTok === "number"
-          ? Number.isInteger(maxTok)
-          : Number.isInteger(Number(maxTok))) &&
-        Number(maxTok) > 0
-      )
-        payload.replay_max_tokens = Number(maxTok);
-      if (topP != null && typeof topP === "number" && Number.isFinite(topP))
-        payload.replay_top_p = topP;
-      const overrides: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(requestBody)) {
-        if (
-          k === "model" ||
-          k === "system_prompt" ||
-          k === "messages" ||
-          k === "temperature" ||
-          k === "max_tokens" ||
-          k === "top_p"
-        )
-          continue;
-        overrides[k] = v;
-      }
-      if (Array.isArray(requestBody.tools) && requestBody.tools.length > 0) {
-        overrides.tools = requestBody.tools;
-      } else if (toolsList.length > 0) {
-        const built: Array<Record<string, unknown>> = [];
-        for (const t of toolsList) {
-          const name = t.name.trim();
-          if (!name) continue;
-          let params: Record<string, unknown> = {};
-          if (t.parameters.trim()) {
-            try {
-              const p = JSON.parse(t.parameters.trim());
-              if (p && typeof p === "object") params = p as Record<string, unknown>;
-            } catch {
-              setError(`Tool "${name}": parameters must be valid JSON.`);
-              setIsValidating(false);
-              return;
-            }
-          }
-          built.push({
-            type: "function",
-            function: {
-              name,
-              description: t.description.trim() || undefined,
-              ...(Object.keys(params).length ? { parameters: params } : {}),
-            },
-          });
-        }
-        if (built.length) overrides.tools = built;
-      }
-      const bodyOverridesForRun = sanitizeReplayBodyOverrides(requestBodyOverrides);
-      const mergedReplayOverrides = { ...overrides, ...bodyOverridesForRun };
-      if (Object.keys(mergedReplayOverrides).length) payload.replay_overrides = mergedReplayOverrides;
-      const perSidPayload: Record<string, Record<string, unknown>> = {};
-      for (const sid of Object.keys(requestBodyOverridesBySnapshotId)) {
-        const cleaned = sanitizeReplayBodyOverrides(requestBodyOverridesBySnapshotId[sid]);
-        if (Object.keys(cleaned).length) perSidPayload[sid] = cleaned;
-      }
-      if (Object.keys(perSidPayload).length) {
-        payload.replay_overrides_by_snapshot_id = perSidPayload;
-      }
-      payload.tool_context = buildToolContextPayload(
-        toolContextMode,
-        toolContextScope,
-        toolContextGlobalText,
-        toolContextBySnapshotId
-      );
-      const jobRes = await releaseGateAPI.validateAsync(projectId, payload);
-      const jobId = String(jobRes?.job?.id || "").trim();
-      if (!jobId) {
-        throw new Error("Failed to start Release Gate job.");
-      }
-      setResult(null);
-      setActiveJobId(jobId);
-      startedAsyncJob = true;
-      if (cancelRequestedRef.current) {
-        try {
-          await releaseGateAPI.cancelJob(projectId, jobId);
-        } catch {
-          // If cancel fails transiently, polling will still surface final status/error.
-        } finally {
-          if (pollNowRef.current) pollNowRef.current();
-        }
-      }
-    } catch (e: any) {
-      const parsedPlanError = parsePlanLimitError(e);
-      if (parsedPlanError && parsedPlanError.code === "LIMIT_PLATFORM_REPLAY_CREDITS") {
-        setPlanError(parsedPlanError);
-        setError(
-          parsedPlanError.message ||
-            "You have used all hosted replay credits for this billing period. Use your own provider key or upgrade your plan for more hosted runs."
-        );
-        setResult(null);
-        return;
-      }
-      if (isRateLimitError(e)) {
-        const rateInfo = getRateLimitInfo(e);
-        const retryAfterSec = Math.max(1, rateInfo.retryAfterSec ?? 60);
-        if (rateInfo.bucket === "release_gate_validate") {
-          setError(
-            `Release Gate run requests are temporarily rate-limited. Try again in about ${retryAfterSec}s.`
-          );
-        } else if (rateInfo.bucket === "release_gate_job_poll") {
-          setError(
-            `Release Gate is still running, but status polling is being slowed down. Retrying in about ${retryAfterSec}s.`
-          );
-        } else {
-          setError(`Too many requests right now. Please retry in about ${retryAfterSec}s.`);
-        }
-        setResult(null);
-        return;
-      }
-      const detail = e?.response?.data?.detail;
-      const detailObj =
-        detail && typeof detail === "object" && !Array.isArray(detail)
-          ? (detail as { error_code?: string; missing_provider_keys?: string[]; message?: string })
-          : null;
-      const missingFromDetail = Array.isArray(detailObj?.missing_provider_keys)
-        ? detailObj!.missing_provider_keys
-            .map(provider => normalizeReplayProvider(provider))
-            .filter((provider): provider is ReplayProvider => Boolean(provider))
-        : [];
-      const detailMessage =
-        detailObj?.message ||
-        (Array.isArray(detail)
-          ? detail.join(" ")
-          : typeof detail === "string"
-            ? detail
-            : e?.message || "Release Gate validation failed.");
-      const errorCode = String(detailObj?.error_code ?? e?.response?.data?.error_code ?? "")
-        .trim()
-        .toLowerCase();
-      if (errorCode === "missing_provider_keys" && missingFromDetail.length > 0) {
-        setError(describeMissingProviderKeys(missingFromDetail));
-      } else if (
-        errorCode === "dataset_agent_mismatch" ||
-        errorCode === "dataset_snapshot_agent_mismatch"
-      ) {
-        setError(
-          "Run blocked: selected data includes logs from another agent. Use only Live Logs or Saved Data for this agent."
-        );
-      } else if (errorCode === "release_gate_requires_pinned_model") {
-        setError(
-          "Run blocked: Release Gate requires a pinned Anthropic model id for reproducibility (ends with YYYYMMDD)."
-        );
-      } else if (errorCode === "provider_model_mismatch") {
-        setError(
-          "Run blocked: selected provider does not match the model id. Pick the matching provider tab or choose a model from that provider."
-        );
-      } else if (errorCode === "missing_api_key" || /api key/i.test(detailMessage)) {
-        setError(
-          "Run blocked: required API key is not registered. Open Live View, click the node, then register the key in the Settings tab."
-        );
-      } else {
-        setError(detailMessage);
-      }
-      setResult(null);
-    } finally {
-      // When async job starts, polling will clear isValidating.
-      if (!startedAsyncJob) setIsValidating(false);
-    }
-  };
-
   const onAgentSelect = (agent: AgentForPicker) => {
     setAgentId(agent.agent_id);
     setSelectedAgent(agent);
@@ -2737,7 +1363,7 @@ export default function ReleaseGatePageContent() {
     });
   }, [agentsError, agentsErrorCode, agentsErrorStatus]);
 
-  const contextValue: Record<string, unknown> = {
+  const contextValue: ReleaseGatePageContextValue = {
     orgId,
     projectId,
     project,
@@ -2903,64 +1529,19 @@ export default function ReleaseGatePageContent() {
     orgId && projectId && !isNaN(projectId)
       ? `/organizations/${encodeURIComponent(orgId)}/projects/${projectId}/live-view`
       : "/organizations";
-  const rawLayoutChildren = showGateLoadingState
-    ? React.createElement(ReleaseGateStatusPanel, {
-        title: "Loading Release Gate",
-        description: "Fetching agents and release history for this project...",
-      })
-    : showGateAccessDeniedState
-      ? React.createElement(ReleaseGateStatusPanel, {
-          title: "Access Denied",
-          description:
-            "You do not have access to this project. Ask a project owner or admin to update your role before using Release Gate.",
-          tone: "warning",
-          primaryActionLabel: "Retry",
-          onPrimaryAction: () => void mutateAgents(),
-        })
-      : showGateApiErrorState
-        ? React.createElement(ReleaseGateStatusPanel, {
-            title: "Unable to Load Release Gate",
-            description:
-              "We could not reach the Release Gate API right now. Retry in a few seconds. If this keeps happening, check backend health and network connectivity.",
-            tone: "danger",
-            primaryActionLabel: "Retry",
-            onPrimaryAction: () => void mutateAgents(),
-          })
-        : showGateEmptyState
-          ? React.createElement(ReleaseGateStatusPanel, {
-              title: "No Baseline Data Yet",
-              description: React.createElement(
-                "div",
-                { className: "space-y-2" },
-                React.createElement(
-                  "p",
-                  null,
-                  "Release Gate needs baseline snapshots before it can compare a candidate model."
-                ),
-                React.createElement(
-                  "ol",
-                  { className: "list-decimal list-inside space-y-1 text-slate-300" },
-                  React.createElement("li", null, "Open Live View and send at least one real or test request."),
-                  React.createElement("li", null, "Select baseline snapshots from Live Logs or Saved Data."),
-                  React.createElement(
-                    "li",
-                    null,
-                    "Return here to configure candidate overrides and run validation."
-                  )
-                )
-              ),
-              tone: "warning",
-              primaryActionLabel: "Go to Live View",
-              primaryHref: liveViewHref,
-            })
-          : viewMode === "map"
-            ? React.createElement(ReleaseGateMap, {
-                agents,
-                agentsLoaded,
-                onSelectAgent: onMapSelectAgent,
-                projectName: project?.name,
-              })
-            : React.createElement(ReleaseGateExpandedView);
+  const rawLayoutChildren = React.createElement(ReleaseGateLayoutGateBody, {
+    showGateLoadingState,
+    showGateAccessDeniedState,
+    showGateApiErrorState,
+    showGateEmptyState,
+    viewMode,
+    mutateAgents,
+    liveViewHref,
+    agents,
+    agentsLoaded,
+    onSelectAgent: onMapSelectAgent,
+    projectName: project?.name,
+  });
   const layoutChildren = planError
     ? React.createElement(
         React.Fragment,
