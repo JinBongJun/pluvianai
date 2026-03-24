@@ -298,6 +298,11 @@ export interface ReleaseGateResult {
   flaky_inputs?: number;
   total_inputs?: number;
   repeat_runs: number;
+  /** Present on some API responses for wall-clock / timing summaries in UI. */
+  perf?: {
+    total_wall_ms?: number;
+    avg_attempt_wall_ms?: number;
+  } | null;
   replay_error_codes?: string[];
   missing_provider_keys?: string[];
   run_results?: ReleaseGateRunResult[];

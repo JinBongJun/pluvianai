@@ -68,7 +68,11 @@ export { healthAPI } from "./health";
 export { publicBenchmarksAPI } from "./public-benchmarks";
 export { behaviorAPI } from "./behavior";
 export { releaseGateAPI } from "./release-gate";
-export type { ToolContextPayload, ToolContextInjectPayload } from "./release-gate";
+export type {
+  ReleaseGateValidatePayload,
+  ToolContextInjectPayload,
+  ToolContextPayload,
+} from "./release-gate";
 
 import { apiClient } from "./client";
 export default apiClient;
