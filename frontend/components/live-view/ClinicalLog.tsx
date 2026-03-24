@@ -740,7 +740,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
           reportId: String(report?.id ?? ""),
           rulesetHash: String(summary?.ruleset_hash ?? report?.ruleset_hash ?? ""),
           ruleSnapshot: Array.isArray(summary?.rule_snapshot) ? summary.rule_snapshot : undefined,
-          message: status === "pass" ? "Policy check passed." : "Policy violations detected.",
+          message:
+            status === "pass" ? "No policy violations." : "Policy violations flagged.",
           failedRuleIds,
         };
       }
@@ -1363,7 +1364,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
                                   : "border-emerald-500/20 bg-emerald-500/10 text-emerald-500/90"
                               )}
                             >
-                              EVAL: {failedCount > 0 ? "FAIL" : "PASS"}
+                              EVAL: {failedCount > 0 ? "FLAGGED" : "HEALTHY"}
                             </div>
                           )}
                           {toolDefinitionCount > 0 && (

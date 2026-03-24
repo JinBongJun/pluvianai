@@ -138,7 +138,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-semibold">
-                              {result.pass ? "Gate healthy" : "Gate flagged"}
+                              {result.pass ? "Healthy gate" : "Flagged gate"}
                             </span>
                             <span className="text-[10px] font-bold text-white/70">
                               Failure rate {percentFromRate(result.fail_rate)}

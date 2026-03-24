@@ -422,13 +422,22 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
                   <span
                     className={clsx(
                       "text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg border shrink-0",
-                      lastRunStatusLabel === "Passed" &&
+                      (lastRunStatusLabel === "Healthy" || lastRunStatusLabel === "Passed") &&
                         "text-emerald-300 border-emerald-500/30 bg-emerald-500/10 shadow-[0_0_10px_rgba(16,185,129,0.1)]",
-                      (lastRunStatusLabel === "Failed" || lastRunStatusLabel === "Canceling") &&
+                      (lastRunStatusLabel === "Flagged" ||
+                        lastRunStatusLabel === "Failed" ||
+                        lastRunStatusLabel === "Canceling") &&
                         "text-rose-300 border-rose-500/30 bg-rose-500/10 shadow-[0_0_10px_rgba(244,63,94,0.1)]",
                       lastRunStatusLabel === "Running" &&
                         "text-indigo-300 border-indigo-500/30 bg-indigo-500/10 shadow-[0_0_10px_rgba(99,102,241,0.1)]",
-                      !["Passed", "Failed", "Running", "Canceling"].includes(lastRunStatusLabel) &&
+                      ![
+                        "Healthy",
+                        "Flagged",
+                        "Passed",
+                        "Failed",
+                        "Running",
+                        "Canceling",
+                      ].includes(lastRunStatusLabel) &&
                         "text-slate-400 border-white/10 bg-white/5"
                     )}
                   >
