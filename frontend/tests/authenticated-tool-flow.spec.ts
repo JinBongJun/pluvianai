@@ -316,7 +316,7 @@ test.describe("Authenticated tool browser flow", () => {
     });
     await page.getByText(nodeLabel, { exact: false }).first().click();
 
-    await expect(page.getByText("Clinical Log")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("Live Logs")).toBeVisible({ timeout: 15000 });
     const seededLiveViewRow = page.getByText("Tool: get_weather").first();
     await expect(seededLiveViewRow).toBeVisible({ timeout: 30000 });
     await seededLiveViewRow.click();
