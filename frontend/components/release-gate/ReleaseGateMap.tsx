@@ -144,6 +144,7 @@ export function ReleaseGateMapContent({
   const didActuallyDragRef = useRef(false);
   const [dragEndCounter, setDragEndCounter] = useState(0);
   historyIndexRef.current = historyIndex;
+  const prevAgentsKeyRef = useRef("");
 
   const commitHistory = (newNodes: Node[]) => {
     const idx = historyIndexRef.current;
@@ -174,12 +175,25 @@ export function ReleaseGateMapContent({
     });
   };
 
-  const agentsKey = agents?.length ? agents.map((a: any) => a.agent_id).join(",") : "";
+  const agentsKey = agents?.length
+    ? [...agents.map((a: any) => String(a.agent_id))].sort().join(",")
+    : "";
   useEffect(() => {
     if (!Array.isArray(agents) || agents.length === 0) {
-      if (agentsLoaded) setNodes([]);
+      if (agentsLoaded) {
+        setNodes([]);
+        setHistory([]);
+        setHistoryIndex(-1);
+        prevAgentsKeyRef.current = "";
+      }
       return;
     }
+
+    if (prevAgentsKeyRef.current !== "" && prevAgentsKeyRef.current !== agentsKey) {
+      setHistory([]);
+      setHistoryIndex(-1);
+    }
+    prevAgentsKeyRef.current = agentsKey;
 
     const saved = loadSavedPositions(projectName);
 

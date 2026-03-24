@@ -313,14 +313,6 @@ apiClient.interceptors.response.use(
         });
         return Promise.reject(refreshError);
       }
-      if (typeof window !== "undefined") {
-        clearStoredAuth();
-        await clearFrontendAuthSession().catch(() => undefined);
-        redirectToLogin({
-          code,
-          message: message || "Your session has expired. Please sign in again.",
-        });
-      }
     }
 
     if (
