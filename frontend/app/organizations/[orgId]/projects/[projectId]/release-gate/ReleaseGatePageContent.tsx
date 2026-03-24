@@ -1993,10 +1993,10 @@ export default function ReleaseGatePageContent() {
     if (modelOverrideEnabled) return "";
     if (projectUserApiKeysLoading) return "Checking required API keys...";
     if (requiredProviderResolution.providers.length === 0) {
-      return "Run blocked: provider could not be detected from selected data. Open Live View and verify the latest node snapshot.";
+      return "Run blocked: provider could not be detected from selected data. Open Live View and verify the latest agent snapshot.";
     }
     if (requiredProviderResolution.unresolvedSnapshotCount > 0) {
-      return "Run blocked: one or more selected snapshots have no detectable provider. Open Live View and verify the latest node snapshot.";
+      return "Run blocked: one or more selected snapshots have no detectable provider. Open Live View and verify the latest agent snapshot.";
     }
     if (missingProviderKeys.length > 0) {
       return describeMissingProviderKeys(missingProviderKeys);

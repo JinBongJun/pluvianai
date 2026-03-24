@@ -1099,11 +1099,11 @@ function LiveViewContent() {
           />
         )}
 
-        {/* Clinical Monitoring Watermark */}
+        {/* Agent Monitoring Watermark */}
         <div className="absolute bottom-10 left-10 z-0 pointer-events-none select-none opacity-20">
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] italic">
-              Pluvian Clinical Monitoring Center
+              Pluvian Agent Monitoring Center
             </span>
             <span className="text-[8px] font-bold text-slate-700 uppercase tracking-widest font-mono">
               Real-time Pulse HUD / PROJECT: {project?.name || "LIVE_HUD"}
