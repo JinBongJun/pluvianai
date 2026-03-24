@@ -4,9 +4,9 @@ import React from "react";
 import { SearchCode } from "lucide-react";
 
 import { formatProviderLabel } from "./releaseGateConfigPanelHelpers";
-import type { ReleaseGateConfigPanelModel } from "./useReleaseGateConfigPanelModel";
+import type { ReleaseGateConfigPanelBaselineColumnProps } from "./releaseGateConfigPanelModel.types";
 
-export function ReleaseGateConfigPanelBaselineColumn({ m }: { m: ReleaseGateConfigPanelModel }) {
+export function ReleaseGateConfigPanelBaselineColumn({ m }: { m: ReleaseGateConfigPanelBaselineColumnProps }) {
   const {
     selectedBaselineCount,
     selectedDataSummary,

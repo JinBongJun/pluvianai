@@ -66,6 +66,46 @@ export function mergeReplayBodyOverridesForSnapshot(
   return { ...g, ...p };
 }
 
+function sortDeep(value: unknown): unknown {
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(sortDeep);
+  const obj = value as Record<string, unknown>;
+  const sorted: Record<string, unknown> = {};
+  for (const k of Object.keys(obj).sort()) {
+    sorted[k] = sortDeep(obj[k]);
+  }
+  return sorted;
+}
+
+/** Structural equality for JSON-like override values (key order independent). */
+export function replayOverrideValuesEqual(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(sortDeep(a)) === JSON.stringify(sortDeep(b));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Drop per-snapshot keys that duplicate the shared override value so the UI only shows diffs.
+ * Merge behavior unchanged: missing key in per still inherits shared.
+ */
+export function stripPerSnapshotOverridesDuplicatingShared(
+  shared: Record<string, unknown>,
+  per: Record<string, unknown>
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(per)) {
+    if (!Object.prototype.hasOwnProperty.call(shared, k)) {
+      out[k] = v;
+      continue;
+    }
+    if (replayOverrideValuesEqual(v, shared[k])) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
 /** @deprecated Use DISALLOWED_REPLAY_BODY_OVERRIDE_KEYS */
 export const DISALLOWED_REPLAY_SUPPLEMENT_KEYS = DISALLOWED_REPLAY_BODY_OVERRIDE_KEYS;
 

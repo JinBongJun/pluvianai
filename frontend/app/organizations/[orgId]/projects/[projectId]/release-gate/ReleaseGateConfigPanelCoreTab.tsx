@@ -6,9 +6,10 @@ import { RefreshCcw } from "lucide-react";
 
 import type { ReplayProvider } from "./releaseGatePageContent.lib";
 import { formatProviderLabel } from "./releaseGateConfigPanelHelpers";
-import type { ReleaseGateConfigPanelModel, ReleaseGateConfigThresholdPreset } from "./useReleaseGateConfigPanelModel";
+import type { ReleaseGateConfigThresholdPreset } from "./releaseGateConfigPanelTypes";
+import type { ReleaseGateConfigPanelCoreTabProps } from "./releaseGateConfigPanelModel.types";
 
-export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanelModel }) {
+export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanelCoreTabProps }) {
   const {
     modelOverrideEnabled,
     repeatRuns,

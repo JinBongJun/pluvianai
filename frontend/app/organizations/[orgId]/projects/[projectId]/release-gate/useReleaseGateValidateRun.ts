@@ -23,11 +23,13 @@ import {
   type ReleaseGateValidateAsyncPayloadInput,
 } from "./releaseGateValidateAsyncPayload";
 
-const CANCEL_BURST_POLLS = 6;
-const CANCEL_BURST_INTERVAL_MS = 1000;
-const BASE_POLL_INTERVAL_MS = 2000;
-const FAST_POLL_INTERVAL_MS = 1500;
-const FAST_POLL_WINDOW_MS = 4000;
+/** Fewer, slightly slower polls during cancel to reduce job_poll 429s. */
+const CANCEL_BURST_POLLS = 3;
+const CANCEL_BURST_INTERVAL_MS = 1500;
+/** Slower baseline polling to stay under release_gate_job_poll limits. */
+const BASE_POLL_INTERVAL_MS = 3500;
+const FAST_POLL_INTERVAL_MS = 2800;
+const FAST_POLL_WINDOW_MS = 2500;
 
 export type ReleaseGateValidateRunDeps = ReleaseGateValidateAsyncPayloadInput & {
   canValidate: boolean;
@@ -74,6 +76,7 @@ export function useReleaseGateValidateRun(options: {
   const [result, setResult] = useState<ReleaseGateResult | null>(null);
   const [error, setError] = useState("");
   const [planError, setPlanError] = useState<PlanLimitError | null>(null);
+  const [runValidateCooldownUntilMs, setRunValidateCooldownUntilMs] = useState(0);
 
   const cancelRequestedRef = useRef(false);
   const pollNowRef = useRef<null | (() => void)>(null);
@@ -90,6 +93,13 @@ export function useReleaseGateValidateRun(options: {
       cancelBurstRemainingRef.current = 0;
     }
   }, [cancelRequested]);
+
+  useEffect(() => {
+    if (runValidateCooldownUntilMs <= Date.now()) return;
+    const ms = Math.max(0, runValidateCooldownUntilMs - Date.now());
+    const id = window.setTimeout(() => setRunValidateCooldownUntilMs(0), ms);
+    return () => window.clearTimeout(id);
+  }, [runValidateCooldownUntilMs]);
 
   const clearRunUi = useCallback(() => {
     setResult(null);
@@ -293,6 +303,12 @@ export function useReleaseGateValidateRun(options: {
     const d = depsRef.current;
     const runLockedLocal = isValidating || Boolean(activeJobId);
     if (!projectId || isNaN(projectId) || !d.canValidate || runLockedLocal) return;
+    const cooldownUntil = runValidateCooldownUntilMs;
+    if (cooldownUntil > Date.now()) {
+      const sec = Math.max(1, Math.ceil((cooldownUntil - Date.now()) / 1000));
+      setError(`Please wait ${sec}s before starting another run (rate limited).`);
+      return;
+    }
     if (d.keyBlocked) {
       setError(d.keyRegistrationMessage || "Run blocked: required API key is not registered.");
       return;
@@ -352,6 +368,7 @@ export function useReleaseGateValidateRun(options: {
       if (isRateLimitError(e)) {
         const rateInfo = getRateLimitInfo(e);
         const retryAfterSec = Math.max(1, rateInfo.retryAfterSec ?? 60);
+        setRunValidateCooldownUntilMs(Date.now() + retryAfterSec * 1000);
         if (rateInfo.bucket === "release_gate_validate") {
           setError(
             `Release Gate run requests are temporarily rate-limited. Try again in about ${retryAfterSec}s.`
@@ -414,7 +431,7 @@ export function useReleaseGateValidateRun(options: {
     } finally {
       if (!startedAsyncJob) setIsValidating(false);
     }
-  }, [projectId, isValidating, activeJobId, depsRef]);
+  }, [projectId, isValidating, activeJobId, depsRef, runValidateCooldownUntilMs]);
 
   return {
     isValidating,
@@ -423,8 +440,17 @@ export function useReleaseGateValidateRun(options: {
     result,
     error,
     planError,
+    runValidateCooldownUntilMs,
     handleValidate,
     handleCancelActiveJob,
     clearRunUi,
   };
+}
+
+/** Keeps validate-async deps fresh on every render (same as `ref.current = { ... }` in the page). */
+export function useReleaseGateValidateRunDepsRefSync(
+  ref: MutableRefObject<ReleaseGateValidateRunDeps>,
+  deps: ReleaseGateValidateRunDeps
+): void {
+  ref.current = deps;
 }
