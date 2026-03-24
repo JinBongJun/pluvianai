@@ -9,7 +9,6 @@ import {
   ResultCaseRowButton,
 } from "@/components/release-gate/ReleaseGateRowButtons";
 import {
-  type GateTab,
   type ResultCaseFilter,
   type VisibleResultCase,
   type FixHint,
@@ -49,7 +48,6 @@ export type ReleaseGateRunOutputSidePanelProps = {
   nodeHistoryItems: any[];
   historyTotal: number;
   historyFilterSummary: string[];
-  setTab: (t: GateTab) => void;
   historyStatus: "all" | "pass" | "fail";
   setHistoryStatus: (s: "all" | "pass" | "fail") => void;
   setHistoryOffset: Dispatch<SetStateAction<number>>;
@@ -81,7 +79,6 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
     nodeHistoryItems,
     historyTotal,
     historyFilterSummary,
-    setTab,
     historyStatus,
     setHistoryStatus,
     setHistoryOffset,
@@ -340,13 +337,6 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                             </div>
                           </div>
                           <div className="flex flex-wrap items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setTab("history")}
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:bg-white/5"
-                            >
-                              Open full history
-                            </button>
                             <select
                               value={historyStatus}
                               onChange={e => {
