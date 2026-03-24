@@ -1,7 +1,7 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { SnapshotForDetail } from "@/components/shared/SnapshotDetailModal";
 import type { AgentForPicker } from "@/components/release-gate/AgentPickerCard";
-import type { ReleaseGateHistoryItem, ReleaseGateResult } from "@/lib/api/types";
+import type { ReleaseGateHistoryItem } from "@/lib/api/types";
 import type { GateTab, ThresholdPreset } from "./releaseGateExpandedHelpers";
 
 export type ReleaseGateReplayProvider = "openai" | "anthropic" | "google";
@@ -157,13 +157,6 @@ export interface ReleaseGatePageContextValue {
   canRunValidate: boolean;
   keyBlocked: boolean;
   keyRegistrationMessage: string;
-  isValidating: boolean;
-  activeJobId: string | null;
-  cancelRequested: boolean;
-  handleValidate: () => void;
-  handleCancelActiveJob: (() => void) | undefined;
-  error: string;
-  result: ReleaseGateResult | null;
   expandedCaseIndex: number | null;
   setExpandedCaseIndex: (n: number | null) => void;
   selectedAttempt: { caseIndex: number; attemptIndex: number } | null;

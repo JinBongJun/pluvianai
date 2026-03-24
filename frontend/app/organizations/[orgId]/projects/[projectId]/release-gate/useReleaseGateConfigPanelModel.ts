@@ -4,6 +4,7 @@ import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
+import { ReleaseGateValidateRunContext } from "./ReleaseGateValidateRunContext";
 import type { ReplayProvider } from "./releaseGatePageContent.lib";
 import { isPinnedAnthropicModelId, stringifyJson, toReplayProvider } from "./releaseGateConfigPanelHelpers";
 import type { ReleaseGateEditableTool } from "./releaseGatePageContext.types";
@@ -19,6 +20,7 @@ type EditableTool = ReleaseGateEditableTool;
 
 export function useReleaseGateConfigPanelModel(isOpen: boolean) {
   const ctx = useContext(ReleaseGatePageContext)!;
+  const vctx = useContext(ReleaseGateValidateRunContext)!;
 
   const [activeProviderTab, setActiveProviderTab] = useState<ReplayProvider>("openai");
   const [showRawBaseline, setShowRawBaseline] = useState(false);
@@ -129,7 +131,7 @@ export function useReleaseGateConfigPanelModel(isOpen: boolean) {
   const selectedDataSummary =
     (ctx.selectedDataSummary as string) ??
     'No baseline data yet. Select representative "good" snapshots from Live Logs or Saved Data.';
-  const runLocked = Boolean(ctx.isValidating) || Boolean(ctx.activeJobId);
+  const runLocked = Boolean(vctx.isValidating) || Boolean(vctx.activeJobId);
   const editsLocked = runLocked;
   const repeatRuns = Number(ctx.repeatRuns ?? 0);
 
