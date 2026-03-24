@@ -3,6 +3,11 @@ Integration tests for Projects API
 """
 import pytest
 from fastapi import status
+from unittest.mock import patch
+
+from app.core.security import get_password_hash
+from app.models.project_member import ProjectMember
+from app.models.user import User
 
 
 @pytest.mark.integration
@@ -132,6 +137,44 @@ class TestProjectsAPI:
             headers=auth_headers
         )
         assert get_response.status_code == status.HTTP_404_NOT_FOUND
+
+    async def test_delete_project_invalidates_project_list_cache_for_owner_and_members(
+        self, async_client, auth_headers, db, test_project
+    ):
+        member = User(
+            email="project-cache-member@example.com",
+            hashed_password=get_password_hash("password123"),
+            full_name="Project Cache Member",
+            is_active=True,
+        )
+        db.add(member)
+        db.commit()
+        db.refresh(member)
+
+        db.add(
+            ProjectMember(
+                project_id=test_project.id,
+                user_id=member.id,
+                role="member",
+            )
+        )
+        db.commit()
+
+        with patch(
+            "app.api.v1.endpoints.projects.cache_service.invalidate_user_projects_cache"
+        ) as invalidate_user_cache, patch(
+            "app.api.v1.endpoints.projects.cache_service.invalidate_project_cache"
+        ) as invalidate_project_cache:
+            response = await async_client.delete(
+                f"/api/v1/projects/{test_project.id}",
+                headers=auth_headers,
+            )
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        invalidated_user_ids = {call.args[0] for call in invalidate_user_cache.call_args_list}
+        assert test_project.owner_id in invalidated_user_ids
+        assert member.id in invalidated_user_ids
+        invalidate_project_cache.assert_called_once_with(test_project.id)
     
     async def test_create_project_with_sample_data(self, async_client, auth_headers):
         """Non-superuser cannot request sample data generation"""

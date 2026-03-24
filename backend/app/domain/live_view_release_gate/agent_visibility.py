@@ -99,12 +99,34 @@ def build_agent_visibility_context(
     )
 
 
-def is_agent_deleted(settings_map: Dict[str, AgentDisplaySetting], agent_id: Optional[str]) -> bool:
+def _get_agent_setting(
+    settings_map: Dict[str, AgentDisplaySetting], agent_id: Optional[str]
+) -> Optional[AgentDisplaySetting]:
     key = str(agent_id or "").strip()
     if not key:
-        return False
-    setting = settings_map.get(key)
+        return None
+    return settings_map.get(key)
+
+
+def is_agent_soft_deleted(settings_map: Dict[str, AgentDisplaySetting], agent_id: Optional[str]) -> bool:
+    setting = _get_agent_setting(settings_map, agent_id)
     return bool(setting is not None and setting.is_deleted)
+
+
+def is_agent_hard_deleted(settings_map: Dict[str, AgentDisplaySetting], agent_id: Optional[str]) -> bool:
+    setting = _get_agent_setting(settings_map, agent_id)
+    return bool(setting is not None and not setting.is_deleted and setting.deleted_at is not None)
+
+
+def is_agent_hidden(settings_map: Dict[str, AgentDisplaySetting], agent_id: Optional[str]) -> bool:
+    return is_agent_soft_deleted(settings_map, agent_id) or is_agent_hard_deleted(
+        settings_map, agent_id
+    )
+
+
+def is_agent_deleted(settings_map: Dict[str, AgentDisplaySetting], agent_id: Optional[str]) -> bool:
+    """Backward-compatible alias for callers that only need hidden/not-hidden semantics."""
+    return is_agent_hidden(settings_map, agent_id)
 
 
 def restore_agent_if_soft_deleted(
@@ -113,7 +135,7 @@ def restore_agent_if_soft_deleted(
     agent_id: Optional[str],
     now: Optional[datetime] = None,
 ) -> bool:
-    """Restore a recently deleted agent when identical traffic reappears."""
+    """Restore a hidden agent when matching traffic reappears."""
     normalized_agent_id = str(agent_id or "").strip()
     if not project_id or not normalized_agent_id:
         return False
@@ -126,8 +148,13 @@ def restore_agent_if_soft_deleted(
         )
         .first()
     )
-    if setting is None or not setting.is_deleted:
+    if setting is None:
         return False
+    if not setting.is_deleted:
+        if setting.deleted_at is None:
+            return False
+        setting.deleted_at = None
+        return True
 
     deleted_at = setting.deleted_at
     restore_window_days = max(int(settings.AGENT_AUTO_RESTORE_DAYS or 0), 0)

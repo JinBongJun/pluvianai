@@ -60,6 +60,25 @@ class TestCacheService:
         result = service.get("test_key")
         
         assert result is None
+
+    @pytest.mark.parametrize(
+        "raw_json,expected",
+        [
+            ("0", 0),
+            ("false", False),
+            ("[]", []),
+            ("{}", {}),
+            ('""', ""),
+        ],
+    )
+    def test_get_deserializes_falsy_json(self, raw_json, expected):
+        """Cached JSON that is falsy in Python must still deserialize (not treated as miss)."""
+        service = CacheService()
+        service.enabled = True
+        service.redis_client = Mock()
+        service.redis_client.get.return_value = raw_json
+
+        assert service.get("k") == expected
     
     def test_set_success(self):
         """Test set() with valid data"""

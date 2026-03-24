@@ -21,10 +21,12 @@ from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.models.user import User
 from app.models.organization import Organization, OrganizationMember
 from app.models.project import Project
+from app.models.project_member import ProjectMember
 from app.models.api_call import APICall
 from app.models.alert import Alert
 from app.models.quality_score import QualityScore
 from app.services.cost_analyzer import CostAnalyzer
+from app.services.cache_service import cache_service
 from app.services.subscription_service import SubscriptionService
 
 
@@ -34,6 +36,47 @@ def _utcnow_naive() -> datetime:
 
 router = APIRouter()
 cost_analyzer = CostAnalyzer()
+
+
+def _invalidate_project_list_caches_for_org(db: Session, org: Organization) -> None:
+    user_ids = {int(org.owner_id)}
+
+    org_member_rows = (
+        db.query(OrganizationMember.user_id)
+        .filter(OrganizationMember.organization_id == org.id)
+        .all()
+    )
+    for row in org_member_rows:
+        if getattr(row, "user_id", None):
+            user_ids.add(int(row.user_id))
+
+    project_rows = (
+        db.query(Project.id, Project.owner_id)
+        .filter(Project.organization_id == org.id)
+        .all()
+    )
+    project_ids = []
+    for row in project_rows:
+        if getattr(row, "id", None):
+            project_ids.append(int(row.id))
+        if getattr(row, "owner_id", None):
+            user_ids.add(int(row.owner_id))
+
+    if project_ids:
+        project_member_rows = (
+            db.query(ProjectMember.user_id)
+            .filter(ProjectMember.project_id.in_(project_ids))
+            .all()
+        )
+        for row in project_member_rows:
+            if getattr(row, "user_id", None):
+                user_ids.add(int(row.user_id))
+
+    for project_id in project_ids:
+        cache_service.invalidate_project_cache(project_id)
+
+    for user_id in user_ids:
+        cache_service.invalidate_user_projects_cache(user_id)
 
 
 class OrganizationCreate(BaseModel):
@@ -985,6 +1028,8 @@ def delete_organization(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete organization"
         )
-    
+
+    _invalidate_project_list_caches_for_org(db, org)
+
     return None
 

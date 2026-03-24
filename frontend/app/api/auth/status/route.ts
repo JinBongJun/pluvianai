@@ -5,11 +5,12 @@ export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   const hasAccessToken = request.cookies.has("access_token");
-  const hasRefreshToken = request.cookies.has("refresh_token");
 
   return NextResponse.json(
     {
-      authenticated: hasAccessToken || hasRefreshToken,
+      // Only a valid access cookie counts as "authenticated" for UI gating.
+      // A refresh cookie alone can be stale; API calls will refresh or redirect to login.
+      authenticated: hasAccessToken,
     },
     {
       headers: {

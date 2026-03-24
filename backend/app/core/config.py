@@ -127,13 +127,14 @@ class Settings(BaseSettings):
     # Encryption for user API keys
     ENCRYPTION_KEY: Optional[str] = None  # Fernet key for encrypting user API keys (32-byte base64)
 
-    # Stripe configuration (Billing)
-    STRIPE_SECRET_KEY: Optional[str] = None
-    STRIPE_WEBHOOK_SECRET: Optional[str] = None
-    STRIPE_PRICE_ID_INDIE: Optional[str] = None
-    STRIPE_PRICE_ID_STARTUP: Optional[str] = None
-    STRIPE_PRICE_ID_PRO: Optional[str] = None
-    STRIPE_PRICE_ID_ENTERPRISE: Optional[str] = None
+    # Paddle Billing (https://developer.paddle.com/)
+    PADDLE_API_KEY: Optional[str] = None
+    PADDLE_WEBHOOK_SECRET: Optional[str] = None
+    PADDLE_USE_SANDBOX: bool = True
+    PADDLE_PRICE_ID_INDIE: Optional[str] = None
+    PADDLE_PRICE_ID_STARTUP: Optional[str] = None
+    PADDLE_PRICE_ID_PRO: Optional[str] = None
+    PADDLE_PRICE_ID_ENTERPRISE: Optional[str] = None
 
     # Free Plan Limits
     ENABLE_FREE_PLAN_HARD_LIMIT: bool = False  # If True, Free plan users are blocked when limits are exceeded

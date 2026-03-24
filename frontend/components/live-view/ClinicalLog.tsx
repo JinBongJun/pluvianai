@@ -71,6 +71,7 @@ interface ClinicalLogProps {
   agentId: string;
   /** Used for Release Gate CTA inside snapshot detail. */
   orgId?: string;
+  onLogsMutated?: () => void | Promise<void>;
 }
 
 const MIN_LAST_N_RUNS = 10;
@@ -430,7 +431,12 @@ function getEvalDetail(
   }
 }
 
-export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, orgId }) => {
+export const ClinicalLog: React.FC<ClinicalLogProps> = ({
+  projectId,
+  agentId,
+  orgId,
+  onLogsMutated,
+}) => {
   const toast = useToast();
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [recentTraceLimit, setRecentTraceLimit] = React.useState<number>(DEFAULT_LAST_N_RUNS);
@@ -797,6 +803,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
         setExpandedId(null);
       }
       await mutate();
+      await Promise.resolve(onLogsMutated?.()).catch(() => undefined);
     } catch (error) {
       console.error("Failed to delete snapshots:", error);
       toast.showToast("Failed to delete selected logs. Please try again.", "error");
