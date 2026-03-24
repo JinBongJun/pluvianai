@@ -167,14 +167,14 @@ export function HistoryRunRowButton({
   const rawStatus = String(item.status ?? "").trim().toLowerCase();
   const caseIsPass = rawStatus === "pass";
   const caseIsFlaky = rawStatus === "flaky";
-  const caseStatusLabel = caseIsPass ? "Passed" : caseIsFlaky ? "Flaky" : "Failed";
+  const caseStatusLabel = caseIsPass ? "Healthy" : caseIsFlaky ? "Flaky" : "Flagged";
   const passedInputs = Number(item.passed_runs ?? 0);
   const failedInputs = Number(item.failed_runs ?? 0);
   const explicitInputTotal = Number(item.total_inputs ?? 0);
   const inputTotal = passedInputs + failedInputs || explicitInputTotal;
   const repeatRuns = Number(item.repeat_runs ?? 0);
   const hasExplicitPassSummary = passedInputs + failedInputs > 0;
-  const inputSummary = hasExplicitPassSummary ? `${passedInputs}/${inputTotal} passed` : null;
+  const inputSummary = hasExplicitPassSummary ? `${passedInputs}/${inputTotal} healthy` : null;
   const inputCountLabel =
     inputTotal > 0 ? `${inputTotal} input${inputTotal === 1 ? "" : "s"}` : "Run details limited";
   const preview = item.trace_id ? shortText(String(item.trace_id), "", 48) : "";
