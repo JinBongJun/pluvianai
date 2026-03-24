@@ -2257,6 +2257,7 @@ export function ReleaseGateExpandedView() {
   const nodeBasePayload = (ctx.nodeBasePayload as Record<string, unknown> | null) ?? null;
   const configSourceLabel = (ctx.configSourceLabel as string) || "";
   const recentSnapshots = ctx.recentSnapshots as any[];
+  const recentSnapshotsTotalAvailable = ctx.recentSnapshotsTotalAvailable as number | undefined;
   const recentSnapshotsLoading = Boolean(ctx.recentSnapshotsLoading);
   const recentSnapshotsError = ctx.recentSnapshotsError as unknown;
   const mutateRecentSnapshots = ctx.mutateRecentSnapshots as (() => unknown) | undefined;
@@ -2273,6 +2274,7 @@ export function ReleaseGateExpandedView() {
   const toolContextGlobalText = (ctx.toolContextGlobalText as string) ?? "";
   const toolContextBySnapshotId = (ctx.toolContextBySnapshotId as Record<string, string>) ?? {};
   const setDataSource = ctx.setDataSource as (s: "recent" | "datasets") => void;
+  const dataSource = (ctx.dataSource as "recent" | "datasets") ?? "recent";
   const snapshotEvalFailed = ctx.snapshotEvalFailed as (
     s: Record<string, unknown> | null
   ) => boolean;
@@ -2408,7 +2410,7 @@ export function ReleaseGateExpandedView() {
 
   const [logsStatusFilter, setLogsStatusFilter] = useState<LogsStatusFilter>("all");
   const [logsSortMode, setLogsSortMode] = useState<"newest" | "oldest">("newest");
-  const [logsLimitInput, setLogsLimitInput] = useState<string>("30");
+  const [logsShowLimit, setLogsShowLimit] = useState<10 | 20 | 50 | 100 | 200>(50);
   const requestTools = useMemo(
     () => (Array.isArray(requestBody.tools) ? requestBody.tools : []),
     [requestBody]
@@ -2494,43 +2496,38 @@ export function ReleaseGateExpandedView() {
     datasetSnapshotsError,
   ]);
 
-  const logsLimit = useMemo(() => {
-    const n = Number(logsLimitInput);
-    if (!Number.isFinite(n)) return 30;
-    return Math.max(10, Math.min(200, Math.round(n)));
-  }, [logsLimitInput]);
-
-  const filteredRecentSnapshots = useMemo(() => {
+  const logsFilteredSorted = useMemo(() => {
     const items = Array.isArray(recentSnapshots) ? [...recentSnapshots] : [];
-
-    if (logsStatusFilter !== "all") {
-      const wantFail = logsStatusFilter === "failed";
-      const target = wantFail ? "fail" : "pass";
-      const filtered = items.filter(item => {
-        const evalStatus = String(
-          (item?.eval_checks_result as any)?.overall_status ??
-            (item as any)?.status ??
-            ""
-        )
-          .trim()
-          .toLowerCase();
-        if (!evalStatus) return false;
-        if (wantFail) {
-          return evalStatus === "fail" || evalStatus === "flaky";
-        }
-        return evalStatus === target;
-      });
-      items.splice(0, items.length, ...filtered);
-    }
-
-    items.sort((a, b) => {
+    const filtered = items.filter(item => {
+      const rowId = String((item as { id?: unknown })?.id ?? "");
+      const full =
+        (rowId ? baselineSnapshotsById.get(rowId) : undefined) ??
+        (item as Record<string, unknown>);
+      if (logsStatusFilter === "all") return true;
+      const failed = snapshotEvalFailed(full);
+      if (logsStatusFilter === "failed") return failed;
+      return !failed;
+    });
+    filtered.sort((a, b) => {
       const aTime = a?.created_at ? new Date(String(a.created_at)).getTime() : 0;
       const bTime = b?.created_at ? new Date(String(b.created_at)).getTime() : 0;
       return logsSortMode === "oldest" ? aTime - bTime : bTime - aTime;
     });
+    return filtered;
+  }, [
+    baselineSnapshotsById,
+    logsSortMode,
+    logsStatusFilter,
+    recentSnapshots,
+    snapshotEvalFailed,
+  ]);
 
-    return items.slice(0, logsLimit);
-  }, [logsLimit, logsSortMode, logsStatusFilter, recentSnapshots]);
+  const logsMatchCount = logsFilteredSorted.length;
+
+  const filteredRecentSnapshots = useMemo(
+    () => logsFilteredSorted.slice(0, logsShowLimit),
+    [logsFilteredSorted, logsShowLimit]
+  );
 
   useEffect(() => {
     setDataPanelTab("logs");
@@ -2856,49 +2853,98 @@ export function ReleaseGateExpandedView() {
               <div className="flex h-full flex-col">
                 {dataPanelTab === "logs" && (
                   <div className="flex h-full flex-col" data-testid="rg-data-panel-logs">
-                    <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-black/30 px-4 py-3">
-                      <span className="text-[11px] font-mono text-slate-400">
-                        Total {filteredRecentSnapshots.length} Runs
-                      </span>
-                      <div className="flex flex-wrap items-center justify-end gap-3">
-                        <div className="flex items-center rounded-xl border border-white/[0.08] bg-black/40 p-0.5">
-                          {(["all", "failed", "passed"] as LogsStatusFilter[]).map(mode => (
-                            <button
-                              key={mode}
-                              type="button"
-                              onClick={() => setLogsStatusFilter(mode)}
-                              className={clsx(
-                                "rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] transition-all",
-                                logsStatusFilter === mode
-                                  ? "bg-white/[0.12] text-white shadow-sm"
-                                  : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
-                              )}
-                            >
-                              {mode === "all" ? "ALL" : mode === "failed" ? "FAILED" : "PASSED"}
-                            </button>
-                          ))}
+                    <div className="space-y-2 border-b border-white/[0.06] bg-black/30 px-4 py-3">
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="text-[11px] font-medium leading-snug text-slate-300">
+                          Showing{" "}
+                          <span className="font-mono text-slate-100">
+                            {filteredRecentSnapshots.length}
+                          </span>{" "}
+                          of{" "}
+                          <span className="font-mono text-slate-100">{logsMatchCount}</span>{" "}
+                          matching
+                          {logsMatchCount > logsShowLimit ? (
+                            <span className="text-slate-500"> · cap {logsShowLimit}</span>
+                          ) : null}
                         </div>
-
-                        <div className="group flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-black/40 pl-3 transition-colors focus-within:border-fuchsia-500/60">
-                          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-600 group-focus-within:text-fuchsia-400">
-                            LIMIT
-                          </span>
-                          <input
-                            type="number"
-                            min={10}
-                            max={200}
-                            value={logsLimitInput}
-                            onChange={e => setLogsLimitInput(e.target.value)}
-                            className="w-[44px] bg-transparent py-1.5 text-center font-mono text-[12px] text-slate-200 outline-none"
-                            title="Max recent runs to show (10–200)"
-                          />
+                        <div className="text-[10px] leading-snug text-slate-500">
+                          Loaded {recentSnapshots.length}
+                          {typeof recentSnapshotsTotalAvailable === "number"
+                            ? ` of ${recentSnapshotsTotalAvailable} on server`
+                            : ""}
                         </div>
+                        <div className="text-[10px] font-semibold text-fuchsia-300/90">
+                          {dataSource === "datasets"
+                            ? runDatasetIds.length > 0
+                              ? `Run source: ${runDatasetIds.length} saved dataset${runDatasetIds.length === 1 ? "" : "s"}`
+                              : "Run source: saved data (pick a dataset)"
+                            : runSnapshotIds.length > 0
+                              ? `Selected ${runSnapshotIds.length} log${runSnapshotIds.length === 1 ? "" : "s"}`
+                              : "No logs selected for run"}
+                        </div>
+                      </div>
 
-                        <div className="rounded-xl border border-white/[0.08] bg-black/40 transition-colors hover:border-white/20 focus-within:border-fuchsia-500/60">
+                      <div className="flex w-full items-center rounded-xl border border-white/[0.08] bg-black/40 p-0.5">
+                        {(["all", "failed", "passed"] as LogsStatusFilter[]).map(mode => (
+                          <button
+                            key={mode}
+                            type="button"
+                            data-testid={`rg-logs-filter-${mode}`}
+                            onClick={() => setLogsStatusFilter(mode)}
+                            className={clsx(
+                              "min-w-0 flex-1 rounded-lg px-1.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] transition-all sm:px-2.5 sm:text-[10px] sm:tracking-[0.16em]",
+                              logsStatusFilter === mode
+                                ? "bg-white/[0.12] text-white shadow-sm"
+                                : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
+                            )}
+                          >
+                            {mode === "all" ? "ALL" : mode === "failed" ? "FAILED" : "PASSED"}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex flex-wrap items-stretch gap-2">
+                        <div className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-black/40 transition-colors hover:border-white/20 focus-within:border-fuchsia-500/60">
+                          <label className="sr-only" htmlFor="rg-logs-show-limit">
+                            Max rows to show
+                          </label>
                           <select
+                            id="rg-logs-show-limit"
+                            data-testid="rg-logs-show-limit"
+                            value={logsShowLimit}
+                            onChange={e =>
+                              setLogsShowLimit(Number(e.target.value) as 10 | 20 | 50 | 100 | 200)
+                            }
+                            className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-300 outline-none"
+                            title="How many matching logs to list"
+                          >
+                            <option value={10} className="bg-[#18191e] text-slate-200">
+                              Show 10
+                            </option>
+                            <option value={20} className="bg-[#18191e] text-slate-200">
+                              Show 20
+                            </option>
+                            <option value={50} className="bg-[#18191e] text-slate-200">
+                              Show 50
+                            </option>
+                            <option value={100} className="bg-[#18191e] text-slate-200">
+                              Show 100
+                            </option>
+                            <option value={200} className="bg-[#18191e] text-slate-200">
+                              Show 200
+                            </option>
+                          </select>
+                        </div>
+                        <div className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-black/40 transition-colors hover:border-white/20 focus-within:border-fuchsia-500/60">
+                          <label className="sr-only" htmlFor="rg-logs-sort">
+                            Sort order
+                          </label>
+                          <select
+                            id="rg-logs-sort"
+                            data-testid="rg-logs-sort"
                             value={logsSortMode}
                             onChange={e => setLogsSortMode(e.target.value as "newest" | "oldest")}
-                            className="cursor-pointer bg-transparent py-1.5 pl-3 pr-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-300 outline-none"
+                            className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-300 outline-none"
                           >
                             <option value="newest" className="bg-[#18191e] text-slate-200">
                               Newest
@@ -2937,13 +2983,26 @@ export function ReleaseGateExpandedView() {
                             Fetching baseline logs for this node...
                           </div>
                         </div>
-                      ) : filteredRecentSnapshots.length === 0 ? (
+                      ) : recentSnapshots.length === 0 ? (
                         <div className="p-8 text-center" data-testid="rg-logs-state-empty">
                           <div className="text-xs font-medium uppercase tracking-widest text-slate-500">
-                            No logs match this filter
+                            No baseline logs yet
                           </div>
                           <div className="mt-2 text-[11px] text-slate-500">
-                            Try ALL, increase LIMIT, or wait for more baseline traffic from Live View.
+                            Generate traffic in Live View, then open this node again.
+                          </div>
+                        </div>
+                      ) : logsMatchCount === 0 ? (
+                        <div className="p-8 text-center" data-testid="rg-logs-state-empty-filter">
+                          <div className="text-xs font-medium uppercase tracking-widest text-slate-500">
+                            {logsStatusFilter === "failed"
+                              ? "No failed logs in this window"
+                              : logsStatusFilter === "passed"
+                                ? "No passed logs in this window"
+                                : "No logs match this filter"}
+                          </div>
+                          <div className="mt-2 text-[11px] text-slate-500">
+                            Try ALL, or raise Show limit if matches are further back.
                           </div>
                         </div>
                       ) : (
@@ -2964,12 +3023,14 @@ export function ReleaseGateExpandedView() {
                                   key={skinny.id}
                                   data-testid={`rg-live-log-row-${skinny.id}`}
                                   className={clsx(
-                                    "group transition-colors",
-                                    checked ? "bg-fuchsia-500/5" : "hover:bg-white/[0.02]"
+                                    "group border-l-2 transition-colors",
+                                    checked
+                                      ? "border-fuchsia-500/70 bg-fuchsia-500/[0.07]"
+                                      : "border-transparent hover:bg-white/[0.02]"
                                   )}
                                 >
                                   <div
-                                    className="flex cursor-pointer items-start gap-3 p-4"
+                                    className="flex cursor-pointer items-start gap-2.5 px-3 py-3 sm:gap-3 sm:p-4"
                                     onClick={() => openBaselineDetailSnapshot(snap)}
                                   >
                                     <div className="pt-0.5" onClick={e => e.stopPropagation()}>
@@ -2993,7 +3054,7 @@ export function ReleaseGateExpandedView() {
                                       />
                                     </div>
                                     <div className="min-w-0 flex-1 space-y-1">
-                                      <div className="flex items-center justify-between gap-3">
+                                      <div className="flex items-center justify-between gap-2">
                                         <span className="font-mono text-[11px] font-bold text-slate-300">
                                           {formatDateTime(snap.created_at)}
                                         </span>
@@ -3019,11 +3080,18 @@ export function ReleaseGateExpandedView() {
                                         )}
                                       </p>
                                       {Boolean(snap.trace_id) && (
-                                        <p className="truncate text-[11px] text-slate-500">
-                                          Trace {String(snap.trace_id)}
+                                        <p
+                                          className="truncate font-mono text-[9px] text-slate-600"
+                                          title={String(snap.trace_id)}
+                                        >
+                                          {String(snap.trace_id).slice(0, 14)}…
                                         </p>
                                       )}
                                     </div>
+                                    <ChevronRight
+                                      className="mt-1 h-3.5 w-3.5 shrink-0 text-slate-600 opacity-60 transition group-hover:text-slate-400 group-hover:opacity-100"
+                                      aria-hidden
+                                    />
                                   </div>
                                 </div>
                               );
@@ -3040,6 +3108,21 @@ export function ReleaseGateExpandedView() {
                     className="flex-1 overflow-y-auto custom-scrollbar p-4"
                     data-testid="rg-data-panel-datasets"
                   >
+                    <div className="mb-3 rounded-xl border border-white/[0.06] bg-black/25 px-3 py-2 text-[10px] font-semibold text-slate-400">
+                      {dataSource === "recent" && runSnapshotIds.length > 0 ? (
+                        <span className="text-amber-200/90">
+                          Run source: {runSnapshotIds.length} live log
+                          {runSnapshotIds.length === 1 ? "" : "s"} (switch source below)
+                        </span>
+                      ) : runDatasetIds.length > 0 ? (
+                        <span className="text-fuchsia-300/90">
+                          Selected {runDatasetIds.length} dataset
+                          {runDatasetIds.length === 1 ? "" : "s"} for run
+                        </span>
+                      ) : (
+                        <span>No dataset selected for run</span>
+                      )}
+                    </div>
                     {datasetsError ? (
                       <div
                         className="rounded-2xl border border-dashed border-rose-500/25 bg-rose-500/[0.06] p-8 text-center text-[12px] text-rose-100/90"
@@ -3102,16 +3185,16 @@ export function ReleaseGateExpandedView() {
                               <div
                                 key={id}
                                 className={clsx(
-                                  "overflow-hidden rounded-[22px] border transition-all",
+                                  "overflow-hidden rounded-2xl border transition-all",
                                   checked
-                                    ? "border-fuchsia-500/25 bg-fuchsia-500/8 shadow-[0_18px_40px_rgba(217,70,239,0.08)]"
+                                    ? "border-fuchsia-500/30 bg-fuchsia-500/[0.06]"
                                     : "border-white/8 bg-white/[0.04]"
                                 )}
                               >
                                 <button
                                   type="button"
                                   onClick={() => setExpandedDatasetId(isExpanded ? null : id)}
-                                  className="flex w-full items-start gap-3 px-4 py-4 text-left"
+                                  className="flex w-full items-start gap-2.5 px-3 py-3 text-left sm:gap-3 sm:px-4 sm:py-3.5"
                                 >
                                   <div className="pt-0.5" onClick={e => e.stopPropagation()}>
                                     <input
@@ -3133,18 +3216,17 @@ export function ReleaseGateExpandedView() {
                                     />
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start justify-between gap-2">
                                       <div className="min-w-0">
                                         <div className="truncate text-[13px] font-semibold text-slate-100">
                                           {label}
                                         </div>
-                                        <div className="mt-1 text-xs text-slate-300">
-                                          Saved baseline bundle for this node. Expand to inspect the
-                                          snapshots inside.
+                                        <div className="mt-0.5 text-[10px] text-slate-500">
+                                          Tap to expand snapshots
                                         </div>
                                       </div>
-                                      <div className="shrink-0 rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[11px] text-slate-200">
-                                        {count} snapshots
+                                      <div className="shrink-0 rounded-full border border-white/10 bg-black/30 px-2 py-0.5 text-[10px] text-slate-200">
+                                        {count} snaps
                                       </div>
                                     </div>
                                   </div>
