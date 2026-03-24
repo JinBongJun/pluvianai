@@ -33,8 +33,12 @@ import {
   type ReleaseGateLayoutGateBodyProps,
 } from "./ReleaseGateLayoutGateBody";
 import { ReleaseGateLayoutWrapper } from "./ReleaseGateLayoutWrapper";
-import { ReleaseGatePlanLimitedScaffold } from "./ReleaseGatePlanLimitedScaffold";
+import { ReleaseGatePlanLimitedScaffold } from "@/app/organizations/[orgId]/projects/[projectId]/release-gate/ReleaseGatePlanLimitedScaffold";
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
+import {
+  ReleaseGateValidateRunContext,
+  type ReleaseGateValidateRunContextValue,
+} from "./ReleaseGateValidateRunContext";
 import type { ReleaseGatePageContextValue } from "./releaseGatePageContext.types";
 import {
   SnapshotDetailModal,
@@ -1494,13 +1498,6 @@ export default function ReleaseGatePageContent() {
       canRunValidate,
       keyBlocked,
       keyRegistrationMessage,
-      isValidating,
-      activeJobId,
-      cancelRequested,
-      handleValidate,
-      handleCancelActiveJob,
-      error,
-      result,
       expandedCaseIndex,
       setExpandedCaseIndex,
       selectedAttempt,
@@ -1534,7 +1531,6 @@ export default function ReleaseGatePageContent() {
       runDataPrompt,
     }),
     [
-      activeJobId,
       agentEvalData,
       agents,
       agentsLoaded,
@@ -1550,7 +1546,6 @@ export default function ReleaseGatePageContent() {
       bodyOverridesJsonError,
       bodyOverridesSnapshotDraftRaw,
       bodyOverridesSnapshotJsonError,
-      cancelRequested,
       canRunValidate,
       clearBodyOverrides,
       configSourceLabel,
@@ -1562,7 +1557,6 @@ export default function ReleaseGatePageContent() {
       datasetsError,
       datasetsLoading,
       effectiveRepresentativeBaselineSnapshotId,
-      error,
       expandedCaseIndex,
       expandedDatasetId,
       expandedDatasetSnapshots,
@@ -1575,10 +1569,8 @@ export default function ReleaseGatePageContent() {
       flakyRateMax,
       handleBodyOverridesJsonBlur,
       handleBodyOverridesSnapshotBlur,
-      handleCancelActiveJob,
       handleLoadToolContextFromSnapshots,
       handleRequestJsonBlur,
-      handleValidate,
       historyDatePreset,
       historyItems,
       historyLimit,
@@ -1593,7 +1585,6 @@ export default function ReleaseGatePageContent() {
       historyTotal,
       historyTraceId,
       isHeavyRepeat,
-      isValidating,
       keyBlocked,
       keyRegistrationMessage,
       modelOverrideEnabled,
@@ -1627,7 +1618,6 @@ export default function ReleaseGatePageContent() {
       requestJsonDraft,
       requestJsonError,
       requestSystemPrompt,
-      result,
       runDataModel,
       runDataPrompt,
       runDataProvider,
@@ -1654,6 +1644,28 @@ export default function ReleaseGatePageContent() {
       validateOverridePreview,
     ]
   );
+
+  const validateRunContextValue = useMemo<ReleaseGateValidateRunContextValue>(
+    () => ({
+      isValidating,
+      activeJobId,
+      cancelRequested,
+      handleValidate,
+      handleCancelActiveJob,
+      error,
+      result,
+    }),
+    [
+      activeJobId,
+      cancelRequested,
+      error,
+      handleCancelActiveJob,
+      handleValidate,
+      isValidating,
+      result,
+    ]
+  );
+
   const liveViewHref = useMemo(
     () =>
       orgId && projectId && !isNaN(projectId)
@@ -1703,18 +1715,22 @@ export default function ReleaseGatePageContent() {
   }, []);
 
   return React.createElement(
-    ReleaseGatePageContext.Provider,
-    { value: contextValue },
+    ReleaseGateValidateRunContext.Provider,
+    { value: validateRunContextValue },
     React.createElement(
-      ReleaseGateLayoutWrapper,
-      {
-        orgId,
-        projectId,
-        projectName: project?.name,
-        orgName: org?.name,
-        onAction: handleLayoutHudAction,
-      },
-      layoutChildren
+      ReleaseGatePageContext.Provider,
+      { value: contextValue },
+      React.createElement(
+        ReleaseGateLayoutWrapper,
+        {
+          orgId,
+          projectId,
+          projectName: project?.name,
+          orgName: org?.name,
+          onAction: handleLayoutHudAction,
+        },
+        layoutChildren
+      )
     )
   );
 }

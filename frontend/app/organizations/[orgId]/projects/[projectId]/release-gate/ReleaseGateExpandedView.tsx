@@ -7,6 +7,7 @@
  */
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
+import { ReleaseGateValidateRunContext } from "./ReleaseGateValidateRunContext";
 import { ReleaseGateExpandedBaselineDetailPortal } from "./ReleaseGateExpandedBaselineDetailPortal";
 import { ReleaseGateExpandedMainTabs } from "./ReleaseGateExpandedMainTabs";
 import { sanitizePayloadForPreview } from "./releaseGatePageContent.lib";
@@ -39,8 +40,11 @@ import {
 
 export function ReleaseGateExpandedView() {
   const ctx = useContext(ReleaseGatePageContext);
-  if (!ctx) {
-    throw new Error("ReleaseGateExpandedView must render inside ReleaseGatePageContext.Provider");
+  const vctx = useContext(ReleaseGateValidateRunContext);
+  if (!ctx || !vctx) {
+    throw new Error(
+      "ReleaseGateExpandedView must render inside ReleaseGateValidateRunContext and ReleaseGatePageContext providers"
+    );
   }
 
   const orgId = ctx.orgId;
@@ -129,13 +133,13 @@ export function ReleaseGateExpandedView() {
   const canRunValidate = ctx.canRunValidate;
   const keyBlocked = ctx.keyBlocked;
   const keyRegistrationMessage = ctx.keyRegistrationMessage || "";
-  const isValidating = ctx.isValidating;
-  const activeJobId = ctx.activeJobId ?? null;
-  const cancelRequested = ctx.cancelRequested;
-  const handleValidate = ctx.handleValidate;
-  const handleCancelActiveJob = ctx.handleCancelActiveJob ?? undefined;
-  const runError = ctx.error || "";
-  const result = ctx.result;
+  const isValidating = vctx.isValidating;
+  const activeJobId = vctx.activeJobId ?? null;
+  const cancelRequested = vctx.cancelRequested;
+  const handleValidate = vctx.handleValidate;
+  const handleCancelActiveJob = vctx.handleCancelActiveJob ?? undefined;
+  const runError = vctx.error || "";
+  const result = vctx.result;
   const expandedCaseIndex = ctx.expandedCaseIndex;
   const setExpandedCaseIndex = ctx.setExpandedCaseIndex;
   const baselineDetailSnapshot = ctx.baselineDetailSnapshot;
@@ -250,7 +254,7 @@ export function ReleaseGateExpandedView() {
   );
   const historyFilterSummary = useMemo(() => {
     const parts: string[] = [];
-    if (historyStatus !== "all") parts.push(historyStatus === "pass" ? "Passed runs" : "Failed runs");
+    if (historyStatus !== "all") parts.push(historyStatus === "pass" ? "Healthy runs" : "Flagged runs");
     if (historyDateSummary) parts.push(historyDateSummary);
     if (historyTraceId.trim()) parts.push(`Trace ${historyTraceId.trim()}`);
     return parts;
@@ -528,7 +532,7 @@ export function ReleaseGateExpandedView() {
   const lastRunStatusLabel = useMemo(() => {
     if (isValidating) return cancelRequested ? "Canceling" : "Running";
     if (runError) return "Failed";
-    if (typeof result?.pass === "boolean") return result.pass ? "Passed" : "Failed";
+    if (typeof result?.pass === "boolean") return result.pass ? "Healthy" : "Flagged";
     return "";
   }, [isValidating, cancelRequested, runError, result]);
   const originalPayloadPreview = useMemo(() => {
