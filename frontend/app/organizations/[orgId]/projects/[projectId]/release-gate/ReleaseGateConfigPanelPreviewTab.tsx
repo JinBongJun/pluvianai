@@ -3,9 +3,9 @@
 import React from "react";
 
 import { formatProviderLabel } from "./releaseGateConfigPanelHelpers";
-import type { ReleaseGateConfigPanelModel } from "./useReleaseGateConfigPanelModel";
+import type { ReleaseGateConfigPanelPreviewTabProps } from "./releaseGateConfigPanelModel.types";
 
-export function ReleaseGateConfigPanelPreviewTab({ m }: { m: ReleaseGateConfigPanelModel }) {
+export function ReleaseGateConfigPanelPreviewTab({ m }: { m: ReleaseGateConfigPanelPreviewTabProps }) {
   const {
     setShowExpandedCandidatePreview,
     validateOverridePreview,

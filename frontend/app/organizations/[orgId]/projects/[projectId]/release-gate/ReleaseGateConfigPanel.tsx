@@ -10,6 +10,12 @@ import { ReleaseGateConfigPanelCoreTab } from "./ReleaseGateConfigPanelCoreTab";
 import { ReleaseGateConfigPanelParityTab } from "./ReleaseGateConfigPanelParityTab";
 import { ReleaseGateConfigPanelPreviewTab } from "./ReleaseGateConfigPanelPreviewTab";
 import { ClientPortal } from "@/components/shared/ClientPortal";
+import {
+  pickReleaseGateConfigPanelBaselineColumnProps,
+  pickReleaseGateConfigPanelCoreTabProps,
+  pickReleaseGateConfigPanelParityTabProps,
+  pickReleaseGateConfigPanelPreviewTabProps,
+} from "./releaseGateConfigPanelPickTabProps";
 import { useReleaseGateConfigPanelModel } from "./useReleaseGateConfigPanelModel";
 
 export function ReleaseGateConfigPanel({
@@ -36,6 +42,11 @@ export function ReleaseGateConfigPanel({
     validateOverridePreview,
     finalCandidateJson,
   } = m;
+
+  const baselineColumn = pickReleaseGateConfigPanelBaselineColumnProps(m);
+  const coreTab = pickReleaseGateConfigPanelCoreTabProps(m);
+  const parityTab = pickReleaseGateConfigPanelParityTabProps(m);
+  const previewTab = pickReleaseGateConfigPanelPreviewTabProps(m);
 
   return (
     <ClientPortal>
@@ -88,7 +99,7 @@ export function ReleaseGateConfigPanel({
               )}
 
               <div className="grid gap-8 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)] items-start">
-                <ReleaseGateConfigPanelBaselineColumn m={m} />
+                <ReleaseGateConfigPanelBaselineColumn m={baselineColumn} />
 
                 <section className="min-w-0 space-y-4 pb-8">
                   {!runLocked && selectedBaselineCount === 0 ? (
@@ -135,9 +146,9 @@ export function ReleaseGateConfigPanel({
                     aria-labelledby={`rg-config-tab-${configTab}`}
                     className="space-y-6"
                   >
-                    {configTab === "preview" ? <ReleaseGateConfigPanelPreviewTab m={m} /> : null}
-                    {configTab === "core" ? <ReleaseGateConfigPanelCoreTab m={m} /> : null}
-                    {configTab === "parity" ? <ReleaseGateConfigPanelParityTab m={m} /> : null}
+                    {configTab === "preview" ? <ReleaseGateConfigPanelPreviewTab m={previewTab} /> : null}
+                    {configTab === "core" ? <ReleaseGateConfigPanelCoreTab m={coreTab} /> : null}
+                    {configTab === "parity" ? <ReleaseGateConfigPanelParityTab m={parityTab} /> : null}
                   </div>
                 </section>
               </div>
