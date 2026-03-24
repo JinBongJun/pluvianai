@@ -30,6 +30,10 @@ interface RailwaySidePanelProps {
   tabTestIdPrefix?: string;
   contentClassName?: string;
   contentScrollable?: boolean;
+  /** Small label above the title (defaults to "Unit Diagnostics"). */
+  headerEyebrow?: string;
+  /** Status line in the footer (defaults to legacy clinical copy for existing screens). */
+  footerStatusLabel?: string;
 }
 
 const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
@@ -48,6 +52,8 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
   tabTestIdPrefix,
   contentClassName = "",
   contentScrollable = true,
+  headerEyebrow = "Unit Diagnostics",
+  footerStatusLabel = "Clinical System Active",
 }) => {
   const isLeft = side === "left";
   const slideFrom = isLeft ? "-100%" : "100%";
@@ -75,7 +81,7 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
           <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06] bg-black/30">
             <div className="flex-1 min-w-0">
               <span className="text-[9px] font-semibold text-slate-600 uppercase tracking-[0.22em] block">
-                Unit Diagnostics
+                {headerEyebrow}
               </span>
               {title && (
                 <h2 className="text-[13px] font-semibold text-white/85 tracking-tight truncate mt-0.5">{title}</h2>
@@ -140,7 +146,7 @@ const RailwaySidePanel: React.FC<RailwaySidePanelProps> = ({
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-pluvian-bio-500 animate-pulse" />
               <span className="text-[9px] font-medium text-slate-600 uppercase tracking-widest">
-                Clinical System Active
+                {footerStatusLabel}
               </span>
             </div>
           </div>
