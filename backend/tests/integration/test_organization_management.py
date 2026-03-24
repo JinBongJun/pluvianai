@@ -2,6 +2,8 @@ import pytest
 from fastapi import status
 from app.models.organization import Organization
 from app.models.project import Project
+from app.models.user import User
+from app.core.security import get_password_hash
 
 def test_organization_management_flow(client, db, test_user, auth_headers):
     # 1. Create Organization
@@ -47,15 +49,20 @@ def test_organization_management_flow(client, db, test_user, auth_headers):
     
     # 6. Verify Organization is deleted
     db.expire_all()
-    assert db.query(Organization).filter(Organization.id == org_id).first() is None
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    assert org is not None
+    assert org.is_deleted is True
+    assert org.deleted_at is not None
     
     # 7. Verify Project is ALSO deleted (Cascade check)
-    assert db.query(Project).filter(Project.id == project_id).first() is None
+    project = db.query(Project).filter(Project.id == project_id).first()
+    assert project is not None
+    assert project.is_deleted is True
+    assert project.is_active is False
+    assert project.deleted_at is not None
 
 def test_organization_delete_not_owner(client, db, test_user, auth_headers):
     # Create another user
-    from app.models.user import User
-    from app.core.security import get_password_hash
     other_user = User(
         email="other@example.com",
         hashed_password=get_password_hash("password123"),
@@ -77,4 +84,4 @@ def test_organization_delete_not_owner(client, db, test_user, auth_headers):
         headers=auth_headers
     )
     assert response.status_code == 403
-    assert "Only the organization owner" in response.json()["error"]["message"]
+    assert "organization owner role" in response.json()["error"]["message"]

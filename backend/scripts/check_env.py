@@ -87,19 +87,19 @@ def validate_cors_origins(origins: str) -> tuple[bool, str]:
     return True, f"Valid ({len(origin_list)} origins)"
 
 
-def validate_stripe_config() -> tuple[bool, str]:
-    """Validate Stripe configuration (optional, only if billing is used)"""
-    stripe_key = getattr(settings, "STRIPE_SECRET_KEY", None)
-    if not stripe_key:
-        return True, "Stripe not configured (optional)"
-    
-    if not stripe_key.startswith("sk_"):
-        return False, "Invalid STRIPE_SECRET_KEY format (should start with sk_)"
-    
-    webhook_secret = getattr(settings, "STRIPE_WEBHOOK_SECRET", None)
+def validate_paddle_config() -> tuple[bool, str]:
+    """Validate Paddle Billing configuration (optional)"""
+    api_key = getattr(settings, "PADDLE_API_KEY", None)
+    if not api_key:
+        return True, "Paddle not configured (optional)"
+
+    if len(str(api_key).strip()) < 8:
+        return False, "PADDLE_API_KEY looks invalid (too short)"
+
+    webhook_secret = getattr(settings, "PADDLE_WEBHOOK_SECRET", None)
     if not webhook_secret:
-        return False, "STRIPE_WEBHOOK_SECRET is required when STRIPE_SECRET_KEY is set"
-    
+        return True, "Paddle API key set; add PADDLE_WEBHOOK_SECRET for webhook verification"
+
     return True, "Valid"
 
 
@@ -121,7 +121,7 @@ def main():
     
     # Optional but recommended
     optional_checks = [
-        ("Stripe Config", validate_stripe_config, False),
+        ("Paddle Billing", validate_paddle_config, False),
     ]
     
     # Run required checks

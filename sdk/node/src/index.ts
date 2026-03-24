@@ -173,18 +173,39 @@ class PluvianAI {
 
   private patchOpenAI(): void {
     try {
-      // Try to patch OpenAI v4+ (ESM/CJS)
+      const resolved = require.resolve('openai');
       const openaiModule = require('openai');
+      const cached = require.cache[resolved] as { exports: any } | undefined;
 
-      if (openaiModule && openaiModule.default) {
-        // ESM default export
-        this.patchOpenAIClass(openaiModule.default);
-      } else if (openaiModule && openaiModule.OpenAI) {
-        // Named export
-        this.patchOpenAIClass(openaiModule.OpenAI);
-      } else if (openaiModule) {
-        // Direct class
-        this.patchOpenAIClass(openaiModule);
+      const defaultExport = openaiModule?.default;
+      const namedExport = openaiModule?.OpenAI;
+
+      if (defaultExport) {
+        const wrapped = this.wrapOpenAIConstructor(defaultExport);
+        if (wrapped && wrapped !== defaultExport) {
+          openaiModule.default = wrapped;
+          if (cached?.exports) {
+            cached.exports.default = wrapped;
+          }
+        }
+      }
+
+      if (namedExport && namedExport !== defaultExport) {
+        const wrapped = this.wrapOpenAIConstructor(namedExport);
+        if (wrapped && wrapped !== namedExport) {
+          openaiModule.OpenAI = wrapped;
+          if (cached?.exports) {
+            cached.exports.OpenAI = wrapped;
+          }
+        }
+      }
+
+      // CJS: `module.exports = OpenAI` (entire export is the constructor)
+      if (!defaultExport && !namedExport && typeof openaiModule === 'function') {
+        const wrapped = this.wrapOpenAIConstructor(openaiModule);
+        if (wrapped && wrapped !== openaiModule && cached) {
+          cached.exports = wrapped;
+        }
       }
     } catch (error) {
       // OpenAI not installed or different version
@@ -192,30 +213,56 @@ class PluvianAI {
     }
   }
 
-  private patchOpenAIClass(OpenAIClass: any): void {
+  /**
+   * Replace OpenAI with a subclass-like wrapper so `new OpenAI()` runs our instance hooks.
+   * Patching `prototype.constructor` does not run for `new OpenAI()` in modern class semantics.
+   */
+  private wrapOpenAIConstructor(OpenAIClass: any): any {
     if (!OpenAIClass || typeof OpenAIClass !== 'function') {
-      return;
+      return null;
+    }
+    if ((OpenAIClass as any).__pluvianaiPatched) {
+      return OpenAIClass;
     }
 
-    const originalConstructor = OpenAIClass.prototype.constructor;
     const self = this;
+    const Original = OpenAIClass;
 
-    // Patch constructor to wrap chat.completions.create
-    OpenAIClass.prototype.constructor = function(...args: any[]) {
-      originalConstructor.apply(this, args);
+    function Wrapped(this: any, ...args: any[]) {
+      const instance = Reflect.construct(Original, args, new.target || Wrapped);
+      self.patchOpenAIInstance(instance);
+      return instance;
+    }
 
-      // Patch chat.completions.create if it exists
-      if (this.chat && this.chat.completions && this.chat.completions.create) {
-        const originalCreate = this.chat.completions.create;
-        const instanceId = Math.random().toString(36).substring(7);
+    Object.setPrototypeOf(Wrapped, Original);
+    Wrapped.prototype = Original.prototype;
+    try {
+      Object.defineProperty(Wrapped, 'name', { configurable: true, value: Original.name });
+    } catch {
+      /* ignore */
+    }
+    try {
+      Object.defineProperty(Wrapped, 'length', { configurable: true, value: Original.length });
+    } catch {
+      /* ignore */
+    }
 
-        this.chat.completions.create = async function(...createArgs: any[]) {
-          return self.captureCall(originalCreate.bind(this), ...createArgs);
-        };
+    (Wrapped as any).__pluvianaiPatched = true;
+    return Wrapped;
+  }
 
-        self.originalFunctions.set(`${instanceId}.chat.completions.create`, originalCreate);
-      }
+  private patchOpenAIInstance(instance: any): void {
+    if (!instance?.chat?.completions?.create) {
+      return;
+    }
+    const originalCreate = instance.chat.completions.create;
+    const instanceId = Math.random().toString(36).substring(7);
+
+    instance.chat.completions.create = async (...createArgs: any[]) => {
+      return this.captureCall(originalCreate.bind(instance.chat.completions), ...createArgs);
     };
+
+    this.originalFunctions.set(`${instanceId}.chat.completions.create`, originalCreate);
   }
 
   private async captureCall(originalFunc: (...args: any[]) => Promise<any>, ...args: any[]): Promise<any> {

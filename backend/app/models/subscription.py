@@ -14,6 +14,8 @@ class Subscription(Base):
     status = Column(String(20), default="active")
 
     stripe_subscription_id = Column(String(255), nullable=True, index=True)
+    paddle_subscription_id = Column(String(255), nullable=True, index=True)
+    paddle_customer_id = Column(String(255), nullable=True, index=True)
     current_period_end = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -33,8 +35,6 @@ class Subscription(Base):
             "current_period_start",
             "trial_end",
             "cancel_at_period_end",
-            "paddle_subscription_id",
-            "paddle_customer_id",
         ):
             kwargs.pop(legacy_key, None)
         super().__init__(**kwargs)

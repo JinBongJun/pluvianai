@@ -17,6 +17,7 @@ from app.core.dependencies import get_project_service, get_evaluation_rubric_rep
 from app.infrastructure.repositories.evaluation_rubric_repository import EvaluationRubricRepository
 from app.services.cache_service import cache_service
 from app.services.firewall_service import firewall_service
+from app.services.subscription_service import SubscriptionService
 from app.middleware.usage_middleware import check_project_limit
 from app.services.activity_logger import activity_logger
 from app.core.analytics import analytics_service
@@ -31,6 +32,24 @@ from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 # from app.infrastructure.repositories.project_repository import ProjectRepository
 
 router = APIRouter()
+
+
+def _invalidate_project_list_caches_for_project(db: Session, project_id: int, owner_id: Optional[int]) -> None:
+    user_ids = set()
+    if owner_id:
+        user_ids.add(int(owner_id))
+
+    member_rows = (
+        db.query(ProjectMember.user_id)
+        .filter(ProjectMember.project_id == project_id)
+        .all()
+    )
+    for row in member_rows:
+        if getattr(row, "user_id", None):
+            user_ids.add(int(row.user_id))
+
+    for user_id in user_ids:
+        cache_service.invalidate_user_projects_cache(user_id)
 
 
 class ProjectCreate(BaseModel):
@@ -351,7 +370,7 @@ async def update_project(
 
     # Invalidate cache
     cache_service.invalidate_project_cache(project_id)
-    cache_service.invalidate_user_projects_cache(current_user.id)
+    _invalidate_project_list_caches_for_project(db, project_id, project.owner_id)
 
     # Log activity
     activity_logger.log_activity(
@@ -449,7 +468,7 @@ async def delete_project(
 
     # Invalidate cache
     cache_service.invalidate_project_cache(project_id)
-    cache_service.invalidate_user_projects_cache(current_user.id)
+    _invalidate_project_list_caches_for_project(db, project_id, project.owner_id)
 
     logger.info(f"Project deleted successfully: {project_id}")
     return None

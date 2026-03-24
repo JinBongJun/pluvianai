@@ -52,7 +52,7 @@ export function ReleaseGateHistoryExplorer({
         <div className="text-[11px] font-medium text-slate-400">History explorer</div>
         <div className="text-lg font-semibold text-white">Search and reopen validation runs</div>
         <p className="max-w-3xl text-sm leading-6 text-slate-400">
-          Use filters here for full run browsing across this agent, including trace search and paginated
+          Use filters here for full run browsing across this project, including trace search and paginated
           history results.
         </p>
       </div>

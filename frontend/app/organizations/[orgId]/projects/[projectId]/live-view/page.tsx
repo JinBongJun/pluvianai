@@ -525,7 +525,8 @@ function DeletedAgentsTray({
         )}
         <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-[11px] leading-relaxed text-slate-400">
           Removal hides an agent immediately. Matching traffic can auto-restore it within the grace
-          window. Hard delete will permanently remove display settings for the selected agents.
+          window. Hard delete permanently purges the selected agents' current Live View data. New
+          matching traffic can create them again as fresh agents later.
           <Link href="/docs" className="ml-1 text-emerald-300 hover:text-emerald-200">
             See docs
           </Link>
@@ -618,8 +619,8 @@ function LiveViewContent() {
       refreshInterval: (() => {
         if (!isPageVisible) return 0;
         if (sseConnected) return 0;
-        // When SSE is reconnecting/flapping, don't immediately fall back to polling.
-        if (Date.now() < sseBackoffUntilRef.current) return 0;
+        // When SSE is reconnecting/flapping, keep a light polling fallback instead of freezing.
+        if (Date.now() < sseBackoffUntilRef.current) return LIVE_VIEW_MAX_POLL_MS;
         return selectedAgentId
           ? Math.min(agentsPollIntervalMs, LIVE_VIEW_FOCUSED_POLL_MS)
           : agentsPollIntervalMs;
@@ -766,18 +767,25 @@ function LiveViewContent() {
   const handleHardDeleteAgents = async (agentIds: string[]) => {
     if (!projectId || Number.isNaN(projectId) || agentIds.length === 0) return;
     const confirmed = window.confirm(
-      `Permanently delete ${agentIds.length} deleted node(s)? This action cannot be undone.`
+      `Permanently purge ${agentIds.length} deleted node(s) and their Live View data? This action cannot be undone.`
     );
     if (!confirmed) return;
 
     setHardDeletingAgents(true);
     try {
-      await liveViewAPI.hardDeleteAgents(projectId, agentIds);
-      void mutateAgents();
+      const result = await liveViewAPI.hardDeleteAgents(projectId, agentIds);
+      if (selectedAgentId && agentIds.includes(selectedAgentId)) {
+        setSelectedAgentId(null);
+        setPanelTab("logs");
+      }
+      await mutateAgents(undefined, true);
+      setHistory([]);
+      setHistoryIndex(-1);
+      const deletedSnapshots = Number(result?.deleted_snapshots ?? 0);
       toast.showToast(
         agentIds.length === 1
-          ? "Deleted 1 node permanently."
-          : `Deleted ${agentIds.length} nodes permanently.`,
+          ? `Permanently purged 1 deleted node${deletedSnapshots > 0 ? ` and ${deletedSnapshots} log${deletedSnapshots === 1 ? "" : "s"}` : ""}.`
+          : `Permanently purged ${agentIds.length} deleted nodes${deletedSnapshots > 0 ? ` and ${deletedSnapshots} logs` : ""}.`,
         "success"
       );
     } catch (error: any) {
@@ -844,9 +852,26 @@ function LiveViewContent() {
   useEffect(() => {
     if (typeof agentsData === "undefined") return;
 
+    if (agentsList.length === 0) {
+      prevAgentIdsRef.current = new Set();
+      setHistory([]);
+      setHistoryIndex(-1);
+      setNodes([]);
+      return;
+    }
+
     const saved = loadLvPositions(projectId);
     const currentAgentIds = new Set(agentsList.map((a: any) => String(a.agent_id)));
     const prevAgentIds = prevAgentIdsRef.current;
+    if (prevAgentIds.size > 0) {
+      const sameAgentSet =
+        prevAgentIds.size === currentAgentIds.size &&
+        [...currentAgentIds].every(id => prevAgentIds.has(id));
+      if (!sameAgentSet) {
+        setHistory([]);
+        setHistoryIndex(-1);
+      }
+    }
     const hasNewAgents =
       prevAgentIds.size > 0 &&
       Array.from(currentAgentIds).some(id => !prevAgentIds.has(id));
@@ -1029,6 +1054,7 @@ function LiveViewContent() {
               projectId={projectId}
               agentId={selectedAgentId || ""}
               orgId={orgId}
+              onLogsMutated={() => mutateAgents(undefined, true)}
             />
           ) : null}
           {panelTab === "eval" ? (

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, BackgroundTasks, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case, desc
+from sqlalchemy import func, case, desc, or_
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 import time
@@ -28,11 +28,13 @@ from app.utils.secret_redaction import redact_secrets
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.agent_eval_config_history import AgentEvalConfigHistory
 from app.models.project import Project
+from app.models.user_api_key import UserApiKey
 from app.services.cache_service import cache_service
 from app.services.live_view_events import publish_agents_changed
 from app.domain.live_view_release_gate import (
     build_agent_visibility_context,
-    is_agent_deleted,
+    is_agent_hard_deleted,
+    is_agent_soft_deleted,
     restore_agent_if_soft_deleted,
 )
 from app.services.live_eval_service import (
@@ -495,6 +497,7 @@ def list_agents(
         def serialize(row):
             agent_id = row.agent_id or "unknown"
             setting = settings_map.get(agent_id)
+            soft_deleted = is_agent_soft_deleted(settings_map, agent_id)
             return {
                 "agent_id": agent_id,
                 "display_name": setting.display_name if setting and setting.display_name else (agent_id or "Agent"),
@@ -505,22 +508,20 @@ def list_agents(
                 "last_seen": _iso(row.last_seen),
                 "signals": _aggregate_signals(row.all_signals),
                 "node_type": setting.node_type if setting else "agentCard",
-                "is_deleted": setting.is_deleted if setting else False,
-                "deleted_at": _iso(setting.deleted_at) if setting else None,
+                "is_deleted": soft_deleted,
+                "deleted_at": _iso(setting.deleted_at) if setting and soft_deleted else None,
             }
 
         final_agents = []
         processed_ids = set()
 
-        def _is_deleted(agent_id: str) -> bool:
-            return is_agent_deleted(settings_map, agent_id)
-
         # 1. Start with Blueprint Nodes (Official)
         for node_id, node in blueprint_map.items():
             if node.get('type') != 'agentCard':
                 continue
-            is_deleted = _is_deleted(node_id)
-            if is_deleted and not include_deleted:
+            soft_deleted = is_agent_soft_deleted(settings_map, node_id)
+            hard_deleted = is_agent_hard_deleted(settings_map, node_id)
+            if hard_deleted or (soft_deleted and not include_deleted):
                 continue
 
             # Match snapshots
@@ -541,8 +542,10 @@ def list_agents(
                 "node_type": "agentCard",
                 "is_official": True,
                 "drift_status": "official",
-                "is_deleted": is_deleted,
-                "deleted_at": _iso(settings_map.get(node_id).deleted_at) if settings_map.get(node_id) else None,
+                "is_deleted": soft_deleted,
+                "deleted_at": _iso(settings_map.get(node_id).deleted_at)
+                if settings_map.get(node_id) and soft_deleted
+                else None,
                 "position": node.get('position'),
             })
             processed_ids.add(node_id)
@@ -552,8 +555,9 @@ def list_agents(
             s_id = s_node.get("id")
             if s_id in processed_ids:
                 continue
-            is_deleted = _is_deleted(s_id)
-            if is_deleted and not include_deleted:
+            soft_deleted = is_agent_soft_deleted(settings_map, s_id)
+            hard_deleted = is_agent_hard_deleted(settings_map, s_id)
+            if hard_deleted or (soft_deleted and not include_deleted):
                 continue
 
             stat = next((r for r in rows if r.agent_id == s_id), None)
@@ -570,15 +574,19 @@ def list_agents(
                 "is_official": False,
                 "drift_status": "ghost",
                 "is_ghost": True,
-                "is_deleted": is_deleted,
-                "deleted_at": _iso(settings_map.get(s_id).deleted_at) if settings_map.get(s_id) else None,
+                "is_deleted": soft_deleted,
+                "deleted_at": _iso(settings_map.get(s_id).deleted_at)
+                if settings_map.get(s_id) and soft_deleted
+                else None,
             })
             processed_ids.add(s_id)
 
         # 3. Add any other detected snapshots (Probabilistic fallback)
         for row in rows:
             if row.agent_id not in processed_ids:
-                if _is_deleted(row.agent_id or "unknown") and not include_deleted:
+                if is_agent_hard_deleted(settings_map, row.agent_id or "unknown"):
+                    continue
+                if is_agent_soft_deleted(settings_map, row.agent_id or "unknown") and not include_deleted:
                     continue
                 final_agents.append(serialize(row))
                 processed_ids.add(row.agent_id or "unknown")
@@ -586,6 +594,8 @@ def list_agents(
         # 4. Add setting-only nodes (no snapshots, not in blueprint/sentinel)
         for setting_agent_id, setting in settings_map.items():
             if setting_agent_id in processed_ids:
+                continue
+            if is_agent_hard_deleted(settings_map, setting_agent_id):
                 continue
             if setting.is_deleted and not include_deleted:
                 continue
@@ -837,6 +847,14 @@ def get_agent_settings(
             "is_deleted": False,
             "diagnostic_config": {},
         }
+    if not setting.is_deleted and setting.deleted_at is not None:
+        return {
+            "agent_id": agent_id,
+            "display_name": None,
+            "node_type": "agentCard",
+            "is_deleted": False,
+            "diagnostic_config": {},
+        }
     return {
         "agent_id": agent_id,
         "display_name": setting.display_name,
@@ -913,6 +931,11 @@ def update_agent_settings(
         .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash == agent_id)
         .first()
     )
+    if setting and not setting.is_deleted and setting.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Agent was permanently deleted and can no longer be modified.",
+        )
     if not setting:
         deleted_at = datetime.now(timezone.utc) if is_deleted else None
         setting = AgentDisplaySetting(
@@ -957,6 +980,7 @@ def update_agent_settings(
             
     db.commit()
     db.refresh(setting)
+    publish_agents_changed(project_id, [agent_id])
     return {
         "agent_id": agent_id, 
         "display_name": setting.display_name, 
@@ -992,6 +1016,7 @@ def delete_agent(
         )
         db.add(setting)
     db.commit()
+    publish_agents_changed(project_id, [agent_id])
     return None
 
 
@@ -1021,19 +1046,118 @@ def hard_delete_agents(
             detail="No valid agent_ids provided",
         )
 
-    settings_q = (
+    settings = (
         db.query(AgentDisplaySetting)
         .filter(
             AgentDisplaySetting.project_id == project_id,
             AgentDisplaySetting.system_prompt_hash.in_(normalized_ids),
+            AgentDisplaySetting.is_deleted.is_(True),
         )
+        .all()
     )
-    deleted_count = settings_q.count()
-    if deleted_count:
-        settings_q.delete(synchronize_session=False)
-        db.commit()
+    target_agent_ids = [str(setting.system_prompt_hash).strip() for setting in settings if setting.system_prompt_hash]
+    if not target_agent_ids:
+        return {
+            "ok": True,
+            "deleted_agent_settings": 0,
+            "deleted_snapshots": 0,
+            "deleted_saved_logs": 0,
+            "deleted_trajectory_steps": 0,
+            "deleted_agent_eval_history": 0,
+            "deleted_user_api_keys": 0,
+        }
 
-    return {"ok": True, "deleted_agent_settings": deleted_count}
+    snapshot_rows = (
+        db.query(Snapshot.id)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.agent_id.in_(target_agent_ids),
+        )
+        .all()
+    )
+    snapshot_ids = [int(row.id) for row in snapshot_rows]
+    snapshot_source_ids = [str(snapshot_id) for snapshot_id in snapshot_ids]
+
+    if snapshot_ids:
+        deleted_saved_logs = (
+            db.query(SavedLog)
+            .filter(
+                SavedLog.project_id == project_id,
+                or_(SavedLog.agent_id.in_(target_agent_ids), SavedLog.snapshot_id.in_(snapshot_ids)),
+            )
+            .delete(synchronize_session=False)
+        )
+        deleted_trajectory_steps = (
+            db.query(TrajectoryStep)
+            .filter(
+                TrajectoryStep.project_id == project_id,
+                or_(
+                    TrajectoryStep.agent_id.in_(target_agent_ids),
+                    TrajectoryStep.source_id.in_(snapshot_source_ids),
+                ),
+            )
+            .delete(synchronize_session=False)
+        )
+    else:
+        deleted_saved_logs = (
+            db.query(SavedLog)
+            .filter(
+                SavedLog.project_id == project_id,
+                SavedLog.agent_id.in_(target_agent_ids),
+            )
+            .delete(synchronize_session=False)
+        )
+        deleted_trajectory_steps = (
+            db.query(TrajectoryStep)
+            .filter(
+                TrajectoryStep.project_id == project_id,
+                TrajectoryStep.agent_id.in_(target_agent_ids),
+            )
+            .delete(synchronize_session=False)
+        )
+
+    deleted_agent_eval_history = (
+        db.query(AgentEvalConfigHistory)
+        .filter(
+            AgentEvalConfigHistory.project_id == project_id,
+            AgentEvalConfigHistory.agent_id.in_(target_agent_ids),
+        )
+        .delete(synchronize_session=False)
+    )
+    deleted_user_api_keys = (
+        db.query(UserApiKey)
+        .filter(
+            UserApiKey.project_id == project_id,
+            UserApiKey.agent_id.in_(target_agent_ids),
+        )
+        .delete(synchronize_session=False)
+    )
+    deleted_snapshots = (
+        db.query(Snapshot)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.agent_id.in_(target_agent_ids),
+        )
+        .delete(synchronize_session=False)
+    )
+
+    hard_deleted_at = datetime.now(timezone.utc)
+    for setting in settings:
+        setting.is_deleted = False
+        setting.deleted_at = hard_deleted_at
+
+    db.commit()
+    publish_agents_changed(project_id, target_agent_ids)
+
+    return {
+        "ok": True,
+        "deleted_agent_settings": len(target_agent_ids),
+        "deleted_snapshots": int(deleted_snapshots or 0),
+        "deleted_saved_logs": int(deleted_saved_logs or 0),
+        "deleted_trajectory_steps": int(deleted_trajectory_steps or 0),
+        "deleted_agent_eval_history": int(deleted_agent_eval_history or 0),
+        "deleted_user_api_keys": int(deleted_user_api_keys or 0),
+    }
 
 
 @router.post("/projects/{project_id}/live-view/agents/{agent_id}/restore", status_code=status.HTTP_200_OK)
@@ -1044,13 +1168,18 @@ def restore_agent(
     current_user: User = Depends(get_current_user),
 ):
     _ensure_project_admin(project_id, current_user, db)
+    setting = (
+        db.query(AgentDisplaySetting)
+        .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash == agent_id)
+        .first()
+    )
+    if setting is not None and not setting.is_deleted and setting.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Agent was permanently deleted and cannot be restored.",
+        )
     restored = restore_agent_if_soft_deleted(db, project_id, agent_id, now=datetime.now(timezone.utc))
     if not restored:
-        setting = (
-            db.query(AgentDisplaySetting)
-            .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash == agent_id)
-            .first()
-        )
         if setting is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
         setting.is_deleted = False
@@ -1061,6 +1190,7 @@ def restore_agent(
         .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash == agent_id)
         .first()
     )
+    publish_agents_changed(project_id, [agent_id])
     return {
         "agent_id": agent_id,
         "display_name": setting.display_name if setting else None,
@@ -1329,6 +1459,7 @@ async def create_snapshot(
         snapshot.agent_id = agent_id
         restore_agent_if_soft_deleted(db, project_id, agent_id, now=datetime.now(timezone.utc))
         db.commit()
+        publish_agents_changed(project_id, [agent_id])
 
     # Run policy (tool use) validation asynchronously so Clinical Log shows result without Run check
     if trace_id:
@@ -1581,6 +1712,8 @@ def delete_snapshot(
         SavedLog.snapshot_id == snapshot_id,
     ).delete(synchronize_session=False)
     db.commit()
+    if snapshot.agent_id:
+        publish_agents_changed(project_id, [snapshot.agent_id])
     return {"ok": True, "deleted": 1}
 
 
@@ -1610,6 +1743,13 @@ def batch_delete_snapshots(
 
     now_utc = datetime.now(timezone.utc)
     matched_ids = [int(row.id) for row in rows]
+    affected_agent_ids = sorted(
+        {
+            str(row.agent_id).strip()
+            for row in rows
+            if getattr(row, "agent_id", None) and str(row.agent_id).strip()
+        }
+    )
     (
         db.query(Snapshot)
         .filter(Snapshot.project_id == project_id, Snapshot.id.in_(matched_ids))
@@ -1624,6 +1764,8 @@ def batch_delete_snapshots(
         .delete(synchronize_session=False)
     )
     db.commit()
+    if affected_agent_ids:
+        publish_agents_changed(project_id, affected_agent_ids)
     return {"ok": True, "deleted": len(matched_ids)}
 
 
@@ -1650,6 +1792,8 @@ def restore_snapshot(
     snapshot.is_deleted = False
     snapshot.deleted_at = None
     db.commit()
+    if snapshot.agent_id:
+        publish_agents_changed(project_id, [snapshot.agent_id])
     return {"ok": True, "restored": 1}
 
 
@@ -1664,6 +1808,22 @@ def restore_snapshots_batch(
     snapshot_ids = list(dict.fromkeys(int(sid) for sid in body.snapshot_ids if sid is not None))
     if not snapshot_ids:
         return {"ok": True, "restored": 0}
+    rows = (
+        db.query(Snapshot.id, Snapshot.agent_id)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.id.in_(snapshot_ids),
+            Snapshot.is_deleted.is_(True),
+        )
+        .all()
+    )
+    affected_agent_ids = sorted(
+        {
+            str(row.agent_id).strip()
+            for row in rows
+            if getattr(row, "agent_id", None) and str(row.agent_id).strip()
+        }
+    )
     restored = (
         db.query(Snapshot)
         .filter(
@@ -1674,6 +1834,8 @@ def restore_snapshots_batch(
         .update({"is_deleted": False, "deleted_at": None}, synchronize_session=False)
     )
     db.commit()
+    if affected_agent_ids:
+        publish_agents_changed(project_id, affected_agent_ids)
     return {"ok": True, "restored": int(restored or 0)}
 
 
@@ -1688,6 +1850,22 @@ def permanently_delete_snapshots(
     snapshot_ids = list(dict.fromkeys(int(sid) for sid in body.snapshot_ids if sid is not None))
     if not snapshot_ids:
         return {"ok": True, "deleted": 0}
+    rows = (
+        db.query(Snapshot.id, Snapshot.agent_id)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.id.in_(snapshot_ids),
+            Snapshot.is_deleted.is_(True),
+        )
+        .all()
+    )
+    affected_agent_ids = sorted(
+        {
+            str(row.agent_id).strip()
+            for row in rows
+            if getattr(row, "agent_id", None) and str(row.agent_id).strip()
+        }
+    )
     deleted = (
         db.query(Snapshot)
         .filter(
@@ -1698,6 +1876,8 @@ def permanently_delete_snapshots(
         .delete(synchronize_session=False)
     )
     db.commit()
+    if affected_agent_ids:
+        publish_agents_changed(project_id, affected_agent_ids)
     return {"ok": True, "deleted": int(deleted or 0)}
 
 

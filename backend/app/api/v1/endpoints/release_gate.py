@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, func
+from sqlalchemy import String, cast, desc, func
 from sqlalchemy.orm import Session
 
 from app.api.v1.endpoints.behavior import (
@@ -54,7 +54,7 @@ from app.models.snapshot import Snapshot
 from app.models.user import User
 from app.models.validation_dataset import ValidationDataset
 from app.services.data_lifecycle_service import DataLifecycleService
-from app.domain.live_view_release_gate import build_agent_visibility_context, is_agent_deleted
+from app.domain.live_view_release_gate import build_agent_visibility_context, is_agent_hidden
 from app.services.ops_alerting import ops_alerting
 from app.services.replay_service import replay_service, resolve_tool_context_injection_text
 from app.services.data_normalizer import DataNormalizer
@@ -2832,7 +2832,7 @@ def list_release_gate_agents(
 
     items = []
     for aid in ordered_agent_ids:
-        if is_agent_deleted(visibility.settings_map, aid):
+        if is_agent_hidden(visibility.settings_map, aid):
             continue
         s = visibility.settings_map.get(aid)
         blueprint_node = visibility.blueprint_map.get(aid)
@@ -3249,19 +3249,22 @@ async def list_release_gate_history(
         query = query.filter(BehaviorReport.created_at <= created_to)
 
     # Release-gate runs are marked in summary_json.release_gate.
-    scan_limit = min(1000, max(200, (offset + limit) * 5))
-    scanned = query.limit(scan_limit).all()
-    rows = [
-        row
-        for row in scanned
-        if isinstance(row.summary_json, dict) and isinstance(row.summary_json.get("release_gate"), dict)
-    ]
+    # Filter in SQL so total/pagination reflect the full retained RG history.
+    rows_query = query.filter(cast(BehaviorReport.summary_json, String).contains('"release_gate"'))
 
-    total = len(rows)
-    page_rows = rows[offset : offset + limit]
+    total = rows_query.count()
+    page_rows = rows_query.offset(offset).limit(limit).all()
     items: List[Dict[str, Any]] = []
     for row in page_rows:
         gate_meta = row.summary_json.get("release_gate") if isinstance(row.summary_json, dict) else {}
+        total_inputs = gate_meta.get("total_inputs")
+        failed_inputs = gate_meta.get("failed_inputs")
+        flaky_inputs = gate_meta.get("flaky_inputs")
+        total_inputs_num = int(total_inputs or 0) if total_inputs is not None else 0
+        failed_inputs_num = int(failed_inputs or 0) if failed_inputs is not None else 0
+        flaky_inputs_num = int(flaky_inputs or 0) if flaky_inputs is not None else 0
+        failed_runs = failed_inputs_num + flaky_inputs_num
+        passed_runs = max(total_inputs_num - failed_runs, 0) if total_inputs is not None else None
         items.append(
             {
                 "id": row.id,
@@ -3272,9 +3275,9 @@ async def list_release_gate_history(
                 "created_at": _iso(row.created_at),
                 "mode": gate_meta.get("mode", "replay_test"),
                 "repeat_runs": gate_meta.get("repeat_runs"),
-                "total_inputs": gate_meta.get("total_inputs"),
-                "passed_runs": gate_meta.get("passed_runs"),
-                "failed_runs": gate_meta.get("failed_runs"),
+                "total_inputs": total_inputs,
+                "passed_runs": passed_runs,
+                "failed_runs": failed_runs if total_inputs is not None else None,
                 "passed_attempts": gate_meta.get("passed_attempts"),
                 "total_attempts": gate_meta.get("total_attempts"),
                 "thresholds": gate_meta.get("thresholds"),

@@ -318,8 +318,8 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                               Quick scan for this agent
                             </div>
                             <div className="mt-1 text-xs leading-relaxed text-slate-500">
-                              Use this panel to reopen recent retained runs. Switch to the main History tab for
-                              trace search and full browsing.
+                              Use this panel to reopen recent retained runs for this agent. Switch to the
+                              main History tab for project-wide trace search and full browsing.
                             </div>
                             <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-slate-500">
                               <span>
