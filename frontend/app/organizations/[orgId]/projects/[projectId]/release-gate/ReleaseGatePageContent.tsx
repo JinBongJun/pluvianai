@@ -97,6 +97,7 @@ import {
   normalizeReplayProvider,
   parseSnapshotCreatedAtMs,
   payloadWithoutModel,
+  releaseGateCoreRequestBodyFromBaseline,
   PROVIDER_PAYLOAD_TEMPLATES,
   REPLAY_THRESHOLD_PRESETS,
   shouldShowEvalSetting,
@@ -216,6 +217,14 @@ export default function ReleaseGatePageContent() {
   const [overridesOpen, setOverridesOpen] = useState(false);
   const [toolsHydratedKey, setToolsHydratedKey] = useState("");
   const [overridesHydratedKey, setOverridesHydratedKey] = useState("");
+  type ParityHydrationBaseline = {
+    selectionKey: string;
+    sharedOverrides: Record<string, unknown>;
+    perLogOverrides: Record<string, Record<string, unknown>>;
+    tools: EditableTool[];
+    toolContextBySnapshotId: Record<string, string>;
+  };
+  const parityHydrationBaselineRef = useRef<ParityHydrationBaseline | null>(null);
   const [representativeBaselineUserSnapshotId, setRepresentativeBaselineUserSnapshotId] = useState<
     string | null
   >(null);
@@ -541,10 +550,6 @@ export default function ReleaseGatePageContent() {
     return raw ? getRequestPart(raw) : null;
   }, [baselineSeedSnapshot]);
   const baselineTools = useMemo(() => extractToolsFromPayload(baselinePayload), [baselinePayload]);
-  const baselineOverrides = useMemo(
-    () => extractOverridesFromPayload(baselinePayload),
-    [baselinePayload]
-  );
 
   const {
     data: selectedRunReport,
@@ -1255,7 +1260,7 @@ export default function ReleaseGatePageContent() {
 
   const handleResetRequestJson = useCallback(() => {
     if (!baselinePayload) return;
-    setRequestBody(payloadWithoutModel(baselinePayload));
+    setRequestBody(releaseGateCoreRequestBodyFromBaseline(baselinePayload));
     setRequestJsonDraft(null);
     setRequestJsonError("");
   }, [baselinePayload]);
@@ -1305,7 +1310,7 @@ export default function ReleaseGatePageContent() {
     }
 
     if (selectionKey !== overridesHydratedKey) {
-      setRequestBody(payloadWithoutModel(baselinePayload));
+      setRequestBody(releaseGateCoreRequestBodyFromBaseline(baselinePayload));
       if (!modelOverrideEnabled) {
         setNewModel(runDataModel);
         const inferredProvider = runDataProvider || inferProviderFromModelId(runDataModel);
@@ -1315,6 +1320,42 @@ export default function ReleaseGatePageContent() {
         }
       }
       setRequestJsonError("");
+
+      const seedShared = sanitizeReplayBodyOverrides(extractOverridesFromPayload(baselinePayload));
+      const seedPer: Record<string, Record<string, unknown>> = {};
+      const seedToolCtx: Record<string, string> = {};
+      for (const sid of selectedSnapshotIdsForRun) {
+        const key = String(sid);
+        const snap = baselineSnapshotsById.get(key);
+        const raw = snap ? asPayloadObject(snap.payload) : null;
+        const req = raw ? getRequestPart(raw) : null;
+        seedPer[key] = sanitizeReplayBodyOverrides(extractOverridesFromPayload(req));
+        seedToolCtx[key] = snap ? extractToolResultTextFromSnapshotRecord(snap) : "";
+      }
+      setRequestBodyOverrides(seedShared);
+      setRequestBodyOverridesBySnapshotId(seedPer);
+      setBodyOverridesJsonDraft(null);
+      setBodyOverridesJsonError("");
+      setBodyOverridesSnapshotDraftRaw({});
+      setBodyOverridesSnapshotJsonError({});
+      setToolContextBySnapshotId(seedToolCtx);
+
+      parityHydrationBaselineRef.current = {
+        selectionKey,
+        sharedOverrides: JSON.parse(JSON.stringify(seedShared)) as Record<string, unknown>,
+        perLogOverrides: JSON.parse(JSON.stringify(seedPer)) as Record<
+          string,
+          Record<string, unknown>
+        >,
+        tools: baselineTools.map(t => ({
+          id: t.id,
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters,
+        })),
+        toolContextBySnapshotId: JSON.parse(JSON.stringify(seedToolCtx)) as Record<string, string>,
+      };
+
       setOverridesHydratedKey(selectionKey);
     }
   }, [
@@ -1322,6 +1363,7 @@ export default function ReleaseGatePageContent() {
     effectiveRepresentativeBaselineSnapshotId,
     baselineSeedSnapshot,
     baselinePayload,
+    baselineSnapshotsById,
     baselineTools,
     runDataModel,
     runDataProvider,
@@ -1373,6 +1415,46 @@ export default function ReleaseGatePageContent() {
       message: getApiErrorMessage(agentsError),
     });
   }, [agentsError, agentsErrorCode, agentsErrorStatus]);
+
+  const getParityHydrationSelectionKey = useCallback(() => {
+    return `${selectedSnapshotIdsForRun.join(",")}|rep:${effectiveRepresentativeBaselineSnapshotId ?? ""}`;
+  }, [selectedSnapshotIdsForRun, effectiveRepresentativeBaselineSnapshotId]);
+
+  const resetParitySharedOverridesToBaseline = useCallback(() => {
+    const h = parityHydrationBaselineRef.current;
+    const key = getParityHydrationSelectionKey();
+    if (!h || h.selectionKey !== key || selectedSnapshotIdsForRun.length === 0) return;
+    setRequestBodyOverrides(JSON.parse(JSON.stringify(h.sharedOverrides)) as Record<string, unknown>);
+    setBodyOverridesJsonDraft(null);
+    setBodyOverridesJsonError("");
+  }, [getParityHydrationSelectionKey, selectedSnapshotIdsForRun.length]);
+
+  const resetParityPerLogOverridesToBaseline = useCallback(() => {
+    const h = parityHydrationBaselineRef.current;
+    const key = getParityHydrationSelectionKey();
+    if (!h || h.selectionKey !== key || selectedSnapshotIdsForRun.length === 0) return;
+    setRequestBodyOverridesBySnapshotId(
+      JSON.parse(JSON.stringify(h.perLogOverrides)) as Record<string, Record<string, unknown>>
+    );
+    setBodyOverridesSnapshotDraftRaw({});
+    setBodyOverridesSnapshotJsonError({});
+  }, [getParityHydrationSelectionKey, selectedSnapshotIdsForRun.length]);
+
+  const resetParityToolsToBaseline = useCallback(() => {
+    const h = parityHydrationBaselineRef.current;
+    const key = getParityHydrationSelectionKey();
+    if (!h || h.selectionKey !== key || selectedSnapshotIdsForRun.length === 0) return;
+    setToolsList(h.tools.map(t => ({ ...t })));
+  }, [getParityHydrationSelectionKey, selectedSnapshotIdsForRun.length]);
+
+  const resetParityToolContextToBaseline = useCallback(() => {
+    const h = parityHydrationBaselineRef.current;
+    const key = getParityHydrationSelectionKey();
+    if (!h || h.selectionKey !== key || selectedSnapshotIdsForRun.length === 0) return;
+    setToolContextBySnapshotId(
+      JSON.parse(JSON.stringify(h.toolContextBySnapshotId)) as Record<string, string>
+    );
+  }, [getParityHydrationSelectionKey, selectedSnapshotIdsForRun.length]);
 
   const contextValue = useMemo<ReleaseGatePageContextValue>(
     () => ({
@@ -1473,6 +1555,10 @@ export default function ReleaseGatePageContent() {
       applyLoadedGlobalBodyOverrides,
       applyLoadedSnapshotBodyOverrides,
       clearBodyOverrides,
+      resetParitySharedOverridesToBaseline,
+      resetParityPerLogOverridesToBaseline,
+      resetParityToolsToBaseline,
+      resetParityToolContextToBaseline,
       handleRequestJsonBlur,
       applySystemPromptToBody,
       toolsList,
@@ -1548,6 +1634,10 @@ export default function ReleaseGatePageContent() {
       bodyOverridesSnapshotJsonError,
       canRunValidate,
       clearBodyOverrides,
+      resetParitySharedOverridesToBaseline,
+      resetParityPerLogOverridesToBaseline,
+      resetParityToolsToBaseline,
+      resetParityToolContextToBaseline,
       configSourceLabel,
       dataSource,
       datasetSnapshots404,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
@@ -8,7 +8,11 @@ import { ReleaseGateValidateRunContext } from "./ReleaseGateValidateRunContext";
 import type { ReplayProvider } from "./releaseGatePageContent.lib";
 import { isPinnedAnthropicModelId, stringifyJson, toReplayProvider } from "./releaseGateConfigPanelHelpers";
 import type { ReleaseGateEditableTool } from "./releaseGatePageContext.types";
-import { sanitizePayloadForPreview } from "./releaseGatePageContent.lib";
+import {
+  editableRequestBodyWithoutTools,
+  formatSnapshotShortLabel,
+  releaseGateCoreRequestBodyFromBaseline,
+} from "./releaseGatePageContent.lib";
 import { liveViewAPI, type LiveViewToolTimelineRow } from "@/lib/api/live-view";
 import { buildNodeRequestOverview } from "@/lib/requestOverview";
 
@@ -29,7 +33,7 @@ export function useReleaseGateConfigPanelModel(isOpen: boolean) {
   const [parityOpenTools, setParityOpenTools] = useState(false);
   const [parityOpenOverrides, setParityOpenOverrides] = useState(false);
   const [parityOpenContext, setParityOpenContext] = useState(false);
-  const [parityOpenTimeline, setParityOpenTimeline] = useState(false);
+  const [parityOpenRecordedToolCalls, setParityOpenRecordedToolCalls] = useState(false);
 
   const REPLAY_PROVIDER_MODEL_LIBRARY = ctx.REPLAY_PROVIDER_MODEL_LIBRARY as Record<
     ReplayProvider,
@@ -103,6 +107,17 @@ export function useReleaseGateConfigPanelModel(isOpen: boolean) {
     | ((sid: string, obj: Record<string, unknown>) => void)
     | undefined;
   const clearBodyOverrides = ctx.clearBodyOverrides as (() => void) | undefined;
+  const resetParitySharedOverridesToBaseline = ctx.resetParitySharedOverridesToBaseline as
+    | (() => void)
+    | undefined;
+  const resetParityPerLogOverridesToBaseline = ctx.resetParityPerLogOverridesToBaseline as
+    | (() => void)
+    | undefined;
+  const resetParityToolsToBaseline = ctx.resetParityToolsToBaseline as (() => void) | undefined;
+  const resetParityToolContextToBaseline = ctx.resetParityToolContextToBaseline as
+    | (() => void)
+    | undefined;
+  const baselineSnapshotsById = ctx.baselineSnapshotsById as Map<string, Record<string, unknown>>;
   const handleRequestJsonBlur = ctx.handleRequestJsonBlur as (() => void) | undefined;
   const applySystemPromptToBody = ctx.applySystemPromptToBody as
     | ((body: Record<string, unknown>, systemPrompt: string) => Record<string, unknown>)
@@ -171,6 +186,10 @@ export function useReleaseGateConfigPanelModel(isOpen: boolean) {
   const [bodyOverridesFileLoadTarget, setBodyOverridesFileLoadTarget] = useState<
     "global" | { sid: string } | null
   >(null);
+  const toolContextFileInputRef = useRef<HTMLInputElement>(null);
+  const [toolContextFileLoadTarget, setToolContextFileLoadTarget] = useState<
+    "global" | { sid: string } | null
+  >(null);
 
   const hasAnyBodyOverridesContent = useMemo(() => {
     const hasGlobal =
@@ -223,6 +242,36 @@ export function useReleaseGateConfigPanelModel(isOpen: boolean) {
       }
     }
   };
+
+  const triggerToolContextFilePick = (target: "global" | { sid: string }) => {
+    if (editsLocked) return;
+    setToolContextFileLoadTarget(target);
+    requestAnimationFrame(() => toolContextFileInputRef.current?.click());
+  };
+
+  const onToolContextFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    const target = toolContextFileLoadTarget;
+    setToolContextFileLoadTarget(null);
+    if (!file || !target) return;
+    try {
+      const text = (await file.text()).trim();
+      if (!text) return;
+      if (target === "global") {
+        setToolContextGlobalText?.(text);
+      } else {
+        setToolContextBySnapshotId?.(prev => ({ ...prev, [target.sid]: text }));
+      }
+    } catch {
+      // ignore invalid reads
+    }
+  };
+
+  const getSnapshotParityLabel = useCallback(
+    (sid: string) => formatSnapshotShortLabel(sid, baselineSnapshotsById.get(String(sid))),
+    [baselineSnapshotsById]
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -313,11 +362,9 @@ export function useReleaseGateConfigPanelModel(isOpen: boolean) {
 
   const cleanBaselineForComparison = useMemo(() => {
     if (!baselinePayload) return "{}";
-    const sanitized = sanitizePayloadForPreview(baselinePayload);
-    const clean = { ...sanitized };
-    delete clean.tools;
-    delete (clean as Record<string, unknown> & { system_prompt?: unknown }).system_prompt;
-    return stringifyJson(clean);
+    const core = releaseGateCoreRequestBodyFromBaseline(baselinePayload);
+    const cleaned = editableRequestBodyWithoutTools(core);
+    return stringifyJson(cleaned);
   }, [baselinePayload]);
 
   const isJsonModified = candidateJsonValue !== cleanBaselineForComparison;
@@ -325,11 +372,7 @@ export function useReleaseGateConfigPanelModel(isOpen: boolean) {
   const handleResetJsonToBaseline = () => {
     if (editsLocked || !setRequestBody) return;
     if (!baselinePayload) return;
-    const sanitized = sanitizePayloadForPreview(baselinePayload);
-    const clean = { ...sanitized };
-    delete clean.tools;
-    delete (clean as Record<string, unknown> & { system_prompt?: unknown }).system_prompt;
-    setRequestBody(clean);
+    setRequestBody(releaseGateCoreRequestBodyFromBaseline(baselinePayload));
     setRequestJsonDraft?.(null);
   };
 
@@ -457,10 +500,17 @@ export function useReleaseGateConfigPanelModel(isOpen: boolean) {
       },
       {
         label: "Tools",
-        value: toolsList.length > 0 ? `${toolsList.length} defined` : "None",
+        value:
+          toolsList.length > 0 && baselineToolTimelineRows.length > 0
+            ? `${toolsList.length} defined · ${baselineToolTimelineRows.length} recorded I/O`
+            : toolsList.length > 0
+              ? `${toolsList.length} defined`
+              : baselineToolTimelineRows.length > 0
+                ? `${baselineToolTimelineRows.length} recorded I/O (add definitions to replay)`
+                : "None",
       },
       {
-        label: "Extra request data",
+        label: "Extra request JSON",
         value: hasAnyBodyOverridesContent
           ? perLogOverridesCount > 0
             ? `Set (shared + ${perLogOverridesCount} log${perLogOverridesCount === 1 ? "" : "s"})`
@@ -471,16 +521,6 @@ export function useReleaseGateConfigPanelModel(isOpen: boolean) {
         label: "Extra system context",
         value: toolContextMode === "inject" ? "Appending on replay" : "Recorded only",
       },
-      {
-        label: "Baseline tool timeline",
-        value: !snapshotIdForBaselineTimeline
-          ? "No snapshot selected"
-          : baselineTimelineLoading
-            ? "Loading…"
-            : baselineToolTimelineRows.length > 0
-              ? `${baselineToolTimelineRows.length} events`
-              : "None captured",
-      },
     ],
     [
       modelOverrideEnabled,
@@ -490,14 +530,18 @@ export function useReleaseGateConfigPanelModel(isOpen: boolean) {
       hasAnyBodyOverridesContent,
       perLogOverridesCount,
       toolContextMode,
-      snapshotIdForBaselineTimeline,
-      baselineTimelineLoading,
       baselineToolTimelineRows.length,
     ]
   );
 
   const toolsSummarySubtitle =
-    toolsList.length === 0 ? "No tools configured" : `${toolsList.length} tool definition(s)`;
+    toolsList.length === 0 && baselineToolTimelineRows.length === 0
+      ? "No tools in this run"
+      : toolsList.length === 0
+        ? `${baselineToolTimelineRows.length} recorded call(s) — add definitions above to replay with tools`
+        : baselineToolTimelineRows.length > 0
+          ? `${toolsList.length} definition(s) · ${baselineToolTimelineRows.length} recorded I/O`
+          : `${toolsList.length} tool definition(s)`;
   const overridesSummarySubtitle = hasAnyBodyOverridesContent
     ? perLogOverridesCount > 0
       ? `Shared and/or per-log overrides (${perLogOverridesCount} log${perLogOverridesCount === 1 ? "" : "s"})`
@@ -532,8 +576,8 @@ export function useReleaseGateConfigPanelModel(isOpen: boolean) {
     setParityOpenOverrides,
     parityOpenContext,
     setParityOpenContext,
-    parityOpenTimeline,
-    setParityOpenTimeline,
+    parityOpenRecordedToolCalls,
+    setParityOpenRecordedToolCalls,
     REPLAY_PROVIDER_MODEL_LIBRARY,
     REPLAY_THRESHOLD_PRESETS,
     thresholdPreset,
@@ -600,6 +644,9 @@ export function useReleaseGateConfigPanelModel(isOpen: boolean) {
     representativeBaselinePickerOptions,
     bodyOverridesFileInputRef,
     onBodyOverridesFileChange,
+    toolContextFileInputRef,
+    onToolContextFileChange,
+    triggerToolContextFilePick,
     hasAnyBodyOverridesContent,
     triggerBodyOverridesFilePick,
     finalCandidateJson,
@@ -621,6 +668,11 @@ export function useReleaseGateConfigPanelModel(isOpen: boolean) {
     updateTool,
     addTool,
     removeTool,
+    resetParitySharedOverridesToBaseline,
+    resetParityPerLogOverridesToBaseline,
+    resetParityToolsToBaseline,
+    resetParityToolContextToBaseline,
+    getSnapshotParityLabel,
     snapshotIdForBaselineTimeline,
     baselineTimelineLoading,
     baselineToolTimelineRows,
@@ -628,7 +680,7 @@ export function useReleaseGateConfigPanelModel(isOpen: boolean) {
     toolsSummarySubtitle,
     overridesSummarySubtitle,
     contextSummarySubtitle,
-    timelineSummarySubtitle,
+    recordedCallsSummarySubtitle: timelineSummarySubtitle,
   };
 }
 
