@@ -525,8 +525,8 @@ function DeletedAgentsTray({
         )}
         <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-[11px] leading-relaxed text-slate-400">
           Removal hides an agent immediately. Matching traffic can auto-restore it within the grace
-          window. Hard delete permanently purges the selected agents' current Live View data. New
-          matching traffic can create them again as fresh agents later.
+          window. Hard delete permanently purges current Live View data for the selected agents.
+          New matching traffic can create them again as fresh agents later.
           <Link href="/docs" className="ml-1 text-emerald-300 hover:text-emerald-200">
             See docs
           </Link>
@@ -866,7 +866,7 @@ function LiveViewContent() {
     if (prevAgentIds.size > 0) {
       const sameAgentSet =
         prevAgentIds.size === currentAgentIds.size &&
-        [...currentAgentIds].every(id => prevAgentIds.has(id));
+        Array.from(currentAgentIds).every(id => prevAgentIds.has(id));
       if (!sameAgentSet) {
         setHistory([]);
         setHistoryIndex(-1);
