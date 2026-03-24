@@ -64,7 +64,7 @@ export default function DocsPage() {
           <p className="text-2xl text-slate-400 leading-relaxed font-medium max-w-4xl tracking-tight">
             PluvianAI is a{" "}
             <span className="text-white font-black underline decoration-emerald-500/30 underline-offset-4">
-              node-level regression guard
+              agent regression guard
             </span>{" "}
             for AI agents. It replays real traces under your new model or prompt configuration,
             compares behavior against a baseline, and gives you a clear pass/fail gate before you
@@ -182,7 +182,7 @@ export default function DocsPage() {
                 Evaluation represents your soft-validation configuration. Activate checks, define
                 thresholds, and secure stability. Use{" "}
                 <span className="text-white font-bold bg-white/10 px-2 py-0.5 rounded">
-                  Clinical Log
+                  Live Logs
                 </span>{" "}
                 to dictate sample sizes.
               </p>
@@ -413,7 +413,7 @@ Content-Type: application/json
                 Inspect in Live View
               </h3>
               <p className="text-sm text-slate-400 leading-relaxed max-w-3xl">
-                Once snapshots arrive, open Live View to see traces grouped by node. Each snapshot
+                Once snapshots arrive, open Live View to see traces grouped by agent. Each snapshot
                 is scored by Atomic Signals, and you can drill into payloads, evaluations, and
                 policy violations before setting up Release Gate.
               </p>
@@ -427,7 +427,7 @@ Content-Type: application/json
                 Run Release Gate
               </h3>
               <p className="text-sm text-slate-400 leading-relaxed max-w-3xl">
-                Pick baseline snapshots for a node, choose a new model or prompt configuration, and
+                Pick baseline snapshots for an agent, choose a new model or prompt configuration, and
                 run Release Gate. PluvianAI replays each trace, computes a behavior diff between
                 baseline and candidate, applies your Atomic Signals and Policy rules, and returns a
                 pass/fail verdict plus Stable / Minor / Major change labels for each attempt.
@@ -511,7 +511,7 @@ Content-Type: application/json
                     <strong className="text-slate-200">
                       Provider API keys (OpenAI, Anthropic, Google)
                     </strong>{" "}
-                    — Registered in Live View → node → Settings. Only needed when re-running Release
+                    — Registered in Live View → agent → Settings. Only needed when re-running Release
                     Gate. Do not confuse these with the key you enter at init.
                   </li>
                 </ul>
@@ -626,8 +626,8 @@ Content-Type: application/json
             </h3>
             <ol className="list-decimal list-inside space-y-3 text-sm text-slate-300">
               <li>
-                In your workflow, after the node that calls the LLM (e.g. OpenAI), add an{" "}
-                <strong className="text-slate-200">HTTP Request</strong> node.
+                In your workflow, after the step that calls the LLM (e.g. OpenAI), add an{" "}
+                <strong className="text-slate-200">HTTP Request</strong> step.
               </li>
               <li>
                 Set the HTTP Request: <strong className="text-slate-200">Method</strong> = POST,{" "}
@@ -643,13 +643,13 @@ Content-Type: application/json
                 Body = JSON. Use this shape (fill{" "}
                 <code className="font-mono text-xs">request_data</code> and{" "}
                 <code className="font-mono text-xs">response_data</code> from the previous
-                node&apos;s output):
+                step&apos;s output):
                 <br />
                 <pre className="mt-2 p-4 rounded-lg bg-black/50 border border-white/5 text-xs text-slate-300 overflow-x-auto">{`{
   "project_id": YOUR_PROJECT_ID,
   "agent_name": "my_n8n_workflow",
-  "request_data": { /* LLM request from previous node */ },
-  "response_data": { /* LLM response from previous node */ },
+  "request_data": { /* LLM request from previous step */ },
+  "response_data": { /* LLM response from previous step */ },
   "latency_ms": 0,
   "status_code": 200
 }`}</pre>
@@ -767,7 +767,7 @@ Content-Type: application/json
     },
     "node-lifecycle": {
       id: "node-lifecycle",
-      title: "Node Lifecycle",
+      title: "Agent Lifecycle",
       icon: (
         <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.15)] mb-8">
           <History className="w-8 h-8" />
@@ -776,8 +776,8 @@ Content-Type: application/json
       content: (
         <div className="space-y-12">
           <p className="text-2xl text-slate-400 leading-relaxed font-medium max-w-4xl tracking-tight">
-            Live View node removal is designed to be reversible first, destructive later. That means
-            deleting a node hides it immediately, but the system can still restore it if matching
+            Live View agent removal is designed to be reversible first, destructive later. That means
+            deleting an agent hides it immediately, but the system can still restore it if matching
             traffic returns or if an admin restores it manually.
           </p>
 
@@ -788,8 +788,8 @@ Content-Type: application/json
               </div>
               <h4 className="text-lg font-black text-white uppercase tracking-wide">Soft Delete</h4>
               <p className="mt-3 text-sm leading-relaxed text-slate-400">
-                Removing a node hides it from the normal Live View canvas right away. Historical
-                snapshots are preserved, and the node enters a soft-deleted state.
+                Removing an agent hides it from the normal Live View canvas right away. Historical
+                snapshots are preserved, and the agent enters a soft-deleted state.
               </p>
             </div>
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6">
@@ -798,7 +798,7 @@ Content-Type: application/json
               </div>
               <h4 className="text-lg font-black text-white uppercase tracking-wide">Restore Window</h4>
               <p className="mt-3 text-sm leading-relaxed text-slate-400">
-                If the same node identity sends traffic again, PluvianAI can auto-restore it during
+                If the same agent identity sends traffic again, PluvianAI can auto-restore it during
                 the configured restore window. Admins can also restore it manually from Live View.
               </p>
             </div>
@@ -808,7 +808,7 @@ Content-Type: application/json
               </div>
               <h4 className="text-lg font-black text-white uppercase tracking-wide">Hard Delete</h4>
               <p className="mt-3 text-sm leading-relaxed text-slate-400">
-                Scheduled cleanup can permanently purge old soft-deleted node settings after the grace
+                Scheduled cleanup can permanently purge old soft-deleted agent settings after the grace
                 period expires. This cleans up old display state, not your historical snapshots.
               </p>
             </div>
@@ -828,8 +828,8 @@ Content-Type: application/json
                 </div>
                 <div className="mt-3 text-3xl font-black text-emerald-300">30 days</div>
                 <p className="mt-3 text-sm leading-relaxed text-slate-400">
-                  Default restore window for matching traffic. Same-node traffic inside this window
-                  can bring the node back automatically.
+                  Default restore window for matching traffic. Same-agent traffic inside this window
+                  can bring the agent back automatically.
                 </p>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/20 p-5">
@@ -839,7 +839,7 @@ Content-Type: application/json
                 <div className="mt-3 text-3xl font-black text-amber-300">30 days</div>
                 <p className="mt-3 text-sm leading-relaxed text-slate-400">
                   Default grace period before scheduled cleanup can permanently delete old
-                  soft-deleted node settings.
+                  soft-deleted agent settings.
                 </p>
               </div>
             </div>
@@ -863,17 +863,17 @@ Content-Type: application/json
             </h3>
             <div className="grid md:grid-cols-3 gap-4">
               <div className="rounded-xl border border-white/10 bg-black/20 p-5">
-                <h4 className="text-sm font-black text-white">Same node returns</h4>
+                <h4 className="text-sm font-black text-white">Same agent returns</h4>
                 <p className="mt-2 text-xs leading-relaxed text-slate-400">
-                  If a removed node sends matching traffic again with the same identity, it can
-                  auto-restore and continue collecting fresh logs under that node.
+                  If a removed agent sends matching traffic again with the same identity, it can
+                  auto-restore and continue collecting fresh logs under that agent.
                 </p>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/20 p-5">
                 <h4 className="text-sm font-black text-white">Config changed</h4>
                 <p className="mt-2 text-xs leading-relaxed text-slate-400">
                   If prompt, model, code path, or other identity inputs change enough to create a
-                  different node identity, Live View treats it as a new node instead.
+                  different agent identity, Live View treats it as a new agent instead.
                 </p>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/20 p-5">
@@ -893,8 +893,8 @@ Content-Type: application/json
             <ul className="space-y-2 text-sm leading-relaxed text-slate-400">
               <li>
                 Live View canvas: open{" "}
-                <span className="text-white font-semibold">Deleted Nodes</span> to restore hidden
-                nodes.
+                <span className="text-white font-semibold">Deleted Agents</span> to restore hidden
+                agents.
               </li>
               <li>
                 Live View side panel: open{" "}
@@ -933,7 +933,7 @@ Content-Type: application/json
       content: (
         <div className="space-y-12">
           <p className="text-xl text-slate-400 leading-relaxed max-w-4xl">
-            PluvianAI works best when you have a single node (agent) per Release Gate run and when
+            PluvianAI works best when you have a single agent per Release Gate run and when
             required keys and data are set. Below are common cases where the service blocks or
             fails, and what to do.
           </p>
@@ -960,7 +960,7 @@ Content-Type: application/json
                       Provider API key not registered (using your own model)
                     </td>
                     <td className="px-4 py-3">
-                      In Live View, open the node → <strong>Settings</strong> →{" "}
+                      In Live View, open the agent → <strong>Settings</strong> →{" "}
                       <strong>Provider API Keys</strong>, then add the key for the provider (OpenAI,
                       Anthropic, or Google) you use.
                     </td>
@@ -979,7 +979,7 @@ Content-Type: application/json
                     </td>
                     <td className="px-4 py-3">
                       Ensure the selected data includes valid request/response from a supported
-                      provider. Check the latest node snapshot in Live View.
+                      provider. Check the latest agent snapshot in Live View.
                     </td>
                   </tr>
                   <tr className="border-b border-white/5">
@@ -987,18 +987,18 @@ Content-Type: application/json
                       No agent or data selected
                     </td>
                     <td className="px-4 py-3">
-                      Use <strong>Select node &amp; data</strong> and pick an agent and at least one
+                      Use <strong>Select agent &amp; data</strong> and pick an agent and at least one
                       snapshot or dataset.
                     </td>
                   </tr>
                   <tr className="border-b border-white/5">
                     <td className="px-4 py-3 font-medium text-slate-200">
-                      Data from more than one node
+                      Data from more than one agent
                     </td>
                     <td className="px-4 py-3">
-                      Re-open <strong>Select node &amp; data</strong> and choose snapshots or
-                      datasets that belong to <strong>one node only</strong>. Release Gate runs one
-                      node at a time.
+                      Re-open <strong>Select agent &amp; data</strong> and choose snapshots or
+                      datasets that belong to <strong>one agent only</strong>. Release Gate runs one
+                      agent at a time.
                     </td>
                   </tr>
                 </tbody>
@@ -1036,7 +1036,7 @@ Content-Type: application/json
                       Platform replay credits exhausted (when using PluvianAI-hosted model)
                     </td>
                     <td className="px-4 py-3">
-                      Use your own provider key (BYOK) for the node so the run does not use platform
+                      Use your own provider key (BYOK) for the agent so the run does not use platform
                       credits, or upgrade your plan.
                     </td>
                   </tr>
@@ -1074,10 +1074,10 @@ Content-Type: application/json
                 <tbody className="text-slate-300">
                   <tr className="border-b border-white/5">
                     <td className="px-4 py-3 font-medium text-slate-200">
-                      Dataset spans multiple nodes
+                      Dataset spans multiple agents
                     </td>
                     <td className="px-4 py-3">
-                      Create or select a dataset that contains logs from a single node only.
+                      Create or select a dataset that contains logs from a single agent only.
                     </td>
                   </tr>
                   <tr className="border-b border-white/5">
@@ -1155,7 +1155,7 @@ Content-Type: application/json
       content: (
         <div className="space-y-12">
           <p className="text-2xl text-slate-400 leading-relaxed font-medium max-w-4xl tracking-tight">
-            Deep dive into the key concepts that power PluvianAI&apos;s node-level regression guard:
+            Deep dive into the key concepts that power PluvianAI&apos;s agent regression guard:
             Live View, behavior diff, Atomic Signals, and Policy versus Evaluation.
           </p>
           <div className="grid md:grid-cols-2 gap-6">
@@ -1168,7 +1168,7 @@ Content-Type: application/json
                 Behavior Diff
               </h4>
               <p className="text-sm text-slate-400 leading-relaxed relative z-10">
-                PluvianAI compares how a node behaves before and after a change. It derives
+                PluvianAI compares how an agent behaves before and after a change. It derives
                 canonical steps from each response, computes sequence and tool-usage distance
                 between baseline and candidate traces, and labels changes as Stable, Minor, or Major
                 to guide deployment decisions.
@@ -1339,7 +1339,7 @@ Content-Type: application/json
         { id: "introduction", label: "Introduction" },
         { id: "quickstart", label: "Quickstart" },
         { id: "integrations", label: "Integrations by tool" },
-        { id: "node-lifecycle", label: "Node Lifecycle" },
+        { id: "node-lifecycle", label: "Agent Lifecycle" },
         { id: "when-things-dont-work", label: "When things don't work" },
         { id: "key-concepts", label: "Key Concepts" },
         { id: "architecture", label: "Architecture" },

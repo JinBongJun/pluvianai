@@ -46,7 +46,7 @@ export function AgentNodePickerModal({
       <div className="relative w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl border border-white/10 bg-[#111216] shadow-2xl">
         <div className="flex items-center justify-between shrink-0 px-5 py-4 border-b border-white/10">
           <h2 id="agent-picker-title" className="text-base font-bold text-white">
-            Select agent (Live View node)
+            Select agent from Live View
           </h2>
           <button
             type="button"
@@ -64,7 +64,7 @@ export function AgentNodePickerModal({
             </div>
           ) : agents.length === 0 ? (
             <p className="text-sm text-slate-500 text-center py-8">
-              No agents yet. Run flows in Live View to see nodes here.
+              No agents yet. Run flows in Live View to see agents here.
             </p>
           ) : (
             agents.map(agent => (

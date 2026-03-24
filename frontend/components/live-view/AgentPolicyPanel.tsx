@@ -149,7 +149,7 @@ export function AgentPolicyPanel({ projectId, agentId }: { projectId: number; ag
           </div>
           <div className="w-full text-right">
             <p className="text-[11px] text-slate-400">
-              Policy evaluation and dataset save actions are handled in Clinical Log.
+              Policy evaluation and dataset save actions are handled in Live Logs.
             </p>
           </div>
         </div>
@@ -161,7 +161,7 @@ export function AgentPolicyPanel({ projectId, agentId }: { projectId: number; ag
             Status
           </div>
           <div className="text-sm text-slate-300">
-            Configure policy rules here. Run validation from Clinical Log per snapshot.
+            Configure policy rules here. Run validation from Live Logs per log.
           </div>
           {latestReport && (
             <div className="mt-3 text-sm text-slate-400">

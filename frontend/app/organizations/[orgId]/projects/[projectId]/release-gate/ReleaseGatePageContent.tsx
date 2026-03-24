@@ -302,7 +302,7 @@ function collectMissingProviderKeys(result: ReleaseGateResult | null): ReplayPro
 function describeMissingProviderKeys(missingProviders: ReplayProvider[]): string {
   if (missingProviders.length === 0) return "";
   const labels = missingProviders.map(p => REPLAY_PROVIDER_LABEL[p]).join(", ");
-  return `Run blocked: ${labels} API key is not registered for the selected node (or project default). Open Live View, click the node, then register the key in the Settings tab.`;
+  return `Run blocked: ${labels} API key is not registered for the selected agent (or project default). Open Live View, click the agent, then register the key in the Settings tab.`;
 }
 
 function ReleaseGateStatusPanel({
@@ -2684,7 +2684,7 @@ export default function ReleaseGatePageContent() {
         errorCode === "dataset_snapshot_agent_mismatch"
       ) {
         setError(
-          "Run blocked: selected data includes logs from another node. Use only Live view logs or Saved data for this node."
+          "Run blocked: selected data includes logs from another agent. Use only Live Logs or Saved Data for this agent."
         );
       } else if (errorCode === "release_gate_requires_pinned_model") {
         setError(

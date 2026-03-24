@@ -77,14 +77,15 @@ const MIN_LAST_N_RUNS = 10;
 const MAX_LAST_N_RUNS = 200;
 const MAX_STEP_ROWS = 30;
 const DEFAULT_LAST_N_RUNS = 30;
+const LOG_LIMIT_OPTIONS = [10, 20, 30, 50, 100, 200] as const;
 const CLINICAL_LOG_BASE_POLL_MS = 4000;
 const CLINICAL_LOG_MAX_POLL_MS = 30000;
 
 type RiskFilter = "all" | "worst" | "healthy";
 const RISK_FILTER_LABELS: Record<RiskFilter, string> = {
-  all: "ALL",
-  worst: "FLAGGED",
-  healthy: "HEALTHY",
+  all: "All",
+  worst: "Flagged",
+  healthy: "Healthy",
 };
 type SortMode = "newest" | "oldest" | "latency_desc" | "latency_asc";
 const SORT_MODE_LABELS: Record<SortMode, string> = {
@@ -433,10 +434,6 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
   const toast = useToast();
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [recentTraceLimit, setRecentTraceLimit] = React.useState<number>(DEFAULT_LAST_N_RUNS);
-  const [recentTraceInput, setRecentTraceInput] = React.useState<string>(
-    String(DEFAULT_LAST_N_RUNS)
-  );
-  const [isSavingLimit, setIsSavingLimit] = React.useState(false);
   const [riskFilter, setRiskFilter] = React.useState<RiskFilter>("all");
   const [sortMode, setSortMode] = React.useState<SortMode>("newest");
   const [policyByTrace, setPolicyByTrace] = React.useState<Record<string, PolicyState>>({});
@@ -476,7 +473,6 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
     if (Number.isFinite(persisted)) {
       const clamped = clampRuns(persisted);
       setRecentTraceLimit(clamped);
-      setRecentTraceInput(String(clamped));
     }
   }, [settingsData]);
 
@@ -540,13 +536,10 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
     void mutate();
   }, [agentId, isPageVisible, mutate, projectId]);
 
-  const saveRecentTraceLimit = async () => {
+  const saveRecentTraceLimit = async (nextLimit: number) => {
     if (!projectId || !agentId) return;
-    const parsedInput = Number(recentTraceInput);
-    const limit = clampRuns(Number.isFinite(parsedInput) ? parsedInput : recentTraceLimit);
+    const limit = clampRuns(nextLimit);
     setRecentTraceLimit(limit);
-    setRecentTraceInput(String(limit));
-    setIsSavingLimit(true);
     try {
       const existingEval = (settingsData?.diagnostic_config?.eval || {}) as Record<string, unknown>;
       await liveViewAPI.updateAgentSettings(projectId, agentId, {
@@ -559,16 +552,11 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
       });
       await mutateSettings();
     } finally {
-      setIsSavingLimit(false);
+      // Keep UI responsive; no extra local draft state to reset.
     }
   };
 
   const snapshots = (data?.items || []) as ClinicalSnapshot[];
-  const isRunsInputDirty = React.useMemo(() => {
-    const parsed = Number(recentTraceInput);
-    if (!Number.isFinite(parsed)) return true;
-    return clampRuns(parsed) !== recentTraceLimit;
-  }, [recentTraceInput, recentTraceLimit]);
 
   React.useEffect(() => {
     // Collapse expanded card when filters/window change to avoid stale selection confusion.
@@ -996,8 +984,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
       <div className="p-5 flex items-center justify-between gap-4 border-b border-white/[0.04] bg-[#18191e]">
         <div className="flex items-center">
           <span className="px-2 py-0.5 rounded-md text-[13px] font-mono text-slate-400 capitalize tracking-wide">
-            Total {totalSnapshotsCount} {totalSnapshotsCount === 1 ? "Run" : "Runs"} - Showing{" "}
-            {visibleSnapshots.length} (limit {recentTraceLimit})
+            Showing {visibleSnapshots.length} of {totalSnapshotsCount} logs
+            {totalSnapshotsCount > recentTraceLimit ? ` · cap ${recentTraceLimit}` : ""}
           </span>
         </div>
 
@@ -1010,10 +998,10 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
                 onClick={() => setRiskFilter(mode)}
                 title={
                   mode === "worst"
-                    ? "FLAGGED: Issues detected"
+                    ? "Flagged: Issues detected"
                     : mode === "healthy"
-                      ? "HEALTHY: No issues"
-                      : "ALL"
+                      ? "Healthy: No issues"
+                      : "All"
                 }
                 className={clsx(
                   "px-3 py-1.5 rounded-lg text-[12px] font-bold tracking-wide transition-all",
@@ -1029,38 +1017,24 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
 
           <div className="w-px h-4 bg-white/10 hidden md:block" />
 
-          {/* Limit Input */}
-          <div className="flex items-center gap-1.5 bg-[#030806] border border-white/[0.04] rounded-xl mb-0 pl-3 focus-within:border-emerald-500/50 transition-colors group">
-            <span className="text-[11px] font-black uppercase text-slate-600 tracking-wider group-focus-within:text-emerald-500/70">
-              LIMIT
-            </span>
-            <input
-              type="number"
-              min={MIN_LAST_N_RUNS}
-              max={MAX_LAST_N_RUNS}
-              value={recentTraceInput}
-              onChange={e => setRecentTraceInput(e.target.value)}
-              onBlur={() => {
-                const parsed = Number(recentTraceInput);
-                if (!Number.isFinite(parsed)) {
-                  setRecentTraceInput(String(recentTraceLimit));
-                } else {
-                  const val = clampRuns(parsed);
-                  setRecentTraceInput(String(val));
-                  if (val !== recentTraceLimit) {
-                    void saveRecentTraceLimit();
-                  }
-                }
-              }}
-              onKeyDown={e => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  e.currentTarget.blur();
-                }
-              }}
-              className="w-[42px] bg-transparent py-1.5 text-[13px] text-slate-200 font-mono outline-none"
-              title={`Max items (${MIN_LAST_N_RUNS} to ${MAX_LAST_N_RUNS})`}
-            />
+          {/* Show limit */}
+          <div className="bg-[#030806] border border-white/[0.04] rounded-xl hover:border-white/10 transition-colors focus-within:border-emerald-500/50">
+            <label className="sr-only" htmlFor="clinical-log-show-limit">
+              Show logs limit
+            </label>
+            <select
+              id="clinical-log-show-limit"
+              value={recentTraceLimit}
+              onChange={e => void saveRecentTraceLimit(Number(e.target.value))}
+              className="pl-3 pr-2 py-1.5 bg-transparent text-xs font-bold tracking-[0.08em] text-slate-300 outline-none cursor-pointer"
+              title={`Show logs limit (${MIN_LAST_N_RUNS} to ${MAX_LAST_N_RUNS})`}
+            >
+              {LOG_LIMIT_OPTIONS.map(limit => (
+                <option key={limit} value={limit} className="bg-[#18191e] text-slate-200">
+                  {`Show ${limit}`}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Sort */}
@@ -1068,7 +1042,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
             <select
               value={sortMode}
               onChange={e => setSortMode(e.target.value as SortMode)}
-              className="pl-3 pr-2 py-1.5 bg-transparent text-xs font-bold uppercase tracking-wider text-slate-300 outline-none cursor-pointer"
+              className="pl-3 pr-2 py-1.5 bg-transparent text-xs font-bold tracking-[0.08em] text-slate-300 outline-none cursor-pointer"
             >
               {(Object.keys(SORT_MODE_LABELS) as SortMode[]).map(mode => (
                 <option key={mode} value={mode} className="bg-[#18191e] text-slate-200">
@@ -1096,23 +1070,23 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
             )}
           >
             {isSelectMode ? <XCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-            {isSelectMode ? "CANCEL" : "SAVE"}
+            {isSelectMode ? "Cancel" : "Save"}
           </button>
 
           {isSelectMode && (
             <div className="flex items-center gap-2">
               <button
                 onClick={selectAll}
-                className="px-3 py-1.5 rounded-xl bg-[#030806] border border-white/[0.04] text-[12px] font-bold uppercase tracking-wide text-slate-300 hover:bg-white/[0.05]"
+                className="px-3 py-1.5 rounded-xl bg-[#030806] border border-white/[0.04] text-[12px] font-bold tracking-[0.08em] text-slate-300 hover:bg-white/[0.05]"
               >
-                {selectedIds.size === visibleSnapshots.length ? "DESELECT" : "ALL"}
+                {selectedIds.size === visibleSnapshots.length ? "Deselect" : "Select all"}
               </button>
               <button
                 onClick={openSaveToDatasetsModal}
                 disabled={selectedIds.size === 0}
-                className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-[12px] font-bold uppercase tracking-wide text-emerald-300 hover:bg-emerald-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-[12px] font-bold tracking-[0.08em] text-emerald-300 hover:bg-emerald-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
               >
-                {isSavingToDatasets ? "SAVING…" : `SAVE (${selectedIds.size})`}
+                {isSavingToDatasets ? "Saving..." : `Save (${selectedIds.size})`}
               </button>
             </div>
           )}
@@ -1135,27 +1109,27 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
             )}
           >
             {isRemoveMode ? <XCircle className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
-            {isRemoveMode ? "CANCEL" : "DELETE"}
+            {isRemoveMode ? "Cancel" : "Delete"}
           </button>
 
           {isRemoveMode && (
             <div className="flex items-center gap-2">
               <button
                 onClick={selectAllForRemove}
-                className="px-3 py-1.5 rounded-xl bg-[#030806] border border-white/[0.04] text-[12px] font-bold uppercase tracking-wide text-slate-300 hover:bg-white/[0.05]"
+                className="px-3 py-1.5 rounded-xl bg-[#030806] border border-white/[0.04] text-[12px] font-bold tracking-[0.08em] text-slate-300 hover:bg-white/[0.05]"
               >
-                {selectedRemoveIds.size === visibleSnapshots.length ? "DESELECT" : "ALL"}
+                {selectedRemoveIds.size === visibleSnapshots.length ? "Deselect" : "Select all"}
               </button>
               <button
                 onClick={() => void deleteSelectedSnapshots()}
                 disabled={selectedRemoveIds.size === 0 || isDeletingSnapshots}
-                className="px-3 py-1.5 rounded-xl bg-rose-500/20 border border-rose-500/30 text-[12px] font-bold uppercase tracking-wide text-rose-300 hover:bg-rose-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                className="px-3 py-1.5 rounded-xl bg-rose-500/20 border border-rose-500/30 text-[12px] font-bold tracking-[0.08em] text-rose-300 hover:bg-rose-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
               >
                 {isDeletingSnapshots
-                  ? "DELETING..."
+                  ? "Deleting..."
                   : selectedRemoveIds.size === 0
-                    ? "DELETE"
-                    : `DELETE (${selectedRemoveIds.size})`}
+                    ? "Delete"
+                    : `Delete (${selectedRemoveIds.size})`}
               </button>
             </div>
           )}
@@ -1225,15 +1199,15 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
               <Terminal className="w-8 h-8 text-slate-700 mx-auto" />
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wide leading-relaxed">
                 {riskFilter === "all"
-                  ? "No clinical snapshots found yet. Run the agent and this panel will auto-refresh every few seconds."
-                  : `No snapshots match ${RISK_FILTER_LABELS[riskFilter]} filter. Try ALL or increase LIMIT.`}
+                  ? "No logs yet for this agent. Run the agent and this panel will auto-refresh every few seconds."
+                  : `No logs match ${RISK_FILTER_LABELS[riskFilter]} filter. Try All or raise Show limit.`}
               </p>
               {riskFilter !== "all" && (
                 <button
                   onClick={() => setRiskFilter("all")}
                   className="px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/10 text-xs font-bold uppercase tracking-wide text-slate-200 hover:bg-white/[0.06]"
                 >
-                  SHOW ALL
+                  Show all
                 </button>
               )}
             </div>
@@ -1501,7 +1475,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId, or
                     Save logs to datasets
                   </h2>
                   <p className="mt-1 text-xs text-slate-400">
-                    Select existing datasets for this node or create a new one.
+                    Select existing datasets for this agent or create a new one.
                   </p>
                 </div>
                 <button

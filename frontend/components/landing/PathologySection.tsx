@@ -31,7 +31,7 @@ const pathologies = [
     id: "gate",
     title: "No real gate before deploy",
     description:
-      "CI says tests are green, but none of them replay your actual production conversations under the new config. There’s no PASS/FAIL gate that runs on real traces and tells you, “this node is safe to ship.”",
+      "CI says tests are green, but none of them replay your actual production conversations under the new config. There’s no pass/fail gate that runs on real traces and tells you, “this agent is safe to ship.”",
     icon: Activity,
     color: "text-yellow-500",
     borderColor: "group-hover:border-yellow-500/50",

@@ -91,7 +91,7 @@ function DatasetSnapshotList({
       <div className="px-4 py-3 border-t border-white/5 bg-white/[0.02]">
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <span className="inline-block w-3 h-3 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
-          Loading logs…
+          Loading logs...
         </div>
       </div>
     );
@@ -548,9 +548,9 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
                         prev.size === items.length ? new Set() : new Set(items.map(ds => ds.id))
                       );
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-[11px] font-bold uppercase tracking-wide text-slate-200 bg-white/[0.03] hover:bg-white/[0.08]"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-[11px] font-bold tracking-[0.08em] text-slate-200 bg-white/[0.03] hover:bg-white/[0.08]"
                   >
-                    {selectedDatasetIds.size === items.length ? "DESELECT" : "ALL"}
+                    {selectedDatasetIds.size === items.length ? "Deselect" : "Select all"}
                   </button>
                   <button
                     type="button"
@@ -612,7 +612,7 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
           <div className="p-10 text-center space-y-4 border border-dashed border-white/5 rounded-3xl">
             <FileArchive className="w-8 h-8 text-slate-700 mx-auto" />
             <p className="text-xs font-black text-slate-500 uppercase tracking-wide leading-relaxed">
-              No datasets saved yet. Select logs in Clinical Log and save into datasets.
+              No datasets saved yet. Select logs in Live Logs and save them into datasets.
             </p>
           </div>
         )}
