@@ -245,7 +245,7 @@ function LiveViewEmptyState({
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-400">Step 3</p>
             <p className="mt-2 text-sm font-semibold text-white">Run one request</p>
             <p className="mt-1 text-xs leading-relaxed text-slate-400">
-              Trigger one test call and return here. Your first agent node should appear in seconds.
+              Trigger one test call and return here. Your first agent should appear in seconds.
             </p>
           </div>
         </div>
@@ -276,7 +276,7 @@ function LiveViewEmptyState({
             {snippet}
           </div>
           <p className="text-[11px] text-slate-500 px-6 pb-6 font-bold uppercase tracking-widest opacity-50">
-            Make one LLM call — you should see your first agent node here within a few seconds.
+            Make one LLM call — you should see your first agent here within a few seconds.
           </p>
         </div>
 
@@ -286,7 +286,7 @@ function LiveViewEmptyState({
           </p>
           <ul className="mt-2 space-y-1 text-xs leading-relaxed text-slate-300">
             <li>401/403: verify Project ID and API key match the same project.</li>
-            <li>No nodes after 1-2 minutes: verify requests hit your backend and `/api/v1/api-calls`.</li>
+            <li>No agents after 1-2 minutes: verify requests hit your backend and `/api/v1/api-calls`.</li>
             <li>Still empty: open browser Network tab and confirm `live-view/agents` returns at least one agent.</li>
           </ul>
         </div>
@@ -424,10 +424,10 @@ function DeletedAgentsTray({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-300">
-            Deleted Nodes
+            Deleted Agents
           </p>
           <p className="mt-1 text-xs leading-relaxed text-slate-400">
-            Hidden nodes can be restored here. Matching new traffic also restores them automatically
+            Hidden agents can be restored here. Matching new traffic also restores them automatically
             during the configured restore window.
           </p>
         </div>
@@ -462,7 +462,7 @@ function DeletedAgentsTray({
                 <p className="mt-1 text-[11px] text-slate-600">
                   {agent.deleted_at
                     ? `Deleted ${new Date(agent.deleted_at).toLocaleString()}`
-                    : "Soft-deleted node"}
+                    : "Soft-deleted agent"}
                 </p>
               </div>
               <button
@@ -485,14 +485,14 @@ function DeletedAgentsTray({
               <button
                 type="button"
                 onClick={handleCancel}
-                className="flex-1 rounded-xl border border-rose-500/40 bg-rose-500/15 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-rose-200 hover:bg-rose-500/25"
+                className="flex-1 rounded-xl border border-rose-500/40 bg-rose-500/15 px-3 py-2 text-[11px] font-bold tracking-[0.12em] text-rose-200 hover:bg-rose-500/25"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSelectAllOrDeselect}
-                className="flex-1 rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-200 hover:bg-white/5"
+                className="flex-1 rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-[11px] font-bold tracking-[0.12em] text-slate-200 hover:bg-white/5"
               >
                 {selectedIds.size === agents.length ? "Deselect" : "All"}
               </button>
@@ -500,7 +500,7 @@ function DeletedAgentsTray({
                 type="button"
                 onClick={handleDelete}
                 disabled={hardDeleting || selectedIds.size === 0}
-                className="flex-1 rounded-xl border border-rose-500/40 bg-rose-500/25 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-rose-100 hover:bg-rose-500/40 disabled:opacity-40"
+                className="flex-1 rounded-xl border border-rose-500/40 bg-rose-500/25 px-3 py-2 text-[11px] font-bold tracking-[0.12em] text-rose-100 hover:bg-rose-500/40 disabled:opacity-40"
               >
                 {hardDeleting
                   ? "Deleting..."
@@ -517,15 +517,15 @@ function DeletedAgentsTray({
               setIsDeleteMode(true);
               setSelectedIds(new Set());
             }}
-            className="w-full rounded-xl border border-rose-500/40 bg-black/40 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-rose-200 hover:bg-rose-500/20 flex items-center justify-center gap-2"
+            className="w-full rounded-xl border border-rose-500/40 bg-black/40 px-3 py-2 text-[11px] font-bold tracking-[0.12em] text-rose-200 hover:bg-rose-500/20 flex items-center justify-center gap-2"
           >
             <Trash2 className="w-3.5 h-3.5" />
             Delete
           </button>
         )}
         <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-[11px] leading-relaxed text-slate-400">
-          Removal hides a node immediately. Matching traffic can auto-restore it within the grace
-          window. Hard delete will permanently remove node display settings for the selected agents.
+          Removal hides an agent immediately. Matching traffic can auto-restore it within the grace
+          window. Hard delete will permanently remove display settings for the selected agents.
           <Link href="/docs" className="ml-1 text-emerald-300 hover:text-emerald-200">
             See docs
           </Link>
@@ -1016,9 +1016,9 @@ function LiveViewContent() {
             setPanelTab("logs");
           }}
           tabs={[
-            { id: "logs", label: "Clinical Log" },
+            { id: "logs", label: "Live Logs" },
             { id: "eval", label: "Evaluation" },
-            { id: "data", label: "Data" },
+            { id: "data", label: "Saved Data" },
             { id: "settings", label: "Settings" },
           ]}
           activeTab={panelTab}

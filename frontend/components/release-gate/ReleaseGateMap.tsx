@@ -306,7 +306,7 @@ export function ReleaseGateMapContent({
       {!agents.length && agentsLoaded && (
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
           <p className="text-slate-400 text-sm">
-            No agents yet. Run flows in Live View to see nodes here.
+            No agents yet. Run flows in Live View to see agents here.
           </p>
         </div>
       )}
