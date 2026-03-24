@@ -27,6 +27,9 @@ export type ReleaseGateThresholdShape = { label: string; failRateMax: number; fl
 /**
  * Full value provided by `ReleaseGatePageContent` — consumers should use
  * `useContext(ReleaseGatePageContext)` and handle `null` only when outside the provider.
+ *
+ * Keep field types accurate here so `pickReleaseGateConfigPanelContext` (and similar) can stay a thin projection
+ * without `as` casts.
  */
 export interface ReleaseGatePageContextValue {
   orgId: string;
@@ -163,8 +166,6 @@ export interface ReleaseGatePageContextValue {
   REPEAT_OPTIONS: readonly number[];
   isHeavyRepeat: boolean;
   canRunValidate: boolean;
-  keyBlocked: boolean;
-  keyRegistrationMessage: string;
   expandedCaseIndex: number | null;
   setExpandedCaseIndex: (n: number | null) => void;
   selectedAttempt: { caseIndex: number; attemptIndex: number } | null;
