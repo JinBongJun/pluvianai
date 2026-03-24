@@ -367,10 +367,10 @@ function HistoryRunRowButton({
 }
 
 function formatHistoryDateFilterSummary(preset: "all" | "24h" | "7d" | "30d"): string {
-  if (preset === "24h") return "Last 24 hours";
-  if (preset === "7d") return "Last 7 days";
-  if (preset === "30d") return "Last 30 days";
-  return "All retained dates";
+  if (preset === "24h") return "Last 24h";
+  if (preset === "7d") return "Last 7d";
+  if (preset === "30d") return "Last 30d";
+  return "All dates";
 }
 
 function percentFromRate(value: unknown): string {
@@ -2410,7 +2410,7 @@ export function ReleaseGateExpandedView() {
 
   const [logsStatusFilter, setLogsStatusFilter] = useState<LogsStatusFilter>("all");
   const [logsSortMode, setLogsSortMode] = useState<"newest" | "oldest">("newest");
-  const [logsShowLimit, setLogsShowLimit] = useState<10 | 20 | 50 | 100 | 200>(50);
+  const [logsShowLimit, setLogsShowLimit] = useState<10 | 20 | 30 | 50 | 100 | 200>(30);
   const requestTools = useMemo(
     () => (Array.isArray(requestBody.tools) ? requestBody.tools : []),
     [requestBody]
@@ -2450,7 +2450,7 @@ export function ReleaseGateExpandedView() {
   );
   const historyFilterSummary = useMemo(() => {
     const parts: string[] = [];
-    if (historyStatus !== "all") parts.push(historyStatus === "pass" ? "Passed only" : "Failed only");
+    if (historyStatus !== "all") parts.push(historyStatus === "pass" ? "Passed runs" : "Failed runs");
     if (historyDateSummary) parts.push(historyDateSummary);
     if (historyTraceId.trim()) parts.push(`Trace ${historyTraceId.trim()}`);
     return parts;
@@ -2815,7 +2815,7 @@ export function ReleaseGateExpandedView() {
                   : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
               )}
             >
-              VALIDATE
+              Validate
             </button>
             <button
               onClick={() => setTab("history")}
@@ -2827,7 +2827,7 @@ export function ReleaseGateExpandedView() {
                   : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
               )}
             >
-              HISTORY
+              History
             </button>
           </div>
         </div>
@@ -2862,7 +2862,7 @@ export function ReleaseGateExpandedView() {
                           </span>{" "}
                           of{" "}
                           <span className="font-mono text-slate-100">{logsMatchCount}</span>{" "}
-                          matching
+                          logs
                           {logsMatchCount > logsShowLimit ? (
                             <span className="text-slate-500"> · cap {logsShowLimit}</span>
                           ) : null}
@@ -2892,13 +2892,13 @@ export function ReleaseGateExpandedView() {
                             data-testid={`rg-logs-filter-${mode}`}
                             onClick={() => setLogsStatusFilter(mode)}
                             className={clsx(
-                              "min-w-0 flex-1 rounded-lg px-1.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] transition-all sm:px-2.5 sm:text-[10px] sm:tracking-[0.16em]",
+                              "min-w-0 flex-1 rounded-lg px-1.5 py-1.5 text-[9px] font-bold tracking-[0.08em] transition-all sm:px-2.5 sm:text-[10px] sm:tracking-[0.12em]",
                               logsStatusFilter === mode
                                 ? "bg-white/[0.12] text-white shadow-sm"
                                 : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
                             )}
                           >
-                            {mode === "all" ? "ALL" : mode === "failed" ? "FAILED" : "PASSED"}
+                            {mode === "all" ? "All" : mode === "failed" ? "Flagged" : "Healthy"}
                           </button>
                         ))}
                       </div>
@@ -2913,9 +2913,11 @@ export function ReleaseGateExpandedView() {
                             data-testid="rg-logs-show-limit"
                             value={logsShowLimit}
                             onChange={e =>
-                              setLogsShowLimit(Number(e.target.value) as 10 | 20 | 50 | 100 | 200)
+                              setLogsShowLimit(
+                                Number(e.target.value) as 10 | 20 | 30 | 50 | 100 | 200
+                              )
                             }
-                            className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-300 outline-none"
+                            className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold tracking-[0.08em] text-slate-300 outline-none"
                             title="How many matching logs to list"
                           >
                             <option value={10} className="bg-[#18191e] text-slate-200">
@@ -2923,6 +2925,9 @@ export function ReleaseGateExpandedView() {
                             </option>
                             <option value={20} className="bg-[#18191e] text-slate-200">
                               Show 20
+                            </option>
+                            <option value={30} className="bg-[#18191e] text-slate-200">
+                              Show 30
                             </option>
                             <option value={50} className="bg-[#18191e] text-slate-200">
                               Show 50
@@ -2944,7 +2949,7 @@ export function ReleaseGateExpandedView() {
                             data-testid="rg-logs-sort"
                             value={logsSortMode}
                             onChange={e => setLogsSortMode(e.target.value as "newest" | "oldest")}
-                            className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-300 outline-none"
+                            className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold tracking-[0.08em] text-slate-300 outline-none"
                           >
                             <option value="newest" className="bg-[#18191e] text-slate-200">
                               Newest
@@ -2980,7 +2985,7 @@ export function ReleaseGateExpandedView() {
                             Loading recent snapshots
                           </div>
                           <div className="mt-2 text-[11px] text-slate-500">
-                            Fetching baseline logs for this node...
+                            Fetching baseline logs for this agent...
                           </div>
                         </div>
                       ) : recentSnapshots.length === 0 ? (
@@ -2989,20 +2994,20 @@ export function ReleaseGateExpandedView() {
                             No baseline logs yet
                           </div>
                           <div className="mt-2 text-[11px] text-slate-500">
-                            Generate traffic in Live View, then open this node again.
+                            Generate traffic in Live View, then open this agent again.
                           </div>
                         </div>
                       ) : logsMatchCount === 0 ? (
                         <div className="p-8 text-center" data-testid="rg-logs-state-empty-filter">
                           <div className="text-xs font-medium uppercase tracking-widest text-slate-500">
                             {logsStatusFilter === "failed"
-                              ? "No failed logs in this window"
+                              ? "No flagged logs in this window"
                               : logsStatusFilter === "passed"
-                                ? "No passed logs in this window"
+                                ? "No healthy logs in this window"
                                 : "No logs match this filter"}
                           </div>
                           <div className="mt-2 text-[11px] text-slate-500">
-                            Try ALL, or raise Show limit if matches are further back.
+                            Try All, or raise Show limit if matching logs are further back.
                           </div>
                         </div>
                       ) : (
@@ -3353,7 +3358,7 @@ export function ReleaseGateExpandedView() {
                           Awaiting run
                         </div>
                         <p className="mt-1 text-[11px] text-slate-500">
-                          Choose baseline data, adjust the settings below the node, then press
+                          Choose baseline data, adjust the settings below the agent, then press
                           Start.
                         </p>
                       </div>
@@ -3370,10 +3375,10 @@ export function ReleaseGateExpandedView() {
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-bold uppercase tracking-wider">
-                              {result.pass ? "Gate Passed" : "Gate Failed"}
+                              {result.pass ? "Gate passed" : "Gate failed"}
                             </span>
                             <span className="text-[10px] font-bold text-white/70">
-                              Fail rate {percentFromRate(result.fail_rate)}
+                              Failure rate {percentFromRate(result.fail_rate)}
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center gap-3 text-[11px] text-white/60">
@@ -3400,10 +3405,10 @@ export function ReleaseGateExpandedView() {
                                   </span>
                                 </span>
                                 <span className="text-emerald-400/90">
-                                  Pass {toolGroundingRunSummary.pass}
+                                  Passed {toolGroundingRunSummary.pass}
                                 </span>
                                 <span className="text-rose-400/90">
-                                  Fail {toolGroundingRunSummary.fail}
+                                  Failed {toolGroundingRunSummary.fail}
                                 </span>
                                 {toolGroundingRunSummary.semanticOk > 0 ? (
                                   <span className="text-violet-300/90">
@@ -3513,7 +3518,7 @@ export function ReleaseGateExpandedView() {
                       <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
                         <Flag className="mx-auto mb-2 h-10 w-10 text-slate-600" />
                         <p className="text-sm text-slate-500">
-                          No retained history yet for this node.
+                          No retained runs yet for this agent.
                         </p>
                       </div>
                     ) : (
@@ -3524,7 +3529,7 @@ export function ReleaseGateExpandedView() {
                               Experiment history
                             </div>
                             <div className="text-sm font-semibold text-white">
-                              Retained runs for this node
+                              Retained runs for this agent
                             </div>
                             <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-slate-500">
                               <span>
@@ -3565,9 +3570,9 @@ export function ReleaseGateExpandedView() {
                               className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[11px] text-slate-200"
                             >
                               <option value="all">All dates</option>
-                              <option value="24h">24h</option>
-                              <option value="7d">7d</option>
-                              <option value="30d">30d</option>
+                              <option value="24h">Last 24h</option>
+                              <option value="7d">Last 7d</option>
+                              <option value="30d">Last 30d</option>
                             </select>
                             <button
                               type="button"
@@ -3694,7 +3699,7 @@ export function ReleaseGateExpandedView() {
             ) : historyItems.length === 0 ? (
               <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
                 <Flag className="mx-auto mb-2 h-10 w-10 text-slate-600" />
-                <p className="text-sm text-slate-500">No validation history yet.</p>
+                <p className="text-sm text-slate-500">No validation runs yet.</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -3713,7 +3718,7 @@ export function ReleaseGateExpandedView() {
             {!historyLoading && historyItems.length > 0 && (
               <div className="flex items-center justify-between border-t border-white/10 pt-2 text-xs text-slate-400">
                 <span>
-                  {historyTotal} {historyTotal === 1 ? "record" : "records"}
+                  {historyTotal} {historyTotal === 1 ? "run" : "runs"}
                 </span>
                 <div className="flex gap-2">
                   <button

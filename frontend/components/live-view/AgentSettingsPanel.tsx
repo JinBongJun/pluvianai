@@ -241,10 +241,10 @@ export function AgentSettingsPanel({
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
         <div>
           <h3 className="text-sm font-black uppercase tracking-wider text-slate-300">
-            Node Settings
+            Agent Settings
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            Change node name or remove this node from Live View.
+            Change agent name or remove this agent from Live View.
           </p>
         </div>
         <div className="space-y-2">
@@ -274,11 +274,11 @@ export function AgentSettingsPanel({
             className="inline-flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            Remove node
+            Remove agent
           </button>
         ) : (
           <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 space-y-2">
-            <p className="text-xs text-rose-200">Remove this node from Live View?</p>
+            <p className="text-xs text-rose-200">Remove this agent from Live View?</p>
             <div className="flex items-center gap-2">
               <button
                 type="button"

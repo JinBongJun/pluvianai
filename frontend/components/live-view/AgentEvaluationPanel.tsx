@@ -554,12 +554,10 @@ export function AgentEvaluationPanel({
             <div>
               <div className="flex items-center gap-2 mb-1.5">
                 <SlidersHorizontal className="w-5 h-5 text-emerald-400" />
-                <h2 className="text-lg font-black text-white uppercase tracking-widest">
-                  Active Diagnostics
-                </h2>
+                <h2 className="text-lg font-black text-white uppercase tracking-widest">Evaluation</h2>
               </div>
               <p className="text-xs text-slate-400 font-medium">
-                Configure evaluation rules. Trace range is managed in Clinical Log.
+                Configure evaluation rules. Log range is managed in Live Logs.
               </p>
             </div>
 
