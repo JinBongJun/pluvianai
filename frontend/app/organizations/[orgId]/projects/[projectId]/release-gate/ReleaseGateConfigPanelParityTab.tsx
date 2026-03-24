@@ -6,9 +6,9 @@ import { Loader2, Plus, RefreshCcw, Trash2, Upload } from "lucide-react";
 import { getToolParametersError } from "./releaseGateConfigPanelHelpers";
 import { ReleaseGateConfigPanelCollapsible as CollapsiblePanel } from "./ReleaseGateConfigPanelCollapsible";
 import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel";
-import type { ReleaseGateConfigPanelModel } from "./useReleaseGateConfigPanelModel";
+import type { ReleaseGateConfigPanelParityTabProps } from "./releaseGateConfigPanelModel.types";
 
-export function ReleaseGateConfigPanelParityTab({ m }: { m: ReleaseGateConfigPanelModel }) {
+export function ReleaseGateConfigPanelParityTab({ m }: { m: ReleaseGateConfigPanelParityTabProps }) {
   const {
     parityOpenTools,
     setParityOpenTools,
@@ -251,7 +251,9 @@ export function ReleaseGateConfigPanelParityTab({ m }: { m: ReleaseGateConfigPan
                 <span className="font-mono text-slate-500">attachments</span>,{" "}
                 <span className="font-mono text-slate-500">documents</span>, or provider-specific keys. Does{" "}
                 <em>not</em> replace stored chat messages. Pre-filled from the representative snapshot when you
-                select logs. Per-log JSON below overrides the same key for that log only.
+                select logs. The same keys are omitted from the <strong className="text-slate-400">Core setup</strong>{" "}
+                config JSON so you edit them in one place. Per-log boxes below only show fields that{" "}
+                <em>differ</em> from this shared JSON.
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2 justify-end">
@@ -309,8 +311,9 @@ export function ReleaseGateConfigPanelParityTab({ m }: { m: ReleaseGateConfigPan
                   Per-log extras
                 </div>
                 <p className="text-xs text-slate-500 mt-1 max-w-[48rem]">
-                  When a log needed different non-message fields than the shared JSON (same merge rules). Filled
-                  from each snapshot when available.
+                  Only fields that <em>differ</em> from the shared JSON for that log appear here — same values are
+                  omitted so you are not editing two copies. Empty <code className="text-slate-400">{"{}"}</code>{" "}
+                  means “use shared for everything.” Merge order is still shared first, then these overrides.
                 </p>
               </div>
               <button
