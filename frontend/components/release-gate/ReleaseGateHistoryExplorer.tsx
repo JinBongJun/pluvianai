@@ -57,31 +57,57 @@ export function ReleaseGateHistoryExplorer({
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <select
-          value={historyStatus}
-          onChange={e => {
-            setHistoryStatus(e.target.value as "all" | "pass" | "fail");
-            setHistoryOffset(0);
-          }}
-          className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100"
-        >
-          <option value="all">All</option>
-          <option value="pass">Healthy</option>
-          <option value="fail">Flagged</option>
-        </select>
-        <select
-          value={historyDatePreset}
-          onChange={e => {
-            setHistoryDatePreset(e.target.value as "all" | "24h" | "7d" | "30d");
-            setHistoryOffset(0);
-          }}
-          className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100"
-        >
-          <option value="all">All dates</option>
-          <option value="24h">Last 24h</option>
-          <option value="7d">Last 7d</option>
-          <option value="30d">Last 30d</option>
-        </select>
+        <div className="min-w-[6rem] rounded-xl bg-[#030806] border border-white/[0.04] transition-colors hover:border-white/10 focus-within:border-emerald-500/50">
+          <label className="sr-only" htmlFor="rg-history-explorer-status">
+            Filter runs by health
+          </label>
+          <select
+            id="rg-history-explorer-status"
+            value={historyStatus}
+            onChange={e => {
+              setHistoryStatus(e.target.value as "all" | "pass" | "fail");
+              setHistoryOffset(0);
+            }}
+            className="w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-sm font-bold tracking-[0.06em] text-slate-200 outline-none"
+          >
+            <option value="all" className="bg-[#18191e] text-slate-200">
+              All
+            </option>
+            <option value="pass" className="bg-[#18191e] text-slate-200">
+              Healthy
+            </option>
+            <option value="fail" className="bg-[#18191e] text-slate-200">
+              Flagged
+            </option>
+          </select>
+        </div>
+        <div className="min-w-[7.5rem] rounded-xl bg-[#030806] border border-white/[0.04] transition-colors hover:border-white/10 focus-within:border-emerald-500/50">
+          <label className="sr-only" htmlFor="rg-history-explorer-dates">
+            Filter runs by date range
+          </label>
+          <select
+            id="rg-history-explorer-dates"
+            value={historyDatePreset}
+            onChange={e => {
+              setHistoryDatePreset(e.target.value as "all" | "24h" | "7d" | "30d");
+              setHistoryOffset(0);
+            }}
+            className="w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-sm font-bold tracking-[0.06em] text-slate-200 outline-none"
+          >
+            <option value="all" className="bg-[#18191e] text-slate-200">
+              All dates
+            </option>
+            <option value="24h" className="bg-[#18191e] text-slate-200">
+              Last 24h
+            </option>
+            <option value="7d" className="bg-[#18191e] text-slate-200">
+              Last 7d
+            </option>
+            <option value="30d" className="bg-[#18191e] text-slate-200">
+              Last 30d
+            </option>
+          </select>
+        </div>
         <input
           value={historyTraceId}
           onChange={e => {
