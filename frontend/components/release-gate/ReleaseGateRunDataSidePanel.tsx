@@ -183,26 +183,32 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                         </div>
                       </div>
 
-                      <div className="flex w-full items-center rounded-xl border border-white/[0.08] bg-black/40 p-0.5">
-                        {(["all", "failed", "passed"] as LogsStatusFilter[]).map(mode => (
-                          <button
-                            key={mode}
-                            type="button"
-                            data-testid={`rg-logs-filter-${mode}`}
-                            onClick={() => setLogsStatusFilter(mode)}
-                            className={clsx(
-                              "min-w-0 flex-1 rounded-lg px-1.5 py-1.5 text-[9px] font-bold tracking-[0.08em] transition-all sm:px-2.5 sm:text-[10px] sm:tracking-[0.12em]",
-                              logsStatusFilter === mode
-                                ? "bg-white/[0.12] text-white shadow-sm"
-                                : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
-                            )}
-                          >
-                            {mode === "all" ? "All" : mode === "failed" ? "Flagged" : "Healthy"}
-                          </button>
-                        ))}
-                      </div>
-
                       <div className="flex flex-wrap items-stretch gap-2">
+                        <div className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-black/40 transition-colors hover:border-white/20 focus-within:border-fuchsia-500/60">
+                          <label className="sr-only" htmlFor="rg-logs-status-filter">
+                            Filter logs by status
+                          </label>
+                          <select
+                            id="rg-logs-status-filter"
+                            data-testid="rg-logs-status-filter"
+                            value={logsStatusFilter}
+                            onChange={e =>
+                              setLogsStatusFilter(e.target.value as LogsStatusFilter)
+                            }
+                            className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold tracking-[0.08em] text-slate-300 outline-none"
+                            title="All, Flagged, or Healthy logs"
+                          >
+                            <option value="all" className="bg-[#18191e] text-slate-200">
+                              All
+                            </option>
+                            <option value="failed" className="bg-[#18191e] text-slate-200">
+                              Flagged
+                            </option>
+                            <option value="passed" className="bg-[#18191e] text-slate-200">
+                              Healthy
+                            </option>
+                          </select>
+                        </div>
                         <div className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-black/40 transition-colors hover:border-white/20 focus-within:border-fuchsia-500/60">
                           <label className="sr-only" htmlFor="rg-logs-show-limit">
                             Max rows to show
