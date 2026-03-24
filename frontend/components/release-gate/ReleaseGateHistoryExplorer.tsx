@@ -66,8 +66,8 @@ export function ReleaseGateHistoryExplorer({
           className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100"
         >
           <option value="all">All</option>
-          <option value="pass">Passed</option>
-          <option value="fail">Failed</option>
+          <option value="pass">Healthy</option>
+          <option value="fail">Flagged</option>
         </select>
         <select
           value={historyDatePreset}
