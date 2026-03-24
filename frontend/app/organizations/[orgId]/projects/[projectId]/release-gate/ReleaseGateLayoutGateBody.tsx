@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { memo } from "react";
 import type { AgentForPicker } from "@/components/release-gate/AgentPickerCard";
 import { ReleaseGateMap } from "@/components/release-gate/ReleaseGateMap";
 import { ReleaseGateExpandedView } from "./ReleaseGateExpandedView";
@@ -20,7 +20,7 @@ export type ReleaseGateLayoutGateBodyProps = {
   projectName?: string;
 };
 
-export function ReleaseGateLayoutGateBody({
+function ReleaseGateLayoutGateBodyInner({
   showGateLoadingState,
   showGateAccessDeniedState,
   showGateApiErrorState,
@@ -95,3 +95,6 @@ export function ReleaseGateLayoutGateBody({
   }
   return <ReleaseGateExpandedView />;
 }
+
+export const ReleaseGateLayoutGateBody = memo(ReleaseGateLayoutGateBodyInner);
+ReleaseGateLayoutGateBody.displayName = "ReleaseGateLayoutGateBody";

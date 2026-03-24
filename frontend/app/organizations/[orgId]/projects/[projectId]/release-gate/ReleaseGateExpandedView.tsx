@@ -6,20 +6,16 @@
  * (see docs/live-view-context-privacy-plan.md).
  */
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
-import clsx from "clsx";
-import { AnimatePresence, motion } from "framer-motion";
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
-import { sanitizePayloadForPreview } from "./ReleaseGatePageContent";
+import { ReleaseGateExpandedBaselineDetailPortal } from "./ReleaseGateExpandedBaselineDetailPortal";
+import { ReleaseGateExpandedMainTabs } from "./ReleaseGateExpandedMainTabs";
+import { sanitizePayloadForPreview } from "./releaseGatePageContent.lib";
 import { ReleaseGateConfigPanel } from "./ReleaseGateConfigPanel";
 import { ReleaseGateMap } from "@/components/release-gate/ReleaseGateMap";
 import { AttemptDetailOverlay } from "@/components/release-gate/AttemptDetailOverlay";
 import { ReleaseGateHistoryExplorer } from "@/components/release-gate/ReleaseGateHistoryExplorer";
 import { ReleaseGateRunDataSidePanel } from "@/components/release-gate/ReleaseGateRunDataSidePanel";
 import { ReleaseGateRunOutputSidePanel } from "@/components/release-gate/ReleaseGateRunOutputSidePanel";
-import {
-  SnapshotDetailModal,
-  type SnapshotForDetail,
-} from "@/components/shared/SnapshotDetailModal";
 import { ClientPortal } from "@/components/shared/ClientPortal";
 import {
   type GateTab,
@@ -148,6 +144,31 @@ export function ReleaseGateExpandedView() {
     () => ctx.runEvalElements.map(({ name }) => ({ name })),
     [ctx.runEvalElements]
   );
+
+  const baselineEvalRows = useMemo(() => {
+    const snap = baselineDetailSnapshot as unknown as Record<string, unknown> | null;
+    if (!snap) return [];
+    const checks = snap.eval_checks_result;
+    if (!checks || typeof checks !== "object" || Array.isArray(checks)) return [];
+    return Object.entries(checks).map(([id, status]) => ({
+      id,
+      status: String(status),
+    }));
+  }, [baselineDetailSnapshot]);
+
+  const baselineEvalContextLabel = useMemo(() => {
+    const snap = baselineDetailSnapshot as unknown as Record<string, unknown> | null;
+    if (!snap) return "Eval result from snapshot capture time.";
+    const cur = (agentEvalData as Record<string, unknown> | undefined)?.current_eval_config_version as
+      | string
+      | undefined;
+    const snapVer = snap.eval_config_version as string | undefined;
+    const stale = cur && snapVer && snapVer !== cur;
+    return stale
+      ? "Eval result from snapshot capture time. Eval config has changed since then."
+      : "Eval result from snapshot capture time.";
+  }, [baselineDetailSnapshot, agentEvalData]);
+
   const historyStatus = ctx.historyStatus;
   const setHistoryStatus = ctx.setHistoryStatus;
   const historyTraceId = ctx.historyTraceId;
@@ -583,34 +604,7 @@ export function ReleaseGateExpandedView() {
         />
       </div>
       <div className="absolute inset-0 z-[9999] pointer-events-none overflow-y-auto">
-        <div className="absolute top-6 left-6 right-6 flex items-start justify-end pointer-events-none z-[10000]">
-          <div className="mt-[70px] flex rounded-2xl border border-white/10 bg-[#1a1a1e]/90 p-1.5 shadow-2xl pointer-events-auto">
-            <button
-              onClick={() => setTab("validate")}
-              data-testid="rg-main-tab-validate"
-              className={clsx(
-                "px-6 py-2 text-xs font-bold rounded-xl transition-all duration-300",
-                tab === "validate"
-                  ? "bg-fuchsia-500/20 text-fuchsia-100 border border-fuchsia-500/30 shadow-[0_0_20px_rgba(217,70,239,0.2)]"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
-              )}
-            >
-              Validate
-            </button>
-            <button
-              onClick={() => setTab("history")}
-              data-testid="rg-main-tab-history"
-              className={clsx(
-                "px-6 py-2 text-xs font-bold rounded-xl transition-all duration-300",
-                tab === "history"
-                  ? "bg-fuchsia-500/20 text-fuchsia-100 border border-fuchsia-500/30"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
-              )}
-            >
-              History
-            </button>
-          </div>
-        </div>
+        <ReleaseGateExpandedMainTabs tab={tab} setTab={setTab} />
 
         {agentId && (
           <ClientPortal>
@@ -681,7 +675,6 @@ export function ReleaseGateExpandedView() {
               nodeHistoryItems={nodeHistoryItems}
               historyTotal={historyTotal}
               historyFilterSummary={historyFilterSummary}
-              setTab={setTab}
               historyStatus={historyStatus}
               setHistoryStatus={setHistoryStatus}
               setHistoryOffset={setHistoryOffset}
@@ -737,41 +730,12 @@ export function ReleaseGateExpandedView() {
           />
         )}
 
-        <ClientPortal>
-          <AnimatePresence>
-            {baselineDetailSnapshot ? (
-              <SnapshotDetailModal
-                key={String(
-                  (baselineDetailSnapshot as unknown as { id?: string | number }).id ?? "snapshot"
-                )}
-                snapshot={baselineDetailSnapshot}
-                onClose={() => setBaselineDetailSnapshot(null)}
-                overlayZIndex={10000}
-                policyState={{ status: "idle" }}
-                evalRows={(() => {
-                  const snap = baselineDetailSnapshot as unknown as Record<string, unknown> | null;
-                  const checks = snap?.eval_checks_result;
-                  if (!checks || typeof checks !== "object" || Array.isArray(checks)) return [];
-                  return Object.entries(checks).map(([id, status]) => ({
-                    id,
-                    status: String(status),
-                  }));
-                })()}
-                evalEnabled={true}
-                evalContextLabel={(() => {
-                  const snap = baselineDetailSnapshot as unknown as Record<string, unknown>;
-                  const cur = (agentEvalData as Record<string, unknown> | undefined)
-                    ?.current_eval_config_version as string | undefined;
-                  const snapVer = snap?.eval_config_version as string | undefined;
-                  const stale = cur && snapVer && snapVer !== cur;
-                  return stale
-                    ? "Eval result from snapshot capture time. Eval config has changed since then."
-                    : "Eval result from snapshot capture time.";
-                })()}
-              />
-            ) : null}
-          </AnimatePresence>
-        </ClientPortal>
+        <ReleaseGateExpandedBaselineDetailPortal
+          baselineDetailSnapshot={baselineDetailSnapshot}
+          onClose={() => setBaselineDetailSnapshot(null)}
+          evalRows={baselineEvalRows}
+          evalContextLabel={baselineEvalContextLabel}
+        />
       </div>
     </div>
   );

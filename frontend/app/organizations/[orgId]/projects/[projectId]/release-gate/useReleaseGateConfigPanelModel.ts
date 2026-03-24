@@ -7,7 +7,7 @@ import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
 import type { ReplayProvider } from "./releaseGatePageContent.lib";
 import { isPinnedAnthropicModelId, stringifyJson, toReplayProvider } from "./releaseGateConfigPanelHelpers";
 import type { ReleaseGateEditableTool } from "./releaseGatePageContext.types";
-import { sanitizePayloadForPreview } from "./ReleaseGatePageContent";
+import { sanitizePayloadForPreview } from "./releaseGatePageContent.lib";
 import { liveViewAPI, type LiveViewToolTimelineRow } from "@/lib/api/live-view";
 import { buildNodeRequestOverview } from "@/lib/requestOverview";
 
