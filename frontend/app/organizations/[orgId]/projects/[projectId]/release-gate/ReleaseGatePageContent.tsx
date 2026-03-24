@@ -1427,6 +1427,11 @@ export default function ReleaseGatePageContent() {
   );
   const recentSnapshotsAll = recentSnapshotsData?.items ?? EMPTY_SWF_ITEMS;
   const recentSnapshots = recentSnapshotsAll;
+  const recentSnapshotsTotalAvailable =
+    typeof (recentSnapshotsData as { total_available?: number } | undefined)?.total_available ===
+    "number"
+      ? (recentSnapshotsData as { total_available: number }).total_available
+      : undefined;
 
   const baselineSnapshotPoolKey =
     projectId && !isNaN(projectId) && agentId?.trim()
@@ -2745,6 +2750,7 @@ export default function ReleaseGatePageContent() {
     setSnapshotIds,
     setRunSnapshotIds,
     setRunDatasetIds,
+    dataSource,
     setExpandedDatasetId,
     selectedAgent,
     agentsLoaded,
@@ -2752,6 +2758,7 @@ export default function ReleaseGatePageContent() {
     onMapSelectAgent,
     requestSystemPrompt,
     recentSnapshots,
+    recentSnapshotsTotalAvailable,
     recentSnapshotsLoading,
     recentSnapshotsError,
     mutateRecentSnapshots,
