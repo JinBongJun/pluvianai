@@ -129,6 +129,14 @@ export interface ReleaseGatePageContextValue {
   applyLoadedGlobalBodyOverrides: (obj: Record<string, unknown>) => void;
   applyLoadedSnapshotBodyOverrides: (sid: string, obj: Record<string, unknown>) => void;
   clearBodyOverrides: () => void;
+  /** Restore shared replay body extras to values captured when the current log selection was applied. */
+  resetParitySharedOverridesToBaseline: () => void;
+  /** Restore per-log replay body extras to snapshot-derived values for the current selection. */
+  resetParityPerLogOverridesToBaseline: () => void;
+  /** Restore tool definitions to snapshot-derived list for the current selection. */
+  resetParityToolsToBaseline: () => void;
+  /** Restore injected tool-context text per log to snapshot-derived values. */
+  resetParityToolContextToBaseline: () => void;
   handleRequestJsonBlur: () => void;
   applySystemPromptToBody: (
     b: Record<string, unknown>,
