@@ -244,8 +244,14 @@ def upgrade() -> None:
                existing_type=sa.VARCHAR(length=255),
                type_=sa.String(length=100),
                existing_nullable=False)
-    op.create_index(op.f('ix_evaluation_rubrics_created_at'), 'evaluation_rubrics', ['created_at'], unique=False)
-    op.create_index(op.f('ix_evaluation_rubrics_project_id'), 'evaluation_rubrics', ['project_id'], unique=False)
+    # core_legacy / 9d03 may already have created these indexes on empty-DB CI.
+    _rubric_ix = {idx["name"] for idx in sa.inspect(bind).get_indexes("evaluation_rubrics")}
+    _nm_ca = op.f("ix_evaluation_rubrics_created_at")
+    _nm_pi = op.f("ix_evaluation_rubrics_project_id")
+    if _nm_ca not in _rubric_ix:
+        op.create_index(_nm_ca, "evaluation_rubrics", ["created_at"], unique=False)
+    if _nm_pi not in _rubric_ix:
+        op.create_index(_nm_pi, "evaluation_rubrics", ["project_id"], unique=False)
     op.drop_column('evaluation_rubrics', 'min_score')
     op.drop_column('evaluation_rubrics', 'max_score')
     op.drop_column('evaluation_rubrics', 'criteria_prompt')
