@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     # Ingest queue (Phase 3: SDK api-calls pushed here, worker pops and persists)
     INGEST_QUEUE_KEY: str = "ingest:api_calls"
+    # Failed persist payloads (worker pushes original JSON here for replay after fix)
+    INGEST_DLQ_KEY: str = "ingest:api_calls:dlq"
 
     # Security
     SECRET_KEY: str = "your-secret-key-change-in-production"  # Should be changed in production
