@@ -388,7 +388,7 @@ export default function DocsPage() {
                   HTTP
                 </div>
                 <code className="text-emerald-300 font-mono text-sm leading-relaxed whitespace-pre-wrap">
-                  {`POST https://api.pluvian.ai/api/v1/projects/{project_id}/snapshots
+                  {`POST https://api.pluvianai.com/api/v1/projects/{project_id}/snapshots
 Authorization: Bearer YOUR_API_KEY
 Content-Type: application/json
 
@@ -462,7 +462,7 @@ Content-Type: application/json
               <li>
                 <strong className="text-slate-200">Endpoint:</strong>{" "}
                 <code className="px-1.5 py-0.5 rounded bg-black/40 text-violet-300 font-mono text-xs break-all">
-                  POST https://api.pluvian.ai/api/v1/projects/YOUR_PROJECT_ID/api-calls
+                  POST https://api.pluvianai.com/api/v1/projects/YOUR_PROJECT_ID/api-calls
                 </code>
                 — put your numeric project ID in the path (same number as in the project URL).
                 Self-hosted? Replace the host with your API base URL.
@@ -472,6 +472,11 @@ Content-Type: application/json
                 <code className="font-mono text-xs">Authorization: Bearer YOUR_API_KEY</code> — use a
                 project API key with the <strong className="text-slate-200">ingest</strong> scope (or{" "}
                 <code className="font-mono text-xs">*</code>).
+              </li>
+              <li>
+                <strong className="text-slate-200">Headers (manual HTTP):</strong> include{" "}
+                <code className="font-mono text-xs">Content-Type: application/json</code> in addition
+                to <code className="font-mono text-xs">Authorization</code>.
               </li>
               <li>
                 <strong className="text-slate-200">Success:</strong>{" "}
@@ -494,7 +499,8 @@ Content-Type: application/json
               <li className="text-slate-400 text-xs list-none -ml-4 pl-4">
                 Rich tool timelines in Live View / Release Gate may require optional{" "}
                 <code className="font-mono text-xs">tool_events</code> in the same payload (see SDK
-                README). LLM-only payloads still create snapshots.
+                README). The server keeps at most <strong className="text-slate-300">50</strong>{" "}
+                events per call after normalization. LLM-only payloads still create snapshots.
               </li>
             </ul>
           </div>
@@ -722,7 +728,7 @@ Content-Type: application/json
                 Set the HTTP Request: <strong className="text-slate-200">Method</strong> = POST,{" "}
                 <strong className="text-slate-200">URL</strong> ={" "}
                 <code className="px-1.5 py-0.5 rounded bg-black/40 text-amber-300 font-mono text-xs break-all">
-                  https://api.pluvian.ai/api/v1/projects/YOUR_PROJECT_ID/api-calls
+                  https://api.pluvianai.com/api/v1/projects/YOUR_PROJECT_ID/api-calls
                 </code>{" "}
                 (replace <code className="font-mono text-xs">YOUR_PROJECT_ID</code> with your numeric
                 project ID). <strong className="text-slate-200">Authentication</strong> = Header Auth →
@@ -771,7 +777,7 @@ Content-Type: application/json
               <li>
                 From that code path, send one HTTP POST to:{" "}
                 <code className="px-1.5 py-0.5 rounded bg-black/40 text-amber-300 font-mono text-xs break-all">
-                  https://api.pluvian.ai/api/v1/projects/YOUR_PROJECT_ID/api-calls
+                  https://api.pluvianai.com/api/v1/projects/YOUR_PROJECT_ID/api-calls
                 </code>
               </li>
               <li>
@@ -822,7 +828,7 @@ Content-Type: application/json
                 If you prefer not to use the SDK, after each LLM call in LangChain send the same
                 request/response with a POST to{" "}
                 <code className="font-mono text-xs break-all">
-                  https://api.pluvian.ai/api/v1/projects/YOUR_PROJECT_ID/api-calls
+                  https://api.pluvianai.com/api/v1/projects/YOUR_PROJECT_ID/api-calls
                 </code>{" "}
                 and the same JSON body as in the ingest section above (agent_name, request_data,
                 response_data, latency_ms, status_code; optional project_id matching the URL).
@@ -845,7 +851,7 @@ Content-Type: application/json
               <li>
                 Send a POST request to:{" "}
                 <code className="px-1.5 py-0.5 rounded bg-black/40 text-slate-300 font-mono text-xs break-all">
-                  https://api.pluvian.ai/api/v1/projects/123/api-calls
+                  https://api.pluvianai.com/api/v1/projects/123/api-calls
                 </code>{" "}
                 (replace <code className="font-mono text-xs">123</code> with your project ID).
               </li>
