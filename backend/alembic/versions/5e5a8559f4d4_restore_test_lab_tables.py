@@ -366,8 +366,15 @@ def upgrade() -> None:
     op.drop_column('project_notification_settings', 'min_interval_minutes')
     op.drop_column('project_notification_settings', 'discord_enabled')
     op.drop_column('project_notification_settings', 'error_rate_threshold')
-    op.drop_index(op.f('idx_projects_organization_id'), table_name='projects')
-    op.create_index(op.f('ix_projects_organization_id'), 'projects', ['organization_id'], unique=False)
+    # add_organizations uses index=True → ix_projects_organization_id, not idx_*.
+    _proj_ix = {idx["name"] for idx in sa.inspect(bind).get_indexes("projects")}
+    _drop_org = op.f("idx_projects_organization_id")
+    if _drop_org in _proj_ix:
+        op.drop_index(_drop_org, table_name="projects")
+        _proj_ix = {idx["name"] for idx in sa.inspect(bind).get_indexes("projects")}
+    _ix_org = op.f("ix_projects_organization_id")
+    if _ix_org not in _proj_ix:
+        op.create_index(_ix_org, "projects", ["organization_id"], unique=False)
     op.drop_column('projects', 'shadow_routing_config')
     op.add_column('public_benchmarks', sa.Column('version', sa.String(length=20), nullable=True))
     op.add_column('public_benchmarks', sa.Column('data', sa.JSON(), nullable=False, server_default='{}'))
