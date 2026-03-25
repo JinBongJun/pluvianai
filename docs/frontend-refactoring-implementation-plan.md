@@ -97,9 +97,9 @@ flowchart TD
 |----|------|------|-----|
 | **1A.1** | `LIVE_VIEW_*` 상수를 `liveViewPolling.constants.ts`(또는 동일 역할 파일)로 이동, `page`는 import | S | ✅ `live-view/liveViewPolling.constants.ts` |
 | **1A.2** | SWR 인스턴스별 **`dedupingInterval` / `revalidateOnFocus`** 를 상수 파일 또는 훅 옵션 객체로 모음 | M | ✅ `liveViewSwr.defaults.ts` + project/org/agents |
-| **1A.3** | 첫 번째 데이터 훅 **`useLiveViewCoreData`** (예: 프로젝트·노드·에이전트 중 2~3개만) 추출 | L | `page.tsx` 줄 수 ≥150 감소 목표 |
+| **1A.3** | 첫 번째 데이터 훅 **`useLiveViewCoreData`** (예: 프로젝트·노드·에이전트 중 2~3개만) 추출 | L | ✅ `useLiveViewCoreData.ts` (project + org + agents) |
 | **1A.4** | **SSE → mutate** 디바운스 로직을 `useLiveViewSseMutate.ts` 등으로 이동 | M | ✅ `useLiveViewSseRefs` + `useLiveViewSseLifecycle` + `useLiveViewSseCloseWhenHidden` |
-| **1A.5** | 401/429 분기가 훅 내부에서도 **`redirectToLogin` / `getRateLimitInfo`** 와 동일 패턴인지 점검 표 | S | 표 또는 체크리스트 PR 설명 |
+| **1A.5** | 401/429 분기가 훅 내부에서도 **`redirectToLogin` / `getRateLimitInfo`** 와 동일 패턴인지 점검 표 | S | ✅ `live-view-rg-polling-inventory.md` §4 |
 
 ### 5.2 리스크
 
@@ -234,9 +234,9 @@ Phase 0
 Phase 1A
 [x] 1A.1 상수 파일
 [x] 1A.2 SWR 옵션 모음
-[ ] 1A.3 첫 데이터 훅
+[x] 1A.3 첫 데이터 훅
 [x] 1A.4 SSE mutate 훅
-[ ] 1A.5 에러 패턴 점검
+[x] 1A.5 에러 패턴 점검
 
 Phase 1B
 [ ] 1B.1 FlowShell
