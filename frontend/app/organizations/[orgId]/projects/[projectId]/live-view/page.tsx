@@ -61,17 +61,18 @@ import { useToast } from "@/components/ToastContainer";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { PlanLimitBanner } from "@/components/PlanLimitBanner";
+import {
+  LIVE_VIEW_BASE_POLL_MS,
+  LIVE_VIEW_FOCUSED_POLL_MS,
+  LIVE_VIEW_MAX_POLL_MS,
+  LIVE_VIEW_SSE_MUTATE_DEBOUNCE_MS,
+  LIVE_VIEW_SSE_POLL_BACKOFF_MS,
+  LIVE_VIEW_SWRS_DEDUPE_MS,
+} from "./liveViewPolling.constants";
 
 // Stable references for React Flow (avoid "new nodeTypes/edgeTypes object" warning)
 const NODE_TYPES = { agentCard: AgentCardNode };
 const EDGE_TYPES = { default: DrawIOEdge };
-// Polling defaults: keep light enough to avoid 429 under multi-tab / multi-user load.
-const LIVE_VIEW_BASE_POLL_MS = 10000;
-const LIVE_VIEW_MAX_POLL_MS = 60000;
-const LIVE_VIEW_FOCUSED_POLL_MS = 5000;
-const LIVE_VIEW_SWRS_DEDUPE_MS = 5000;
-const LIVE_VIEW_SSE_MUTATE_DEBOUNCE_MS = 1000;
-const LIVE_VIEW_SSE_POLL_BACKOFF_MS = 30000;
 
 function LiveViewToolbar({
   onUndo,
