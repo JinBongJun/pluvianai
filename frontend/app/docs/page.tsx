@@ -117,37 +117,39 @@ export default function DocsPage() {
               Critical Initialization
             </div>
             <p className="text-base text-amber-500/80 leading-relaxed font-medium">
-              Start by mirroring your agent&apos;s requests and responses to PluvianAI as snapshots.
-              Most teams add a small helper in their orchestrator or gateway that forwards trace
-              data over HTTP, so Live View can observe behavior without changing how traffic reaches
-              your users.
+              Start by mirroring your agent&apos;s requests and responses to PluvianAI. The usual
+              path is the <strong className="text-amber-200">SDK</strong> or a direct{" "}
+              <strong className="text-amber-200">POST …/api-calls</strong> ingest (see Integrations).
+              You can also run through the optional validation proxy, or call the dashboard{" "}
+              <strong className="text-amber-200">POST …/snapshots</strong> API when building
+              internal tools — each path uses different auth (see step 01 below).
             </p>
           </div>
 
-          <div className="rounded-[24px] border border-emerald-500/20 bg-emerald-500/5 p-8 max-w-4xl relative">
-            <div className="text-[10px] font-black uppercase tracking-[0.35em] text-emerald-400 mb-4 flex items-center gap-2">
+          <div className="rounded-[24px] border border-emerald-500/20 bg-emerald-500/5 p-8 max-w-4xl relative space-y-4">
+            <div className="text-[10px] font-black uppercase tracking-[0.35em] text-emerald-400 mb-2 flex items-center gap-2">
               <Shield className="w-4 h-4" />
-              Agent Identity Protocol
+              Agent identity (<span className="font-mono text-emerald-300">agent_id</span>)
             </div>
             <p className="text-base text-slate-400 leading-relaxed">
-              Pluvian groups traces by a stable{" "}
+              Live View groups traces by a stable{" "}
               <span className="text-white font-bold bg-white/10 px-2 py-0.5 rounded">agent_id</span>
-              . Priority hierarchy:
-              <br />
-              <br />
-              <span className="flex items-center gap-3">
-                <span className="px-3 py-1 rounded bg-emerald-500/10 text-emerald-400 font-bold text-sm">
-                  1. Explicit Name
-                </span>{" "}
-                <ChevronRight className="w-4 h-4 text-slate-600" />
-                <span className="px-3 py-1 rounded bg-white/5 text-slate-300 font-bold text-sm">
-                  2. Payload ID
-                </span>{" "}
-                <ChevronRight className="w-4 h-4 text-slate-600" />
-                <span className="px-3 py-1 rounded bg-white/5 text-slate-500 font-bold text-sm">
-                  3. Prompt Hash Fallback
-                </span>
-              </span>
+              . By default the server derives it as a{" "}
+              <strong className="text-slate-200">16-character signature</strong> (SHA-256 prefix)
+              over <strong className="text-slate-200">provider</strong>,{" "}
+              <strong className="text-slate-200">model</strong>, normalized{" "}
+              <strong className="text-slate-200">system prompt</strong>, selected generation
+              settings, and declared <strong className="text-slate-200">tools/functions</strong>{" "}
+              schema — so two configs that differ only by display name still get different nodes if
+              their signatures differ. SDK <span className="font-mono text-xs">agent_name</span> is
+              a <strong className="text-slate-200">label</strong>; it is{" "}
+              <strong className="text-slate-200">not</strong> part of that signature.
+            </p>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              Optional override: when using{" "}
+              <span className="font-mono text-xs text-emerald-300">POST …/snapshots</span>, you may
+              pass <span className="font-mono text-xs">agent_id</span> in the JSON body to force the
+              stored node id after ingest (e.g. align with an external id).
             </p>
           </div>
 
@@ -157,8 +159,11 @@ export default function DocsPage() {
                 <Activity className="w-5 h-5 text-indigo-400" /> Evaluation
               </h4>
               <p className="text-sm text-slate-400 leading-relaxed">
-                Atomic Signals run deterministic checks on each snapshot – for example latency, JSON
-                validity, length, refusal, PII, and basic tool policy signals.
+                Live View <strong className="text-slate-200">Evaluation</strong> runs configurable,
+                deterministic checks on each snapshot (empty/short output, latency, HTTP status,
+                JSON shape, refusal patterns, length drift, repetition, leakage, and whether
+                tool-use policy rules pass). You tune them per agent in the product UI; results show
+                in Snapshot Details alongside separate diagnostic scores stored on the payload.
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 hover:bg-white/[0.04] transition-colors">
@@ -178,46 +183,69 @@ export default function DocsPage() {
                 <Terminal className="w-5 h-5 text-emerald-400" />
                 Evaluation Matrix
               </h4>
-              <p className="text-sm text-slate-400 leading-relaxed mb-8 max-w-3xl">
-                Evaluation represents your soft-validation configuration. Activate checks, define
-                thresholds, and secure stability. Use{" "}
+              <p className="text-sm text-slate-400 leading-relaxed mb-4 max-w-3xl">
+                These line up with the <strong className="text-slate-200">Snapshot Details</strong>{" "}
+                cards and the Evaluation settings on each agent. Activate checks, set thresholds, and
+                use{" "}
                 <span className="text-white font-bold bg-white/10 px-2 py-0.5 rounded">
                   Live Logs
                 </span>{" "}
-                to dictate sample sizes.
+                for sample windows.
+              </p>
+              <p className="text-xs text-slate-500 leading-relaxed mb-8 max-w-3xl border-l-2 border-emerald-500/30 pl-4">
+                Separately, the backend may attach additional{" "}
+                <strong className="text-slate-300">clinical-style diagnostic scores</strong> on the
+                stored payload (radar / taxonomy metrics). Those are not the same knobs as the
+                Evaluation matrix — think of Evaluation as the pass/fail checks you configure in
+                the UI for gating and triage.
               </p>
 
               <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {[
                   {
                     title: "Empty / Short Answers",
-                    desc: "Detects overly short or empty outputs.",
-                    value: "Min chars or tokens",
+                    desc: "Flags outputs below a minimum character count.",
+                    value: "min_chars threshold",
+                  },
+                  {
+                    title: "Latency Spikes",
+                    desc: "Fails slow snapshots when latency exceeds your limit (e.g. warn vs fail ms).",
+                    value: "fail_ms (and tiers in UI)",
+                  },
+                  {
+                    title: "HTTP Error Codes",
+                    desc: "Treats non-success HTTP status on the LLM call as a failure when enabled.",
+                    value: "fail_from status code",
+                  },
+                  {
+                    title: "Refusal / Non-Answer",
+                    desc: "Pattern-based detection of refusals vs helpful answers.",
+                    value: "on/off",
                   },
                   {
                     title: "JSON Validity",
-                    desc: "Ensures responses are valid JSON when required.",
-                    value: "Strict / lenient modes",
+                    desc: "Validates assistant output as JSON when required (if_json / always / off).",
+                    value: "mode + schema-aware checks",
                   },
                   {
-                    title: "Refusal Detection",
-                    desc: "Flags pattern-based refusals instead of helpful answers.",
-                    value: "Boolean check",
+                    title: "Output Length Drift",
+                    desc: "Compares length vs a baseline window; optional, off by default in many setups.",
+                    value: "fail_ratio vs baseline",
                   },
                   {
-                    title: "Output Length Guard",
-                    desc: "Detects unusual length drift between runs.",
-                    value: "Length / token ratios",
+                    title: "Repetition / Loops",
+                    desc: "Detects repeated lines or looping text in the assistant output.",
+                    value: "max line repeats",
                   },
                   {
-                    title: "Latency Guard",
-                    desc: "Tracks response latency for each snapshot.",
-                    value: "Warning thresholds",
+                    title: "Leakage (PII / secrets)",
+                    desc: "Optional heuristic pass for sensitive patterns in the visible output.",
+                    value: "on/off",
                   },
                   {
-                    title: "PII & Secret Guard",
-                    desc: "Helps catch obvious PII or secret-like strings.",
-                    value: "Rule-based filters",
+                    title: "Tool Use Policy",
+                    desc: "Runs your behavior rules (allowlist, forbidden, order, args) against the trace.",
+                    value: "ties to Policy tab",
                     span: true,
                   },
                 ].map((item, i) => (
@@ -383,19 +411,47 @@ export default function DocsPage() {
                 </span>
                 Send a snapshot
               </h3>
+              <div className="space-y-4 text-sm text-slate-400 leading-relaxed max-w-3xl">
+                <p>
+                  <strong className="text-slate-200">Primary (production ingest):</strong> use the
+                  SDK or{" "}
+                  <code className="font-mono text-xs text-emerald-300">
+                    POST …/api/v1/projects/{"{"}id{"}"}/api-calls
+                  </code>{" "}
+                  with a <strong className="text-slate-200">project API key</strong> that has the{" "}
+                  <code className="font-mono text-xs">ingest</code> scope. Expect{" "}
+                  <strong className="text-emerald-400">202 Accepted</strong> when the payload is
+                  queued. Full field list is in{" "}
+                  <span className="text-slate-200">Integrations by tool</span>.
+                </p>
+                <p>
+                  <strong className="text-slate-200">Dashboard / simulation API:</strong>{" "}
+                  <code className="font-mono text-xs text-emerald-300">
+                    POST …/api/v1/projects/{"{"}id{"}"}/snapshots
+                  </code>{" "}
+                  expects your <strong className="text-slate-200">logged-in user JWT</strong> (same
+                  session as the web app — <code className="font-mono text-xs">Authorization: Bearer</code>{" "}
+                  with the access token, or cookie session). Project SDK keys are not the intended
+                  credential here. Response is <strong className="text-emerald-400">200</strong> if
+                  saved synchronously or <strong className="text-emerald-400">202</strong> if queued.
+                  Optional <code className="font-mono text-xs">agent_id</code> in the body overrides
+                  the default signature-based node id.
+                </p>
+              </div>
               <pre className="p-6 rounded-2xl bg-black/50 border border-white/5 overflow-x-auto relative">
                 <div className="absolute top-0 right-0 p-4 text-[10px] font-black uppercase tracking-widest text-slate-600">
-                  HTTP
+                  snapshots (session JWT)
                 </div>
                 <code className="text-emerald-300 font-mono text-sm leading-relaxed whitespace-pre-wrap">
                   {`POST https://api.pluvianai.com/api/v1/projects/{project_id}/snapshots
-Authorization: Bearer YOUR_API_KEY
+Authorization: Bearer <access_token from sign-in>
 Content-Type: application/json
 
 {
   "trace_id": "trace-123",
   "provider": "openai",
   "model": "gpt-4o",
+  "agent_id": "optional-external-id",
   "payload": {
     "request": { ... },
     "response": { ... }
@@ -413,9 +469,9 @@ Content-Type: application/json
                 Inspect in Live View
               </h3>
               <p className="text-sm text-slate-400 leading-relaxed max-w-3xl">
-                Once snapshots arrive, open Live View to see traces grouped by agent. Each snapshot
-                is scored by Atomic Signals, and you can drill into payloads, evaluations, and
-                policy violations before setting up Release Gate.
+                Once snapshots arrive, open Live View to see traces grouped by agent. Open Snapshot
+                Details for evaluation pass/fail, payloads, and policy/tool results; configure checks
+                under the agent&apos;s Evaluation and Policy tabs before running Release Gate.
               </p>
             </section>
 
@@ -429,8 +485,9 @@ Content-Type: application/json
               <p className="text-sm text-slate-400 leading-relaxed max-w-3xl">
                 Pick baseline snapshots for an agent, choose a new model or prompt configuration, and
                 run Release Gate. PluvianAI replays each trace, computes a behavior diff between
-                baseline and candidate, applies your Atomic Signals and Policy rules, and returns a
-                pass/fail verdict plus Stable / Minor / Major change labels for each attempt.
+                baseline and candidate, applies your configured Evaluation checks and Policy rules,
+                and returns a pass/fail verdict plus Stable / Minor / Major change labels for each
+                attempt.
               </p>
             </section>
           </div>
@@ -1263,11 +1320,13 @@ Content-Type: application/json
                 <tbody className="text-slate-300">
                   <tr className="border-b border-white/5">
                     <td className="px-4 py-3 font-medium text-slate-200">
-                      Wrong or missing PluvianAI API key (at init)
+                      Wrong or missing PluvianAI API key (SDK / ingest)
                     </td>
                     <td className="px-4 py-3">
-                      Get a key from <strong>Settings → Profile</strong> (Get your PluvianAI API
-                      key) and use it in your app init.
+                      Create a project API key with <code className="font-mono text-xs">ingest</code>{" "}
+                      scope under <strong>Project Settings → API Keys</strong>. For dashboard-only
+                      flows you may also use keys from{" "}
+                      <strong>Settings → Profile</strong> where documented.
                     </td>
                   </tr>
                   <tr className="border-b border-white/5">
@@ -1297,7 +1356,7 @@ Content-Type: application/json
         <div className="space-y-12">
           <p className="text-2xl text-slate-400 leading-relaxed font-medium max-w-4xl tracking-tight">
             Deep dive into the key concepts that power PluvianAI&apos;s agent regression guard:
-            Live View, behavior diff, Atomic Signals, and Policy versus Evaluation.
+            Live View, behavior diff, Evaluation versus Policy, and stored diagnostic scores.
           </p>
           <div className="grid md:grid-cols-2 gap-6">
             <div className="p-10 rounded-[32px] bg-white/[0.02] border border-white/10 hover:border-indigo-500/30 transition-colors relative overflow-hidden group">
@@ -1322,12 +1381,14 @@ Content-Type: application/json
                 <Zap className="w-5 h-5 text-emerald-400" />
               </div>
               <h4 className="text-lg font-black uppercase tracking-widest mb-4 text-white relative z-10">
-                Atomic Signals
+                Evaluation &amp; diagnostics
               </h4>
               <p className="text-sm text-slate-400 leading-relaxed relative z-10">
-                Atomic Signals are rule-based checks on each snapshot – for example JSON validity,
-                length, latency, refusal, PII, and tool policy. They provide simple, deterministic
-                signals that can be combined into dashboards and gates.
+                In the product UI, think of <strong className="text-slate-200">Evaluation</strong> as
+                the configurable checks behind Snapshot Details (latency, JSON, refusal, tool policy
+                pass/fail, etc.). The platform may also store broader{" "}
+                <strong className="text-slate-200">diagnostic scores</strong> on each snapshot for
+                analytics — separate from the Evaluation toggles you use for gating.
               </p>
             </div>
 
@@ -1360,9 +1421,11 @@ Content-Type: application/json
       content: (
         <div className="space-y-12">
           <p className="text-2xl text-slate-400 leading-relaxed font-medium max-w-4xl tracking-tight">
-            The PluvianAI guard layer sits between your orchestrator and LLM providers, or receives
-            mirrored traces via HTTP. It evaluates behavior before and after changes so you can ship
-            new configs with confidence.
+            The PluvianAI guard layer can sit between your orchestrator and LLM providers (validation
+            proxy), or receive mirrored traces via the SDK /{" "}
+            <code className="text-cyan-300/90 font-mono text-lg">api-calls</code> ingest without
+            changing your user-facing path. It evaluates behavior before and after changes so you can
+            ship new configs with confidence.
           </p>
           <div className="p-20 rounded-[40px] bg-white/[0.02] border border-white/10 flex flex-col items-center justify-center gap-6 relative overflow-hidden backdrop-blur-xl">
             <div className="absolute inset-0 bg-flowing-lines opacity-[0.03] pointer-events-none" />
@@ -1463,9 +1526,11 @@ Content-Type: application/json
               Execution Model
             </h4>
             <p className="mt-3 text-sm text-slate-400 leading-relaxed">
-              Atomic Signal evaluation is automatic on snapshot ingestion. Policy validation is run
-              on demand (e.g., Run Policy Check, Compare, CI Gate) so teams can control cost, noise,
-              and release timing.
+              <strong className="text-slate-200">Evaluation</strong> checks run when snapshots are
+              ingested. <strong className="text-slate-200">Policy</strong> (behavior) validation may
+              also be kicked off automatically after some ingest paths (e.g. dashboard snapshot
+              create), and is always available on demand from Live Logs, Release Gate, Compare, and
+              CI-style gates — so you can still control when to surface or block on policy results.
             </p>
           </div>
         </div>
