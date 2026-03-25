@@ -211,22 +211,21 @@ flowchart LR
 
 ### 10.0 현재 코드의 데이터 경로(현실 체크)
 
+> **2026-03 갱신**: 아래는 저장소 기준 동작 요약이다. 세부 감사는 §18.1 참고.
+
 - **스냅샷 상세(로그 상세) 데이터 소스**
   - API: `GET /api/v1/projects/{project_id}/snapshots/{snapshot_id}`
-  - Backend: `backend/app/api/v1/endpoints/live_view.py:get_snapshot`
-  - Frontend client: `frontend/lib/api/live-view.ts:liveViewAPI.getSnapshot`
-  - UI: `frontend/components/shared/SnapshotDetailModal.tsx`
-  - 현재 반환: `tool_calls_summary`(툴 이름/인자 요약)만 포함. tool_result(툴 output)는 없음.
+  - Backend: `backend/app/api/v1/endpoints/live_view.py:get_snapshot` — 응답에 `tool_timeline[]`, `tool_timeline_redaction_version` 포함. `trajectory_steps`가 있으면 우선, 없으면 `payload.tool_events`에서 구성(`_tool_timeline_for_snapshot`).
+  - Frontend: `frontend/components/shared/SnapshotDetailModal.tsx` — `ToolTimelinePanel`로 타임라인 표시.
+  - `tool_calls_summary`는 리스트/배지용 경량 요약으로 병행 유지.
 
 - **SDK ingest 경로(프로덕션 실시간 로그)**
-  - API: `POST /api/v1/projects/{project_id}/api-calls`
-  - Backend: `backend/app/api/v1/endpoints/api_calls.py:ingest_api_call`
-  - Snapshot payload shape(현재): `{ "request": request_data, "response": response_data }`
-    - 생성 위치: `backend/app/services/background_tasks.py:save_api_call_async`
-  - tool_calls_summary는 `payload_for_snapshot`에서 walk-extract로 계산됨.
+  - API: `POST /api/v1/projects/{project_id}/api-calls` — 본문에 선택 필드 `tool_events` (`APICallIngestBody`, 상한·정규화는 `app.utils.tool_events`).
+  - Snapshot payload: `background_tasks._save_api_call_sync` 등에서 `request`/`response`와 함께 정규화된 `tool_events`를 `payload_for_snapshot`에 병합.
 
-- **Release Gate replay(현재 tool_result 생성 방식)**
-  - Backend: `backend/app/services/replay_service.py`의 Stage 2 alpha tool loop가 `_build_simulated_tool_result_text()`로 **dry-run simulated tool_result**를 만들어 follow-up 요청에 주입.
+- **Release Gate replay(tool_result 주입)**
+  - Backend: `backend/app/services/replay_service.py` — Stage 2 tool loop에서 스냅샷의 recorded tool_result(`call_id` 또는 이름 큐)를 우선 사용, 없으면 `_build_simulated_tool_result_text()` 폴백; evidence 행에 `execution_source` 등 설정.
+  - Gate 응답 정규화: `release_gate.py`에서 `execution_source` / `tool_result_source` 유지.
 
 이 계획의 목표는 “툴을 재실행”이 아니라:
 1) 프로덕션에서 실제 실행된 tool IO를 **우리 트레이스(trajectory_steps)로 저장**하고,
@@ -596,4 +595,25 @@ flowchart LR
 7. **테스트**: unit + integration + 최소 E2E로 위 6항이 자동 검증된다.
 
 > **현실적 범위**: 핵심 경로는 unit/integration + `frontend/tests` Playwright 스모크(공개 라우트·로그인 없이 가능한 수준)로 커버합니다. 전체 플로우를 실데이터로 E2E하려면 인증·시드 프로젝트가 필요합니다.
+
+### 18.1 레포 감사 (2026-03-26, Definition of Done 대조)
+
+코드 검색·주요 경로 확인으로 §18 항목을 다음과 같이 표시한다. **완료**는 “핵심 구현 + 자동 테스트가 있거나 명확히 연결됨”, **부분**은 “구현은 있으나 문서 §14 전역 RBAC/export 매트릭스까지는 미검증” 등.
+
+| §18 | 상태 | 근거(대표 경로) |
+|-----|------|------------------|
+| 1 Ingest `tool_events` | **완료** | `api_calls.py` 필드 + `normalize_tool_events`; `background_tasks.py` payload 병합; `test_tool_events_live_view_pipeline.py` |
+| 2 `trajectory_steps` 정규화 | **완료** | `behavior.py` `_steps_from_payload_tool_events` + `_persist_trajectory_steps`; 동일 통합 테스트 |
+| 3 Live View 타임라인 | **완료** | `live_view.py` `tool_timeline`; `SnapshotDetailModal` + `ToolTimelinePanel` |
+| 4 RG recorded 우선 주입 | **완료** | `replay_service.py` recorded / simulated 분기; `release_gate.py` evidence 필드 |
+| 5 구버전 degrade | **완료** | 통합 테스트 `test_snapshot_detail_safely_degrades_when_tool_events_are_absent` |
+| 6 보안 redaction / export | **부분** | API 단계 `redact_secrets`·`TOOL_TIMELINE_REDACTION_VERSION` 적용. §14.3 **역할별 raw export 제한**은 엔드포인트별로 별도 체크리스트 권장 |
+| 7 테스트 | **부분** | Backend: `test_replay_service_tool_followup.py`, `test_tool_events_live_view_pipeline.py`, `test_ops_alerting_service.py` 등. Frontend: `snapshot-detail-tool-io.spec.ts` 등. **전 구간 단일 E2E(인증+실데이터)** 는 여전히 선택 과제 |
+
+**권장 후속 (우선순위 낮음~중)**
+
+1. **§18.6 마감**: Export/Copy JSON·Release Gate history export에서 raw `tool_result` 노출을 역할과 대조해 문서화·테스트.
+2. **프록시/스트림 전용 저장 경로**: SDK ingest 외에 스냅샷이 들어오는 모든 진입점에서 `payload`에 `tool_events`가 동일 규칙으로 유지되는지 정기 점검(§11.3).
+3. **§15.4 운영**: `observe_release_gate_tool_missing_surge`가 스테이징/프로덕션에서 웹훅·임계값이 기대대로인지 스모크.
+4. **문서**: Commit A1–B3 블록(§10)은 “역사적 레일”로 두고, 신규 기여자는 §18.1 + §11을 SoT로 보면 된다.
 
