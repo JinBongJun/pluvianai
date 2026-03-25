@@ -18,7 +18,7 @@ class ValidationDataset(Base):
 
     __tablename__ = "validation_datasets"
 
-    id = Column(String(255), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String(255), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     agent_id = Column(String(100), nullable=True, index=True)
 

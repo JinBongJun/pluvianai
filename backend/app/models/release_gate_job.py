@@ -7,7 +7,7 @@ from app.core.database import Base
 class ReleaseGateJob(Base):
     __tablename__ = "release_gate_jobs"
 
-    id = Column(String(255), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String(255), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id = Column(Integer, nullable=False, index=True)
     user_id = Column(Integer, nullable=False, index=True)
 
