@@ -469,24 +469,51 @@ def upgrade() -> None:
     op.drop_column('shared_results', 'token')
     op.drop_column('shared_results', 'result_type')
     op.drop_column('shared_results', 'result_data')
-    op.add_column('snapshots', sa.Column('project_id', sa.Integer(), nullable=True))
-    op.add_column('snapshots', sa.Column('agent_id', sa.String(length=100), nullable=True))
-    op.add_column('snapshots', sa.Column('parent_span_id', sa.String(length=255), nullable=True))
-    op.add_column('snapshots', sa.Column('span_order', sa.Integer(), nullable=True))
-    op.add_column('snapshots', sa.Column('is_parallel', sa.Boolean(), server_default='false', nullable=True))
-    op.add_column('snapshots', sa.Column('model_settings', sa.JSON(), nullable=True))
-    op.add_column('snapshots', sa.Column('system_prompt', sa.Text(), nullable=True))
-    op.add_column('snapshots', sa.Column('user_message', sa.Text(), nullable=True))
-    op.add_column('snapshots', sa.Column('response', sa.Text(), nullable=True))
-    op.add_column('snapshots', sa.Column('latency_ms', sa.Integer(), nullable=True))
-    op.add_column('snapshots', sa.Column('tokens_used', sa.Integer(), nullable=True))
-    op.add_column('snapshots', sa.Column('cost', sa.Numeric(precision=10, scale=6), nullable=True))
-    op.add_column('snapshots', sa.Column('signal_result', sa.JSON(), nullable=True))
-    op.add_column('snapshots', sa.Column('is_worst', sa.Boolean(), server_default='false', nullable=True))
-    op.add_column('snapshots', sa.Column('worst_status', sa.String(length=20), nullable=True))
-    op.create_index(op.f('ix_snapshots_agent_id'), 'snapshots', ['agent_id'], unique=False)
-    op.create_index(op.f('ix_snapshots_project_id'), 'snapshots', ['project_id'], unique=False)
-    op.create_foreign_key(None, 'snapshots', 'projects', ['project_id'], ['id'], ondelete='CASCADE')
+    # 20260205_phase1_schema_alignment may have already added these snapshot fields.
+    _snapshot_cols = {col["name"] for col in sa.inspect(bind).get_columns("snapshots")}
+    if 'project_id' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('project_id', sa.Integer(), nullable=True))
+    if 'agent_id' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('agent_id', sa.String(length=100), nullable=True))
+    if 'parent_span_id' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('parent_span_id', sa.String(length=255), nullable=True))
+    if 'span_order' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('span_order', sa.Integer(), nullable=True))
+    if 'is_parallel' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('is_parallel', sa.Boolean(), server_default='false', nullable=True))
+    if 'model_settings' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('model_settings', sa.JSON(), nullable=True))
+    if 'system_prompt' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('system_prompt', sa.Text(), nullable=True))
+    if 'user_message' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('user_message', sa.Text(), nullable=True))
+    if 'response' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('response', sa.Text(), nullable=True))
+    if 'latency_ms' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('latency_ms', sa.Integer(), nullable=True))
+    if 'tokens_used' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('tokens_used', sa.Integer(), nullable=True))
+    if 'cost' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('cost', sa.Numeric(precision=10, scale=6), nullable=True))
+    if 'signal_result' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('signal_result', sa.JSON(), nullable=True))
+    if 'is_worst' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('is_worst', sa.Boolean(), server_default='false', nullable=True))
+    if 'worst_status' not in _snapshot_cols:
+        op.add_column('snapshots', sa.Column('worst_status', sa.String(length=20), nullable=True))
+    _snapshot_ix = {idx["name"] for idx in sa.inspect(bind).get_indexes("snapshots")}
+    _snap_agent_ix = op.f('ix_snapshots_agent_id')
+    _snap_project_ix = op.f('ix_snapshots_project_id')
+    if _snap_agent_ix not in _snapshot_ix:
+        op.create_index(_snap_agent_ix, 'snapshots', ['agent_id'], unique=False)
+    if _snap_project_ix not in _snapshot_ix:
+        op.create_index(_snap_project_ix, 'snapshots', ['project_id'], unique=False)
+    _snapshot_fks = sa.inspect(bind).get_foreign_keys("snapshots")
+    if not any(
+        fk.get("referred_table") == "projects" and fk.get("constrained_columns") == ["project_id"]
+        for fk in _snapshot_fks
+    ):
+        op.create_foreign_key(None, 'snapshots', 'projects', ['project_id'], ['id'], ondelete='CASCADE')
     op.alter_column('subscriptions', 'status',
                existing_type=sa.VARCHAR(length=20),
                nullable=True)
