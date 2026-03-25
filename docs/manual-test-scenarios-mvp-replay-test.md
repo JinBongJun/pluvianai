@@ -40,12 +40,12 @@
 
 | 통합 유형 | 데이터가 우리에게 오는 방식 | 비고 |
 |-----------|-----------------------------|------|
-| **SDK (Python)** | 앱에서 `pluvianai.init()` 후 OpenAI 호출 → SDK가 `POST /api/v1/api-calls` 전송 | 현재 구현됨 |
+| **SDK (Python)** | 앱에서 `pluvianai.init()` 후 OpenAI 호출 → SDK가 `POST /api/v1/projects/{project_id}/api-calls` 전송 | 현재 구현됨 |
 | **SDK (Node)** | Node에서 `pluvianai.init()` 후 OpenAI 호출 → 동일 API 전송 | 현재 구현됨 |
 | **n8n** | n8n 워크플로에서 HTTP Request 등으로 우리 API 호출, 또는 (있다면) 전용 노드 | 전용 노드 없으면 사용자가 직접 API 호출 구현 |
 | **MCP** | MCP 서버/클라이언트가 우리 API로 전송하는 루트를 둔 경우 | 우리 쪽 MCP 어댑터 구현 여부에 따름 |
 | **LangChain** | LangChain 앱 안에서 우리 SDK 사용 시 → SDK와 동일 경로; callback만 쓰면 우리 API 직접 호출 | SDK 사용 시 Python/Node와 동일 |
-| **기타 (직접 API)** | curl/스크립트 등으로 `POST /api/v1/api-calls` 직접 호출 | payload 포맷만 맞으면 동일 검증 가능 |
+| **기타 (직접 API)** | curl/스크립트 등으로 `POST /api/v1/projects/{project_id}/api-calls` 직접 호출 | payload 포맷만 맞으면 동일 검증 가능 |
 
 **공통**: 어떤 통합 유형이든, 데이터가 한 번 우리 API로 들어온 뒤에는 동일한 `project_id`·`agent_id` 기준으로 Live View·Release Gate·상세가 **같은 방식**으로 노출된다. 아래 단계는 “데이터가 들어오기까지”의 전제를 만드는 절차다.
 
@@ -60,12 +60,12 @@
 1. **SDK (Python)**: `pip install pluvianai` → `import pluvianai` → `pluvianai.init(api_key="...", project_id=123)` (또는 env: `PLUVIANAI_API_KEY`, `PLUVIANAI_PROJECT_ID`).
 2. **SDK (Node)**: `npm install pluvianai` → `pluvianai.init({ apiKey: "...", projectId: 123 })` (또는 env).
 3. 로컬/자체 백엔드 사용 시 `PLUVIANAI_API_URL`로 API URL 지정.
-4. **n8n / MCP / LangChain 등** 다른 빌더를 쓰는 경우: 해당 환경에서 우리 API(`POST /api/v1/api-calls`)를 호출하도록 설정하거나, 공식 연동이 있으면 해당 가이드대로 구성한다.
+4. **n8n / MCP / LangChain 등** 다른 빌더를 쓰는 경우: 해당 환경에서 우리 API(`POST /api/v1/projects/{project_id}/api-calls`)를 호출하도록 설정하거나, 공식 연동이 있으면 해당 가이드대로 구성한다.
 
 ### INT-3. 호출 발생
 
 1. 해당 앱(또는 SDK README Quick Start 스크립트)에서 **OpenAI(또는 지원 LLM) 호출 1~2회** 실행.
-2. SDK 사용 시 호출은 자동으로 `POST /api/v1/api-calls`로 전송된다. n8n/MCP/기타는 해당 경로로 1회 이상 전송되도록 실행한다.
+2. SDK 사용 시 호출은 자동으로 `POST /api/v1/projects/{project_id}/api-calls`로 전송된다. n8n/MCP/기타는 해당 경로로 1회 이상 전송되도록 실행한다.
 
 ### INT-4. 백엔드 수신 확인
 
