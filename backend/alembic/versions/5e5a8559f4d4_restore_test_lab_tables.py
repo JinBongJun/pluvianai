@@ -602,19 +602,35 @@ def upgrade() -> None:
                existing_type=postgresql.JSON(astext_type=sa.Text()),
                type_=sa.Text(),
                nullable=True)
-    op.drop_index(op.f('idx_webhook_project_active'), table_name='webhooks')
-    op.drop_index(op.f('idx_webhook_user_active'), table_name='webhooks')
-    op.drop_index(op.f('ix_webhooks_created_at'), table_name='webhooks')
-    op.drop_index(op.f('ix_webhooks_project_id'), table_name='webhooks')
-    op.drop_index(op.f('ix_webhooks_user_id'), table_name='webhooks')
-    op.drop_constraint(op.f('webhooks_project_id_fkey'), 'webhooks', type_='foreignkey')
-    op.drop_constraint(op.f('webhooks_user_id_fkey'), 'webhooks', type_='foreignkey')
-    op.create_foreign_key(None, 'webhooks', 'projects', ['project_id'], ['id'], ondelete='CASCADE')
-    op.create_foreign_key(None, 'webhooks', 'users', ['user_id'], ['id'], ondelete='CASCADE')
-    op.drop_column('webhooks', 'failure_count')
-    op.drop_column('webhooks', 'last_error')
-    op.drop_column('webhooks', 'last_triggered_at')
-    op.drop_column('webhooks', 'updated_at')
+    _webhook_ix = {idx["name"] for idx in sa.inspect(bind).get_indexes("webhooks")}
+    for _ix in (
+        op.f('idx_webhook_project_active'),
+        op.f('idx_webhook_user_active'),
+        op.f('ix_webhooks_created_at'),
+        op.f('ix_webhooks_project_id'),
+        op.f('ix_webhooks_user_id'),
+    ):
+        if _ix in _webhook_ix:
+            op.drop_index(_ix, table_name='webhooks')
+    _webhook_fks = sa.inspect(bind).get_foreign_keys("webhooks")
+    for _fk_name in (op.f('webhooks_project_id_fkey'), op.f('webhooks_user_id_fkey')):
+        if any(fk.get("name") == _fk_name for fk in _webhook_fks):
+            op.drop_constraint(_fk_name, 'webhooks', type_='foreignkey')
+    _webhook_fks = sa.inspect(bind).get_foreign_keys("webhooks")
+    if not any(
+        fk.get("referred_table") == "projects" and fk.get("constrained_columns") == ["project_id"]
+        for fk in _webhook_fks
+    ):
+        op.create_foreign_key(None, 'webhooks', 'projects', ['project_id'], ['id'], ondelete='CASCADE')
+    if not any(
+        fk.get("referred_table") == "users" and fk.get("constrained_columns") == ["user_id"]
+        for fk in _webhook_fks
+    ):
+        op.create_foreign_key(None, 'webhooks', 'users', ['user_id'], ['id'], ondelete='CASCADE')
+    _webhook_cols = {col["name"] for col in sa.inspect(bind).get_columns("webhooks")}
+    for _col in ('failure_count', 'last_error', 'last_triggered_at', 'updated_at'):
+        if _col in _webhook_cols:
+            op.drop_column('webhooks', _col)
     # ### end Alembic commands ###
 
 
