@@ -56,7 +56,20 @@ SSE 연결 시 해당 훅의 `refreshInterval`이 0이 되고, 폴링은 위 상
 
 ---
 
-## 4. 관련 설계 문서
+## 4. Live View — 에러·재시도 패턴 (Phase 1A.5)
+
+| 구분 | 처리 위치 | 동작 |
+|------|-----------|------|
+| **401** | `agentsError` `useEffect` | `redirectToLogin` + `getApiErrorCode` / `getApiErrorMessage` |
+| **429** | 동일 + `getRateLimitInfo` | `isRateLimitError` → `Retry-After` 기반 `setAgentsPollIntervalMs` (상한 `LIVE_VIEW_MAX_POLL_MS`) |
+| **기타 에이전트 오류** | 동일 | 지수적 백오프 `current * 2` (상한 동일) |
+| **탭 복귀** | `isPageVisible` `useEffect` | `mutateAgents()` 1회 |
+
+데이터 훅: `useLiveViewCoreData` — project/org/agents SWR 한곳 (`live-view/useLiveViewCoreData.ts`).
+
+---
+
+## 5. 관련 설계 문서
 
 - [rate-limit-heavy-endpoints-design.md](./rate-limit-heavy-endpoints-design.md)
 - [mvp-realtime-pipeline-implementation-plan.md](./mvp-realtime-pipeline-implementation-plan.md)

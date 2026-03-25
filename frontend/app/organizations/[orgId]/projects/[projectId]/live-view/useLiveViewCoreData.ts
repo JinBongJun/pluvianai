@@ -1,0 +1,93 @@
+"use client";
+
+import type { MutableRefObject } from "react";
+import useSWR from "swr";
+
+import { liveViewAPI, organizationsAPI, projectsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
+
+import {
+  LIVE_VIEW_FOCUSED_POLL_MS,
+  LIVE_VIEW_MAX_POLL_MS,
+} from "./liveViewPolling.constants";
+import { LIVE_VIEW_SWR_DEFAULT_OPTIONS } from "./liveViewSwr.defaults";
+
+/** Project + org + Live View agents list (SWR). See `docs/live-view-rg-polling-inventory.md`. */
+export function useLiveViewCoreData(options: {
+  projectId: number;
+  orgId: string;
+  routerReplace: (href: string) => void;
+  selectedAgentId: string | null;
+  agentsPollIntervalMs: number;
+  isPageVisible: boolean;
+  sseConnected: boolean;
+  sseBackoffUntilRef: MutableRefObject<number>;
+}) {
+  const {
+    projectId,
+    orgId,
+    routerReplace,
+    selectedAgentId,
+    agentsPollIntervalMs,
+    isPageVisible,
+    sseConnected,
+    sseBackoffUntilRef,
+  } = options;
+
+  const { data: project } = useSWR(
+    projectId && !isNaN(projectId) ? ["project", projectId] : null,
+    async () => {
+      try {
+        return await projectsAPI.get(projectId);
+      } catch (e: unknown) {
+        const err = e as { response?: { status?: number; data?: { detail?: string; error?: { message?: string } } } };
+        const status = err?.response?.status;
+        const msg =
+          err?.response?.data?.detail ?? err?.response?.data?.error?.message ?? "";
+        if (status === 404 && (msg === "Project not found" || msg === "Not Found")) {
+          routerReplace(orgId ? `/organizations/${orgId}/projects` : "/organizations");
+          return undefined;
+        }
+        throw e;
+      }
+    },
+    LIVE_VIEW_SWR_DEFAULT_OPTIONS
+  );
+
+  const { data: org } = useSWR(
+    orgId ? orgKeys.detail(orgId) : null,
+    () => organizationsAPI.get(orgId),
+    LIVE_VIEW_SWR_DEFAULT_OPTIONS
+  );
+
+  const {
+    data: agentsData,
+    mutate: mutateAgents,
+    isLoading: agentsLoading,
+    error: agentsError,
+  } = useSWR(
+    projectId && !isNaN(projectId) && projectId > 0 ? ["live-view-agents", projectId] : null,
+    () => liveViewAPI.getAgents(projectId, 30, true),
+    {
+      refreshInterval: (() => {
+        if (!isPageVisible) return 0;
+        if (sseConnected) return 0;
+        if (Date.now() < sseBackoffUntilRef.current) return LIVE_VIEW_MAX_POLL_MS;
+        return selectedAgentId
+          ? Math.min(agentsPollIntervalMs, LIVE_VIEW_FOCUSED_POLL_MS)
+          : agentsPollIntervalMs;
+      })(),
+      shouldRetryOnError: false,
+      ...LIVE_VIEW_SWR_DEFAULT_OPTIONS,
+    }
+  );
+
+  return {
+    project,
+    org,
+    agentsData,
+    agentsLoading,
+    agentsError,
+    mutateAgents,
+  };
+}
