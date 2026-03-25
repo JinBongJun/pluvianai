@@ -13,7 +13,7 @@ from app.core.database import Base
 class SavedLog(Base):
     __tablename__ = "saved_logs"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     agent_id = Column(String(100), nullable=False, index=True)
     snapshot_id = Column(Integer, ForeignKey("snapshots.id", ondelete="CASCADE"), nullable=False, index=True)
