@@ -1,42 +1,33 @@
 # PluvianAI — 문서 안내
 
 **브랜드**: PluvianAI  
-**저장소 경로**: 현재 워크스페이스 루트
+
+이 저장소에서 **제품·명세·설계 문서의 본문은 `docs/`** 아래에 둡니다. 루트에는 `README.md`, `SECURITY.md`, `POST_MVP_HARDENING_ROADMAP.md` 등만 있습니다.
+
+**정리 (2026-03)**: 일회성 초안(소셜 스레드 모음, 에이전트 테스트 런북, 보안 점검 1회성 리포트, 브라우저 토이 런북, drift/regression 이슈 스크래치패드, 수동 엔드포인트 표 — `endpoints-verification`), 폐기된 콘텐츠 플레이북은 삭제해 중복·고아 링크를 줄였습니다.
 
 ---
 
-## 문서 위치 (단일 소스)
+## 빠른 링크
 
-문서는 **저장소 루트의 `.md` 파일**을 기준으로 합니다. 여기만 최신입니다.
-
-| 문서 | 용도 |
+| 영역 | 문서 |
 |------|------|
-| [README.md](./README.md) | 프로젝트 개요, 빠른 시작, 구조 |
-| [BLUEPRINT.md](./BLUEPRINT.md) | 기술 청사진, 아키텍처, API, 로드맵 |
-| [BUSINESS_PLAN.md](./BUSINESS_PLAN.md) | 사업계획서 |
-| [SCHEMA_SPEC.md](./SCHEMA_SPEC.md) | API 스키마 명세 |
-| [PRD_AGENT_BEHAVIOR_VALIDATION.md](./PRD_AGENT_BEHAVIOR_VALIDATION.md) | Behavior Validation PRD |
-| [TEST_PLAN.md](./TEST_PLAN.md) | 통합 테스트 계획 |
-| [PLUVIANAI_LANDING_IMPLEMENTATION.md](./PLUVIANAI_LANDING_IMPLEMENTATION.md) | 랜딩 페이지 구현 가이드 |
-
-### docs/ 폴더 (권한·엔드포인트·감사)
-
-| 문서 | 용도 |
-|------|------|
-| [authorization-and-scoping.md](./authorization-and-scoping.md) | 프로젝트 스코프 URL 규칙, RBAC, 스키마/유일 제약 체크리스트 |
-| [mvp-endpoint-access-matrix.md](./mvp-endpoint-access-matrix.md) | 엔드포인트별 접근 권한 (역할·메서드) |
-| [audit-live-view-soft-delete-and-related.md](./audit-live-view-soft-delete-and-related.md) | Live View·소프트삭제·멀티테넌트 관련 감사 요약 |
-| [live-view-node-lifecycle-policy.md](./live-view-node-lifecycle-policy.md) | Live View 노드 soft delete, 자동 복원, 완전 삭제 정책 |
-| [rate-limit-heavy-endpoints-design.md](./rate-limit-heavy-endpoints-design.md) | 엔드포인트별 rate limit 설계 (무거운 경로 한도) |
-| [security-roadmap-per-user-rate-limit-and-api-key-scope.md](./security-roadmap-per-user-rate-limit-and-api-key-scope.md) | 단기·중기 보완: per-user rate limit, API key scope 로드맵 |
-| [frontend-api-split-design.md](./frontend-api-split-design.md) | frontend `lib/api.ts` 도메인별 분리 설계 (폴더 구조, re-export, 마이그레이션 순서) |
-| [frontend-refactoring-implementation-plan.md](./frontend-refactoring-implementation-plan.md) | Live View·Release Gate·org/project·로그인·API 클라이언트 세분화 구현 계획 (Phase 0–5, 작업 ID·DoD·체크리스트) |
-| [mvp-realtime-pipeline-implementation-plan.md](./mvp-realtime-pipeline-implementation-plan.md) | 실시간 파이프라인 (SDK 큐/배치, 백엔드 ingest 큐+워커, Live View 폴링) 구현·안정화 계획 및 **운영 가이드 (Redis / worker 실행)** |
-| [release-gate-tool-io-grounding-plan.md](./release-gate-tool-io-grounding-plan.md) | Release Gate tool input/output evidence grounding 계획 |
+| 청사진·스키마·PRD | [BLUEPRINT.md](./BLUEPRINT.md), [SCHEMA_SPEC.md](./SCHEMA_SPEC.md), [PRD_AGENT_BEHAVIOR_VALIDATION.md](./PRD_AGENT_BEHAVIOR_VALIDATION.md), [BUSINESS_PLAN.md](./BUSINESS_PLAN.md) |
+| 접근 제어·보안 | [authorization-and-scoping.md](./authorization-and-scoping.md), [mvp-endpoint-access-matrix.md](./mvp-endpoint-access-matrix.md), [mvp-endpoint-access-gap-list.md](./mvp-endpoint-access-gap-list.md), [security-and-data-retention.md](./security-and-data-retention.md), [rate-limit-heavy-endpoints-design.md](./rate-limit-heavy-endpoints-design.md), [security-roadmap-per-user-rate-limit-and-api-key-scope.md](./security-roadmap-per-user-rate-limit-and-api-key-scope.md) |
+| Live View·프라이버시·ingest | [live-view-node-lifecycle-policy.md](./live-view-node-lifecycle-policy.md), [live-view-context-privacy-plan.md](./live-view-context-privacy-plan.md), [live-view-ingest-field-matrix.md](./live-view-ingest-field-matrix.md), [live-view-trust-data-collection.md](./live-view-trust-data-collection.md), [TOOL_EVENTS_SCHEMA.md](./TOOL_EVENTS_SCHEMA.md), [why-send-tool-results.md](./why-send-tool-results.md) |
+| Release Gate | [mvp-node-gate-spec.md](./mvp-node-gate-spec.md), [mvp-node-gate-implementation-checklist.md](./mvp-node-gate-implementation-checklist.md), [release-gate-tool-io-grounding-plan.md](./release-gate-tool-io-grounding-plan.md), [release-gate-request-body-overrides.md](./release-gate-request-body-overrides.md), [release-gate-report-context.md](./release-gate-report-context.md), [release-gate-node-ui-notes.md](./release-gate-node-ui-notes.md), [manual-test-scenarios-mvp-replay-test.md](./manual-test-scenarios-mvp-replay-test.md) |
+| 노드 단위 제품 스토리 | [node-live-view-release-gate-alignment-plan.md](./node-live-view-release-gate-alignment-plan.md) |
+| 프론트엔드 | [frontend-refactoring-implementation-plan.md](./frontend-refactoring-implementation-plan.md) (**진행 중**), [frontend-api-split-design.md](./frontend-api-split-design.md), [UI_GUIDE.md](./UI_GUIDE.md) |
+| 실시간 파이프라인·운영 | [mvp-realtime-pipeline-implementation-plan.md](./mvp-realtime-pipeline-implementation-plan.md), [ops-ingest-observability.md](./ops-ingest-observability.md), [mvp-ops-alerting-minimum-plan.md](./mvp-ops-alerting-minimum-plan.md), [mvp-ops-slack-alerts-implementation-plan.md](./mvp-ops-slack-alerts-implementation-plan.md) |
+| Behavior API | [BEHAVIOR_RULE_API_CONTRACT.md](./BEHAVIOR_RULE_API_CONTRACT.md) |
+| 요금·크레딧 | [mvp-usage-credits-and-pricing-plan.md](./mvp-usage-credits-and-pricing-plan.md), [mvp-usage-credits-implementation-checklist.md](./mvp-usage-credits-implementation-checklist.md), [mvp-free-tier-limits-implementation-plan.md](./mvp-free-tier-limits-implementation-plan.md) |
+| 감사·역할·법무 | [audit-live-view-soft-delete-and-related.md](./audit-live-view-soft-delete-and-related.md), [role-action-matrix.md](./role-action-matrix.md), [role-action-gap-analysis.md](./role-action-gap-analysis.md), [legal-package-baseline.md](./legal-package-baseline.md) |
+| 시장 조사 (보조) | [LLM_EVAL_MARKET_RESEARCH.md](./LLM_EVAL_MARKET_RESEARCH.md), [LLM_EVAL_MARKET_RESEARCH_V2.md](./LLM_EVAL_MARKET_RESEARCH_V2.md) (V2는 V1 보조) |
+| 데모 | [demo/README.md](./demo/README.md), [demo/content-and-demo-execution-plan.md](./demo/content-and-demo-execution-plan.md), [demo/demo-support-bot-a1-plan.md](./demo/demo-support-bot-a1-plan.md), [demo/content-plan-support-bot-screenshots.md](./demo/content-plan-support-bot-screenshots.md) |
 
 ---
 
 ## 주의
 
-- **`docs/` 폴더**에 예전에 있던 문서(BLUEPRINT, QUICK_START, DEPLOYMENT_GUIDE 등)는 **삭제되었거나 더 이상 업데이트되지 않습니다.**
-- 확인할 때는 **반드시 루트의 위 목록 문서만** 참고하세요. 이전 버전 문서를 읽으면 내용이 달라서 헷갈릴 수 있습니다.
+- 구현 상태는 문서 제목·본문·체크리스트를 함께 보고 판단하세요. 특히 `mvp-*-implementation-checklist.md`와 `*-plan.md`는 **계획과 완료가 섞여 있을 수 있습니다**.
+- `TEST_PLAN.md`, `PLUVIANAI_LANDING_IMPLEMENTATION.md` 등 루트 전용 파일은 이 저장소 루트에 없을 수 있습니다 — 필요 시 별도 추가합니다.
