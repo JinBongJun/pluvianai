@@ -3,6 +3,15 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+function isLikelyBrowserDomGlitch(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("removechild") ||
+    m.includes("insertbefore") ||
+    (m.includes("notfounderror") && m.includes("node"))
+  );
+}
+
 export default function OrganizationDetailError({
   error,
   reset,
@@ -11,18 +20,27 @@ export default function OrganizationDetailError({
   reset: () => void;
 }) {
   const router = useRouter();
+  const msg = error?.message ?? "";
+  const showDomHint = isLikelyBrowserDomGlitch(msg);
 
   useEffect(() => {
-    console.error("[Organization Detail Error]:", error);
+    console.error("[Organizations org route]:", error);
   }, [error]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 px-4">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold text-pluvian-text">Could not load organization</h2>
-        <p className="text-pluvian-muted max-w-md">
-          An error occurred while loading the organization.
+      <div className="text-center space-y-3 max-w-lg">
+        <h2 className="text-2xl font-bold text-pluvian-text">Something went wrong</h2>
+        <p className="text-pluvian-muted">
+          This page hit an unexpected error while rendering. It is not necessarily a problem with your
+          organization or permissions — often a refresh fixes it.
         </p>
+        {showDomHint ? (
+          <p className="text-pluvian-muted text-sm leading-relaxed">
+            If this keeps happening, try a hard refresh, a private/incognito window, or temporarily
+            disabling browser extensions that modify the page.
+          </p>
+        ) : null}
       </div>
 
       <div className="flex gap-3">

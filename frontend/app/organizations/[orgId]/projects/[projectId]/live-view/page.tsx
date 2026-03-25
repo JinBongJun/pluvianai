@@ -3,7 +3,6 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import useSWR from "swr";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import ReactFlow, {
@@ -20,10 +19,8 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 
 import CanvasPageLayout from "@/components/layout/CanvasPageLayout";
-import { behaviorAPI, liveViewAPI, projectsAPI, organizationsAPI } from "@/lib/api";
-import { orgKeys } from "@/lib/queryKeys";
+import { behaviorAPI, liveViewAPI } from "@/lib/api";
 import {
-  API_URL,
   getApiErrorCode,
   getApiErrorMessage,
   getRateLimitInfo,
@@ -61,17 +58,22 @@ import { useToast } from "@/components/ToastContainer";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { PlanLimitBanner } from "@/components/PlanLimitBanner";
+import {
+  LIVE_VIEW_BASE_POLL_MS,
+  LIVE_VIEW_FOCUSED_POLL_MS,
+  LIVE_VIEW_MAX_POLL_MS,
+  LIVE_VIEW_SSE_POLL_BACKOFF_MS,
+} from "./liveViewPolling.constants";
+import {
+  useLiveViewSseCloseWhenHidden,
+  useLiveViewSseLifecycle,
+} from "./useLiveViewSseLifecycle";
+import { useLiveViewCoreData } from "./useLiveViewCoreData";
+import { useLiveViewSseRefs } from "./useLiveViewSseRefs";
 
 // Stable references for React Flow (avoid "new nodeTypes/edgeTypes object" warning)
 const NODE_TYPES = { agentCard: AgentCardNode };
 const EDGE_TYPES = { default: DrawIOEdge };
-// Polling defaults: keep light enough to avoid 429 under multi-tab / multi-user load.
-const LIVE_VIEW_BASE_POLL_MS = 10000;
-const LIVE_VIEW_MAX_POLL_MS = 60000;
-const LIVE_VIEW_FOCUSED_POLL_MS = 5000;
-const LIVE_VIEW_SWRS_DEDUPE_MS = 5000;
-const LIVE_VIEW_SSE_MUTATE_DEBOUNCE_MS = 1000;
-const LIVE_VIEW_SSE_POLL_BACKOFF_MS = 30000;
 
 function LiveViewToolbar({
   onUndo,
@@ -578,128 +580,46 @@ function LiveViewContent() {
   const [agentsPlanError, setAgentsPlanError] = useState<PlanLimitError | null>(null);
   const isPageVisible = usePageVisibility();
   const wasPageVisibleRef = useRef(isPageVisible);
-  const [sseConnected, setSseConnected] = useState(false);
-  const sseRef = useRef<EventSource | null>(null);
-  const sseMutateTimerRef = useRef<number | null>(null);
-  const sseBackoffUntilRef = useRef<number>(0);
+  const {
+    sseConnected,
+    setSseConnected,
+    sseRef,
+    sseMutateTimerRef,
+    sseBackoffUntilRef,
+  } = useLiveViewSseRefs();
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+
+  const { project, org, agentsData, agentsLoading, agentsError, mutateAgents } = useLiveViewCoreData({
+    projectId,
+    orgId,
+    routerReplace: href => router.replace(href),
+    selectedAgentId,
+    agentsPollIntervalMs,
+    isPageVisible,
+    sseConnected,
+    sseBackoffUntilRef,
+  });
   const [panelTab, setPanelTab] = useState<"logs" | "eval" | "data" | "settings">("logs");
   const [restoringAgentId, setRestoringAgentId] = useState<string | null>(null);
   const [hardDeletingAgents, setHardDeletingAgents] = useState(false);
 
-  const { data: project } = useSWR(
-    projectId && !isNaN(projectId) ? ["project", projectId] : null,
-    async () => {
-      try {
-        return await projectsAPI.get(projectId);
-      } catch (e: any) {
-        const status = e?.response?.status;
-        const msg = e?.response?.data?.detail ?? e?.response?.data?.error?.message ?? "";
-        if (status === 404 && (msg === "Project not found" || msg === "Not Found")) {
-          router.replace(orgId ? `/organizations/${orgId}/projects` : "/organizations");
-          return undefined;
-        }
-        throw e;
-      }
-    }
-  );
-  const { data: org } = useSWR(orgId ? orgKeys.detail(orgId) : null, () =>
-    organizationsAPI.get(orgId)
-  );
+  useLiveViewSseLifecycle({
+    projectId,
+    isPageVisible,
+    mutateAgents,
+    setAgentsPollIntervalMs,
+    setSseConnected,
+    sseRef,
+    sseMutateTimerRef,
+    sseBackoffUntilRef,
+  });
 
-  const {
-    data: agentsData,
-    mutate: mutateAgents,
-    isLoading: agentsLoading,
-    error: agentsError,
-  } = useSWR(
-    projectId && !isNaN(projectId) && projectId > 0 ? ["live-view-agents", projectId] : null,
-    () => liveViewAPI.getAgents(projectId, 30, true),
-    {
-      refreshInterval: (() => {
-        if (!isPageVisible) return 0;
-        if (sseConnected) return 0;
-        // When SSE is reconnecting/flapping, keep a light polling fallback instead of freezing.
-        if (Date.now() < sseBackoffUntilRef.current) return LIVE_VIEW_MAX_POLL_MS;
-        return selectedAgentId
-          ? Math.min(agentsPollIntervalMs, LIVE_VIEW_FOCUSED_POLL_MS)
-          : agentsPollIntervalMs;
-      })(),
-      revalidateOnFocus: false,
-      shouldRetryOnError: false,
-      dedupingInterval: LIVE_VIEW_SWRS_DEDUPE_MS,
-    }
-  );
-
-  // SSE stream: when connected, we rely on push notifications and stop polling.
-  useEffect(() => {
-    if (!projectId || Number.isNaN(projectId) || projectId <= 0) return;
-    if (!isPageVisible) return;
-    // Avoid creating multiple connections.
-    if (sseRef.current) return;
-
-    try {
-      const url = `${API_URL}/api/v1/projects/${projectId}/live-view/stream`;
-      const es = new EventSource(url, { withCredentials: true });
-      sseRef.current = es;
-
-      const cleanup = () => {
-        if (sseMutateTimerRef.current) {
-          window.clearTimeout(sseMutateTimerRef.current);
-          sseMutateTimerRef.current = null;
-        }
-        try {
-          es.close();
-        } catch {}
-        sseRef.current = null;
-        setSseConnected(false);
-      };
-
-      es.addEventListener("connected", () => {
-        setSseConnected(true);
-        // Reset to normal polling baseline (though SSE will disable polling).
-        setAgentsPollIntervalMs(LIVE_VIEW_BASE_POLL_MS);
-      });
-
-      es.addEventListener("agents_changed", () => {
-        // Debounce refresh so bursts don't spam the agents endpoint.
-        if (sseMutateTimerRef.current) {
-          window.clearTimeout(sseMutateTimerRef.current);
-        }
-        sseMutateTimerRef.current = window.setTimeout(() => {
-          sseMutateTimerRef.current = null;
-          void mutateAgents();
-        }, LIVE_VIEW_SSE_MUTATE_DEBOUNCE_MS);
-      });
-
-      es.onerror = () => {
-        // EventSource will auto-reconnect; mark as disconnected so polling can resume if needed.
-        setSseConnected(false);
-        sseBackoffUntilRef.current = Date.now() + LIVE_VIEW_SSE_POLL_BACKOFF_MS;
-        // If we have to fall back to polling, keep it very light.
-        setAgentsPollIntervalMs(LIVE_VIEW_MAX_POLL_MS);
-      };
-
-      return cleanup;
-    } catch {
-      setSseConnected(false);
-      sseBackoffUntilRef.current = Date.now() + LIVE_VIEW_SSE_POLL_BACKOFF_MS;
-      setAgentsPollIntervalMs(LIVE_VIEW_MAX_POLL_MS);
-      return;
-    }
-  }, [isPageVisible, mutateAgents, projectId]);
-
-  // Close SSE when tab becomes hidden to reduce server load.
-  useEffect(() => {
-    if (isPageVisible) return;
-    if (!sseRef.current) return;
-    try {
-      sseRef.current.close();
-    } catch {}
-    sseRef.current = null;
-    setSseConnected(false);
-    sseBackoffUntilRef.current = Date.now() + LIVE_VIEW_SSE_POLL_BACKOFF_MS;
-  }, [isPageVisible]);
+  useLiveViewSseCloseWhenHidden({
+    isPageVisible,
+    setSseConnected,
+    sseRef,
+    sseBackoffUntilRef,
+  });
 
   const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
