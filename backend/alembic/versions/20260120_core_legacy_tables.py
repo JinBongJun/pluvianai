@@ -373,6 +373,12 @@ def upgrade() -> None:
             sa.PrimaryKeyConstraint("id"),
         )
         op.create_index("ix_evaluation_rubrics_id", "evaluation_rubrics", ["id"], unique=False)
+        op.create_index(
+            "ix_evaluation_rubrics_project_id", "evaluation_rubrics", ["project_id"], unique=False
+        )
+        op.create_index(
+            "ix_evaluation_rubrics_created_at", "evaluation_rubrics", ["created_at"], unique=False
+        )
 
     if not insp.has_table("rule_market"):
         op.create_table(
