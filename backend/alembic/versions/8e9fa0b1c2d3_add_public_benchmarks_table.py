@@ -17,6 +17,9 @@ depends_on = None
 
 
 def upgrade():
+    bind = op.get_bind()
+    if sa.inspect(bind).has_table("public_benchmarks"):
+        return
     # Create public_benchmarks table
     op.create_table(
         'public_benchmarks',
