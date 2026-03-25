@@ -17,6 +17,10 @@
 
 **429 / Retry-After:** `page.tsx` — `getRateLimitInfo`, `agentsRetryAfterSec`로 폴링 간격 조정(상수와 함께 동작).
 
+**SWR 공통 옵션:** `live-view/liveViewSwr.defaults.ts` — `LIVE_VIEW_SWR_DEFAULT_OPTIONS` (`dedupingInterval`, `revalidateOnFocus: false`). 프로젝트·조직·에이전트 목록에 공유.
+
+**SSE:** `useLiveViewSseRefs` + `useLiveViewSseLifecycle` + `useLiveViewSseCloseWhenHidden` (`live-view/useLiveViewSse*.ts`) — `agents_changed` 시 디바운스된 `mutateAgents`, 탭 숨김 시 연결 종료.
+
 ---
 
 ## 2. Live View — SWR 키 패턴
