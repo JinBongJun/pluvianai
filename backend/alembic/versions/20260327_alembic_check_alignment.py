@@ -74,13 +74,22 @@ def downgrade() -> None:
         vix = {i["name"] for i in insp.get_indexes("validation_datasets")}
         if "ix_validation_datasets_tag" in vix:
             op.drop_index("ix_validation_datasets_tag", table_name="validation_datasets")
-        for col in (
-            "trace_ids",
-            "snapshot_ids",
-            "eval_config_snapshot",
-            "policy_ruleset_snapshot",
-        ):
-            op.execute(sa.text(f"COMMENT ON COLUMN validation_datasets.{col} IS NULL"))
+        op.execute(
+            sa.text("COMMENT ON COLUMN validation_datasets.trace_ids IS NULL")
+        )
+        op.execute(
+            sa.text("COMMENT ON COLUMN validation_datasets.snapshot_ids IS NULL")
+        )
+        op.execute(
+            sa.text(
+                "COMMENT ON COLUMN validation_datasets.eval_config_snapshot IS NULL"
+            )
+        )
+        op.execute(
+            sa.text(
+                "COMMENT ON COLUMN validation_datasets.policy_ruleset_snapshot IS NULL"
+            )
+        )
 
     if not insp.has_table("test_lab_canvases"):
         op.create_table(
