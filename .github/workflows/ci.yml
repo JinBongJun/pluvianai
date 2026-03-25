@@ -45,6 +45,57 @@ jobs:
           # Unit suite via pytest-ci.ini (integration/chaos need API parity fixes)
           python -m pytest -c pytest-ci.ini
 
+  # Fresh Postgres: prove migrations apply cleanly and ORM metadata matches DB at head.
+  migrations:
+    name: Backend (Alembic)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          # Loopback-only service on the runner; trust auth avoids embedding any password in this file (secret scanners).
+          POSTGRES_USER: agentguard_ci
+          POSTGRES_DB: pluvianai
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agentguard_ci -d pluvianai"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://agentguard_ci@localhost:5432/pluvianai
+      ENVIRONMENT: development
+      REDIS_URL: redis://127.0.0.1:6379/0
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Alembic upgrade head
+        run: python -m alembic upgrade head
+
+      - name: Alembic check (model vs DB at head)
+        run: python -m alembic check
+
   frontend:
     name: Frontend (type-check & build)
     runs-on: ubuntu-latest
