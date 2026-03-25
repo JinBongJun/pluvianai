@@ -41,6 +41,12 @@ Commands run:
 - [ ] Migration included and reversible
 - [ ] Backfill required
 
+**If this PR changes `app/models/` or database behavior:**
+
+- [ ] New/changed tables or columns have an **Alembic revision** in `backend/alembic/versions/`
+- [ ] New models are imported in **`backend/alembic/env.py`** (so `alembic check` sees them)
+- [ ] Ran **`python -m alembic upgrade head`** and **`python -m alembic check`** against an **empty Postgres** with the same `DATABASE_URL` pattern as CI (see [`backend/README.md`](../backend/README.md#reproduce-ci-locally-recommended-before-merging-db-changes))
+
 ## Deployment Notes
 - Feature flags:
 - Required env vars:
