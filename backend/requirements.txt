@@ -1,28 +1,25 @@
-fastapi==0.104.1
+fastapi==0.135.1
 uvicorn[standard]==0.24.0
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
-alembic==1.12.1
-pydantic==2.5.0
-pydantic-settings==2.1.0
-pydantic[email]==2.5.0
+alembic==1.18.4
+pydantic>=2.7.0,<3
+pydantic-settings>=2.1.0
+pydantic[email]>=2.7.0,<3
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 python-multipart==0.0.6
-redis==5.0.1
-httpx==0.25.2
+redis==7.3.0
+httpx==0.28.1
 reportlab==4.0.7
 resend==2.1.0
-apscheduler==3.10.4
+apscheduler==3.11.2
 sentry-sdk[fastapi]==1.38.0
 prometheus-client==0.19.0
 
 # System metrics for detailed health checks
 psutil==5.9.7
-
-# Billing
-stripe==7.0.0
 
 # PII Sanitization
 presidio-analyzer==2.2.33

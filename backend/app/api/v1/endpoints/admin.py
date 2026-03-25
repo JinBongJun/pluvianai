@@ -4,8 +4,10 @@ Admin endpoints for database initialization
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Literal, Optional
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import require_admin
@@ -16,13 +18,44 @@ from app.models.api_call import APICall
 from app.models.quality_score import QualityScore
 from app.models.drift_detection import DriftDetection
 from app.models.alert import Alert
+from app.services.ops_alerting import ops_alerting
 import random
 
 router = APIRouter()
 
+
+def _utcnow_naive() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 # Include impersonation routes
 from app.api.v1.endpoints.admin.impersonation import router as impersonation_router
 router.include_router(impersonation_router, tags=["admin-impersonation"])
+
+
+class OpsAlertDryRunRequest(BaseModel):
+    event_type: Literal[
+        "live_view_api_degraded",
+        "project_api_degraded",
+        "release_gate_failure_burst",
+        "release_gate_fail_ratio_high",
+        "provider_error_burst",
+        "db_error_burst",
+        "snapshot_error_ratio_high",
+        "custom",
+    ]
+    project_id: int = Field(1, ge=1)
+    repeats: int = Field(1, ge=1, le=250)
+    status_code: int = Field(500, ge=100, le=599)
+    duration_ms: float = Field(5000.0, ge=0)
+    error_summary: str = ""
+    error_class: str = "OperationalError"
+    endpoint_group: Literal["live_view", "release_gate"] = "live_view"
+    provider: Literal["openai", "anthropic", "google", "unknown"] = "openai"
+    error_code: str = "provider_error"
+    success: bool = Field(False)
+    custom_severity: Literal["info", "warning", "critical"] = "warning"
+    custom_title: Optional[str] = None
+    custom_summary: Optional[str] = None
 
 
 @router.post("/init-db", status_code=status.HTTP_201_CREATED)
@@ -93,7 +126,7 @@ async def generate_sample_data(
         provider = random.choice(providers)
         model = random.choice(models[provider])
         days_ago = random.randint(0, 7)
-        created_at = datetime.utcnow() - timedelta(days=days_ago, hours=random.randint(0, 23))
+        created_at = _utcnow_naive() - timedelta(days=days_ago, hours=random.randint(0, 23))
 
         api_call = APICall(
             project_id=project_id,
@@ -133,7 +166,7 @@ async def generate_sample_data(
         provider = random.choice(providers)
         model = random.choice(models[provider])
         days_ago = random.randint(0, 7)
-        created_at = datetime.utcnow() - timedelta(days=days_ago, hours=random.randint(0, 23))
+        created_at = _utcnow_naive() - timedelta(days=days_ago, hours=random.randint(0, 23))
 
         # Invalid JSON response
         api_call = APICall(
@@ -237,7 +270,7 @@ async def generate_sample_data(
                 change_percentage=scenario["change"],
                 drift_score=abs(scenario["change"]) + random.uniform(0, 10),
                 severity=scenario["severity"],
-                detected_at=datetime.utcnow() - timedelta(days=random.randint(0, 3), hours=random.randint(0, 23)),
+                detected_at=_utcnow_naive() - timedelta(days=random.randint(0, 3), hours=random.randint(0, 23)),
                 metadata={"evidence": scenario["evidence"]},
             )
             db.add(detection)
@@ -276,7 +309,7 @@ async def generate_sample_data(
                 message=scenario["message"],
                 is_sent=False,
                 is_resolved=random.choice([True, False]),
-                created_at=datetime.utcnow() - timedelta(days=random.randint(0, 2), hours=random.randint(0, 23)),
+                created_at=_utcnow_naive() - timedelta(days=random.randint(0, 2), hours=random.randint(0, 23)),
             )
             db.add(alert)
 
@@ -332,4 +365,93 @@ async def upgrade_user_subscription(
         "plan_type": subscription.plan_type,
         "status": subscription.status,
         "price_per_month": subscription.price_per_month,
+    }
+
+
+@router.post("/ops-alerts/test", status_code=status.HTTP_202_ACCEPTED)
+async def trigger_ops_alert_dry_run(
+    body: OpsAlertDryRunRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Admin-only dry-run endpoint for operational alerts.
+    Useful for validating webhook wiring and message format without real incidents.
+    """
+    require_admin(current_user)
+
+    et = body.event_type
+    if et == "live_view_api_degraded":
+        for _ in range(body.repeats):
+            ops_alerting.observe_live_view_agents_request(
+                project_id=body.project_id,
+                status_code=body.status_code,
+                duration_ms=body.duration_ms,
+            )
+    elif et == "project_api_degraded":
+        for _ in range(body.repeats):
+            ops_alerting.observe_project_api_request(
+                project_id=body.project_id,
+                endpoint_group=body.endpoint_group,
+                status_code=body.status_code,
+                duration_ms=body.duration_ms,
+            )
+    elif et == "release_gate_failure_burst":
+        for _ in range(body.repeats):
+            ops_alerting.observe_release_gate_result(
+                project_id=body.project_id,
+                success=False,
+                error_summary=body.error_summary or "dry-run release gate failure",
+            )
+    elif et == "release_gate_fail_ratio_high":
+        for _ in range(body.repeats):
+            ops_alerting.observe_release_gate_result(
+                project_id=body.project_id,
+                success=bool(body.success),
+                error_summary=body.error_summary or "dry-run release gate ratio sample",
+            )
+    elif et == "provider_error_burst":
+        for _ in range(body.repeats):
+            ops_alerting.observe_provider_error(
+                project_id=body.project_id,
+                provider=body.provider,
+                error_code=body.error_code,
+                error_summary=body.error_summary or "dry-run provider error",
+            )
+    elif et == "db_error_burst":
+        for _ in range(body.repeats):
+            ops_alerting.observe_db_error(body.error_class or "OperationalError")
+    elif et == "snapshot_error_ratio_high":
+        for _ in range(body.repeats):
+            ops_alerting.observe_snapshot_status(
+                project_id=body.project_id,
+                status_code=body.status_code,
+            )
+    else:
+        ops_alerting.emit_test_alert(
+            event_type="custom_dry_run",
+            severity=body.custom_severity,
+            title=body.custom_title or "Custom ops alert dry-run",
+            summary=body.custom_summary or "Manual dry-run alert triggered by admin endpoint.",
+            payload={
+                "project_id": body.project_id,
+                "repeats": body.repeats,
+            },
+        )
+
+    logger.info(
+        "Ops alert dry-run triggered",
+        extra={
+            "event_type": body.event_type,
+            "project_id": body.project_id,
+            "repeats": body.repeats,
+            "admin_user_id": current_user.id,
+        },
+    )
+
+    return {
+        "accepted": True,
+        "event_type": body.event_type,
+        "project_id": body.project_id,
+        "repeats": body.repeats,
+        "note": "Dry-run signal emitted. Check ops webhook channel and backend logs.",
     }

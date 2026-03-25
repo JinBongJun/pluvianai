@@ -714,13 +714,21 @@ class SignalDetectionService:
         return self.db.query(SignalConfig).filter(
             SignalConfig.project_id == project_id
         ).all()
-    
-    def update_signal_config(self, config_id: str, **kwargs):
-        """Update a signal configuration"""
+
+    def get_signal_config_by_id(self, config_id: str):
+        """Get a signal configuration by ID"""
         _, SignalConfig = self._get_models()
-        config = self.db.query(SignalConfig).filter(
+        return self.db.query(SignalConfig).filter(
             SignalConfig.id == config_id
         ).first()
+    
+    def update_signal_config(self, config_id: str, project_id: Optional[int] = None, **kwargs):
+        """Update a signal configuration"""
+        _, SignalConfig = self._get_models()
+        query = self.db.query(SignalConfig).filter(SignalConfig.id == config_id)
+        if project_id is not None:
+            query = query.filter(SignalConfig.project_id == project_id)
+        config = query.first()
         
         if not config:
             return None
@@ -733,12 +741,13 @@ class SignalDetectionService:
         self.db.refresh(config)
         return config
     
-    def delete_signal_config(self, config_id: str) -> bool:
+    def delete_signal_config(self, config_id: str, project_id: Optional[int] = None) -> bool:
         """Delete a signal configuration"""
         _, SignalConfig = self._get_models()
-        config = self.db.query(SignalConfig).filter(
-            SignalConfig.id == config_id
-        ).first()
+        query = self.db.query(SignalConfig).filter(SignalConfig.id == config_id)
+        if project_id is not None:
+            query = query.filter(SignalConfig.project_id == project_id)
+        config = query.first()
         
         if not config:
             return False

@@ -32,12 +32,12 @@ class CacheService:
 
         try:
             value = self.redis_client.get(key)
-            if value:
-                return json.loads(value)
+            if value is None:
+                return None
+            return json.loads(value)
         except Exception:
             # Graceful degradation: treat as cache miss
             return None
-        return None
 
     def set(self, key: str, value: Any, ttl: int = 3600):  # Default 1 hour
         """Set value in cache with TTL"""

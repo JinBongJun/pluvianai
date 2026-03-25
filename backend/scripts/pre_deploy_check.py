@@ -145,6 +145,15 @@ def check_environment():
         
         if settings.CORS_ORIGINS == "*":
             issues.append("CORS_ORIGINS is '*' in production (security risk)")
+
+        if settings.expose_api_docs:
+            issues.append("API docs are exposed in production (security risk)")
+
+        if settings.expose_metrics_endpoint:
+            issues.append("Metrics endpoint is exposed in production (security risk)")
+
+        if settings.expose_detailed_health_endpoint:
+            issues.append("Detailed health endpoint is exposed in production (security risk)")
     
     if issues:
         print("⚠️  Environment issues found:")

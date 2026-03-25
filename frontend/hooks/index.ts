@@ -8,5 +8,6 @@ export { useDebouncedValue } from "./useDebounce";
 export { useFormSubmit } from "./useFormSubmit";
 export { useKeyboardShortcuts, useGlobalShortcuts } from "./useKeyboardShortcuts";
 export { useLoading } from "./useLoading";
+export { useOrgProjectParams } from "./useOrgProjectParams";
 export { useRequireAuth } from "./useRequireAuth";
 export { useScrollAnimation } from "./useScrollAnimation";

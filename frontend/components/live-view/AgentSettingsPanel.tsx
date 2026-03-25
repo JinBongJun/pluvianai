@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import useSWR from "swr";
 import { AlertCircle, KeyRound, Save, Trash2 } from "lucide-react";
 
@@ -24,10 +25,13 @@ type ProjectUserApiKeyItem = {
   name?: string | null;
   is_active: boolean;
   created_at?: string | null;
+  key_hint?: string | null;
 };
 
 function normalizeProvider(value: unknown): ReplayProvider | null {
-  const v = String(value ?? "").trim().toLowerCase();
+  const v = String(value ?? "")
+    .trim()
+    .toLowerCase();
   if (v === "openai" || v === "anthropic" || v === "google") return v;
   return null;
 }
@@ -47,17 +51,29 @@ export function AgentSettingsPanel({
 }: AgentSettingsPanelProps) {
   const toast = useToast();
 
-  const { data: settingsData, mutate: mutateSettings, isLoading: settingsLoading } = useSWR(
+  const {
+    data: settingsData,
+    mutate: mutateSettings,
+    isLoading: settingsLoading,
+  } = useSWR(
     projectId && agentId ? ["live-view-agent-settings-panel", projectId, agentId] : null,
-    () => liveViewAPI.getAgentSettings(projectId, agentId)
+    () => liveViewAPI.getAgentSettings(projectId, agentId),
+    { revalidateOnFocus: false }
   );
   const { data: latestSnapshotData } = useSWR(
     projectId && agentId ? ["live-view-agent-settings-latest-snapshot", projectId, agentId] : null,
-    () => liveViewAPI.listSnapshots(projectId, { agent_id: agentId, limit: 1, offset: 0, light: true })
+    () =>
+      liveViewAPI.listSnapshots(projectId, { agent_id: agentId, limit: 1, offset: 0, light: true }),
+    { revalidateOnFocus: false }
   );
-  const { data: keysData, mutate: mutateKeys, isLoading: keysLoading } = useSWR(
+  const {
+    data: keysData,
+    mutate: mutateKeys,
+    isLoading: keysLoading,
+  } = useSWR(
     projectId ? ["project-user-api-keys-settings-panel", projectId] : null,
-    () => projectUserApiKeysAPI.list(projectId)
+    () => projectUserApiKeysAPI.list(projectId),
+    { revalidateOnFocus: false }
   );
 
   const [displayNameDraft, setDisplayNameDraft] = useState(agentId);
@@ -120,13 +136,19 @@ export function AgentSettingsPanel({
     return map;
   }, [keys, agentId]);
   const targetProvider = latestProvider ?? providerDraft;
-  const targetKey = activeNodeKeyByProvider.get(targetProvider) ?? activeProjectKeyByProvider.get(targetProvider);
+  const targetKey =
+    activeNodeKeyByProvider.get(targetProvider) ?? activeProjectKeyByProvider.get(targetProvider);
   const targetHasKey = Boolean(targetKey);
-  const targetKeyScope = activeNodeKeyByProvider.has(targetProvider) ? "Node override" : targetHasKey ? "Project default" : null;
+  const targetKeyScope = activeNodeKeyByProvider.has(targetProvider)
+    ? "Node override"
+    : targetHasKey
+      ? "Project default"
+      : null;
   const showMissingKeyWarning = Boolean(latestProvider) && !targetHasKey;
 
   useEffect(() => {
-    const displayName = (settingsData as { display_name?: string | null } | undefined)?.display_name;
+    const displayName = (settingsData as { display_name?: string | null } | undefined)
+      ?.display_name;
     setDisplayNameDraft(displayName?.trim() || agentId);
   }, [settingsData, agentId]);
 
@@ -185,8 +207,8 @@ export function AgentSettingsPanel({
         agent_id: agentId.trim() || undefined,
       });
       setApiKeyDraft("");
-      await mutateKeys();
-      toast.showToast(`${PROVIDER_LABEL[targetProvider]} key saved.`, "success");
+      await mutateKeys(undefined, true);
+      toast.showToast(`${PROVIDER_LABEL[targetProvider]} key saved. Check the identifier below.`, "success");
       onAgentUpdated?.();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
@@ -203,7 +225,7 @@ export function AgentSettingsPanel({
     setDeletingKeyProvider(provider);
     try {
       await projectUserApiKeysAPI.delete(projectId, item.id);
-      await mutateKeys();
+      await mutateKeys(undefined, true);
       toast.showToast(`${PROVIDER_LABEL[provider]} key removed.`, "success");
       onAgentUpdated?.();
     } catch (err: unknown) {
@@ -215,18 +237,22 @@ export function AgentSettingsPanel({
   };
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="h-0 flex-1 min-h-0 overflow-y-auto custom-scrollbar p-8 space-y-6">
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
         <div>
-          <h3 className="text-sm font-black uppercase tracking-wider text-slate-300">Node Settings</h3>
-          <p className="text-xs text-slate-500 mt-1">Change node name or remove this node from Live View.</p>
+          <h3 className="text-sm font-black uppercase tracking-wider text-slate-300">
+            Agent Settings
+          </h3>
+          <p className="text-xs text-slate-500 mt-1">
+            Change agent name or remove this agent from Live View.
+          </p>
         </div>
         <div className="space-y-2">
           <label className="text-[11px] uppercase tracking-wide text-slate-500">Display name</label>
           <div className="flex items-center gap-2">
             <input
               value={displayNameDraft}
-              onChange={(e) => setDisplayNameDraft(e.target.value)}
+              onChange={e => setDisplayNameDraft(e.target.value)}
               placeholder="Agent display name"
               className="flex-1 rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-fuchsia-500/50 outline-none"
             />
@@ -248,11 +274,11 @@ export function AgentSettingsPanel({
             className="inline-flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            Remove node
+            Remove agent
           </button>
         ) : (
           <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 space-y-2">
-            <p className="text-xs text-rose-200">Remove this node from Live View?</p>
+            <p className="text-xs text-rose-200">Remove this agent from Live View?</p>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -275,34 +301,74 @@ export function AgentSettingsPanel({
         )}
       </section>
 
+      <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-5 space-y-3">
+        <div>
+          <h3 className="text-sm font-black uppercase tracking-wider text-emerald-200">
+            Lifecycle Policy
+          </h3>
+          <p className="mt-1 text-xs leading-relaxed text-slate-400">
+            Removing a node hides it from Live View immediately. Matching traffic can auto-restore
+            the same node during the configured restore window, and scheduled cleanup may permanently
+            purge old soft-deleted node settings after the grace period.
+          </p>
+        </div>
+        <p className="text-[11px] leading-relaxed text-slate-500">
+          Check the repository docs for the current default values and operator guidance.
+          <Link href="/docs" className="ml-1 text-emerald-300 hover:text-emerald-200">
+            Open docs
+          </Link>
+        </p>
+      </section>
+
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <KeyRound className="w-4 h-4 mt-0.5 text-fuchsia-300" />
             <div>
-              <h3 className="text-sm font-black uppercase tracking-wider text-slate-300">Provider API Keys</h3>
+              <h3 className="text-sm font-black uppercase tracking-wider text-slate-300">
+                Provider API Keys
+              </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Node key overrides project default. If no node key exists, project default key is used.
+                Node key overrides project default. If no node key exists, project default key is
+                used.
               </p>
             </div>
           </div>
           {latestProvider && (
-            <span
-              className={targetHasKey
-                ? "shrink-0 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-200"
-                : "shrink-0 rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[11px] font-medium text-rose-200"}
-            >
-              {targetHasKey ? "Registered" : "Not registered"}
-            </span>
+            <div className="shrink-0 flex flex-col items-end gap-1">
+              <span
+                className={
+                  targetHasKey
+                    ? "rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-sm font-semibold text-emerald-200"
+                    : "rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-sm font-semibold text-rose-200"
+                }
+              >
+                {targetHasKey ? "Registered" : "Not registered"}
+              </span>
+              {targetHasKey && targetKey?.key_hint && (
+                <span className="text-[11px] font-mono text-slate-400" title="Key identifier (masked)">
+                  {targetKey.key_hint}
+                </span>
+              )}
+              {targetHasKey && !targetKey?.key_hint && (
+                <span className="text-[10px] text-slate-500" title="Key was saved before identifier was added">
+                  Re-save key to show identifier
+                </span>
+              )}
+            </div>
           )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-300">
-            Node provider: <span className="font-semibold">{latestProvider ? PROVIDER_LABEL[latestProvider] : "Not detected yet"}</span>
+            Node provider:{" "}
+            <span className="font-semibold">
+              {latestProvider ? PROVIDER_LABEL[latestProvider] : "Not detected yet"}
+            </span>
           </div>
           <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-300">
-            Node model: <span className="font-semibold break-all">{latestModel || "Not detected yet"}</span>
+            Node model:{" "}
+            <span className="font-semibold break-all">{latestModel || "Not detected yet"}</span>
           </div>
         </div>
 
@@ -310,18 +376,16 @@ export function AgentSettingsPanel({
           <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-300">
             Target provider for node key registration:{" "}
             <span className="font-semibold">{PROVIDER_LABEL[latestProvider]}</span>
-            {targetKeyScope && (
-              <span className="ml-2 text-slate-400">({targetKeyScope})</span>
-            )}
+            {targetKeyScope && <span className="ml-2 text-slate-400">({targetKeyScope})</span>}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2">
             <select
               value={providerDraft}
-              onChange={(e) => setProviderDraft(e.target.value as ReplayProvider)}
+              onChange={e => setProviderDraft(e.target.value as ReplayProvider)}
               className="rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm text-slate-200 focus:border-fuchsia-500/50 outline-none"
             >
-              {PROVIDERS.map((provider) => (
+              {PROVIDERS.map(provider => (
                 <option key={provider} value={provider}>
                   {PROVIDER_LABEL[provider]}
                 </option>
@@ -330,7 +394,7 @@ export function AgentSettingsPanel({
             <input
               type="password"
               value={apiKeyDraft}
-              onChange={(e) => setApiKeyDraft(e.target.value)}
+              onChange={e => setApiKeyDraft(e.target.value)}
               placeholder=""
               autoComplete="new-password"
               name={`provider-api-key-${agentId}`}
@@ -342,7 +406,7 @@ export function AgentSettingsPanel({
           <input
             type="password"
             value={apiKeyDraft}
-            onChange={(e) => setApiKeyDraft(e.target.value)}
+            onChange={e => setApiKeyDraft(e.target.value)}
             placeholder=""
             autoComplete="new-password"
             name={`provider-api-key-${agentId}`}
@@ -364,14 +428,13 @@ export function AgentSettingsPanel({
             onClick={() => {
               if (targetKey) void deleteProviderKey(targetKey);
             }}
-            disabled={
-              !targetHasKey ||
-              deletingKeyProvider === targetProvider
-            }
+            disabled={!targetHasKey || deletingKeyProvider === targetProvider}
             className="inline-flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            {deletingKeyProvider === targetProvider ? "Removing..." : "Remove selected provider key"}
+            {deletingKeyProvider === targetProvider
+              ? "Removing..."
+              : "Remove selected provider key"}
           </button>
         </div>
         {(settingsLoading || keysLoading) && (
@@ -381,7 +444,8 @@ export function AgentSettingsPanel({
           <div className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <span>
-              Release Gate run is blocked before execution because the required provider key is not registered.
+              Release Gate run is blocked before execution because the required provider key is not
+              registered.
             </span>
           </div>
         )}
@@ -389,4 +453,3 @@ export function AgentSettingsPanel({
     </div>
   );
 }
-

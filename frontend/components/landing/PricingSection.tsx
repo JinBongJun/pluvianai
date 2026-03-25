@@ -3,18 +3,19 @@
 import React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Check, Zap, Shield, Crown } from "lucide-react";
+import { Check, Zap, Shield, Crown, ArrowRight, Lock } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 const tiers = [
   {
-    name: "Community",
+    name: "Free",
     priceLabel: "Free",
-    description: "For independent researchers and hobbyists getting started with node regression guard.",
+    description: "For teams getting started with Live View and Release Gate.",
     features: [
       "Live View & Release Gate",
-      "Behavior diff on replays",
-      "Best‑effort community support",
+      "Up to 10,000 snapshots per month",
+      "Up to 50 Release Gate runs per month",
+      "Bring your own provider key anytime",
       "No credit card required",
     ],
     icon: Zap,
@@ -25,9 +26,10 @@ const tiers = [
   {
     name: "Pro",
     priceLabel: "Coming soon",
-    description: "For professional teams who need higher limits, longer retention, and support.",
+    description: "For teams that need higher hosted replay budgets, retention, and support.",
     features: [
-      "Higher usage limits (GuardCredits)",
+      "10 active projects",
+      "10,000 platform replay credits per month",
       "Longer trace retention",
       "Priority support",
       "API access & webhooks",
@@ -41,7 +43,7 @@ const tiers = [
   {
     name: "Enterprise",
     priceLabel: "Contact sales",
-    description: "For enterprises with strict security and compliance needs.",
+    description: "For enterprises that need procurement, security review, and custom limits.",
     features: [
       "Security review & compliance support",
       "Self-hosted / private cloud options",
@@ -64,23 +66,21 @@ export default function PricingSection({ isLoggedIn }: PricingSectionProps) {
   const primaryHref = isLoggedIn ? "/organizations" : "/login?mode=signup&intent=trial";
 
   return (
-    <section id="pricing" className="py-32 relative overflow-hidden">
-      <div className="container mx-auto px-6 relative z-10">
+    <section id="pricing" className="py-32 relative bg-transparent overflow-hidden">
+      <div className="w-[95%] max-w-[1800px] mx-auto relative z-10 border-t border-white/5 pt-12">
         <div className="text-center max-w-3xl mx-auto mb-20">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold uppercase tracking-widest mb-6 border border-emerald-500/20">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Access
           </div>
-          <h2 className="text-4xl md:text-5xl font-black text-white mb-6">
-            Pricing
-          </h2>
+          <h2 className="text-4xl md:text-5xl font-black text-white mb-6">Pricing</h2>
           <p className="text-xl text-slate-400 leading-relaxed font-medium">
-            Start for free with fair-use limits. <br />
-            Paid plans are coming soon.
+            Start for free with product limits and included platform replay credits. <br />
+            Paid plans are preview-only during the MVP.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 max-w-7xl mx-auto">
+        <div className="grid md:grid-cols-3 gap-8 w-full max-w-[1400px] mx-auto">
           {tiers.map(tier => (
             <motion.div
               key={tier.name}
@@ -88,11 +88,11 @@ export default function PricingSection({ isLoggedIn }: PricingSectionProps) {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               whileHover={{ y: -10 }}
-              className={`relative p-8 rounded-xl bg-[#0d0d11]/80 backdrop-blur-xl border ${tier.bestValue ? "border-emerald-500/50 shadow-[0_0_50px_-10px_rgba(16,185,129,0.2)]" : "border-white/5"} flex flex-col`}
+              className={`relative p-8 rounded-3xl bg-[#0d0d11]/80 backdrop-blur-xl border ${tier.bestValue ? "border-emerald-500/50 shadow-[0_0_40px_-10px_rgba(16,185,129,0.3)] bg-[#0d0d11]/90" : "border-white/5"} flex flex-col`}
             >
               {tier.bestValue && (
                 <div className="absolute top-0 right-8 -translate-y-1/2 px-4 py-1 bg-emerald-500 text-black text-[10px] font-black uppercase tracking-widest rounded-full">
-                  Best Value
+                  Preview
                 </div>
               )}
 
@@ -104,9 +104,7 @@ export default function PricingSection({ isLoggedIn }: PricingSectionProps) {
                 </div>
                 <h3 className="text-2xl font-black text-white mb-2">{tier.name}</h3>
                 <div className="flex items-baseline gap-1 mb-4">
-                  <span className="text-2xl font-black text-white">
-                    {tier.priceLabel}
-                  </span>
+                  <span className="text-5xl font-black text-white">{tier.priceLabel}</span>
                 </div>
                 <p className="text-slate-400 text-sm leading-relaxed">{tier.description}</p>
               </div>
@@ -122,37 +120,35 @@ export default function PricingSection({ isLoggedIn }: PricingSectionProps) {
                 ))}
               </div>
 
-              {tier.name === "Community" ? (
+              {tier.name === "Free" ? (
                 <Link href={primaryHref} className="w-full">
                   <Button
                     variant={tier.buttonVariant}
-                    className={`w-full h-12 text-sm font-black uppercase tracking-widest ${tier.bestValue ? "shadow-[0_0_30px_-5px_rgba(16,185,129,0.4)]" : ""}`}
+                    className={`w-full h-14 text-sm font-black uppercase tracking-widest rounded-full ${tier.bestValue ? "shadow-[0_0_30px_-5px_rgba(16,185,129,0.4)]" : "bg-transparent text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500/10"}`}
                   >
                     {tier.ctaLabel}
+                    <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
                 </Link>
               ) : (
                 <Button
                   variant={tier.buttonVariant}
-                  disabled
-                  className={`w-full h-12 text-sm font-black uppercase tracking-widest opacity-60 cursor-not-allowed`}
+                  disabled={true}
+                  className="w-full h-14 text-sm font-black uppercase tracking-widest rounded-full bg-transparent text-slate-500 border border-white/10 opacity-70"
                 >
+                  <Lock className="w-4 h-4 mr-2" />
                   {tier.ctaLabel}
                 </Button>
               )}
             </motion.div>
           ))}
         </div>
-
-        <div className="mt-20 text-center">
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em]">
-            Trusted by teams shipping AI agents
-          </p>
-        </div>
       </div>
 
-      {/* Background Accent */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-emerald-500/5 blur-[120px] rounded-full pointer-events-none -z-10" />
+      {/* Background Accent (Photographic Flare) */}
+      <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-emerald-500/20 blur-[150px] rounded-full pointer-events-none -z-10 mix-blend-screen" />
+      <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[2px] bg-emerald-400/30 blur-[2px] -rotate-[10deg] pointer-events-none -z-10 mix-blend-screen" />
+      <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[20px] bg-emerald-500/10 blur-[20px] -rotate-[10deg] pointer-events-none -z-10 mix-blend-screen" />
     </section>
   );
 }

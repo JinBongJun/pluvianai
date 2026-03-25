@@ -11,36 +11,48 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "type-check": "tsc --noEmit --skipLibCheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "generate-types": "npx openapi-typescript http://localhost:8000/openapi.json -o lib/api-types.ts",
-    "validate-types": "npm run generate-types && npm run type-check"
+    "validate-types": "npm run generate-types && npm run type-check",
+    "qa:g-billing-ui": "node scripts/pricing_billing_ui_assert.js",
+    "qa:i-login-flow": "node scripts/login_query_flow_assert.js",
+    "qa:n1-reauth-matrix": "node scripts/session_reauth_matrix_assert.js",
+    "qa:l-m-legal-ux": "node scripts/projects_legal_ux_assert.js",
+    "qa:rg-warn-ui": "node scripts/release_gate_warn_ui_assert.js",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.32.1",
     "autoprefixer": "^10.4.16",
-    "axios": "^1.6.2",
+    "axios": "^1.13.6",
     "clsx": "^2.1.1",
     "framer-motion": "^12.33.0",
     "lucide-react": "^0.562.0",
     "next": "14.0.3",
+    "playwright": "^1.58.2",
     "postcss": "^8.4.32",
     "posthog-js": "^1.328.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "reactflow": "^11.10.4",
     "recharts": "^2.15.4",
-    "swr": "^2.3.8",
-    "tailwind-merge": "^3.4.0",
+    "swr": "^2.4.1",
+    "tailwind-merge": "^3.5.0",
     "tailwindcss": "^3.3.6",
     "typescript": "^5.3.2",
-    "zod": "^4.3.5"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.42",
     "@types/react-dom": "^18.2.17",
     "eslint": "^8.54.0",
     "eslint-config-next": "14.0.3",
-    "openapi-typescript": "^7.4.3",
-    "prettier": "^3.1.0"
+    "openapi-typescript": "^7.13.0",
+    "prettier": "^3.1.0",
+    "vitest": "^3.2.4"
   }
 }

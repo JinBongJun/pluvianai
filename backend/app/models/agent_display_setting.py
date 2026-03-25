@@ -9,7 +9,11 @@ class AgentDisplaySetting(Base):
 
     __tablename__ = "agent_display_settings"
     __table_args__ = (
-        UniqueConstraint("system_prompt_hash", name="uq_agent_display_settings_system_prompt_hash"),
+        UniqueConstraint(
+            "project_id",
+            "system_prompt_hash",
+            name="uq_agent_display_settings_project_system_prompt_hash",
+        ),
     )
 
     id = Column(String(255), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
@@ -19,6 +23,7 @@ class AgentDisplaySetting(Base):
     display_name = Column(String(100), nullable=True)
     node_type = Column(String(50), nullable=True, server_default="agentCard")
     is_deleted = Column(Boolean, default=False, server_default="false")
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     
     # Custom thresholds for this specific agent (Overrides Project-level config)
     diagnostic_config = Column(JSON, nullable=True, server_default='{}')

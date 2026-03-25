@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { randomBytes } from "crypto";
 import {
   FormActionState,
   zodErrorToFormState,
@@ -12,6 +13,71 @@ import {
 import { getLoginErrorMessage, getRegisterErrorMessage } from "@/lib/auth-messages";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const DEFAULT_ACCESS_TOKEN_MAX_AGE_SEC = 60 * 30;
+const DEFAULT_REFRESH_TOKEN_MAX_AGE_SEC = 60 * 60 * 24 * 7;
+const AUTH_COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN || undefined;
+const CSRF_COOKIE_NAME = "csrf_token";
+
+function getTokenMaxAge(token: string | undefined, fallbackSeconds: number): number {
+  if (!token) return fallbackSeconds;
+
+  try {
+    const [, payloadBase64] = token.split(".");
+    if (!payloadBase64) return fallbackSeconds;
+
+    const normalized = payloadBase64.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const payloadJson = Buffer.from(padded, "base64").toString("utf8");
+    const payload = JSON.parse(payloadJson) as { exp?: number };
+    const exp = Number(payload.exp);
+    if (!Number.isFinite(exp)) return fallbackSeconds;
+
+    const maxAge = exp - Math.floor(Date.now() / 1000);
+    return maxAge > 0 ? maxAge : fallbackSeconds;
+  } catch {
+    return fallbackSeconds;
+  }
+}
+
+function generateCsrfToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+function setAuthCookies(accessToken: string, refreshToken: string): void {
+  const csrfToken = generateCsrfToken();
+  const secure = process.env.NODE_ENV === "production";
+
+  cookies().set("access_token", accessToken, {
+    httpOnly: true,
+    secure,
+    sameSite: "lax",
+    path: "/",
+    domain: AUTH_COOKIE_DOMAIN,
+    maxAge: getTokenMaxAge(accessToken, DEFAULT_ACCESS_TOKEN_MAX_AGE_SEC),
+  });
+  cookies().set("refresh_token", refreshToken, {
+    httpOnly: true,
+    secure,
+    sameSite: "lax",
+    path: "/",
+    domain: AUTH_COOKIE_DOMAIN,
+    maxAge: getTokenMaxAge(refreshToken, DEFAULT_REFRESH_TOKEN_MAX_AGE_SEC),
+  });
+  cookies().set(CSRF_COOKIE_NAME, csrfToken, {
+    httpOnly: false,
+    secure,
+    sameSite: "lax",
+    path: "/",
+    domain: AUTH_COOKIE_DOMAIN,
+    maxAge: getTokenMaxAge(refreshToken, DEFAULT_REFRESH_TOKEN_MAX_AGE_SEC),
+  });
+}
+
+function clearAuthCookies(): void {
+  cookies().delete({ name: "access_token", path: "/", domain: AUTH_COOKIE_DOMAIN });
+  cookies().delete({ name: "refresh_token", path: "/", domain: AUTH_COOKIE_DOMAIN });
+  cookies().delete({ name: CSRF_COOKIE_NAME, path: "/", domain: AUTH_COOKIE_DOMAIN });
+}
 
 // ===== Zod schemas =====
 
@@ -83,7 +149,6 @@ export async function loginAction(
     const { access_token, refresh_token } = data;
 
     console.log("✅ [loginAction] Login successful, setting cookies");
-    console.log("🔵 [loginAction] Token preview:", access_token?.substring(0, 20) + "...");
 
     // Decode JWT token and extract user info
     let userInfo = null;
@@ -98,7 +163,6 @@ export async function loginAction(
       );
 
       const payload = JSON.parse(jsonPayload);
-      console.log("✅ [loginAction] Token decoded, user_id:", payload.sub);
 
       // Extract user info from payload
       userInfo = {
@@ -106,29 +170,11 @@ export async function loginAction(
         email: parsed.data.email, // Use email from login form input
         full_name: payload.full_name || parsed.data.email.split("@")[0], // Use token value when present, fallback to email prefix
       };
-      console.log("✅ [loginAction] User info extracted:", userInfo.email);
     } catch (error) {
       console.error("🔴 [loginAction] Failed to decode token:", error);
     }
 
-    // Set cookies with standard settings
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax" as const,
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-    };
-
-    cookies().set("access_token", access_token, cookieOptions);
-    cookies().set("refresh_token", refresh_token, cookieOptions);
-
-    if (userInfo) {
-      cookies().set("user_info", JSON.stringify(userInfo), {
-        ...cookieOptions,
-        httpOnly: false, // Accessible to client
-      });
-    }
+    setAuthCookies(access_token, refresh_token);
 
     console.log("✅ [loginAction] Authentication cookies set");
     return formSuccessResponse({
@@ -154,17 +200,13 @@ export async function loginAction(
 export async function registerAction(
   prevState: FormActionState<{
     user_id: number;
-    access_token?: string;
-    refresh_token?: string;
-    user_info?: any;
+    authenticated?: boolean;
   }> | null,
   formData: FormData
 ): Promise<
   FormActionState<{
     user_id: number;
-    access_token?: string;
-    refresh_token?: string;
-    user_info?: any;
+    authenticated?: boolean;
   }>
 > {
   // 1. Parse form data
@@ -222,21 +264,10 @@ export async function registerAction(
     const { access_token, refresh_token } = loginData;
 
     // 5. Store tokens in cookies
-    cookies().set("access_token", access_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-    });
-    cookies().set("refresh_token", refresh_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 30, // 30 days
-    });
+    setAuthCookies(access_token, refresh_token);
 
     // Include tokens in return payload (for client-side localStorage usage)
-    return formSuccessResponse({ user_id: userData.id, access_token, refresh_token });
+    return formSuccessResponse({ user_id: userData.id, authenticated: true });
   } catch (error: any) {
     console.error("[registerAction] Error:", error);
     const msg = getRegisterErrorMessage({
@@ -253,9 +284,7 @@ export async function registerAction(
  * Deletes cookies and redirects to the login page.
  */
 export async function logoutAction(): Promise<void> {
-  cookies().delete("access_token");
-  cookies().delete("refresh_token");
-  cookies().delete("user_info");
+  clearAuthCookies();
   redirect("/login");
 }
 

@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { settingsAPI } from "@/lib/api";
 import { Key, Trash2, Copy, UserCircle2, Pencil, Check, X } from "lucide-react";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import AccountLayout from "@/components/layout/AccountLayout";
 
 type UserProfile = {
   id: number;
@@ -204,23 +204,28 @@ export default function ProfileSettingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0c] text-slate-200 flex items-center justify-center">
-        Loading profile settings...
-      </div>
+      <AccountLayout activeTab="profile" breadcrumb={[{ label: "Account" }, { label: "Profile" }]}>
+        <div className="min-h-[50vh] flex items-center justify-center text-slate-300 text-sm">
+          Loading profile settings...
+        </div>
+      </AccountLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0c] text-slate-200 px-6 py-10">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <AccountLayout
+      activeTab="profile"
+      breadcrumb={[
+        { label: "Account" },
+        { label: "Profile" },
+      ]}
+    >
+      <div className="space-y-8">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-3">
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-3">
             <UserCircle2 className="w-8 h-8 text-emerald-400" />
             Profile & API Keys
           </h1>
-          <Link href="/organizations">
-            <Button variant="outline">Back to Console</Button>
-          </Link>
         </div>
 
         {notice ? (
@@ -321,7 +326,9 @@ export default function ProfileSettingsPage() {
               <p className="text-xs uppercase tracking-widest font-bold text-amber-300">
                 Save This Key Now (Shown Once)
               </p>
-              <div className="font-mono text-sm break-all text-amber-100">{newlyCreatedKey.api_key}</div>
+              <div className="font-mono text-sm break-all text-amber-100">
+                {newlyCreatedKey.api_key}
+              </div>
               <Button variant="outline" onClick={handleCopy}>
                 <Copy className="w-4 h-4 mr-2" />
                 Copy key
@@ -400,7 +407,6 @@ export default function ProfileSettingsPage() {
           </div>
         </section>
       </div>
-    </div>
+    </AccountLayout>
   );
 }
-

@@ -1,30 +1,29 @@
-# PluvianAI Node.js SDK (package: @agentguard/sdk)
+# PluvianAI Node.js SDK
 
 Zero-config monitoring for LLM APIs. Automatically track all your OpenAI, Anthropic, and other LLM API calls without changing your code.
 
 ## Installation
 
 ```bash
-npm install @agentguard/sdk
+npm install pluvianai
 ```
 
 ## Quick Start
 
 ### Zero-Config Setup (Recommended)
 
-```typescript
-import agentguard from '@agentguard/sdk';
+```javascript
+import pluvianai from 'pluvianai';
 
 // Initialize with environment variables
-agentguard.init();
+pluvianai.init();
 
 // That's it! All OpenAI calls are now automatically monitored
 import OpenAI from 'openai';
-
 const openai = new OpenAI();
 const response = await openai.chat.completions.create({
   model: 'gpt-4',
-  messages: [{ role: 'user', content: 'Hello!' }]
+  messages: [{ role: 'user', content: 'Hello!' }],
 });
 ```
 
@@ -33,21 +32,25 @@ const response = await openai.chat.completions.create({
 Set these environment variables:
 
 ```bash
-export AGENTGUARD_API_KEY="your-api-key"
-export AGENTGUARD_PROJECT_ID="123"
-export AGENTGUARD_API_URL="https://api.agentguard.dev"  # Optional
-export AGENTGUARD_AGENT_NAME="my-agent"  # Optional
+export PLUVIANAI_API_KEY="your-api-key"
+export PLUVIANAI_PROJECT_ID="123"
+export PLUVIANAI_API_URL="https://api.pluvianai.com"  # Optional
+export PLUVIANAI_AGENT_NAME="my-agent"  # Optional
 ```
+
+### Security / privacy
+
+The Node SDK applies the same ingest-side sanitization as Python: request/response bodies and tool event payloads can be omitted or truncated based on config and env (e.g. `PLUVIANAI_LOG_USER_CONTENT`, `PLUVIANAI_LOG_REQUEST_BODIES`, `PLUVIANAI_LOG_RESPONSE_BODIES`, `PLUVIANAI_LOG_TOOL_EVENT_PAYLOADS`, `PLUVIANAI_MAX_INGEST_BYTES`). See [`docs/live-view-trust-data-collection.md`](../../docs/live-view-trust-data-collection.md) and [`sdk/python/README.md`](../python/README.md#security--privacy-ingest-payload) for the full policy matrix.
 
 ### Manual Initialization
 
-```typescript
-import agentguard from '@agentguard/sdk';
+```javascript
+import pluvianai from 'pluvianai';
 
-agentguard.init({
+pluvianai.init({
   apiKey: 'your-api-key',
   projectId: 123,
-  agentName: 'my-agent'
+  agentName: 'my-agent',
 });
 ```
 
@@ -55,28 +58,25 @@ agentguard.init({
 
 To track a chain of API calls that belong to the same workflow:
 
-```typescript
-import agentguard from '@agentguard/sdk';
+```javascript
+import pluvianai from 'pluvianai';
 import OpenAI from 'openai';
 
-agentguard.init();
+pluvianai.init();
 const openai = new OpenAI();
 
-// Use chain function to group related calls into a chain
-await agentguard.chain("user-query-123", "data-collector", async () => {
-  // All calls within this block will have the same chain_id
+await pluvianai.chain('user-query-123', 'data-collector', async () => {
   const response1 = await openai.chat.completions.create({
     model: 'gpt-4',
-    messages: [{ role: 'user', content: 'Collect data' }]
+    messages: [{ role: 'user', content: 'Collect data' }],
   });
-  
+
   const response2 = await openai.chat.completions.create({
     model: 'gpt-4',
-    messages: [{ role: 'user', content: 'Analyze data' }]
+    messages: [{ role: 'user', content: 'Analyze data' }],
   });
-  
+
   // Both calls will be grouped under chain_id="user-query-123"
-  // You can view them in the Agent Chains page
 });
 ```
 
@@ -84,42 +84,45 @@ await agentguard.chain("user-query-123", "data-collector", async () => {
 
 If you prefer to track calls manually:
 
-```typescript
-import agentguard from '@agentguard/sdk';
-import { performance } from 'perf_hooks';
+```javascript
+import pluvianai from 'pluvianai';
 
-const startTime = performance.now();
-// ... make your API call ...
-const latencyMs = performance.now() - startTime;
-
-await agentguard.trackCall(
+await pluvianai.trackCall(
   { model: 'gpt-4', messages: [...] },
   { choices: [...] },
-  latencyMs,
+  150,
   200,
   'my-agent',
-  'user-query-123'  // Optional: group related calls
+  'user-query-123'
 );
 ```
 
-## Features
+## Tool calls & `tool_events` (optional)
 
-- **Zero-config**: Automatically patches OpenAI SDK
-- **Non-blocking**: Doesn't slow down your application
-- **Error handling**: Gracefully handles failures
-- **Agent tracking**: Track different agents in your system
-- **TypeScript support**: Full TypeScript definitions included
+Zero-config patching records **LLM API** traffic. Tool **execution** often happens outside the client, so for Live View and Release Gate to show **recorded** tool results (instead of dry-run simulation), attach an optional **`tool_events`** array when calling `trackCall` (7th argument), or send the same field on `POST /api/v1/projects/{project_id}/api-calls`.
 
-## Tool calls & workflow structure (optional)
+Use the **same `call_id`** the provider returned on `tool_call` / `tool_use` when possible. Server enforces max event count and size; see backend docs.
 
-The zero-config patching focuses on **LLM API calls** (requests/responses, latency, tokens/cost when available).
+```javascript
+await pluvianai.trackCall(
+  { model: 'gpt-4o-mini', messages: [{ role: 'user', content: 'Hi' }] },
+  { choices: [{ message: { content: '…' } }] },
+  120,
+  200,
+  'my-agent',
+  'trace-abc',
+  [
+    { kind: 'tool_call', name: 'get_weather', call_id: 'call_abc', input: { city: 'Seoul' } },
+    { kind: 'tool_result', name: 'get_weather', call_id: 'call_abc', output: { temp_c: 22 }, status: 'ok' },
+  ]
+);
+```
 
-If you want PluvianAI to reliably validate **tool usage policies** across *any* framework (custom tools, LangChain,
-n8n-style workflows, HTTP/DB/Slack/email actions) — especially tool **results** and strict ordering — you may need to
-add lightweight, explicit instrumentation in your code (for example, wrapping tool execution or emitting tool events).
+If you omit `agent_name` / `chain_id`, pass `undefined` before `tool_events`:
 
-This is intentional: tool execution typically happens outside the LLM client, so it cannot always be inferred from LLM
-API traffic alone.
+```javascript
+await pluvianai.trackCall(req, res, latencyMs, 200, undefined, undefined, toolEvents);
+```
 
 ## License
 

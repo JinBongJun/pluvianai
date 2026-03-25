@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import ProjectLayout from "@/components/layout/ProjectLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import ProjectTabs from "@/components/ProjectTabs";
 import CostChart from "@/components/CostChart";
 import { Button } from "@/components/ui/Button";
 import { apiCallsAPI } from "@/lib/api";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { ArrowLeft, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
 
 interface CostData {
@@ -18,11 +20,8 @@ interface CostData {
 
 export default function CostPage() {
   const router = useRouter();
-  const params = useParams();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Number(
-    Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId
-  );
+  const { orgId, projectId } = useOrgProjectParams();
+  const isAuthenticated = useRequireAuth();
 
   const [data, setData] = useState<CostData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,13 +48,11 @@ export default function CostPage() {
   }, [projectId, days]);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
+    if (!isAuthenticated) {
       return;
     }
     loadData();
-  }, [router, loadData]);
+  }, [isAuthenticated, loadData]);
 
   if (!projectId || isNaN(projectId)) {
     return null;

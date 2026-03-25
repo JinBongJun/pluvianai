@@ -1,5 +1,5 @@
 """
-Locust load test file for AgentGuard API
+Locust load test file for PluvianAI API
 Usage: locust -f locustfile.py --host=http://localhost:8000
 """
 from locust import HttpUser, task, between
@@ -7,8 +7,8 @@ import json
 import random
 
 
-class AgentGuardUser(HttpUser):
-    """Simulates a typical AgentGuard user"""
+class PluvianAIUser(HttpUser):
+    """Simulates a typical PluvianAI user"""
     wait_time = between(1, 3)  # Wait 1-3 seconds between requests
     token = None
     project_id = None
@@ -42,7 +42,7 @@ class AgentGuardUser(HttpUser):
         """Get API calls for a project"""
         if self.project_id:
             self.client.get(
-                f"/api/v1/api-calls?project_id={self.project_id}&limit=10"
+                f"/api/v1/projects/{self.project_id}/api-calls?limit=10"
             )
     
     @task(3)
@@ -50,7 +50,7 @@ class AgentGuardUser(HttpUser):
         """Get quality scores"""
         if self.project_id:
             self.client.get(
-                f"/api/v1/quality/scores?project_id={self.project_id}&limit=10"
+                f"/api/v1/projects/{self.project_id}/quality/scores?limit=10"
             )
     
     @task(2)
@@ -79,5 +79,5 @@ class AgentGuardUser(HttpUser):
         """Get alerts"""
         if self.project_id:
             self.client.get(
-                f"/api/v1/alerts?project_id={self.project_id}&limit=10"
+                f"/api/v1/projects/{self.project_id}/alerts?limit=10"
             )

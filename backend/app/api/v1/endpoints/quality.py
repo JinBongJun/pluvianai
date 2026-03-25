@@ -1,3 +1,4 @@
+import json
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -19,18 +20,35 @@ class EvaluationRequest(BaseModel):
     required_fields: Optional[List[str]] = None
     use_advanced: bool = False
 
-@router.post("/evaluate")
+@router.post("/{project_id}/quality/evaluate")
 def evaluate_quality(
+    project_id: int,
     payload: EvaluationRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Evaluate the quality of a specific API call."""
+    check_project_access(project_id, current_user, db)
     api_call = db.query(APICall).filter(APICall.id == payload.api_call_id).first()
     if not api_call:
         raise HTTPException(status_code=404, detail="API call not found")
-    
-    check_project_access(api_call.project_id, current_user, db)
+    if api_call.project_id != project_id:
+        raise HTTPException(status_code=404, detail="API call not found")
+
+    # Backward-compat shim for older APICall schema variants.
+    # QualityEvaluator expects response_data/response_text attrs.
+    if not hasattr(api_call, "response_data"):
+        response_content = getattr(api_call, "response_content", None)
+        parsed = {}
+        if isinstance(response_content, str) and response_content.strip():
+            try:
+                parsed = json.loads(response_content)
+            except Exception:
+                parsed = {}
+        setattr(api_call, "response_data", parsed)
+    if not hasattr(api_call, "response_text"):
+        response_content = getattr(api_call, "response_content", None)
+        setattr(api_call, "response_text", response_content or "")
     
     evaluator = QualityEvaluator()
     score = evaluator.evaluate(
@@ -46,7 +64,7 @@ def evaluate_quality(
     
     return score
 
-@router.get("/scores")
+@router.get("/{project_id}/quality/scores")
 def get_quality_scores(
     project_id: int,
     limit: int = Query(50, ge=1, le=200),
@@ -62,7 +80,7 @@ def get_quality_scores(
     
     return scores
 
-@router.get("/stats")
+@router.get("/{project_id}/quality/stats")
 def get_quality_stats(
     project_id: int,
     db: Session = Depends(get_db),
@@ -74,7 +92,7 @@ def get_quality_stats(
     from sqlalchemy import func
     
     stats = db.query(
-        func.avg(QualityScore.overall_score).label("avg_score"),
+        func.avg(QualityScore.score).label("avg_score"),
         func.count(QualityScore.id).label("total_evaluations")
     ).filter(QualityScore.project_id == project_id).first()
     

@@ -22,10 +22,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.canonical import response_to_canonical_steps
-from app.utils.tool_calls import normalize_tool_name
+from app.utils.tool_calls import normalize_tool_name, parse_tool_args
+from app.utils.tool_events import normalize_tool_events
 from app.core.database import get_db
 from app.core.logging_config import logger
-from app.core.permissions import ProjectRole, check_project_access
+from app.core.permissions import ProjectRole, check_project_access, get_user_project_role
 from app.core.security import get_current_user
 from app.models.behavior_report import BehaviorReport
 from app.models.behavior_rule import BehaviorRule
@@ -37,6 +38,11 @@ from app.models.user import User
 from app.models.validation_dataset import ValidationDataset
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.project import Project
+from app.services.behavior_rules_service import (
+    resolve_effective_rules,
+    run_behavior_validation,
+)
+from app.utils.behavior_export_sanitization import sanitize_behavior_report_summary_for_export
 
 router = APIRouter()
 
@@ -143,6 +149,7 @@ def _resolve_dataset_agent_id(
         .filter(
             Snapshot.project_id == project_id,
             Snapshot.id.in_(normalized_snapshot_ids),
+            Snapshot.is_deleted.is_(False),
         )
         .all()
     )
@@ -163,7 +170,7 @@ def _resolve_dataset_agent_id(
     )
     if len(snapshot_agent_ids) > 1:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "error_code": "dataset_agent_mismatch",
                 "message": "A dataset can only contain logs from one node.",
@@ -174,7 +181,7 @@ def _resolve_dataset_agent_id(
     inferred_agent_id = snapshot_agent_ids[0] if snapshot_agent_ids else None
     if normalized_requested and inferred_agent_id and normalized_requested != inferred_agent_id:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "error_code": "dataset_agent_mismatch",
                 "message": "Provided agent_id does not match selected snapshot_ids.",
@@ -185,10 +192,100 @@ def _resolve_dataset_agent_id(
     return normalized_requested or inferred_agent_id
 
 
+def _steps_from_payload_tool_events(
+    payload: Any,
+    base_meta: Dict[str, Any],
+    span_order: float,
+) -> List[Dict[str, Any]]:
+    """
+    Build canonical trajectory rows from snapshot payload.tool_events (SDK ingest).
+    step_order uses span_order + 1.0 + index*0.001 so rows sort after response-derived steps.
+    """
+    if not isinstance(payload, dict):
+        return []
+    normalized = normalize_tool_events(payload.get("tool_events"))
+    if not normalized:
+        return []
+    out: List[Dict[str, Any]] = []
+    base = float(span_order) + 1.0
+    for j, ev in enumerate(normalized):
+        kind = str(ev.get("kind") or "").strip().lower()
+        name = str(ev.get("name") or "").strip()
+        step_order = base + j * 0.001
+        call_id = ev.get("call_id")
+        cid = str(call_id).strip() if call_id is not None and str(call_id).strip() else None
+
+        if kind == "tool_call":
+            args = parse_tool_args(ev.get("input"))
+            if not isinstance(args, dict):
+                args = {}
+            if cid:
+                args = {**args, "call_id": cid}
+            out.append(
+                {
+                    **base_meta,
+                    "step_order": step_order,
+                    "step_type": "tool_call",
+                    "tool_name": name,
+                    "tool_args": args,
+                }
+            )
+        elif kind == "tool_result":
+            tr_payload: Dict[str, Any] = {"source": "ingest_tool_events"}
+            if ev.get("output") is not None:
+                tr_payload["output"] = ev.get("output")
+            st = ev.get("status")
+            if st:
+                tr_payload["status"] = st
+            if cid:
+                tr_payload["call_id"] = cid
+            ta: Dict[str, Any] = {}
+            if cid:
+                ta["call_id"] = cid
+            if st:
+                ta["status"] = st
+            out.append(
+                {
+                    **base_meta,
+                    "step_order": step_order,
+                    "step_type": "tool_result",
+                    "tool_name": name,
+                    "tool_args": ta,
+                    "tool_result": tr_payload,
+                }
+            )
+        elif kind == "action":
+            tr_payload = {"source": "ingest_tool_events", "kind": "action"}
+            if ev.get("input") is not None:
+                tr_payload["input"] = ev.get("input")
+            if ev.get("output") is not None:
+                tr_payload["output"] = ev.get("output")
+            st = ev.get("status")
+            if st:
+                tr_payload["status"] = st
+            if cid:
+                tr_payload["call_id"] = cid
+            out.append(
+                {
+                    **base_meta,
+                    "step_order": step_order,
+                    "step_type": "action",
+                    "tool_name": name,
+                    "tool_args": {},
+                    "tool_result": tr_payload,
+                }
+            )
+    return out
+
+
 def _build_trace_steps(project_id: int, trace_id: str, db: Session) -> List[Dict[str, Any]]:
     rows = (
         db.query(Snapshot)
-        .filter(Snapshot.project_id == project_id, Snapshot.trace_id == trace_id)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.trace_id == trace_id,
+            Snapshot.is_deleted.is_(False),
+        )
         .order_by(Snapshot.span_order.asc().nullslast(), Snapshot.created_at.asc())
         .all()
     )
@@ -209,6 +306,13 @@ def _build_trace_steps(project_id: int, trace_id: str, db: Session) -> List[Dict
             base_meta=base_step,
         )
         steps.extend(canonical_steps)
+        steps.extend(
+            _steps_from_payload_tool_events(
+                s.payload,
+                base_step,
+                float(base_step["step_order"]),
+            )
+        )
     return sorted(steps, key=lambda x: x.get("step_order") or 0)
 
 
@@ -289,81 +393,7 @@ def _resolve_effective_rules(
     rules: List[BehaviorRule],
     steps: List[Dict[str, Any]],
 ) -> Tuple[List[BehaviorRule], Dict[str, Any]]:
-    """
-    Resolve effective policy rules for a specific validation target.
-
-    Priority:
-    - Project defaults always apply unless overridden.
-    - Agent-scoped rules apply when the target contains that agent_id.
-    - Agent overrides can shadow project defaults via rule_json.meta.override_mode:
-      - additive (default): no shadowing
-      - replace_same_name: replace project rules with same name+type
-      - replace_same_type: replace all project rules of same type
-    - Optional explicit shadowing:
-      - rule_json.meta.override_project_rule_ids: [rule_id, ...]
-      - rule_json.meta.override_project_rule_names: [rule_name, ...]
-    """
-    scoped_rules = [r for r in rules if r.enabled and _match_rule_scope(r, steps)]
-    project_rules = [r for r in scoped_rules if str(r.scope_type or "project") == "project"]
-    agent_rules = [r for r in scoped_rules if str(r.scope_type or "") == "agent"]
-    other_rules = [r for r in scoped_rules if str(r.scope_type or "") not in {"project", "agent"}]
-
-    remaining_project_rules = list(project_rules)
-    override_events: List[Dict[str, Any]] = []
-
-    for agent_rule in agent_rules:
-        rule_json = agent_rule.rule_json if isinstance(agent_rule.rule_json, dict) else {}
-        meta = rule_json.get("meta") if isinstance(rule_json.get("meta"), dict) else {}
-        override_mode = str(meta.get("override_mode") or "additive").strip().lower()
-
-        explicit_ids = {str(x) for x in (meta.get("override_project_rule_ids") or [])}
-        explicit_names = {_normalize_rule_name(x) for x in (meta.get("override_project_rule_names") or [])}
-
-        removed_ids: List[str] = []
-        next_project_rules: List[BehaviorRule] = []
-        for project_rule in remaining_project_rules:
-            remove = False
-            if project_rule.id in explicit_ids:
-                remove = True
-            if _normalize_rule_name(project_rule.name) in explicit_names and _normalize_rule_name(project_rule.name):
-                remove = True
-
-            same_type = _rule_type(project_rule) == _rule_type(agent_rule) and bool(_rule_type(project_rule))
-            same_name_and_type = (
-                _normalize_rule_name(project_rule.name) == _normalize_rule_name(agent_rule.name)
-                and same_type
-                and bool(_normalize_rule_name(project_rule.name))
-            )
-
-            if override_mode == "replace_same_name" and same_name_and_type:
-                remove = True
-            elif override_mode == "replace_same_type" and same_type:
-                remove = True
-
-            if remove:
-                removed_ids.append(project_rule.id)
-            else:
-                next_project_rules.append(project_rule)
-
-        remaining_project_rules = next_project_rules
-        if removed_ids:
-            override_events.append(
-                {
-                    "agent_rule_id": agent_rule.id,
-                    "agent_id": agent_rule.scope_ref,
-                    "override_mode": override_mode,
-                    "shadowed_project_rule_ids": removed_ids,
-                }
-            )
-
-    effective_rules = remaining_project_rules + agent_rules + other_rules
-    resolution = {
-        "project_defaults_total": len(project_rules),
-        "agent_overrides_total": len(agent_rules),
-        "effective_rule_count": len(effective_rules),
-        "override_events": override_events,
-    }
-    return effective_rules, resolution
+    return resolve_effective_rules(rules, steps)
 
 
 def _validate_tool_order(rule: BehaviorRule, spec: Dict[str, Any], steps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -623,7 +653,11 @@ def _build_eval_summary(
     """
     rows = (
         db.query(Snapshot)
-        .filter(Snapshot.project_id == project_id, Snapshot.trace_id == trace_id)
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.trace_id == trace_id,
+            Snapshot.is_deleted.is_(False),
+        )
         .order_by(Snapshot.span_order.asc().nullslast(), Snapshot.created_at.asc())
         .all()
     )
@@ -681,7 +715,7 @@ def _persist_trajectory_steps(
                 agent_id=s.get("agent_id"),
                 tool_name=s.get("tool_name"),
                 tool_args=s.get("tool_args") or {},
-                tool_result=None,
+                tool_result=s.get("tool_result") if isinstance(s.get("tool_result"), dict) else None,
                 latency_ms=float(s.get("latency_ms")) if s.get("latency_ms") is not None else None,
                 source_type=s.get("source_type"),
                 source_id=str(s.get("source_id")) if s.get("source_id") is not None else None,
@@ -692,73 +726,7 @@ def _persist_trajectory_steps(
 
 
 def _run_behavior_validation(rules: List[BehaviorRule], steps: List[Dict[str, Any]]) -> Tuple[str, Dict[str, Any], List[Dict[str, Any]]]:
-    violations: List[Dict[str, Any]] = []
-
-    # System violations (must be added before status calculation)
-    if any(s.get("_provider_unknown") for s in steps):
-        violations.append({
-            "rule_id": None,
-            "rule_name": None,
-            "severity": "critical",
-            "step_ref": None,
-            "message": "Unknown provider response; cannot validate tool calls",
-            "evidence": {},
-        })
-    if any(s.get("_id_conflict") for s in steps):
-        violations.append({
-            "rule_id": None,
-            "rule_name": None,
-            "severity": "critical",
-            "step_ref": None,
-            "message": "Duplicate tool_call id with conflicting name or arguments",
-            "evidence": {},
-        })
-    if any(
-        s.get("step_type") == "tool_call" and (s.get("tool_name") == "" or s.get("_tool_name_empty"))
-        for s in steps
-    ):
-        violations.append({
-            "rule_id": None,
-            "rule_name": None,
-            "severity": "critical",
-            "step_ref": None,
-            "message": "Tool name empty or invalid",
-            "evidence": {},
-        })
-
-    for rule in rules:
-        if not rule.enabled:
-            continue
-        if not _match_rule_scope(rule, steps):
-            continue
-        rule_json = rule.rule_json or {}
-        rule_type = rule_json.get("type")
-        spec = rule_json.get("spec") or {}
-
-        if rule_type == "tool_order":
-            violations.extend(_validate_tool_order(rule, spec, steps))
-        elif rule_type == "tool_forbidden":
-            violations.extend(_validate_tool_forbidden(rule, spec, steps))
-        elif rule_type == "tool_allowlist":
-            violations.extend(_validate_tool_allowlist(rule, spec, steps))
-        elif rule_type == "tool_args_schema":
-            violations.extend(_validate_tool_args_schema(rule, spec, steps))
-
-    severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
-    for v in violations:
-        sev = str(v.get("severity") or "medium").lower()
-        if sev in severity_counts:
-            severity_counts[sev] += 1
-
-    status_out = "pass" if len(violations) == 0 else "fail"
-    summary = {
-        "status": status_out,
-        "step_count": len(steps),
-        "rule_count": len(rules),
-        "violation_count": len(violations),
-        "severity_breakdown": severity_counts,
-    }
-    return status_out, summary, violations
+    return run_behavior_validation(rules, steps)
 
 
 @router.get("/projects/{project_id}/behavior/rules")
@@ -1188,7 +1156,11 @@ async def list_dataset_snapshots(
         return {"items": [], "total": 0}
     rows = (
         db.query(Snapshot)
-        .filter(Snapshot.project_id == project_id, Snapshot.id.in_(ids))
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.id.in_(ids),
+            Snapshot.is_deleted.is_(False),
+        )
         .order_by(Snapshot.created_at.desc())
         .all()
     )
@@ -1299,6 +1271,7 @@ async def export_behavior_report(
     current_user: User = Depends(get_current_user),
 ):
     check_project_access(project_id, current_user, db)
+    export_role = get_user_project_role(project_id, current_user.id, db)
     report = (
         db.query(BehaviorReport)
         .filter(BehaviorReport.project_id == project_id, BehaviorReport.id == report_id)
@@ -1307,6 +1280,9 @@ async def export_behavior_report(
     if not report:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Behavior report not found")
 
+    summary_for_export = sanitize_behavior_report_summary_for_export(
+        report.summary_json, role=export_role
+    )
     payload = {
         "id": report.id,
         "project_id": report.project_id,
@@ -1316,10 +1292,17 @@ async def export_behavior_report(
         "baseline_run_ref": report.baseline_run_ref,
         "ruleset_hash": report.ruleset_hash,
         "status": report.status,
-        "summary": report.summary_json,
+        "summary": summary_for_export,
         "violations": report.violations_json,
         "created_at": _iso(report.created_at),
+        "export_tool_io_policy": "redacted" if export_role == "viewer" else "full",
     }
+    if isinstance(summary_for_export, dict):
+        rg = summary_for_export.get("release_gate")
+        if isinstance(rg, dict):
+            cr = rg.get("case_results")
+            if isinstance(cr, list) and cr:
+                payload["case_results"] = cr
     if format == "json":
         return payload
 
@@ -1855,8 +1838,10 @@ async def ci_gate_behavior(
     db.commit()
     db.refresh(report)
 
-    # Construct report URL (assuming frontend route)
-    report_url = f"/organizations/{project_id}/projects/{project_id}/behavior?report_id={report.id}"
+    # Construct report URL using the project's real organization scope.
+    project = db.query(Project).filter(Project.id == project_id).first()
+    org_id = project.organization_id if project else project_id
+    report_url = f"/organizations/{org_id}/projects/{project_id}/behavior?report_id={report.id}"
 
     return {
         "pass": pass_gate,

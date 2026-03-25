@@ -18,7 +18,7 @@
 | 가입 시 플랜 | `user_service` | Subscription 기본 `plan_id="free"` |
 | 플랜/한도 조회 | `SubscriptionService.get_user_plan()` | limits, features 반환 |
 | GuardCredit 로깅 | `replay_service` + `Usage` | `metric_name="guard_credits_replay"`, `quantity` 누적 |
-| 데이터 보존 | `data_lifecycle_service` | `data_retention_days` 사용 (free=7) |
+| 데이터 보존 | `data_lifecycle_service` | `data_retention_days` 사용 (현재 Beta Free 플랜 기준 30일). Raw snapshots + Release Gate history 모두 동일 retention 적용 |
 
 ### 1.2 안 맞는 것 / 비어 있는 것
 
@@ -48,7 +48,7 @@
 - **인터페이스 예**:
   - `get_snapshots_count_this_month(db, user_id) -> int`
   - `get_guard_credits_this_month(db, user_id) -> int` (또는 project_id 기준으로 org 단위)
-- **free 한도 값**: `PLAN_LIMITS["free"]["snapshots_per_month"]` (현재 500). GuardCredits는 `PLAN_LIMITS["free"]`에 `guard_credits_per_month` 키 추가 (예: 5_000 ~ 10_000, 팀 결정).
+- **free 한도 값**: `PLAN_LIMITS["free"]["snapshots_per_month"]` (현재 Beta Free 기준 10_000). GuardCredits는 `PLAN_LIMITS["free"]`에 `guard_credits_per_month` 키 추가 (예: 5_000 ~ 10_000, 팀 결정).
 
 #### 1.2 스냅샷 생성 시 한도 적용
 
@@ -58,7 +58,7 @@
   - 생성 전에, 해당 프로젝트의 소유자(또는 org owner) `user_id`에 대해 `get_snapshots_count_this_month(db, user_id)` 호출.
   - `get_user_plan(user_id)` 로 `snapshots_per_month` 한도 조회.
   - `current + 1 > limit` 이면 **403** + 메시지 예:  
-    `"Free plan limit: 500 snapshots per month. You've reached the limit. Upgrade or try again next month."`
+    `"Free plan limit: 10,000 snapshots per month. You've reached the limit. Upgrade or try again next month."`
 - **예외**: `is_superuser` 또는 마스터 계정은 한도 체크 스킵 (선택).
 
 #### 1.3 프로젝트 생성 시 한도 적용
@@ -96,7 +96,7 @@
 - **엔드포인트 예**: `GET /api/v1/me/usage` 또는 `GET /organizations/{id}/usage` (이미 비슷한 것이 있을 수 있음).
 - **응답 예**:
   - `plan_type: "free"`
-  - `limits: { snapshots_per_month: 500, guard_credits_per_month: 10000, ... }`
+  - `limits: { snapshots_per_month: 10000, guard_credits_per_month: 10000, ... }`
   - `usage_this_month: { snapshots: 120, guard_credits: 3200 }`
 - **구현**: `SubscriptionService.get_user_plan()` + 위 1.1의 `get_snapshots_count_this_month`, `get_guard_credits_this_month` 조합.
 
@@ -105,7 +105,7 @@
 - **위치**: 조직별 Billing 또는 Usage 페이지 (이미 Usage Overview가 billing에 통합되어 있음).
 - **표시**:
   - "Free plan" 뱃지 또는 문구.
-  - "This month: X snapshots / 500", "Y GuardCredits / 10,000" (또는 적용한 한도 값).
+  - "This month: X snapshots / 10,000", "Y GuardCredits / 10,000" (또는 적용한 한도 값).
   - 한도에 가까우면 경고 스타일, 초과 시 "Limit reached" 메시지 + "Contact us for more" 또는 "Try again next month".
 - **랜딩/가입 플로우**: 기존 "Get started free" 유지. 가입 후 첫 대시에서 "You're on the free plan. Limits: …" 한 줄 안내 추가 가능.
 

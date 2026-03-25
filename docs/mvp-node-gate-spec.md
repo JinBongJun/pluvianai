@@ -31,7 +31,7 @@ This lets you confirm **whether the node still behaves the same as before**. (Wh
 
 - **Replay Test (unified)**
   - Candidate config (model / provider / model override / JSON / tools overrides)
-  - `repeat_runs` option (1 / 3 / 5)
+  - `repeat_runs` option (1 / 10 / 50 / 100; 50/100 show cost warning)
   - Per-case results + attempt pattern visibility for repeated runs
   - Per run: compare baseline (original snapshot) vs run (replay result) tool sequence
   - sequence distance (edit distance), tool divergence (set difference %), Baseline/Run sequences
@@ -54,7 +54,19 @@ This lets you confirm **whether the node still behaves the same as before**. (Wh
 - Tool execution / E2E pipeline execution
 - Approval workflow / permissions / audit logs (enterprise)
 - Scoring / clustering / ML-based recommendation
-- Plan-based data volume limits / retention / quotas
+
+### MVP pricing and limit contract
+
+- Public plans shown in product are limited to **Free / Pro / Enterprise**.
+- During the MVP, **only Free is purchasable/active by default**. Pro and Enterprise may be shown as preview-only.
+- Limits are split into two buckets:
+  - **Product limits**: projects, snapshots, retention, etc.
+  - **Hosted replay credits**: only consumed when Release Gate runs with **PluvianAI-hosted models** (`model_source = platform`).
+- **BYOK runs do not consume hosted replay credits.**
+- When hosted replay credits are exhausted:
+  - Release Gate with `model_source = platform` must return **403** with an English upgrade/BYOK message.
+  - Release Gate with `model_source = byo` must still be allowed if other product limits are satisfied.
+- Billing / Usage UI must clearly label the metric as **platform replay credits**. Legacy internal field names such as `guard_credits_*` may remain for compatibility, but must not be primary user-facing copy.
 
 ---
 
@@ -67,10 +79,13 @@ This lets you confirm **whether the node still behaves the same as before**. (Wh
 
 #### 2) MVP stance on tool-call
 
-- We do **not** execute tools.
+- We do **not** execute arbitrary external tools by default (no side effects).
 - We only **observe**:
   - tool-call names/args are visible (policy check purpose)
-  - Original snapshot has tool-result stubs; replay compares against policy
+- Tool results (tool_result):
+  - If recorded baseline tool_result evidence exists, we inject that recorded result into replay for stable grounding and evidence UI.
+  - If recorded evidence is missing, we fall back to deterministic dry-run/simulated tool_result for policy evaluation, and the UI must clearly mark the evidence as `simulated`/`missing`.
+- **Ingest**: customers may attach `tool_events` (tool_call + tool_result + optional action) on `POST .../api-calls` so baseline runs contain recorded results. Canonical JSON examples: `docs/TOOL_EVENTS_SCHEMA.md` and `docs/release-gate-tool-io-grounding-plan.md` (keep examples in sync when changing the contract).
 
 #### 3) Canonical step (cross-provider behavior check)
 
@@ -114,12 +129,65 @@ Policy (Gate) and Replay checks depend on **fixed fields** below. Changing this 
 - **Model**
   - Original model (default) / Custom model (option)
   - run-only API key input (used only for this run)
+- **Pinned-only policy (Release Gate reproducibility)**
+  - For Release Gate / CI-style comparisons, the default UX and recommended policy is **pinned model ids** (versioned snapshots), not moving aliases.
+  - **Anthropic**: prefer model ids ending with `YYYYMMDD` (pinned snapshots). Avoid `...-latest` / alias-style ids in Gate runs because provider updates can change behavior over time.
+  - UI should clearly label when a run uses **Pinned vs Custom** model id for auditability.
+  - **Enforcement (current implementation)**:
+    - In **production**, Release Gate **enforces pinned-only** for Anthropic model overrides.
+    - Escape hatches:
+      - **superuser** can use custom model ids
+      - `RELEASE_GATE_ALLOW_CUSTOM_MODELS=true` allows custom model ids (emergency)
 - **Request JSON / tools overrides**
-  - Limited to "model-excluded JSON + tools" (product simplicity / avoid misuse)
+  - Limited to **configuration-only JSON + tools**, excluding per-snapshot content.
+  - Content fields (`messages`, `user_message`, `response`, trace metadata, etc.) always come from snapshots and are **not** provided via JSON payload.
+
+#### Backend API contract (Release Gate validate, MVP)
+
+- **Request: `ReleaseGateValidateRequest` (conceptual shape)**
+
+```json
+{
+  "agent_id": "node-id",
+  "snapshot_ids": ["..."],          // OR dataset_ids: ["..."] (single-node scope only)
+  "dataset_ids": ["..."],
+  "evaluation_mode": "replay_test", // fixed
+  "repeat_runs": 1,
+
+  "model_source": "detected | platform",   // detected = use snapshot/provider model, platform = use PluvianAI-hosted model
+  "new_model": "optional-override-model-id",
+  "replay_provider": "openai | anthropic | google | null",
+
+  "new_system_prompt": "optional-override-system-prompt",
+  "replay_temperature": 0.3,
+  "replay_max_tokens": 512,
+  "replay_top_p": 1,
+
+  "replay_overrides": {
+    "...": "configuration-only fields (see below)"
+  }
+}
+```
+
+- **Config-only contract for `replay_overrides`**
+  - Purpose: tweak **how** the LLM is called (sampling, tools, response format, extra config), **never** the **content** of each case.
+  - Backend MUST treat the following keys as **disallowed** inside `replay_overrides` (drop or ignore safely if present):
+    - `messages`, `message`, `user_message`
+    - `response`, `responses`
+    - `input`, `inputs`
+    - `trace_id`, `agent_id`, `agent_name`
+  - All snapshot-specific content (user prompts, model responses, trace metadata) always comes from the stored snapshots, not from overrides.
+  - Allowed examples (non-exhaustive; provider-agnostic): `temperature`, `max_tokens`, `top_p`, `seed`, `response_format`, `tools`, `tool_choice`, `metadata`, `json_mode`, `stop`, etc.
+
+- **Response: minimal contract (recap)**
+  - Already defined below as **case_results + summary + verdict**; additionally, for UI it is recommended (but not strictly required) to include:
+    - `baseline_request`: canonicalized **original request payload** used as baseline (for the first snapshot / representative case).
+    - `candidate_request_preview`: **baseline_request + overrides** merged on the backend, provider-normalized, read-only; used only for UI comparison (left = baseline, right = candidate).
+  - These two preview fields are **display-only** and must not be re-ingested as-is; replay execution should still derive the effective request from snapshots + overrides directly.
 
 #### Execution
 
-- **repeat_runs**: 1 / 3 / 5
+- **repeat_runs**: 1 / 10 / 50 / 100 (dropdown next to Run; 50/100 red-tinted + warning)
 - Data source: node?s "Recommended set" is default (see below)
 
 #### Case-level classification (strict default)
@@ -138,12 +206,10 @@ Policy (Gate) and Replay checks depend on **fixed fields** below. Changing this 
   - `fail_rate = (# FAIL cases) / total`
   - `flaky_rate = (# FLAKY cases) / total`
 - **Strict gate (default)**
-- **Threshold tuning (run-time only)**
+- **Strictness (run-time only; UI label "Strictness")**
   - Default: `fail_rate_max = 0.05`, `flaky_rate_max = 0.03`
-  - Adjustable in UI ("this run only", not persisted). **UI display**: values in **%** (e.g. 5%, 3%); API/internal keep 0?1 decimal.
-  - Presets: **(Fail % / Flaky %)**:
-    - **Default**: 5% / 3%
-    - **Lenient**: 10% / 5%
+  - Adjustable in UI ("this run only", not persisted). **UI display**: values in **%** (e.g. 5%, 3%); API/internal keep 0–1 decimal.
+  - Presets: **Strict** (5% / 1%), **Normal** (5% / 3%), **Lenient** (10% / 5%), **Custom**. Fail % / Flaky % inputs shown only when Custom is selected; preset values in tooltips.
 
 ---
 
@@ -153,7 +219,7 @@ This section is the **reference contract shared by docs / UX / API**. Data selec
 
 #### 1) Terminology
 
-- **Check**: Live Eval signals stored in `eval_checks_result` (e.g. empty/json/leakage/tool/length?)
+- **Check**: Live Eval signals stored in `eval_checks_result`. MVP supports exactly **11 checks**: empty, latency, status_code, refusal, json, length, repetition, required, format, leakage, tool. (Token/cost usage checks are out of scope.)
 - **Policy**: Rules defined by `BehaviorRule` (e.g. forbidden tool, allowlist, args schema)
 - **Case**: One input for Release Gate. In MVP **case = snapshot_id**.
 - **Attempt**: One replay run result per case. If `repeat_runs=N`, there are N attempts per case.
@@ -236,6 +302,15 @@ Each case must provide at least:
 - **Curated pool cap**: Worst \(N\) / Golden \(M\) (per plan)
 - **Raw snapshot retention**: \(X\) days or \(Y\) GB (per plan)
 - **Display policy (reference)**: Release Gate UI shows snapshots subject to raw retention policy.
+
+#### Release Gate history retention (MVP)
+
+- Release Gate history is stored as `BehaviorReport` rows marked with `summary_json.release_gate`.
+- During the MVP beta, Release Gate history follows a **single plan-based retention window**, matching raw snapshots:
+  - Beta Free plan: **30 days**
+- `GET /projects/{project_id}/release-gate/history` returns only rows within the active retention window and may include `retention_days` for UI copy.
+- Expired Release Gate history is **hard-deleted** by the scheduled data lifecycle cleanup job.
+- **Safety rule**: Only rows marked as release-gate history are deleted. General Behavior reports remain untouched.
 
 ---
 

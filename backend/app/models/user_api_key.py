@@ -9,7 +9,7 @@ from app.core.database import Base
 
 
 class UserApiKey(Base):
-    """User-provided API key (encrypted) for Judge calls"""
+    """User-provided API key (encrypted) for Release Gate / evaluation calls"""
 
     __tablename__ = "user_api_keys"
 
@@ -22,6 +22,8 @@ class UserApiKey(Base):
     # Provider and encrypted key
     provider = Column(String(50), nullable=False, index=True)  # openai, anthropic, google
     encrypted_key = Column(Text, nullable=False)  # Encrypted API key (Fernet)
+    # Masked hint for UI (e.g. "sk-...xyz"); set at save time only, never the full key
+    key_hint = Column(String(32), nullable=True)
 
     # Metadata
     name = Column(String(255), nullable=True)  # Optional name for the key

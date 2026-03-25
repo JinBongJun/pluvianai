@@ -4,6 +4,7 @@ PluvianAI FastAPI Application
 
 import os
 import sys
+from contextlib import asynccontextmanager
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
@@ -41,8 +42,8 @@ if settings.SENTRY_DSN:
 else:
     logger.info("Sentry DSN not configured, skipping Sentry initialization")
 from app.core.exceptions import (
-    AgentGuardException,
-    agentguard_exception_handler,
+    PluvianAIException,
+    pluvianai_exception_handler,
     http_exception_handler,
     validation_exception_handler,
     sqlalchemy_exception_handler,
@@ -56,7 +57,6 @@ from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.logging_middleware import LoggingMiddleware
 from app.middleware.metrics_middleware import MetricsMiddleware
 from app.middleware.security_middleware import SecurityHeadersMiddleware
-from app.middleware.force_cors_middleware import ForceCORSMiddleware
 from app.core.metrics import update_app_info
 from app.services.cache_service import cache_service
 
@@ -85,68 +85,40 @@ from app.models import (  # noqa: F401
 # Use /api/v1/admin/init-db endpoint to initialize database after deployment
 # Base.metadata.create_all(bind=engine)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await startup_event()
+    try:
+        yield
+    finally:
+        await shutdown_event()
+
+
+docs_url = "/docs" if settings.expose_api_docs else None
+redoc_url = "/redoc" if settings.expose_api_docs else None
+openapi_url = "/openapi.json" if settings.expose_api_docs else None
+
 app = FastAPI(
     title=settings.APP_NAME,
     description="LLM Agent Monitoring Platform",
     version=settings.APP_VERSION,
     debug=settings.DEBUG,
-    openapi_url="/openapi.json",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    openapi_url=openapi_url,
+    docs_url=docs_url,
+    redoc_url=redoc_url,
+    lifespan=lifespan,
 )
+app.state.expose_debug_details = settings.ENVIRONMENT != "production"
 
 # Update app info metrics
 update_app_info(settings.APP_VERSION, settings.SENTRY_ENVIRONMENT)
 
 # Add exception handlers
-app.add_exception_handler(AgentGuardException, agentguard_exception_handler)
+app.add_exception_handler(PluvianAIException, pluvianai_exception_handler)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
 app.add_exception_handler(Exception, general_exception_handler)
-
-# CRITICAL: CORS middleware MUST be added LAST (last in list = first to execute)
-# FastAPI middleware executes in REVERSE order (last added = first executed)
-# CORS must handle preflight OPTIONS requests before any other middleware
-# Parse CORS_ORIGINS from settings (supports comma-separated list or "*")
-cors_origins = settings.cors_origins_list
-
-# CORS configuration for cookie-based authentication
-# For cookies to work, we need:
-# 1. Specific origins (not "*")
-# 2. allow_credentials=True
-cors_origins = settings.cors_origins_list
-
-# Allow localhost for development and production origins
-allow_origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3000",
-]
-
-# Add production origins from settings if available
-if cors_origins and cors_origins != ["*"]:
-    allow_origins.extend(cors_origins)
-
-allow_credentials = True  # Required for httpOnly cookies
-
-logger.info(f"CORS configuration: allow_origins={allow_origins}, allow_credentials={allow_credentials}")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allow_origins,
-    allow_credentials=allow_credentials,
-    allow_methods=["*"],  # Allow all HTTP methods
-    allow_headers=["*"],  # Allow all headers
-    expose_headers=["*"],  # Expose all response headers
-    max_age=3600,  # Cache preflight for 1 hour
-)
-
-logger.info("✅ CORS middleware configured successfully")
-
-# Force CORS middleware - ALWAYS add CORS headers as final fallback
-# This runs FIRST (last added = first executed) to ensure CORS headers are never missing
-app.add_middleware(ForceCORSMiddleware)
 
 # Logging middleware (added immediately after CORS to catch all requests)
 # This MUST be early in the chain to log requests even if they fail later
@@ -162,10 +134,48 @@ app.add_middleware(MetricsMiddleware)
 app.add_middleware(GZipMiddleware)
 
 # Rate limiting middleware (prevent abuse)
-app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
+# Keep a coarse IP-level fallback limit high enough that dashboard polling is governed
+# by bucket-specific per-user limits instead of a single low global cap.
+app.add_middleware(RateLimitMiddleware, requests_per_minute=6000)
 
 # API Hook middleware for capturing LLM API calls
 app.add_middleware(APIHookMiddleware, enabled=True)
+
+# CRITICAL: CORS middleware MUST be added LAST (last added = first executed)
+# FastAPI middleware executes in REVERSE order (last added = first executed).
+# By adding CORSMiddleware last, even "early return" middlewares (e.g. rate limit 429)
+# still get correct CORS headers on the way back out.
+#
+# CORS configuration for cookie-based authentication:
+# - allow_credentials=True
+# - explicit allow_origins (never "*")
+cors_origins = settings.cors_origins_list
+
+# Allow localhost for development and production origins
+allow_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+]
+
+# Add production origins from settings if available
+if cors_origins and cors_origins != ["*"]:
+    allow_origins.extend(cors_origins)
+
+allow_credentials = True  # Required for httpOnly cookies
+logger.info(f"CORS configuration: allow_origins={allow_origins}, allow_credentials={allow_credentials}")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins,
+    allow_credentials=allow_credentials,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],  # Expose all response headers
+    max_age=3600,  # Cache preflight for 1 hour
+)
+
+logger.info("✅ CORS middleware configured successfully")
 
 # Include API routers
 app.include_router(api_router, prefix="/api/v1")
@@ -174,21 +184,25 @@ app.include_router(api_router, prefix="/api/v1")
 # v2 is currently in development - v1 remains stable
 app.include_router(api_router_v2, prefix="/api/v2")
 
-# Debug: log registered API v1 routes at startup-time
-for route in app.routes:
-    path = getattr(route, "path", "")
-    if path.startswith("/api/v1"):
-        logger.info(f"🔍 REGISTERED ROUTE: {path}")
+# Debug: log registered API v1 routes at startup-time (development only)
+if settings.DEBUG:
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        if path.startswith("/api/v1"):
+            logger.info(f"🔍 REGISTERED ROUTE: {path}")
 
-# Simple debug endpoint to inspect routes from the outside
-@app.get("/api/v1/debug/routes")
-async def list_registered_routes():
-    """Return a list of all registered API v1 routes (no auth)."""
-    return {
-        "routes": sorted(
-            {getattr(route, "path", "") for route in app.routes if getattr(route, "path", "").startswith("/api/v1")}
-        )
-    }
+    @app.get("/api/v1/debug/routes")
+    async def list_registered_routes():
+        """Return a list of all registered API v1 routes (no auth). Dev only."""
+        return {
+            "routes": sorted(
+                {
+                    getattr(route, "path", "")
+                    for route in app.routes
+                    if getattr(route, "path", "").startswith("/api/v1")
+                }
+            )
+        }
 
 # NOTE: Catch-all handler removed - it was interfering with API routing
 # If needed, add specific route handlers for non-API paths instead
@@ -199,21 +213,22 @@ async def list_registered_routes():
 async def add_api_version_headers(request, call_next):
     """Add API version headers for versioning strategy"""
     response = await call_next(request)
-    
-    # Add API version header
-    if request.url.path.startswith("/api/v1"):
-        response.headers["X-API-Version"] = "v1"
-        response.headers["X-API-Status"] = "stable"
-    elif request.url.path.startswith("/api/v2"):
-        response.headers["X-API-Version"] = "v2"
-        response.headers["X-API-Status"] = "development"
+
+    if settings.ENVIRONMENT != "production":
+        # Add API version header outside production to aid local/dev migrations.
+        if request.url.path.startswith("/api/v1"):
+            response.headers["X-API-Version"] = "v1"
+            response.headers["X-API-Status"] = "stable"
+        elif request.url.path.startswith("/api/v2"):
+            response.headers["X-API-Version"] = "v2"
+            response.headers["X-API-Status"] = "development"
     
     # Future: Add deprecation notice when v1 endpoints are deprecated
     # Example:
     # if request.url.path.startswith("/api/v1/deprecated-endpoint"):
     #     response.headers["X-API-Deprecation"] = "This endpoint will be deprecated on 2026-06-01. Migrate to /api/v2/..."
     #     response.headers["X-API-Deprecation-Date"] = "2026-06-01"
-    #     response.headers["X-API-Migration-Guide"] = "https://docs.agentguard.dev/api/migration/v1-to-v2"
+    #     response.headers["X-API-Migration-Guide"] = "https://docs.pluvianai.com/api/migration/v1-to-v2"
     
     return response
 
@@ -239,8 +254,12 @@ async def update_business_metrics_periodically():
                 user_count = db.query(User).filter(User.is_active.is_(True)).count()
                 active_users.set(user_count)
 
-                # Count active projects (projects with is_active=True)
-                project_count = db.query(Project).filter(Project.is_active.is_(True)).count()
+                # Count active projects (projects with is_active=True and not soft-deleted)
+                project_count = (
+                    db.query(Project)
+                    .filter(Project.is_active.is_(True), Project.is_deleted.is_(False))
+                    .count()
+                )
                 active_projects.set(project_count)
 
                 logger.debug(f"Updated metrics: {user_count} active users, {project_count} active projects")
@@ -253,7 +272,6 @@ async def update_business_metrics_periodically():
         await asyncio.sleep(60)
 
 
-@app.on_event("startup")
 async def startup_event():
     """Initialize application on startup (tolerant to missing DB in non-prod/CI)."""
     from sqlalchemy.exc import OperationalError
@@ -348,6 +366,7 @@ async def startup_event():
     # Start background scheduler only if DB is available
     if db_available:
         from app.services.scheduler_service import scheduler_service
+        from app.services.release_gate_job_runner import release_gate_job_runner
 
         scheduler_service.start()
         logger.info("Background scheduler started")
@@ -357,6 +376,12 @@ async def startup_event():
 
         asyncio.create_task(update_business_metrics_periodically())
         logger.info("Business metrics update task started")
+
+        if getattr(settings, "RELEASE_GATE_JOB_RUNNER_ENABLED", True):
+            asyncio.create_task(release_gate_job_runner.start())
+            logger.info("Release Gate job runner background task started")
+        else:
+            logger.info("Release Gate job runner disabled in web process (RELEASE_GATE_JOB_RUNNER_ENABLED=false)")
     else:
         logger.warning("Skipping scheduler startup because database is unavailable.")
 
@@ -377,15 +402,19 @@ async def startup_event():
     logger.info("✅ Server listening and ready for connections")
 
 
-@app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("Shutting down PluvianAI API...")
 
     # Shutdown background scheduler
     from app.services.scheduler_service import scheduler_service
+    from app.services.release_gate_job_runner import release_gate_job_runner
 
     scheduler_service.shutdown()
+    try:
+        await release_gate_job_runner.stop()
+    except Exception:
+        logger.warning("Failed stopping Release Gate job runner", exc_info=True)
 
     # Additional cleanup tasks can be added here
 
@@ -396,7 +425,10 @@ async def root(request: Request):
     origin = request.headers.get("origin", "none")
     ip = request.client.host if request.client else "unknown"
     logger.info(f"🌐 ROOT ENDPOINT: {request.method} {request.url.path} from origin: {origin}, IP: {ip}")
-    return {"message": settings.APP_NAME, "version": settings.APP_VERSION}
+    response = {"message": settings.APP_NAME}
+    if settings.ENVIRONMENT != "production":
+        response["version"] = settings.APP_VERSION
+    return response
 
 @app.get("/health")
 async def health(request: Request):
@@ -453,9 +485,10 @@ async def health_ready():
     }, status_code
 
 
-@app.get("/metrics")
-async def metrics():
-    """Prometheus metrics endpoint"""
-    from app.core.metrics import get_metrics_response
+if settings.expose_metrics_endpoint:
+    @app.get("/metrics")
+    async def metrics():
+        """Prometheus metrics endpoint"""
+        from app.core.metrics import get_metrics_response
 
-    return get_metrics_response()
+        return get_metrics_response()

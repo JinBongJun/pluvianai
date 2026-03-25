@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import ProjectLayout from "@/components/layout/ProjectLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import Pagination from "@/components/ui/Pagination";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import DateRangePicker from "@/components/ui/DateRangePicker";
 import { alertsAPI, organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import { useToast } from "@/components/ToastContainer";
 import {
   ArrowUpDown,
@@ -25,6 +27,7 @@ import {
 import { clsx } from "clsx";
 import ProjectTabs from "@/components/ProjectTabs";
 import useSWR from "swr";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 type SortField = "created_at" | "severity" | "alert_type";
 type SortDirection = "asc" | "desc";
@@ -59,14 +62,11 @@ const DEFAULT_ALERT_TYPES = [
 
 export default function AlertsPage() {
   const router = useRouter();
-  const params = useParams();
+  const isAuthenticated = useRequireAuth();
   const toast = useToast();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Number(
-    Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId
-  );
+  const { orgId, projectId } = useOrgProjectParams();
 
-  const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
+  const { data: org } = useSWR(orgId ? orgKeys.detail(orgId) : null, () =>
     organizationsAPI.get(orgId, { includeStats: false })
   );
 
@@ -216,11 +216,7 @@ export default function AlertsPage() {
   ]);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    if (!isAuthenticated) return;
 
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       if (orgId) {
@@ -232,7 +228,7 @@ export default function AlertsPage() {
     }
 
     void loadAlerts();
-  }, [projectId, orgId, router, loadAlerts]);
+  }, [isAuthenticated, projectId, orgId, router, loadAlerts]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -246,7 +242,7 @@ export default function AlertsPage() {
 
   const handleResolve = async (alertId: number) => {
     try {
-      await alertsAPI.resolve(alertId);
+      await alertsAPI.resolve(projectId, alertId);
       toast.showToast("Alert resolved successfully", "success");
       loadAlerts();
     } catch (error: any) {
@@ -257,7 +253,7 @@ export default function AlertsPage() {
 
   const handleSend = async (alertId: number) => {
     try {
-      await alertsAPI.send(alertId);
+      await alertsAPI.send(projectId, alertId);
       toast.showToast("Alert sent successfully", "success");
       loadAlerts();
     } catch (error: any) {
@@ -341,8 +337,15 @@ export default function AlertsPage() {
           { label: "Alerts" },
         ]}
       >
-        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4" role="status" aria-label="Loading alerts">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent" aria-hidden />
+        <div
+          className="flex flex-col items-center justify-center min-h-[400px] gap-4"
+          role="status"
+          aria-label="Loading alerts"
+        >
+          <div
+            className="animate-spin rounded-full h-12 w-12 border-2 border-ag-accent/20 border-t-ag-accent"
+            aria-hidden
+          />
           <p className="text-sm text-slate-500 font-medium">Loading alerts…</p>
         </div>
       </ProjectLayout>

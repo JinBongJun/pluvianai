@@ -17,12 +17,16 @@ Baseline vs Run eval:
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Literal, Optional, Set, Tuple
+from datetime import datetime, timedelta, timezone
+import hashlib
+import json
+import re
+import time
+from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, func
+from sqlalchemy import String, cast, desc, func
 from sqlalchemy.orm import Session
 
 from app.api.v1.endpoints.behavior import (
@@ -30,8 +34,6 @@ from app.api.v1.endpoints.behavior import (
     _build_ruleset_hash,
     _derive_agent_id,
     _iso,
-    _resolve_effective_rules,
-    _run_behavior_validation,
 )
 from app.core.behavior_diff import compute_behavior_diff, tool_calls_summary_to_sequence
 from app.core.canonical import (
@@ -39,20 +41,733 @@ from app.core.canonical import (
     response_to_canonical_tool_calls_summary,
 )
 from app.core.database import get_db
+from app.core.logging_config import logger
 from app.core.permissions import check_project_access
+from app.core.config import settings as app_settings
 from app.core.usage_limits import check_guard_credits_limit
 from app.core.security import get_current_user, get_user_from_api_key
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.behavior_report import BehaviorReport
 from app.models.behavior_rule import BehaviorRule
+from app.models.release_gate_job import ReleaseGateJob
 from app.models.snapshot import Snapshot
 from app.models.user import User
 from app.models.validation_dataset import ValidationDataset
-from app.services.replay_service import replay_service
+from app.services.data_lifecycle_service import DataLifecycleService
+from app.domain.live_view_release_gate import build_agent_visibility_context, is_agent_hidden
+from app.services.ops_alerting import ops_alerting
+from app.services.replay_service import replay_service, resolve_tool_context_injection_text
+from app.services.data_normalizer import DataNormalizer
 from app.services.user_api_key_service import UserApiKeyService
+from app.services.behavior_rules_service import (
+    resolve_effective_rules,
+    run_behavior_validation,
+)
+from app.services.live_eval_service import (
+    evaluate_one_snapshot_at_save,
+    eval_config_version_hash,
+    normalize_eval_config,
+)
+from app.utils.tool_events import normalize_tool_events
 
 router = APIRouter()
 SUPPORTED_REPLAY_PROVIDERS = {"openai", "anthropic", "google"}
+CORE_REPLAY_MODELS: Dict[str, List[str]] = {
+    # Keep this intentionally small and stable; users can still pass custom model ids.
+    "openai": [
+        "gpt-4o-mini",
+        "gpt-4o",
+        "gpt-4.1",
+        "gpt-4.1-mini",
+    ],
+    "anthropic": [
+        "claude-sonnet-4-5-20250929",
+        "claude-haiku-4-5-20251001",
+        "claude-sonnet-4-20250514",
+    ],
+    "google": [
+        # Prefer current stable Gemini 2.5 ids for Release Gate defaults.
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-pro",
+    ],
+}
+
+
+class ReleaseGateCancelled(Exception):
+    pass
+
+
+def _tool_evidence_stats_from_gate_result(result: Optional[Dict[str, Any]]) -> Tuple[int, int]:
+    """Return (total tool_evidence rows, rows with execution_source/status missing)."""
+    total = 0
+    missing = 0
+    if not isinstance(result, dict):
+        return 0, 0
+    for case in result.get("case_results") or []:
+        if not isinstance(case, dict):
+            continue
+        for att in case.get("attempts") or []:
+            if not isinstance(att, dict):
+                continue
+            for row in att.get("tool_evidence") or []:
+                if not isinstance(row, dict):
+                    continue
+                total += 1
+                exec_src = str(row.get("execution_source") or "").strip().lower()
+                status = str(row.get("status") or "").strip().lower()
+                if exec_src == "missing" or (not exec_src and status == "missing"):
+                    missing += 1
+    return total, missing
+
+
+def _is_pinned_anthropic_model_id(model_id: Any) -> bool:
+    """
+    Anthropic pinned model ids are versioned snapshots ending in YYYYMMDD.
+    Examples: claude-sonnet-4-20250514, claude-haiku-4-5-20251001
+    """
+    s = str(model_id or "").strip()
+    if not s:
+        return False
+    return bool(re.search(r"-\d{8}$", s))
+
+
+def _should_block_release_gate_custom_model(
+    provider: Optional[str], model_id: Any, current_user: Optional[User]
+) -> bool:
+    """
+    Option A policy:
+    - In production, Release Gate should require pinned model ids for Anthropic.
+    - Escape hatches:
+      - current_user.is_superuser
+      - RELEASE_GATE_ALLOW_CUSTOM_MODELS=true
+    """
+    if provider != "anthropic":
+        return False
+    s = str(model_id or "").strip()
+    if not s:
+        return False
+    is_production = str(app_settings.ENVIRONMENT).strip().lower() == "production"
+    if not is_production:
+        return False
+    if bool(getattr(current_user, "is_superuser", False)):
+        return False
+    if bool(getattr(app_settings, "RELEASE_GATE_ALLOW_CUSTOM_MODELS", False)):
+        return False
+    return not _is_pinned_anthropic_model_id(s)
+
+
+def _safe_preview_json(value: Any, max_chars: int = 12000) -> Optional[str]:
+    """
+    Best-effort stringify for UI diagnostics. Truncates to keep responses bounded.
+    """
+    if value is None:
+        return None
+    try:
+        if isinstance(value, (dict, list)):
+            text = json.dumps(value, ensure_ascii=False, indent=2)
+        else:
+            text = str(value)
+    except Exception:
+        try:
+            text = str(value)
+        except Exception:
+            return None
+    text = text.strip()
+    if not text:
+        return None
+    if len(text) > max_chars:
+        return text[:max_chars] + "\n…(truncated)…"
+    return text
+
+
+def _preview_text_snippet(text: str, max_chars: int = 500) -> str:
+    t = (text or "").strip()
+    if len(t) <= max_chars:
+        return t
+    return t[:max_chars] + "…"
+
+
+def _build_captured_customer_material_from_snapshot(snapshot: Snapshot) -> Dict[str, Any]:
+    """
+    A: Tool result text captured at ingest (payload.tool_events), if any.
+    """
+    payload = snapshot.payload if isinstance(getattr(snapshot, "payload", None), dict) else {}
+    evs = normalize_tool_events(payload.get("tool_events"))
+    if not evs:
+        return {
+            "present": False,
+            "sources": [],
+            "tool_result_excerpt_chars": 0,
+            "preview": None,
+        }
+    parts: List[str] = []
+    for ev in evs:
+        if str(ev.get("kind") or "").strip().lower() != "tool_result":
+            continue
+        out = ev.get("output")
+        if isinstance(out, str):
+            parts.append(out)
+        elif out is not None:
+            try:
+                parts.append(json.dumps(out, ensure_ascii=False))
+            except Exception:
+                parts.append(str(out))
+    combined = "\n\n---\n\n".join(parts)
+    if not combined.strip():
+        return {
+            "present": False,
+            "sources": ["snapshot.payload.tool_events"],
+            "tool_result_excerpt_chars": 0,
+            "preview": None,
+        }
+    return {
+        "present": True,
+        "sources": ["snapshot.payload.tool_events"],
+        "tool_result_excerpt_chars": len(combined),
+        "preview": _preview_text_snippet(combined, 500),
+    }
+
+
+def _build_rg_injection_report(
+    tool_context_payload: Optional[Dict[str, Any]], snapshot_id: int
+) -> Dict[str, Any]:
+    """B: Release Gate inject — text merged into replay system prompt for this snapshot."""
+    resolved = resolve_tool_context_injection_text(tool_context_payload, snapshot_id)
+    if not resolved:
+        return {
+            "applied": False,
+            "resolution": "none",
+            "matched_key": None,
+            "char_count": 0,
+            "preview": None,
+            "sha256": None,
+        }
+    inject: Dict[str, Any] = {}
+    if isinstance(tool_context_payload, dict):
+        raw = tool_context_payload.get("inject")
+        if isinstance(raw, dict):
+            inject = raw
+    scope = str(inject.get("scope") or "per_snapshot").strip().lower()
+    sid = str(snapshot_id)
+    by_snapshot = inject.get("by_snapshot_id") or {}
+    if not isinstance(by_snapshot, dict):
+        by_snapshot = {}
+    per_val = by_snapshot.get(sid)
+    if isinstance(per_val, str) and per_val.strip():
+        resolution = "per_snapshot"
+        matched_key = sid
+    elif scope == "global":
+        resolution = "global"
+        matched_key = None
+    else:
+        resolution = "per_snapshot_fallback"
+        matched_key = None
+    return {
+        "applied": True,
+        "resolution": resolution,
+        "matched_key": matched_key,
+        "char_count": len(resolved),
+        "preview": _preview_text_snippet(resolved, 500),
+        "sha256": hashlib.sha256(resolved.encode("utf-8")).hexdigest(),
+    }
+
+
+def _aggregate_tool_flow_from_attempts(attempts: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """C/D: aggregate tool inbound/outbound previews from attempts[].tool_evidence."""
+    recorded = 0
+    simulated = 0
+    rows_with_result = 0
+    rows_with_args = 0
+    for att in attempts or []:
+        for row in att.get("tool_evidence") or []:
+            if not isinstance(row, dict):
+                continue
+            st = str(row.get("status") or "").strip().lower()
+            if st == "recorded":
+                recorded += 1
+            elif st == "simulated":
+                simulated += 1
+            rp = row.get("result_preview")
+            if isinstance(rp, str) and rp.strip():
+                rows_with_result += 1
+            ap = row.get("arguments_preview")
+            if ap is not None and str(ap).strip():
+                rows_with_args += 1
+    return {
+        "C_tool_inbound": {
+            "summary": {
+                "recorded_rows": recorded,
+                "simulated_rows": simulated,
+                "rows_with_result_preview": rows_with_result,
+            },
+            "detail": "attempts[].tool_evidence[].result_preview",
+        },
+        "D_tool_outbound": {
+            "summary": {"rows_with_arguments_preview": rows_with_args},
+            "detail": "attempts[].tool_evidence[].arguments_preview",
+        },
+    }
+
+
+_GROUNDING_STOPWORDS: Set[str] = {
+    "the",
+    "and",
+    "for",
+    "with",
+    "this",
+    "that",
+    "from",
+    "into",
+    "your",
+    "have",
+    "has",
+    "were",
+    "was",
+    "will",
+    "would",
+    "about",
+    "after",
+    "before",
+    "there",
+    "their",
+    "they",
+    "them",
+    "then",
+    "than",
+    "http",
+    "https",
+    "www",
+    "json",
+    "true",
+    "false",
+    "null",
+    "none",
+    "tool",
+    "tools",
+    "result",
+    "results",
+    "response",
+    "content",
+    "message",
+    "status",
+    "value",
+    "data",
+    "items",
+    "item",
+    "text",
+}
+
+
+def _normalize_grounding_text(value: Any) -> str:
+    text = str(value or "").lower()
+    if not text:
+        return ""
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _extract_grounding_tokens(value: Any, max_tokens: int = 8) -> List[str]:
+    text = _normalize_grounding_text(value)
+    if not text:
+        return []
+    raw_tokens = re.findall(r"[a-z0-9][a-z0-9._:/-]{2,}", text)
+    out: List[str] = []
+    seen: Set[str] = set()
+    for token in raw_tokens:
+        if token in seen:
+            continue
+        if token in _GROUNDING_STOPWORDS:
+            continue
+        if token.isdigit():
+            continue
+        if len(token) < 4 and not any(ch.isdigit() for ch in token):
+            continue
+        seen.add(token)
+        out.append(token)
+        if len(out) >= max_tokens:
+            break
+    return out
+
+
+def _assess_tool_grounding(
+    tool_evidence: List[Dict[str, Any]],
+    candidate_response_preview: Any,
+    tool_loop_status: Any,
+) -> Dict[str, Any]:
+    tool_total_calls = len(tool_evidence or [])
+    response_text = str(candidate_response_preview or "").strip()
+    response_present = bool(response_text)
+    loop_status = str(tool_loop_status or "").strip().lower()
+
+    result_rows = [
+        row
+        for row in (tool_evidence or [])
+        if isinstance(row, dict) and str(row.get("result_preview") or "").strip()
+    ]
+    tool_result_count = len(result_rows)
+
+    if tool_total_calls <= 0:
+        return {
+            "status": "not_applicable",
+            "reason": "No tool calls detected for this attempt.",
+            "tool_calls": 0,
+            "tool_results": 0,
+            "loop_status": loop_status or None,
+            "response_present": response_present,
+            "grounded_rows": 0,
+            "evaluated_rows": 0,
+            "coverage_ratio": None,
+            "matched_tokens": [],
+            "expected_tokens": [],
+        }
+
+    if tool_result_count <= 0:
+        return {
+            "status": "fail",
+            "reason": "Tool calls were detected but no tool results were captured.",
+            "tool_calls": tool_total_calls,
+            "tool_results": 0,
+            "loop_status": loop_status or None,
+            "response_present": response_present,
+            "grounded_rows": 0,
+            "evaluated_rows": 0,
+            "coverage_ratio": 0.0,
+            "matched_tokens": [],
+            "expected_tokens": [],
+        }
+
+    if not response_present:
+        return {
+            "status": "fail",
+            "reason": "Tool results were captured, but no final assistant response text was produced.",
+            "tool_calls": tool_total_calls,
+            "tool_results": tool_result_count,
+            "loop_status": loop_status or None,
+            "response_present": False,
+            "grounded_rows": 0,
+            "evaluated_rows": tool_result_count,
+            "coverage_ratio": 0.0,
+            "matched_tokens": [],
+            "expected_tokens": [],
+        }
+
+    if loop_status in {"provider_error", "network_error", "id_conflict", "max_rounds_exceeded"}:
+        return {
+            "status": "fail",
+            "reason": f"Tool loop ended with status '{loop_status}', so grounding confidence is low.",
+            "tool_calls": tool_total_calls,
+            "tool_results": tool_result_count,
+            "loop_status": loop_status,
+            "response_present": True,
+            "grounded_rows": 0,
+            "evaluated_rows": tool_result_count,
+            "coverage_ratio": 0.0,
+            "matched_tokens": [],
+            "expected_tokens": [],
+        }
+
+    normalized_response = _normalize_grounding_text(response_text)
+    response_tokens = set(_extract_grounding_tokens(response_text, max_tokens=64))
+    grounded_rows = 0
+    matched_tokens: List[str] = []
+    expected_tokens: List[str] = []
+
+    for row in result_rows:
+        preview = str(row.get("result_preview") or "").strip()
+        tokens = _extract_grounding_tokens(preview, max_tokens=8)
+        direct_match = False
+        normalized_preview = _normalize_grounding_text(preview)
+        if 12 <= len(normalized_preview) <= 160 and normalized_preview in normalized_response:
+            direct_match = True
+        overlap = [token for token in tokens if token in response_tokens or token in normalized_response]
+        row_expected = tokens[:4]
+        for token in row_expected:
+            if token not in expected_tokens:
+                expected_tokens.append(token)
+        if direct_match or (len(tokens) <= 2 and len(overlap) >= 1) or (len(tokens) >= 3 and len(overlap) >= 2):
+            grounded_rows += 1
+            for token in overlap[:3]:
+                if token not in matched_tokens:
+                    matched_tokens.append(token)
+
+    coverage_ratio = grounded_rows / tool_result_count if tool_result_count > 0 else 0.0
+    if grounded_rows > 0 and coverage_ratio >= 0.5:
+        reason = (
+            f"Tool-result grounding matched {grounded_rows}/{tool_result_count} result row"
+            f"{'' if tool_result_count == 1 else 's'}."
+        )
+        if matched_tokens:
+            reason += f" Matched tokens: {', '.join(matched_tokens[:4])}."
+        status = "pass"
+    else:
+        reason = (
+            f"Tool results were captured, but the final response did not show enough overlap "
+            f"with tool evidence ({grounded_rows}/{tool_result_count} rows matched)."
+        )
+        if expected_tokens:
+            reason += f" Expected signals included: {', '.join(expected_tokens[:4])}."
+        status = "fail"
+
+    return {
+        "status": status,
+        "reason": reason,
+        "tool_calls": tool_total_calls,
+        "tool_results": tool_result_count,
+        "loop_status": loop_status or None,
+        "response_present": True,
+        "grounded_rows": grounded_rows,
+        "evaluated_rows": tool_result_count,
+        "coverage_ratio": round(coverage_ratio, 4),
+        "matched_tokens": matched_tokens[:6],
+        "expected_tokens": expected_tokens[:6],
+    }
+
+
+def _build_tool_evidence_grounding_text(
+    tool_evidence: List[Dict[str, Any]],
+    max_items: int = 4,
+) -> str:
+    lines: List[str] = []
+    for idx, row in enumerate(tool_evidence or [], start=1):
+        if idx > max_items:
+            break
+        if not isinstance(row, dict):
+            continue
+        tool_name = str(row.get("name") or "unknown_tool").strip()
+        result_preview = str(row.get("result_preview") or "").strip()
+        if not result_preview:
+            continue
+        lines.append(f"{idx}. {tool_name}: {result_preview[:800]}")
+    return "\n".join(lines).strip()
+
+
+async def _run_semantic_tool_grounding_judge(
+    *,
+    tool_evidence: List[Dict[str, Any]],
+    candidate_response_preview: Any,
+    project_id: int,
+    agent_id: Optional[str],
+    db: Session,
+    judge_model: str = "gpt-4o-mini",
+) -> Dict[str, Any]:
+    response_text = str(candidate_response_preview or "").strip()
+    evidence_text = _build_tool_evidence_grounding_text(tool_evidence)
+    if not evidence_text or not response_text:
+        return {
+            "status": "unavailable",
+            "reason": "Semantic grounding judge skipped because evidence or final response text was missing.",
+            "judge_model": judge_model,
+        }
+
+    user_api_key = None
+    try:
+        user_api_key = UserApiKeyService(db).get_user_api_key(project_id, "openai", agent_id)
+    except Exception:
+        user_api_key = None
+
+    if not user_api_key and not getattr(app_settings, "OPENAI_API_KEY", None):
+        return {
+            "status": "unavailable",
+            "reason": "Semantic grounding judge is unavailable because no OpenAI judge key is configured.",
+            "judge_model": judge_model,
+        }
+
+    from app.services.judge_service import judge_service
+
+    raw = await judge_service.evaluate_grounding(
+        tool_evidence_text=evidence_text,
+        final_response_text=response_text,
+        judge_model=judge_model,
+        user_api_key=user_api_key,
+    )
+    if not isinstance(raw, dict) or raw.get("error"):
+        return {
+            "status": "unavailable",
+            "reason": "Semantic grounding judge did not return a usable result.",
+            "judge_model": judge_model,
+        }
+
+    grounded = bool(raw.get("grounded"))
+    confidence = str(raw.get("confidence") or "").strip().lower() or "unknown"
+    reasoning = str(raw.get("reasoning") or "").strip() or (
+        "Semantic grounding judge found the response grounded."
+        if grounded
+        else "Semantic grounding judge found the response insufficiently grounded."
+    )
+    matched_facts = raw.get("matched_facts") if isinstance(raw.get("matched_facts"), list) else []
+    missing_facts = raw.get("missing_facts") if isinstance(raw.get("missing_facts"), list) else []
+    return {
+        "status": "pass" if grounded else "fail",
+        "reason": reasoning,
+        "judge_confidence": confidence,
+        "judge_model": judge_model,
+        "matched_facts": [str(v).strip() for v in matched_facts if str(v).strip()][:4],
+        "missing_facts": [str(v).strip() for v in missing_facts if str(v).strip()][:4],
+    }
+
+
+def _merge_tool_grounding_with_semantic(
+    heuristic: Dict[str, Any],
+    semantic: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    merged = dict(heuristic or {})
+    if not semantic or not isinstance(semantic, dict):
+        return merged
+
+    semantic_status = str(semantic.get("status") or "").strip().lower() or "unavailable"
+    merged["semantic_status"] = semantic_status
+    merged["semantic_reason"] = str(semantic.get("reason") or "").strip() or None
+    merged["semantic_confidence"] = str(semantic.get("judge_confidence") or "").strip() or None
+    merged["semantic_model"] = str(semantic.get("judge_model") or "").strip() or None
+    merged["matched_facts"] = semantic.get("matched_facts") if isinstance(semantic.get("matched_facts"), list) else []
+    merged["missing_facts"] = semantic.get("missing_facts") if isinstance(semantic.get("missing_facts"), list) else []
+
+    if semantic_status == "pass" and str(merged.get("status") or "").strip().lower() == "fail":
+        merged["status"] = "pass"
+        base_reason = str(merged.get("reason") or "").strip()
+        semantic_reason = str(semantic.get("reason") or "").strip()
+        merged["reason"] = (
+            f"{base_reason} Semantic judge rescue: {semantic_reason}".strip()
+            if base_reason
+            else semantic_reason or "Semantic judge found the final response grounded in tool evidence."
+        )
+    elif semantic_status == "fail":
+        merged["status"] = "fail"
+        semantic_reason = str(semantic.get("reason") or "").strip()
+        if semantic_reason:
+            merged["reason"] = semantic_reason
+
+    return merged
+
+
+DISALLOWED_REPLAY_OVERRIDE_KEYS: Set[str] = {
+    # Content / trace fields that must not be overridden via replay_overrides.
+    "messages",
+    "message",
+    "user_message",
+    "response",
+    "responses",
+    "input",
+    "inputs",
+    "trace_id",
+    "agent_id",
+    "agent_name",
+}
+
+
+def _sanitize_replay_overrides(
+    overrides: Optional[Dict[str, Any]]
+) -> Optional[Dict[str, Any]]:
+    """
+    Keep replay_overrides focused on configuration-only fields.
+
+    Snapshot content (messages/user_message/response), trace identifiers,
+    and similar fields are always derived from the baseline snapshot, not
+    from client-provided overrides. This helper removes such keys so that
+    Release Gate cannot accidentally change the underlying test cases via
+    replay_overrides.
+    """
+    if not overrides or not isinstance(overrides, dict):
+        return overrides
+
+    cleaned: Dict[str, Any] = {
+        key: value
+        for key, value in overrides.items()
+        if key not in DISALLOWED_REPLAY_OVERRIDE_KEYS
+    }
+    return cleaned or None
+
+
+def _sanitize_replay_overrides_by_snapshot_id(
+    raw: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Dict[str, Any]]]:
+    """Sanitize each inner dict; keys are string snapshot ids."""
+    if not raw or not isinstance(raw, dict):
+        return None
+    out: Dict[str, Dict[str, Any]] = {}
+    for k, v in raw.items():
+        sk = str(k).strip()
+        if not sk or not isinstance(v, dict):
+            continue
+        cleaned = _sanitize_replay_overrides(v)
+        if cleaned:
+            out[sk] = cleaned
+    return out or None
+
+
+def _snapshot_request_part(snapshot: Snapshot) -> Dict[str, Any]:
+    """Return the provider request body from stored snapshot payload (proxy or flat)."""
+    raw = snapshot.payload if isinstance(getattr(snapshot, "payload", None), dict) else {}
+    req = raw.get("request")
+    if isinstance(req, dict):
+        return dict(req)
+    return dict(raw)
+
+
+def _build_replay_request_meta(
+    snapshots: List[Snapshot],
+    payload: Any,
+) -> Dict[str, Any]:
+    """
+    Snapshot vs applied overrides for result UI: first snapshot's top-level request keys
+    vs sanitized replay_overrides sent to the replay worker.
+    """
+    overrides = _sanitize_replay_overrides(getattr(payload, "replay_overrides", None)) or {}
+    baseline_excerpt: Dict[str, Any] = {}
+    if snapshots:
+        req = _snapshot_request_part(snapshots[0])
+        for k in overrides.keys():
+            baseline_excerpt[k] = req[k] if k in req else None
+    sampling: Dict[str, Any] = {}
+    if getattr(payload, "replay_temperature", None) is not None:
+        sampling["replay_temperature"] = payload.replay_temperature
+    if getattr(payload, "replay_max_tokens", None) is not None:
+        sampling["replay_max_tokens"] = payload.replay_max_tokens
+    if getattr(payload, "replay_top_p", None) is not None:
+        sampling["replay_top_p"] = payload.replay_top_p
+    nsp = str(getattr(payload, "new_system_prompt", None) or "").strip()
+    per_sid = _sanitize_replay_overrides_by_snapshot_id(
+        getattr(payload, "replay_overrides_by_snapshot_id", None)
+    )
+    return {
+        "replay_overrides_applied": overrides,
+        "baseline_snapshot_excerpt": baseline_excerpt,
+        "replay_overrides_by_snapshot_id_applied": per_sid,
+        "sampling_overrides": sampling or None,
+        "has_new_system_prompt": bool(nsp),
+        "new_system_prompt_preview": (nsp[:240] + "…") if len(nsp) > 240 else (nsp or None),
+    }
+
+
+def _enforce_platform_replay_credit_limit(
+    payload: "ReleaseGateValidateRequest", db: Session, current_user: User
+) -> None:
+    """
+    Hosted replay credits only apply when Release Gate uses platform-hosted models.
+    BYOK runs remain subject to product limits, but do not spend hosted credits.
+    """
+    if payload.model_source != "platform":
+        return
+
+    allowed, err_msg = check_guard_credits_limit(
+        db, current_user.id, getattr(current_user, "is_superuser", False)
+    )
+    if allowed:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "code": "LIMIT_PLATFORM_REPLAY_CREDITS",
+            "message": err_msg,
+            "model_source": payload.model_source,
+            "next_steps": [
+                "Use your own provider key for this run.",
+                "Upgrade your plan for more hosted replay credits.",
+            ],
+        },
+    )
 
 def _has_eval_fail(eval_checks_result: Any) -> bool:
     """
@@ -102,13 +817,14 @@ def get_recommended_snapshots_for_agent(
         )
 
     window_days = 7
-    since = datetime.utcnow() - timedelta(days=window_days)
+    since = datetime.now(timezone.utc) - timedelta(days=window_days)
     snapshots = (
         db.query(Snapshot)
         .filter(
             Snapshot.project_id == project_id,
             Snapshot.agent_id == effective_agent_id,
             Snapshot.created_at >= since,
+            Snapshot.is_deleted.is_(False),
         )
         .order_by(Snapshot.created_at.desc())
         .limit(800)
@@ -171,6 +887,37 @@ def get_recommended_snapshots_for_agent(
     }
 
 
+class ToolContextInject(BaseModel):
+    """
+    When mode=inject, resolved text is appended to the replay system prompt so runs can
+    include docs/code/tool outcomes that were never captured in logs (e.g. redacted at source).
+    """
+
+    scope: Literal["per_snapshot", "global"] = Field(
+        "per_snapshot",
+        description=(
+            "global: use global_text for every snapshot. "
+            "per_snapshot: use by_snapshot_id[snapshot_id], then optional global_text if missing."
+        ),
+    )
+    global_text: Optional[str] = Field(
+        None,
+        description="Shared additional system text when scope=global, or fallback when scope=per_snapshot.",
+    )
+    by_snapshot_id: Optional[Dict[str, str]] = Field(
+        None,
+        description="Map snapshot id (string) -> additional system text for that log.",
+    )
+
+
+class ToolContextConfig(BaseModel):
+    mode: Literal["recorded", "inject"] = Field(
+        "recorded",
+        description="recorded: use captured request only. inject: append resolved ToolContextInject text to system prompt.",
+    )
+    inject: Optional[ToolContextInject] = Field(None, description="Used when mode=inject.")
+
+
 class ReleaseGateValidateRequest(BaseModel):
     agent_id: Optional[str] = Field(
         None, description="Agent (node) to validate. Use with use_recent_snapshots or dataset_id."
@@ -218,11 +965,31 @@ class ReleaseGateValidateRequest(BaseModel):
     replay_max_tokens: Optional[int] = Field(None, description="Replay request max_tokens override")
     replay_top_p: Optional[float] = Field(None, description="Replay request top_p override")
     replay_overrides: Optional[Dict[str, Any]] = Field(
-        None, description="Optional dict merged into replay request body (e.g. tools, extra params)"
+        None,
+        description=(
+            "Optional configuration-only overrides merged into the replay request body "
+            "(e.g. tools, sampling/format knobs). Snapshot content fields such as "
+            "messages/user_message/response/trace_id/agent_id/agent_name are ignored."
+        ),
+    )
+    replay_overrides_by_snapshot_id: Optional[Dict[str, Dict[str, Any]]] = Field(
+        None,
+        description=(
+            "Optional per-log request body overrides merged after replay_overrides for that snapshot id "
+            "(string keys). Same disallowed keys as replay_overrides. Wins over replay_overrides "
+            "on key conflict."
+        ),
+    )
+    tool_context: Optional[ToolContextConfig] = Field(
+        None,
+        description=(
+            "Optional additional system context for replay (e.g. tool/doc/code not present in captured logs). "
+            "When mode=inject, resolved text is appended to the system prompt per snapshot."
+        ),
     )
     rule_ids: Optional[List[str]] = Field(None, description="Optional specific rule IDs")
     max_snapshots: int = Field(20, ge=1, le=100, description="Max snapshots replayed from trace")
-    repeat_runs: int = Field(3, ge=1, le=5, description="Repeat replay N times")
+    repeat_runs: int = Field(3, ge=1, le=100, description="Repeat replay N times (1=quick, 10/50/100=stability)")
     fail_rate_max: float = Field(
         0.05,
         ge=0.0,
@@ -239,6 +1006,79 @@ class ReleaseGateValidateRequest(BaseModel):
         "replay_test",
         description="Replay Test only.",
     )
+
+
+ReleaseGateJobStatus = Literal["queued", "running", "succeeded", "failed", "canceled"]
+
+
+class ReleaseGateJobProgressOut(BaseModel):
+    done: int = 0
+    total: Optional[int] = None
+    phase: Optional[str] = None
+
+
+class ReleaseGateJobOut(BaseModel):
+    id: str
+    status: ReleaseGateJobStatus
+    created_at: Optional[str] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    cancel_requested_at: Optional[str] = None
+    progress: ReleaseGateJobProgressOut
+    report_id: Optional[str] = None
+    error_detail: Optional[Dict[str, Any]] = None
+
+
+class ReleaseGateJobCreateResponse(BaseModel):
+    job: ReleaseGateJobOut
+
+
+class ReleaseGateJobGetResponse(BaseModel):
+    job: ReleaseGateJobOut
+    result: Optional[Dict[str, Any]] = None
+
+
+def _job_to_out(job: ReleaseGateJob) -> ReleaseGateJobOut:
+    return ReleaseGateJobOut(
+        id=str(job.id),
+        status=str(job.status),
+        created_at=_iso(getattr(job, "created_at", None)),
+        started_at=_iso(getattr(job, "started_at", None)),
+        finished_at=_iso(getattr(job, "finished_at", None)),
+        cancel_requested_at=_iso(getattr(job, "cancel_requested_at", None)),
+        progress=ReleaseGateJobProgressOut(
+            done=int(getattr(job, "progress_done", 0) or 0),
+            total=(int(job.progress_total) if getattr(job, "progress_total", None) is not None else None),
+            phase=(str(job.progress_phase) if getattr(job, "progress_phase", None) else None),
+        ),
+        report_id=str(job.report_id) if getattr(job, "report_id", None) else None,
+        error_detail=job.error_detail if isinstance(job.error_detail, dict) else None,
+    )
+
+
+def _get_active_release_gate_job(
+    db: Session,
+    *,
+    project_id: int,
+    user_id: int,
+) -> Optional[ReleaseGateJob]:
+    return (
+        db.query(ReleaseGateJob)
+        .filter(
+            ReleaseGateJob.project_id == project_id,
+            ReleaseGateJob.user_id == user_id,
+            ReleaseGateJob.status.in_(["queued", "running"]),
+        )
+        .order_by(ReleaseGateJob.created_at.desc())
+        .first()
+    )
+
+
+def _sanitize_release_gate_job_request(payload: ReleaseGateValidateRequest) -> Dict[str, Any]:
+    data = payload.model_dump()
+    # Never persist secrets.
+    data.pop("replay_api_key", None)
+    return data
 
 
 def _iso(value: Optional[datetime]) -> Optional[str]:
@@ -314,6 +1154,52 @@ def _build_replay_candidate_steps(
             if st.get("step_type") == "tool_call":
                 steps.append(st)
 
+        # Stage 2 alpha: preserve loop-level tool result evidence as canonical steps.
+        loop_events = res.get("tool_loop_events")
+        if isinstance(loop_events, list):
+            for ev_idx, ev in enumerate(loop_events, start=1):
+                if not isinstance(ev, dict):
+                    continue
+                round_no = ev.get("round")
+                try:
+                    round_no_int = int(round_no) if round_no is not None else ev_idx
+                except Exception:
+                    round_no_int = ev_idx
+                tool_rows = ev.get("tool_rows")
+                if not isinstance(tool_rows, list):
+                    continue
+                for row_idx, row in enumerate(tool_rows, start=1):
+                    if not isinstance(row, dict):
+                        continue
+                    tool_name = str(row.get("name") or "").strip()
+                    if not tool_name:
+                        continue
+                    step_order = (
+                        order
+                        + 0.2
+                        + float(max(round_no_int, 1)) * 0.01
+                        + float(row_idx) * 0.0001
+                    )
+                    step_result_payload = {
+                        "status": str(row.get("status") or "").strip().lower() or "unknown",
+                        "arguments_preview": row.get("arguments_preview"),
+                        "result_preview": row.get("result_preview"),
+                        "round": round_no_int,
+                    }
+                    steps.append(
+                        {
+                            **base,
+                            "step_order": step_order,
+                            "step_type": "tool_result",
+                            "tool_name": tool_name,
+                            "tool_args": {
+                                "status": step_result_payload["status"],
+                                "round": round_no_int,
+                            },
+                            "tool_result": step_result_payload,
+                        }
+                    )
+
     return sorted(steps, key=lambda x: x.get("step_order") or 0)
 
 
@@ -325,33 +1211,144 @@ def _baseline_sequence_for_snapshot(snapshot: Snapshot) -> List[str]:
     return []
 
 
-def _eval_elements_passed_failed(
-    rules: List[BehaviorRule],
-    violations: List[Dict[str, Any]],
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Split rules into passed (no violation) and failed (has violations)."""
-    violated_rule_ids: Set[str] = set()
-    violation_counts: Dict[str, int] = {}
-    for v in violations:
-        rid = str(v.get("rule_id") or "")
-        if rid:
-            violated_rule_ids.add(rid)
-            violation_counts[rid] = violation_counts.get(rid, 0) + 1
-    passed = [
-        {"rule_id": r.id, "rule_name": r.name or "Unknown"}
-        for r in rules
-        if r.id not in violated_rule_ids
-    ]
-    failed = [
-        {
-            "rule_id": r.id,
-            "rule_name": r.name or "Unknown",
-            "violation_count": violation_counts.get(r.id, 0),
+def _build_stage1_tool_evidence(
+    run_tool_summary: Any,
+    replay_result: Optional[Dict[str, Any]] = None,
+    max_items: int = 20,
+) -> List[Dict[str, Any]]:
+    """
+    Stage 1 evidence model:
+    - detect tool calls from provider response
+    - do not execute tools yet
+    - expose deterministic evidence rows for UI trust cues
+    """
+    if not isinstance(run_tool_summary, list):
+        run_tool_summary = []
+
+    # Prefer richer loop events when present (Stage 2 alpha+).
+    if isinstance(replay_result, dict):
+        loop_events = replay_result.get("tool_loop_events")
+        if isinstance(loop_events, list):
+            rows: List[Dict[str, Any]] = []
+            for ev in loop_events:
+                if not isinstance(ev, dict):
+                    continue
+                tool_rows = ev.get("tool_rows")
+                if not isinstance(tool_rows, list):
+                    continue
+                for item in tool_rows:
+                    if not isinstance(item, dict):
+                        continue
+                    name = str(item.get("name") or "").strip()
+                    if not name:
+                        continue
+                    st = str(item.get("status") or "simulated").strip().lower()
+                    exec_src = str(item.get("execution_source") or st).strip().lower()
+                    tr_src = str(item.get("tool_result_source") or "").strip().lower()
+                    if not tr_src:
+                        tr_src = "baseline_snapshot" if st == "recorded" else "dry_run"
+                    cid = item.get("call_id")
+                    mt = item.get("match_tier")
+                    rows.append(
+                        {
+                            "order": len(rows) + 1,
+                            "name": name,
+                            "status": st,
+                            "execution_source": exec_src,
+                            "tool_result_source": tr_src,
+                            "call_id": str(cid).strip() if cid is not None and str(cid).strip() else None,
+                            "match_tier": str(mt).strip().lower() if mt is not None else None,
+                            "reason_code": "tool_loop_event",
+                            "reason_message": "Derived from tool loop events.",
+                            "arguments_preview": _safe_preview_json(
+                                item.get("arguments_preview"), max_chars=1500
+                            ),
+                            "result_preview": _safe_preview_json(
+                                item.get("result_preview"), max_chars=1500
+                            ),
+                        }
+                    )
+                    if len(rows) >= max_items:
+                        break
+                if len(rows) >= max_items:
+                    break
+            if rows:
+                return rows
+
+    out: List[Dict[str, Any]] = []
+    for idx, item in enumerate(run_tool_summary):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        args_preview = _safe_preview_json(item.get("arguments"), max_chars=1500)
+        out.append(
+            {
+                "order": idx + 1,
+                "name": name,
+                "status": "simulated",
+                "reason_code": "stage1_no_tool_execution_loop",
+                "reason_message": "Tool call detected, but execution is not enabled in Stage 1.",
+                "arguments_preview": args_preview,
+                "result_preview": None,
+            }
+        )
+        if len(out) >= max_items:
+            break
+    return out
+
+
+def _build_stage1_tool_execution_summary(tool_evidence: List[Dict[str, Any]]) -> Dict[str, Any]:
+    total_calls = len(tool_evidence or [])
+    simulated = sum(1 for row in (tool_evidence or []) if str(row.get("status")) == "simulated")
+    recorded = sum(
+        1
+        for row in (tool_evidence or [])
+        if str(row.get("status")) == "recorded"
+        or str(row.get("execution_source") or "").strip().lower() == "recorded"
+    )
+    executed = recorded
+    skipped = sum(1 for row in (tool_evidence or []) if str(row.get("status")) == "skipped")
+    failed = sum(1 for row in (tool_evidence or []) if str(row.get("status")) == "failed")
+    tool_results = sum(
+        1
+        for row in (tool_evidence or [])
+        if isinstance(row.get("result_preview"), str) and str(row.get("result_preview") or "").strip()
+    )
+
+    if total_calls <= 0:
+        return {
+            "status": "no_tool_calls",
+            "confidence": "medium",
+            "detail": "No tool calls detected for this attempt.",
+            "counts": {
+                "total_calls": 0,
+                "executed": 0,
+                "simulated": 0,
+                "recorded": 0,
+                "skipped": 0,
+                "failed": 0,
+                "tool_results": 0,
+            },
+            "requires_stage2_loop": False,
         }
-        for r in rules
-        if r.id in violated_rule_ids
-    ]
-    return passed, failed
+
+    return {
+        "status": "calls_detected_no_execution",
+        "confidence": "low",
+        "detail": "Tool calls were detected but not executed in Stage 1.",
+        "counts": {
+            "total_calls": total_calls,
+            "executed": executed,
+            "simulated": simulated,
+            "recorded": recorded,
+            "skipped": skipped,
+            "failed": failed,
+            "tool_results": tool_results,
+        },
+        "requires_stage2_loop": True,
+    }
 
 
 def _parse_snapshot_ids(raw: Optional[List[str]]) -> List[int]:
@@ -399,6 +1396,16 @@ def _infer_provider_from_model(model: Any) -> Optional[str]:
     m = str(model or "").strip().lower()
     if not m:
         return None
+    # Explicit OpenAI families
+    if (
+        m.startswith("gpt")
+        or m.startswith("o1")
+        or m.startswith("o3")
+        or m.startswith("o4")
+        or m.startswith("text-embedding")
+        or m.startswith("openai/")
+    ):
+        return "openai"
     if "claude" in m or m.startswith("anthropic/"):
         return "anthropic"
     if (
@@ -408,7 +1415,27 @@ def _infer_provider_from_model(model: Any) -> Optional[str]:
         or m.startswith("google/")
     ):
         return "google"
-    return "openai"
+    # Unknown model IDs should not force a provider.
+    return None
+
+
+def _assert_provider_matches_model(replay_provider: Any, model: Any) -> None:
+    provider = _normalize_provider(replay_provider)
+    inferred = _infer_provider_from_model(model)
+    if not provider or not inferred:
+        return
+    if provider == inferred:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail={
+            "error_code": "provider_model_mismatch",
+            "message": "Selected replay_provider does not match provider inferred from new_model.",
+            "replay_provider": provider,
+            "inferred_provider": inferred,
+            "model_id": str(model or "").strip(),
+        },
+    )
 
 
 def _resolve_snapshot_provider(snapshot: Snapshot) -> Optional[str]:
@@ -419,7 +1446,12 @@ def _resolve_snapshot_provider(snapshot: Snapshot) -> Optional[str]:
 
 
 async def _run_release_gate(
-    project_id: int, payload: ReleaseGateValidateRequest, db: Session
+    project_id: int,
+    payload: ReleaseGateValidateRequest,
+    db: Session,
+    current_user: User,
+    cancel_check: Optional[Callable[[], bool]] = None,
+    progress_hook: Optional[Callable[[int, Optional[int], Optional[str], Optional[Dict[str, Any]]], None]] = None,
 ) -> Dict[str, Any]:
     trace_id = payload.trace_id
     baseline_trace_id = payload.baseline_trace_id
@@ -444,6 +1476,7 @@ async def _run_release_gate(
             .filter(
                 Snapshot.project_id == project_id,
                 Snapshot.id == snapshot_ids_to_use[0],
+                Snapshot.is_deleted.is_(False),
             )
             .first()
         )
@@ -457,6 +1490,7 @@ async def _run_release_gate(
             .filter(
                 Snapshot.project_id == project_id,
                 Snapshot.agent_id == payload.agent_id,
+                Snapshot.is_deleted.is_(False),
             )
             .order_by(Snapshot.created_at.desc())
             .limit(payload.recent_snapshot_limit)
@@ -503,7 +1537,7 @@ async def _run_release_gate(
             ]
             if mismatched_dataset_ids:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail={
                         "error_code": "dataset_agent_mismatch",
                         "message": "Selected datasets must belong to the currently selected node.",
@@ -513,7 +1547,7 @@ async def _run_release_gate(
                 )
         elif len(non_empty_dataset_agent_ids) > 1:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail={
                     "error_code": "dataset_agent_mismatch",
                     "message": "Selected datasets span multiple nodes. Please select datasets from one node only.",
@@ -548,6 +1582,7 @@ async def _run_release_gate(
                     .filter(
                         Snapshot.project_id == project_id,
                         Snapshot.id == ds.snapshot_ids[0],
+                        Snapshot.is_deleted.is_(False),
                     )
                     .first()
                 )
@@ -577,6 +1612,7 @@ async def _run_release_gate(
             .filter(
                 Snapshot.project_id == project_id,
                 Snapshot.id.in_(snapshot_ids_to_use),
+                Snapshot.is_deleted.is_(False),
             )
             .all()
         }
@@ -598,7 +1634,7 @@ async def _run_release_gate(
                 ]
                 if mismatched_snapshot_ids:
                     raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                         detail={
                             "error_code": "dataset_snapshot_agent_mismatch",
                             "message": "Selected datasets include logs from another node.",
@@ -608,7 +1644,7 @@ async def _run_release_gate(
                     )
             elif len(snapshot_agent_ids) > 1:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail={
                         "error_code": "dataset_snapshot_agent_mismatch",
                         "message": "Selected datasets include logs from multiple nodes.",
@@ -620,7 +1656,11 @@ async def _run_release_gate(
     else:
         snapshots = (
             db.query(Snapshot)
-            .filter(Snapshot.project_id == project_id, Snapshot.trace_id == trace_id)
+            .filter(
+                Snapshot.project_id == project_id,
+                Snapshot.trace_id == trace_id,
+                Snapshot.is_deleted.is_(False),
+            )
             .order_by(Snapshot.span_order.asc().nullslast(), Snapshot.created_at.asc())
             .limit(payload.max_snapshots)
             .all()
@@ -634,19 +1674,41 @@ async def _run_release_gate(
     use_platform_model = payload.model_source == "platform"
 
     explicit_provider = _normalize_provider(payload.replay_provider)
+    if use_platform_model and str(payload.new_model or "").strip() and payload.replay_provider:
+        _assert_provider_matches_model(payload.replay_provider, payload.new_model)
     if use_platform_model and not explicit_provider:
         inferred_provider = _infer_provider_from_model(payload.new_model)
         if inferred_provider:
             explicit_provider = inferred_provider
     if payload.replay_provider and not explicit_provider:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Unsupported replay_provider. Use one of: openai, anthropic, google.",
         )
     if use_platform_model and not explicit_provider:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Platform model mode requires replay_provider or provider-inferrable new_model.",
+        )
+
+    # Enforce pinned-only model ids for Anthropic in production (Option A),
+    # with escape hatch for superusers or RELEASE_GATE_ALLOW_CUSTOM_MODELS=true.
+    if (
+        use_platform_model
+        and explicit_provider == "anthropic"
+        and str(payload.new_model or "").strip()
+        and _should_block_release_gate_custom_model(explicit_provider, payload.new_model, current_user)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error_code": "release_gate_requires_pinned_model",
+                "message": (
+                    "Release Gate requires a pinned Anthropic model id (ends with YYYYMMDD) for reproducibility."
+                ),
+                "provider": "anthropic",
+                "model_id": str(payload.new_model or "").strip(),
+            },
         )
 
     unresolved_snapshot_ids: List[int] = []
@@ -658,8 +1720,15 @@ async def _run_release_gate(
                 continue
 
     if unresolved_snapshot_ids:
+        unresolved_provider = explicit_provider or _resolve_snapshot_provider(snapshots[0]) or "unknown"
+        ops_alerting.observe_provider_error(
+            project_id=project_id,
+            provider=unresolved_provider,
+            error_code="provider_resolution_failed",
+            error_summary=f"unresolved_snapshot_ids={len(unresolved_snapshot_ids)}",
+        )
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "error_code": "provider_resolution_failed",
                 "message": "Could not resolve provider for one or more selected snapshots.",
@@ -671,12 +1740,24 @@ async def _run_release_gate(
         key_service = UserApiKeyService(db)
         key_presence_cache: Dict[Tuple[str, Optional[str]], bool] = {}
 
+        def _env_key_available(provider: str) -> bool:
+            """
+            In local dev / self-hosted, allow falling back to server .env keys
+            even in 'detected' mode to reduce setup friction.
+            """
+            if not (app_settings.SELF_HOSTED_MODE or str(app_settings.ENVIRONMENT).lower() != "production"):
+                return False
+            v = getattr(app_settings, f"{provider.upper()}_API_KEY", None)
+            return isinstance(v, str) and bool(v.strip())
+
         def _has_effective_provider_key(provider: str, agent_id: Optional[str]) -> bool:
             normalized_agent_id = str(agent_id or "").strip() or None
             cache_key = (provider, normalized_agent_id)
             if cache_key in key_presence_cache:
                 return key_presence_cache[cache_key]
-            exists = bool(key_service.get_user_api_key(project_id, provider, normalized_agent_id))
+            exists = _env_key_available(provider) or bool(
+                key_service.get_user_api_key(project_id, provider, normalized_agent_id)
+            )
             key_presence_cache[cache_key] = exists
             return exists
 
@@ -695,6 +1776,13 @@ async def _run_release_gate(
 
         missing_provider_keys = sorted(missing_provider_keys_set)
         if missing_provider_keys:
+            for provider in missing_provider_keys:
+                ops_alerting.observe_provider_error(
+                    project_id=project_id,
+                    provider=provider,
+                    error_code="missing_provider_keys",
+                    error_summary="Missing API keys for required providers.",
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
@@ -712,12 +1800,60 @@ async def _run_release_gate(
     rules = rules_query.order_by(BehaviorRule.created_at.asc()).all()
     baseline_steps: List[Dict[str, Any]] = []
 
+    # Load Live View diagnostic config (signals eval) for this agent, if available.
+    eval_config_raw: Any = {}
+    if payload.agent_id:
+        try:
+            setting = (
+                db.query(AgentDisplaySetting)
+                .filter(
+                    AgentDisplaySetting.project_id == project_id,
+                    AgentDisplaySetting.system_prompt_hash == payload.agent_id,
+                )
+                .first()
+            )
+            if setting and isinstance(getattr(setting, "diagnostic_config", None), dict):
+                eval_config_raw = setting.diagnostic_config or {}
+        except Exception:
+            eval_config_raw = {}
+
+    try:
+        eval_config_version = eval_config_version_hash(eval_config_raw or {})
+    except Exception:
+        eval_config_version = None
+
+    # Signals-only config (do not run tool policy twice; policy is validated via BehaviorRules).
+    try:
+        eval_config_signals = normalize_eval_config(eval_config_raw or {})
+        if isinstance(eval_config_signals.get("tool"), dict):
+            eval_config_signals["tool"]["enabled"] = False
+    except Exception:
+        eval_config_signals = {"enabled": True}
+
     if payload.evaluation_mode == "replay_test":
+        normalizer = DataNormalizer()
         snapshot_by_id: Dict[int, Snapshot] = {s.id: s for s in snapshots}
         attempts_by_snapshot: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
         all_reasons: List[str] = []
+        perf_attempts: List[Dict[str, Any]] = []
+        perf_started = time.monotonic()
+        perf_total = int(payload.repeat_runs or 0) or 0
+
+        tool_context_payload: Optional[Dict[str, Any]] = (
+            payload.tool_context.model_dump(exclude_none=True)
+            if payload.tool_context is not None
+            else None
+        )
 
         for run_idx in range(payload.repeat_runs):
+            if cancel_check and cancel_check():
+                raise ReleaseGateCancelled()
+            allow_env_fallback = bool(
+                use_platform_model
+                or app_settings.SELF_HOSTED_MODE
+                or str(app_settings.ENVIRONMENT).lower() != "production"
+            )
+            t0 = time.monotonic()
             replay_results = await replay_service.run_batch_replay(
                 snapshots=snapshots,
                 new_model=payload.new_model,
@@ -725,24 +1861,334 @@ async def _run_release_gate(
                 temperature=payload.replay_temperature,
                 max_tokens=payload.replay_max_tokens,
                 top_p=payload.replay_top_p,
-                replay_overrides=payload.replay_overrides,
+                replay_overrides=_sanitize_replay_overrides(payload.replay_overrides),
+                replay_overrides_by_snapshot_id=_sanitize_replay_overrides_by_snapshot_id(
+                    payload.replay_overrides_by_snapshot_id
+                ),
+                tool_context=tool_context_payload,
                 replay_provider=payload.replay_provider,
                 api_key=None,
                 rubric=None,
                 project_id=project_id,
                 db=db,
-                allow_environment_key=use_platform_model,
+                allow_environment_key=allow_env_fallback,
+                # Platform mode prefers env keys (hosted). Detected mode uses DB keys first,
+                # with env as a fallback (self-hosted/local convenience).
                 prefer_environment_key=use_platform_model,
+                track_platform_credits=use_platform_model,
             )
+            wall_ms = int((time.monotonic() - t0) * 1000)
+            latencies = [
+                float(r.get("latency_ms"))
+                for r in replay_results
+                if r.get("latency_ms") is not None
+            ]
+            avg_latency_ms = (sum(latencies) / len(latencies)) if latencies else None
+            succeeded = sum(1 for r in replay_results if r.get("success"))
+            failed = len(replay_results) - succeeded
+            perf_attempts.append(
+                {
+                    "run_index": run_idx + 1,
+                    "batch_wall_ms": wall_ms,
+                    "snapshots": len(replay_results),
+                    "succeeded": succeeded,
+                    "failed": failed,
+                    "avg_snapshot_latency_ms": avg_latency_ms,
+                }
+            )
+            if progress_hook:
+                try:
+                    progress_hook(
+                        run_idx + 1,
+                        perf_total or None,
+                        "replay",
+                        {
+                            "run_index": run_idx + 1,
+                            "batch_wall_ms": wall_ms,
+                            "avg_snapshot_latency_ms": avg_latency_ms,
+                        },
+                    )
+                except Exception:
+                    # Progress reporting must never fail the run.
+                    pass
 
             for res in replay_results:
                 snapshot = snapshot_by_id.get(res.get("snapshot_id"))
                 if not snapshot:
                     continue
+                snapshot_payload = (
+                    snapshot.payload
+                    if isinstance(getattr(snapshot, "payload", None), dict)
+                    else {}
+                )
+                baseline_input_text = str(
+                    getattr(snapshot, "user_message", None)
+                    or snapshot_payload.get("prompt")
+                    or snapshot_payload.get("input")
+                    or snapshot_payload.get("user_message")
+                    or ""
+                ).strip()
+                candidate_extract_path: Optional[str] = None
+                candidate_extract_reason: Optional[str] = None
+                try:
+                    extract_meta = normalizer._extract_response_text_with_meta(res.get("response_data"))
+                    if not isinstance(extract_meta, dict):
+                        extract_meta = {
+                            "text": _safe_preview_json(res.get("response_data"))
+                            or "[non-text response received]",
+                            "path": "__extract_meta_invalid__",
+                            "reason": "extract_meta_invalid",
+                        }
+                    candidate_response_preview = str(extract_meta.get("text") or "")
+                    candidate_extract_path = (
+                        str(extract_meta.get("path")).strip() if extract_meta.get("path") else None
+                    )
+                    candidate_extract_reason = (
+                        str(extract_meta.get("reason")).strip() if extract_meta.get("reason") else None
+                    )
+                except Exception as exc:
+                    candidate_response_preview = (
+                        _safe_preview_json(res.get("response_data"))
+                        or "[non-text response received]"
+                    )
+                    candidate_extract_path = "__release_gate_runtime__"
+                    candidate_extract_reason = "extract_meta_runtime_error"
+                    try:
+                        logger.warning(
+                            "Release Gate extract meta runtime fallback: snapshot_id=%s, error=%s",
+                            str(res.get("snapshot_id")),
+                            str(exc),
+                        )
+                    except Exception:
+                        pass
+
+                # Small status flag for UI/debugging.
+                response_preview_status = "ok"
+                try:
+                    preview_text = str(candidate_response_preview or "").strip()
+                    if not preview_text:
+                        response_preview_status = (
+                            "tool_calls_only"
+                            if str(candidate_extract_reason or "").strip().lower() == "tool_calls_only"
+                            else "empty"
+                        )
+                    elif "tool calls only" in preview_text.lower():
+                        response_preview_status = "tool_calls_only"
+                except Exception:
+                    response_preview_status = "unknown"
+
+                # Capture lightweight response_data key summary for UI debugging.
+                response_data_keys: List[str] = []
+                try:
+                    rd = res.get("response_data")
+                    if isinstance(rd, dict):
+                        response_data_keys = sorted([str(k) for k in rd.keys()])
+                    elif isinstance(rd, str):
+                        response_data_keys = ["<text>"]
+                    elif rd is None:
+                        response_data_keys = []
+                    else:
+                        response_data_keys = [f"<{type(rd).__name__}>"]
+                except Exception:
+                    response_data_keys = []
+
+                baseline_response_text = ""
+                baseline_response_data_keys: List[str] = []
+                baseline_response_preview_status = "unknown"
+                baseline_response_capture_reason: Optional[str] = None
+                try:
+                    raw_baseline_resp = getattr(snapshot, "response", None)
+                    if isinstance(raw_baseline_resp, str):
+                        baseline_response_text = raw_baseline_resp
+                        baseline_response_data_keys = ["<text>"] if raw_baseline_resp.strip() else []
+                    elif isinstance(raw_baseline_resp, dict):
+                        baseline_response_text = normalizer._extract_response_text(raw_baseline_resp)
+                        baseline_response_data_keys = sorted([str(k) for k in raw_baseline_resp.keys()])
+                    else:
+                        baseline_response_text = str(raw_baseline_resp or "")
+                        baseline_response_data_keys = (
+                            [f"<{type(raw_baseline_resp).__name__}>"] if raw_baseline_resp is not None else []
+                        )
+                except Exception:
+                    baseline_response_text = ""
+                    baseline_response_data_keys = []
+                baseline_len = len(baseline_response_text.strip()) if baseline_response_text else None
+                baseline_response_preview = str(baseline_response_text or "").strip()[:2000]
+                try:
+                    if raw_baseline_resp is None:
+                        baseline_response_preview_status = "not_captured"
+                        baseline_response_capture_reason = "snapshot.response is null"
+                    elif isinstance(raw_baseline_resp, str) and not raw_baseline_resp.strip():
+                        baseline_response_preview_status = "empty"
+                        baseline_response_capture_reason = "snapshot.response is empty string"
+                    elif isinstance(raw_baseline_resp, dict) and not str(baseline_response_preview or "").strip():
+                        baseline_response_preview_status = "empty"
+                        baseline_response_capture_reason = "snapshot.response extracted to empty text"
+                    elif str(baseline_response_preview or "").strip():
+                        baseline_response_preview_status = "ok"
+                    else:
+                        baseline_response_preview_status = "unknown"
+                except Exception:
+                    baseline_response_preview_status = "unknown"
+
+                try:
+                    status_code_val = res.get("status_code")
+                    status_code_int = int(status_code_val) if isinstance(status_code_val, int) else None
+                except Exception:
+                    status_code_int = None
+                try:
+                    latency_val = res.get("latency_ms")
+                    latency_int = int(latency_val) if isinstance(latency_val, (int, float)) else None
+                except Exception:
+                    latency_int = None
+
+                signals_checks: Dict[str, str] = {}
+                try:
+                    signals_checks = evaluate_one_snapshot_at_save(
+                        response_text=candidate_response_preview or "",
+                        latency_ms=latency_int,
+                        status_code=status_code_int,
+                        eval_config=eval_config_signals,
+                        baseline_len=baseline_len,
+                    )
+                except Exception:
+                    signals_checks = {}
+                # Rich "why" details for UI: include thresholds + measured values per check.
+                signals_details: Dict[str, Any] = {}
+                try:
+                    cfg = normalize_eval_config(eval_config_signals or {})
+                    text_trimmed = str(candidate_response_preview or "").strip()
+                    actual_chars = len(text_trimmed)
+                    # empty
+                    if "empty" in (signals_checks or {}):
+                        signals_details["empty"] = {
+                            "status": signals_checks.get("empty"),
+                            "min_chars": cfg.get("empty", {}).get("min_chars"),
+                            "actual_chars": actual_chars,
+                        }
+                    # latency
+                    if "latency" in (signals_checks or {}):
+                        signals_details["latency"] = {
+                            "status": signals_checks.get("latency"),
+                            "fail_ms": cfg.get("latency", {}).get("fail_ms"),
+                            "actual_ms": latency_int,
+                        }
+                    # status_code
+                    if "status_code" in (signals_checks or {}):
+                        signals_details["status_code"] = {
+                            "status": signals_checks.get("status_code"),
+                            "fail_from": cfg.get("status_code", {}).get("fail_from"),
+                            "actual_status": status_code_int,
+                        }
+                    # refusal (best-effort heuristic; aligns with live_eval_service patterns)
+                    if "refusal" in (signals_checks or {}):
+                        t = text_trimmed.lower()
+                        refusal_markers = [
+                            "i cannot",
+                            "i can't",
+                            "unable to",
+                            "as an ai",
+                            "sorry, but i",
+                            "apologize",
+                        ]
+                        signals_details["refusal"] = {
+                            "status": signals_checks.get("refusal"),
+                            "matched": any(m in t for m in refusal_markers) if t else None,
+                        }
+                    # json
+                    if "json" in (signals_checks or {}):
+                        mode = (cfg.get("json") or {}).get("mode")
+                        looks_like_json = (
+                            (text_trimmed.startswith("{") and text_trimmed.endswith("}"))
+                            or (text_trimmed.startswith("[") and text_trimmed.endswith("]"))
+                        )
+                        parsed_ok: Optional[bool] = None
+                        if mode != "off" and (mode == "always" or looks_like_json):
+                            try:
+                                json.loads(text_trimmed)
+                                parsed_ok = True
+                            except Exception:
+                                parsed_ok = False
+                        signals_details["json"] = {
+                            "status": signals_checks.get("json"),
+                            "mode": mode,
+                            "checked": (mode != "off") and (mode == "always" or looks_like_json),
+                            "parsed_ok": parsed_ok,
+                        }
+                    # length drift
+                    if "length" in (signals_checks or {}):
+                        fail_ratio = (cfg.get("length") or {}).get("fail_ratio")
+                        ratio_val: Optional[float] = None
+                        if baseline_len and baseline_len > 0 and actual_chars > 0:
+                            ratio_val = abs(actual_chars - baseline_len) / float(baseline_len)
+                        signals_details["length"] = {
+                            "status": signals_checks.get("length"),
+                            "fail_ratio": fail_ratio,
+                            "baseline_len": baseline_len,
+                            "actual_chars": actual_chars,
+                            "ratio": ratio_val,
+                        }
+                    # repetition (max repeated line count)
+                    if "repetition" in (signals_checks or {}):
+                        lines = [ln.strip() for ln in text_trimmed.split("\n") if len(ln.strip()) >= 4]
+                        counts: Dict[str, int] = {}
+                        max_repeat = 0
+                        for ln in lines:
+                            counts[ln] = counts.get(ln, 0) + 1
+                            if counts[ln] > max_repeat:
+                                max_repeat = counts[ln]
+                        signals_details["repetition"] = {
+                            "status": signals_checks.get("repetition"),
+                            "fail_line_repeats": (cfg.get("repetition") or {}).get("fail_line_repeats"),
+                            "max_line_repeats": max_repeat,
+                        }
+                    # required/format/leakage/tool: keep minimal structure so UI can render status even if no details
+                    for k in ["required", "format", "leakage", "tool"]:
+                        if k in (signals_checks or {}):
+                            signals_details[k] = {"status": signals_checks.get(k)}
+                except Exception:
+                    signals_details = {}
+                failed_signals_local = [
+                    k
+                    for k, v in (signals_checks or {}).items()
+                    if str(v).strip().lower() == "fail"
+                ]
+                signals_obj = {
+                    "checks": signals_checks or {},
+                    "failed": failed_signals_local,
+                    "config_version": eval_config_version,
+                    "details": signals_details or {},
+                }
 
                 run_tool_summary = response_to_canonical_tool_calls_summary(
                     res.get("response_data") or {}, res.get("replay_provider")
                 )
+                tool_evidence = _build_stage1_tool_evidence(run_tool_summary, replay_result=res)
+                tool_execution_summary = _build_stage1_tool_execution_summary(tool_evidence)
+                tool_loop_status = str(res.get("tool_loop_status") or "").strip().lower()
+                tool_grounding_heuristic = _assess_tool_grounding(
+                    tool_evidence=tool_evidence,
+                    candidate_response_preview=candidate_response_preview,
+                    tool_loop_status=tool_loop_status,
+                )
+                tool_grounding_semantic: Optional[Dict[str, Any]] = None
+                if str(tool_grounding_heuristic.get("status") or "").strip().lower() == "fail":
+                    tool_grounding_semantic = await _run_semantic_tool_grounding_judge(
+                        tool_evidence=tool_evidence,
+                        candidate_response_preview=candidate_response_preview,
+                        project_id=project_id,
+                        agent_id=getattr(snapshot, "agent_id", None),
+                        db=db,
+                    )
+                tool_grounding = _merge_tool_grounding_with_semantic(
+                    tool_grounding_heuristic,
+                    tool_grounding_semantic,
+                )
+                tool_grounding_status = str(tool_grounding.get("status") or "").strip().lower()
+                signals_obj["checks"]["tool_grounding"] = tool_grounding_status
+                signals_obj["details"]["tool_grounding"] = tool_grounding
+                if tool_grounding_status == "fail" and "tool_grounding" not in signals_obj["failed"]:
+                    signals_obj["failed"].append("tool_grounding")
                 baseline_seq = _baseline_sequence_for_snapshot(snapshot)
                 candidate_seq = tool_calls_summary_to_sequence(run_tool_summary)
                 behavior_diff = compute_behavior_diff(baseline_seq, candidate_seq).to_dict()
@@ -752,6 +2198,23 @@ async def _run_release_gate(
                     reasons = replay_error_msgs or ["Replay request failed."]
                     replay_error_code = str(res.get("error_code") or "").strip() or None
                     replay_provider = str(res.get("replay_provider") or "").strip() or None
+                    if replay_error_code:
+                        ops_alerting.observe_provider_error(
+                            project_id=project_id,
+                            provider=replay_provider or _resolve_snapshot_provider(snapshot) or "unknown",
+                            error_code=replay_error_code,
+                            error_summary=str(res.get("error") or "").strip()[:180],
+                        )
+                    provider_error_preview = _safe_preview_json(res.get("response_data"))
+                    provider_error_obj = {
+                        "provider": replay_provider,
+                        "status_code": res.get("status_code"),
+                        "error_code": res.get("error_code"),
+                        "error_type": res.get("error_type"),
+                        "message": res.get("error"),
+                        "response_preview": provider_error_preview,
+                        "response_data_keys": response_data_keys,
+                    }
                     attempts_by_snapshot[snapshot.id].append(
                         {
                             "run_index": run_idx + 1,
@@ -760,8 +2223,6 @@ async def _run_release_gate(
                             "failure_reasons": reasons,
                             "violations": [],
                             "summary": {},
-                            "eval_elements_passed": [],
-                            "eval_elements_failed": [],
                             "replay": {
                                 "attempted": 1,
                                 "succeeded": 0,
@@ -770,15 +2231,60 @@ async def _run_release_gate(
                                 "failed_snapshot_ids": [snapshot.id],
                                 "error_messages": replay_error_msgs,
                                 "error_codes": [replay_error_code] if replay_error_code else [],
+                                "provider_error": provider_error_obj,
                                 "missing_provider_keys": (
                                     [replay_provider]
                                     if replay_error_code == "missing_api_key" and replay_provider
                                     else []
                                 ),
+                                "tool_loop_status": str(res.get("tool_loop_status") or "").strip() or None,
+                                "tool_loop_rounds": (
+                                    int(res.get("tool_loop_rounds"))
+                                    if isinstance(res.get("tool_loop_rounds"), (int, float))
+                                    else 0
+                                ),
+                                "tool_loop_events": (
+                                    res.get("tool_loop_events")
+                                    if isinstance(res.get("tool_loop_events"), list)
+                                    else []
+                                ),
                             },
-                            "has_tool_calls": len(run_tool_summary) > 0,
-                            "tool_calls_summary": run_tool_summary,
                             "behavior_diff": behavior_diff,
+                            "signals": signals_obj,
+                            "tool_execution_summary": tool_execution_summary,
+                            "tool_evidence": tool_evidence,
+                            "tool_replay_status": tool_execution_summary.get("status"),
+                            "final_response_confidence_stage1": tool_execution_summary.get(
+                                "confidence"
+                            ),
+                            "baseline_snapshot": {
+                                "response_preview": baseline_response_preview,
+                                "response_data_keys": baseline_response_data_keys,
+                                "response_preview_status": baseline_response_preview_status,
+                                "capture_reason": baseline_response_capture_reason,
+                            },
+                            "candidate_snapshot": {
+                                "provider": replay_provider,
+                                "model": str(res.get("replay_model") or snapshot.model or "").strip()
+                                or None,
+                                "status_code": res.get("status_code"),
+                                "input_text": baseline_input_text,
+                                "response_preview": candidate_response_preview
+                                or str(res.get("error") or "").strip(),
+                                "response_data_keys": response_data_keys,
+                                "response_preview_status": response_preview_status,
+                                "response_extract_path": candidate_extract_path,
+                                "response_extract_reason": candidate_extract_reason,
+                                "tool_calls_summary": run_tool_summary,
+                                "request_fallback_stage": (
+                                    str(res.get("request_fallback_stage") or "").strip() or None
+                                ),
+                                "request_fallback_attempts": (
+                                    res.get("request_fallback_attempts")
+                                    if isinstance(res.get("request_fallback_attempts"), list)
+                                    else []
+                                ),
+                            },
                         }
                     )
                     all_reasons.extend(reasons)
@@ -792,6 +2298,7 @@ async def _run_release_gate(
                         if replay_error_msgs
                         else "Replay produced no candidate steps"
                     )
+                    provider_error_preview = _safe_preview_json(res.get("response_data"))
                     attempts_by_snapshot[snapshot.id].append(
                         {
                             "run_index": run_idx + 1,
@@ -800,8 +2307,6 @@ async def _run_release_gate(
                             "failure_reasons": [reason],
                             "violations": [],
                             "summary": {},
-                            "eval_elements_passed": [],
-                            "eval_elements_failed": [],
                             "replay": {
                                 "attempted": 1,
                                 "succeeded": 0,
@@ -810,36 +2315,99 @@ async def _run_release_gate(
                                 "failed_snapshot_ids": [snapshot.id],
                                 "error_messages": replay_error_msgs,
                                 "error_codes": [],
+                                "provider_error": {
+                                    "provider": str(res.get("replay_provider") or "").strip() or None,
+                                    "status_code": res.get("status_code"),
+                                    "error_code": res.get("error_code"),
+                                    "error_type": res.get("error_type"),
+                                    "message": res.get("error"),
+                                    "response_preview": provider_error_preview,
+                                    "response_data_keys": response_data_keys,
+                                },
                                 "missing_provider_keys": [],
+                                "tool_loop_status": str(res.get("tool_loop_status") or "").strip() or None,
+                                "tool_loop_rounds": (
+                                    int(res.get("tool_loop_rounds"))
+                                    if isinstance(res.get("tool_loop_rounds"), (int, float))
+                                    else 0
+                                ),
+                                "tool_loop_events": (
+                                    res.get("tool_loop_events")
+                                    if isinstance(res.get("tool_loop_events"), list)
+                                    else []
+                                ),
                             },
-                            "has_tool_calls": len(run_tool_summary) > 0,
-                            "tool_calls_summary": run_tool_summary,
                             "behavior_diff": behavior_diff,
+                            "signals": signals_obj,
+                            "tool_execution_summary": tool_execution_summary,
+                            "tool_evidence": tool_evidence,
+                            "tool_replay_status": tool_execution_summary.get("status"),
+                            "final_response_confidence_stage1": tool_execution_summary.get(
+                                "confidence"
+                            ),
+                            "baseline_snapshot": {
+                                "response_preview": baseline_response_preview,
+                                "response_data_keys": baseline_response_data_keys,
+                                "response_preview_status": baseline_response_preview_status,
+                                "capture_reason": baseline_response_capture_reason,
+                            },
+                            "candidate_snapshot": {
+                                "provider": str(res.get("replay_provider") or "").strip() or None,
+                                "model": str(res.get("replay_model") or snapshot.model or "").strip()
+                                or None,
+                                "status_code": res.get("status_code"),
+                                "input_text": baseline_input_text,
+                                "response_preview": candidate_response_preview or reason,
+                                "response_data_keys": response_data_keys,
+                                "response_preview_status": response_preview_status,
+                                "response_extract_path": candidate_extract_path,
+                                "response_extract_reason": candidate_extract_reason,
+                                "tool_calls_summary": run_tool_summary,
+                                "request_fallback_stage": (
+                                    str(res.get("request_fallback_stage") or "").strip() or None
+                                ),
+                                "request_fallback_attempts": (
+                                    res.get("request_fallback_attempts")
+                                    if isinstance(res.get("request_fallback_attempts"), list)
+                                    else []
+                                ),
+                            },
                         }
                     )
                     all_reasons.append(reason)
                     continue
 
-                candidate_rules, candidate_policy_resolution = _resolve_effective_rules(
+                candidate_rules, candidate_policy_resolution = resolve_effective_rules(
                     rules, candidate_steps
                 )
-                _candidate_status, candidate_summary, candidate_violations = _run_behavior_validation(
+                _candidate_status, candidate_summary, candidate_violations = run_behavior_validation(
                     candidate_rules, candidate_steps
                 )
+                candidate_tool_result_steps = [
+                    st for st in candidate_steps if str(st.get("step_type") or "").strip() == "tool_result"
+                ]
                 candidate_summary["policy_resolution"] = candidate_policy_resolution
                 candidate_summary["ruleset_hash"] = _build_ruleset_hash(candidate_rules)
+                candidate_summary["tool_result_count"] = len(candidate_tool_result_steps)
+                # Keep rule snapshot lightweight for Release Gate jobs.
+                # Full rule definitions can be fetched from Behavior APIs when needed.
                 candidate_summary["rule_snapshot"] = [
-                    {"id": r.id, "revision": _iso(r.updated_at), "rule_json": r.rule_json or {}}
+                    {"id": r.id, "revision": _iso(r.updated_at)}
                     for r in candidate_rules
                 ]
 
-                run_pass = len(candidate_violations) == 0
-                reasons = [f"{len(candidate_violations)} eval element(s) failed"] if not run_pass else []
+                policy_failed = len(candidate_violations) > 0
+                signals_failed = len(failed_signals_local) > 0
+                run_pass = (not policy_failed) and (not signals_failed)
+                reasons: List[str] = []
+                if policy_failed:
+                    reasons.append(f"{len(candidate_violations)} policy rule(s) failed")
+                if signals_failed:
+                    reasons.append(f"{len(failed_signals_local)} signal check(s) failed")
                 if reasons:
                     all_reasons.extend(reasons)
 
                 enriched_violations = _append_violation_context(candidate_violations, candidate_steps)
-                tr_passed, tr_failed = _eval_elements_passed_failed(candidate_rules, candidate_violations)
                 avg_latency_ms = (
                     float(res.get("latency_ms"))
                     if res.get("latency_ms") is not None
@@ -853,8 +2421,6 @@ async def _run_release_gate(
                         "failure_reasons": reasons,
                         "violations": enriched_violations,
                         "summary": candidate_summary,
-                        "eval_elements_passed": tr_passed,
-                        "eval_elements_failed": tr_failed,
                         "replay": {
                             "attempted": 1,
                             "succeeded": 1,
@@ -864,10 +2430,64 @@ async def _run_release_gate(
                             "error_messages": [],
                             "error_codes": [],
                             "missing_provider_keys": [],
+                            "tool_loop_status": str(res.get("tool_loop_status") or "").strip() or None,
+                            "tool_loop_rounds": (
+                                int(res.get("tool_loop_rounds"))
+                                if isinstance(res.get("tool_loop_rounds"), (int, float))
+                                else 0
+                            ),
+                            "tool_loop_events": (
+                                res.get("tool_loop_events")
+                                if isinstance(res.get("tool_loop_events"), list)
+                                else []
+                            ),
                         },
-                        "has_tool_calls": len(run_tool_summary) > 0,
-                        "tool_calls_summary": run_tool_summary,
                         "behavior_diff": behavior_diff,
+                        "signals": signals_obj,
+                        "tool_execution_summary": tool_execution_summary,
+                        "tool_evidence": tool_evidence,
+                        "tool_replay_status": tool_execution_summary.get("status"),
+                        "final_response_confidence_stage1": tool_execution_summary.get(
+                            "confidence"
+                        ),
+                        "baseline_snapshot": {
+                            "response_preview": baseline_response_preview,
+                            "response_data_keys": baseline_response_data_keys,
+                            "response_preview_status": baseline_response_preview_status,
+                            "capture_reason": baseline_response_capture_reason,
+                        },
+                        "candidate_snapshot": {
+                            "provider": str(res.get("replay_provider") or "").strip() or None,
+                            "model": str(res.get("replay_model") or snapshot.model or "").strip()
+                            or None,
+                            "status_code": res.get("status_code"),
+                            "input_text": baseline_input_text,
+                            "response_preview": candidate_response_preview,
+                            "response_data_keys": response_data_keys,
+                            "response_preview_status": response_preview_status,
+                            "response_extract_path": candidate_extract_path,
+                            "response_extract_reason": candidate_extract_reason,
+                            "tool_calls_summary": run_tool_summary,
+                            "request_fallback_stage": (
+                                str(res.get("request_fallback_stage") or "").strip() or None
+                            ),
+                            "request_fallback_attempts": (
+                                res.get("request_fallback_attempts")
+                                if isinstance(res.get("request_fallback_attempts"), list)
+                                else []
+                            ),
+                            "tool_loop_status": str(res.get("tool_loop_status") or "").strip() or None,
+                            "tool_loop_rounds": (
+                                int(res.get("tool_loop_rounds"))
+                                if isinstance(res.get("tool_loop_rounds"), (int, float))
+                                else 0
+                            ),
+                            "tool_loop_events": (
+                                res.get("tool_loop_events")
+                                if isinstance(res.get("tool_loop_events"), list)
+                                else []
+                            ),
+                        },
                     }
                 )
 
@@ -901,27 +2521,14 @@ async def _run_release_gate(
             latency_max_ms = max(latencies) if latencies else None
 
             failed_rule_counts: Dict[str, int] = {}
-            passed_rule_ids: Set[str] = set()
             failed_reasons: List[str] = []
             replay_error_messages: List[str] = []
             replay_error_codes: List[str] = []
             missing_provider_keys: List[str] = []
-            tool_summary_agg: List[Dict[str, Any]] = []
             all_violations: List[Dict[str, Any]] = []
             error_attempt_count = 0
 
             for a in attempts:
-                for item in a.get("eval_elements_passed") or []:
-                    rid = str(item.get("rule_id") or "")
-                    if rid:
-                        passed_rule_ids.add(rid)
-                for item in a.get("eval_elements_failed") or []:
-                    rid = str(item.get("rule_id") or "")
-                    if not rid:
-                        continue
-                    failed_rule_counts[rid] = failed_rule_counts.get(rid, 0) + int(
-                        item.get("violation_count") or 1
-                    )
                 for msg in a.get("failure_reasons") or []:
                     if msg and msg not in failed_reasons:
                         failed_reasons.append(str(msg))
@@ -938,10 +2545,13 @@ async def _run_release_gate(
                         missing_provider_keys.append(provider_str)
                 if int((a.get("replay") or {}).get("failed") or 0) > 0:
                     error_attempt_count += 1
-                for tc in a.get("tool_calls_summary") or []:
-                    if tc not in tool_summary_agg:
-                        tool_summary_agg.append(tc)
                 all_violations.extend(a.get("violations") or [])
+
+            for violation in all_violations:
+                rid = str(violation.get("rule_id") or "").strip()
+                if not rid:
+                    continue
+                failed_rule_counts[rid] = failed_rule_counts.get(rid, 0) + 1
 
             eval_elements_failed = [
                 {
@@ -958,12 +2568,15 @@ async def _run_release_gate(
                 }
                 for rid, count in sorted(failed_rule_counts.items())
             ]
-            eval_elements_failed_ids = {item["rule_id"] for item in eval_elements_failed}
-            eval_elements_passed = [
-                {"rule_id": rid, "rule_name": rid}
-                for rid in sorted(passed_rule_ids - eval_elements_failed_ids)
-            ]
             pass_ratio = passed_attempts / total_attempts if total_attempts else 0.0
+
+            _ctx_layers: Dict[str, Any] = {
+                "A_captured_customer_material": _build_captured_customer_material_from_snapshot(
+                    snapshot
+                ),
+                "B_rg_injection": _build_rg_injection_report(tool_context_payload, snapshot.id),
+            }
+            _ctx_layers.update(_aggregate_tool_flow_from_attempts(attempts))
 
             case_results.append(
                 {
@@ -972,6 +2585,7 @@ async def _run_release_gate(
                     "snapshot_id": snapshot.id,
                     "pass": case_status == "pass",
                     "case_status": case_status,
+                    "context": _ctx_layers,
                     "failure_reasons": failed_reasons if case_status != "pass" else [],
                     "violation_count_delta": 0,
                     "severity_delta": {"critical": 0, "high": 0, "medium": 0, "low": 0},
@@ -985,7 +2599,6 @@ async def _run_release_gate(
                         "latency_max_ms": latency_max_ms,
                     },
                     "violations": all_violations,
-                    "eval_elements_passed": eval_elements_passed,
                     "eval_elements_failed": eval_elements_failed,
                     "top_regressed_rules": [],
                     "first_broken_step": None,
@@ -999,8 +2612,6 @@ async def _run_release_gate(
                         "error_codes": replay_error_codes,
                         "missing_provider_keys": missing_provider_keys,
                     },
-                    "has_tool_calls": len(tool_summary_agg) > 0,
-                    "tool_calls_summary": tool_summary_agg[:20],
                     "attempts": attempts,
                 }
             )
@@ -1019,6 +2630,10 @@ async def _run_release_gate(
         ratio_band = _ratio_band(fail_rate)
         gate_pass = fail_rate <= payload.fail_rate_max and flaky_rate <= payload.flaky_rate_max
 
+        # If cancellation was requested mid-run, do not persist a report.
+        if cancel_check and cancel_check():
+            raise ReleaseGateCancelled()
+
         primary_case = next((r for r in case_results if r.get("case_status") != "pass"), case_results[0])
         primary_summary = dict(primary_case.get("summary", {}))
         primary_summary["target"] = {
@@ -1027,12 +2642,25 @@ async def _run_release_gate(
             "baseline_trace_id": baseline_trace_id,
             "snapshot_id": primary_case.get("snapshot_id"),
         }
+        total_wall_ms = int((time.monotonic() - perf_started) * 1000)
+        avg_attempt_wall_ms = (
+            (sum(int(a.get("batch_wall_ms") or 0) for a in perf_attempts) / len(perf_attempts))
+            if perf_attempts
+            else None
+        )
+        total_attempts = sum(len(c.get("attempts") or []) for c in case_results)
+        passed_attempts = sum(
+            sum(1 for a in (c.get("attempts") or []) if a.get("pass")) for c in case_results
+        )
+        replay_request_meta = _build_replay_request_meta(snapshots, payload)
         primary_summary["release_gate"] = {
             "mode": "replay_test",
             "repeat_runs": payload.repeat_runs,
             "total_inputs": total_cases,
             "failed_inputs": failed_cases,
             "flaky_inputs": flaky_cases,
+            "passed_attempts": passed_attempts,
+            "total_attempts": total_attempts,
             "fail_rate": round(fail_rate, 4),
             "flaky_rate": round(flaky_rate, 4),
             "ratio_band": ratio_band,
@@ -1040,6 +2668,16 @@ async def _run_release_gate(
                 "fail_rate_max": payload.fail_rate_max,
                 "flaky_rate_max": payload.flaky_rate_max,
             },
+            "perf": {
+                "total_wall_ms": total_wall_ms,
+                "avg_attempt_wall_ms": avg_attempt_wall_ms,
+            },
+            "experiment": {
+                "tool_context": tool_context_payload,
+                "storage_policy": {"full_text_in_report": True},
+            },
+            "case_results": case_results,
+            "replay_request_meta": replay_request_meta,
         }
         report = BehaviorReport(
             project_id=project_id,
@@ -1074,10 +2712,11 @@ async def _run_release_gate(
         )
         failed_signals = list(
             dict.fromkeys(
-                v.get("rule_id")
+                sig
                 for run in case_results
-                for v in (run.get("violations") or [])
-                if v.get("rule_id")
+                for a in (run.get("attempts") or [])
+                for sig in (((a.get("signals") or {}).get("failed")) or [])
+                if sig
             )
         )
 
@@ -1110,9 +2749,18 @@ async def _run_release_gate(
             "flaky_inputs": flaky_cases,
             "total_inputs": total_cases,
             "repeat_runs": payload.repeat_runs,
+            "perf": {
+                "total_wall_ms": total_wall_ms,
+                "avg_attempt_wall_ms": avg_attempt_wall_ms,
+                "attempts": perf_attempts,
+            },
             "replay_error_codes": replay_error_codes_global,
             "missing_provider_keys": missing_provider_keys_global,
-            "run_results": case_results,
+            "experiment": {
+                "tool_context": tool_context_payload,
+                "storage_policy": {"full_text_in_report": True},
+            },
+            "replay_request_meta": replay_request_meta,
             "case_results": case_results,
             "evidence_pack": {
                 "top_regressed_rules": [],
@@ -1138,33 +2786,77 @@ def list_release_gate_agents(
     current_user: User = Depends(get_current_user),
 ):
     """List agents (nodes) for Release Gate dropdown: agent_id and display_name."""
-    check_project_access(project_id, current_user, db)
+    project = check_project_access(project_id, current_user, db)
     rows = (
         db.query(Snapshot.agent_id, func.max(Snapshot.created_at).label("last_seen"))
-        .filter(Snapshot.project_id == project_id, Snapshot.agent_id.isnot(None))
+        .filter(
+            Snapshot.project_id == project_id,
+            Snapshot.agent_id.isnot(None),
+            Snapshot.is_deleted.is_(False),
+        )
         .group_by(Snapshot.agent_id)
         .order_by(desc("last_seen"))
         .limit(limit)
         .all()
     )
-    agent_ids = [r.agent_id for r in rows if r.agent_id]
-    if not agent_ids:
-        return {"items": []}
-    settings = (
-        db.query(AgentDisplaySetting)
-        .filter(
-            AgentDisplaySetting.project_id == project_id,
-            AgentDisplaySetting.system_prompt_hash.in_(agent_ids),
-        )
-        .all()
+    snapshot_agent_ids = [r.agent_id for r in rows if r.agent_id]
+    visibility = build_agent_visibility_context(
+        project_id=project_id,
+        db=db,
+        seed_agent_ids=snapshot_agent_ids,
+        project=project,
     )
-    settings_map = {s.system_prompt_hash: s for s in settings}
+
+    # Start with agents that have recent snapshots
+    ordered_agent_ids: List[str] = list(snapshot_agent_ids)
+    seen = set(ordered_agent_ids)
+
+    # Then include agents from blueprint (canvas) so nodes without recent logs still appear
+    for aid in visibility.blueprint_map.keys():
+        if aid not in seen:
+            ordered_agent_ids.append(aid)
+            seen.add(aid)
+
+    # Then include agents detected by Sentinel (drift) cache
+    for node in visibility.sentinel_agents:
+        sid = str(node.get("id") or "").strip() if isinstance(node, dict) else ""
+        if sid and sid not in seen:
+            ordered_agent_ids.append(sid)
+            seen.add(sid)
+
+    # Finally include agents that only exist in AgentDisplaySetting (display settings only)
+    for aid in visibility.settings_map.keys():
+        if aid and aid not in seen:
+            ordered_agent_ids.append(aid)
+            seen.add(aid)
+
     items = []
-    for aid in agent_ids:
-        s = settings_map.get(aid)
-        display_name = (s.display_name if s and s.display_name else (aid or "Agent"))
+    for aid in ordered_agent_ids:
+        if is_agent_hidden(visibility.settings_map, aid):
+            continue
+        s = visibility.settings_map.get(aid)
+        blueprint_node = visibility.blueprint_map.get(aid)
+        blueprint_label = (
+            blueprint_node.get("data", {}).get("label")
+            if isinstance(blueprint_node, dict)
+            else None
+        )
+        display_name = blueprint_label or (s.display_name if s and s.display_name else (aid or "Agent"))
         items.append({"agent_id": aid, "display_name": display_name})
+        if len(items) >= limit:
+            break
     return {"items": items}
+
+
+@router.get("/projects/{project_id}/release-gate/core-models")
+def get_release_gate_core_models(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return curated core model presets used by Release Gate UI."""
+    check_project_access(project_id, current_user, db)
+    return {"providers": CORE_REPLAY_MODELS}
 
 
 @router.get("/projects/{project_id}/release-gate/agents/{agent_id}/recent-snapshots")
@@ -1182,6 +2874,7 @@ def list_recent_snapshots_for_agent(
         .filter(
             Snapshot.project_id == project_id,
             Snapshot.agent_id == agent_id,
+            Snapshot.is_deleted.is_(False),
         )
         .scalar()
         or 0
@@ -1206,6 +2899,7 @@ def list_recent_snapshots_for_agent(
         .filter(
             Snapshot.project_id == project_id,
             Snapshot.agent_id == agent_id,
+            Snapshot.is_deleted.is_(False),
         )
         .order_by(Snapshot.created_at.desc())
         .limit(limit)
@@ -1246,10 +2940,141 @@ async def validate_release_gate(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="agent_id is required when use_recent_snapshots is True",
         )
-    allowed, err_msg = check_guard_credits_limit(db, current_user.id, getattr(current_user, "is_superuser", False))
-    if not allowed:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=err_msg)
-    return await _run_release_gate(project_id, payload, db)
+    _enforce_platform_replay_credit_limit(payload, db, current_user)
+    try:
+        result = await _run_release_gate(project_id, payload, db, current_user)
+        passed = bool((result or {}).get("pass"))
+        reason = ""
+        if not passed:
+            reasons = (result or {}).get("failure_reasons") or []
+            if isinstance(reasons, list) and reasons:
+                reason = str(reasons[0])
+            else:
+                reason = str((result or {}).get("summary") or "release gate failed")
+        ev_rows, miss_rows = _tool_evidence_stats_from_gate_result(result if isinstance(result, dict) else None)
+        if ev_rows > 0:
+            logger.info(
+                "release_gate_tool_evidence_snapshot project_id=%s evidence_rows=%s missing_rows=%s",
+                project_id,
+                ev_rows,
+                miss_rows,
+            )
+        ops_alerting.observe_release_gate_tool_missing_surge(
+            project_id, evidence_rows=ev_rows, missing_rows=miss_rows
+        )
+        ops_alerting.observe_release_gate_result(project_id=project_id, success=passed, error_summary=reason)
+        return result
+    except HTTPException:
+        # Client/business errors are expected in some workflows, so no ops alert here.
+        raise
+    except Exception as exc:
+        ops_alerting.observe_release_gate_result(
+            project_id=project_id,
+            success=False,
+            error_summary=f"exception:{type(exc).__name__}",
+        )
+        raise
+
+
+@router.post(
+    "/projects/{project_id}/release-gate/validate-async",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=ReleaseGateJobCreateResponse,
+)
+async def validate_release_gate_async(
+    project_id: int,
+    payload: ReleaseGateValidateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    check_project_access(project_id, current_user, db)
+    if payload.use_recent_snapshots and not payload.agent_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="agent_id is required when use_recent_snapshots is True",
+        )
+    _enforce_platform_replay_credit_limit(payload, db, current_user)
+
+    user_id = int(getattr(current_user, "id"))
+    active_job = _get_active_release_gate_job(db, project_id=project_id, user_id=user_id)
+    if active_job is not None:
+        return ReleaseGateJobCreateResponse(job=_job_to_out(active_job))
+
+    job = ReleaseGateJob(
+        project_id=project_id,
+        user_id=user_id,
+        status="queued",
+        progress_done=0,
+        progress_total=int(payload.repeat_runs or 0) or None,
+        progress_phase="replay",
+        request_json=_sanitize_release_gate_job_request(payload),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return ReleaseGateJobCreateResponse(job=_job_to_out(job))
+
+
+@router.get(
+    "/projects/{project_id}/release-gate/jobs/{job_id}",
+    response_model=ReleaseGateJobGetResponse,
+)
+async def get_release_gate_job(
+    project_id: int,
+    job_id: str,
+    include_result: int = Query(0, ge=0, le=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    check_project_access(project_id, current_user, db)
+    job = (
+        db.query(ReleaseGateJob)
+        .filter(ReleaseGateJob.project_id == project_id, ReleaseGateJob.id == job_id)
+        .first()
+    )
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release Gate job not found")
+    result = job.result_json if include_result and isinstance(job.result_json, dict) else None
+    return ReleaseGateJobGetResponse(job=_job_to_out(job), result=result)
+
+
+@router.post(
+    "/projects/{project_id}/release-gate/jobs/{job_id}/cancel",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=ReleaseGateJobCreateResponse,
+)
+async def cancel_release_gate_job(
+    project_id: int,
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    check_project_access(project_id, current_user, db)
+    job = (
+        db.query(ReleaseGateJob)
+        .filter(ReleaseGateJob.project_id == project_id, ReleaseGateJob.id == job_id)
+        .first()
+    )
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release Gate job not found")
+    current_status = str(getattr(job, "status", "") or "").lower()
+    if current_status not in {"succeeded", "failed", "canceled"}:
+        now = datetime.now(timezone.utc)
+        if getattr(job, "cancel_requested_at", None) is None:
+            job.cancel_requested_at = now
+        # If the job has not started yet, we can finalize cancel immediately.
+        if current_status == "queued":
+            job.status = "canceled"
+            job.finished_at = now
+            job.progress_phase = "canceled"
+        else:
+            # For running jobs, keep status as running until the worker acknowledges,
+            # but expose cancel_requested_at so UI can show "Canceling…".
+            job.progress_phase = "cancel_requested"
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+    return ReleaseGateJobCreateResponse(job=_job_to_out(job))
 
 
 @router.post("/projects/{project_id}/release-gate/webhook")
@@ -1260,10 +3085,39 @@ async def release_gate_webhook(
     current_user: User = Depends(get_user_from_api_key),
 ):
     check_project_access(project_id, current_user, db)
-    allowed, err_msg = check_guard_credits_limit(db, current_user.id, getattr(current_user, "is_superuser", False))
-    if not allowed:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=err_msg)
-    return await _run_release_gate(project_id, payload, db)
+    _enforce_platform_replay_credit_limit(payload, db, current_user)
+    try:
+        result = await _run_release_gate(project_id, payload, db, current_user)
+        passed = bool((result or {}).get("pass"))
+        reason = ""
+        if not passed:
+            reasons = (result or {}).get("failure_reasons") or []
+            if isinstance(reasons, list) and reasons:
+                reason = str(reasons[0])
+            else:
+                reason = str((result or {}).get("summary") or "release gate failed")
+        ev_rows, miss_rows = _tool_evidence_stats_from_gate_result(result if isinstance(result, dict) else None)
+        if ev_rows > 0:
+            logger.info(
+                "release_gate_tool_evidence_snapshot project_id=%s evidence_rows=%s missing_rows=%s",
+                project_id,
+                ev_rows,
+                miss_rows,
+            )
+        ops_alerting.observe_release_gate_tool_missing_surge(
+            project_id, evidence_rows=ev_rows, missing_rows=miss_rows
+        )
+        ops_alerting.observe_release_gate_result(project_id=project_id, success=passed, error_summary=reason)
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        ops_alerting.observe_release_gate_result(
+            project_id=project_id,
+            success=False,
+            error_summary=f"exception:{type(exc).__name__}",
+        )
+        raise
 
 
 @router.get("/projects/{project_id}/release-gate/suggest-baseline")
@@ -1280,7 +3134,11 @@ async def suggest_release_gate_baseline(
     if not effective_agent:
         latest_snapshot = (
             db.query(Snapshot)
-            .filter(Snapshot.project_id == project_id, Snapshot.trace_id == trace_id)
+            .filter(
+                Snapshot.project_id == project_id,
+                Snapshot.trace_id == trace_id,
+                Snapshot.is_deleted.is_(False),
+            )
             .order_by(Snapshot.created_at.desc())
             .first()
         )
@@ -1324,6 +3182,7 @@ async def suggest_release_gate_baseline(
                 Snapshot.agent_id == effective_agent,
                 Snapshot.trace_id.isnot(None),
                 Snapshot.trace_id != trace_id,
+                Snapshot.is_deleted.is_(False),
             )
             .order_by(Snapshot.created_at.desc())
             .limit(300)
@@ -1350,6 +3209,8 @@ async def list_release_gate_history(
     project_id: int,
     status_filter: Optional[str] = Query(None, alias="status", description="pass | fail"),
     trace_id: Optional[str] = Query(None),
+    created_from: Optional[datetime] = Query(None),
+    created_to: Optional[datetime] = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -1357,30 +3218,53 @@ async def list_release_gate_history(
 ):
     check_project_access(project_id, current_user, db)
 
+    lifecycle = DataLifecycleService(db)
+    summary = lifecycle.get_data_retention_summary(project_id)
+    if "error" in summary:
+        retention_days = 7
+    else:
+        retention_days = summary.get("retention_days", 7)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    if created_from and created_from.tzinfo is None:
+        created_from = created_from.replace(tzinfo=timezone.utc)
+    if created_to and created_to.tzinfo is None:
+        created_to = created_to.replace(tzinfo=timezone.utc)
+
     query = (
         db.query(BehaviorReport)
-        .filter(BehaviorReport.project_id == project_id, BehaviorReport.trace_id.isnot(None))
+        .filter(
+            BehaviorReport.project_id == project_id,
+            BehaviorReport.trace_id.isnot(None),
+            BehaviorReport.created_at >= cutoff,
+        )
         .order_by(BehaviorReport.created_at.desc())
     )
     if status_filter in {"pass", "fail"}:
         query = query.filter(BehaviorReport.status == status_filter)
     if trace_id:
         query = query.filter(BehaviorReport.trace_id == trace_id)
+    if created_from:
+        query = query.filter(BehaviorReport.created_at >= created_from)
+    if created_to:
+        query = query.filter(BehaviorReport.created_at <= created_to)
 
     # Release-gate runs are marked in summary_json.release_gate.
-    scan_limit = min(1000, max(200, (offset + limit) * 5))
-    scanned = query.limit(scan_limit).all()
-    rows = [
-        row
-        for row in scanned
-        if isinstance(row.summary_json, dict) and isinstance(row.summary_json.get("release_gate"), dict)
-    ]
+    # Filter in SQL so total/pagination reflect the full retained RG history.
+    rows_query = query.filter(cast(BehaviorReport.summary_json, String).contains('"release_gate"'))
 
-    total = len(rows)
-    page_rows = rows[offset : offset + limit]
+    total = rows_query.count()
+    page_rows = rows_query.offset(offset).limit(limit).all()
     items: List[Dict[str, Any]] = []
     for row in page_rows:
         gate_meta = row.summary_json.get("release_gate") if isinstance(row.summary_json, dict) else {}
+        total_inputs = gate_meta.get("total_inputs")
+        failed_inputs = gate_meta.get("failed_inputs")
+        flaky_inputs = gate_meta.get("flaky_inputs")
+        total_inputs_num = int(total_inputs or 0) if total_inputs is not None else 0
+        failed_inputs_num = int(failed_inputs or 0) if failed_inputs is not None else 0
+        flaky_inputs_num = int(flaky_inputs or 0) if flaky_inputs is not None else 0
+        failed_runs = failed_inputs_num + flaky_inputs_num
+        passed_runs = max(total_inputs_num - failed_runs, 0) if total_inputs is not None else None
         items.append(
             {
                 "id": row.id,
@@ -1391,11 +3275,20 @@ async def list_release_gate_history(
                 "created_at": _iso(row.created_at),
                 "mode": gate_meta.get("mode", "replay_test"),
                 "repeat_runs": gate_meta.get("repeat_runs"),
-                "passed_runs": gate_meta.get("passed_runs"),
-                "failed_runs": gate_meta.get("failed_runs"),
+                "total_inputs": total_inputs,
+                "passed_runs": passed_runs,
+                "failed_runs": failed_runs if total_inputs is not None else None,
+                "passed_attempts": gate_meta.get("passed_attempts"),
+                "total_attempts": gate_meta.get("total_attempts"),
                 "thresholds": gate_meta.get("thresholds"),
             }
         )
 
-    return {"items": items, "total": total, "limit": limit, "offset": offset}
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "retention_days": retention_days,
+    }
 

@@ -1,15 +1,32 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, HelpCircle, MessageSquare, ChevronDown, User, Settings, LogOut, Building2, LayoutGrid, Plus } from "lucide-react";
+import {
+  Bell,
+  HelpCircle,
+  MessageSquare,
+  ChevronDown,
+  User,
+  Settings,
+  LogOut,
+  Building2,
+  LayoutGrid,
+  Plus,
+  BarChart3,
+  CreditCard,
+} from "lucide-react";
 import FeedbackModal from "@/components/modals/FeedbackModal";
 import { motion, AnimatePresence } from "framer-motion";
 import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
-import { organizationsAPI, projectsAPI } from "@/lib/api";
+import { organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
+import { authAPI } from "@/lib/api/auth";
+import { useAuthSession } from "@/hooks/useAuthSession";
 import SwitcherDropdown from "@/components/ui/SwitcherDropdown";
+import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
 
 interface TopHeaderProps {
   breadcrumb?: { label: string; href?: string }[];
@@ -17,14 +34,17 @@ interface TopHeaderProps {
   userEmail?: string;
   onLogout?: () => void;
   nav?: React.ReactNode;
+  organizations?: OrganizationSummary[];
+  projects?: OrganizationProject[];
 }
 
 const TopHeader: React.FC<TopHeaderProps> = ({
-  breadcrumb,
   userName,
   userEmail,
   onLogout,
   nav,
+  organizations: providedOrganizations,
+  projects: providedProjects,
 }) => {
   const params = useParams();
   const pathname = usePathname();
@@ -34,24 +54,34 @@ const TopHeader: React.FC<TopHeaderProps> = ({
 
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  // Only fetch when we have a token (avoids 401 on first paint after login redirect)
-  const [hasToken, setHasToken] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setHasToken(!!localStorage.getItem("access_token"));
-  }, []);
+  const { isAuthenticated } = useAuthSession();
+  const shouldFetchOrganizations = !providedOrganizations;
+  const shouldFetchProjects = !providedProjects;
 
-  // Single shared key/fetcher with organizations page to avoid duplicate 401s
-  const { data: organizations } = useSWR(hasToken ? "organizations" : null, () =>
-    organizationsAPI.list({ includeStats: false })
+  const { data: fetchedOrganizations } = useSWR(
+    isAuthenticated && shouldFetchOrganizations ? orgKeys.list() : null,
+    () => organizationsAPI.list({ includeStats: false }),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 10_000,
+    }
   );
   const { data: projects } = useSWR(
-    hasToken && currentOrgId ? ["organization-projects-list", currentOrgId] : null,
-    ([, id]) => organizationsAPI.listProjects(id as string, { includeStats: false })
+    isAuthenticated && currentOrgId && shouldFetchProjects
+      ? orgKeys.projects(currentOrgId as string, "")
+      : null,
+    ([, , id]) => organizationsAPI.listProjects(id as string, { includeStats: false }),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 10_000,
+    }
   );
 
+  const organizations = providedOrganizations ?? fetchedOrganizations;
+  const resolvedProjects = providedProjects ?? projects;
+
   const activeOrg = organizations?.find(o => String(o.id) === String(currentOrgId));
-  const activeProject = projects?.find(p => String(p.id) === String(currentProjectId));
+  const activeProject = resolvedProjects?.find(p => String(p.id) === String(currentProjectId));
 
   const orgSwitcherItems =
     organizations?.map(org => ({
@@ -62,7 +92,7 @@ const TopHeader: React.FC<TopHeaderProps> = ({
     })) || [];
 
   const projectSwitcherItems =
-    projects?.map(p => ({
+    resolvedProjects?.map(p => ({
       id: p.id,
       name: p.name,
       href: `/organizations/${currentOrgId}/projects/${p.id}`,
@@ -240,14 +270,49 @@ const TopHeader: React.FC<TopHeaderProps> = ({
                               </div>
                             </Link>
 
+                            <Link
+                              href="/settings/usage"
+                              className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group/item border border-transparent hover:border-white/5"
+                            >
+                              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-400 group-hover/item:text-emerald-400 transition-colors">
+                                <BarChart3 className="w-5 h-5" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-black text-white uppercase tracking-wider">
+                                  Usage
+                                </p>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">
+                                  Account-wide limits
+                                </p>
+                              </div>
+                            </Link>
+
+                            <Link
+                              href="/settings/billing"
+                              className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group/item border border-transparent hover:border-white/5"
+                            >
+                              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-400 group-hover/item:text-emerald-400 transition-colors">
+                                <CreditCard className="w-5 h-5" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-black text-white uppercase tracking-wider">
+                                  Billing
+                                </p>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">
+                                  Plan & invoices
+                                </p>
+                              </div>
+                            </Link>
+
                             <button
-                              onClick={() => {
-                                if (onLogout) onLogout();
-                                else {
-                                  localStorage.removeItem("access_token");
-                                  localStorage.removeItem("refresh_token");
-                                  window.location.href = "/login";
+                              onClick={async () => {
+                                if (onLogout) {
+                                  onLogout();
+                                  return;
                                 }
+
+                                await authAPI.logout().catch(() => undefined);
+                                window.location.href = "/login";
                               }}
                               className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-red-500/5 transition-all group/item border border-transparent hover:border-red-500/10"
                             >

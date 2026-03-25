@@ -5,14 +5,25 @@
 
 export type AuthErrorSource = {
   status?: number;
-  detail?: string | { message?: string; reasons?: string[] };
+  detail?: string | { message?: string; reasons?: string[]; code?: string };
   message?: string;
+};
+
+const SESSION_REAUTH_MESSAGES: Record<string, string> = {
+  no_token: "Please sign in to continue.",
+  access_token_expired: "Your session expired while you were away. Please sign in again.",
+  access_token_invalid: "Your login session is no longer valid. Please sign in again.",
+  refresh_token_missing: "Your session could not be renewed. Please sign in again.",
+  refresh_token_expired: "Your session expired. Please sign in again.",
+  refresh_token_invalid: "Your saved login session is no longer valid. Please sign in again.",
+  refresh_token_not_found: "This login session was replaced or cleared. Please sign in again.",
+  refresh_token_revoked: "This login session was replaced by a newer one. Please sign in again.",
 };
 
 const LOGIN_MESSAGES: Record<number, string> = {
   400: "Invalid request. Please check your email and password.",
   401: "Incorrect email or password. Please try again or sign up.",
-  403: "This account has been deactivated. Contact support if you need access.",
+  403: "Access denied. Please try again or contact support if this continues.",
   429: "Too many attempts. Please wait a moment and try again.",
   500: "Something went wrong on our side. Please try again in a few minutes.",
 };
@@ -37,16 +48,30 @@ function parseDetail(detail: AuthErrorSource["detail"]): string | null {
   return null;
 }
 
+function parseCode(detail: AuthErrorSource["detail"]): string | null {
+  if (!detail || typeof detail !== "object") return null;
+  const code = (detail as { code?: string }).code;
+  return typeof code === "string" ? code : null;
+}
+
 /**
  * Returns a user-friendly message for login errors (client-side or Server Action).
  */
 export function getLoginErrorMessage(source: AuthErrorSource): string {
   const status = source.status ?? (source as any)?.response?.status;
-  const detail = source.detail ?? (source as any)?.response?.data?.detail;
+  const detail =
+    source.detail ??
+    (source as any)?.response?.data?.detail ??
+    (source as any)?.response?.data?.error?.details ??
+    (source as any)?.response?.data?.error;
   const parsed = parseDetail(detail);
+  const code = parseCode(detail) ?? (source as any)?.response?.data?.error?.code;
 
   if (status === 401 && parsed?.toLowerCase().includes("incorrect")) {
     return "Incorrect email or password. Please try again or sign up.";
+  }
+  if (status === 401 && code && SESSION_REAUTH_MESSAGES[code]) {
+    return SESSION_REAUTH_MESSAGES[code];
   }
   if (status === 429) {
     const waitMatch = typeof parsed === "string" && parsed.match(/(\d+)\s*seconds?/);
@@ -75,7 +100,11 @@ export function getLoginErrorMessage(source: AuthErrorSource): string {
  */
 export function getRegisterErrorMessage(source: AuthErrorSource): string {
   const status = source.status ?? (source as any)?.response?.status;
-  const detail = source.detail ?? (source as any)?.response?.data?.detail;
+  const detail =
+    source.detail ??
+    (source as any)?.response?.data?.detail ??
+    (source as any)?.response?.data?.error?.details ??
+    (source as any)?.response?.data?.error;
   const parsed = parseDetail(detail);
 
   if (status === 400) {
@@ -112,7 +141,19 @@ export function getRegisterErrorMessage(source: AuthErrorSource): string {
  */
 export function getAuthErrorMessage(err: any, kind: "login" | "register" = "login"): string {
   const status = err?.response?.status;
-  const detail = err?.response?.data?.detail ?? err?.message;
+  const detail =
+    err?.response?.data?.detail ??
+    err?.response?.data?.error?.details ??
+    err?.response?.data?.error ??
+    err?.message;
   const source: AuthErrorSource = { status, detail, message: err?.message };
   return kind === "login" ? getLoginErrorMessage(source) : getRegisterErrorMessage(source);
+}
+
+export function getReauthMessage(code?: string | null, fallback?: string | null): string {
+  if (code && SESSION_REAUTH_MESSAGES[code]) {
+    return SESSION_REAUTH_MESSAGES[code];
+  }
+  if (fallback && fallback.trim()) return fallback.trim();
+  return "Please log in again.";
 }

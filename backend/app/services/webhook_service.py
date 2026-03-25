@@ -7,7 +7,7 @@ import json
 import hmac
 import hashlib
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from app.models.webhook import Webhook
 from app.models.alert import Alert
@@ -62,7 +62,7 @@ class WebhookService:
         # Prepare payload
         payload = {
             "event": event_type,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "project_id": project_id,
             "data": event_data,
         }
@@ -75,7 +75,7 @@ class WebhookService:
                 if result["status"] == "sent":
                     results["triggered"] += 1
                     # Update webhook status
-                    webhook.last_triggered_at = datetime.utcnow()
+                    webhook.last_triggered_at = datetime.now(timezone.utc)
                     if webhook.failure_count > 0:
                         webhook.failure_count = 0
                         webhook.last_error = None
@@ -117,7 +117,7 @@ class WebhookService:
                 signature = hmac.new(
                     webhook.secret.encode(), json.dumps(payload, sort_keys=True).encode(), hashlib.sha256
                 ).hexdigest()
-                headers["X-AgentGuard-Signature"] = f"sha256={signature}"
+                headers["X-PluvianAI-Signature"] = f"sha256={signature}"
 
             # Send webhook
             async with httpx.AsyncClient(timeout=10.0) as client:

@@ -54,6 +54,13 @@ from app.models import (
     SignalConfig,
     ReplayRun,
     AgentDisplaySetting,
+    ReleaseGateJob,
+    AgentEvalConfigHistory,
+    BehaviorRule,
+    BehaviorReport,
+    TrajectoryStep,
+    ValidationDataset,
+    SavedLog,
 )
 
 # this is the Alembic Config object, which provides

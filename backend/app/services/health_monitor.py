@@ -4,7 +4,7 @@ Health Monitor Service for automatic health checks and alerts
 
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.database import SessionLocal
 from app.services.alert_service import AlertService
 from app.infrastructure.repositories.alert_repository import AlertRepository
@@ -103,7 +103,7 @@ class HealthMonitor:
                 "should_alert": should_alert,
                 "alert_severity": alert_severity,
                 "alert_message": alert_message,
-                "checked_at": datetime.utcnow().isoformat(),
+                "checked_at": datetime.now(timezone.utc).isoformat(),
             }
         finally:
             if should_close:

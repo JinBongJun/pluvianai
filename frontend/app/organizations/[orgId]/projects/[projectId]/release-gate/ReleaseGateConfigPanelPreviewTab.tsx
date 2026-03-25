@@ -1,0 +1,136 @@
+"use client";
+
+import React from "react";
+
+import { formatProviderLabel } from "./releaseGateConfigPanelHelpers";
+import type { ReleaseGateConfigPanelPreviewTabProps } from "./releaseGateConfigPanelModel.types";
+
+export function ReleaseGateConfigPanelPreviewTab({ m }: { m: ReleaseGateConfigPanelPreviewTabProps }) {
+  const {
+    setShowExpandedCandidatePreview,
+    validateOverridePreview,
+    selectedBaselineCount,
+    representativeBaselineId,
+    usingModel,
+    usingProvider,
+    candidateRequestOverview,
+    parityEnvironmentNotes,
+    parityCandidateShapeNotes,
+    finalCandidateJson,
+  } = m;
+
+  return (
+    <div className="rounded-2xl border border-white/5 bg-[#0f1115] overflow-hidden flex flex-col shadow-inner">
+      <div className="flex flex-col gap-3 border-b border-white/5 px-5 py-4 bg-white/[0.02] sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1">
+            Final override payload
+          </div>
+          <div className="text-base font-semibold text-white">After overrides</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowExpandedCandidatePreview(true)}
+          disabled={!validateOverridePreview}
+          className="shrink-0 rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Expand full JSON
+        </button>
+      </div>
+      {selectedBaselineCount > 1 && representativeBaselineId ? (
+        <div className="border-b border-white/5 px-5 py-3 text-xs text-slate-400">
+          Representative preview uses log #{representativeBaselineId} (newest by default, or your pick above).
+          The candidate run still applies to all selected logs.
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-px bg-white/5 border-b border-white/5">
+        <div className="bg-[#0f1115] p-4">
+          <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1.5">
+            Using model
+          </div>
+          <div className="text-sm font-mono text-slate-200 truncate">{usingModel || "Not specified"}</div>
+        </div>
+        <div className="bg-[#0f1115] p-4">
+          <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1.5">
+            Using provider
+          </div>
+          <div className="text-sm text-slate-200">{formatProviderLabel(usingProvider)}</div>
+        </div>
+      </div>
+
+      <div className="p-5">
+        <div className="mb-4 rounded-xl border border-white/5 bg-black/20 p-4">
+          <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">
+            Candidate request summary
+          </div>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <div className="text-xs text-slate-400">
+              Messages preserved
+              <div className="mt-1 text-sm font-semibold text-slate-200">
+                {candidateRequestOverview.messageCount}
+              </div>
+            </div>
+            <div className="text-xs text-slate-400">
+              Tools
+              <div className="mt-1 text-sm font-semibold text-slate-200">
+                {candidateRequestOverview.toolsCount}
+              </div>
+            </div>
+            <div className="text-xs text-slate-400">
+              Extended context keys
+              <div className="mt-1 text-sm font-semibold text-slate-200">
+                {candidateRequestOverview.extendedContextKeys.length || "0"}
+              </div>
+            </div>
+            <div className="text-xs text-slate-400">
+              Additional request keys
+              <div className="mt-1 text-sm font-semibold text-slate-200">
+                {candidateRequestOverview.additionalRequestKeys.length || "0"}
+              </div>
+            </div>
+          </div>
+          {parityEnvironmentNotes.length > 0 || parityCandidateShapeNotes.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {parityEnvironmentNotes.length > 0 ? (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-xs text-amber-100">
+                  <div className="font-bold uppercase tracking-[0.15em] text-amber-300">
+                    Capture / environment
+                  </div>
+                  <div className="mt-2 space-y-1.5">
+                    {parityEnvironmentNotes.map(note => (
+                      <div key={note}>{note}</div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {parityCandidateShapeNotes.length > 0 ? (
+                <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-3 text-xs text-sky-100">
+                  <div className="font-bold uppercase tracking-[0.15em] text-sky-300">
+                    Candidate shape (may be intentional)
+                  </div>
+                  <div className="mt-2 space-y-1.5">
+                    {parityCandidateShapeNotes.map(note => (
+                      <div key={note}>{note}</div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : selectedBaselineCount > 0 ? (
+            <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 text-xs text-emerald-100">
+              Candidate replay still includes the key request shape detected on the baseline node call.
+            </div>
+          ) : null}
+        </div>
+        <pre className="min-h-[160px] max-h-[min(360px,45vh)] rounded-xl border border-white/5 bg-[#0a0c10] p-4 text-[12px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-all overflow-auto custom-scrollbar shadow-inner">
+          {validateOverridePreview
+            ? finalCandidateJson
+            : selectedBaselineCount === 0
+              ? "Select a baseline on the main screen to build a preview payload."
+              : "No override payload available yet. Adjust Core setup, then check again."}
+        </pre>
+      </div>
+    </div>
+  );
+}

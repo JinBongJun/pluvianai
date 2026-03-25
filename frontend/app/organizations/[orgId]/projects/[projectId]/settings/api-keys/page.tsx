@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import ProjectSettingsShell from "@/components/layout/ProjectSettingsShell";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { ConfirmModal } from "@/components/shared/ConfirmModal";
 import { projectUserApiKeysAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
@@ -27,14 +27,9 @@ const PROVIDER_LABELS: Record<string, string> = {
 };
 
 export default function ProjectApiKeysPage() {
-  const params = useParams();
   const toast = useToast();
   const hasToken = useRequireAuth();
-
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Number(
-    Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId
-  );
+  const { orgId, projectId } = useOrgProjectParams();
 
   const [keys, setKeys] = useState<UserApiKeyItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,6 +115,11 @@ export default function ProjectApiKeysPage() {
         title="API Keys"
         description="LLM API keys for this project. Used by Policy validation and replay-style checks (OpenAI, Anthropic, Google). Custom models (model_id, base_url) can be added here and selected per evaluation flow."
       >
+        <p className="mb-6 text-slate-400 text-sm">
+          For SDK or demos: use the <strong className="text-slate-300">Project ID</strong> shown above in your{" "}
+          <code className="px-1.5 py-0.5 rounded bg-white/10 text-emerald-300 text-xs">.env</code> as{" "}
+          <code className="px-1.5 py-0.5 rounded bg-white/10 text-emerald-300 text-xs">PLUVIANAI_PROJECT_ID</code>.
+        </p>
         {/* Add key form */}
         <div className="rounded-lg border border-white/10 bg-white/5 p-4 mb-6">
           <h2 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
@@ -183,7 +183,9 @@ export default function ProjectApiKeysPage() {
                   className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3"
                 >
                   <div>
-                    <span className="font-medium text-white">{PROVIDER_LABELS[k.provider] ?? k.provider}</span>
+                    <span className="font-medium text-white">
+                      {PROVIDER_LABELS[k.provider] ?? k.provider}
+                    </span>
                     {k.name && <span className="text-slate-400 ml-2">({k.name})</span>}
                     <span className="text-slate-500 text-sm ml-2">
                       added {k.created_at ? new Date(k.created_at).toLocaleDateString() : ""}

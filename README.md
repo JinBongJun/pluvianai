@@ -24,12 +24,27 @@ Agent behavior firewall for multi‑LLM applications — capture traffic, replay
 
 ---
 
+## Live View Node Lifecycle
+
+- Removing a Live View node is a **soft delete**.
+- Same-node traffic can **auto-restore** a removed node within the configured restore window.
+- Old soft-deleted node settings can be **hard-deleted** later by scheduled cleanup.
+
+Current repository defaults:
+
+- `AGENT_AUTO_RESTORE_DAYS=30`
+- `AGENT_SOFT_DELETE_GRACE_DAYS=30`
+
+See [`docs/live-view-node-lifecycle-policy.md`](./docs/live-view-node-lifecycle-policy.md) for the full policy.
+
+---
+
 ## Tech stack
 
 - **Backend**: FastAPI (Python)
 - **Database**: PostgreSQL + JSONB
 - **Frontend**: Next.js (TypeScript, App Router)
-- **SDKs**: Python (`agentguard`), Node.js (`@agentguard/sdk`)
+- **SDKs**: Python (`pluvianai`), Node.js (`pluvianai`)
 - **Infrastructure**: Docker, Redis
 
 ---
@@ -41,17 +56,17 @@ Agent behavior firewall for multi‑LLM applications — capture traffic, replay
 **Python**
 
 ```python
-import agentguard
+import pluvianai
 
-agentguard.init(api_key="YOUR_API_KEY")
+pluvianai.init(api_key="YOUR_API_KEY")
 ```
 
 **Node.js**
 
 ```typescript
-import agentguard from '@agentguard/sdk';
+import pluvianai from 'pluvianai';
 
-agentguard.init({ apiKey: 'YOUR_API_KEY' });
+pluvianai.init({ apiKey: 'YOUR_API_KEY' });
 ```
 
 Once SDKs are initialized and traffic flows, agents and nodes will appear in **Live View** automatically.
@@ -101,13 +116,13 @@ PluvianAI/
 
 ## Documentation
 
-The root `.md` files are the single source of truth for documentation (the `docs/` folder may contain older drafts).
+Product specs, plans, and security notes live under **`docs/`**. See **[`docs/DOCS_README.md`](./docs/DOCS_README.md)** for the full index.
 
-- **[DOCS_README.md](./DOCS_README.md)** — documentation index and navigation.
-- **[BLUEPRINT.md](./BLUEPRINT.md)** — technical blueprint (architecture, APIs, roadmap).
-- **[BUSINESS_PLAN.md](./BUSINESS_PLAN.md)** — business plan.
-- **[SCHEMA_SPEC.md](./SCHEMA_SPEC.md)** — API schema specification.
-- **[PRD_AGENT_BEHAVIOR_VALIDATION.md](./PRD_AGENT_BEHAVIOR_VALIDATION.md)** — behavior validation PRD.
+- **[`docs/BLUEPRINT.md`](./docs/BLUEPRINT.md)** — technical blueprint (architecture, APIs, roadmap).
+- **[`docs/BUSINESS_PLAN.md`](./docs/BUSINESS_PLAN.md)** — business plan.
+- **[`docs/SCHEMA_SPEC.md`](./docs/SCHEMA_SPEC.md)** — API schema specification.
+- **[`docs/PRD_AGENT_BEHAVIOR_VALIDATION.md`](./docs/PRD_AGENT_BEHAVIOR_VALIDATION.md)** — behavior validation PRD.
+- **[`docs/live-view-node-lifecycle-policy.md`](./docs/live-view-node-lifecycle-policy.md)** — Live View node soft delete, restore, and purge policy.
 
 ---
 
@@ -124,6 +139,8 @@ docker-compose up -d
 # Backend:  http://localhost:8000
 # Frontend: http://localhost:3000
 ```
+
+**Backend database migrations:** CI enforces `alembic upgrade head` and `alembic check` on a fresh Postgres. To match that locally and for PR expectations, see **[`backend/README.md`](./backend/README.md)** (Database and Alembic).
 
 ---
 

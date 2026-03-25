@@ -4,7 +4,7 @@ Infrastructure Cost Monitor for tracking Railway/Vercel costs
 
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.core.database import SessionLocal
 from app.models.alert import Alert
 from app.services.alert_service import AlertService
@@ -48,7 +48,7 @@ class InfrastructureCostMonitor:
             "budget_warning": False,
             "budget_exceeded": False,
             "days_analyzed": days,
-            "checked_at": datetime.utcnow().isoformat(),
+            "checked_at": datetime.now(timezone.utc).isoformat(),
         }
 
         if budget_limit:

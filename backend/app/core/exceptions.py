@@ -9,9 +9,10 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.core.logging_config import logger
+from app.services.ops_alerting import ops_alerting
 
 
-class AgentGuardException(Exception):
+class PluvianAIException(Exception):
     """Base exception for PluvianAI"""
 
     def __init__(self, message: str, status_code: int = 500):
@@ -20,28 +21,28 @@ class AgentGuardException(Exception):
         super().__init__(self.message)
 
 
-class NotFoundError(AgentGuardException):
+class NotFoundError(PluvianAIException):
     """Resource not found exception"""
 
     def __init__(self, message: str = "Resource not found"):
         super().__init__(message, status_code=404)
 
 
-class PermissionDeniedError(AgentGuardException):
+class PermissionDeniedError(PluvianAIException):
     """Permission denied exception"""
 
     def __init__(self, message: str = "Permission denied"):
         super().__init__(message, status_code=403)
 
 
-class ValidationError(AgentGuardException):
+class ValidationError(PluvianAIException):
     """Validation error exception"""
 
     def __init__(self, message: str = "Validation error"):
         super().__init__(message, status_code=400)
 
 
-class UpgradeRequiredException(AgentGuardException):
+class UpgradeRequiredException(PluvianAIException):
     """Upgrade required exception for Pro/Enterprise features"""
 
     def __init__(
@@ -59,7 +60,7 @@ class UpgradeRequiredException(AgentGuardException):
         super().__init__(message, status_code=403)
 
 
-async def agentguard_exception_handler(request: Request, exc: AgentGuardException):
+async def pluvianai_exception_handler(request: Request, exc: PluvianAIException):
     """Handle custom PluvianAI exceptions following API_REFERENCE.md format"""
     logger.error(f"PluvianAIException: {exc.message}", extra={"path": request.url.path, "method": request.method})
     
@@ -78,7 +79,7 @@ async def agentguard_exception_handler(request: Request, exc: AgentGuardExceptio
                 "upgrade_url": exc.upgrade_url,
             },
             status_code=exc.status_code,
-            origin="Proxy",  # AgentGuard server error
+            origin="Proxy",  # PluvianAI server error
             headers=headers,
         )
     
@@ -121,7 +122,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         error_code = detail["code"]
     elif hasattr(exc, "error_code"):
         error_code = exc.error_code
-    origin = request.headers.get("X-PluvianAI-Origin") or request.headers.get("X-AgentGuard-Origin")
+    origin = request.headers.get("X-PluvianAI-Origin")
     from app.core.responses import error_response
     return error_response(
         code=error_code,
@@ -135,25 +136,35 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle validation errors following API_REFERENCE.md format"""
     errors = exc.errors()
-    # Extract more detailed error messages
-    error_messages = []
+    summarized_errors = []
     for error in errors:
         loc = " -> ".join(str(loc) for loc in error.get("loc", []))
         msg = error.get("msg", "Validation error")
         error_type = error.get("type", "unknown")
-        error_messages.append(f"{loc}: {msg} (type: {error_type})")
+        summarized_errors.append(
+            {
+                "field": loc,
+                "message": msg,
+                "type": error_type,
+            }
+        )
 
     logger.warning(
-        f"ValidationError: {error_messages}",
+        f"ValidationError: {summarized_errors}",
         extra={"path": request.url.path, "method": request.method, "query_params": dict(request.query_params)},
     )
-    
+
     from app.core.responses import error_response
+    details = (
+        {"errors": errors, "error_messages": summarized_errors}
+        if request.app and getattr(request.app.state, "expose_debug_details", False)
+        else {"errors": summarized_errors}
+    )
     return error_response(
         code="VALIDATION_ERROR",
         message="Validation error",
-        details={"errors": errors, "error_messages": error_messages},
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        details=details,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         origin="Proxy",  # PluvianAI validation error
     )
 
@@ -163,6 +174,7 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     logger.error(
         f"Database error: {str(exc)}", extra={"path": request.url.path, "method": request.method}, exc_info=True
     )
+    ops_alerting.observe_db_error(type(exc).__name__)
 
     from app.core.responses import error_response
 
@@ -171,14 +183,14 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
             code="DATABASE_INTEGRITY_ERROR",
             message="Database integrity error. The resource may already exist.",
             status_code=status.HTTP_409_CONFLICT,
-            origin="Proxy",  # AgentGuard database error
+            origin="Proxy",  # PluvianAI database error
         )
 
     return error_response(
         code="DATABASE_ERROR",
         message="Database error occurred",
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        origin="Proxy",  # AgentGuard database error
+        origin="Proxy",  # PluvianAI database error
     )
 
 
@@ -189,14 +201,9 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
     
     from app.core.responses import error_response
-    response = error_response(
+    return error_response(
         code="INTERNAL_SERVER_ERROR",
         message="An unexpected error occurred",
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        origin="Proxy",  # AgentGuard server error
+        origin="Proxy",  # PluvianAI server error
     )
-    # Ensure CORS headers are added even on errors
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return response

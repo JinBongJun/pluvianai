@@ -2,9 +2,12 @@
 Security utilities for JWT authentication
 """
 
-from datetime import datetime, timedelta
-from typing import Optional, List, Any
+from datetime import datetime, timedelta, timezone
+from typing import Optional, List, Any, Tuple
+import secrets
+import hmac
 from jose import JWTError, jwt
+from jose.exceptions import ExpiredSignatureError
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status, Header, Request
 from fastapi.security import OAuth2PasswordBearer
@@ -19,6 +22,32 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds
 
 # OAuth2 scheme; auto_error=False so get_current_user can fall back to cookies
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login", auto_error=False)
+API_KEY_LAST_USED_WRITE_INTERVAL = timedelta(minutes=5)
+CSRF_COOKIE_NAME = "csrf_token"
+
+
+class TokenValidationError(Exception):
+    """Structured JWT validation error for user-facing auth responses."""
+
+    def __init__(self, code: str, message: str, log_reason: Optional[str] = None):
+        self.code = code
+        self.message = message
+        self.log_reason = log_reason or message
+        super().__init__(self.message)
+
+
+def auth_error_detail(code: str, message: str, **extra: Any) -> dict:
+    detail = {"code": code, "message": message}
+    detail.update({k: v for k, v in extra.items() if v is not None})
+    return detail
+
+
+def _should_update_api_key_last_used(last_used_at: Optional[datetime], now_utc: datetime) -> bool:
+    if last_used_at is None:
+        return True
+    if last_used_at.tzinfo is None:
+        last_used_at = last_used_at.replace(tzinfo=timezone.utc)
+    return now_utc - last_used_at >= API_KEY_LAST_USED_WRITE_INTERVAL
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -34,7 +63,7 @@ def get_password_hash(password: str) -> str:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create a JWT access token"""
     to_encode = data.copy()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expire = now + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire, "iat": now, "type": "access"})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
@@ -48,7 +77,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 def create_refresh_token(data: dict) -> str:
     """Create a JWT refresh token"""
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire, "type": "refresh"})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
@@ -59,8 +88,8 @@ def decode_token(token: str) -> Optional[dict]:
     from app.core.logging_config import logger
     try:
         payload = jwt.decode(
-            token, 
-            settings.SECRET_KEY, 
+            token,
+            settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM],
             options={"leeway": 300}  # Increase leeway to 5 minutes
         )
@@ -74,6 +103,45 @@ def decode_token(token: str) -> Optional[dict]:
         elif "signature" in error_msg.lower():
             logger.error(f"🔑 [decode_token] Signature mismatch. Possible SECRET_KEY issue.")
         return None
+
+
+def decode_token_or_raise(token: str, *, expected_type: Optional[str] = None) -> dict:
+    """Decode a JWT and raise a structured exception on expected auth failures."""
+    from app.core.logging_config import logger
+
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+            options={"leeway": 300},
+        )
+    except ExpiredSignatureError as exc:
+        code = f"{expected_type}_token_expired" if expected_type else "auth_token_expired"
+        raise TokenValidationError(
+            code=code,
+            message="Your session has expired. Please sign in again.",
+            log_reason=str(exc),
+        ) from exc
+    except JWTError as exc:
+        code = f"{expected_type}_token_invalid" if expected_type else "auth_token_invalid"
+        raise TokenValidationError(
+            code=code,
+            message="Your login session is no longer valid. Please sign in again.",
+            log_reason=str(exc),
+        ) from exc
+
+    if expected_type and payload.get("type") != expected_type:
+        logger.warning(
+            "JWT token type mismatch",
+            extra={"expected_type": expected_type, "actual_type": payload.get("type")},
+        )
+        raise TokenValidationError(
+            code=f"{expected_type}_token_invalid",
+            message="Your login session is no longer valid. Please sign in again.",
+            log_reason=f"Token type mismatch: expected {expected_type}, got {payload.get('type')}",
+        )
+    return payload
 
 
 async def get_current_user(
@@ -102,16 +170,17 @@ async def get_current_user(
         logger.warning(f"🟡 [get_current_user] 401 Unauthorized: No token provided via Header or Cookie. PATH: {request.url.path}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="NOT_AUTHENTICATED",
+            detail=auth_error_detail("no_token", "You need to sign in to access this page."),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     logger.debug(f"🔍 [get_current_user] Token source: {source}, Token length: {len(final_token)}")
-    payload = decode_token(final_token)
-    if payload is None:
+    try:
+        payload = decode_token_or_raise(final_token, expected_type="access")
+    except TokenValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expired or invalid",
+            detail=auth_error_detail(exc.code, exc.message),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -119,14 +188,21 @@ async def get_current_user(
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token claims",
+            detail=auth_error_detail(
+                "access_token_invalid",
+                "Your login session is no longer valid. Please sign in again.",
+            ),
         )
 
     user = db.query(User).filter(User.id == int(user_id)).first()
     if user is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=auth_error_detail(
+                "access_token_invalid",
+                "Your login session is no longer valid. Please sign in again.",
+            ),
+            headers={"WWW-Authenticate": "Bearer"},
         )
     
     if not user.is_active:
@@ -135,6 +211,10 @@ async def get_current_user(
             detail="Inactive user account",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    if hasattr(request, "state"):
+        request.state.auth_method = "jwt"
+        request.state.api_key_scope = None  # JWT = full access
 
     return user
 
@@ -177,19 +257,21 @@ async def get_current_user_optional(
         return None
 
 
-async def get_user_from_api_key(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)):
+async def get_user_from_api_key(
+    authorization: Optional[str] = Header(None), db: Session = Depends(get_db)
+) -> Tuple[User, List[str]]:
     """
-    Get user from API Key (for SDK authentication)
+    Get user and scope list from API Key (for SDK authentication).
 
     SDK에서 Authorization: Bearer ag_live_xxxxx 형식으로 요청을 보내면
-    API Key를 검증하고 해당 User를 반환합니다.
+    API Key를 검증하고 해당 User와 scope 목록을 반환합니다.
 
     Args:
         authorization: Authorization header (Bearer {api_key} 형식)
         db: Database session
 
     Returns:
-        User object
+        Tuple of (User, scope list e.g. ["*"] or ["ingest","read"])
 
     Raises:
         HTTPException: If API key is invalid or expired
@@ -201,7 +283,7 @@ async def get_user_from_api_key(authorization: Optional[str] = Header(None), db:
     if not authorization:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing API key",
+            detail=auth_error_detail("api_key_missing", "API key is required for this request."),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -217,7 +299,7 @@ async def get_user_from_api_key(authorization: Optional[str] = Header(None), db:
     if not api_key.startswith("ag_live_") and not api_key.startswith("ag_test_"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key format",
+            detail=auth_error_detail("api_key_invalid_format", "API key format is invalid."),
         )
 
     # Hash the API key for lookup
@@ -229,14 +311,15 @@ async def get_user_from_api_key(authorization: Optional[str] = Header(None), db:
     if not api_key_record:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
+            detail=auth_error_detail("api_key_invalid", "API key is invalid."),
         )
 
-    # Check if API key is expired
-    if api_key_record.expires_at and api_key_record.expires_at < datetime.utcnow():
+    # Check if API key is expired (timezone-aware UTC comparison)
+    now_utc = datetime.now(timezone.utc)
+    if api_key_record.expires_at and api_key_record.expires_at < now_utc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key expired",
+            detail=auth_error_detail("api_key_expired", "API key has expired."),
         )
 
     # Get user
@@ -244,14 +327,143 @@ async def get_user_from_api_key(authorization: Optional[str] = Header(None), db:
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid user",
+            detail=auth_error_detail("api_key_user_invalid", "API key is no longer associated with an active user."),
         )
 
-    # Update last_used_at
-    api_key_record.last_used_at = datetime.utcnow()
-    db.commit()
+    # Avoid a write on every SDK request; refresh usage timestamp periodically.
+    if _should_update_api_key_last_used(api_key_record.last_used_at, now_utc):
+        api_key_record.last_used_at = now_utc
+        db.flush()
 
-    return user
+    # Parse scope: "*", "ingest,read", or JSON ["ingest","read"]. Default ["*"] for backward compatibility.
+    scope_raw = (api_key_record.scope or "").strip() or "*"
+    if scope_raw == "*":
+        scope_list = ["*"]
+    else:
+        try:
+            import json
+            parsed = json.loads(scope_raw)
+            scope_list = list(parsed) if isinstance(parsed, list) else [str(parsed)]
+        except Exception:
+            scope_list = [s.strip() for s in scope_raw.split(",") if s.strip()]
+        if not scope_list:
+            scope_list = ["*"]
+
+    return user, scope_list
+
+
+async def get_current_user_or_api_key(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> User:
+    """
+    Resolve authenticated user from either JWT session token or SDK API key.
+
+    Priority:
+    1) If Authorization clearly contains an SDK key (ag_live_/ag_test_), validate as API key.
+    2) Otherwise, try regular JWT auth (header/cookie).
+    3) If JWT fails but Authorization exists, retry as API key.
+    """
+    normalized_auth = (authorization or "").strip()
+
+    def _extract_bearer_value(raw: str) -> str:
+        if raw.startswith("Bearer "):
+            return raw.replace("Bearer ", "", 1).strip()
+        if raw.startswith("Api-Key "):
+            return raw.replace("Api-Key ", "", 1).strip()
+        return raw
+
+    auth_value = _extract_bearer_value(normalized_auth) if normalized_auth else ""
+    is_sdk_api_key = auth_value.startswith("ag_live_") or auth_value.startswith("ag_test_")
+
+    if is_sdk_api_key:
+        user, scope_list = await get_user_from_api_key(authorization=normalized_auth, db=db)
+        if hasattr(request, "state"):
+            request.state.auth_method = "api_key"
+            request.state.api_key_scope = scope_list
+        return user
+
+    try:
+        user = await get_current_user(request=request, token=token, db=db)
+        return user
+    except HTTPException as jwt_error:
+        if normalized_auth:
+            try:
+                user, scope_list = await get_user_from_api_key(authorization=normalized_auth, db=db)
+                if hasattr(request, "state"):
+                    request.state.auth_method = "api_key"
+                    request.state.api_key_scope = scope_list
+                return user
+            except HTTPException:
+                pass
+        raise jwt_error
+
+
+def generate_csrf_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+async def require_csrf_for_cookie_auth(request: Request) -> None:
+    """
+    Enforce double-submit CSRF protection for cookie-authenticated state-changing requests.
+    Header/Bearer and SDK API-key requests are not CSRF-vulnerable, so they bypass this check.
+    """
+    authorization = (request.headers.get("Authorization") or "").strip()
+    if authorization:
+        return None
+
+    has_cookie_auth = bool(
+        request.cookies.get("access_token") or request.cookies.get("refresh_token")
+    )
+    if not has_cookie_auth:
+        return None
+
+    cookie_token = (request.cookies.get(CSRF_COOKIE_NAME) or "").strip()
+    header_token = (request.headers.get("X-CSRF-Token") or "").strip()
+
+    if not cookie_token or not header_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=auth_error_detail(
+                "csrf_missing",
+                "Security verification failed. Refresh the page and try again.",
+            ),
+        )
+
+    if not hmac.compare_digest(cookie_token, header_token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=auth_error_detail(
+                "csrf_invalid",
+                "Security verification failed. Refresh the page and try again.",
+            ),
+        )
+
+    return None
+
+
+class RequireScope:
+    """
+    Dependency that checks API key scope. Use after get_current_user_or_api_key.
+    JWT auth is always allowed. API key auth requires the key to have the required scope or "*".
+    """
+
+    def __init__(self, required: str):
+        self.required = required
+
+    async def __call__(self, request: Request) -> None:
+        auth_method = getattr(request.state, "auth_method", None)
+        if auth_method != "api_key":
+            return None
+        scopes = getattr(request.state, "api_key_scope", None) or []
+        if not scopes or "*" in scopes or self.required in scopes:
+            return None
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Insufficient API key scope. This endpoint requires scope: {self.required}",
+        )
 
 
 def rotate_refresh_token(
@@ -275,11 +487,12 @@ def rotate_refresh_token(
     from app.models.refresh_token import RefreshToken
     
     # Verify old refresh token
-    payload = decode_token(old_refresh_token)
-    if payload is None or payload.get("type") != "refresh":
+    try:
+        payload = decode_token_or_raise(old_refresh_token, expected_type="refresh")
+    except TokenValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token"
+            detail=auth_error_detail(exc.code, exc.message),
         )
     
     # Verify user
@@ -287,7 +500,10 @@ def rotate_refresh_token(
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid user"
+            detail=auth_error_detail(
+                "refresh_token_invalid",
+                "Your login session is no longer valid. Please sign in again.",
+            ),
         )
     
     # Calculate hash of old refresh token
@@ -307,26 +523,36 @@ def rotate_refresh_token(
     if not refresh_token_record:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token not found"
+            detail=auth_error_detail(
+                "refresh_token_not_found",
+                "Your login session is no longer valid. Please sign in again.",
+            ),
         )
     
     # Check if token is already revoked
     if refresh_token_record.is_revoked:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token has been revoked"
+            detail=auth_error_detail(
+                "refresh_token_revoked",
+                "This login session has already been replaced. Please sign in again.",
+            ),
         )
     
-    # Check if token is expired
-    if refresh_token_record.expires_at < datetime.utcnow():
+    # Check if token is expired (timezone-aware UTC comparison)
+    now_utc = datetime.now(timezone.utc)
+    if refresh_token_record.expires_at < now_utc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token has expired"
+            detail=auth_error_detail(
+                "refresh_token_expired",
+                "Your session has expired. Please sign in again.",
+            ),
         )
     
     # Revoke old refresh token
     refresh_token_record.is_revoked = True
-    refresh_token_record.revoked_at = datetime.utcnow()
+    refresh_token_record.revoked_at = now_utc
     
     # Create new tokens
     new_access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
@@ -337,7 +563,8 @@ def rotate_refresh_token(
     
     # Get expiration time for new refresh token
     new_payload = decode_token(new_refresh_token)
-    expires_at = datetime.utcfromtimestamp(new_payload.get("exp", 0))
+    exp_ts = new_payload.get("exp", 0) if new_payload else 0
+    expires_at = datetime.fromtimestamp(exp_ts, tz=timezone.utc)
     
     # Save new refresh token to database
     new_refresh_token_record = RefreshToken(
@@ -386,11 +613,12 @@ def rotate_api_key(
     new_api_key = f"{key_prefix}{random_part}"
     key_hash = hashlib.sha256(new_api_key.encode()).hexdigest()
     
-    # Create new API key record
+    # Create new API key record (scope defaults to full access)
     new_key_record = APIKey(
         user_id=user_id,
         key_hash=key_hash,
         name="Rotated key",
+        scope="*",
         is_active=True,
     )
     db.add(new_key_record)

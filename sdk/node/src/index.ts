@@ -1,10 +1,11 @@
 /**
- * AgentGuard Node.js SDK - Zero-config monitoring for LLM APIs
+ * PluvianAI Node.js SDK - Zero-config monitoring for LLM APIs
  */
 
 import axios, { AxiosInstance } from 'axios';
+import { sanitizeForIngest, resolveLogFlag } from './ingestPrivacy';
 
-interface AgentGuardConfig {
+interface PluvianAIConfig {
   apiKey?: string;
   projectId?: number;
   apiUrl?: string;
@@ -19,6 +20,12 @@ interface AgentGuardConfig {
     halfOpenMaxCalls?: number;
   };
   healthCheckInterval?: number;  // milliseconds
+  /** When false, replace messages[].content with [omitted] before ingest (env PLUVIANAI_LOG_REQUEST_BODIES / PLUVIANAI_LOG_USER_CONTENT). */
+  logRequestBodies?: boolean;
+  logResponseBodies?: boolean;
+  logToolEventPayloads?: boolean;
+  maxRequestBodyBytes?: number;
+  maxResponseBodyBytes?: number;
 }
 
 interface APICallData {
@@ -29,7 +36,7 @@ interface APICallData {
   agent_name?: string;
 }
 
-class AgentGuard {
+class PluvianAI {
   private apiKey: string | undefined;
   private projectId: number | undefined;
   private apiUrl: string;
@@ -38,13 +45,13 @@ class AgentGuard {
   private patched: boolean = false;
   private originalFunctions: Map<string, any> = new Map();
   private axiosInstance: AxiosInstance;
-  
+
   // Timeout configuration
   private proxyTimeout: number;
   private firewallTimeout: number;
   private piiTimeout: number;
   private healthCheckInterval: number;
-  
+
   // Circuit Breaker state
   private circuitState: 'closed' | 'open' | 'half-open' = 'closed';
   private circuitFailures: number = 0;
@@ -54,17 +61,23 @@ class AgentGuard {
     recoveryTimeSeconds: number;
     halfOpenMaxCalls: number;
   };
-  
+
   // Context for chain_id and agent_name (using AsyncLocalStorage for async context)
   private context: Map<string, any> = new Map();
 
-  constructor(config: AgentGuardConfig = {}) {
-    this.apiKey = config.apiKey || process.env.AGENTGUARD_API_KEY;
-    this.projectId = config.projectId 
-      ? Number(config.projectId) 
-      : (process.env.AGENTGUARD_PROJECT_ID ? Number(process.env.AGENTGUARD_PROJECT_ID) : undefined);
-    this.apiUrl = config.apiUrl || process.env.AGENTGUARD_API_URL || 'https://api.agentguard.dev';
-    this.agentName = config.agentName || process.env.AGENTGUARD_AGENT_NAME;
+  private logRequestBodies: boolean;
+  private logResponseBodies: boolean;
+  private logToolEventPayloads: boolean;
+  private maxRequestBodyBytes: number;
+  private maxResponseBodyBytes: number;
+
+  constructor(config: PluvianAIConfig = {}) {
+    this.apiKey = config.apiKey || process.env.PLUVIANAI_API_KEY;
+    this.projectId = config.projectId
+      ? Number(config.projectId)
+      : (process.env.PLUVIANAI_PROJECT_ID ? Number(process.env.PLUVIANAI_PROJECT_ID) : undefined);
+    this.apiUrl = config.apiUrl || process.env.PLUVIANAI_API_URL || 'https://api.pluvianai.com';
+    this.agentName = config.agentName || process.env.PLUVIANAI_AGENT_NAME;
     this.enabled = (config.enabled !== false) && !!this.apiKey && !!this.projectId;
 
     // Timeout configuration
@@ -87,7 +100,34 @@ class AgentGuard {
         'Content-Type': 'application/json',
       },
     });
-    
+
+    this.logRequestBodies = resolveLogFlag(
+      config.logRequestBodies,
+      process.env.PLUVIANAI_LOG_REQUEST_BODIES,
+      process.env.PLUVIANAI_LOG_USER_CONTENT,
+      true
+    );
+    this.logResponseBodies = resolveLogFlag(
+      config.logResponseBodies,
+      process.env.PLUVIANAI_LOG_RESPONSE_BODIES,
+      process.env.PLUVIANAI_LOG_USER_CONTENT,
+      true
+    );
+    this.logToolEventPayloads = resolveLogFlag(
+      config.logToolEventPayloads,
+      process.env.PLUVIANAI_LOG_TOOL_PAYLOADS,
+      process.env.PLUVIANAI_LOG_USER_CONTENT,
+      true
+    );
+    const mrb =
+      config.maxRequestBodyBytes ??
+      parseInt(process.env.PLUVIANAI_MAX_REQUEST_BODY_BYTES || '524288', 10);
+    const mrs =
+      config.maxResponseBodyBytes ??
+      parseInt(process.env.PLUVIANAI_MAX_RESPONSE_BODY_BYTES || '524288', 10);
+    this.maxRequestBodyBytes = Math.max(4096, Number.isFinite(mrb) ? mrb : 524288);
+    this.maxResponseBodyBytes = Math.max(4096, Number.isFinite(mrs) ? mrs : 524288);
+
     // Start health check monitoring
     if (this.enabled) {
       this.startHealthCheck();
@@ -96,15 +136,15 @@ class AgentGuard {
 
   /**
    * Initialize and patch OpenAI SDK automatically
-   * 
+   *
    * This method automatically patches the OpenAI Node.js SDK to capture
    * all API calls without requiring code changes.
-   * 
+   *
    * @example
    * ```typescript
-   * import agentguard from '@agentguard/sdk';
-   * agentguard.init();
-   * 
+   * import pluvianai from 'pluvianai';
+   * pluvianai.init();
+   *
    * // Now all OpenAI calls are automatically monitored
    * import OpenAI from 'openai';
    * const openai = new OpenAI();
@@ -113,69 +153,116 @@ class AgentGuard {
    */
   init(): void {
     if (!this.enabled) {
-      console.log('AgentGuard: Monitoring disabled (missing API key or project ID)');
+      console.log('PluvianAI: Monitoring disabled (missing API key or project ID)');
       return;
     }
 
     if (this.patched) {
-      console.log('AgentGuard: Already initialized');
+      console.log('PluvianAI: Already initialized');
       return;
     }
 
     try {
       this.patchOpenAI();
       this.patched = true;
-      console.log(`AgentGuard: Successfully initialized for project ${this.projectId}`);
+      console.log(`PluvianAI: Successfully initialized for project ${this.projectId}`);
     } catch (error: any) {
-      console.log(`AgentGuard: Failed to initialize: ${error.message}`);
+      console.log(`PluvianAI: Failed to initialize: ${error.message}`);
     }
   }
 
   private patchOpenAI(): void {
     try {
-      // Try to patch OpenAI v4+ (ESM/CJS)
+      const resolved = require.resolve('openai');
       const openaiModule = require('openai');
-      
-      if (openaiModule && openaiModule.default) {
-        // ESM default export
-        this.patchOpenAIClass(openaiModule.default);
-      } else if (openaiModule && openaiModule.OpenAI) {
-        // Named export
-        this.patchOpenAIClass(openaiModule.OpenAI);
-      } else if (openaiModule) {
-        // Direct class
-        this.patchOpenAIClass(openaiModule);
+      const cached = require.cache[resolved] as { exports: any } | undefined;
+
+      const defaultExport = openaiModule?.default;
+      const namedExport = openaiModule?.OpenAI;
+
+      if (defaultExport) {
+        const wrapped = this.wrapOpenAIConstructor(defaultExport);
+        if (wrapped && wrapped !== defaultExport) {
+          openaiModule.default = wrapped;
+          if (cached?.exports) {
+            cached.exports.default = wrapped;
+          }
+        }
+      }
+
+      if (namedExport && namedExport !== defaultExport) {
+        const wrapped = this.wrapOpenAIConstructor(namedExport);
+        if (wrapped && wrapped !== namedExport) {
+          openaiModule.OpenAI = wrapped;
+          if (cached?.exports) {
+            cached.exports.OpenAI = wrapped;
+          }
+        }
+      }
+
+      // CJS: `module.exports = OpenAI` (entire export is the constructor)
+      if (!defaultExport && !namedExport && typeof openaiModule === 'function') {
+        const wrapped = this.wrapOpenAIConstructor(openaiModule);
+        if (wrapped && wrapped !== openaiModule && cached) {
+          cached.exports = wrapped;
+        }
       }
     } catch (error) {
       // OpenAI not installed or different version
-      console.log('AgentGuard: OpenAI SDK not found. Install with: npm install openai');
+      console.log('PluvianAI: OpenAI SDK not found. Install with: npm install openai');
     }
   }
 
-  private patchOpenAIClass(OpenAIClass: any): void {
+  /**
+   * Replace OpenAI with a subclass-like wrapper so `new OpenAI()` runs our instance hooks.
+   * Patching `prototype.constructor` does not run for `new OpenAI()` in modern class semantics.
+   */
+  private wrapOpenAIConstructor(OpenAIClass: any): any {
     if (!OpenAIClass || typeof OpenAIClass !== 'function') {
-      return;
+      return null;
+    }
+    if ((OpenAIClass as any).__pluvianaiPatched) {
+      return OpenAIClass;
     }
 
-    const originalConstructor = OpenAIClass.prototype.constructor;
     const self = this;
+    const Original = OpenAIClass;
 
-    // Patch constructor to wrap chat.completions.create
-    OpenAIClass.prototype.constructor = function(...args: any[]) {
-      originalConstructor.apply(this, args);
+    function Wrapped(this: any, ...args: any[]) {
+      const instance = Reflect.construct(Original, args, new.target || Wrapped);
+      self.patchOpenAIInstance(instance);
+      return instance;
+    }
 
-      // Patch chat.completions.create if it exists
-      if (this.chat && this.chat.completions && this.chat.completions.create) {
-        const originalCreate = this.chat.completions.create;
-        const instanceId = Math.random().toString(36).substring(7);
-        
-        this.chat.completions.create = async function(...createArgs: any[]) {
-          return self.captureCall(originalCreate.bind(this), ...createArgs);
-        };
+    Object.setPrototypeOf(Wrapped, Original);
+    Wrapped.prototype = Original.prototype;
+    try {
+      Object.defineProperty(Wrapped, 'name', { configurable: true, value: Original.name });
+    } catch {
+      /* ignore */
+    }
+    try {
+      Object.defineProperty(Wrapped, 'length', { configurable: true, value: Original.length });
+    } catch {
+      /* ignore */
+    }
 
-        self.originalFunctions.set(`${instanceId}.chat.completions.create`, originalCreate);
-      }
+    (Wrapped as any).__pluvianaiPatched = true;
+    return Wrapped;
+  }
+
+  private patchOpenAIInstance(instance: any): void {
+    if (!instance?.chat?.completions?.create) {
+      return;
+    }
+    const originalCreate = instance.chat.completions.create;
+    const instanceId = Math.random().toString(36).substring(7);
+
+    instance.chat.completions.create = async (...createArgs: any[]) => {
+      return this.captureCall(originalCreate.bind(instance.chat.completions), ...createArgs);
     };
+
+    this.originalFunctions.set(`${instanceId}.chat.completions.create`, originalCreate);
   }
 
   private async captureCall(originalFunc: (...args: any[]) => Promise<any>, ...args: any[]): Promise<any> {
@@ -201,7 +288,7 @@ class AgentGuard {
         }
       }
 
-      // Send to AgentGuard API (async, non-blocking)
+      // Send to PluvianAI API (async, non-blocking)
       this.sendToAPI(requestData, responseData, latencyMs, 200).catch(() => {
         // Silently fail - don't block the application
       });
@@ -211,7 +298,7 @@ class AgentGuard {
       // Calculate latency even on error
       const latencyMs = Date.now() - startTime;
 
-      // Send error to AgentGuard API
+      // Send error to PluvianAI API
       const errorData = {
         error: error.message || String(error),
         error_type: error.constructor?.name || 'Error',
@@ -241,10 +328,10 @@ class AgentGuard {
 
   /**
    * Context manager to set chain_id and agent_name for a chain of API calls
-   * 
+   *
    * @example
    * ```typescript
-   * await agentguard.chain("user-query-123", "data-collector", async () => {
+   * await pluvianai.chain("user-query-123", "data-collector", async () => {
    *   const response1 = await openai.chat.completions.create(...);
    *   const response2 = await openai.chat.completions.create(...);
    *   // Both calls will have chain_id="user-query-123"
@@ -285,7 +372,8 @@ class AgentGuard {
     requestData: any,
     responseData: any,
     latencyMs: number,
-    statusCode: number
+    statusCode: number,
+    toolEvents?: unknown[]
   ): Promise<void> {
     if (!this.enabled) {
       return;
@@ -296,10 +384,32 @@ class AgentGuard {
       const chainId = this.getChainId();
       const agentName = this.getAgentName();
 
+      const rdIn =
+        requestData && typeof requestData === 'object' && !Array.isArray(requestData)
+          ? (requestData as Record<string, unknown>)
+          : { _pluvianai_wrapped: requestData as unknown };
+      const rsIn =
+        responseData && typeof responseData === 'object' && !Array.isArray(responseData)
+          ? (responseData as Record<string, unknown>)
+          : { _pluvianai_wrapped: responseData as unknown };
+
+      const { request_data, response_data, tool_events } = sanitizeForIngest(
+        rdIn,
+        rsIn,
+        toolEvents,
+        {
+          logRequestBodies: this.logRequestBodies,
+          logResponseBodies: this.logResponseBodies,
+          logToolEventPayloads: this.logToolEventPayloads,
+          maxRequestBodyBytes: this.maxRequestBodyBytes,
+          maxResponseBodyBytes: this.maxResponseBodyBytes,
+        }
+      );
+
       const payload: any = {
         project_id: Number(this.projectId),
-        request_data: requestData,
-        response_data: responseData,
+        request_data,
+        response_data,
         latency_ms: latencyMs,
         status_code: statusCode,
         agent_name: agentName,
@@ -310,15 +420,21 @@ class AgentGuard {
         payload.chain_id = chainId;
       }
 
+      if (toolEvents !== undefined) {
+        payload.tool_events = tool_events ?? [];
+      }
+
       // Check Circuit Breaker state before sending
       if (!this.checkCircuitBreaker()) {
-        // Circuit is open, bypass AgentGuard (fail-open)
+        // Circuit is open, bypass PluvianAI (fail-open)
         return;
       }
 
+      const ingestUrl = `${this.apiUrl}/api/v1/projects/${this.projectId}/api-calls`;
+
       // Send asynchronously (fire and forget)
       try {
-        await this.axiosInstance.post(`${this.apiUrl}/api/v1/api-calls`, payload);
+        await this.axiosInstance.post(ingestUrl, payload);
         // Success - reset circuit breaker
         this.resetCircuitBreaker();
       } catch (error) {
@@ -333,15 +449,16 @@ class AgentGuard {
 
   /**
    * Manually track an API call
-   * 
+   *
    * Use this if you want to manually track calls instead of using auto-patching.
-   * 
+   *
    * @param requestData - Request payload
    * @param responseData - Response payload
    * @param latencyMs - Latency in milliseconds
    * @param statusCode - HTTP status code
    * @param agentName - Optional agent name
    * @param chainId - Optional chain ID to group related calls
+   * @param toolEvents - Optional tool_call/tool_result events (same schema as ingest `tool_events`)
    */
   async trackCall(
     requestData: any,
@@ -349,7 +466,8 @@ class AgentGuard {
     latencyMs: number,
     statusCode: number = 200,
     agentName?: string,
-    chainId?: string
+    chainId?: string,
+    toolEvents?: unknown[]
   ): Promise<void> {
     if (!this.enabled) {
       return;
@@ -367,7 +485,7 @@ class AgentGuard {
     }
 
     try {
-      await this.sendToAPI(requestData, responseData, latencyMs, statusCode);
+      await this.sendToAPI(requestData, responseData, latencyMs, statusCode, toolEvents);
     } finally {
       // Restore old values
       if (oldChainId !== undefined) {
@@ -383,7 +501,7 @@ class AgentGuard {
       }
     }
   }
-  
+
   private checkCircuitBreaker(): boolean {
     if (this.circuitState === 'closed') {
       return true;
@@ -403,7 +521,7 @@ class AgentGuard {
     }
     return true;
   }
-  
+
   private recordCircuitFailure(): void {
     this.circuitFailures++;
     if (this.circuitFailures >= this.circuitBreakerConfig.failureThreshold) {
@@ -411,7 +529,7 @@ class AgentGuard {
       this.circuitOpenedAt = Date.now();
     }
   }
-  
+
   private resetCircuitBreaker(): void {
     if (this.circuitState === 'half-open') {
       this.circuitState = 'closed';
@@ -420,7 +538,7 @@ class AgentGuard {
       this.circuitFailures = 0;
     }
   }
-  
+
   private startHealthCheck(): void {
     setInterval(async () => {
       try {
@@ -435,25 +553,25 @@ class AgentGuard {
       }
     }, this.healthCheckInterval);
   }
-  
+
   // ============================================
   // Signal Detection / Regression Status Methods
   // ============================================
-  
+
   /**
    * Check regression status for a response using signal-based detection.
-   * 
+   *
    * Returns status: 'safe', 'regressed', or 'critical'
-   * 
+   *
    * @param responseText - The LLM response text to check
    * @param requestData - Original request data (optional)
    * @param responseData - Full response data including latency (optional)
    * @param baselineResponse - Previous response for comparison (optional)
    * @returns Promise with status, signals, signal_count, etc.
-   * 
+   *
    * @example
    * ```typescript
-   * const result = await agentguard.checkStatus(
+   * const result = await pluvianai.checkStatus(
    *   "I cannot help with that.",
    *   { messages: [...] }
    * );
@@ -471,7 +589,7 @@ class AgentGuard {
     if (!this.enabled) {
       return { status: 'safe', signals: [], signal_count: 0 };
     }
-    
+
     try {
       const payload = {
         project_id: Number(this.projectId),
@@ -480,56 +598,56 @@ class AgentGuard {
         response_data: responseData,
         baseline_response: baselineResponse,
       };
-      
+
       const response = await this.axiosInstance.post(
         `${this.apiUrl}/api/v1/projects/${this.projectId}/regression/check`,
         payload
       );
-      
+
       return response.data;
     } catch (error: any) {
       // Fail-open: return safe status on error
       return { status: 'safe', signals: [], signal_count: 0, error: error.message };
     }
   }
-  
+
   /**
    * Get the current regression status for the project.
-   * 
+   *
    * @returns Promise with current_status, review_stats, worst_prompt_stats, etc.
-   * 
+   *
    * @example
    * ```typescript
-   * const status = await agentguard.getProjectStatus();
+   * const status = await pluvianai.getProjectStatus();
    * console.log(`Project status: ${status.current_status}`);
    * ```
    */
   async getProjectStatus(): Promise<{ current_status: string; error?: string; [key: string]: any }> {
     if (!this.enabled) {
-      return { current_status: 'safe', error: 'AgentGuard not enabled' };
+      return { current_status: 'safe', error: 'PluvianAI not enabled' };
     }
-    
+
     try {
       const response = await this.axiosInstance.get(
         `${this.apiUrl}/api/v1/projects/${this.projectId}/regression/status`
       );
-      
+
       return response.data;
     } catch (error: any) {
       return { current_status: 'safe', error: error.message };
     }
   }
-  
+
   /**
    * Quick check if a response is safe (no regression detected).
-   * 
+   *
    * @param responseText - The LLM response text to check
    * @param requestData - Original request data (optional)
    * @returns Promise<boolean> - True if status is 'safe', False otherwise
-   * 
+   *
    * @example
    * ```typescript
-   * if (await agentguard.isSafe(response.content)) {
+   * if (await pluvianai.isSafe(response.content)) {
    *   console.log("Response is safe!");
    * } else {
    *   console.log("Potential regression detected!");
@@ -543,40 +661,40 @@ class AgentGuard {
 }
 
 // Global instance
-let globalInstance: AgentGuard | null = null;
+let globalInstance: PluvianAI | null = null;
 
 /**
- * Initialize AgentGuard with zero-config setup
- * 
+ * Initialize PluvianAI with zero-config setup
+ *
  * This function automatically patches the OpenAI SDK to capture all API calls.
- * 
+ *
  * @example
  * ```typescript
- * import agentguard from '@agentguard/sdk';
- * agentguard.init();
- * 
+ * import pluvianai from 'pluvianai';
+ * pluvianai.init();
+ *
  * // Now all OpenAI calls are automatically monitored
  * import OpenAI from 'openai';
  * const openai = new OpenAI();
  * const response = await openai.chat.completions.create({...});
  * ```
- * 
+ *
  * @param config - Configuration options
  */
-export function init(config: AgentGuardConfig = {}): void {
-  globalInstance = new AgentGuard(config);
+export function init(config: PluvianAIConfig = {}): void {
+  globalInstance = new PluvianAI(config);
   globalInstance.init();
 }
 
 /**
  * Context manager to set chain_id and agent_name for a chain of API calls
- * 
+ *
  * @example
  * ```typescript
- * import agentguard from '@agentguard/sdk';
- * agentguard.init();
- * 
- * await agentguard.chain("user-query-123", "data-collector", async () => {
+ * import pluvianai from 'pluvianai';
+ * pluvianai.init();
+ *
+ * await pluvianai.chain("user-query-123", "data-collector", async () => {
  *   const response1 = await openai.chat.completions.create(...);
  *   const response2 = await openai.chat.completions.create(...);
  *   // Both calls will have chain_id="user-query-123"
@@ -589,22 +707,23 @@ export async function chain<T>(
   callback: () => Promise<T>
 ): Promise<T> {
   if (!globalInstance) {
-    throw new Error('AgentGuard not initialized. Call agentguard.init() first.');
+    throw new Error('PluvianAI not initialized. Call pluvianai.init() first.');
   }
   return globalInstance.chain(chainId, agentName, callback);
 }
 
 /**
  * Manually track an API call
- * 
+ *
  * Use this if you want to manually track calls instead of using auto-patching.
- * 
+ *
  * @param requestData - Request payload
  * @param responseData - Response payload
  * @param latencyMs - Latency in milliseconds
  * @param statusCode - HTTP status code
  * @param agentName - Optional agent name
  * @param chainId - Optional chain ID to group related calls
+ * @param toolEvents - Optional `tool_events` array for Live View / Release Gate (see README)
  */
 export async function trackCall(
   requestData: any,
@@ -612,31 +731,48 @@ export async function trackCall(
   latencyMs: number,
   statusCode: number = 200,
   agentName?: string,
-  chainId?: string
+  chainId?: string,
+  toolEvents?: unknown[]
 ): Promise<void> {
   if (globalInstance) {
-    await globalInstance.trackCall(requestData, responseData, latencyMs, statusCode, agentName, chainId);
+    await globalInstance.trackCall(
+      requestData,
+      responseData,
+      latencyMs,
+      statusCode,
+      agentName,
+      chainId,
+      toolEvents
+    );
   } else {
     // Create a temporary instance
-    const instance = new AgentGuard();
-    await instance.trackCall(requestData, responseData, latencyMs, statusCode, agentName, chainId);
+    const instance = new PluvianAI();
+    await instance.trackCall(
+      requestData,
+      responseData,
+      latencyMs,
+      statusCode,
+      agentName,
+      chainId,
+      toolEvents
+    );
   }
 }
 
 /**
  * Check regression status for a response using signal-based detection.
- * 
+ *
  * Returns status: 'safe', 'regressed', or 'critical'
- * 
+ *
  * @param responseText - The LLM response text to check
  * @param requestData - Original request data (optional)
  * @param responseData - Full response data including latency (optional)
  * @param baselineResponse - Previous response for comparison (optional)
  * @returns Promise with status, signals, signal_count, etc.
- * 
+ *
  * @example
  * ```typescript
- * const result = await agentguard.checkStatus(
+ * const result = await pluvianai.checkStatus(
  *   "I cannot help with that.",
  *   { messages: [...] }
  * );
@@ -654,19 +790,19 @@ export async function checkStatus(
   if (globalInstance) {
     return globalInstance.checkStatus(responseText, requestData, responseData, baselineResponse);
   } else {
-    const instance = new AgentGuard();
+    const instance = new PluvianAI();
     return instance.checkStatus(responseText, requestData, responseData, baselineResponse);
   }
 }
 
 /**
  * Get the current regression status for the project.
- * 
+ *
  * @returns Promise with current_status, review_stats, worst_prompt_stats, etc.
- * 
+ *
  * @example
  * ```typescript
- * const status = await agentguard.getProjectStatus();
+ * const status = await pluvianai.getProjectStatus();
  * console.log(`Project status: ${status.current_status}`);
  * ```
  */
@@ -674,21 +810,21 @@ export async function getProjectStatus(): Promise<{ current_status: string; erro
   if (globalInstance) {
     return globalInstance.getProjectStatus();
   } else {
-    const instance = new AgentGuard();
+    const instance = new PluvianAI();
     return instance.getProjectStatus();
   }
 }
 
 /**
  * Quick check if a response is safe (no regression detected).
- * 
+ *
  * @param responseText - The LLM response text to check
  * @param requestData - Original request data (optional)
  * @returns Promise<boolean> - True if status is 'safe', False otherwise
- * 
+ *
  * @example
  * ```typescript
- * if (await agentguard.isSafe(response.content)) {
+ * if (await pluvianai.isSafe(response.content)) {
  *   console.log("Response is safe!");
  * } else {
  *   console.log("Potential regression detected!");
@@ -699,13 +835,13 @@ export async function isSafe(responseText: string, requestData?: any): Promise<b
   if (globalInstance) {
     return globalInstance.isSafe(responseText, requestData);
   } else {
-    const instance = new AgentGuard();
+    const instance = new PluvianAI();
     return instance.isSafe(responseText, requestData);
   }
 }
 
 // Export class for advanced usage
-export { AgentGuard };
+export { PluvianAI };
 
 // Default export
 export default {
@@ -715,5 +851,5 @@ export default {
   checkStatus,
   getProjectStatus,
   isSafe,
-  AgentGuard,
+  PluvianAI,
 };

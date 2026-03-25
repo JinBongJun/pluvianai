@@ -1,0 +1,340 @@
+/**
+ * Shared API client and helpers for PluvianAI backend.
+ */
+import axios from "axios";
+
+export const logError = (
+  message: string,
+  error?: unknown,
+  context?: Record<string, unknown>
+) => {
+  console.error(message, error, context);
+};
+
+export const logWarn = (message: string, context?: Record<string, unknown>) => {
+  if (process.env.NODE_ENV === "development") {
+    console.warn(message, context);
+  }
+};
+
+export const unwrapResponse = (response: { data: any }): any => {
+  const data = response.data;
+  if (data && typeof data === "object" && "data" in data) {
+    return data.data;
+  }
+  return data;
+};
+
+export const unwrapArrayResponse = (response: { data: any }): any[] => {
+  const data = unwrapResponse(response);
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === "object" && "items" in data) {
+    return data.items || [];
+  }
+  return [];
+};
+
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_TIMEOUT_MS = 30_000;
+const SESSION_AUTH_CODES = new Set([
+  "no_token",
+  "access_token_expired",
+  "access_token_invalid",
+  "refresh_token_missing",
+  "refresh_token_expired",
+  "refresh_token_invalid",
+  "refresh_token_not_found",
+  "refresh_token_revoked",
+]);
+
+const PUBLIC_PATHS = [
+  /^\/auth\/login/,
+  /^\/auth\/register/,
+  /^\/auth\/forgot/,
+  /^\/health/,
+  /^\/trust-center\/policies/,
+  /^\/trust-center\/compliance/,
+];
+
+const CSRF_COOKIE_NAME = "csrf_token";
+
+function isPublicPath(url: string): boolean {
+  if (!url) return false;
+  let path = url.split("?")[0] || "";
+  if (path.startsWith("http")) {
+    try {
+      path = new URL(url).pathname;
+    } catch {
+      path = url.split("?")[0] || "";
+    }
+  }
+  if (path.startsWith("/api/v1/")) path = path.slice(7);
+  else if (path.startsWith("/api/v1")) path = "/";
+  if (!path.startsWith("/")) path = "/" + path;
+  return PUBLIC_PATHS.some(re => re.test(path));
+}
+
+function isRefreshRequest(url: string | undefined): boolean {
+  if (!url) return false;
+  return /\/auth\/refresh(?:\?|$)/.test(url);
+}
+
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const prefix = `${name}=`;
+  const cookies = document.cookie ? document.cookie.split("; ") : [];
+  for (const entry of cookies) {
+    if (entry.startsWith(prefix)) {
+      return decodeURIComponent(entry.slice(prefix.length));
+    }
+  }
+  return null;
+}
+
+function attachCsrfHeader(
+  headers: Record<string, string> | undefined,
+  url: string | undefined,
+  method: string | undefined
+): Record<string, string> | undefined {
+  const normalizedMethod = String(method || "get").toUpperCase();
+  if (normalizedMethod === "GET" || normalizedMethod === "HEAD" || normalizedMethod === "OPTIONS") {
+    return headers;
+  }
+  if (typeof window === "undefined") return headers;
+  if (isPublicPath(url || "")) return headers;
+  const csrfToken = readCookie(CSRF_COOKIE_NAME);
+  if (!csrfToken) return headers;
+  return {
+    ...(headers || {}),
+    "X-CSRF-Token": csrfToken,
+  };
+}
+
+type ApiErrorPayload = {
+  status: number;
+  code: string | null;
+  message: string | null;
+  details: Record<string, unknown> | null;
+};
+
+export type RateLimitInfo = {
+  bucket: string | null;
+  limit: number | null;
+  windowSec: number | null;
+  retryAfterSec: number | null;
+};
+
+function getSafeNextPath(): string | null {
+  if (typeof window === "undefined") return null;
+  const next = `${window.location.pathname}${window.location.search}`;
+  return next.startsWith("/") ? next : null;
+}
+
+export async function clearFrontendAuthSession(): Promise<void> {
+  if (typeof window === "undefined") return;
+
+  await fetch("/api/auth/session", {
+    method: "DELETE",
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+}
+
+export function clearStoredAuth(): void {
+  if (typeof window === "undefined") return;
+}
+
+export function extractApiErrorPayload(error: any): ApiErrorPayload {
+  const status = Number(error?.response?.status ?? 0);
+  const responseData = error?.response?.data;
+  const topLevelError =
+    responseData?.error && typeof responseData.error === "object" ? responseData.error : null;
+  const detail =
+    responseData?.detail && typeof responseData.detail === "object" ? responseData.detail : null;
+
+  const code =
+    (typeof topLevelError?.code === "string" && topLevelError.code) ||
+    (typeof detail?.code === "string" && detail.code) ||
+    null;
+  const message =
+    (typeof topLevelError?.message === "string" && topLevelError.message) ||
+    (typeof detail?.message === "string" && detail.message) ||
+    (typeof responseData?.message === "string" && responseData.message) ||
+    (typeof responseData?.detail === "string" && responseData.detail) ||
+    null;
+  const details =
+    (topLevelError?.details &&
+    typeof topLevelError.details === "object" &&
+    !Array.isArray(topLevelError.details)
+      ? topLevelError.details
+      : detail) || null;
+
+  return { status, code, message, details };
+}
+
+export function getApiErrorCode(error: any): string | null {
+  return extractApiErrorPayload(error).code;
+}
+
+export function getApiErrorMessage(error: any): string | null {
+  return extractApiErrorPayload(error).message;
+}
+
+export function isRateLimitError(error: any): boolean {
+  return Number(error?.response?.status ?? 0) === 429;
+}
+
+export function getRateLimitInfo(error: any): RateLimitInfo {
+  const { details } = extractApiErrorPayload(error);
+  const asNumber = (value: unknown): number | null => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  };
+  return {
+    bucket: typeof details?.bucket === "string" ? details.bucket : null,
+    limit: asNumber(details?.limit),
+    windowSec: asNumber(details?.window_sec),
+    retryAfterSec:
+      asNumber(details?.retry_after_sec) ??
+      asNumber(error?.response?.headers?.["retry-after"]),
+  };
+}
+
+export function isSessionAuthError(errorOrCode: any): boolean {
+  const code =
+    typeof errorOrCode === "string" ? errorOrCode : extractApiErrorPayload(errorOrCode).code;
+  return !!code && SESSION_AUTH_CODES.has(code);
+}
+
+export function redirectToLogin(options?: { code?: string | null; message?: string | null }): void {
+  if (typeof window === "undefined") return;
+  const params = new URLSearchParams();
+  params.set("reauth", "1");
+  const code = options?.code?.trim();
+  if (code) params.set("code", code);
+  const next = getSafeNextPath();
+  if (next) params.set("next", next);
+  if (options?.message) {
+    sessionStorage.setItem("pluvianai_reauth_message", options.message);
+  } else {
+    sessionStorage.removeItem("pluvianai_reauth_message");
+  }
+  window.location.href = `/login?${params.toString()}`;
+}
+
+export const apiClient = axios.create({
+  baseURL: `${API_URL}/api/v1`,
+  timeout: API_TIMEOUT_MS,
+  headers: { "Content-Type": "application/json" },
+  withCredentials: true,
+});
+
+apiClient.interceptors.request.use(
+  config => {
+    if (typeof window === "undefined") return config;
+    if (isPublicPath(config.url || "")) return config;
+    config.headers = attachCsrfHeader(
+      (config.headers as Record<string, string> | undefined) ?? undefined,
+      config.url,
+      config.method
+    ) as any;
+    if (process.env.NODE_ENV === "development") {
+      console.debug(
+        "[API] Protected request using cookie-backed auth. URL:",
+        config.url
+      );
+    }
+    return config;
+  },
+  err => Promise.reject(err)
+);
+
+apiClient.interceptors.response.use(
+  response => response,
+  async error => {
+    const originalRequest = error?.config as any | undefined;
+    const requestUrl = originalRequest?.url as string | undefined;
+
+    if (
+      error.response?.status === 403 &&
+      error.response?.headers["x-upgrade-required"] === "true"
+    ) {
+      error.upgradeRequired = true;
+      error.upgradeDetails = error.response?.data?.error?.details || {};
+      return Promise.reject(error);
+    }
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !isRefreshRequest(requestUrl)
+    ) {
+      originalRequest._retry = true;
+      const { code, message } = extractApiErrorPayload(error);
+      if (process.env.NODE_ENV === "development") {
+        console.warn(
+          "[API] 401 on",
+          originalRequest.url,
+          "– backend says:",
+          JSON.stringify({ code, message })
+        );
+      }
+
+      if (typeof window === "undefined") {
+        return Promise.reject(error);
+      }
+
+      try {
+        await axios.post(
+          `${API_URL}/api/v1/auth/refresh`,
+          {},
+          {
+            headers: attachCsrfHeader(
+              { "Content-Type": "application/json" },
+              `${API_URL}/api/v1/auth/refresh`,
+              "POST"
+            ) as any,
+            withCredentials: true,
+          }
+        );
+        if (originalRequest.headers?.Authorization) {
+          delete originalRequest.headers.Authorization;
+        }
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        const refreshPayload = extractApiErrorPayload(refreshError);
+        clearStoredAuth();
+        await clearFrontendAuthSession().catch(() => undefined);
+        redirectToLogin({
+          code: refreshPayload.code || code,
+          message:
+            refreshPayload.message || message || "Your session has expired. Please sign in again.",
+        });
+        return Promise.reject(refreshError);
+      }
+    }
+
+    if (
+      error.response?.status === 403 &&
+      error.response?.headers?.["x-upgrade-required"] === "true"
+    ) {
+      const errorData = error.response?.data;
+      if (errorData?.error?.details) {
+        error.upgradeInfo = errorData.error.details;
+      }
+    }
+
+    if (error.response?.status === 404 && process.env.NODE_ENV === "development") {
+      const msg = error.response?.data?.error?.message;
+      if (msg === "Not Found") {
+        logWarn("[API] 404 Not Found – check route and NEXT_PUBLIC_API_URL", {
+          url: originalRequest?.url,
+          baseURL: originalRequest?.baseURL,
+        });
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);

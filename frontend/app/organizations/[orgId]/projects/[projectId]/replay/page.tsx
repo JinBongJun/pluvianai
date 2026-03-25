@@ -1,28 +1,30 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import ProjectLayout from "@/components/layout/ProjectLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { replayAPI, apiCallsAPI, organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import { useToast } from "@/components/ToastContainer";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { Play, History, Split, ArrowRight, Settings2, Trash2 } from "lucide-react";
 import ProjectTabs from "@/components/ProjectTabs";
-import posthog from "posthog-js";
+import { analytics } from "@/lib/analytics";
 import { clsx } from "clsx";
 import useSWR from "swr";
+import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
+import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 
 export default function ReplayPage() {
   const router = useRouter();
-  const params = useParams();
   const toast = useToast();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
-  const projectId = Number(
-    Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId
-  );
+  const { orgId, projectId } = useOrgProjectParams();
+  const isAuthenticated = useRequireAuth();
 
-  const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
+  const { data: org } = useSWR(orgId ? orgKeys.detail(orgId) : null, () =>
     organizationsAPI.get(orgId, { includeStats: false })
   );
 
@@ -30,6 +32,7 @@ export default function ReplayPage() {
   const [loading, setLoading] = useState(true);
   const [replaying, setReplaying] = useState(false);
   const [isConcurrencyBlocked, setIsConcurrencyBlocked] = useState(false);
+  const [planError, setPlanError] = useState<PlanLimitError | null>(null);
   const [concurrencyError, setConcurrencyError] = useState<{
     message?: string;
     limit?: number;
@@ -76,11 +79,7 @@ export default function ReplayPage() {
   }, [projectId, toast]);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    if (!isAuthenticated) return;
 
     if (!projectId || isNaN(projectId) || projectId <= 0) {
       if (orgId) {
@@ -93,7 +92,7 @@ export default function ReplayPage() {
 
     loadSnapshots();
     loadRubrics();
-  }, [projectId, orgId, router, loadSnapshots, loadRubrics]);
+  }, [isAuthenticated, projectId, orgId, router, loadSnapshots, loadRubrics]);
 
   const handleRunReplay = async () => {
     if (selectedIds.length === 0) {
@@ -103,6 +102,7 @@ export default function ReplayPage() {
     if (isConcurrencyBlocked) return;
 
     setReplaying(true);
+    setPlanError(null);
     try {
       const replayResults = await replayAPI.runBatchReplay(projectId, {
         snapshot_ids: selectedIds,
@@ -113,7 +113,7 @@ export default function ReplayPage() {
       });
 
       // Track replay execution event
-      posthog.capture("replay_executed", {
+      analytics.capture("replay_executed", {
         project_id: projectId,
         item_count: selectedIds.length,
         has_rubric: !!selectedRubricId,
@@ -124,9 +124,17 @@ export default function ReplayPage() {
       setResults(replayResults);
       toast.showToast(`Batch replay of ${selectedIds.length} items completed`, "success");
     } catch (err: any) {
+      const parsed = parsePlanLimitError(err);
       const detail = err?.response?.data?.detail;
       const errorCode = typeof detail === "object" ? detail?.code : undefined;
-      if (err?.response?.status === 403 && errorCode === "CONCURRENT_TEST_NOT_ALLOWED") {
+      if (parsed && parsed.code === "LIMIT_PLATFORM_REPLAY_CREDITS") {
+        setPlanError(parsed);
+        toast.showToast(
+          parsed.message ||
+            "You have used all hosted replay credits for this billing period. Use your own provider key or upgrade your plan.",
+          "warning"
+        );
+      } else if (err?.response?.status === 403 && errorCode === "CONCURRENT_TEST_NOT_ALLOWED") {
         setIsConcurrencyBlocked(true);
         setConcurrencyError({
           message:
@@ -186,6 +194,11 @@ export default function ReplayPage() {
       ]}
     >
       <div className="max-w-7xl mx-auto">
+        {planError && (
+          <div className="mb-4">
+            <PlanLimitBanner {...planError} context="replay" />
+          </div>
+        )}
         {concurrencyError && (
           <div className="mb-4 rounded-md border border-yellow-500/60 bg-yellow-500/10 px-3 py-2 text-xs flex items-start justify-between gap-3">
             <div>
@@ -318,7 +331,10 @@ export default function ReplayPage() {
                 {loading ? (
                   <div className="p-4 space-y-3" role="status" aria-label="Loading logs">
                     {[1, 2, 3, 4, 5].map(i => (
-                      <div key={i} className="flex gap-3 p-4 rounded-lg border border-white/5 bg-white/5">
+                      <div
+                        key={i}
+                        className="flex gap-3 p-4 rounded-lg border border-white/5 bg-white/5"
+                      >
                         <div className="animate-pulse h-5 w-16 rounded bg-white/10" />
                         <div className="flex-1 space-y-2">
                           <div className="animate-pulse h-3 rounded bg-white/10 w-full max-w-xs" />

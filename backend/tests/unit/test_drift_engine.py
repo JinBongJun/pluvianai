@@ -5,7 +5,6 @@ import pytest
 from datetime import datetime, timedelta
 from app.services.drift_engine import DriftEngine
 from app.models.api_call import APICall
-from app.models.drift_detection import DriftDetection
 
 
 @pytest.mark.unit

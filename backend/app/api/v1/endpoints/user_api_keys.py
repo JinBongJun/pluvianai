@@ -4,7 +4,7 @@ User API Key endpoints for managing user-provided API keys
 
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -30,6 +30,8 @@ class CreateUserApiKeyRequest(BaseModel):
 
 class UserApiKeyResponse(BaseModel):
     """User API key response (without decrypted key)"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     project_id: int
     agent_id: Optional[str]
@@ -37,10 +39,7 @@ class UserApiKeyResponse(BaseModel):
     name: Optional[str]
     is_active: bool
     created_at: str
-
-    class Config:
-        from_attributes = True
-
+    key_hint: Optional[str] = None
 
 @router.post("")
 @handle_errors
@@ -105,6 +104,7 @@ async def create_user_api_key(
             "name": user_key.name,
             "is_active": user_key.is_active,
             "created_at": user_key.created_at.isoformat() if user_key.created_at else None,
+            "key_hint": getattr(user_key, "key_hint", None),
         })
     except Exception as e:
         logger.error(f"Failed to create user API key: {str(e)}", exc_info=True)
@@ -139,6 +139,7 @@ async def list_user_api_keys(
             name=k.name,
             is_active=k.is_active,
             created_at=k.created_at.isoformat() if k.created_at else "",
+            key_hint=getattr(k, "key_hint", None),
         )
         for k in keys
     ]
@@ -165,8 +166,13 @@ async def delete_user_api_key(
     # Get key info before deletion for audit log
     keys = service.list_user_api_keys(project_id)
     key_to_delete = next((k for k in keys if k.id == key_id), None)
+    if key_to_delete is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User API key not found"
+        )
     
-    deleted = service.delete_user_api_key(key_id, current_user.id)
+    deleted = service.delete_user_api_key(key_id, current_user.id, project_id=project_id)
 
     if not deleted:
         raise HTTPException(

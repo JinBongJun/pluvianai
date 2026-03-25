@@ -5,12 +5,17 @@ User settings endpoints
 import secrets
 import hashlib
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 from app.core.database import get_db
-from app.core.security import get_current_user, verify_password, get_password_hash
+from app.core.security import (
+    get_current_user,
+    verify_password,
+    get_password_hash,
+    require_csrf_for_cookie_auth,
+)
 from app.core.decorators import handle_errors
 from app.core.logging_config import logger
 from app.core.responses import success_response
@@ -23,15 +28,13 @@ router = APIRouter()
 
 class ProfileResponse(BaseModel):
     """User profile response"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     email: str
     full_name: Optional[str]
     is_active: bool
     created_at: str
-
-    class Config:
-        from_attributes = True
-
 
 class UpdateProfileRequest(BaseModel):
     """Update profile request"""
@@ -51,6 +54,8 @@ class ChangePasswordRequest(BaseModel):
 
 class NotificationSettingsResponse(BaseModel):
     """Notification settings response"""
+    model_config = ConfigDict(from_attributes=True)
+
     email_drift: bool
     email_cost_anomaly: bool
     email_quality_drop: bool
@@ -61,10 +66,6 @@ class NotificationSettingsResponse(BaseModel):
     slack_webhook_url: Optional[str]
     discord_enabled: bool
     discord_webhook_url: Optional[str]
-
-    class Config:
-        from_attributes = True
-
 
 class UpdateNotificationSettingsRequest(BaseModel):
     """Update notification settings request"""
@@ -81,13 +82,17 @@ class UpdateNotificationSettingsRequest(BaseModel):
 
 
 # API Key Models
+# Scope: "*" = all, or comma-separated e.g. "ingest,read". "ingest" = POST api-calls only.
 class CreateAPIKeyRequest(BaseModel):
     """Create API key request"""
     name: str
+    scope: Optional[str] = None  # Default "*"; use "ingest" for SDK-only keys
 
 
 class APIKeyResponse(BaseModel):
     """API key response (without actual key value)"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: Optional[str]
     is_active: bool
@@ -96,16 +101,21 @@ class APIKeyResponse(BaseModel):
     # key_prefix shows first 12 chars for identification (ag_live_xxxx...)
     key_prefix: Optional[str] = None
 
-    class Config:
-        from_attributes = True
-
-
 class APIKeyCreatedResponse(BaseModel):
     """Response when API key is created (includes full key, shown only once)"""
     id: int
     name: Optional[str]
     api_key: str  # Full key, shown only once
     message: str
+
+
+def _generate_api_key_pair() -> tuple[str, str]:
+    """Return (raw_api_key, sha256_hash_for_storage)."""
+    key_prefix = "ag_live_"
+    random_part = secrets.token_urlsafe(32)
+    raw_api_key = f"{key_prefix}{random_part}"
+    key_hash = hashlib.sha256(raw_api_key.encode()).hexdigest()
+    return raw_api_key, key_hash
 
 
 @router.get("/profile", response_model=ProfileResponse)
@@ -129,6 +139,7 @@ async def get_profile(
 async def update_profile(
     request: UpdateProfileRequest,
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """Update user profile"""
@@ -137,7 +148,8 @@ async def update_profile(
     if request.full_name is not None:
         current_user.full_name = request.full_name
     
-    # Note: get_db() dependency automatically commits, so db.commit() is not needed
+    # Flush pending mutation before refresh so updated fields are persisted in response.
+    db.flush()
     db.refresh(current_user)
     
     logger.info(f"Profile updated for user {current_user.id}")
@@ -155,6 +167,7 @@ async def update_profile(
 async def delete_account(
     request: DeleteAccountRequest,
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """Delete user account (requires password confirmation)"""
@@ -180,6 +193,7 @@ async def delete_account(
 async def change_password(
     request: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """Change user password"""
@@ -247,6 +261,7 @@ async def get_api_keys(
 async def create_api_key(
     request: CreateAPIKeyRequest,
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """
@@ -273,18 +288,15 @@ async def create_api_key(
         )
     
     # Generate secure API key
-    key_prefix = "ag_live_"
-    random_part = secrets.token_urlsafe(32)
-    api_key_value = f"{key_prefix}{random_part}"
+    api_key_value, key_hash = _generate_api_key_pair()
     
-    # Hash the key for storage (SHA256)
-    key_hash = hashlib.sha256(api_key_value.encode()).hexdigest()
-    
-    # Create API key record
+    # Create API key record (scope: "*" = full access, "ingest" = ingest-only, etc.)
+    scope_value = (request.scope or "*").strip() or "*"
     api_key = APIKey(
         user_id=current_user.id,
         key_hash=key_hash,
         name=request.name.strip(),
+        scope=scope_value,
         is_active=True,
     )
     db.add(api_key)
@@ -301,11 +313,67 @@ async def create_api_key(
     )
 
 
+@router.post("/api-keys/{key_id}/rotate", response_model=APIKeyCreatedResponse)
+@handle_errors
+async def rotate_api_key(
+    key_id: int,
+    current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Rotate an API key.
+
+    Creates a brand new key and deactivates the old key in one operation.
+    Full key is returned only once.
+    """
+    logger.info(f"User {current_user.id} rotating API key: {key_id}")
+
+    old_key = db.query(APIKey).filter(
+        APIKey.id == key_id,
+        APIKey.user_id == current_user.id,
+        APIKey.is_active == True,
+    ).first()
+    if not old_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="API key not found",
+        )
+
+    raw_api_key, key_hash = _generate_api_key_pair()
+    new_key = APIKey(
+        user_id=current_user.id,
+        key_hash=key_hash,
+        name=(old_key.name or "Rotated key"),
+        scope=old_key.scope or "*",
+        is_active=True,
+    )
+    db.add(new_key)
+
+    # Deactivate old key as part of rotation.
+    old_key.is_active = False
+    old_key.last_used_at = datetime.now(timezone.utc)
+
+    db.flush()
+    db.refresh(new_key)
+
+    logger.info(
+        f"API key rotated for user {current_user.id}: old_key_id={old_key.id}, new_key_id={new_key.id}"
+    )
+    return APIKeyCreatedResponse(
+        id=new_key.id,
+        name=new_key.name,
+        api_key=raw_api_key,
+        message="API key rotated successfully. Save this key now - it won't be shown again!",
+    )
+
+
 @router.delete("/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
 @handle_errors
 async def delete_api_key(
     key_id: int,
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """
@@ -342,6 +410,7 @@ async def update_api_key(
     key_id: int,
     request: CreateAPIKeyRequest,  # Reuse for name update
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """Update API key name"""
@@ -414,6 +483,7 @@ async def get_notification_settings(
 async def update_notification_settings(
     request: UpdateNotificationSettingsRequest,
     current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
     """Update user notification settings"""

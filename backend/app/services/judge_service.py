@@ -106,6 +106,95 @@ Compare the original_response and replayed_response, and provide scores and reas
             logger.error(f"Judge Service Error: {error_msg}")
             return {"error": "Judge evaluation failed"}
 
+    async def evaluate_grounding(
+        self,
+        tool_evidence_text: str,
+        final_response_text: str,
+        judge_model: str = "gpt-4o-mini",
+        user_api_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Judge whether the final response is grounded in the provided tool evidence.
+
+        Returns JSON with:
+        - grounded: boolean
+        - confidence: "low" | "medium" | "high"
+        - reasoning: string
+        - matched_facts: string[]
+        - missing_facts: string[]
+        """
+        system_prompt = """<system>
+You are an expert evaluator for tool grounding in AI agents.
+
+Your task:
+- Read the TOOL_EVIDENCE and the FINAL_RESPONSE
+- Decide whether the FINAL_RESPONSE is meaningfully grounded in facts present in TOOL_EVIDENCE
+- Allow paraphrasing and summarization
+- Do not require verbatim copying
+- Mark grounded=false when the response contradicts the evidence, ignores the key evidence, or invents unsupported facts
+
+You must output strictly valid JSON with these keys:
+- "grounded": boolean
+- "confidence": "low" | "medium" | "high"
+- "reasoning": string
+- "matched_facts": string[]
+- "missing_facts": string[]
+</system>"""
+
+        sanitized_tool_evidence = self._sanitize_for_judge(tool_evidence_text or "")
+        sanitized_final_response = self._sanitize_for_judge(final_response_text or "")
+
+        user_content = f"""<user_input>
+<tool_evidence>
+{sanitized_tool_evidence}
+</tool_evidence>
+
+<final_response>
+{sanitized_final_response}
+</final_response>
+</user_input>
+
+<instruction>
+Decide whether the final_response is grounded in the tool_evidence.
+Be conservative: if the key factual content in the final_response is not supported by tool_evidence, set grounded to false.
+</instruction>"""
+
+        payload = {
+            "model": judge_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            "response_format": {"type": "json_object"},
+        }
+
+        api_key = user_api_key or settings.OPENAI_API_KEY
+        if not api_key:
+            raise ValueError("No API key available. Set OPENAI_API_KEY or provide user_api_key.")
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(self.api_url, headers=headers, json=payload)
+                if response.status_code == 200:
+                    result = response.json()
+                    content = result["choices"][0]["message"]["content"]
+                    parsed = json.loads(content)
+                    if isinstance(parsed, dict):
+                        return parsed
+                    return {"error": "Judge evaluation failed"}
+                error_text = response.text.replace(api_key, "[REDACTED]") if api_key in response.text else response.text
+                logger.error(f"Judge grounding API failed: {error_text}")
+                return {"error": "Judge evaluation failed"}
+        except Exception as e:
+            error_msg = str(e).replace(api_key, "[REDACTED]") if api_key in str(e) else str(e)
+            logger.error(f"Judge Grounding Error: {error_msg}")
+            return {"error": "Judge evaluation failed"}
+
     def _sanitize_for_judge(self, text: str) -> str:
         """
         Sanitize text for Judge input to prevent Prompt Injection

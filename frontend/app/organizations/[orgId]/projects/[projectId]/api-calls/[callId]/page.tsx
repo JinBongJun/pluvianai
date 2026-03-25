@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import ProjectLayout from "@/components/layout/ProjectLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import JSONViewer from "@/components/ui/JSONViewer";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -16,9 +18,11 @@ export default function APICallDetailPage() {
   const router = useRouter();
   const params = useParams();
   const toast = useToast();
-  const orgId = params.orgId as string;
-  const projectId = Number(params.projectId);
-  const callId = Number(params.callId);
+  const { orgId, projectId } = useOrgProjectParams();
+  const isAuthenticated = useRequireAuth();
+  const callId = Number(
+    Array.isArray(params?.callId) ? params.callId[0] : params?.callId
+  );
 
   const [apiCall, setApiCall] = useState<any>(null);
   const [qualityScore, setQualityScore] = useState<any>(null);
@@ -31,7 +35,7 @@ export default function APICallDetailPage() {
   const loadAPICall = useCallback(async () => {
     try {
       const [callData, callsList] = await Promise.all([
-        apiCallsAPI.get(callId),
+        apiCallsAPI.get(projectId, callId),
         apiCallsAPI.list(projectId, { limit: 1000 }),
       ]);
 
@@ -75,14 +79,9 @@ export default function APICallDetailPage() {
   }, [callId, projectId, basePath, router, toast]);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
+    if (!isAuthenticated) return;
     void loadAPICall();
-  }, [router, loadAPICall]);
+  }, [isAuthenticated, loadAPICall]);
 
   const navigateToCall = (newCallId: number) => {
     router.push(`${basePath}/api-calls/${newCallId}`);

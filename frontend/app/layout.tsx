@@ -7,20 +7,29 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import { MouseSpotlight } from "@/components/ui/MouseSpotlight";
 
 const PostHogProviderWrapper = dynamic(
-  () => import("@/components/analytics/PostHogProvider").then((m) => ({ default: m.default })),
+  () => import("@/components/analytics/PostHogProvider").then(m => ({ default: m.default })),
   { ssr: false }
 );
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
   variable: "--font-plus-jakarta",
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "PluvianAI — The Symbiotic Guardian for AI Agents",
+  metadataBase: new URL("https://www.pluvianai.com"),
+  title: "PluvianAI — Validation & Release Gates for AI Agents",
   description:
-    "Clinical grade validation for AI Agents. Cut hallucination rates & logic errors in half. Instantly.",
+    "Validate and ship AI agents with confidence. Live view, release gates, and behavior checks.",
+  openGraph: {
+    title: "PluvianAI — Validation & Release Gates for AI Agents",
+    description:
+      "Validate and ship AI agents with confidence. Live view, release gates, and behavior checks.",
+    url: "https://www.pluvianai.com",
+    siteName: "PluvianAI",
+  },
   icons: {
     icon: "/icon.svg",
   },

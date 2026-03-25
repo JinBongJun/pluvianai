@@ -24,21 +24,28 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     ENVIRONMENT: str = "development"  # development, staging, production
     PORT: int = 8000  # Railway/Vercel uses $PORT
+    EXPOSE_API_DOCS: Optional[bool] = None
+    EXPOSE_METRICS_ENDPOINT: Optional[bool] = None
+    EXPOSE_DETAILED_HEALTH_ENDPOINT: Optional[bool] = None
 
     # Database
     # Standard local dev URL - ensures we don't accidentally use Railway internal URLs
-    DATABASE_URL: str = "postgresql://agentguard:agentguard@localhost:5432/agentguard"
+    DATABASE_URL: str = "postgresql://pluvianai:pluvianai@localhost:5432/pluvianai"
 
     @field_validator("DATABASE_URL", mode="after")
     @classmethod
     def force_local_db_if_internal(cls, v: str) -> str:
         # If running locally but environment has Railway internal URL, override it
         if "railway.internal" in v:
-            return "postgresql://agentguard:agentguard@localhost:5432/agentguard"
+            return "postgresql://pluvianai:pluvianai@localhost:5432/pluvianai"
         return v
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
+    # Ingest queue (Phase 3: SDK api-calls pushed here, worker pops and persists)
+    INGEST_QUEUE_KEY: str = "ingest:api_calls"
+    # Failed persist payloads (worker pushes original JSON here for replay after fix)
+    INGEST_DLQ_KEY: str = "ingest:api_calls:dlq"
 
     # Security
     SECRET_KEY: str = "your-secret-key-change-in-production"  # Should be changed in production
@@ -65,6 +72,7 @@ class Settings(BaseSettings):
     # Use "*" to allow all origins (for development/flexibility)
     # In production, specify exact domains for better security
     CORS_ORIGINS: str = "*"
+    AUTH_COOKIE_DOMAIN: Optional[str] = None
 
     # API Keys (for LLM providers - optional)
     OPENAI_API_KEY: Optional[str] = None
@@ -79,20 +87,56 @@ class Settings(BaseSettings):
     EMAIL_FROM: Optional[str] = None  # e.g., "onboarding@resend.dev" or verified domain
     EMAIL_FROM_NAME: str = "PluvianAI"
     FEEDBACK_TO_EMAIL: Optional[str] = None  # If unset, defaults to EMAIL_FROM
+    FEEDBACK_SLACK_WEBHOOK_URL: Optional[str] = None  # If set, feedback is sent to Slack instead of Resend
+    # For uploading feedback attachments to Slack (optional; requires Bot Token with files:write)
+    FEEDBACK_SLACK_BOT_TOKEN: Optional[str] = None
+    FEEDBACK_SLACK_CHANNEL_ID: Optional[str] = None  # Channel ID where file will be posted (e.g. C01234567)
 
     # Slack configuration
     SLACK_WEBHOOK_URL: Optional[str] = None  # Slack webhook URL for notifications
+    OPS_ALERT_WEBHOOK_URL: Optional[str] = None  # MVP ops alert webhook (Slack incoming webhook)
+    OPS_ALERT_COOLDOWN_SECONDS: int = 600
+    OPS_LIVE_VIEW_WINDOW_SECONDS: int = 300
+    OPS_LIVE_VIEW_MIN_SAMPLES: int = 5  # require N requests in window before alerting (avoids 1 slow request = alert)
+    OPS_LIVE_VIEW_5XX_RATE_THRESHOLD: float = 0.05
+    OPS_LIVE_VIEW_P95_MS_THRESHOLD: int = 3000
+    OPS_PROJECT_API_WINDOW_SECONDS: int = 300
+    OPS_PROJECT_API_MIN_SAMPLES: int = 20
+    OPS_PROJECT_API_5XX_RATE_THRESHOLD: float = 0.05
+    OPS_PROJECT_API_P95_MS_THRESHOLD: int = 3000
+    OPS_RELEASE_GATE_WINDOW_SECONDS: int = 600
+    OPS_RELEASE_GATE_FAILURE_BURST_COUNT: int = 3
+    OPS_RELEASE_GATE_RATIO_WINDOW_SECONDS: int = 3600
+    OPS_RELEASE_GATE_RATIO_MIN_SAMPLES: int = 10
+    OPS_RELEASE_GATE_FAIL_RATIO_THRESHOLD: float = 0.15
+    # Release Gate tool_evidence: rolling missing ratio (§15.4)
+    OPS_RG_TOOL_MISSING_WINDOW_SECONDS: int = 3600
+    OPS_RG_TOOL_MISSING_MIN_SAMPLES: int = 5
+    OPS_RG_TOOL_MISSING_RATIO_THRESHOLD: float = 0.72
+    OPS_PROVIDER_ERROR_WINDOW_SECONDS: int = 600
+    OPS_PROVIDER_ERROR_BURST_COUNT: int = 5
+    OPS_ALERT_META_WINDOW_SECONDS: int = 3600
+    OPS_ALERT_META_FREQUENCY_THRESHOLD: int = 20
+    OPS_DB_ERROR_WINDOW_SECONDS: int = 300
+    OPS_DB_ERROR_BURST_COUNT: int = 10
+    OPS_SNAPSHOT_WINDOW_SECONDS: int = 600
+    OPS_SNAPSHOT_5XX_RATIO_THRESHOLD: float = 0.20
+    OPS_SNAPSHOT_ERROR_MIN_SAMPLES: int = 20
+    SOFT_DELETE_GRACE_DAYS: int = 30
+    AGENT_SOFT_DELETE_GRACE_DAYS: int = 30
+    AGENT_AUTO_RESTORE_DAYS: int = 30
 
     # Encryption for user API keys
     ENCRYPTION_KEY: Optional[str] = None  # Fernet key for encrypting user API keys (32-byte base64)
 
-    # Stripe configuration (Billing)
-    STRIPE_SECRET_KEY: Optional[str] = None
-    STRIPE_WEBHOOK_SECRET: Optional[str] = None
-    STRIPE_PRICE_ID_INDIE: Optional[str] = None
-    STRIPE_PRICE_ID_STARTUP: Optional[str] = None
-    STRIPE_PRICE_ID_PRO: Optional[str] = None
-    STRIPE_PRICE_ID_ENTERPRISE: Optional[str] = None
+    # Paddle Billing (https://developer.paddle.com/)
+    PADDLE_API_KEY: Optional[str] = None
+    PADDLE_WEBHOOK_SECRET: Optional[str] = None
+    PADDLE_USE_SANDBOX: bool = True
+    PADDLE_PRICE_ID_INDIE: Optional[str] = None
+    PADDLE_PRICE_ID_STARTUP: Optional[str] = None
+    PADDLE_PRICE_ID_PRO: Optional[str] = None
+    PADDLE_PRICE_ID_ENTERPRISE: Optional[str] = None
 
     # Free Plan Limits
     ENABLE_FREE_PLAN_HARD_LIMIT: bool = False  # If True, Free plan users are blocked when limits are exceeded
@@ -107,6 +151,16 @@ class Settings(BaseSettings):
     FEATURE_FLAG_ENHANCED_ANALYTICS: bool = False
     FEATURE_FLAG_BETA_FEATURES: bool = False
     FEATURE_FLAG_EXPERIMENTAL_API: bool = False
+
+    # Release Gate policy flags
+    # When False (default), production Release Gate should enforce pinned-only model ids for reproducibility.
+    # When True, allow custom (non-pinned) model ids as an emergency escape hatch.
+    RELEASE_GATE_ALLOW_CUSTOM_MODELS: bool = False
+
+    # Release Gate async worker
+    # Production-grade setup runs the job runner in a dedicated worker process,
+    # not inside the web server process.
+    RELEASE_GATE_JOB_RUNNER_ENABLED: bool = True
 
     # Monitoring (optional, for production)
     GRAFANA_URL: Optional[str] = None
@@ -148,6 +202,24 @@ class Settings(BaseSettings):
         if not origins:
             return ["*"]
         return origins
+
+    @property
+    def expose_api_docs(self) -> bool:
+        if self.EXPOSE_API_DOCS is not None:
+            return self.EXPOSE_API_DOCS
+        return self.ENVIRONMENT != "production"
+
+    @property
+    def expose_metrics_endpoint(self) -> bool:
+        if self.EXPOSE_METRICS_ENDPOINT is not None:
+            return self.EXPOSE_METRICS_ENDPOINT
+        return self.ENVIRONMENT != "production"
+
+    @property
+    def expose_detailed_health_endpoint(self) -> bool:
+        if self.EXPOSE_DETAILED_HEALTH_ENDPOINT is not None:
+            return self.EXPOSE_DETAILED_HEALTH_ENDPOINT
+        return self.ENVIRONMENT != "production"
 
 
 settings = Settings()

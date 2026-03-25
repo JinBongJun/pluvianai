@@ -49,7 +49,7 @@ class OnboardingService:
             project_id = project.id if project else None
 
         # Determine base URL
-        base_url = "https://api.agentguard.ai"
+        base_url = "https://api.pluvianai.com"
         if settings.CORS_ORIGINS and settings.CORS_ORIGINS != "*":
             origins = settings.CORS_ORIGINS.split(",")
             if origins:
@@ -129,11 +129,12 @@ class OnboardingService:
         api_key_value = f"ag_live_{secrets.token_urlsafe(24)}"
         key_hash = hashlib.sha256(api_key_value.encode()).hexdigest()
 
-        # Create new API key record
+        # Create new API key record (full scope for onboarding)
         api_key_obj = APIKey(
             user_id=user_id,
             key_hash=key_hash,
             name="Default API Key",
+            scope="*",
             is_active=True,
         )
         self.db.add(api_key_obj)

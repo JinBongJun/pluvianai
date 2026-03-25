@@ -1,10 +1,13 @@
 """
 Unit tests for BillingService
 """
+import hashlib
+import hmac
+import json
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime
-from app.services.billing_service import BillingService
+from unittest.mock import patch, MagicMock
+from app.services.billing_service import BillingService, verify_paddle_webhook_signature
 from app.models.user import User
 from app.models.subscription import Subscription
 from app.services.cache_service import cache_service
@@ -224,160 +227,148 @@ class TestBillingService:
             assert exceeded is False
             assert message is None
 
-    @patch('app.services.billing_service.stripe')
-    def test_create_stripe_checkout_session_success(self, mock_stripe, db, test_user):
-        """Test creating Stripe checkout session successfully"""
-        service = BillingService(db)
-        service.stripe_available = True
-        
-        # Mock Stripe session
-        mock_session = MagicMock()
-        mock_session.id = "cs_test_123"
-        mock_session.url = "https://checkout.stripe.com/test"
-        mock_stripe.checkout.Session.create.return_value = mock_session
-        
-        # Mock price ID
-        with patch.object(service, '_get_stripe_price_id', return_value="price_test_123"):
-            with patch.object(service, '_get_user_email', return_value=test_user.email):
-                result = service.create_stripe_checkout_session(
-                    test_user.id,
-                    "pro",
-                    "https://success.com",
-                    "https://cancel.com"
+    @staticmethod
+    def _paddle_sig(body: bytes, secret: str, ts: str = "1700000000") -> str:
+        signed = f"{ts}:{body.decode('utf-8')}"
+        digest = hmac.new(secret.encode("utf-8"), signed.encode("utf-8"), hashlib.sha256).hexdigest()
+        return f"ts={ts};h1={digest}"
+
+    def test_verify_paddle_webhook_signature_accepts_valid(self):
+        secret = "endpoint_secret_test"
+        body = b'{"hello":"world"}'
+        sig = self._paddle_sig(body, secret)
+        assert verify_paddle_webhook_signature(body, sig, secret) is True
+
+    def test_verify_paddle_webhook_signature_rejects_bad_secret(self):
+        body = b'{"a":1}'
+        sig = self._paddle_sig(body, "good")
+        assert verify_paddle_webhook_signature(body, sig, "wrong") is False
+
+    def test_create_checkout_session_success(self, db, test_user):
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test_api_key_xxxxxxxx"
+            mock_settings.PADDLE_USE_SANDBOX = True
+            service = BillingService(db)
+            with patch.object(service, "_paddle_post") as mock_post:
+                mock_post.return_value = (
+                    {
+                        "id": "txn_test_123",
+                        "checkout": {"url": "https://sandbox-checkout.paddle.com/test"},
+                    },
+                    None,
                 )
-                
-                assert result is not None
-                assert "session_id" in result
-                assert "url" in result
-                assert result["session_id"] == "cs_test_123"
-                assert mock_stripe.checkout.Session.create.called
+                with patch.object(service, "_get_paddle_price_id", return_value="pri_test"):
+                    with patch.object(service, "_get_or_create_paddle_customer", return_value="ctm_test"):
+                        result = service.create_checkout_session(
+                            test_user.id,
+                            "pro",
+                            "https://success.com",
+                            "https://cancel.com",
+                        )
+        assert result is not None
+        assert result["session_id"] == "txn_test_123"
+        assert result["url"].startswith("https://")
 
-    def test_create_stripe_checkout_session_stripe_unavailable(self, db, test_user):
-        """Test creating checkout session when Stripe is unavailable"""
-        service = BillingService(db)
-        service.stripe_available = False
-        
-        result = service.create_stripe_checkout_session(
-            test_user.id,
-            "pro",
-            "https://success.com",
-            "https://cancel.com"
-        )
-        
-        assert result is None
-
-    @patch('app.services.billing_service.stripe')
-    def test_create_stripe_checkout_session_no_price_id(self, mock_stripe, db, test_user):
-        """Test creating checkout session when price ID is missing"""
-        service = BillingService(db)
-        service.stripe_available = True
-        
-        with patch.object(service, '_get_stripe_price_id', return_value=None):
-            result = service.create_stripe_checkout_session(
+    def test_create_checkout_session_paddle_unavailable(self, db, test_user):
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = ""
+            service = BillingService(db)
+            result = service.create_checkout_session(
                 test_user.id,
                 "pro",
                 "https://success.com",
-                "https://cancel.com"
+                "https://cancel.com",
             )
-            
-            assert result is None
+        assert result is None
 
-    @patch('app.services.billing_service.stripe')
-    def test_handle_stripe_webhook_success(self, mock_stripe, db, test_user):
-        """Test handling Stripe webhook successfully"""
-        service = BillingService(db)
-        service.stripe_available = True
-        
-        # Mock webhook event
-        mock_event = {
-            "type": "checkout.session.completed",
+    def test_create_checkout_session_no_price_id(self, db, test_user):
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test_key"
+            service = BillingService(db)
+            with patch.object(service, "_get_paddle_price_id", return_value=None):
+                result = service.create_checkout_session(
+                    test_user.id,
+                    "pro",
+                    "https://success.com",
+                    "https://cancel.com",
+                )
+        assert result is None
+
+    def test_handle_paddle_webhook_transaction_completed(self, db, test_user):
+        secret = "whsec_paddle_test"
+        payload_obj = {
+            "event_type": "transaction.completed",
             "data": {
-                "object": {
-                    "metadata": {
-                        "user_id": str(test_user.id),
-                        "plan_type": "pro"
-                    }
-                }
-            }
+                "id": "txn_1",
+                "custom_data": {"user_id": str(test_user.id), "plan_type": "pro"},
+                "subscription_id": "sub_1",
+                "customer_id": "ctm_1",
+            },
         }
-        
-        mock_stripe.Webhook.construct_event.return_value = mock_event
-        
-        with patch('app.services.billing_service.settings') as mock_settings:
-            mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
-            
-            with patch('app.services.billing_service.SubscriptionService') as mock_sub_service:
-                mock_instance = MagicMock()
-                mock_sub_service.return_value = mock_instance
-                
-                result = service.handle_stripe_webhook(b'{"test": "data"}', "sig_test")
-                
-                assert result["status"] == "success"
-                assert "Subscription updated" in result["message"]
-                assert mock_instance.create_or_update_subscription.called
+        raw = json.dumps(payload_obj).encode("utf-8")
+        sig = self._paddle_sig(raw, secret)
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_WEBHOOK_SECRET = secret
+            service = BillingService(db)
+            with patch("app.services.subscription_service.SubscriptionService") as mock_sub:
+                mock_sub.return_value.create_or_update_subscription = MagicMock()
+                result = service.handle_paddle_webhook(raw, sig)
+        assert result["status"] == "success"
+        assert mock_sub.return_value.create_or_update_subscription.called
 
-    @patch('app.services.billing_service.stripe')
-    def test_handle_stripe_webhook_invalid_signature(self, mock_stripe, db):
-        """Test handling webhook with invalid signature"""
-        service = BillingService(db)
-        service.stripe_available = True
-        
-        import stripe.error
-        mock_stripe.Webhook.construct_event.side_effect = stripe.error.SignatureVerificationError(
-            "Invalid signature", "sig"
-        )
-        
-        with patch('app.services.billing_service.settings') as mock_settings:
-            mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
-            
-            result = service.handle_stripe_webhook(b'{"test": "data"}', "invalid_sig")
-            
-            assert "error" in result
-            assert "Invalid signature" in result["error"]
-
-    @patch('app.services.billing_service.stripe')
-    def test_handle_stripe_webhook_invalid_payload(self, mock_stripe, db):
-        """Test handling webhook with invalid payload"""
-        service = BillingService(db)
-        service.stripe_available = True
-        
-        mock_stripe.Webhook.construct_event.side_effect = ValueError("Invalid payload")
-        
-        with patch('app.services.billing_service.settings') as mock_settings:
-            mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
-            
-            result = service.handle_stripe_webhook(b'invalid json', "sig_test")
-            
-            assert "error" in result
-            assert "Invalid payload" in result["error"]
-
-    @patch('app.services.billing_service.stripe')
-    def test_handle_stripe_webhook_unhandled_event(self, mock_stripe, db):
-        """Test handling unhandled webhook event type"""
-        service = BillingService(db)
-        service.stripe_available = True
-        
-        mock_event = {
-            "type": "payment_intent.succeeded",
-            "data": {}
+    def test_handle_paddle_webhook_missing_custom_data(self, db):
+        secret = "whsec_paddle_test"
+        payload_obj = {
+            "event_type": "transaction.completed",
+            "data": {"id": "txn_1", "custom_data": {}},
         }
-        
-        mock_stripe.Webhook.construct_event.return_value = mock_event
-        
-        with patch('app.services.billing_service.settings') as mock_settings:
-            mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
-            
-            result = service.handle_stripe_webhook(b'{"test": "data"}', "sig_test")
-            
-            assert result["status"] == "ignored"
-            assert "not handled" in result["message"]
+        raw = json.dumps(payload_obj).encode("utf-8")
+        sig = self._paddle_sig(raw, secret)
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_WEBHOOK_SECRET = secret
+            service = BillingService(db)
+            result = service.handle_paddle_webhook(raw, sig)
+        assert result.get("status") == "error"
+        assert "custom_data" in result.get("message", "").lower()
 
-    def test_handle_stripe_webhook_stripe_unavailable(self, db):
-        """Test handling webhook when Stripe is unavailable"""
-        service = BillingService(db)
-        service.stripe_available = False
-        
-        result = service.handle_stripe_webhook(b'{"test": "data"}', "sig_test")
-        
+    def test_handle_paddle_webhook_invalid_signature(self, db):
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_WEBHOOK_SECRET = "secret"
+            service = BillingService(db)
+            result = service.handle_paddle_webhook(b"{}", "ts=1;h1=deadbeef")
+        assert result.get("error") == "Invalid signature"
+
+    def test_handle_paddle_webhook_invalid_payload(self, db):
+        secret = "whsec_paddle_test"
+        raw = b"not-json"
+        sig = self._paddle_sig(raw, secret)
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_WEBHOOK_SECRET = secret
+            service = BillingService(db)
+            result = service.handle_paddle_webhook(raw, sig)
+        assert result.get("error") == "Invalid payload"
+
+    def test_handle_paddle_webhook_unhandled_event(self, db):
+        secret = "whsec_paddle_test"
+        payload_obj = {"event_type": "transaction.created", "data": {"id": "txn_1"}}
+        raw = json.dumps(payload_obj).encode("utf-8")
+        sig = self._paddle_sig(raw, secret)
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_WEBHOOK_SECRET = secret
+            service = BillingService(db)
+            result = service.handle_paddle_webhook(raw, sig)
+        assert result["status"] == "ignored"
+        assert "not handled" in result["message"]
+
+    def test_handle_paddle_webhook_paddle_unavailable(self, db):
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = ""
+            service = BillingService(db)
+            result = service.handle_paddle_webhook(b"{}", "ts=1;h1=x")
         assert "error" in result
-        assert "Stripe not available" in result["error"]
+        assert "not configured" in result["error"].lower()

@@ -6,7 +6,7 @@ from typing import List
 from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole
@@ -17,6 +17,7 @@ from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.services.cache_service import cache_service
 from app.middleware.usage_middleware import check_team_member_limit
 from app.services.activity_logger import activity_logger
+from app.services.subscription_service import SubscriptionService
 from app.models.user import User
 from app.models.project import Project
 from app.models.project_member import ProjectMember
@@ -61,6 +62,7 @@ class ProjectMemberUpdate(BaseModel):
 
 class ProjectMemberResponse(BaseModel):
     """Project member response schema"""
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     project_id: int
@@ -69,10 +71,6 @@ class ProjectMemberResponse(BaseModel):
     user_name: str | None
     role: str
     created_at: str
-
-    class Config:
-        from_attributes = True
-
 
 @router.post(
     "/projects/{project_id}/members", response_model=ProjectMemberResponse, status_code=status.HTTP_201_CREATED
@@ -110,9 +108,27 @@ async def add_project_member(
     # Check team member limit
     can_add, error_msg = check_team_member_limit(current_user.id, project_id, db)
     if not can_add:
+        plan_info = SubscriptionService(db).get_user_plan(current_user.id)
+        plan_type = str(plan_info.get("plan_type") or "free")
+        limits = plan_info.get("limits") or {}
+        member_limit = int(limits.get("team_members_per_project", 1))
+        current_members = (
+            db.query(ProjectMember)
+            .filter(ProjectMember.project_id == project_id)
+            .count()
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=error_msg or "Team member limit reached. Please upgrade your plan.",
+            detail={
+                "code": "TEAM_MEMBER_LIMIT_REACHED",
+                "message": error_msg or "You have reached the team member limit for this project.",
+                "details": {
+                    "plan_type": plan_type,
+                    "current": current_members,
+                    "limit": member_limit,
+                    "upgrade_path": "/settings/subscription",
+                },
+            },
         )
 
     try:
@@ -124,9 +140,17 @@ async def add_project_member(
         )
         # Transaction is committed by get_db() dependency
     except EntityAlreadyExistsError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.warning("Project member add rejected: already exists", extra={"reason": str(e)})
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That user is already a member of this project.",
+        )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        logger.warning("Project member add rejected", extra={"reason": str(e)})
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found or cannot be added to this project.",
+        )
 
     # Invalidate cache
     cache_service.invalidate_project_cache(project_id)

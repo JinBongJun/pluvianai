@@ -10,20 +10,24 @@ import {
   Square,
   CheckSquare,
   Save,
-  Zap,
-  Coins,
   Hash,
   AlignLeft,
   CheckCircle2,
   XCircle,
   AlertCircle,
+  Trash2,
 } from "lucide-react";
 import clsx from "clsx";
 import { behaviorAPI, liveViewAPI } from "@/lib/api";
+import type { LiveViewRequestOverview, RequestContextMeta } from "@/lib/api/live-view";
+import { getRateLimitInfo, isRateLimitError } from "@/lib/api/client";
+import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { toEvalRows } from "@/lib/evalRows";
-import useSWR, { mutate as globalMutate } from "swr";
+import useSWR from "swr";
 import { SnapshotDetailModal } from "@/components/shared/SnapshotDetailModal";
 import { useToast } from "@/components/ToastContainer";
+import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
+import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 
 interface EvaluationMetric {
   score: number;
@@ -53,24 +57,36 @@ interface ClinicalSnapshot {
   payload?: Record<string, any> | null;
   created_at: string;
   has_tool_calls?: boolean;
+  /** From list API: payload/trajectory includes tool_result evidence */
+  has_tool_results?: boolean;
   tool_calls_summary?: Array<{ name: string; arguments?: string | Record<string, any> }>;
+  /** From list API (light mode): server-derived from stored payload markers */
+  request_context_meta?: RequestContextMeta | null;
+  /** From list API: server-derived request shape summary */
+  request_overview?: LiveViewRequestOverview | null;
 }
 
 interface ClinicalLogProps {
   projectId: number;
   agentId: string;
+  /** Used for Release Gate CTA inside snapshot detail. */
+  orgId?: string;
+  onLogsMutated?: () => void | Promise<void>;
 }
 
 const MIN_LAST_N_RUNS = 10;
 const MAX_LAST_N_RUNS = 200;
 const MAX_STEP_ROWS = 30;
 const DEFAULT_LAST_N_RUNS = 30;
+const LOG_LIMIT_OPTIONS = [10, 20, 30, 50, 100, 200] as const;
+const CLINICAL_LOG_BASE_POLL_MS = 4000;
+const CLINICAL_LOG_MAX_POLL_MS = 30000;
 
 type RiskFilter = "all" | "worst" | "healthy";
 const RISK_FILTER_LABELS: Record<RiskFilter, string> = {
-  all: "ALL",
-  worst: "FLAGGED",
-  healthy: "HEALTHY",
+  all: "All",
+  worst: "Flagged",
+  healthy: "Healthy",
 };
 type SortMode = "newest" | "oldest" | "latency_desc" | "latency_asc";
 const SORT_MODE_LABELS: Record<SortMode, string> = {
@@ -246,6 +262,88 @@ function extractToolNames(snapshot: ClinicalSnapshot): string[] {
   return Array.from(out);
 }
 
+function getRequestOverview(snapshot: ClinicalSnapshot): LiveViewRequestOverview | null {
+  const overview = snapshot.request_overview;
+  if (!overview || typeof overview !== "object") return null;
+  return overview;
+}
+
+function getToolDefinitionCount(snapshot: ClinicalSnapshot, toolNames: string[]): number {
+  const overview = getRequestOverview(snapshot);
+  const serverCount = overview?.tools_count;
+  if (typeof serverCount === "number" && Number.isFinite(serverCount) && serverCount >= 0) {
+    return serverCount;
+  }
+  if (toolNames.length > 0) return toolNames.length;
+  return snapshot.has_tool_calls ? 1 : 0;
+}
+
+function getCaptureStateBadge(snapshot: ClinicalSnapshot): { label: string; title: string } | null {
+  const overview = getRequestOverview(snapshot);
+  const meta = snapshot.request_context_meta;
+  const captureState = String(overview?.capture_state || "").trim().toLowerCase();
+
+  if (captureState === "truncated" || meta?.truncated) {
+    const title =
+      meta?.request_truncated && meta?.payload_truncated
+        ? "Request and payload were both truncated before ingest."
+        : meta?.request_truncated
+          ? "Request fields were truncated or replaced before ingest."
+          : meta?.payload_truncated
+            ? "Outer payload was truncated before ingest."
+            : "Request context was truncated or replaced before ingest.";
+    return { label: "Truncated", title };
+  }
+
+  if (captureState === "policy_limited" || meta?.omitted_by_policy) {
+    const title =
+      meta?.request_text_omitted && meta?.response_text_omitted
+        ? "Request and response text were omitted before ingest by privacy settings."
+        : meta?.request_text_omitted
+          ? "Request text was omitted before ingest by privacy settings."
+          : meta?.response_text_omitted
+            ? "Response text was omitted before ingest by privacy settings."
+            : "Some message or response bodies were omitted before ingest.";
+    return { label: "Privacy", title };
+  }
+
+  return null;
+}
+
+function getRequestShapeBadges(snapshot: ClinicalSnapshot): Array<{ label: string; title: string }> {
+  const overview = getRequestOverview(snapshot);
+  if (!overview) return [];
+
+  const extendedCount = Array.isArray(overview.extended_context_keys)
+    ? overview.extended_context_keys.length
+    : 0;
+  const additionalCount = Array.isArray(overview.additional_request_keys)
+    ? overview.additional_request_keys.length
+    : 0;
+  const controlCount = Array.isArray(overview.request_control_keys)
+    ? overview.request_control_keys.length
+    : 0;
+
+  const badges: Array<{ label: string; title: string }> = [];
+
+  if (extendedCount > 0) {
+    badges.push({
+      label: "Context",
+      title: `${extendedCount} extended context field${extendedCount === 1 ? "" : "s"} captured on this request.`,
+    });
+  }
+
+  if (additionalCount > 0 || controlCount > 0) {
+    const fieldCount = additionalCount + controlCount;
+    badges.push({
+      label: "Fields",
+      title: `${fieldCount} replay-relevant field${fieldCount === 1 ? "" : "s"} outside the main message list.`,
+    });
+  }
+
+  return badges;
+}
+
 /** Build "actual vs config" line for an eval check from snapshot + saved eval config. */
 function getEvalDetail(
   s: ClinicalSnapshot,
@@ -268,30 +366,29 @@ function getEvalDetail(
       return { actualStr: `${len} chars`, configStr };
     }
     case "latency": {
-      const warn = toFiniteNumber(cfg?.warn_ms, 2000);
-      const crit = toFiniteNumber(cfg?.crit_ms, 5000);
-      configStr = `warn > ${warn}ms, crit > ${crit}ms`;
+      const failMs = toFiniteNumber(cfg?.fail_ms ?? cfg?.crit_ms ?? cfg?.warn_ms, 5000);
+      configStr = `fail ≥ ${failMs}ms`;
       const ms = s.latency_ms ?? 0;
       return { actualStr: `${ms}ms`, configStr };
     }
     case "status_code": {
-      const warnFrom = toFiniteNumber(cfg?.warn_from, 400);
-      const critFrom = toFiniteNumber(cfg?.crit_from, 500);
-      configStr = `warn ≥ ${warnFrom}, crit ≥ ${critFrom}`;
+      const failFrom = toFiniteNumber(cfg?.fail_from ?? cfg?.crit_from ?? cfg?.warn_from, 500);
+      configStr = `fail ≥ ${failFrom}`;
       const code = s.status_code ?? 200;
       return { actualStr: String(code), configStr };
     }
     case "length": {
-      const warnR = toFiniteNumber(cfg?.warn_ratio, 0.35);
-      const critR = toFiniteNumber(cfg?.crit_ratio, 0.75);
-      configStr = `warn ±${Math.round(warnR * 100)}%, crit ±${Math.round(critR * 100)}% vs baseline`;
+      const failR = toFiniteNumber(cfg?.fail_ratio ?? cfg?.crit_ratio ?? cfg?.warn_ratio, 0.75);
+      configStr = `fail ±${Math.round(failR * 100)}% vs baseline`;
       actualStr = `${len} chars (vs baseline window)`;
       return { actualStr, configStr };
     }
     case "repetition": {
-      const warnR = toFiniteNumber(cfg?.warn_line_repeats, 3);
-      const critR = toFiniteNumber(cfg?.crit_line_repeats, 6);
-      configStr = `warn ${warnR}, crit ${critR} repeats`;
+      const failR = toFiniteNumber(
+        cfg?.fail_line_repeats ?? cfg?.crit_line_repeats ?? cfg?.warn_line_repeats,
+        6
+      );
+      configStr = `fail ≥ ${failR} repeats`;
       const lines = res
         .split("\n")
         .map(l => l.trim())
@@ -334,34 +431,47 @@ function getEvalDetail(
   }
 }
 
-export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) => {
+export const ClinicalLog: React.FC<ClinicalLogProps> = ({
+  projectId,
+  agentId,
+  orgId,
+  onLogsMutated,
+}) => {
   const toast = useToast();
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [recentTraceLimit, setRecentTraceLimit] = React.useState<number>(DEFAULT_LAST_N_RUNS);
-  const [recentTraceInput, setRecentTraceInput] = React.useState<string>(
-    String(DEFAULT_LAST_N_RUNS)
-  );
-  const [isSavingLimit, setIsSavingLimit] = React.useState(false);
   const [riskFilter, setRiskFilter] = React.useState<RiskFilter>("all");
   const [sortMode, setSortMode] = React.useState<SortMode>("newest");
   const [policyByTrace, setPolicyByTrace] = React.useState<Record<string, PolicyState>>({});
   const [isSelectMode, setIsSelectMode] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [isRemoveMode, setIsRemoveMode] = React.useState(false);
+  const [selectedRemoveIds, setSelectedRemoveIds] = React.useState<Set<string>>(new Set());
+  const [isDeletingSnapshots, setIsDeletingSnapshots] = React.useState(false);
   const [isSavingToDatasets, setIsSavingToDatasets] = React.useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = React.useState(false);
   const [snapshotIdsToSave, setSnapshotIdsToSave] = React.useState<number[]>([]);
-  const [selectedDatasetIdsForSave, setSelectedDatasetIdsForSave] = React.useState<Set<string>>(new Set());
+  const [selectedDatasetIdsForSave, setSelectedDatasetIdsForSave] = React.useState<Set<string>>(
+    new Set()
+  );
   const [newDatasetName, setNewDatasetName] = React.useState("");
+  const [pollIntervalMs, setPollIntervalMs] = React.useState(CLINICAL_LOG_BASE_POLL_MS);
+  const [planError, setPlanError] = React.useState<PlanLimitError | null>(null);
+  const isPageVisible = usePageVisibility();
+  const wasPageVisibleRef = React.useRef(isPageVisible);
 
   // Keep log selection strictly scoped to the current node.
   React.useEffect(() => {
     setSelectedIds(new Set());
+    setSelectedRemoveIds(new Set());
     setIsSelectMode(false);
+    setIsRemoveMode(false);
   }, [projectId, agentId]);
 
   const { data: settingsData, mutate: mutateSettings } = useSWR(
     projectId && agentId ? ["agent-log-settings", projectId, agentId] : null,
-    () => liveViewAPI.getAgentSettings(projectId, agentId)
+    () => liveViewAPI.getAgentSettings(projectId, agentId),
+    { revalidateOnFocus: false }
   );
 
   React.useEffect(() => {
@@ -369,7 +479,6 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     if (Number.isFinite(persisted)) {
       const clamped = clampRuns(persisted);
       setRecentTraceLimit(clamped);
-      setRecentTraceInput(String(clamped));
     }
   }, [settingsData]);
 
@@ -381,16 +490,62 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
         limit: recentTraceLimit,
         light: true,
       }),
-    { keepPreviousData: true }
+    {
+      keepPreviousData: true,
+      refreshInterval: isPageVisible ? pollIntervalMs : 0,
+      revalidateOnFocus: false,
+      refreshWhenHidden: false,
+      shouldRetryOnError: false,
+    }
   );
 
-  const saveRecentTraceLimit = async () => {
+  const rateLimitInfo = getRateLimitInfo(error);
+  const isRateLimited = isRateLimitError(error);
+
+  React.useEffect(() => {
+    if (!error) {
+      setPlanError(null);
+      return;
+    }
+    const parsed = parsePlanLimitError(error);
+    if (parsed && parsed.code === "SNAPSHOT_PLAN_LIMIT_REACHED") {
+      setPlanError(parsed);
+    } else {
+      setPlanError(null);
+    }
+  }, [error]);
+
+  React.useEffect(() => {
     if (!projectId || !agentId) return;
-    const parsedInput = Number(recentTraceInput);
-    const limit = clampRuns(Number.isFinite(parsedInput) ? parsedInput : recentTraceLimit);
+    if (!error) {
+      setPollIntervalMs(CLINICAL_LOG_BASE_POLL_MS);
+      return;
+    }
+
+    if (isRateLimited) {
+      const retryAfterMs = Math.max(
+        CLINICAL_LOG_BASE_POLL_MS,
+        (rateLimitInfo.retryAfterSec || 0) * 1000
+      );
+      setPollIntervalMs(Math.min(retryAfterMs, CLINICAL_LOG_MAX_POLL_MS));
+      return;
+    }
+
+    setPollIntervalMs(current => Math.min(current * 2, CLINICAL_LOG_MAX_POLL_MS));
+  }, [agentId, error, isRateLimited, projectId, rateLimitInfo.retryAfterSec]);
+
+  React.useEffect(() => {
+    if (!projectId || !agentId) return;
+    const becameVisible = !wasPageVisibleRef.current && isPageVisible;
+    wasPageVisibleRef.current = isPageVisible;
+    if (!becameVisible) return;
+    void mutate();
+  }, [agentId, isPageVisible, mutate, projectId]);
+
+  const saveRecentTraceLimit = async (nextLimit: number) => {
+    if (!projectId || !agentId) return;
+    const limit = clampRuns(nextLimit);
     setRecentTraceLimit(limit);
-    setRecentTraceInput(String(limit));
-    setIsSavingLimit(true);
     try {
       const existingEval = (settingsData?.diagnostic_config?.eval || {}) as Record<string, unknown>;
       await liveViewAPI.updateAgentSettings(projectId, agentId, {
@@ -403,25 +558,25 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
       });
       await mutateSettings();
     } finally {
-      setIsSavingLimit(false);
+      // Keep UI responsive; no extra local draft state to reset.
     }
   };
 
   const snapshots = (data?.items || []) as ClinicalSnapshot[];
-  const isRunsInputDirty = React.useMemo(() => {
-    const parsed = Number(recentTraceInput);
-    if (!Number.isFinite(parsed)) return true;
-    return clampRuns(parsed) !== recentTraceLimit;
-  }, [recentTraceInput, recentTraceLimit]);
 
   React.useEffect(() => {
     // Collapse expanded card when filters/window change to avoid stale selection confusion.
     setExpandedId(null);
   }, [riskFilter, recentTraceLimit, agentId]);
 
+  const activeSnapshots = React.useMemo(() => snapshots, [snapshots]);
+  const totalSnapshotsCount = Number(data?.total_count ?? data?.count ?? snapshots.length);
+
   // List uses light mode (no payload/long text); detail modal always needs full snapshot. Cache by (projectId, snapshotId).
   const snapshotDetailCacheRef = React.useRef<Map<string, ClinicalSnapshot>>(new Map());
-  const [detailFetchedSnapshot, setDetailFetchedSnapshot] = React.useState<ClinicalSnapshot | null>(null);
+  const [detailFetchedSnapshot, setDetailFetchedSnapshot] = React.useState<ClinicalSnapshot | null>(
+    null
+  );
   React.useEffect(() => {
     if (!expandedId || !projectId) {
       setDetailFetchedSnapshot(null);
@@ -448,7 +603,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
 
   const { data: evalData } = useSWR(
     projectId && agentId ? ["agent-eval-runtime", projectId, agentId, recentTraceLimit] : null,
-    () => liveViewAPI.getAgentEvaluation(projectId, agentId)
+    () => liveViewAPI.getAgentEvaluation(projectId, agentId),
+    { revalidateOnFocus: false }
   );
   const { data: projectRulesData } = useSWR(
     projectId ? ["policy-rules-project", projectId] : null,
@@ -488,8 +644,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
   );
   // Use stored eval_checks_result only (single source of truth; matches DATA tab detail).
   const hasAnyEvalContext = React.useMemo(
-    () => snapshots.some(s => toEvalRows(s as unknown as Record<string, unknown>).length > 0),
-    [snapshots]
+    () => activeSnapshots.some(s => toEvalRows(s as unknown as Record<string, unknown>).length > 0),
+    [activeSnapshots]
   );
   const evalEnabled = hasAnyEvalContext || enabledEvalChecks.length > 0;
   const getSnapshotEvalRows = React.useCallback((snapshot: ClinicalSnapshot) => {
@@ -500,8 +656,11 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
       const rows = getSnapshotEvalRows(snapshot);
       return rows.reduce((acc, row) => {
         const st = row.status;
-        // Gate/quality policy: both "fail" and "not_applicable" count as failures.
-        return st === "fail" || st === "not_applicable" ? acc + 1 : acc;
+        // Evaluation rules:
+        // - "fail"     → counts as failure
+        // - "pass"     → counts as success
+        // - anything else (e.g. "not_applicable", "skipped") is treated as neutral
+        return st === "fail" ? acc + 1 : acc;
       }, 0);
     },
     [getSnapshotEvalRows]
@@ -510,14 +669,14 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     const hasEvalContext = hasAnyEvalContext;
     const isEvalFlagged = (s: ClinicalSnapshot) => getSnapshotFailedCount(s) > 0;
 
-    if (riskFilter === "all") return snapshots;
+    if (riskFilter === "all") return activeSnapshots;
     if (riskFilter === "worst") {
       // FLAGGED: prefer eval-based failure signal; fallback to backend critical flag.
-      return snapshots.filter(s => (hasEvalContext ? isEvalFlagged(s) : Boolean(s.is_worst)));
+      return activeSnapshots.filter(s => (hasEvalContext ? isEvalFlagged(s) : Boolean(s.is_worst)));
     }
     // HEALTHY: no eval failures (or no backend critical flag when eval context is unavailable)
-    return snapshots.filter(s => (hasEvalContext ? !isEvalFlagged(s) : !s.is_worst));
-  }, [snapshots, riskFilter, hasAnyEvalContext, getSnapshotFailedCount]);
+    return activeSnapshots.filter(s => (hasEvalContext ? !isEvalFlagged(s) : !s.is_worst));
+  }, [activeSnapshots, riskFilter, hasAnyEvalContext, getSnapshotFailedCount]);
   const visibleSnapshots = React.useMemo(() => {
     const out = [...filteredSnapshots];
     if (sortMode === "oldest") {
@@ -577,17 +736,18 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
         const summary = report?.summary as Record<string, unknown> | undefined;
         const violations = Array.isArray(report?.violations) ? report.violations : [];
         const failedRuleIds = Array.from(
-          new Set<string>(violations.map((v: { rule_id?: unknown }) => String(v?.rule_id || "")).filter(Boolean))
+          new Set<string>(
+            violations.map((v: { rule_id?: unknown }) => String(v?.rule_id || "")).filter(Boolean)
+          )
         );
         next[traceId] = {
           status: status as "pass" | "fail",
           violationCount: Number(summary?.violation_count ?? violations.length ?? 0),
           reportId: String(report?.id ?? ""),
           rulesetHash: String(summary?.ruleset_hash ?? report?.ruleset_hash ?? ""),
-          ruleSnapshot: Array.isArray(summary?.rule_snapshot)
-            ? summary.rule_snapshot
-            : undefined,
-          message: status === "pass" ? "Policy check passed." : "Policy violations detected.",
+          ruleSnapshot: Array.isArray(summary?.rule_snapshot) ? summary.rule_snapshot : undefined,
+          message:
+            status === "pass" ? "No policy violations." : "Policy violations flagged.",
           failedRuleIds,
         };
       }
@@ -602,6 +762,54 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
       else next.add(snapshotId);
       return next;
     });
+  };
+
+  const toggleRemoveSelect = (snapshotId: string) => {
+    setSelectedRemoveIds(prev => {
+      const next = new Set(prev);
+      if (next.has(snapshotId)) next.delete(snapshotId);
+      else next.add(snapshotId);
+      return next;
+    });
+  };
+
+  const selectAllForRemove = () => {
+    if (selectedRemoveIds.size === visibleSnapshots.length) {
+      setSelectedRemoveIds(new Set());
+    } else {
+      setSelectedRemoveIds(new Set(visibleSnapshots.map(s => String(s.id))));
+    }
+  };
+
+  const deleteSelectedSnapshots = async () => {
+    if (selectedRemoveIds.size === 0) return;
+    const targetIds = Array.from(selectedRemoveIds)
+      .map(id => Number(id))
+      .filter(id => Number.isFinite(id));
+    if (targetIds.length === 0) return;
+    setIsDeletingSnapshots(true);
+    try {
+      const result = await liveViewAPI.deleteSnapshotsBatch(projectId, targetIds);
+      const deletedCount = Number(result?.deleted ?? 0);
+      toast.showToast(
+        deletedCount > 0
+          ? `Deleted ${deletedCount} log${deletedCount === 1 ? "" : "s"} from project history.`
+          : "No logs were deleted.",
+        deletedCount > 0 ? "success" : "info"
+      );
+      setSelectedRemoveIds(new Set());
+      setIsRemoveMode(false);
+      if (expandedId && targetIds.includes(Number(expandedId))) {
+        setExpandedId(null);
+      }
+      await mutate();
+      await Promise.resolve(onLogsMutated?.()).catch(() => undefined);
+    } catch (error) {
+      console.error("Failed to delete snapshots:", error);
+      toast.showToast("Failed to delete selected logs. Please try again.", "error");
+    } finally {
+      setIsDeletingSnapshots(false);
+    }
   };
 
   const selectAll = () => {
@@ -668,13 +876,13 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
     setIsSavingToDatasets(true);
     try {
       const evalConfig = savedEvalConfig as Record<string, unknown>;
-      const ruleSnapshot = configuredPolicies.map(
-        (r: { id?: unknown; updated_at?: unknown; rule_json?: unknown }) => ({
+      const ruleSnapshot = configuredPolicies
+        .map((r: { id?: unknown; updated_at?: unknown; rule_json?: unknown }) => ({
           id: String(r.id ?? ""),
           revision: r.updated_at != null ? String(r.updated_at) : undefined,
           rule_json: (r.rule_json as Record<string, unknown>) || {},
-        })
-      ).filter(r => r.id);
+        }))
+        .filter(r => r.id);
 
       let createdDatasetName: string | null = null;
       if (trimmedName) {
@@ -741,7 +949,11 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
 
   if (isLoading) {
     return (
-      <div className="flex flex-col h-full bg-[#111216]" role="status" aria-label="Loading clinical log">
+      <div
+        className="flex flex-col h-full bg-[#111216]"
+        role="status"
+        aria-label="Loading clinical log"
+      >
         <div className="p-5 flex items-center justify-between gap-4 border-b border-white/[0.04] bg-[#18191e]">
           <div className="animate-pulse h-5 w-24 rounded bg-white/10" />
           <div className="flex items-center gap-3">
@@ -775,12 +987,13 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
   const isEmptyResult = visibleSnapshots.length === 0;
 
   const mainContent = (
-    <div className="flex flex-col h-full bg-[#111216]">
+    <div className="flex h-0 flex-1 min-h-0 flex-col overflow-hidden bg-[#111216]">
       {/* Log Header Summary */}
       <div className="p-5 flex items-center justify-between gap-4 border-b border-white/[0.04] bg-[#18191e]">
         <div className="flex items-center">
           <span className="px-2 py-0.5 rounded-md text-[13px] font-mono text-slate-400 capitalize tracking-wide">
-            Total {visibleSnapshots.length} {visibleSnapshots.length === 1 ? "Run" : "Runs"}
+            Showing {visibleSnapshots.length} of {totalSnapshotsCount} logs
+            {totalSnapshotsCount > recentTraceLimit ? ` · cap ${recentTraceLimit}` : ""}
           </span>
         </div>
 
@@ -793,10 +1006,10 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                 onClick={() => setRiskFilter(mode)}
                 title={
                   mode === "worst"
-                    ? "FLAGGED: Issues detected"
+                    ? "Flagged: Issues detected"
                     : mode === "healthy"
-                      ? "HEALTHY: No issues"
-                      : "ALL"
+                      ? "Healthy: No issues"
+                      : "All"
                 }
                 className={clsx(
                   "px-3 py-1.5 rounded-lg text-[12px] font-bold tracking-wide transition-all",
@@ -812,38 +1025,24 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
 
           <div className="w-px h-4 bg-white/10 hidden md:block" />
 
-          {/* Limit Input */}
-          <div className="flex items-center gap-1.5 bg-[#030806] border border-white/[0.04] rounded-xl mb-0 pl-3 focus-within:border-emerald-500/50 transition-colors group">
-            <span className="text-[11px] font-black uppercase text-slate-600 tracking-wider group-focus-within:text-emerald-500/70">
-              LIMIT
-            </span>
-            <input
-              type="number"
-              min={MIN_LAST_N_RUNS}
-              max={MAX_LAST_N_RUNS}
-              value={recentTraceInput}
-              onChange={e => setRecentTraceInput(e.target.value)}
-              onBlur={() => {
-                const parsed = Number(recentTraceInput);
-                if (!Number.isFinite(parsed)) {
-                  setRecentTraceInput(String(recentTraceLimit));
-                } else {
-                  const val = clampRuns(parsed);
-                  setRecentTraceInput(String(val));
-                  if (val !== recentTraceLimit) {
-                    void saveRecentTraceLimit();
-                  }
-                }
-              }}
-              onKeyDown={e => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  e.currentTarget.blur();
-                }
-              }}
-              className="w-[42px] bg-transparent py-1.5 text-[13px] text-slate-200 font-mono outline-none"
-              title={`Max items (${MIN_LAST_N_RUNS} to ${MAX_LAST_N_RUNS})`}
-            />
+          {/* Show limit */}
+          <div className="bg-[#030806] border border-white/[0.04] rounded-xl hover:border-white/10 transition-colors focus-within:border-emerald-500/50">
+            <label className="sr-only" htmlFor="clinical-log-show-limit">
+              Show logs limit
+            </label>
+            <select
+              id="clinical-log-show-limit"
+              value={recentTraceLimit}
+              onChange={e => void saveRecentTraceLimit(Number(e.target.value))}
+              className="pl-3 pr-2 py-1.5 bg-transparent text-xs font-bold tracking-[0.08em] text-slate-300 outline-none cursor-pointer"
+              title={`Show logs limit (${MIN_LAST_N_RUNS} to ${MAX_LAST_N_RUNS})`}
+            >
+              {LOG_LIMIT_OPTIONS.map(limit => (
+                <option key={limit} value={limit} className="bg-[#18191e] text-slate-200">
+                  {`Show ${limit}`}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Sort */}
@@ -851,7 +1050,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
             <select
               value={sortMode}
               onChange={e => setSortMode(e.target.value as SortMode)}
-              className="pl-3 pr-2 py-1.5 bg-transparent text-xs font-bold uppercase tracking-wider text-slate-300 outline-none cursor-pointer"
+              className="pl-3 pr-2 py-1.5 bg-transparent text-xs font-bold tracking-[0.08em] text-slate-300 outline-none cursor-pointer"
             >
               {(Object.keys(SORT_MODE_LABELS) as SortMode[]).map(mode => (
                 <option key={mode} value={mode} className="bg-[#18191e] text-slate-200">
@@ -867,6 +1066,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
           <button
             onClick={() => {
               setIsSelectMode(m => !m);
+              setIsRemoveMode(false);
+              setSelectedRemoveIds(new Set());
               if (isSelectMode) setSelectedIds(new Set());
             }}
             className={clsx(
@@ -877,31 +1078,83 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
             )}
           >
             {isSelectMode ? <XCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-            {isSelectMode ? "CANCEL" : "SAVE"}
+            {isSelectMode ? "Cancel" : "Save"}
           </button>
 
           {isSelectMode && (
             <div className="flex items-center gap-2">
               <button
                 onClick={selectAll}
-                className="px-3 py-1.5 rounded-xl bg-[#030806] border border-white/[0.04] text-[12px] font-bold uppercase tracking-wide text-slate-300 hover:bg-white/[0.05]"
+                className="px-3 py-1.5 rounded-xl bg-[#030806] border border-white/[0.04] text-[12px] font-bold tracking-[0.08em] text-slate-300 hover:bg-white/[0.05]"
               >
-                {selectedIds.size === visibleSnapshots.length ? "DESELECT" : "ALL"}
+                {selectedIds.size === visibleSnapshots.length ? "Deselect" : "Select all"}
               </button>
               <button
                 onClick={openSaveToDatasetsModal}
                 disabled={selectedIds.size === 0}
-                className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-[12px] font-bold uppercase tracking-wide text-emerald-300 hover:bg-emerald-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-[12px] font-bold tracking-[0.08em] text-emerald-300 hover:bg-emerald-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
               >
-                {isSavingToDatasets ? "SAVING…" : `SAVE (${selectedIds.size})`}
+                {isSavingToDatasets ? "Saving..." : `Save (${selectedIds.size})`}
+              </button>
+            </div>
+          )}
+
+          {/* Delete from project history */}
+          <button
+            onClick={() => {
+              setIsRemoveMode(m => !m);
+              setIsSelectMode(false);
+              setSelectedIds(new Set());
+              if (!isRemoveMode) {
+                setSelectedRemoveIds(new Set());
+              }
+            }}
+            className={clsx(
+              "px-4 py-1.5 rounded-xl border text-[12px] font-bold uppercase tracking-wide transition-all flex items-center gap-2",
+              isRemoveMode
+                ? "bg-rose-500/20 border-rose-500/30 text-rose-300"
+                : "bg-[#030806] border-white/[0.04] text-slate-300 hover:border-white/10 hover:bg-white/[0.05]"
+            )}
+          >
+            {isRemoveMode ? <XCircle className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
+            {isRemoveMode ? "Cancel" : "Delete"}
+          </button>
+
+          {isRemoveMode && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={selectAllForRemove}
+                className="px-3 py-1.5 rounded-xl bg-[#030806] border border-white/[0.04] text-[12px] font-bold tracking-[0.08em] text-slate-300 hover:bg-white/[0.05]"
+              >
+                {selectedRemoveIds.size === visibleSnapshots.length ? "Deselect" : "Select all"}
+              </button>
+              <button
+                onClick={() => void deleteSelectedSnapshots()}
+                disabled={selectedRemoveIds.size === 0 || isDeletingSnapshots}
+                className="px-3 py-1.5 rounded-xl bg-rose-500/20 border border-rose-500/30 text-[12px] font-bold tracking-[0.08em] text-rose-300 hover:bg-rose-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isDeletingSnapshots
+                  ? "Deleting..."
+                  : selectedRemoveIds.size === 0
+                    ? "Delete"
+                    : `Delete (${selectedRemoveIds.size})`}
               </button>
             </div>
           )}
         </div>
       </div>
-      {error && (
+      {planError && (
+        <div className="mx-4 mb-3">
+          <PlanLimitBanner {...planError} context="snapshots" />
+        </div>
+      )}
+      {error && !planError && (
         <div className="mx-4 mb-3 px-3 py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 flex items-center justify-between gap-3">
-          <span className="text-xs text-rose-300 font-medium">Failed to load snapshots. Please retry.</span>
+          <span className="text-xs text-rose-300 font-medium">
+            {isRateLimited
+              ? `Live updates are temporarily throttled. Please wait${rateLimitInfo.retryAfterSec ? ` about ${rateLimitInfo.retryAfterSec} seconds` : " a moment"} and retry.`
+              : "Failed to load snapshots. Please retry."}
+          </span>
           <button
             type="button"
             onClick={() => mutate()}
@@ -914,13 +1167,20 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
       )}
 
       {/* Scrollable Data Grid */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar relative flex flex-col p-4 md:p-6 lg:p-8 shrink-0">
-        <div className="flex flex-col border border-white/[0.06] rounded-[20px] overflow-hidden bg-[#18191e] shadow-2xl mb-12">
+      <div
+        className="relative h-0 flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar p-4 md:p-6 lg:p-8"
+        onWheelCapture={event => {
+          event.stopPropagation();
+        }}
+      >
+        <div className="flex shrink-0 flex-col border border-white/[0.06] rounded-[20px] overflow-hidden bg-[#18191e] shadow-2xl mb-12">
           {/* Fixed Data Grid Header */}
           <div className="bg-[#18191e] flex items-center justify-between text-[13px] font-bold text-slate-400 border-b border-white/[0.06] py-3.5 px-6 shrink-0">
             <div className="flex items-center gap-4 flex-1 pr-4">
               {isSelectMode ? (
                 <div className="w-8 shrink-0 text-center">SEL</div>
+              ) : isRemoveMode ? (
+                <div className="w-8 shrink-0 text-center">DEL</div>
               ) : (
                 <div className="w-[4.5rem] shrink-0 pl-1 capitalize">time</div>
               )}
@@ -947,15 +1207,15 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
               <Terminal className="w-8 h-8 text-slate-700 mx-auto" />
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wide leading-relaxed">
                 {riskFilter === "all"
-                  ? "No clinical snapshots found yet. Try running the agent, then refresh."
-                  : `No snapshots match ${RISK_FILTER_LABELS[riskFilter]} filter. Try ALL or increase LIMIT.`}
+                  ? "No logs yet for this agent. Run the agent and this panel will auto-refresh every few seconds."
+                  : `No logs match ${RISK_FILTER_LABELS[riskFilter]} filter. Try All or raise Show limit.`}
               </p>
               {riskFilter !== "all" && (
                 <button
                   onClick={() => setRiskFilter("all")}
                   className="px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/10 text-xs font-bold uppercase tracking-wide text-slate-200 hover:bg-white/[0.06]"
                 >
-                  SHOW ALL
+                  Show all
                 </button>
               )}
             </div>
@@ -974,7 +1234,10 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                 const fullTime = formatPrettyTime(s.created_at);
                 const stepLogs = extractStepLogs(s);
                 const toolNames = extractToolNames(s);
-                const hasPolicyContext = toolNames.length > 0;
+                const toolDefinitionCount = getToolDefinitionCount(s, toolNames);
+                const hasPolicyContext = toolDefinitionCount > 0;
+                const captureStateBadge = getCaptureStateBadge(s);
+                const requestShapeBadges = getRequestShapeBadges(s);
                 const customCode = extractCustomCode(s);
                 const traceKey = String(s.trace_id || "");
                 const policyState = policyByTrace[traceKey] ||
@@ -987,7 +1250,9 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                   snapshotRules.length > 0
                     ? snapshotRules.map((snapRule: Record<string, unknown>) => {
                         const ruleId = String(snapRule?.id || "");
-                        const currentRule = configuredPolicyMap.get(ruleId) as Record<string, unknown> | undefined;
+                        const currentRule = configuredPolicyMap.get(ruleId) as
+                          | Record<string, unknown>
+                          | undefined;
                         return {
                           id: ruleId || `snapshot-${String(s.id)}`,
                           name: String(
@@ -995,7 +1260,10 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                           ),
                           scope_type: (currentRule?.scope_type as string) || "snapshot",
                           scope_ref: (currentRule?.scope_ref as string) ?? "",
-                          rule_json: (snapRule?.rule_json as object) ?? (currentRule?.rule_json as object) ?? {},
+                          rule_json:
+                            (snapRule?.rule_json as object) ??
+                            (currentRule?.rule_json as object) ??
+                            {},
                         };
                       })
                     : configuredPolicies;
@@ -1039,6 +1307,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                       onClick={() => {
                         if (isSelectMode) {
                           toggleSelect(String(s.id));
+                        } else if (isRemoveMode) {
+                          toggleRemoveSelect(String(s.id));
                         } else {
                           setExpandedId(isExpanded ? null : s.id);
                         }
@@ -1052,6 +1322,14 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                               <CheckSquare className="w-4 h-4 text-emerald-400" />
                             ) : (
                               <Square className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors" />
+                            )}
+                          </div>
+                        ) : isRemoveMode ? (
+                          <div className="flex flex-col items-center justify-center w-8 shrink-0">
+                            {selectedRemoveIds.has(String(s.id)) ? (
+                              <CheckSquare className="w-4 h-4 text-rose-400" />
+                            ) : (
+                              <Square className="w-4 h-4 text-slate-600 group-hover:text-rose-400 transition-colors" />
                             )}
                           </div>
                         ) : (
@@ -1093,24 +1371,51 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                                   : "border-emerald-500/20 bg-emerald-500/10 text-emerald-500/90"
                               )}
                             >
-                              EVAL: {failedCount > 0 ? "FAIL" : "PASS"}
+                              EVAL: {failedCount > 0 ? "FLAGGED" : "HEALTHY"}
                             </div>
                           )}
-                          {(s.has_tool_calls || toolNames.length > 0) && (
+                          {toolDefinitionCount > 0 && (
                             <div
                               className="shrink-0 px-2.5 py-0.5 rounded-full border border-amber-500/20 bg-amber-500/10 text-amber-400/90 text-[11px] font-bold uppercase tracking-widest flex items-center gap-1"
                               title={
-                                toolNames.length > 0 ? `Tools: ${toolNames.join(", ")}` : "Tool use"
+                                toolNames.length > 0
+                                  ? `Tools: ${toolNames.join(", ")}`
+                                  : `${toolDefinitionCount} tool definition${toolDefinitionCount === 1 ? "" : "s"} captured on this request.`
                               }
                             >
-                              Tool{toolNames.length !== 1 ? "s" : ""}:{" "}
+                              Tool{toolDefinitionCount !== 1 ? "s" : ""}:{" "}
                               {toolNames.length > 0
                                 ? toolNames.length > 2
                                   ? `${toolNames.length} calls`
                                   : toolNames.join(", ")
-                                : "—"}
+                                : toolDefinitionCount}
                             </div>
                           )}
+                          {s.has_tool_results ? (
+                            <div
+                              className="shrink-0 px-2.5 py-0.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-400/90 text-[11px] font-bold uppercase tracking-widest"
+                              title="Tool result evidence captured (ingest or trajectory)"
+                            >
+                              Result
+                            </div>
+                          ) : null}
+                          {requestShapeBadges.map(badge => (
+                            <div
+                              key={badge.label}
+                              className="shrink-0 px-2.5 py-0.5 rounded-full border border-cyan-500/25 bg-cyan-500/10 text-cyan-200/90 text-[11px] font-bold uppercase tracking-widest"
+                              title={badge.title}
+                            >
+                              {badge.label}
+                            </div>
+                          ))}
+                          {captureStateBadge ? (
+                            <div
+                              className="shrink-0 px-2.5 py-0.5 rounded-full border border-amber-500/25 bg-amber-500/10 text-amber-300/90 text-[11px] font-bold uppercase tracking-widest"
+                              title={captureStateBadge.title}
+                            >
+                              {captureStateBadge.label}
+                            </div>
+                          ) : null}
 
                           <p className="text-[14px] text-slate-300 truncate flex-1 ml-2">
                             {s.request_prompt || s.user_message || "—"}
@@ -1178,7 +1483,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                     Save logs to datasets
                   </h2>
                   <p className="mt-1 text-xs text-slate-400">
-                    Select existing datasets for this node or create a new one.
+                    Select existing datasets for this agent or create a new one.
                   </p>
                 </div>
                 <button
@@ -1195,7 +1500,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
               <div className="px-5 py-4 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono text-emerald-300">
-                    {snapshotIdsToSave.length} log{snapshotIdsToSave.length !== 1 ? "s" : ""} selected
+                    {snapshotIdsToSave.length} log{snapshotIdsToSave.length !== 1 ? "s" : ""}{" "}
+                    selected
                   </span>
                   <span className="text-[11px] text-slate-500">
                     Node-scoped only. Datasets from other nodes are hidden.
@@ -1220,10 +1526,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                       {datasetsForSave.map(ds => {
                         const id = String(ds.id);
                         const label = (ds.label?.trim() || `Dataset ${id.slice(0, 8)}`) as string;
-                        const count =
-                          typeof ds.snapshot_count === "number"
-                            ? ds.snapshot_count
-                            : 0;
+                        const count = typeof ds.snapshot_count === "number" ? ds.snapshot_count : 0;
                         const checked = selectedDatasetIdsForSave.has(id);
                         return (
                           <label
@@ -1276,7 +1579,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                     />
                   </div>
                   <p className="mt-1 text-[11px] text-slate-500">
-                    If you enter a name, a new dataset will be created and these logs will be included.
+                    If you enter a name, a new dataset will be created and these logs will be
+                    included.
                   </p>
                 </div>
               </div>
@@ -1313,7 +1617,9 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
             const s = snapshots.find(snap => String(snap.id) === String(expandedId));
             if (!s) return null;
             const cacheKey = projectId && expandedId ? `${projectId}-${expandedId}` : "";
-            const fullSnap = detailFetchedSnapshot ?? (cacheKey ? snapshotDetailCacheRef.current.get(cacheKey) : undefined);
+            const fullSnap =
+              detailFetchedSnapshot ??
+              (cacheKey ? snapshotDetailCacheRef.current.get(cacheKey) : undefined);
             const snapshotToShow = (fullSnap ?? s) as ClinicalSnapshot;
             const traceKey = String(snapshotToShow.trace_id || "");
             const policyStateForModal = policyByTrace[traceKey] ||
@@ -1327,6 +1633,11 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({ projectId, agentId }) 
                 evalRows={evalRowsForModal}
                 savedEvalConfig={savedEvalConfig}
                 evalEnabled={evalEnabled}
+                releaseGateHref={
+                  orgId
+                    ? `/organizations/${orgId}/projects/${projectId}/release-gate`
+                    : undefined
+                }
               />
             );
           })()}

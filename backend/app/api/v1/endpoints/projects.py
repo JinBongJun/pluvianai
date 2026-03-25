@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole, get_user_project_role
@@ -17,6 +17,7 @@ from app.core.dependencies import get_project_service, get_evaluation_rubric_rep
 from app.infrastructure.repositories.evaluation_rubric_repository import EvaluationRubricRepository
 from app.services.cache_service import cache_service
 from app.services.firewall_service import firewall_service
+from app.services.subscription_service import SubscriptionService
 from app.middleware.usage_middleware import check_project_limit
 from app.services.activity_logger import activity_logger
 from app.core.analytics import analytics_service
@@ -31,6 +32,24 @@ from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 # from app.infrastructure.repositories.project_repository import ProjectRepository
 
 router = APIRouter()
+
+
+def _invalidate_project_list_caches_for_project(db: Session, project_id: int, owner_id: Optional[int]) -> None:
+    user_ids = set()
+    if owner_id:
+        user_ids.add(int(owner_id))
+
+    member_rows = (
+        db.query(ProjectMember.user_id)
+        .filter(ProjectMember.project_id == project_id)
+        .all()
+    )
+    for row in member_rows:
+        if getattr(row, "user_id", None):
+            user_ids.add(int(row.user_id))
+
+    for user_id in user_ids:
+        cache_service.invalidate_user_projects_cache(user_id)
 
 
 class ProjectCreate(BaseModel):
@@ -55,6 +74,7 @@ class ProjectUpdate(BaseModel):
 
 class ProjectResponse(BaseModel):
     """Project response schema"""
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     name: str
@@ -65,10 +85,6 @@ class ProjectResponse(BaseModel):
     organization_id: int | None = None  # organization this project belongs to
     usage_mode: str = "full"  # "full" | "test_only" (Design 5.1.5)
     diagnostic_config: dict | None = {}
-
-    class Config:
-        from_attributes = True
-
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 @handle_errors
@@ -84,11 +100,38 @@ async def create_project(
     logger.info(f"Creating project: {project_data.name}", extra={"user_id": current_user.id})
 
     # Check project limit
-    can_create, error_msg = check_project_limit(current_user.id, db)
+    can_create, error_msg = check_project_limit(
+        current_user.id,
+        db,
+        is_superuser=bool(getattr(current_user, "is_superuser", False)),
+    )
     if not can_create:
+        plan_info = SubscriptionService(db).get_user_plan(current_user.id)
+        plan_type = str(plan_info.get("plan_type") or "free")
+        limits = plan_info.get("limits") or {}
+        project_limit = int(limits.get("projects", 1))
+
+        project_count = (
+            db.query(Project)
+            .filter(
+                Project.owner_id == current_user.id,
+                Project.is_active.is_(True),
+                Project.is_deleted.is_(False),
+            )
+            .count()
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=error_msg or "Project limit reached. Please upgrade your plan.",
+            detail={
+                "code": "PROJECT_LIMIT_REACHED",
+                "message": error_msg or "You have reached the project limit for your current plan.",
+                "details": {
+                    "plan_type": plan_type,
+                    "current": int(project_count),
+                    "limit": project_limit,
+                    "upgrade_path": "/settings/subscription",
+                },
+            },
         )
 
     usage_mode = (project_data.usage_mode or "full").strip().lower()
@@ -107,11 +150,17 @@ async def create_project(
         # Transaction is committed by get_db() dependency
     except EntityAlreadyExistsError as e:
         logger.warning(f"Duplicate project name: {project_data.name}")
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A project with this name already exists.",
+        )
     except ValueError as e:
         # Organization access errors
         logger.warning(f"Organization access error: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to create a project in that organization.",
+        )
     except IntegrityError as e:
         db.rollback()
         logger.error(f"Database error creating project: {str(e)}")
@@ -321,7 +370,7 @@ async def update_project(
 
     # Invalidate cache
     cache_service.invalidate_project_cache(project_id)
-    cache_service.invalidate_user_projects_cache(current_user.id)
+    _invalidate_project_list_caches_for_project(db, project_id, project.owner_id)
 
     # Log activity
     activity_logger.log_activity(
@@ -419,7 +468,7 @@ async def delete_project(
 
     # Invalidate cache
     cache_service.invalidate_project_cache(project_id)
-    cache_service.invalidate_user_projects_cache(current_user.id)
+    _invalidate_project_list_caches_for_project(db, project_id, project.owner_id)
 
     logger.info(f"Project deleted successfully: {project_id}")
     return None
@@ -496,6 +545,8 @@ class RubricCreate(BaseModel):
     max_score: int = 5
 
 class RubricResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: Optional[str]
@@ -503,9 +554,6 @@ class RubricResponse(BaseModel):
     min_score: int
     max_score: int
     is_active: bool
-
-    class Config:
-        from_attributes = True
 
 @router.post("/{project_id}/rubrics", response_model=RubricResponse)
 @handle_errors

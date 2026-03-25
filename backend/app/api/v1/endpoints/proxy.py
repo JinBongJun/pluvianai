@@ -11,7 +11,10 @@ from typing import Optional, Dict
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db, SessionLocal
+from app.core.permissions import check_project_access
+from app.core.security import get_current_user_or_api_key
 from app.models.project import Project
+from app.models.user import User
 from app.services.cache_service import cache_service
 from app.services.firewall_service import firewall_service
 from app.core.dependencies import get_snapshot_service
@@ -38,12 +41,33 @@ _breaker = CircuitBreaker(failure_threshold=5, recovery_time_seconds=30, excepti
 _bulkhead = Bulkhead(max_concurrent=20)
 
 
+def _get_platform_provider_key(provider: str) -> Optional[str]:
+    if provider == "openai":
+        return settings.OPENAI_API_KEY
+    if provider == "anthropic":
+        return settings.ANTHROPIC_API_KEY
+    if provider == "google":
+        return settings.GOOGLE_API_KEY
+    return None
+
+
+def _proxy_error_response(status_code: int, message: str, origin: str = "Proxy") -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": message},
+        headers={"X-Pluvian-Origin": origin},
+    )
+
+
 async def _stream_with_firewall(
     response: httpx.Response,
     project_id: int,
     rules: list,
     resp_headers: dict,
-    trace_id: str
+    trace_id: str,
+    snapshot_provider: Optional[str] = None,
+    snapshot_model: Optional[str] = None,
+    snapshot_payload: Optional[Dict] = None,
 ) -> StreamingResponse:
     """
     Stream response with real-time firewall scanning
@@ -60,6 +84,41 @@ async def _stream_with_firewall(
     """
     accumulated_text = ""
     
+    def _best_effort_extract_stream_text(sse_text: str) -> str:
+        """
+        Best-effort extraction of assistant text from SSE/NDJSON streams.
+        This is intentionally lightweight; full fidelity is not required for baseline comparison.
+        """
+        if not isinstance(sse_text, str) or not sse_text.strip():
+            return ""
+        out_parts = []
+        # SSE format: lines like "data: {json}\n\n"
+        for raw_line in sse_text.splitlines():
+            line = raw_line.strip()
+            if not line.startswith("data:"):
+                continue
+            data = line[len("data:") :].strip()
+            if not data or data == "[DONE]":
+                continue
+            try:
+                obj = json.loads(data)
+            except Exception:
+                continue
+            # OpenAI chat.completions stream: choices[].delta.content
+            try:
+                choices = obj.get("choices")
+                if isinstance(choices, list) and choices:
+                    delta = choices[0].get("delta") if isinstance(choices[0], dict) else None
+                    if isinstance(delta, dict):
+                        c = delta.get("content")
+                        if isinstance(c, str) and c:
+                            out_parts.append(c)
+            except Exception:
+                pass
+            # OpenAI Responses API stream (best-effort): "delta" fields may differ; ignore for now
+        text = "".join(out_parts).strip()
+        return text
+
     async def generate():
         nonlocal accumulated_text
         async for chunk_bytes in response.aiter_bytes():
@@ -101,6 +160,49 @@ async def _stream_with_firewall(
                 logger.error(f"Firewall streaming error: {str(e)}")
                 # On error, continue streaming (fail-open for resilience)
                 yield chunk_bytes
+        # Stream finished; capture best-effort response text for snapshot baseline.
+        try:
+            if project_id and snapshot_payload and snapshot_provider:
+                extracted = _best_effort_extract_stream_text(accumulated_text) or accumulated_text.strip()
+                # Bound size to avoid huge DB rows.
+                extracted = extracted[:8000] if extracted else ""
+                pay = dict(snapshot_payload) if isinstance(snapshot_payload, dict) else {}
+                if extracted and not pay.get("response"):
+                    pay["response"] = extracted
+                # Save snapshot in background (do not block stream completion).
+                def bg_snapshot(p_id: int, t_id: str, prov: str, mod: str, pay_in: Dict):
+                    with SessionLocal() as bg_db:
+                        try:
+                            from app.services.snapshot_service import SnapshotService
+                            from app.infrastructure.repositories.trace_repository import TraceRepository
+                            from app.infrastructure.repositories.snapshot_repository import SnapshotRepository
+                            from app.services.live_view_events import publish_agents_changed
+                            trace_repo = TraceRepository(bg_db)
+                            snapshot_repo = SnapshotRepository(bg_db)
+                            svc = SnapshotService(trace_repo, snapshot_repo, bg_db)
+                            svc.create_trace(p_id, t_id)
+                            result = svc.save_snapshot(t_id, prov, mod, pay_in, project_id=p_id)
+                            if result is not None:
+                                bg_db.commit()
+                                try:
+                                    publish_agents_changed(p_id, [getattr(result, "agent_id", None)])
+                                except Exception:
+                                    pass
+                        except Exception as ex:
+                            logger.warning(f"Background snapshot error (stream capture, fail-silent): {str(ex)}")
+                            bg_db.rollback()
+                loop = asyncio.get_event_loop()
+                loop.run_in_executor(
+                    None,
+                    bg_snapshot,
+                    int(project_id),
+                    str(trace_id),
+                    str(snapshot_provider),
+                    str(snapshot_model or pay.get("model", "unknown")),
+                    pay,
+                )
+        except Exception:
+            pass
     
     return StreamingResponse(
         generate(),
@@ -118,6 +220,7 @@ async def _proxy_request(
     x_project_id: Optional[str],
     x_agent_name: Optional[str],
     x_chain_id: Optional[str],
+    current_user: User,
     db: Session,
 ) -> Response:
     """
@@ -125,6 +228,25 @@ async def _proxy_request(
     """
     if provider not in PROVIDER_URLS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported provider: {provider}")
+
+    project: Optional[Project] = None
+    project_id: Optional[int] = None
+    auth_method = getattr(request.state, "auth_method", None)
+    if auth_method == "api_key" and not x_project_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Project-ID is required when authenticating with an API key.",
+        )
+
+    if x_project_id:
+        try:
+            project_id = int(x_project_id)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="X-Project-ID must be a valid integer.",
+            ) from exc
+        project = check_project_access(project_id, current_user, db)
 
     # 0. Panic Mode Check (High Performance via Redis)
     if x_project_id:
@@ -142,19 +264,13 @@ async def _proxy_request(
             logger.warning(f"Panic check failed for project {x_project_id}: {str(e)}")
 
     # Check usage limit if project ID is provided
-    if x_project_id:
-        try:
-            project_id = int(x_project_id)
-            project = db.query(Project).filter(Project.id == project_id).first()
-            if project:
-                can_make_call, error_msg = check_api_call_limit(project.owner_id, db)
-                if not can_make_call:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail=error_msg or "API call limit exceeded. Please upgrade your plan.",
-                    )
-        except (ValueError, TypeError):
-            pass
+    if project is not None:
+        can_make_call, error_msg = check_api_call_limit(project.owner_id, db)
+        if not can_make_call:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=error_msg or "API call limit exceeded. Please upgrade your plan.",
+            )
 
     # Build target URL
     base_url = PROVIDER_URLS[provider]
@@ -176,76 +292,40 @@ async def _proxy_request(
     # Get request body
     body = await request.body()
 
-    # 1. Capture Snapshot (Non-blocking Background Task)
+    # 1. Capture Snapshot (store request now; attach response after upstream returns)
     trace_id = x_chain_id or str(uuid.uuid4())
+    snapshot_payload: Optional[Dict] = None
+    snapshot_model: str = "unknown"
     
     if x_project_id and request.method == "POST":
         try:
-            # Parse body to JSON to capture context
-            payload = json.loads(body)
-            if isinstance(payload, dict) and x_agent_name:
-                # Header-based agent name has highest priority for proxy traffic.
-                payload.setdefault("agent_id", x_agent_name)
-                payload.setdefault("agent_name", x_agent_name)
-            
-            # Sub-task to handle snapshot (async buffering via Redis Stream)
-            def bg_snapshot(p_id: int, t_id: str, prov: str, mod: str, pay: Dict):
-                with SessionLocal() as bg_db:
-                    try:
-                        from app.services.snapshot_service import SnapshotService
-                        from app.infrastructure.repositories.trace_repository import TraceRepository
-                        from app.infrastructure.repositories.snapshot_repository import SnapshotRepository
-                        
-                        # Create service instance for background task
-                        trace_repo = TraceRepository(bg_db)
-                        snapshot_repo = SnapshotRepository(bg_db)
-                        bg_snapshot_service = SnapshotService(trace_repo, snapshot_repo, bg_db)
-                        
-                        # Create trace first
-                        bg_snapshot_service.create_trace(p_id, t_id)
-                        
-                        # Save snapshot (will use Redis Stream if available, fail-silent if not)
-                        result = bg_snapshot_service.save_snapshot(t_id, prov, mod, pay, project_id=p_id)
-                        
-                        # Only commit if snapshot was saved directly (fallback mode)
-                        if result is not None:
-                            bg_db.commit()
-                        # If result is None, snapshot was queued to Redis Stream (async)
-                    except Exception as ex:
-                        logger.warning(f"Background snapshot error (fail-silent): {str(ex)}")
-                        bg_db.rollback()
+            payload_obj = json.loads(body) if body else None
+            if isinstance(payload_obj, dict):
+                if x_agent_name:
+                    payload_obj.setdefault("agent_id", x_agent_name)
+                    payload_obj.setdefault("agent_name", x_agent_name)
+                snapshot_payload = payload_obj
+                snapshot_model = str(payload_obj.get("model", "unknown"))
+        except Exception:
+            snapshot_payload = None
 
-            background_tasks.add_task(
-                bg_snapshot, 
-                int(x_project_id), 
-                trace_id, 
-                provider, 
-                payload.get("model", "unknown"), 
-                payload
-            )
-        except Exception as e:
-            logger.warning(f"Failed to queue snapshot for trace {trace_id}: {str(e)}")
-
-    # Auth handling
-    api_key = None
-    auth_header = request.headers.get("Authorization")
-    if auth_header:
-        api_key = auth_header.replace("Bearer ", "").replace("Api-Key ", "")
-    else:
-        if provider == "openai" and settings.OPENAI_API_KEY:
-            api_key = settings.OPENAI_API_KEY
-        elif provider == "anthropic" and settings.ANTHROPIC_API_KEY:
-            api_key = settings.ANTHROPIC_API_KEY
-        elif provider == "google" and settings.GOOGLE_API_KEY:
-            api_key = settings.GOOGLE_API_KEY
-
+    # Auth handling: route access is authenticated separately (JWT or Pluvian API key).
+    # Upstream provider credentials come only from server-side settings.
+    api_key = _get_platform_provider_key(provider)
     if not api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"API key required for {provider}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Platform provider key is not configured for {provider}.",
+        )
 
     # Headers preparation
     headers = dict(request.headers)
     headers.pop("host", None)
     headers.pop("content-length", None)
+    headers.pop("Authorization", None)
+    headers.pop("authorization", None)
+    headers.pop("x-api-key", None)
+    headers.pop("x-goog-api-key", None)
     if provider == "openai":
         headers["Authorization"] = f"Bearer {api_key}"
     elif provider == "anthropic":
@@ -312,14 +392,64 @@ async def _proxy_request(
                                 project_id,
                                 rules,
                                 resp_headers,
-                                trace_id
+                                trace_id,
+                                snapshot_provider=provider,
+                                snapshot_model=snapshot_model,
+                                snapshot_payload=snapshot_payload,
                             )
                     except (ValueError, TypeError):
                         pass
                     except Exception as e:
                         logger.warning(f"Firewall check failed: {str(e)}")
                 
-                # Non-streaming or no firewall rules: return as-is
+                # Non-streaming or no firewall rules: capture response text and save snapshot in background.
+                if x_project_id and request.method == "POST" and snapshot_payload:
+                    try:
+                        from app.services.data_normalizer import DataNormalizer
+                        normalizer = DataNormalizer()
+                        extracted_text = ""
+                        try:
+                            resp_json = response.json()
+                            extracted_text = str(normalizer._extract_response_text(resp_json) or "").strip()
+                        except Exception:
+                            extracted_text = str(response.text or "").strip()
+                        if extracted_text and not snapshot_payload.get("response"):
+                            snapshot_payload["response"] = extracted_text[:8000]
+
+                        def bg_snapshot(p_id: int, t_id: str, prov: str, mod: str, pay: Dict):
+                            with SessionLocal() as bg_db:
+                                try:
+                                    from app.services.snapshot_service import SnapshotService
+                                    from app.infrastructure.repositories.trace_repository import TraceRepository
+                                    from app.infrastructure.repositories.snapshot_repository import SnapshotRepository
+                                    from app.services.live_view_events import publish_agents_changed
+                                    trace_repo = TraceRepository(bg_db)
+                                    snapshot_repo = SnapshotRepository(bg_db)
+                                    svc = SnapshotService(trace_repo, snapshot_repo, bg_db)
+                                    svc.create_trace(p_id, t_id)
+                                    result = svc.save_snapshot(t_id, prov, mod, pay, project_id=p_id)
+                                    if result is not None:
+                                        bg_db.commit()
+                                        try:
+                                            publish_agents_changed(p_id, [getattr(result, "agent_id", None)])
+                                        except Exception:
+                                            pass
+                                except Exception as ex:
+                                    logger.warning(f"Background snapshot error (fail-silent): {str(ex)}")
+                                    bg_db.rollback()
+
+                        background_tasks.add_task(
+                            bg_snapshot,
+                            int(x_project_id),
+                            trace_id,
+                            provider,
+                            snapshot_model or snapshot_payload.get("model", "unknown"),
+                            snapshot_payload,
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to queue snapshot with response for trace {trace_id}: {str(e)}")
+
+                # Return as-is
                 return Response(
                     content=response.content,
                     status_code=response.status_code,
@@ -328,46 +458,41 @@ async def _proxy_request(
                 )
             except CircuitBreakerOpen:
                 circuit_breaker_open_total.labels(service="proxy").inc()
-                from fastapi.responses import JSONResponse
-                error_response = JSONResponse(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    content={"error": "Upstream temporarily unavailable (circuit open)"},
-                    headers={"X-Pluvian-Origin": "Proxy"},  # Pluvian proxy error
+                return _proxy_error_response(
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                    "Upstream temporarily unavailable. Please retry shortly.",
                 )
-                return error_response
             except httpx.RequestError as e:
                 # Network error
                 last_error = e
                 retry_attempts_total.labels(service="proxy").inc()
                 if attempt == 2:
-                    from fastapi.responses import JSONResponse
-                    error_response = JSONResponse(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        content={"error": str(last_error)},
-                        headers={"X-Pluvian-Origin": "Network"},  # Network error
+                    logger.warning(
+                        "Proxy upstream network failure after retries",
+                        extra={"provider": provider, "path": path, "error_type": type(last_error).__name__},
                     )
-                    return error_response
+                    return _proxy_error_response(
+                        status.HTTP_502_BAD_GATEWAY,
+                        "Upstream network error. Please retry shortly.",
+                        origin="Network",
+                    )
             except Exception as e:
                 # PluvianAI proxy error
                 last_error = e
                 retry_attempts_total.labels(service="proxy").inc()
                 if attempt == 2:
-                    from fastapi.responses import JSONResponse
-                    error_response = JSONResponse(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        content={"error": str(last_error)},
-                        headers={
-                            "X-PluvianAI-Origin": "Proxy",
-                            "X-AgentGuard-Origin": "Proxy",  # legacy header for compatibility
-                        },
+                    logger.exception(
+                        "Proxy internal failure after retries",
+                        extra={"provider": provider, "path": path, "error_type": type(last_error).__name__},
                     )
-                    return error_response
-        
-        from fastapi.responses import JSONResponse
-        return JSONResponse(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            content={"error": "Proxy failed after retries"},
-            headers={"X-Pluvian-Origin": "Proxy"},
+                    return _proxy_error_response(
+                        status.HTTP_502_BAD_GATEWAY,
+                        "Proxy request failed. Please retry shortly.",
+                    )
+
+        return _proxy_error_response(
+            status.HTTP_502_BAD_GATEWAY,
+            "Proxy failed after retries",
         )
 
 
@@ -380,9 +505,20 @@ async def proxy_get(
     x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
     x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
     x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: Session = Depends(get_db),
 ) -> Response:
-    return await _proxy_request(provider, path, request, background_tasks, x_project_id, x_agent_name, x_chain_id, db)
+    return await _proxy_request(
+        provider,
+        path,
+        request,
+        background_tasks,
+        x_project_id,
+        x_agent_name,
+        x_chain_id,
+        current_user,
+        db,
+    )
 
 
 @router.post("/{provider}/{path:path}")
@@ -394,48 +530,19 @@ async def proxy_post(
     x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
     x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
     x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: Session = Depends(get_db),
 ) -> Response:
-    return await _proxy_request(provider, path, request, background_tasks, x_project_id, x_agent_name, x_chain_id, db)
+    return await _proxy_request(
+        provider,
+        path,
+        request,
+        background_tasks,
+        x_project_id,
+        x_agent_name,
+        x_chain_id,
+        current_user,
+        db,
+    )
 
 
-@router.put("/{provider}/{path:path}")
-async def proxy_put(
-    provider: str,
-    path: str,
-    request: Request,
-    background_tasks: BackgroundTasks,
-    x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
-    x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
-    x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
-    db: Session = Depends(get_db),
-) -> Response:
-    return await _proxy_request(provider, path, request, background_tasks, x_project_id, x_agent_name, x_chain_id, db)
-
-
-@router.patch("/{provider}/{path:path}")
-async def proxy_patch(
-    provider: str,
-    path: str,
-    request: Request,
-    background_tasks: BackgroundTasks,
-    x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
-    x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
-    x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
-    db: Session = Depends(get_db),
-) -> Response:
-    return await _proxy_request(provider, path, request, background_tasks, x_project_id, x_agent_name, x_chain_id, db)
-
-
-@router.delete("/{provider}/{path:path}")
-async def proxy_delete(
-    provider: str,
-    path: str,
-    request: Request,
-    background_tasks: BackgroundTasks,
-    x_project_id: Optional[str] = Header(None, alias="X-Project-ID"),
-    x_agent_name: Optional[str] = Header(None, alias="X-Agent-Name"),
-    x_chain_id: Optional[str] = Header(None, alias="X-Chain-ID"),
-    db: Session = Depends(get_db),
-) -> Response:
-    return await _proxy_request(provider, path, request, background_tasks, x_project_id, x_agent_name, x_chain_id, db)

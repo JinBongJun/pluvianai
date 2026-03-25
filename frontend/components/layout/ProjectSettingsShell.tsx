@@ -1,8 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState, useCallback } from "react";
+import { Copy, Check } from "lucide-react";
 import OrgLayout from "@/components/layout/OrgLayout";
-import ProjectTabs from "@/components/ProjectTabs";
 
 interface ProjectSettingsShellProps {
   orgId: string;
@@ -19,18 +19,53 @@ export default function ProjectSettingsShell({
   description,
   children,
 }: ProjectSettingsShellProps) {
-  const basePath = `/organizations/${orgId}/projects/${projectId}`;
+  const [copied, setCopied] = useState(false);
+
+  const copyProjectId = useCallback(() => {
+    void navigator.clipboard.writeText(String(projectId)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [projectId]);
 
   return (
     <OrgLayout orgId={orgId}>
-      <div className="min-h-screen bg-ag-bg">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ProjectTabs projectId={projectId} orgId={orgId} basePath={basePath} />
-
-          <div className="mt-8">
-            <div className="mb-6">
-              <h1 className="text-2xl font-bold text-white mb-2">{title}</h1>
-              {description ? <p className="text-slate-400">{description}</p> : null}
+      <div className="min-h-screen relative overflow-hidden">
+        <div className="max-w-5xl mx-auto px-8 pt-10 pb-32 relative z-10">
+          <div className="">
+            <div className="mb-12">
+              <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter leading-none mb-6">
+                Project <span className="text-emerald-500">Settings</span>
+              </h1>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-slate-500 text-sm font-medium">
+                  Project ID (for SDK / .env):{" "}
+                  <span className="text-emerald-400 font-mono font-semibold">{projectId}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={copyProjectId}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-white/20 bg-white/5 text-slate-400 hover:text-white hover:border-emerald-500/40 transition-colors text-xs font-medium"
+                  title="Copy project ID"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      Copy
+                    </>
+                  )}
+                </button>
+              </div>
+              {description ? (
+                <p className="text-slate-400 text-lg font-medium leading-relaxed max-w-xl">
+                  {description}
+                </p>
+              ) : null}
             </div>
             {children}
           </div>
@@ -39,4 +74,3 @@ export default function ProjectSettingsShell({
     </OrgLayout>
   );
 }
-

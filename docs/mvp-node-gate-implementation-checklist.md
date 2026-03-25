@@ -39,7 +39,7 @@
 
 - [x] `backend/app/api/v1/endpoints/release_gate.py`
   - `evaluation_mode`(regression/stability/drift) 제거 또는 `"replay_test"`로 고정
-  - `repeat_runs`는 1/3/5 (기본 3)
+  - `repeat_runs`는 1/10/50/100 (기본 1, Run 옆 드롭다운; 50/100 빨간 칸·경고)
   - Gate verdict threshold는 **failed_run_ratio_max 기반에서** 아래로 전환:
     - `fail_rate_max`
     - `flaky_rate_max`
@@ -70,6 +70,21 @@
 - [x] 완료 기준
   - 프론트에서 “모드별 분기 파싱”이 필요 없고, **단일 렌더 코드**로 표시 가능
 
+#### B-4. Release Gate History retention + purge
+
+- [x] `backend/app/api/v1/endpoints/release_gate.py`
+  - `GET /projects/{project_id}/release-gate/history` 는 프로젝트 플랜 retention(`data_retention_days`) 안의 항목만 반환한다.
+  - 응답에 `retention_days` 를 포함해 UI에서 "Recent N days" 문구를 표시할 수 있다.
+- [x] `backend/app/services/data_lifecycle_service.py`
+  - expired snapshot cleanup와 별도로, **expired release-gate history**(`BehaviorReport` with `summary_json.release_gate`)를 hard-delete 한다.
+  - **Safety rule**: 일반 behavior report는 삭제 대상이 아니며, release-gate row만 purge 한다.
+- [x] `backend/app/services/scheduler_service.py`
+  - daily lifecycle cleanup job에서 snapshot cleanup + release-gate history purge를 함께 실행한다.
+- [x] 완료 기준
+  - 현재 Beta Free 플랜의 retention(예: 30일)에 따라 오래된 release-gate history가 조회되지 않는다.
+  - 스케줄러 실행 후 retention 밖 release-gate history row는 DB에서 실제로 삭제된다.
+  - 일반 behavior report는 retention purge 대상에서 제외된다.
+
 ---
 
 ### C. Candidate Overrides(모델/프롬프트/JSON/tools) + API key
@@ -82,12 +97,44 @@
 - [x] 완료 기준
   - Custom 모드에서 dropdown에 **Original Model 항목이 절대 나오지 않음**
 
+#### C-1a. Anthropic pinned-only preset + Pinned/Custom 가드레일
+
+- [ ] `frontend/app/organizations/[orgId]/projects/[projectId]/release-gate/ReleaseGatePageContent.tsx`
+  - `REPLAY_PROVIDER_MODEL_LIBRARY.anthropic`는 **pinned(YYYYMMDD) 모델만** 기본 노출한다.
+- [ ] `backend/app/api/v1/endpoints/release_gate.py`
+  - production에서 Anthropic override에 대해 **pinned-only(YYYYMMDD) 강제**.
+  - 예외: superuser 또는 `RELEASE_GATE_ALLOW_CUSTOM_MODELS=true`.
+- [ ] `frontend/app/organizations/[orgId]/projects/[projectId]/release-gate/ReleaseGateConfigPanel.tsx`
+  - Custom model id 입력은 `Advanced`로 표기한다.
+  - Anthropic에서 pinned가 아닌(또는 `latest`) 모델 id를 입력하면 **경고 배너 + Custom 배지**가 표시된다.
+  - pinned Anthropic id를 선택하면 **Pinned 배지**가 표시된다.
+- [ ] `frontend/app/organizations/[orgId]/projects/[projectId]/release-gate/ReleaseGateExpandedView.tsx` + `frontend/components/live-view/AgentCardNode.tsx`
+  - 노드 카드 요약(Model mode)이 pinned/custom을 구분해 `Pinned override` / `Custom override`로 표시된다.
+- [ ] 완료 기준
+  - Anthropic preset 목록에 레거시/alias/`latest` 모델이 보이지 않는다.
+  - pinned 선택/ custom 입력 시 배지/경고가 기대대로 노출되고, 노드 카드 요약이 일관되게 표시된다.
+
 #### C-2. API key 입력(런 전용)
 
 - [x] UI: “API key (optional)” 단일 입력
 - [x] Payload: `replay_api_key`로 전달(필요 시 `replay_provider`도)
 - [x] 완료 기준
   - API key 오류가 나면, 결과 테이블 깊숙한 곳이 아니라 **상단 배너 + 입력 하이라이트**로 즉시 보인다.
+
+#### C-3. JSON payload = config-only (계약 고정)
+
+- [ ] 백엔드
+  - `ReleaseGateValidateRequest.replay_overrides`에는 **config-only 필드만** 허용한다.
+    - MUST drop/ignore disallowed keys: `messages`, `message`, `user_message`, `response`, `responses`, `input`, `inputs`, `trace_id`, `agent_id`, `agent_name`.
+    - snapshot content(유저 입력/응답/trace 메타)는 항상 스냅샷에서만 읽고, overrides로는 절대 바꾸지 않는다.
+  - (선택) UI 지원용으로 `baseline_request`, `candidate_request_preview`를 응답에 포함할 경우, 둘 다 **display-only**이며 실행 로직은 여전히 snapshot + overrides에서 직접 파생한다.
+- [ ] 프론트엔드
+  - Release Gate JSON 패널은 baseline payload에서 content 필드(messages/user_message/response/trace_id 등)를 제거한 **config-only JSON**만 보여준다.
+  - 사용자가 JSON을 편집해도 content 필드는 다시 저장되지 않으며, replay 시 snapshot content는 항상 스냅샷에서만 가져온다.
+  - Config 편집 UI는 model/system prompt/sampling/tools 같은 설정을 **폼 + JSON(preview/advanced)** 한 군데에서만 수정하게 하고, 카드/다른 패널에서는 읽기 전용 요약만 보여준다.
+- [ ] 완료 기준
+  - 서로 다른 `user_message`를 가진 스냅샷 여러 개를 선택해도 JSON 패널 내용은 동일한 설정 JSON으로 재사용 가능하며, user input/response 본문은 어디에서도 노출되지 않는다.
+  - Replay 테스트를 여러 번 실행해도 snapshot content가 Request JSON 패널/Export/Copy에 섞여 들어가지 않는다.
 
 ---
 
@@ -96,8 +143,8 @@
 #### D-1. 화면 구조 단순화
 
 - [x] 탭 제거: Regression/Stability/Drift → **Replay Test 1개**
-- [x] repeat_runs 선택: 1 / 3 / 5 (기본 3)
-- [x] threshold 프리셋: Strict (5%/1%), Default (5%/3%), Lenient (10%/5%) + 커스텀(런 전용). UI에서 입력값은 % 단위 표시.
+- [x] repeat_runs 선택: 1 / 10 / 50 / 100 (Run 옆 드롭다운, 50/100 경고)
+- [x] **Strictness**(구 threshold): 라벨 "Strictness" + 한 줄 설명. 프리셋 Strict / Normal / Lenient / Custom(툴팁에 Fail·Flaky %). Custom 선택 시에만 Fail %·Flaky % 입력란 노출.
 - [x] 완료 기준
   - 사용자가 “노드 선택 → Run”만으로 결과를 확인할 수 있다.
 
@@ -106,6 +153,7 @@
 - [x] 케이스별 PASS/FAIL/FLAKY 표시
 - [x] attempts 패턴 표시(●●● 같은 시각화)
 - [x] Copy/Export(최소 1개)
+- [x] **Result UI: 케이스 펼치기·시도 목록·시도 상세** — Result 상단 Gate Pass/Fail, 케이스 행 k/N passed·chevron, 펼침 시 시도 목록(#·status·latency·behavior·eval), 시도 클릭 시 Attempt detail(eval·behavior diff·violations). 수동 검증: RG-6.
 - [x] 완료 기준
   - “대표 근거(Top failed rules + 샘플 실패 링크)”가 항상 보인다.
 
@@ -134,9 +182,14 @@
 ### G. 테스트/안정성 체크(수동 QA)
 
 - [x] `docs/manual-test-scenarios-mvp-replay-test.md`에 Replay Test 기반으로 시나리오 정리(모드 통합 반영)
+- [x] `backend/scripts/release_gate_repeat_matrix_test.py` 추가
+  - RG-2/RG-3 자동 검증: `repeat_runs` 1/10/50/100, PASS/FAIL/FLAKY 분류 불변식, fail/flaky rate 정합성, export summary 정합성
+- [x] `backend/scripts/release_gate_flaky_profile.ps1` 추가
+  - one-click 실행: flaky 유도용 snapshot + 임시 rule 생성 → `--require-flaky` matrix 실행 → 임시 rule cleanup
+  - CI 경량 로그 모드: `-CiQuiet`로 성공 시 압축 요약만 출력, 실패 시에만 matrix 로그 전체 노출
 - [x] 최소 시나리오
   - Recommended set 40개가 정상 로드되는지
-  - repeat_runs 1/3/5에서 PASS/FAIL/FLAKY 분류가 정확한지
+  - repeat_runs 1/10/50/100에서 PASS/FAIL/FLAKY 분류가 정확한지
   - API key 오류/모델 입력 오류가 UI에서 즉시 드러나는지
   - Export/Copy가 일관된 결과를 내는지
 
@@ -151,6 +204,7 @@
       - Golden: FAIL 없음 + PASS 최소 1개 케이스만
   - [x] Live Eval 집계에서 `not_applicable`을 failed 카운트에서 제외
     - `backend/app/services/live_eval_service.py`
+  - [x] Live Eval 체크는 11개만 지원 (empty, latency, status_code, refusal, json, length, repetition, required, format, leakage, tool). tokens/cost 체크는 제거됨.
   - [x] Release Gate 결과 UI 문구에서 “N/A를 gate fail로 간주” 오해 문구 제거
     - `frontend/app/organizations/[orgId]/projects/[projectId]/release-gate/page.tsx`
   - [x] 불필요한 mode 타입/탭 UI/분기/unused state 제거(replay_test 단일 경로 기준)
@@ -187,6 +241,33 @@
 - [x] 완료 기준
   - 일반 사용자 기준으로 plan 변경/DB 마이그레이션 트리거 같은 고위험 동작이 API로 노출되지 않는다.
   - 사용자 관점에서는 프로필 수정 + SDK/API key 발급이 실제 동작한다.
+
+#### I-1. 표준 계정 기능 중 MVP 범위 밖(Out-of-scope for now)
+
+- **비로그인 상태 비밀번호 재설정(“비밀번호 찾기”)**
+  - 일반 SaaS: 이메일 링크 기반 reset 플로우 (`/auth/password-reset-request` + `/auth/password-reset-confirm` 류)
+  - 현재: 로그인 상태에서의 비밀번호 변경만 제공. reset 플로우는 P2 이후로 미룬 상태.
+- **이메일 주소 검증(Email verification)**
+  - 일반 SaaS: 가입 후 이메일 인증 필수, 미인증 계정 제한.
+  - 현재: 초기 베타에서는 가입 즉시 사용 가능. 이메일 검증은 추후 외부 사용자 확대 시점에 도입.
+- **소셜 로그인/SSO (Google/GitHub/SAML 등)**
+  - 일반 B2B: 회사 도메인/IdP 기반 로그인.
+  - 현재: 이메일+패스워드만 제공. 실제 팀 단위 온보딩이 늘어나면 SSO를 별도 페이즈로 도입.
+- **2FA/MFA (OTP/SMS/Authenticator)**
+  - 일반: 보안 민감 환경에서 필수에 가까움.
+  - 현재: 브루트포스 방지/로그인 시큐리티는 구현되어 있으나, MFA는 초기 스코프 밖.
+- **사용자 셀프 계정 삭제(탈퇴)**
+  - 일반: 내 계정/데이터 삭제 요청 플로우.
+  - 현재: 내부/초기 베타 단계에서는 운영자 수동 처리 가정. 정책/법적 요구 정리 후 구현 예정.
+- **이메일 초대 기반 팀 온보딩**
+  - 일반: Org OWNER/ADMIN이 이메일로 멤버 초대 → 링크 수락 시 가입.
+  - 현재: Org/Project/Role 모델은 있으나, 이메일 초대/수락 플로우는 아직 구현하지 않음.
+- **Self-serve Billing (카드 결제/영수증/Tax 정보 관리)**
+  - 일반: Stripe 등과 연동된 자가 결제/업그레이드.
+  - 현재: Free plan만 실동, 유료 플랜/결제는 잠겨 있음. 과금 전략 안정화 후 별도 페이즈에서 도입.
+- **고급 알림·세션 관리**
+  - 예: 이메일 알림 세부 설정, 세션 목록/강제 로그아웃, 프로필 이미지/타임존 설정 등.
+  - 현재: 핵심 기능(MVP Node Gate, Live View, Release Gate)과 직접 연결되지 않는 편의 기능으로, 후순위로 둠.
 
 ---
 
@@ -284,4 +365,22 @@
   - non-superuser의 `generate_sample_data=true` 요청은 명시적 403로 변경 (`G-6`)
   - RBAC 통합 테스트 baseline 추가 (`G-5`)
     - `backend/tests/integration/test_api_rbac_boundaries.py`
+
+---
+
+### P. Operational Alerting Baseline (MVP)
+
+- [x] Phase 1 operational alert rules documented
+  - `docs/mvp-ops-alerting-minimum-plan.md`
+  - Includes: Live View API degradation, Release Gate failure burst, DB error burst, high snapshot error-rate anomaly
+- [x] Alert anti-noise guardrails documented
+  - cooldown, dedup key, recovery notification
+- [x] Manual verification IDs defined
+  - `OPS-T1` ~ `OPS-T6` in alerting plan
+- [x] Phase 2 notifier hook implementation
+  - Introduce non-blocking notifier abstraction (`notify_ops_alert`)
+  - Wire metrics/events from middleware + release gate + DB exception boundary
+- [x] Slack webhook channel wiring + environment config
+  - Example env: `OPS_ALERT_WEBHOOK_URL`
+  - Ensure secrets never appear in logs
 

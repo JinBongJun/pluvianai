@@ -2,7 +2,7 @@
 Integration tests for Billing API
 """
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from fastapi import status
 
 
@@ -70,15 +70,12 @@ class TestBillingAPI:
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    @patch('app.services.billing_service.stripe')
-    async def test_create_checkout_session_success(self, mock_stripe, async_client, auth_headers):
-        """Test creating Stripe checkout session successfully"""
-        # Mock Stripe session
-        mock_session = MagicMock()
-        mock_session.id = "cs_test_123"
-        mock_session.url = "https://checkout.stripe.com/test"
-        mock_stripe.checkout.Session.create.return_value = mock_session
-        
+    @patch(
+        "app.services.billing_service.BillingService.create_checkout_session",
+        return_value={"session_id": "txn_test_123", "url": "https://checkout.paddle.com/test"},
+    )
+    async def test_create_checkout_session_success(self, _mock_checkout, async_client, auth_headers):
+        """Test creating Paddle checkout session successfully (service mocked)."""
         response = await async_client.post(
             "/api/v1/billing/checkout",
             json={
@@ -89,7 +86,7 @@ class TestBillingAPI:
             headers=auth_headers
         )
         
-        # May succeed or fail depending on Stripe configuration
+        # May succeed or fail depending on billing route / Paddle configuration
         assert response.status_code in [
             status.HTTP_200_OK,
             status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -102,10 +99,10 @@ class TestBillingAPI:
                 data = data["data"]
             assert "session_id" in data or "url" in data
 
-    async def test_create_checkout_session_stripe_unavailable(self, async_client, auth_headers):
-        """Test creating checkout session when Stripe is unavailable"""
-        with patch('app.services.billing_service.BillingService.stripe_available', False):
-            response = await async_client.post(
+    @patch("app.services.billing_service.BillingService.create_checkout_session", return_value=None)
+    async def test_create_checkout_session_paddle_unavailable(self, _mock_checkout, async_client, auth_headers):
+        """Test creating checkout session when Paddle checkout cannot be created"""
+        response = await async_client.post(
                 "/api/v1/billing/checkout",
                 json={
                     "plan_type": "pro",
@@ -135,32 +132,20 @@ class TestBillingAPI:
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    @patch('app.services.billing_service.stripe')
-    async def test_stripe_webhook_success(self, mock_stripe, async_client):
-        """Test handling Stripe webhook successfully"""
-        # Mock webhook event
-        mock_event = {
-            "type": "checkout.session.completed",
-            "data": {
-                "object": {
-                    "metadata": {
-                        "user_id": "1",
-                        "plan_type": "pro"
-                    }
-                }
-            }
-        }
-        
-        mock_stripe.Webhook.construct_event.return_value = mock_event
-        
-        with patch('app.services.billing_service.settings') as mock_settings:
-            mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
+    @patch(
+        "app.services.billing_service.BillingService.handle_paddle_webhook",
+        return_value={"status": "success", "message": "ok"},
+    )
+    async def test_paddle_webhook_success(self, _mock_wh, async_client):
+        """Test handling Paddle webhook successfully (service mocked)."""
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_WEBHOOK_SECRET = "whsec_test"
             
             response = await async_client.post(
                 "/api/v1/billing/webhook",
-                content=b'{"test": "data"}',
+                content=b'{"event_type":"transaction.completed"}',
                 headers={
-                    "stripe-signature": "test_signature"
+                    "paddle-signature": "ts=1;h1=test"
                 }
             )
             
@@ -171,22 +156,20 @@ class TestBillingAPI:
                 status.HTTP_500_INTERNAL_SERVER_ERROR
             ]
 
-    @patch('app.services.billing_service.stripe')
-    async def test_stripe_webhook_invalid_signature(self, mock_stripe, async_client):
-        """Test handling webhook with invalid signature"""
-        import stripe.error
-        mock_stripe.Webhook.construct_event.side_effect = stripe.error.SignatureVerificationError(
-            "Invalid signature", "sig"
-        )
-        
-        with patch('app.services.billing_service.settings') as mock_settings:
-            mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
+    @patch(
+        "app.services.billing_service.BillingService.handle_paddle_webhook",
+        return_value={"error": "Invalid signature"},
+    )
+    async def test_paddle_webhook_invalid_signature(self, _mock_wh, async_client):
+        """Test handling webhook with invalid signature (service mocked)."""
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_WEBHOOK_SECRET = "whsec_test"
             
             response = await async_client.post(
                 "/api/v1/billing/webhook",
                 content=b'{"test": "data"}',
                 headers={
-                    "stripe-signature": "invalid_signature"
+                    "paddle-signature": "invalid_signature"
                 }
             )
             
@@ -200,7 +183,7 @@ class TestBillingAPI:
             if error_msg:
                 assert "signature" in error_msg.lower() or "invalid" in error_msg.lower()
 
-    async def test_stripe_webhook_no_signature(self, async_client):
+    async def test_paddle_webhook_no_signature(self, async_client):
         """Test handling webhook without signature header"""
         response = await async_client.post(
             "/api/v1/billing/webhook",
@@ -210,6 +193,6 @@ class TestBillingAPI:
         # Should handle missing signature
         assert response.status_code in [
             status.HTTP_400_BAD_REQUEST,
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             status.HTTP_500_INTERNAL_SERVER_ERROR
         ]

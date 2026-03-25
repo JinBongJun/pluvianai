@@ -3,7 +3,7 @@ Dashboard service for real-time metrics and trend analysis
 """
 
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, case
 from app.models.api_call import APICall
@@ -42,7 +42,7 @@ class DashboardService:
             raise ValueError("Database session required")
 
         # Calculate date range
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if period == "24h":
             start_date = now - timedelta(hours=24)
             days = 1
@@ -228,7 +228,7 @@ class DashboardService:
             raise ValueError("Database session required")
 
         # Calculate date range
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if period == "1d":
             start_date = now - timedelta(days=1)
         elif period == "7d":

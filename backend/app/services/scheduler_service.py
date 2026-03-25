@@ -3,7 +3,7 @@ Background scheduler service for periodic tasks
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -123,7 +123,11 @@ class SchedulerService:
         db: Session = SessionLocal()
         try:
             # Get all active projects
-            projects = db.query(Project).filter(Project.is_active.is_(True)).all()
+            projects = (
+                db.query(Project)
+                .filter(Project.is_active.is_(True), Project.is_deleted.is_(False))
+                .all()
+            )
             logger.info(f"Found {len(projects)} active projects")
 
             total_detections = 0
@@ -145,14 +149,12 @@ class SchedulerService:
 
                         # Get alerts created by drift detection
                         from app.models.alert import Alert
-                        from datetime import timedelta
-
                         alerts = (
                             db.query(Alert)
                             .filter(
                                 Alert.project_id == project.id,
                                 Alert.alert_type == "drift",
-                                Alert.created_at >= datetime.utcnow() - timedelta(seconds=10),
+                                Alert.created_at >= datetime.now(timezone.utc) - timedelta(seconds=10),
                             )
                             .all()
                         )
@@ -188,7 +190,11 @@ class SchedulerService:
         db: Session = SessionLocal()
         try:
             # Get all active projects
-            projects = db.query(Project).filter(Project.is_active.is_(True)).all()
+            projects = (
+                db.query(Project)
+                .filter(Project.is_active.is_(True), Project.is_deleted.is_(False))
+                .all()
+            )
             logger.info(f"Found {len(projects)} active projects")
 
             total_alerts = 0
@@ -249,7 +255,11 @@ class SchedulerService:
             from app.models.project import Project
 
             # Get all active projects
-            projects = db.query(Project).filter(Project.is_active.is_(True)).all()
+            projects = (
+                db.query(Project)
+                .filter(Project.is_active.is_(True), Project.is_deleted.is_(False))
+                .all()
+            )
             logger.info(f"Found {len(projects)} active projects")
 
             for project in projects:
@@ -280,26 +290,53 @@ class SchedulerService:
             from app.services.data_lifecycle_service import DataLifecycleService
 
             # Get all active projects
-            projects = db.query(Project).filter(Project.is_active.is_(True)).all()
+            projects = (
+                db.query(Project)
+                .filter(Project.is_active.is_(True), Project.is_deleted.is_(False))
+                .all()
+            )
             logger.info(f"Found {len(projects)} active projects")
 
-            total_cleaned = 0
+            total_snapshots_cleaned = 0
+            total_release_gate_reports_cleaned = 0
             lifecycle_service = DataLifecycleService(db)
 
             for project in projects:
                 try:
                     # Run cleanup for this project
                     result = lifecycle_service.cleanup_expired_data(project_id=project.id)
-                    if result.get("deleted_count", 0) > 0:
-                        total_cleaned += result["deleted_count"]
+                    deleted_snapshots = result.get("deleted_snapshots_count", result.get("deleted_count", 0))
+                    deleted_reports = result.get("deleted_release_gate_reports_count", 0)
+                    if deleted_snapshots > 0 or deleted_reports > 0:
+                        total_snapshots_cleaned += deleted_snapshots
+                        total_release_gate_reports_cleaned += deleted_reports
                         logger.info(
-                            f"Project {project.id}: Cleaned up {result['deleted_count']} expired snapshots"
+                            "Project %s: Cleaned up %s expired snapshots and %s expired release-gate history records",
+                            project.id,
+                            deleted_snapshots,
+                            deleted_reports,
                         )
                 except Exception as e:
                     logger.error(f"Error cleaning up data for project {project.id}: {str(e)}")
                     continue
 
-            logger.info(f"Scheduled data lifecycle cleanup completed: {total_cleaned} snapshots cleaned")
+            soft_delete_purge = lifecycle_service.purge_soft_deleted_entities()
+            soft_deleted_snapshot_purge = lifecycle_service.purge_soft_deleted_snapshots()
+            agent_setting_purge = lifecycle_service.purge_soft_deleted_agent_settings()
+            logger.info(
+                (
+                    "Scheduled data lifecycle cleanup completed: %s snapshots cleaned, "
+                    "%s release-gate history records purged, %s soft-deleted projects hard-deleted, "
+                    "%s soft-deleted organizations hard-deleted, %s soft-deleted snapshots hard-deleted, "
+                    "%s soft-deleted agent settings hard-deleted"
+                ),
+                total_snapshots_cleaned,
+                total_release_gate_reports_cleaned,
+                soft_delete_purge.get("purged_projects_count", 0),
+                soft_delete_purge.get("purged_organizations_count", 0),
+                soft_deleted_snapshot_purge.get("purged_snapshots_count", 0),
+                agent_setting_purge.get("purged_agent_settings_count", 0),
+            )
         except Exception as e:
             logger.error(f"Error in scheduled data lifecycle cleanup: {str(e)}")
         finally:
@@ -352,7 +389,11 @@ class SchedulerService:
                     from app.models.project import Project
                     
                     # Find first active project to associate alert with
-                    project = db.query(Project).filter(Project.is_active.is_(True)).first()
+                    project = (
+                        db.query(Project)
+                        .filter(Project.is_active.is_(True), Project.is_deleted.is_(False))
+                        .first()
+                    )
                     if project:
                         alert = Alert(
                             project_id=project.id,

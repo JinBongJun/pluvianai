@@ -28,8 +28,11 @@ async def usage_enforcement_middleware(request: Request, call_next):
     return response
 
 
-def check_project_limit(user_id: int, db: Session) -> tuple[bool, str | None]:
+def check_project_limit(user_id: int, db: Session, is_superuser: bool = False) -> tuple[bool, str | None]:
     """Check if user can create a new project"""
+    if is_superuser:
+        return (True, None)
+
     service = SubscriptionService(db)
     plan_info = service.get_user_plan(user_id)
     limits = plan_info["limits"]
@@ -41,11 +44,39 @@ def check_project_limit(user_id: int, db: Session) -> tuple[bool, str | None]:
     # Count user's projects
     from app.models.project import Project
 
-    project_count = db.query(Project).filter(Project.owner_id == user_id).count()
+    project_count = db.query(Project).filter(
+        Project.owner_id == user_id,
+        Project.is_active.is_(True),
+        Project.is_deleted.is_(False),
+    ).count()
 
     if project_count >= project_limit:
         return (False, f"Project limit reached: {project_count} / {project_limit}")
 
+    return (True, None)
+
+
+def check_organization_limit(user_id: int, db: Session, is_superuser: bool = False) -> tuple[bool, str | None]:
+    """Check if user can create a new organization."""
+    if is_superuser:
+        return (True, None)
+
+    service = SubscriptionService(db)
+    plan_info = service.get_user_plan(user_id)
+    limits = plan_info["limits"]
+    org_limit = limits.get("organizations", 1)
+
+    if org_limit == -1:  # unlimited
+        return (True, None)
+
+    from app.models.organization import Organization
+
+    org_count = db.query(Organization).filter(
+        Organization.owner_id == user_id,
+        Organization.is_deleted.is_(False),
+    ).count()
+    if org_count >= org_limit:
+        return (False, f"Organization limit reached: {org_count} / {org_limit}")
     return (True, None)
 
 

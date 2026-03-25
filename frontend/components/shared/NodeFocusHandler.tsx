@@ -24,23 +24,24 @@ export const NodeFocusHandler: React.FC<NodeFocusHandlerProps> = ({
 
       /**
        * CALCULATION LOGIC:
-       * The inspector is 520px wide with a 24px (right-6) margin. Total = 544px.
-       * To center the node in the remaining workspace, we need to shift the camera focus point
-       * to the RIGHT by (TotalPanelWidth / 2) in screen pixels.
+       * The right panel is ~500px wide. The remaining canvas width is roughly viewport - 500px.
+       * We shift the camera LEFT by half the panel width so the node sits centered
+       * in the visible canvas area (left side).
        *
-       * Since ReactFlow's setCenter uses graph coordinates, we must divide the pixel offset by the zoom level.
-       * Graph Offset = (544 / 2) / 1.6 = 170 units.
+       * Panel screen offset ≈ 500px → shift LEFT by 500/2 = 250px screen pixels.
+       * Since ReactFlow's setCenter uses graph coordinates, divide by zoom: 250 / 1.6 ≈ 156 units.
+       * A small additional nudge (+20) ensures the node is fully visible.
        */
-      const xOffset = isPanelOpen ? 170 : 0;
+      const xOffset = isPanelOpen ? 240 : 0;
 
-      setCenter(
-        node.position.x + (node.width ?? 0) / 2 + xOffset,
-        node.position.y + (node.height ?? 0) / 2,
-        {
-          zoom: targetZoom,
-          duration: 800,
-        }
-      );
+      // Fallback dimensions if node hasn't been measured yet (AgentCardNode is 340px wide)
+      const nWidth = node.width ?? 340;
+      const nHeight = node.height ?? 200;
+
+      setCenter(node.position.x + nWidth / 2 + xOffset, node.position.y + nHeight / 2, {
+        zoom: targetZoom,
+        duration: 800,
+      });
     }
   }, [selectedNodeId, isPanelOpen, getNodes, setCenter, getZoom]);
 

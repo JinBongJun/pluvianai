@@ -35,11 +35,10 @@ def success_response(
     if not response_content and data is None:
         response_content["data"] = None
 
-    default_headers = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "*",
-        "Access-Control-Allow-Headers": "*",
-    }
+    # NOTE: Do not set CORS headers here.
+    # CORS must be handled centrally by FastAPI's CORSMiddleware to ensure
+    # credentialed requests never receive wildcard origins.
+    default_headers: Dict[str, str] = {}
 
     if headers:
         default_headers.update(headers)
@@ -87,21 +86,16 @@ def error_response(
     if origin:
         error_content["origin"] = origin
     
-    default_headers = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "*",
-        "Access-Control-Allow-Headers": "*",
-    }
+    # NOTE: Do not set CORS headers here.
+    # CORS must be handled centrally by FastAPI's CORSMiddleware to ensure
+    # credentialed requests never receive wildcard origins.
+    default_headers: Dict[str, str] = {}
     
     # Add X-PluvianAI-Origin header for Error Namespace consistency
-    # Keep X-AgentGuard-Origin for backward compatibility (legacy clients)
     if origin:
         default_headers["X-PluvianAI-Origin"] = origin
-        default_headers["X-AgentGuard-Origin"] = origin
     else:
-        # Default to "Proxy" for PluvianAI server errors
         default_headers["X-PluvianAI-Origin"] = "Proxy"
-        default_headers["X-AgentGuard-Origin"] = "Proxy"
     
     if headers:
         default_headers.update(headers)

@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import ProjectLayout from "@/components/layout/ProjectLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { projectsAPI, organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
 import {
   Zap,
   Copy,
@@ -23,15 +25,27 @@ import clsx from "clsx";
 import Button from "@/components/ui/Button";
 
 export default function InfrastructureHubPage() {
-  const params = useParams();
-  const orgId = params?.orgId as string;
-  const projectId = Number(params?.projectId);
+  const router = useRouter();
+  const { orgId, projectId } = useOrgProjectParams();
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
-  const { data: project } = useSWR(projectId ? ["project", projectId] : null, () =>
-    projectsAPI.get(projectId)
+  const { data: project } = useSWR(
+    projectId ? ["project", projectId] : null,
+    async () => {
+      try {
+        return await projectsAPI.get(projectId);
+      } catch (e: any) {
+        const status = e?.response?.status;
+        const msg = e?.response?.data?.detail ?? e?.response?.data?.error?.message ?? "";
+        if (status === 404 && (msg === "Project not found" || msg === "Not Found")) {
+          router.replace(orgId ? `/organizations/${orgId}/projects` : "/organizations");
+          return undefined;
+        }
+        throw e;
+      }
+    }
   );
-  const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
+  const { data: org } = useSWR(orgId ? orgKeys.detail(orgId) : null, () =>
     organizationsAPI.get(orgId)
   );
 

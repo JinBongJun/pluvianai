@@ -1,7 +1,7 @@
 """Add optional agent scope to user_api_keys.
 
 Revision ID: 20260302uak
-Revises: add_eval_config_version
+Revises: 20260301_user_api_keys
 Create Date: 2026-03-02
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "20260302uak"
-down_revision = "add_eval_config_version"
+down_revision = "20260301_user_api_keys"
 branch_labels = None
 depends_on = None
 

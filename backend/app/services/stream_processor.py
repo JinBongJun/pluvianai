@@ -8,11 +8,14 @@ from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from app.models.snapshot import Snapshot
 from app.models.trace import Trace
+from app.domain.live_view_release_gate import restore_agent_if_soft_deleted
 from app.services.cache_service import cache_service
 from app.core.database import SessionLocal
 from app.core.logging_config import logger
 from app.core.config import settings
 from app.utils.tool_calls import extract_tool_calls_summary
+from app.utils.agent_signature import build_node_key
+from app.services.live_view_events import publish_agents_changed
 import httpx
 
 
@@ -100,7 +103,6 @@ class StreamProcessor:
                             eval_config_version = None
                         snapshot_data = {
                             "trace_id": data.get("trace_id"),
-                            "agent_id": data.get("agent_id") or None,
                             "provider": data.get("provider"),
                             "model": data.get("model"),
                             "system_prompt": data.get("system_prompt") or None,
@@ -113,6 +115,17 @@ class StreamProcessor:
                             "eval_config_version": eval_config_version,
                             "tool_calls_summary": tool_calls_summary if tool_calls_summary else None,
                         }
+                        # v1.0 node identity: always recompute from signature to avoid mixing
+                        # (stream payload may contain legacy agent_id/agent_name fields)
+                        request_payload = payload.get("request") if isinstance(payload, dict) else None
+                        if not isinstance(request_payload, dict) and isinstance(payload, dict):
+                            request_payload = payload
+                        snapshot_data["agent_id"] = build_node_key(
+                            provider=snapshot_data.get("provider"),
+                            model=snapshot_data.get("model"),
+                            system_prompt=snapshot_data.get("system_prompt"),
+                            request_payload=request_payload if isinstance(request_payload, dict) else {},
+                        )
                         project_id = int(data.get("project_id")) if data.get("project_id") else None
                         
                         snapshots_to_insert.append((snapshot_data, project_id, message_id))
@@ -142,7 +155,6 @@ class StreamProcessor:
             # Pre-check hard limits before inserting (if enabled)
             from app.models.project import Project
             from app.services.billing_service import BillingService
-            from app.core.config import settings
             
             # Group by project_id to check limits per owner
             project_owners = {}  # project_id -> owner_id
@@ -195,42 +207,57 @@ class StreamProcessor:
             inserted_count = 0
             for snapshot_data, project_id, message_id in filtered_snapshots:
                 try:
-                    # Ensure trace exists
-                    trace = db.query(Trace).filter(Trace.id == snapshot_data["trace_id"]).first()
-                    if not trace and project_id:
-                        # Create trace if it doesn't exist
-                        trace = Trace(id=snapshot_data["trace_id"], project_id=project_id)
-                        db.add(trace)
+                    # Isolate malformed rows so one bad snapshot doesn't roll back the whole stream batch.
+                    with db.begin_nested():
+                        trace = db.query(Trace).filter(Trace.id == snapshot_data["trace_id"]).first()
+                        if not trace and project_id:
+                            trace = Trace(id=snapshot_data["trace_id"], project_id=project_id)
+                            db.add(trace)
+                            db.flush()
+
+                        snapshot = Snapshot(
+                            trace_id=snapshot_data["trace_id"],
+                            project_id=project_id,
+                            agent_id=snapshot_data.get("agent_id"),
+                            provider=snapshot_data["provider"],
+                            model=snapshot_data["model"],
+                            system_prompt=snapshot_data.get("system_prompt"),
+                            user_message=snapshot_data.get("user_message"),
+                            response=snapshot_data.get("response"),
+                            payload=snapshot_data["payload"],
+                            is_sanitized=snapshot_data["is_sanitized"],
+                            status_code=snapshot_data["status_code"],
+                            eval_checks_result=snapshot_data.get("eval_checks_result"),
+                            eval_config_version=snapshot_data.get("eval_config_version"),
+                            tool_calls_summary=snapshot_data.get("tool_calls_summary"),
+                        )
+                        db.add(snapshot)
+                        restore_agent_if_soft_deleted(db, project_id, snapshot_data.get("agent_id"))
                         db.flush()
-                    
-                    # Create snapshot
-                    snapshot = Snapshot(
-                        trace_id=snapshot_data["trace_id"],
-                        project_id=project_id,
-                        agent_id=snapshot_data.get("agent_id"),
-                        provider=snapshot_data["provider"],
-                        model=snapshot_data["model"],
-                        system_prompt=snapshot_data.get("system_prompt"),
-                        user_message=snapshot_data.get("user_message"),
-                        response=snapshot_data.get("response"),
-                        payload=snapshot_data["payload"],
-                        is_sanitized=snapshot_data["is_sanitized"],
-                        status_code=snapshot_data["status_code"],
-                        eval_checks_result=snapshot_data.get("eval_checks_result"),
-                        eval_config_version=snapshot_data.get("eval_config_version"),
-                        tool_calls_summary=snapshot_data.get("tool_calls_summary"),
-                    )
-                    db.add(snapshot)
                     inserted_count += 1
                 except Exception as e:
                     logger.error(f"Error inserting snapshot {message_id}: {str(e)}")
-                    db.rollback()
                     continue
 
             # Commit batch
             if inserted_count > 0:
                 db.commit()
                 logger.info(f"Batch inserted {inserted_count} snapshots from {stream_key}")
+
+                # Notify Live View dashboards (SSE) that agent lists changed.
+                try:
+                    by_project = {}
+                    for snapshot_data, proj_id, _ in filtered_snapshots:
+                        if not proj_id:
+                            continue
+                        aid = snapshot_data.get("agent_id")
+                        if not aid:
+                            continue
+                        by_project.setdefault(int(proj_id), set()).add(str(aid))
+                    for pid, aids in by_project.items():
+                        publish_agents_changed(pid, aids)
+                except Exception:
+                    pass
 
                 # Optional: track snapshot_created event in PostHog (batch-level)
                 try:
@@ -256,7 +283,6 @@ class StreamProcessor:
                 try:
                     import asyncio
                     from app.api.v1.endpoints.behavior import run_behavior_validation_for_trace
-                    from app.core.database import SessionLocal
                     unique_traces = set()
                     for snapshot_data, proj_id, _ in filtered_snapshots:
                         if proj_id and snapshot_data.get("trace_id"):

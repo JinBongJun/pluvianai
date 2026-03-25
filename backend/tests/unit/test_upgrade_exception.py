@@ -2,15 +2,15 @@
 Unit tests for UpgradeRequiredException and exception handlers
 """
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
 from fastapi import Request
 from app.core.exceptions import (
     UpgradeRequiredException,
-    AgentGuardException,
+    PluvianAIException,
     NotFoundError,
     PermissionDeniedError,
     ValidationError,
-    agentguard_exception_handler,
+    pluvianai_exception_handler,
 )
 
 
@@ -70,11 +70,11 @@ class TestUpgradeRequiredException:
         request.url.path = "/api/v1/projects/1/auto-mapping"
         request.method = "GET"
         
-        with patch('app.core.exceptions.error_response') as mock_error_response:
+        with patch('app.core.responses.error_response') as mock_error_response:
             mock_response = MagicMock()
             mock_error_response.return_value = mock_response
             
-            result = await agentguard_exception_handler(request, exc)
+            result = await pluvianai_exception_handler(request, exc)
             
             assert mock_error_response.called
             call_args = mock_error_response.call_args
@@ -106,18 +106,18 @@ class TestUpgradeRequiredException:
         request.url.path = "/api/v1/test"
         request.method = "GET"
         
-        with patch('app.core.exceptions.error_response') as mock_error_response:
+        with patch('app.core.responses.error_response') as mock_error_response:
             mock_response = MagicMock()
             mock_error_response.return_value = mock_response
             
-            await agentguard_exception_handler(request, exc)
+            await pluvianai_exception_handler(request, exc)
             
             call_args = mock_error_response.call_args
             headers = call_args.kwargs["headers"]
             assert headers["X-Upgrade-Required"] == "true"
 
     @pytest.mark.asyncio
-    async def test_agentguard_exception_handler_not_found(self):
+    async def test_pluvianai_exception_handler_not_found(self):
         """Test exception handler for NotFoundError"""
         exc = NotFoundError("Resource not found")
         
@@ -125,18 +125,18 @@ class TestUpgradeRequiredException:
         request.url.path = "/api/v1/projects/999"
         request.method = "GET"
         
-        with patch('app.core.exceptions.error_response') as mock_error_response:
+        with patch('app.core.responses.error_response') as mock_error_response:
             mock_response = MagicMock()
             mock_error_response.return_value = mock_response
             
-            await agentguard_exception_handler(request, exc)
+            await pluvianai_exception_handler(request, exc)
             
             call_args = mock_error_response.call_args
             assert call_args.kwargs["code"] == "NOT_FOUND"
             assert call_args.kwargs["status_code"] == 404
 
     @pytest.mark.asyncio
-    async def test_agentguard_exception_handler_permission_denied(self):
+    async def test_pluvianai_exception_handler_permission_denied(self):
         """Test exception handler for PermissionDeniedError"""
         exc = PermissionDeniedError("Access denied")
         
@@ -144,18 +144,18 @@ class TestUpgradeRequiredException:
         request.url.path = "/api/v1/projects/1"
         request.method = "DELETE"
         
-        with patch('app.core.exceptions.error_response') as mock_error_response:
+        with patch('app.core.responses.error_response') as mock_error_response:
             mock_response = MagicMock()
             mock_error_response.return_value = mock_response
             
-            await agentguard_exception_handler(request, exc)
+            await pluvianai_exception_handler(request, exc)
             
             call_args = mock_error_response.call_args
             assert call_args.kwargs["code"] == "PERMISSION_DENIED"
             assert call_args.kwargs["status_code"] == 403
 
     @pytest.mark.asyncio
-    async def test_agentguard_exception_handler_validation_error(self):
+    async def test_pluvianai_exception_handler_validation_error(self):
         """Test exception handler for ValidationError"""
         exc = ValidationError("Invalid input")
         
@@ -163,30 +163,30 @@ class TestUpgradeRequiredException:
         request.url.path = "/api/v1/projects"
         request.method = "POST"
         
-        with patch('app.core.exceptions.error_response') as mock_error_response:
+        with patch('app.core.responses.error_response') as mock_error_response:
             mock_response = MagicMock()
             mock_error_response.return_value = mock_response
             
-            await agentguard_exception_handler(request, exc)
+            await pluvianai_exception_handler(request, exc)
             
             call_args = mock_error_response.call_args
             assert call_args.kwargs["code"] == "VALIDATION_ERROR"
             assert call_args.kwargs["status_code"] == 400
 
     @pytest.mark.asyncio
-    async def test_agentguard_exception_handler_generic(self):
-        """Test exception handler for generic AgentGuardException"""
-        exc = AgentGuardException("Generic error", status_code=500)
+    async def test_pluvianai_exception_handler_generic(self):
+        """Test exception handler for generic PluvianAIException"""
+        exc = PluvianAIException("Generic error", status_code=500)
         
         request = MagicMock(spec=Request)
         request.url.path = "/api/v1/test"
         request.method = "GET"
         
-        with patch('app.core.exceptions.error_response') as mock_error_response:
+        with patch('app.core.responses.error_response') as mock_error_response:
             mock_response = MagicMock()
             mock_error_response.return_value = mock_response
             
-            await agentguard_exception_handler(request, exc)
+            await pluvianai_exception_handler(request, exc)
             
             call_args = mock_error_response.call_args
             assert call_args.kwargs["code"] == "PLUVIANAI_ERROR"

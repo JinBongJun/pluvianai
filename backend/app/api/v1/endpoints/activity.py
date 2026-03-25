@@ -7,10 +7,11 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, or_
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.decorators import handle_errors
+from app.core.permissions import check_project_access
 from app.core.logging_config import logger
 from app.core.responses import success_response
 from app.models.user import User
@@ -24,6 +25,8 @@ router = APIRouter()
 
 class ActivityItem(BaseModel):
     """Activity log item"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: Optional[int]
     action: str
@@ -33,10 +36,6 @@ class ActivityItem(BaseModel):
     new_value: Optional[dict]
     ip_address: Optional[str]
     created_at: datetime
-
-    class Config:
-        from_attributes = True
-
 
 @router.get("")
 @handle_errors
@@ -55,10 +54,13 @@ async def list_activity(
         f"User {current_user.id} requested activity log (limit: {limit}, offset: {offset}, project_id: {project_id})",
         extra={"user_id": current_user.id, "limit": limit, "offset": offset, "project_id": project_id}
     )
-    
+
+    if project_id is not None:
+        check_project_access(project_id, current_user, db)
+
     # Build query - filter by user_id
     query = db.query(AuditLog).filter(AuditLog.user_id == current_user.id)
-    
+
     # Filter by project if provided (check resource_type and resource_id)
     if project_id:
         # Try to find project-related activities by checking resource_type

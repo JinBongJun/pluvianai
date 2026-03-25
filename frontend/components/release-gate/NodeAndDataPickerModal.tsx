@@ -42,6 +42,7 @@ type NodeAndDataPickerModalProps = {
   initialDataSource: "recent" | "datasets";
   initialSnapshotIds: string[];
   initialDatasetIds: string[];
+  lockAgent?: boolean;
   onConfirm: (selection: NodeAndDataSelection) => void;
 };
 
@@ -60,6 +61,7 @@ export function NodeAndDataPickerModal({
   initialDataSource,
   initialSnapshotIds,
   initialDatasetIds,
+  lockAgent,
   onConfirm,
 }: NodeAndDataPickerModalProps) {
   const [step, setStep] = useState<Step>("node");
@@ -274,18 +276,20 @@ export function NodeAndDataPickerModal({
         <div className="flex items-center justify-between shrink-0 px-5 py-4 border-b border-white/10">
           {step === "node" ? (
             <h2 id="node-data-picker-title" className="text-base font-bold text-white">
-              Select node & data
+              Select agent & data
             </h2>
           ) : (
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleBack}
-                className="rounded-lg p-2 text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
-                aria-label="Back to node selection"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
+              {!lockAgent && (
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="rounded-lg p-2 text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
+                  aria-label="Back to agent selection"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+              )}
               <h2 id="node-data-picker-title" className="text-base font-bold text-white">
                 Select data for {pickedAgent?.display_name || pickedAgent?.agent_id || "agent"}
               </h2>
@@ -304,7 +308,7 @@ export function NodeAndDataPickerModal({
         {step === "node" && (
           <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-2">
             <p className="text-xs text-slate-500 mb-3">
-              Choose an agent (Live View node), then pick Live View logs or saved datasets.
+              Choose an agent, then pick Live Logs or saved datasets.
             </p>
             {agentsLoading ? (
               <div className="flex items-center justify-center py-12">
@@ -312,7 +316,7 @@ export function NodeAndDataPickerModal({
               </div>
             ) : agents.length === 0 ? (
               <p className="text-sm text-slate-500 text-center py-8">
-                No agents yet. Run flows in Live View to see nodes here.
+                No agents yet. Run flows in Live View to see agents here.
               </p>
             ) : (
               agents.map(agent => (
@@ -345,9 +349,9 @@ export function NodeAndDataPickerModal({
                     className={`w-5 h-5 shrink-0 mt-0.5 ${dataSource === "recent" ? "text-fuchsia-400" : "text-slate-500"}`}
                   />
                   <div>
-                    <div className="text-sm font-semibold text-slate-100">Live View logs</div>
+                    <div className="text-sm font-semibold text-slate-100">Live Logs</div>
                     <div className="text-xs text-slate-500 mt-0.5">
-                      Use recent runs from this node (no save needed)
+                      Use recent logs from this agent (no save needed)
                     </div>
                   </div>
                 </button>
@@ -366,7 +370,7 @@ export function NodeAndDataPickerModal({
                   <div>
                     <div className="text-sm font-semibold text-slate-100">Saved datasets</div>
                     <div className="text-xs text-slate-500 mt-0.5">
-                      Pick from node-scoped datasets you saved (e.g. Saved set 2026-03-02)
+                      Pick from agent-scoped datasets you saved (e.g. Saved set 2026-03-02)
                     </div>
                   </div>
                 </button>
@@ -379,9 +383,9 @@ export function NodeAndDataPickerModal({
                   <span className="text-xs text-slate-400 font-medium">
                     {!isRecentLoading && (
                       <>
-                        This node has{" "}
+                        This agent has{" "}
                         <span className="font-semibold text-slate-200">{recentCount}</span> recent
-                        snapshot{recentCount !== 1 ? "s" : ""} (one row = one snapshot). Select
+                        log{recentCount !== 1 ? "s" : ""}. Select
                         which to use:
                       </>
                     )}
@@ -444,7 +448,7 @@ export function NodeAndDataPickerModal({
                     </p>
                   ) : recentSnapshots.length === 0 ? (
                     <p className="text-sm text-slate-500 text-center py-8">
-                      No recent runs for this node. Run flows in Live View to see logs here.
+                      No recent logs for this agent. Run flows in Live View to see logs here.
                     </p>
                   ) : (
                     recentSnapshots.map(snap => {
@@ -559,7 +563,7 @@ export function NodeAndDataPickerModal({
                                       ·{" "}
                                       {typeof dataset.snapshot_count === "number"
                                         ? dataset.snapshot_count
-                                        : dataset.snapshot_ids?.length ?? 0}{" "}
+                                        : (dataset.snapshot_ids?.length ?? 0)}{" "}
                                       runs
                                     </span>
                                   )}

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Activity,
@@ -10,13 +11,12 @@ import {
   CheckCircle2,
   Clock,
   Code2,
-  Coins,
   FileCheck,
   FileText,
-  Hash,
   Lock,
   Repeat,
   Scale,
+  Send,
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
@@ -27,10 +27,21 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 
+import type {
+  LiveViewRequestOverview,
+  LiveViewToolTimelineRow,
+  RequestContextMeta,
+} from "@/lib/api/live-view";
+import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel";
+import { RequestContextPanel } from "@/components/live-view/RequestContextPanel";
+import { buildNodeRequestOverview } from "@/lib/requestOverview";
+
 export interface SnapshotForDetail {
   id: string | number;
   trace_id?: string;
   agent_id?: string;
+  provider?: string;
+  model?: string;
   created_at?: string;
   latency_ms?: number | null;
   tokens_used?: number | null;
@@ -44,6 +55,14 @@ export interface SnapshotForDetail {
   status_code?: number | null;
   has_tool_calls?: boolean;
   tool_calls_summary?: Array<{ name: string; arguments?: string | Record<string, unknown> }>;
+  /** Tool IO timeline (ingest `tool_events` and/or persisted trajectory steps). */
+  tool_timeline?: LiveViewToolTimelineRow[];
+  /** Server-side redaction pass for tool_timeline (see API). */
+  tool_timeline_redaction_version?: number;
+  /** Derived from payload SDK markers on GET snapshot (preferred over client-only heuristics). */
+  request_context_meta?: RequestContextMeta | null;
+  /** Backend-derived replay-relevant request summary when available. */
+  request_overview?: LiveViewRequestOverview | null;
 }
 
 export type PolicyState = {
@@ -119,9 +138,7 @@ function getEnabledCheckIdsFromConfig(savedEvalConfig: Record<string, unknown>):
 
   // Preserve user-facing order defined by EVAL_CHECK_LABELS.
   const order = Object.keys(EVAL_CHECK_LABELS);
-  return Array.from(new Set(enabled)).sort(
-    (a, b) => order.indexOf(a) - order.indexOf(b)
-  );
+  return Array.from(new Set(enabled)).sort((a, b) => order.indexOf(a) - order.indexOf(b));
 }
 
 function formatPrettyTime(value?: string): string {
@@ -290,6 +307,64 @@ function getEvalDetail(
   }
 }
 
+function buildToolSummaryEmptyLines(s: SnapshotForDetail): string[] {
+  const hasSummary = Array.isArray(s.tool_calls_summary) && s.tool_calls_summary.length > 0;
+  if (hasSummary) return [];
+  if (s.has_tool_calls) {
+    return [
+      "This snapshot is flagged as having tool calls, but no argument summary was stored.",
+      "Open a fresh capture after ingest, or confirm the proxy/SDK stores tool_calls_summary when available.",
+    ];
+  }
+  return [
+    "No provider tool_calls summary on this snapshot.",
+    "Summaries appear when the captured LLM response includes tool_calls or when ingest stores tool_calls_summary.",
+  ];
+}
+
+function buildToolTimelineEmptyLines(s: SnapshotForDetail): string[] {
+  const payload = (s.payload || {}) as Record<string, unknown>;
+  const rawEvents = payload.tool_events;
+  const hasKey = Object.prototype.hasOwnProperty.call(payload, "tool_events");
+  const events = Array.isArray(rawEvents) ? rawEvents : [];
+
+  if (hasKey && events.length === 0) {
+    return [
+      "tool_events was sent on ingest but is empty for this request.",
+      "Record tool_call / tool_result (and optional action) rows from your agent so the timeline can render.",
+    ];
+  }
+  if (hasKey && events.length > 0) {
+    return [
+      "tool_events exists in the payload but no timeline rows were produced.",
+      "Check TOOL_EVENTS_SCHEMA shape, or refresh the snapshot detail after ingest normalization.",
+    ];
+  }
+  return [
+    "No tool_call / tool_result timeline for this snapshot.",
+    "Send tool_events from the SDK on POST …/api-calls, or capture provider responses that include tool calls.",
+    "Tool Use Policy (Evaluation) validates policy only; it is not a substitute for a captured tool trace.",
+  ];
+}
+
+function buildActionsEmptyLines(s: SnapshotForDetail, actionRowCount: number): string[] {
+  if (actionRowCount > 0) return [];
+  const payload = (s.payload || {}) as Record<string, unknown>;
+  const rawEvents = payload.tool_events;
+  const events = Array.isArray(rawEvents) ? rawEvents : [];
+  const hasAction = events.some((ev: unknown) => {
+    const o = ev as Record<string, unknown> | null;
+    return o && String(o.kind ?? o.type ?? "").toLowerCase() === "action";
+  });
+  if (hasAction) {
+    return ["Action events are present but did not normalize into display rows.", "See docs/TOOL_EVENTS_SCHEMA.md for action shape."];
+  }
+  return [
+    "No outbound actions (email, Slack, HTTP, etc.) recorded for this snapshot.",
+    "When your agent emits action-style side effects, include them in tool_events with kind action.",
+  ];
+}
+
 function extractCustomCode(snapshot: SnapshotForDetail): string | null {
   const payload = (snapshot.payload || {}) as Record<string, unknown>;
   const maybeCode =
@@ -309,6 +384,21 @@ function extractCustomCode(snapshot: SnapshotForDetail): string | null {
   return null;
 }
 
+function EmptyHint({ lines }: { lines: string[] }) {
+  return (
+    <div
+      className="rounded-2xl border border-dashed border-white/10 bg-[#030806] p-4 text-left space-y-2"
+      role="status"
+    >
+      {lines.map((line, i) => (
+        <p key={i} className="text-xs text-slate-500 leading-relaxed">
+          {line}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export interface SnapshotDetailModalProps {
   snapshot: SnapshotForDetail;
   onClose: () => void;
@@ -322,6 +412,12 @@ export interface SnapshotDetailModalProps {
   evalContextLabel?: string | null;
   /** When "saved", Evaluation block uses past/archived styling (muted colors, dashed border, clock icon). */
   appearance?: "current" | "saved";
+  /** Override z-index of the overlay (e.g. 10000) when modal must appear above portaled side panels. */
+  overlayZIndex?: number;
+  /**
+   * When set, shows a short Release Gate CTA (pre-deploy replay). Omit in contexts already inside Release Gate if you prefer.
+   */
+  releaseGateHref?: string | null;
 }
 
 export function SnapshotDetailModal({
@@ -334,17 +430,37 @@ export function SnapshotDetailModal({
   evalResultOverride = null,
   evalContextLabel = null,
   appearance = "current",
+  overlayZIndex,
+  releaseGateHref = null,
 }: SnapshotDetailModalProps) {
   const isSavedAppearance = appearance === "saved";
   const stepLogs = extractStepLogs(s);
   const customCode = extractCustomCode(s);
+  const requestOverview = React.useMemo(
+    () =>
+      buildNodeRequestOverview({
+        payload: (s.payload as Record<string, unknown> | null | undefined) ?? null,
+        provider: s.provider,
+        model: s.model,
+        requestContextMeta: s.request_context_meta ?? null,
+        serverRequestOverview: s.request_overview ?? null,
+      }),
+    [s]
+  );
+
+  const tl = s.tool_timeline ?? [];
+  const actionRows = tl.filter(r => r.step_type === "action");
+  const toolIoRows = tl.filter(r => r.step_type !== "action");
+  const hasToolSummaryCards =
+    Array.isArray(s.tool_calls_summary) && s.tool_calls_summary.length > 0;
+  const summaryEmptyLines = buildToolSummaryEmptyLines(s);
+  const timelineEmptyLines = buildToolTimelineEmptyLines(s);
+  const actionsEmptyLines = buildActionsEmptyLines(s, actionRows.length);
 
   const useOverride = !!evalResultOverride;
 
   // Base eval rows coming from caller (Live View runtime or Release Gate run).
-  const baseEvalRows: EvalRow[] = useOverride
-    ? (evalResultOverride?.evalRows ?? [])
-    : evalRows;
+  const baseEvalRows: EvalRow[] = useOverride ? (evalResultOverride?.evalRows ?? []) : evalRows;
 
   // For re-evaluation result views (override mode), show all currently enabled checks.
   // For historical snapshot views, keep rows exactly as stored to avoid introducing
@@ -366,8 +482,7 @@ export function SnapshotDetailModal({
           }));
         })();
 
-  const effectiveEvalEnabled =
-    displayEvalRows.length > 0 || (!useOverride && evalEnabled);
+  const effectiveEvalEnabled = displayEvalRows.length > 0 || (!useOverride && evalEnabled);
 
   const failedCount = displayEvalRows.filter(r => r.status === "fail").length;
   const passedCount = displayEvalRows.filter(r => r.status === "pass").length;
@@ -377,7 +492,8 @@ export function SnapshotDetailModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[1100] flex items-start justify-center p-4 pt-[90px] md:p-8 md:pt-[90px]"
+      className="fixed inset-0 flex items-start justify-center p-4 pt-[90px] md:p-8 md:pt-[90px]"
+      style={{ zIndex: overlayZIndex ?? 1100 }}
     >
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-md"
@@ -414,7 +530,7 @@ export function SnapshotDetailModal({
 
         <div className="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar">
           <div className="bg-[#030806] p-6 rounded-[24px] mb-10 shadow-inner shrink-0">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="bg-[#18191e] border border-white/5 rounded-[20px] p-5 flex flex-col items-center justify-center gap-2 hover:border-white/10 transition-colors">
                 <Activity className="w-6 h-6 text-blue-500 mb-1" />
                 <span className="text-sm font-medium text-slate-400">Status</span>
@@ -442,70 +558,249 @@ export function SnapshotDetailModal({
                   {s.latency_ms != null ? `${s.latency_ms}ms` : "—"}
                 </span>
               </div>
-              <div className="bg-[#18191e] border border-white/5 rounded-[20px] p-5 flex flex-col items-center justify-center gap-2 hover:border-white/10 transition-colors">
-                <Hash className="w-6 h-6 text-emerald-500 mb-1" />
-                <span className="text-sm font-medium text-slate-400">Tokens</span>
-                <span className="text-lg font-black text-slate-200">{s.tokens_used ?? "—"}</span>
-              </div>
-              <div className="bg-[#18191e] border border-white/5 rounded-[20px] p-5 flex flex-col items-center justify-center gap-2 hover:border-white/10 transition-colors">
-                <Coins className="w-6 h-6 text-emerald-500 mb-1" />
-                <span className="text-sm font-medium text-slate-400">Cost</span>
-                <span className="text-lg font-black text-slate-200">{s.cost ?? "—"}</span>
-              </div>
             </div>
           </div>
 
+          {releaseGateHref ? (
+            <div className="mb-8 rounded-2xl border border-emerald-500/20 bg-emerald-950/25 px-4 py-3 text-sm text-slate-300">
+              <span className="font-semibold text-slate-200">Pre-deploy verification: </span>
+              Use{" "}
+              <Link
+                href={releaseGateHref}
+                className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300"
+              >
+                Release Gate
+              </Link>{" "}
+              to replay production snapshots with a candidate model or tool configuration before you ship.
+            </div>
+          ) : null}
+
           <div className="flex flex-col gap-12 shrink-0">
             <div className="space-y-8">
-              <div className="flex flex-col gap-4">
+              <div className="rounded-[24px] border border-white/5 bg-[#0f1115] p-6 shadow-inner">
                 <div className="flex items-center gap-3 border-b border-white/5 pb-3">
-                  <AlignLeft className="w-5 h-5 text-slate-400" />
-                  <span className="text-sm font-bold text-slate-200 uppercase tracking-widest">
-                    System Prompt
+                  <SlidersHorizontal className="h-5 w-5 text-fuchsia-400" />
+                  <span className="text-sm font-bold uppercase tracking-widest text-slate-200">
+                    Node Request Overview
                   </span>
                 </div>
-                <div className="bg-[#030806] border border-white/5 rounded-[20px] p-6 text-sm text-slate-400 font-mono leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30 overflow-x-auto shadow-inner">
-                  {safeStringify(s.system_prompt)}
-                </div>
-              </div>
+                <p className="mt-3 text-xs leading-relaxed text-slate-500">
+                  Replay-relevant request shape captured for this node call.
+                </p>
 
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-3 border-b border-white/5 pb-3">
-                  <AlignLeft className="w-5 h-5 text-slate-400" />
-                  <span className="text-sm font-bold text-slate-200 uppercase tracking-widest">
-                    User Input
-                  </span>
-                </div>
-                <div className="bg-[#030806] border border-white/5 rounded-[20px] p-6 text-sm text-slate-300 font-mono leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30 overflow-x-auto shadow-inner">
-                  {safeStringify(s.request_prompt ?? s.user_message)}
-                </div>
-              </div>
-
-              {(s.has_tool_calls ||
-                (Array.isArray(s.tool_calls_summary) && s.tool_calls_summary.length > 0)) && (
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center gap-3 border-b border-white/5 pb-3">
-                    <Wrench className="w-5 h-5 text-amber-500" />
-                    <span className="text-sm font-bold text-slate-200 uppercase tracking-widest">
-                      Tool calls
-                    </span>
-                  </div>
-                  <div className="bg-[#030806] border border-white/5 rounded-[20px] p-6 shadow-inner space-y-4">
-                    {(s.tool_calls_summary || []).map((tc, idx) => (
-                      <div key={idx} className="border border-white/5 rounded-xl p-4 bg-[#0a0a0c]">
-                        <div className="text-xs font-bold text-amber-400/90 uppercase tracking-wider mb-2">
-                          {tc.name}
-                        </div>
-                        <pre className="text-xs text-slate-400 font-mono whitespace-pre-wrap break-all">
-                          {typeof tc.arguments === "string"
-                            ? tc.arguments
-                            : safeStringify(tc.arguments)}
-                        </pre>
+                {requestOverview.truncated || requestOverview.omittedByPolicy ? (
+                  <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
+                    {requestOverview.truncated ? (
+                      <div>
+                        This snapshot does not include the full original request. Large fields may have been shortened
+                        or replaced before ingest.
                       </div>
-                    ))}
+                    ) : null}
+                    {requestOverview.omittedByPolicy ? (
+                      <div className={clsx(requestOverview.truncated ? "mt-1.5" : null)}>
+                        Privacy settings omitted some request text before ingest. Treat the sections below as the best
+                        retained baseline, not a byte-exact replay record.
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Model
+                    </div>
+                    <div className="mt-1 text-sm font-mono text-slate-200 break-all">
+                      {requestOverview.model}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Provider
+                    </div>
+                    <div className="mt-1 text-sm text-slate-200">{requestOverview.provider}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Request state
+                    </div>
+                    <div className="mt-1 text-sm text-slate-200">
+                      {requestOverview.truncated
+                        ? "Truncated"
+                        : requestOverview.omittedByPolicy
+                          ? "Policy-limited"
+                          : "Complete"}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Messages
+                    </div>
+                    <div className="mt-1 text-sm text-slate-200">{requestOverview.messageCount}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Tools
+                    </div>
+                    <div className="mt-1 text-sm text-slate-200">{requestOverview.toolsCount}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Sampling
+                    </div>
+                    <div className="mt-1 text-sm text-slate-200">
+                      {[
+                        requestOverview.temperature != null
+                          ? `temp ${requestOverview.temperature}`
+                          : null,
+                        requestOverview.topP != null ? `top_p ${requestOverview.topP}` : null,
+                        requestOverview.maxTokens != null
+                          ? `max ${requestOverview.maxTokens}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "Default / not captured"}
+                    </div>
                   </div>
                 </div>
-              )}
+
+                {requestOverview.extendedContextKeys.length > 0 ? (
+                  <div className="mt-4">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Extended context keys
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {requestOverview.extendedContextKeys.map(key => (
+                        <span
+                          key={key}
+                          className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-200"
+                        >
+                          {key}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {requestOverview.additionalRequestKeys.length > 0 ? (
+                  <div className="mt-4">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Additional request keys
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {requestOverview.additionalRequestKeys.map(key => (
+                        <span
+                          key={key}
+                          className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-100"
+                        >
+                          {key}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {requestOverview.requestControlKeys.length > 0 ? (
+                  <div className="mt-4">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Request controls
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {requestOverview.requestControlKeys.map(key => (
+                        <span
+                          key={key}
+                          className="rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-2.5 py-1 text-[11px] font-medium text-fuchsia-100"
+                        >
+                          {key}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <RequestContextPanel snapshot={s} />
+
+              <div className="flex flex-col gap-6">
+                <div className="flex items-center gap-3 border-b border-white/5 pb-3">
+                  <Wrench className="w-5 h-5 text-amber-500" />
+                  <span className="text-sm font-bold text-slate-200 uppercase tracking-widest">
+                    Tool activity
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    Tool calls (provider summary)
+                  </div>
+                  {hasToolSummaryCards ? (
+                    <div className="bg-[#030806] border border-white/5 rounded-[20px] p-6 shadow-inner space-y-4">
+                      {(s.tool_calls_summary || []).map((tc, idx) => (
+                        <div key={idx} className="border border-white/5 rounded-xl p-4 bg-[#0a0a0c]">
+                          <div className="text-xs font-bold text-amber-400/90 uppercase tracking-wider mb-2">
+                            {tc.name}
+                          </div>
+                          <pre className="text-xs text-slate-400 font-mono whitespace-pre-wrap break-all">
+                            {typeof tc.arguments === "string"
+                              ? tc.arguments
+                              : safeStringify(tc.arguments)}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyHint lines={summaryEmptyLines} />
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  {toolIoRows.length > 0 ? (
+                    <ToolTimelinePanel
+                      rows={toolIoRows}
+                      title="Tool timeline (calls & I/O)"
+                      icon={Terminal}
+                      variant="snapshot"
+                    />
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-3 border-b border-white/5 pb-3">
+                        <Terminal className="h-5 w-5 text-sky-400" aria-hidden />
+                        <span className="text-sm font-bold uppercase tracking-widest text-slate-200">
+                          Tool timeline (calls &amp; I/O)
+                        </span>
+                      </div>
+                      <EmptyHint lines={timelineEmptyLines} />
+                    </>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  {actionRows.length > 0 ? (
+                    <ToolTimelinePanel
+                      rows={actionRows}
+                      title="Actions (side effects)"
+                      subtitle="Outbound: email, Slack, HTTP, etc. — not LLM tool reads"
+                      icon={Send}
+                      variant="snapshot"
+                    />
+                  ) : (
+                    <>
+                      <div className="flex flex-col gap-1 border-b border-white/5 pb-3">
+                        <div className="flex items-center gap-3">
+                          <Send className="h-5 w-5 text-sky-400" aria-hidden />
+                          <span className="text-sm font-bold uppercase tracking-widest text-slate-200">
+                            Actions (side effects)
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 pl-8">
+                          Outbound: email, Slack, HTTP, etc. — not LLM tool reads
+                        </p>
+                      </div>
+                      <EmptyHint lines={actionsEmptyLines} />
+                    </>
+                  )}
+                </div>
+              </div>
 
               {customCode && (
                 <div className="flex flex-col gap-4">
@@ -672,6 +967,18 @@ export function SnapshotDetailModal({
                     No eval result for this snapshot.
                   </p>
                 )}
+                {!evalContextLabel && displayEvalRows.length > 0 && !useOverride ? (
+                  <p className="text-[11px] text-slate-500 text-center leading-relaxed px-1">
+                    Checks shown are those recorded for this snapshot at capture time (not necessarily every
+                    check enabled in current settings).
+                  </p>
+                ) : null}
+                {useOverride && displayEvalRows.length > 0 ? (
+                  <p className="text-[11px] text-slate-500 text-center leading-relaxed px-1">
+                    Expanded rows use current eval settings; statuses come from the re-run or override
+                    context.
+                  </p>
+                ) : null}
               </div>
 
               <div className="flex flex-col gap-4 mt-10">
@@ -683,9 +990,20 @@ export function SnapshotDetailModal({
                 </div>
                 <div className="flex flex-col gap-3 pb-4">
                   {!stepLogs.length && (
-                    <p className="text-sm text-slate-500 font-mono italic p-4 text-center border border-dashed border-white/10 rounded-2xl">
-                      No steps recorded
-                    </p>
+                    <div
+                      className="space-y-2 p-4 text-left border border-dashed border-white/10 rounded-2xl"
+                      role="status"
+                    >
+                      <p className="text-sm text-slate-400 font-medium">No execution steps recorded</p>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        We look for structured steps on the snapshot payload:{" "}
+                        <code className="text-slate-400">steps</code>,{" "}
+                        <code className="text-slate-400">step_log</code>,{" "}
+                        <code className="text-slate-400">trajectory.steps</code>, or{" "}
+                        <code className="text-slate-400">events</code>. If your integration does not send
+                        these fields, this section stays empty even when the run succeeded.
+                      </p>
+                    </div>
                   )}
                   {stepLogs.map((step, idx) => (
                     <div

@@ -1,4 +1,5 @@
 from typing import List, Optional
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from app.models.organization import Organization, OrganizationMember
 from app.infrastructure.repositories.organization_repository import OrganizationRepository
@@ -40,7 +41,8 @@ class OrganizationService:
             self.db.query(Organization)
             .filter(
                 Organization.owner_id == owner_id,
-                Organization.name == name
+                Organization.name == name,
+                Organization.is_deleted.is_(False),
             )
             .first()
         )
@@ -68,7 +70,10 @@ class OrganizationService:
 
     def get_organization_by_id(self, org_id: int) -> Optional[Organization]:
         """Get organization by ID"""
-        return self.org_repo.find_by_id(org_id)
+        org = self.org_repo.find_by_id(org_id)
+        if org and org.is_deleted:
+            return None
+        return org
 
     def get_organizations_by_owner_id(self, owner_id: int) -> List[Organization]:
         """Get all organizations owned by user"""
@@ -84,11 +89,10 @@ class OrganizationService:
         member_org_ids = [m.organization_id for m in memberships]
         member_orgs = []
         if member_org_ids:
-            member_orgs = [
-                self.org_repo.find_by_id(oid) 
-                for oid in member_org_ids 
-                if self.org_repo.find_by_id(oid) is not None
-            ]
+            for org_id in member_org_ids:
+                org = self.org_repo.find_by_id(org_id)
+                if org is not None and not org.is_deleted:
+                    member_orgs.append(org)
         
         # Combine and remove duplicates
         all_orgs_dict = {o.id: o for o in owned + member_orgs}
@@ -179,7 +183,7 @@ class OrganizationService:
         Update organization details.
         """
         org = self.org_repo.find_by_id(org_id)
-        if not org:
+        if not org or org.is_deleted:
             return None
         
         if name is not None:
@@ -191,6 +195,21 @@ class OrganizationService:
 
     def delete_organization(self, org_id: int) -> bool:
         """
-        Delete organization. Cascade deletion of members and projects is handled by SQLAlchemy.
+        Soft-delete organization and related projects.
         """
-        return self.org_repo.delete(org_id)
+        org = self.org_repo.find_by_id(org_id)
+        if not org or org.is_deleted:
+            return False
+
+        now = datetime.now(timezone.utc)
+        org.is_deleted = True
+        org.deleted_at = now
+
+        # Hide organization projects immediately from users.
+        for project in org.projects:
+            project.is_active = False
+            project.is_deleted = True
+            project.deleted_at = now
+
+        self.org_repo.save(org)
+        return True

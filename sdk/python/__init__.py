@@ -1,7 +1,3 @@
 """
-AgentGuard Python SDK
+PluvianAI Python SDK
 """
-
-
-
-

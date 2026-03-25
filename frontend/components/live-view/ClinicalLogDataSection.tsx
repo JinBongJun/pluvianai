@@ -4,7 +4,16 @@ import React, { useMemo, useState } from "react";
 import useSWR, { type KeyedMutator } from "swr";
 import clsx from "clsx";
 import { AnimatePresence } from "framer-motion";
-import { Database, FileArchive, Trash2, X, ChevronDown, ChevronRight, Pencil, Check } from "lucide-react";
+import {
+  Database,
+  FileArchive,
+  Trash2,
+  X,
+  ChevronDown,
+  ChevronRight,
+  Pencil,
+  Check,
+} from "lucide-react";
 import { behaviorAPI, liveViewAPI } from "@/lib/api";
 import { toEvalRows } from "@/lib/evalRows";
 import {
@@ -16,6 +25,7 @@ import { useToast } from "@/components/ToastContainer";
 interface ClinicalLogDataSectionProps {
   projectId: number;
   agentId: string;
+  orgId?: string;
 }
 
 interface DatasetItem {
@@ -67,7 +77,9 @@ function DatasetSnapshotList({
   isClearingAll: boolean;
 }) {
   const { data, isLoading, mutate } = useSWR<{ items?: DatasetSnapshotItem[]; total?: number }>(
-    projectId && dataset.id && isExpanded ? ["behavior-dataset-snapshots", projectId, dataset.id] : null,
+    projectId && dataset.id && isExpanded
+      ? ["behavior-dataset-snapshots", projectId, dataset.id]
+      : null,
     () => behaviorAPI.getDatasetSnapshots(projectId, dataset.id)
   );
   const snapshots = (Array.isArray(data?.items) ? data.items : []) as DatasetSnapshotItem[];
@@ -79,7 +91,7 @@ function DatasetSnapshotList({
       <div className="px-4 py-3 border-t border-white/5 bg-white/[0.02]">
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <span className="inline-block w-3 h-3 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
-          Loading logs…
+          Loading logs...
         </div>
       </div>
     );
@@ -108,13 +120,22 @@ function DatasetSnapshotList({
               title="Open snapshot details"
             >
               <div className="text-sm text-slate-200 font-mono truncate">
-                {snap.trace_id ? `Trace ${String(snap.trace_id).slice(0, 16)}...` : `Snapshot ${String(snap.id)}`}
+                {snap.trace_id
+                  ? `Trace ${String(snap.trace_id).slice(0, 16)}...`
+                  : `Snapshot ${String(snap.id)}`}
               </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">{formatDate(snap.created_at ?? dataset.created_at)}</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                {formatDate(snap.created_at ?? dataset.created_at)}
+              </div>
             </button>
             <button
               type="button"
-              onClick={() => onRemoveLog(dataset.id, snap.id, { currentSnapshots: snapshots, mutateThisDataset: mutate })}
+              onClick={() =>
+                onRemoveLog(dataset.id, snap.id, {
+                  currentSnapshots: snapshots,
+                  mutateThisDataset: mutate,
+                })
+              }
               disabled={isRemoving || isClearingAll}
               className="shrink-0 p-2 rounded-lg border border-transparent text-slate-500 hover:text-amber-400 hover:border-amber-500/30 hover:bg-amber-500/10 disabled:opacity-50 transition-colors"
               title="Remove this log from dataset"
@@ -148,6 +169,7 @@ function formatDate(value?: string | null): string {
 export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
   projectId,
   agentId,
+  orgId,
 }) => {
   const toast = useToast();
   const { data, error, isLoading, mutate } = useSWR(
@@ -158,6 +180,8 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
   const [removingKey, setRemovingKey] = useState<string | null>(null);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [isClearingAll, setIsClearingAll] = useState(false);
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [selectedDatasetIds, setSelectedDatasetIds] = useState<Set<string>>(new Set());
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [detailSnapshot, setDetailSnapshot] = useState<SnapshotForDetail | null>(null);
   const [expandedDatasetIds, setExpandedDatasetIds] = useState<Set<string>>(new Set());
@@ -172,8 +196,9 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
     () => liveViewAPI.getAgentSettings(projectId, agentId)
   );
   const savedEvalConfig = useMemo(
-    () => ((settingsData as { diagnostic_config?: { eval?: Record<string, unknown> } } | undefined)
-      ?.diagnostic_config?.eval ?? {}) as Record<string, unknown>,
+    () =>
+      ((settingsData as { diagnostic_config?: { eval?: Record<string, unknown> } } | undefined)
+        ?.diagnostic_config?.eval ?? {}) as Record<string, unknown>,
     [settingsData]
   );
 
@@ -187,7 +212,11 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
     { keepPreviousData: true }
   );
   const detailedSnapshotItems = useMemo(() => {
-    const payload = detailedSnapshotsData as { items?: DatasetSnapshotItem[] } | DatasetSnapshotItem[] | null | undefined;
+    const payload = detailedSnapshotsData as
+      | { items?: DatasetSnapshotItem[] }
+      | DatasetSnapshotItem[]
+      | null
+      | undefined;
     if (Array.isArray(payload)) return payload;
     if (Array.isArray(payload?.items)) return payload.items;
     return [] as DatasetSnapshotItem[];
@@ -268,7 +297,10 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
       .map(s => (typeof s.id === "number" ? s.id : parseInt(String(s.id), 10)))
       .filter(n => !Number.isNaN(n));
 
-    mutateThisDataset({ items: newSnapshotList, total: newSnapshotList.length }, { revalidate: false });
+    mutateThisDataset(
+      { items: newSnapshotList, total: newSnapshotList.length },
+      { revalidate: false }
+    );
     if (removingEntireDataset) {
       setExpandedDatasetIds(prev => {
         const next = new Set(prev);
@@ -347,7 +379,8 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
 
   const handleConfirmClearAll = async () => {
     if (!projectId || items.length === 0) return;
-    const idsToDelete = items.map(ds => ds.id);
+    const idsToDelete =
+      selectedDatasetIds.size > 0 ? Array.from(selectedDatasetIds) : items.map(ds => ds.id);
     setDeleteError(null);
     closeClearAllConfirm();
     setExpandedDatasetIds(new Set());
@@ -359,7 +392,12 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
     try {
       await behaviorAPI.deleteDatasetsBatch(projectId, idsToDelete);
       await mutate();
-      toast.showToast("All saved datasets deleted.", "success");
+      toast.showToast(
+        idsToDelete.length === items.length
+          ? "All saved datasets deleted."
+          : `Deleted ${idsToDelete.length} dataset${idsToDelete.length !== 1 ? "s" : ""}.`,
+        "success"
+      );
     } catch (e: unknown) {
       await mutate();
       const msg =
@@ -372,7 +410,11 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
 
   if (isLoading) {
     return (
-      <div className="p-10 flex flex-col gap-6 w-full max-w-2xl mx-auto" role="status" aria-label="Loading datasets">
+      <div
+        className="p-10 flex flex-col gap-6 w-full max-w-2xl mx-auto"
+        role="status"
+        aria-label="Loading datasets"
+      >
         <div className="flex items-center gap-3">
           <div className="animate-pulse p-3 rounded-full bg-white/10 w-10 h-10" />
           <div className="flex-1 space-y-2">
@@ -385,7 +427,9 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
             <div key={i} className="animate-pulse h-10 rounded-lg bg-white/5 w-full" />
           ))}
         </div>
-        <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 sr-only">Loading datasets...</span>
+        <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 sr-only">
+          Loading datasets...
+        </span>
       </div>
     );
   }
@@ -407,20 +451,27 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
   }
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div className="relative flex h-0 flex-1 min-h-0 flex-col overflow-hidden">
       {confirmClearAll && (
         <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0a0f1e] shadow-2xl overflow-hidden">
             <div className="p-6 border-b border-white/5">
               <h3 className="text-sm font-black text-white uppercase tracking-wider">
-                Delete all saved datasets
+                {selectedDatasetIds.size > 0 ? "Delete selected datasets" : "Delete all saved datasets"}
               </h3>
               <p className="mt-2 text-sm text-slate-400">
-                Delete all saved datasets for this agent? This cannot be undone.
+                {selectedDatasetIds.size > 0
+                  ? "Delete only the selected datasets for this agent. This cannot be undone."
+                  : "Delete all saved datasets for this agent. This cannot be undone."}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                {datasetCount} dataset{datasetCount !== 1 ? "s" : ""} and {datasetLogCount} log
-                {datasetLogCount !== 1 ? "s" : ""} will be removed.
+                {selectedDatasetIds.size > 0
+                  ? `${selectedDatasetIds.size} dataset${
+                      selectedDatasetIds.size !== 1 ? "s" : ""
+                    } will be removed.`
+                  : `${datasetCount} dataset${datasetCount !== 1 ? "s" : ""} and ${datasetLogCount} log${
+                      datasetLogCount !== 1 ? "s" : ""
+                    } will be removed.`}
               </p>
               {deleteError && (
                 <p className="mt-3 text-xs text-rose-400 font-medium">{deleteError}</p>
@@ -487,23 +538,68 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
             {datasetLogCount !== 1 ? "s" : ""}
           </span>
           {datasetCount > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setDeleteError(null);
-                setConfirmClearAll(true);
-              }}
-              disabled={isClearingAll}
-              className={clsx(
-                "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-wide transition-colors",
-                "border-rose-500/30 text-rose-300 hover:bg-rose-500/10",
-                "disabled:opacity-50 disabled:pointer-events-none"
+            <>
+              {isDeleteMode ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDatasetIds(prev =>
+                        prev.size === items.length ? new Set() : new Set(items.map(ds => ds.id))
+                      );
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-[11px] font-bold tracking-[0.08em] text-slate-200 bg-white/[0.03] hover:bg-white/[0.08]"
+                  >
+                    {selectedDatasetIds.size === items.length ? "Deselect" : "Select all"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedDatasetIds.size === 0) return;
+                      setDeleteError(null);
+                      setConfirmClearAll(true);
+                    }}
+                    disabled={isClearingAll || selectedDatasetIds.size === 0}
+                    className={clsx(
+                      "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-wide transition-colors",
+                      "border-rose-500/30 text-rose-300 hover:bg-rose-500/10",
+                      "disabled:opacity-50 disabled:pointer-events-none"
+                    )}
+                    title="Delete selected datasets"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete ({selectedDatasetIds.size})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeleteMode(false);
+                      setSelectedDatasetIds(new Set());
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-[11px] font-bold uppercase tracking-wide text-slate-200 bg-white/[0.02] hover:bg-white/[0.06]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteError(null);
+                    setIsDeleteMode(true);
+                    setSelectedDatasetIds(new Set());
+                  }}
+                  className={clsx(
+                    "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-wide transition-colors",
+                    "border-rose-500/30 text-rose-300 hover:bg-rose-500/10"
+                  )}
+                  title="Delete saved datasets"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete
+                </button>
               )}
-              title="Delete all saved datasets"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Clear all
-            </button>
+            </>
           )}
         </div>
       </div>
@@ -511,12 +607,12 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
         <p className="px-8 pb-2 text-xs text-rose-400 font-medium">{deleteError}</p>
       )}
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar px-6 pb-20 space-y-3">
+      <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-6 pb-20 space-y-3">
         {items.length === 0 && (
           <div className="p-10 text-center space-y-4 border border-dashed border-white/5 rounded-3xl">
             <FileArchive className="w-8 h-8 text-slate-700 mx-auto" />
             <p className="text-xs font-black text-slate-500 uppercase tracking-wide leading-relaxed">
-              No datasets saved yet. Select logs in Clinical Log and save into datasets.
+              No datasets saved yet. Select logs in Live Logs and save them into datasets.
             </p>
           </div>
         )}
@@ -534,6 +630,25 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
               className="rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden"
             >
               <div className="w-full flex items-center gap-3 p-3 hover:bg-white/[0.03] transition-colors">
+                {isDeleteMode && (
+                  <button
+                    type="button"
+                    onClick={e => {
+                      e.stopPropagation();
+                      setSelectedDatasetIds(prev => {
+                        const next = new Set(prev);
+                        if (next.has(ds.id)) next.delete(ds.id);
+                        else next.add(ds.id);
+                        return next;
+                      });
+                    }}
+                    className="ml-1 w-4 h-4 flex items-center justify-center rounded border border-white/15 bg-black/40 text-[10px] text-slate-300"
+                    aria-pressed={selectedDatasetIds.has(ds.id)}
+                    aria-label={selectedDatasetIds.has(ds.id) ? "Deselect dataset" : "Select dataset"}
+                  >
+                    {selectedDatasetIds.has(ds.id) ? "✓" : ""}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => toggleDatasetExpanded(ds.id)}
@@ -637,6 +752,9 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
             evalRows={detailEvalRows}
             evalEnabled={detailEvalRows.length > 0}
             savedEvalConfig={savedEvalConfig}
+            releaseGateHref={
+              orgId ? `/organizations/${orgId}/projects/${projectId}/release-gate` : undefined
+            }
           />
         )}
       </AnimatePresence>

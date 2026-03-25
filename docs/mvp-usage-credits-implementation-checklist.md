@@ -168,6 +168,8 @@ At this point, billing integration becomes:
 
 ---
 
+- **Paddle 연동 시 해야 할 것·체크리스트·사용량 반영 방식**: `docs/mvp-usage-credits-and-pricing-plan.md` **§7. Paddle 연동 계획 (정식 출시 시)** 참고.
+
 ### 5. Phase 5 — Plans & Billing UI (Free-first)
 
 **Objective**: Run the product in a **“free plan only”** mode during MVP, while preparing a clear path to later enable Pro/Enterprise self-serve billing.

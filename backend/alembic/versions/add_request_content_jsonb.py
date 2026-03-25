@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = 'add_request_content_jsonb'
-down_revision = None  # We will need to check the current head
+down_revision = "896063a36393"
 branch_labels = None
 depends_on = None
 

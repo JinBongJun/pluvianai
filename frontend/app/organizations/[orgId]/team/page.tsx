@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { ConfirmModal } from "@/components/shared/ConfirmModal";
+import { PlanLimitBanner } from "@/components/PlanLimitBanner";
+import { useSWRConfig } from "swr";
 import { organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
+import { inviteOrganizationMember, removeOrganizationMember } from "@/lib/orgProjectMutations";
+import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { useToast } from "@/components/ToastContainer";
 import { Users, Mail, Trash2, UserPlus, Shield, Activity, Fingerprint, Lock } from "lucide-react";
 
@@ -18,37 +25,67 @@ interface Member {
   joined_at: string;
 }
 
+const ROLE_EXPLAINER: Record<Member["role"], { title: string; description: string }> = {
+  owner: {
+    title: "Owner",
+    description: "Full control over organization settings, billing, and member access.",
+  },
+  admin: {
+    title: "Admin",
+    description: "Can manage members and day-to-day project operations.",
+  },
+  member: {
+    title: "Member",
+    description: "Can work with project flows and collaborate with the team.",
+  },
+  viewer: {
+    title: "Viewer",
+    description: "Read-only access for monitoring and review.",
+  },
+};
+
 export default function TeamPage() {
   const router = useRouter();
-  const params = useParams();
   const toast = useToast();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
+  const { mutate } = useSWRConfig();
+  const { orgId } = useOrgProjectParams();
+  const isAuthenticated = useRequireAuth();
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member" | "viewer">("member");
   const [inviting, setInviting] = useState(false);
+  const [planError, setPlanError] = useState<PlanLimitError | null>(null);
   const [confirmRemoveMemberId, setConfirmRemoveMemberId] = useState<number | null>(null);
   const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
 
   const { data: org, isValidating: isOrgValidating } = useSWR(
-    orgId ? ["organization", orgId] : null,
-    () => organizationsAPI.get(orgId, { includeStats: false })
+    orgId ? orgKeys.detail(orgId) : null,
+    async () => {
+      try {
+        return await organizationsAPI.get(orgId, { includeStats: false });
+      } catch (error: any) {
+        const status = error?.response?.status;
+        if (status === 404) {
+          toast.showToast("This organization has been archived or deleted.", "info");
+          router.replace("/organizations");
+          return null;
+        }
+        throw error;
+      }
+    }
   );
 
   const {
     data: members,
     mutate: refetchMembers,
     isValidating: isMembersValidating,
-  } = useSWR<Member[]>(orgId ? ["organization-members", orgId] : null, () =>
+  } = useSWR<Member[]>(orgId ? orgKeys.members(orgId) : null, () =>
     organizationsAPI.listMembers(orgId)
   );
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-    }
-  }, [router]);
+    if (!isAuthenticated) return;
+  }, [isAuthenticated]);
 
   const handleInvite = async () => {
     if (!inviteEmail.trim()) {
@@ -57,13 +94,22 @@ export default function TeamPage() {
     }
 
     setInviting(true);
+    setPlanError(null);
     try {
-      await organizationsAPI.inviteMember(orgId, { email: inviteEmail, role: inviteRole });
+      await inviteOrganizationMember(
+        orgId,
+        { email: inviteEmail, role: inviteRole },
+        { mutate }
+      );
       toast.showToast("Access invitation dispatched successfully.", "success");
       setInviteEmail("");
-      refetchMembers();
     } catch (error: any) {
-      toast.showToast(error.response?.data?.detail || "Failed to dispatch invitation.", "error");
+      const parsed = parsePlanLimitError(error);
+      if (parsed && parsed.code === "TEAM_MEMBER_LIMIT_REACHED") {
+        setPlanError(parsed);
+      } else {
+        toast.showToast(error.response?.data?.detail || "Failed to dispatch invitation.", "error");
+      }
     } finally {
       setInviting(false);
     }
@@ -77,10 +123,9 @@ export default function TeamPage() {
     if (confirmRemoveMemberId == null) return;
     setRemovingMemberId(confirmRemoveMemberId);
     try {
-      await organizationsAPI.removeMember(orgId, confirmRemoveMemberId);
+      await removeOrganizationMember(orgId, confirmRemoveMemberId, { mutate });
       toast.showToast("Operator clearance revoked.", "success");
       setConfirmRemoveMemberId(null);
-      refetchMembers();
     } catch (error: unknown) {
       const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       toast.showToast(msg || "Failed to revoke clearance.", "error");
@@ -145,7 +190,7 @@ export default function TeamPage() {
         { label: "Organizations", href: "/organizations" },
         { label: org?.name || "Organization", href: `/organizations/${orgId}/projects` },
         { label: "Settings", href: `/organizations/${orgId}/settings` },
-        { label: "Laboratory Protocols" },
+        { label: "Team & Access" },
       ]}
     >
       <div className="max-w-5xl mx-auto pb-24 relative">
@@ -160,12 +205,36 @@ export default function TeamPage() {
             </p>
           </div>
           <h1 className="text-5xl font-black text-white uppercase tracking-tighter mb-4">
-            Laboratory Protocols
+            Team & Access
           </h1>
           <p className="text-slate-400 font-bold uppercase tracking-widest text-sm max-w-2xl leading-relaxed">
             Manage organization members, assign security clearance levels, and oversee operational
             access to team resources.
           </p>
+        </div>
+
+        {planError && (
+          <div className="mb-8">
+            <PlanLimitBanner {...planError} context="team" />
+          </div>
+        )}
+
+        <div className="mb-10 rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-4">
+          <div className="mb-3 text-[10px] font-black text-slate-500 uppercase tracking-[0.22em]">
+            Role Access Guide
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {(Object.keys(ROLE_EXPLAINER) as Member["role"][]).map(role => (
+              <div key={role} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
+                <div className="mb-1 flex items-center gap-2">
+                  {getRoleBadge(role)}
+                </div>
+                <p className="text-[11px] font-semibold text-slate-400 leading-relaxed">
+                  {ROLE_EXPLAINER[role].description}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Invite Form */}
@@ -224,6 +293,9 @@ export default function TeamPage() {
                     <path d="m6 9 6 6 6-6" />
                   </svg>
                 </div>
+                <p className="mt-2 ml-1 text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                  Tip: Use Viewer for monitoring-only access.
+                </p>
               </div>
 
               <button

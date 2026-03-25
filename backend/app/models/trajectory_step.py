@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON, Float, Boolean
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON, Float, Boolean, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -9,6 +9,10 @@ class TrajectoryStep(Base):
     """Normalized trajectory steps for trace/test-run validation."""
 
     __tablename__ = "trajectory_steps"
+    __table_args__ = (
+        # Live View / Gate: filter by project + trace + snapshot source_id without scanning project-only index
+        Index("ix_trajectory_steps_project_trace_source", "project_id", "trace_id", "source_id"),
+    )
 
     id = Column(String(255), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)

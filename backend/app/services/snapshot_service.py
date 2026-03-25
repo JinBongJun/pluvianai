@@ -8,15 +8,18 @@ from app.services.pii_sanitizer import PIISanitizer
 from app.core.logging_config import logger
 from app.infrastructure.repositories.trace_repository import TraceRepository
 from app.infrastructure.repositories.snapshot_repository import SnapshotRepository
+from app.utils.secret_redaction import redact_secrets
 
 
 from app.core.diagnostics import calculate_diagnostic_scores
+from app.domain.live_view_release_gate import restore_agent_if_soft_deleted
 from app.services.live_eval_service import evaluate_one_snapshot_at_save, eval_config_version_hash
 from app.utils.tool_calls import extract_tool_calls_summary
+from app.utils.agent_signature import build_node_key
 
 
 def _extract_agent_id(payload: Dict[str, Any]) -> Optional[str]:
-    """Best-effort extraction for stable agent identity."""
+    """Legacy helper (kept for compatibility). Prefer signature-based node keys."""
     for key in ("agent_id", "agentId", "agent_name", "agentName"):
         value = payload.get(key)
         if value is not None:
@@ -24,6 +27,17 @@ def _extract_agent_id(payload: Dict[str, Any]) -> Optional[str]:
             if text:
                 return text
     return None
+
+
+def _extract_request_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Return the request-shaped payload for signature extraction.
+    - Proxy path sends the raw request JSON (model/messages/tools/settings)
+    - Some SDK/manual paths wrap as {"request": ..., "response": ...}
+    """
+    if isinstance(payload.get("request"), dict):
+        return payload["request"]
+    return payload
 
 
 def _extract_prompt_fields(payload: Dict[str, Any]) -> Dict[str, Optional[str]]:
@@ -131,17 +145,20 @@ class SnapshotService:
         from app.core.logging_config import logger
         import json
         
-        # Sanitize payload before saving
-        sanitized_payload = self.sanitizer.sanitize_payload(payload)
+        # Redact secrets first, then run PII sanitization.
+        redacted_payload = redact_secrets(payload)
+        sanitized_payload = self.sanitizer.sanitize_payload(redacted_payload)
         is_sanitized = True  # Currently always sanitized by the service
         prompt_fields = _extract_prompt_fields(sanitized_payload)
-        agent_id = _extract_agent_id(sanitized_payload)
-        if not agent_id:
-            # Fallback to deterministic hash for stability when explicit id is missing.
-            hash_seed = prompt_fields.get("system_prompt") or ""
-            if hash_seed:
-                import hashlib
-                agent_id = hashlib.sha256(hash_seed.encode()).hexdigest()[:16]
+        request_payload = _extract_request_payload(sanitized_payload)
+
+        # v1.0 node identity: signature over provider/model/system_prompt/settings/tools (agent_name excluded)
+        agent_id = build_node_key(
+            provider=provider,
+            model=model,
+            system_prompt=prompt_fields.get("system_prompt"),
+            request_payload=request_payload,
+        )
         
         # Fetch project diagnostic_config and agent-specific overrides for threshold-based evaluation
         diagnostic_config = {}
@@ -285,9 +302,10 @@ class SnapshotService:
                 # Successfully queued to Redis Stream - background worker will process
                 return None  # Return None to indicate async queuing
             except Exception as e:
-                # Fail-silent: Log error but don't block
-                logger.warning(f"Failed to queue snapshot to Redis Stream: {str(e)}. Snapshot will be skipped.")
-                return None  # Skip snapshot, don't block response
+                # Fall back to DB save if stream enqueue fails, so we don't lose snapshots.
+                logger.warning(
+                    f"Failed to queue snapshot to Redis Stream: {str(e)}. Falling back to direct DB save."
+                )
         
         # Fallback: If Redis is not available, save directly to DB (synchronous)
         # This is less ideal but ensures data is not lost
@@ -313,6 +331,7 @@ class SnapshotService:
             worst_status=snapshot_data["worst_status"],
         )
         saved_snapshot = self.snapshot_repo.save(snapshot)
+        restore_agent_if_soft_deleted(self.db, project_id, saved_snapshot.agent_id)
         
         # Track snapshot usage for subscription limits (only in fallback mode)
         if project_id:

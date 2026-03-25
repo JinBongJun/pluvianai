@@ -3,7 +3,7 @@ Cost Analyzer Service - Analyze API call costs
 """
 
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class CostAnalyzer:
@@ -39,8 +39,8 @@ class CostAnalyzer:
         if project_id is not None and db is not None:
             from app.models.api_call import APICall
             if start_date is None or end_date is None:
-                start_date = datetime.utcnow() - timedelta(days=period_days)
-                end_date = datetime.utcnow()
+                end_date = datetime.now(timezone.utc)
+                start_date = end_date - timedelta(days=period_days)
             api_calls = (
                 db.query(APICall)
                 .filter(

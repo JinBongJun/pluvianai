@@ -1,6 +1,6 @@
 """
 Helpers for free-tier usage limits (DB-backed, no Redis dependency for enforcement).
-Used by snapshot creation, replay (GuardCredits), and usage API.
+Used by snapshot creation, hosted Release Gate replay credits, and usage APIs.
 """
 
 from calendar import monthrange
@@ -10,7 +10,7 @@ from typing import Tuple
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.subscription_limits import PLAN_LIMITS
+from app.core.subscription_limits import PLAN_LIMITS, normalize_plan_type
 from app.models.project import Project
 from app.models.snapshot import Snapshot
 from app.models.subscription import Subscription
@@ -47,8 +47,8 @@ def get_snapshots_count_this_month(db: Session, user_id: int) -> int:
 
 def get_guard_credits_this_month(db: Session, user_id: int) -> int:
     """
-    Sum of GuardCredits (metric_name='guard_credits_replay') for this user this month.
-    Used for free-tier guard_credits_per_month enforcement.
+    Sum of hosted replay credits (metric_name='guard_credits_replay') for this user this month.
+    Used for free-tier platform replay credit enforcement.
     """
     start, end = _current_month_bounds_utc()
     row = (
@@ -64,10 +64,15 @@ def get_guard_credits_this_month(db: Session, user_id: int) -> int:
     return int(row[0]) if row and row[0] is not None else 0
 
 
+def get_platform_replay_credits_this_month(db: Session, user_id: int) -> int:
+    """Explicit alias for hosted replay credit usage."""
+    return get_guard_credits_this_month(db, user_id)
+
+
 def _get_user_plan_limits(db: Session, user_id: int) -> dict:
     """Resolve plan limits for user from Subscription (plan_id = plan_type)."""
     sub = db.query(Subscription).filter(Subscription.user_id == user_id).first()
-    plan_type = (sub.plan_id or "free") if sub else "free"
+    plan_type = normalize_plan_type((sub.plan_id or "free") if sub else "free")
     return PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
 
@@ -78,7 +83,7 @@ def check_snapshot_limit(db: Session, user_id: int, is_superuser: bool = False) 
     if is_superuser:
         return (True, None)
     limits = _get_user_plan_limits(db, user_id)
-    cap = limits.get("snapshots_per_month", 500)
+    cap = limits.get("snapshots_per_month", 10_000)
     if cap == -1:
         return (True, None)
     current = get_snapshots_count_this_month(db, user_id)
@@ -97,13 +102,20 @@ def check_guard_credits_limit(db: Session, user_id: int, is_superuser: bool = Fa
     if is_superuser:
         return (True, None)
     limits = _get_user_plan_limits(db, user_id)
-    cap = limits.get("guard_credits_per_month")
+    cap = limits.get("platform_replay_credits_per_month", limits.get("guard_credits_per_month"))
     if cap is None or cap == -1:
         return (True, None)
-    current = get_guard_credits_this_month(db, user_id)
+    current = get_platform_replay_credits_this_month(db, user_id)
     if current >= cap:
         return (
             False,
-            "Free plan monthly GuardCredit limit reached. Connect your own API key for more runs, or try again next month.",
+            "You have used all included platform replay credits for this month. Switch to your own provider key or upgrade your plan to keep running Release Gate.",
         )
     return (True, None)
+
+
+def check_platform_replay_credits_limit(
+    db: Session, user_id: int, is_superuser: bool = False
+) -> Tuple[bool, str | None]:
+    """Explicit alias for hosted replay credit checks."""
+    return check_guard_credits_limit(db, user_id, is_superuser)

@@ -1,16 +1,16 @@
 "use client";
 
-import { useParams } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
 import { organizationsAPI } from "@/lib/api";
+import { orgKeys } from "@/lib/queryKeys";
+import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { Plug, Github, Slack, Webhook, Key, ExternalLink } from "lucide-react";
 
 export default function IntegrationsPage() {
-  const params = useParams();
-  const orgId = (Array.isArray(params?.orgId) ? params.orgId[0] : params?.orgId) as string;
+  const { orgId } = useOrgProjectParams();
 
-  const { data: org } = useSWR(orgId ? ["organization", orgId] : null, () =>
+  const { data: org } = useSWR(orgId ? orgKeys.detail(orgId) : null, () =>
     organizationsAPI.get(orgId, { includeStats: false })
   );
 
