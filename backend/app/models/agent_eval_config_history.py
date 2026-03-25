@@ -1,6 +1,6 @@
 """Eval config history for time-based evaluation: apply the config that was active at each snapshot's created_at."""
 import uuid
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON, Index
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -10,7 +10,16 @@ class AgentEvalConfigHistory(Base):
 
     __tablename__ = "agent_eval_config_history"
 
-    id = Column(String(255), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    __table_args__ = (
+        Index(
+            "ix_agent_eval_config_history_project_agent_effective",
+            "project_id",
+            "agent_id",
+            "effective_from",
+        ),
+    )
+
+    id = Column(String(255), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     agent_id = Column(String(64), nullable=False, index=True)  # system_prompt_hash
     effective_from = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
