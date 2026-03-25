@@ -169,7 +169,10 @@ class PluvianAI:
         try:
             self._patch_openai()
             self._patched = True
-            print(f"PluvianAI: Successfully initialized for project {self.project_id}")
+            print(
+                "PluvianAI: Successfully initialized "
+                f"for project {self.project_id} via {self.api_url}"
+            )
         except Exception as e:
             print(f"PluvianAI: Failed to initialize: {e}")
 
@@ -465,20 +468,33 @@ class PluvianAI:
         """Send a single payload to the API (used by worker and flush)."""
         if not self.enabled:
             return
+        ingest_url = f"{self.api_url}/api/v1/projects/{self.project_id}/api-calls"
         try:
             if not self._check_circuit_breaker():
                 return
             with httpx.Client(timeout=self.proxy_timeout) as client:
-                client.post(
-                    f"{self.api_url}/api/v1/projects/{self.project_id}/api-calls",
+                response = client.post(
+                    ingest_url,
                     json=payload,
                     headers={
                         "Authorization": f"Bearer {self.api_key}",
                         "Content-Type": "application/json",
                     },
                 )
-                self._reset_circuit_breaker()
-        except Exception:
+                if 200 <= response.status_code < 300:
+                    self._reset_circuit_breaker()
+                    return
+
+                body_preview = response.text.strip().replace("\n", " ")
+                if len(body_preview) > 200:
+                    body_preview = body_preview[:200] + "..."
+                print(
+                    "PluvianAI ingest failed: "
+                    f"status={response.status_code} url={ingest_url} body={body_preview or '<empty>'}"
+                )
+                self._record_circuit_failure()
+        except Exception as e:
+            print(f"PluvianAI ingest error: url={ingest_url} error={e}")
             self._record_circuit_failure()
 
     def _worker_loop(self) -> None:
