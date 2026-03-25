@@ -535,29 +535,55 @@ def upgrade() -> None:
     op.drop_column('subscriptions', 'trial_end')
     op.drop_column('subscriptions', 'current_period_start')
     op.drop_column('subscriptions', 'paddle_subscription_id')
-    op.add_column('usage', sa.Column('metric_name', sa.String(length=50), nullable=False, server_default='generic_usage'))
-    op.add_column('usage', sa.Column('quantity', sa.BigInteger(), nullable=True))
-    op.add_column('usage', sa.Column('unit', sa.String(length=20), nullable=True))
-    op.add_column('usage', sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True))
+    _usage_cols = {col["name"] for col in sa.inspect(bind).get_columns("usage")}
+    if 'metric_name' not in _usage_cols:
+        op.add_column('usage', sa.Column('metric_name', sa.String(length=50), nullable=False, server_default='generic_usage'))
+    if 'quantity' not in _usage_cols:
+        op.add_column('usage', sa.Column('quantity', sa.BigInteger(), nullable=True))
+    if 'unit' not in _usage_cols:
+        op.add_column('usage', sa.Column('unit', sa.String(length=20), nullable=True))
+    if 'timestamp' not in _usage_cols:
+        op.add_column('usage', sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True))
     op.alter_column('usage', 'user_id',
                existing_type=sa.INTEGER(),
                nullable=True)
-    op.drop_index(op.f('idx_usage_project_metric'), table_name='usage')
-    op.drop_index(op.f('idx_usage_user_metric'), table_name='usage')
-    op.drop_index(op.f('ix_usage_project_id'), table_name='usage')
-    op.drop_index(op.f('ix_usage_user_id'), table_name='usage')
-    op.create_index(op.f('ix_usage_timestamp'), 'usage', ['timestamp'], unique=False)
-    op.drop_constraint(op.f('usage_user_id_fkey'), 'usage', type_='foreignkey')
-    op.drop_constraint(op.f('usage_project_id_fkey'), 'usage', type_='foreignkey')
-    op.create_foreign_key(None, 'usage', 'users', ['user_id'], ['id'], ondelete='CASCADE')
-    op.create_foreign_key(None, 'usage', 'projects', ['project_id'], ['id'], ondelete='CASCADE')
-    op.drop_column('usage', 'created_at')
-    op.drop_column('usage', 'limit')
-    op.drop_column('usage', 'period_end')
-    op.drop_column('usage', 'updated_at')
-    op.drop_column('usage', 'current_usage')
-    op.drop_column('usage', 'period_start')
-    op.drop_column('usage', 'metric_type')
+    _usage_ix = {idx["name"] for idx in sa.inspect(bind).get_indexes("usage")}
+    for _ix in (
+        op.f('idx_usage_project_metric'),
+        op.f('idx_usage_user_metric'),
+        op.f('ix_usage_project_id'),
+        op.f('ix_usage_user_id'),
+    ):
+        if _ix in _usage_ix:
+            op.drop_index(_ix, table_name='usage')
+    if op.f('ix_usage_timestamp') not in _usage_ix:
+        op.create_index(op.f('ix_usage_timestamp'), 'usage', ['timestamp'], unique=False)
+    _usage_fks = sa.inspect(bind).get_foreign_keys("usage")
+    for _fk_name in (op.f('usage_user_id_fkey'), op.f('usage_project_id_fkey')):
+        if any(fk.get("name") == _fk_name for fk in _usage_fks):
+            op.drop_constraint(_fk_name, 'usage', type_='foreignkey')
+    _usage_fks = sa.inspect(bind).get_foreign_keys("usage")
+    if not any(
+        fk.get("referred_table") == "users" and fk.get("constrained_columns") == ["user_id"]
+        for fk in _usage_fks
+    ):
+        op.create_foreign_key(None, 'usage', 'users', ['user_id'], ['id'], ondelete='CASCADE')
+    if not any(
+        fk.get("referred_table") == "projects" and fk.get("constrained_columns") == ["project_id"]
+        for fk in _usage_fks
+    ):
+        op.create_foreign_key(None, 'usage', 'projects', ['project_id'], ['id'], ondelete='CASCADE')
+    for _col in (
+        'created_at',
+        'limit',
+        'period_end',
+        'updated_at',
+        'current_usage',
+        'period_start',
+        'metric_type',
+    ):
+        if _col in _usage_cols:
+            op.drop_column('usage', _col)
     op.add_column('user_agreements', sa.Column('version', sa.String(length=20), nullable=True))
     op.drop_constraint(op.f('user_agreements_user_id_fkey'), 'user_agreements', type_='foreignkey')
     op.create_foreign_key(None, 'user_agreements', 'users', ['user_id'], ['id'], ondelete='CASCADE')
