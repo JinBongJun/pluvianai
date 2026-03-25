@@ -21,6 +21,54 @@ def upgrade() -> None:
     bind = op.get_bind()
     insp = sa.inspect(bind)
 
+    def _cols(table_name: str) -> set[str]:
+        return {col["name"] for col in sa.inspect(bind).get_columns(table_name)}
+
+    def _indexes(table_name: str) -> set[str]:
+        return {idx["name"] for idx in sa.inspect(bind).get_indexes(table_name)}
+
+    def _fks(table_name: str) -> list[dict]:
+        return sa.inspect(bind).get_foreign_keys(table_name)
+
+    def _has_fk(table_name: str, referred_table: str, constrained_columns: list[str]) -> bool:
+        return any(
+            fk.get("referred_table") == referred_table
+            and fk.get("constrained_columns") == constrained_columns
+            for fk in _fks(table_name)
+        )
+
+    def _has_unique(table_name: str, column_names: list[str]) -> bool:
+        return any(
+            uq.get("column_names") == column_names
+            for uq in sa.inspect(bind).get_unique_constraints(table_name)
+        )
+
+    def _add_column_if_missing(table_name: str, column_name: str, column: sa.Column) -> None:
+        if column_name not in _cols(table_name):
+            op.add_column(table_name, column)
+
+    def _drop_column_if_exists(table_name: str, column_name: str) -> None:
+        if column_name in _cols(table_name):
+            op.drop_column(table_name, column_name)
+
+    def _drop_index_if_exists(index_name: str, table_name: str) -> None:
+        if index_name in _indexes(table_name):
+            op.drop_index(index_name, table_name=table_name)
+
+    def _create_index_if_missing(
+        index_name: str,
+        table_name: str,
+        columns: list[str],
+        *,
+        unique: bool = False,
+    ) -> None:
+        if index_name not in _indexes(table_name):
+            op.create_index(index_name, table_name, columns, unique=unique)
+
+    def _drop_fk_if_exists(table_name: str, fk_name: str) -> None:
+        if any(fk.get("name") == fk_name for fk in _fks(table_name)):
+            op.drop_constraint(fk_name, table_name, type_='foreignkey')
+
     # 20260205_phase1_schema_alignment may have already created these (merge graph).
     if not insp.has_table("agent_display_settings"):
         op.create_table('agent_display_settings',
@@ -177,21 +225,18 @@ def upgrade() -> None:
     op.drop_table('shadow_comparisons')
     op.drop_constraint(op.f('activity_logs_project_id_fkey'), 'activity_logs', type_='foreignkey')
     op.create_foreign_key(None, 'activity_logs', 'projects', ['project_id'], ['id'], ondelete='CASCADE')
-    op.add_column('alerts', sa.Column('description', sa.Text(), nullable=True))
-    op.drop_index(op.f('ix_alerts_alert_type'), table_name='alerts')
-    op.drop_constraint(op.f('alerts_project_id_fkey'), 'alerts', type_='foreignkey')
-    op.drop_constraint(op.f('alerts_resolved_by_fkey'), 'alerts', type_='foreignkey')
-    op.create_foreign_key(None, 'alerts', 'projects', ['project_id'], ['id'], ondelete='CASCADE')
-    op.drop_column('alerts', 'sent_at')
-    op.drop_column('alerts', 'alert_data')
-    op.drop_column('alerts', 'resolved_by')
-    op.drop_column('alerts', 'notification_channels')
-    op.drop_column('alerts', 'message')
-    op.drop_column('alerts', 'is_sent')
-    op.add_column('api_calls', sa.Column('request_content', sa.Text(), nullable=True))
-    op.add_column('api_calls', sa.Column('response_content', sa.Text(), nullable=True))
-    op.add_column('api_calls', sa.Column('total_tokens', sa.Integer(), nullable=True))
-    op.add_column('api_calls', sa.Column('cost', sa.Float(), nullable=True))
+    _add_column_if_missing('alerts', 'description', sa.Column('description', sa.Text(), nullable=True))
+    _drop_index_if_exists(op.f('ix_alerts_alert_type'), 'alerts')
+    _drop_fk_if_exists('alerts', op.f('alerts_project_id_fkey'))
+    _drop_fk_if_exists('alerts', op.f('alerts_resolved_by_fkey'))
+    if not _has_fk('alerts', 'projects', ['project_id']):
+        op.create_foreign_key(None, 'alerts', 'projects', ['project_id'], ['id'], ondelete='CASCADE')
+    for _col in ('sent_at', 'alert_data', 'resolved_by', 'notification_channels', 'message', 'is_sent'):
+        _drop_column_if_exists('alerts', _col)
+    _add_column_if_missing('api_calls', 'request_content', sa.Column('request_content', sa.Text(), nullable=True))
+    _add_column_if_missing('api_calls', 'response_content', sa.Column('response_content', sa.Text(), nullable=True))
+    _add_column_if_missing('api_calls', 'total_tokens', sa.Column('total_tokens', sa.Integer(), nullable=True))
+    _add_column_if_missing('api_calls', 'cost', sa.Column('cost', sa.Float(), nullable=True))
     op.alter_column('api_calls', 'provider',
                existing_type=sa.VARCHAR(length=50),
                nullable=True)
@@ -202,44 +247,62 @@ def upgrade() -> None:
                existing_type=sa.DOUBLE_PRECISION(precision=53),
                type_=sa.Integer(),
                existing_nullable=True)
-    op.drop_index(op.f('idx_chain_id'), table_name='api_calls')
-    op.drop_index(op.f('idx_project_created'), table_name='api_calls')
-    op.drop_index(op.f('idx_provider_model'), table_name='api_calls')
-    op.drop_index(op.f('ix_api_calls_agent_name'), table_name='api_calls')
-    op.drop_index(op.f('ix_api_calls_chain_id'), table_name='api_calls')
-    op.drop_index(op.f('ix_api_calls_model'), table_name='api_calls')
-    op.drop_index(op.f('ix_api_calls_provider'), table_name='api_calls')
-    op.drop_constraint(op.f('api_calls_project_id_fkey'), 'api_calls', type_='foreignkey')
-    op.create_foreign_key(None, 'api_calls', 'projects', ['project_id'], ['id'], ondelete='CASCADE')
-    op.drop_column('api_calls', 'chain_id')
-    op.drop_column('api_calls', 'response_tokens')
-    op.drop_column('api_calls', 'request_prompt')
-    op.drop_column('api_calls', 'error_message')
-    op.drop_column('api_calls', 'response_data')
-    op.drop_column('api_calls', 'request_tokens')
-    op.drop_column('api_calls', 'request_data')
-    op.drop_column('api_calls', 'response_text')
-    op.add_column('drift_detections', sa.Column('model_name', sa.String(length=100), nullable=True))
-    op.add_column('drift_detections', sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True))
-    op.drop_index(op.f('ix_drift_detections_agent_name'), table_name='drift_detections')
-    op.drop_index(op.f('ix_drift_detections_detected_at'), table_name='drift_detections')
-    op.drop_index(op.f('ix_drift_detections_detection_type'), table_name='drift_detections')
-    op.drop_index(op.f('ix_drift_detections_model'), table_name='drift_detections')
-    op.create_index(op.f('ix_drift_detections_created_at'), 'drift_detections', ['created_at'], unique=False)
-    op.drop_constraint(op.f('drift_detections_project_id_fkey'), 'drift_detections', type_='foreignkey')
-    op.create_foreign_key(None, 'drift_detections', 'projects', ['project_id'], ['id'], ondelete='CASCADE')
-    op.drop_column('drift_detections', 'model')
-    op.drop_column('drift_detections', 'baseline_period_start')
-    op.drop_column('drift_detections', 'agent_name')
-    op.drop_column('drift_detections', 'detection_type')
-    op.drop_column('drift_detections', 'current_value')
-    op.drop_column('drift_detections', 'change_percentage')
-    op.drop_column('drift_detections', 'affected_fields')
-    op.drop_column('drift_detections', 'detection_details')
-    op.drop_column('drift_detections', 'baseline_value')
-    op.drop_column('drift_detections', 'detected_at')
-    op.drop_column('drift_detections', 'severity')
-    op.drop_column('drift_detections', 'baseline_period_end')
+    for _ix in (
+        op.f('idx_chain_id'),
+        op.f('idx_project_created'),
+        op.f('idx_provider_model'),
+        op.f('ix_api_calls_agent_name'),
+        op.f('ix_api_calls_chain_id'),
+        op.f('ix_api_calls_model'),
+        op.f('ix_api_calls_provider'),
+    ):
+        _drop_index_if_exists(_ix, 'api_calls')
+    _drop_fk_if_exists('api_calls', op.f('api_calls_project_id_fkey'))
+    if not _has_fk('api_calls', 'projects', ['project_id']):
+        op.create_foreign_key(None, 'api_calls', 'projects', ['project_id'], ['id'], ondelete='CASCADE')
+    for _col in (
+        'chain_id',
+        'response_tokens',
+        'request_prompt',
+        'error_message',
+        'response_data',
+        'request_tokens',
+        'request_data',
+        'response_text',
+    ):
+        _drop_column_if_exists('api_calls', _col)
+    _add_column_if_missing('drift_detections', 'model_name', sa.Column('model_name', sa.String(length=100), nullable=True))
+    _add_column_if_missing(
+        'drift_detections',
+        'created_at',
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    )
+    for _ix in (
+        op.f('ix_drift_detections_agent_name'),
+        op.f('ix_drift_detections_detected_at'),
+        op.f('ix_drift_detections_detection_type'),
+        op.f('ix_drift_detections_model'),
+    ):
+        _drop_index_if_exists(_ix, 'drift_detections')
+    _create_index_if_missing(op.f('ix_drift_detections_created_at'), 'drift_detections', ['created_at'])
+    _drop_fk_if_exists('drift_detections', op.f('drift_detections_project_id_fkey'))
+    if not _has_fk('drift_detections', 'projects', ['project_id']):
+        op.create_foreign_key(None, 'drift_detections', 'projects', ['project_id'], ['id'], ondelete='CASCADE')
+    for _col in (
+        'model',
+        'baseline_period_start',
+        'agent_name',
+        'detection_type',
+        'current_value',
+        'change_percentage',
+        'affected_fields',
+        'detection_details',
+        'baseline_value',
+        'detected_at',
+        'severity',
+        'baseline_period_end',
+    ):
+        _drop_column_if_exists('drift_detections', _col)
     op.alter_column('evaluation_rubrics', 'name',
                existing_type=sa.VARCHAR(length=255),
                type_=sa.String(length=100),
@@ -256,8 +319,8 @@ def upgrade() -> None:
     op.drop_column('evaluation_rubrics', 'max_score')
     op.drop_column('evaluation_rubrics', 'criteria_prompt')
     op.drop_column('evaluation_rubrics', 'updated_at')
-    op.add_column('firewall_rules', sa.Column('is_active', sa.Boolean(), server_default='true', nullable=True))
-    op.add_column('firewall_rules', sa.Column('priority', sa.Integer(), nullable=True))
+    _add_column_if_missing('firewall_rules', 'is_active', sa.Column('is_active', sa.Boolean(), server_default='true', nullable=True))
+    _add_column_if_missing('firewall_rules', 'priority', sa.Column('priority', sa.Integer(), nullable=True))
     op.alter_column('firewall_rules', 'name',
                existing_type=sa.VARCHAR(length=255),
                type_=sa.String(length=100),
@@ -268,14 +331,11 @@ def upgrade() -> None:
     op.alter_column('firewall_rules', 'severity',
                existing_type=postgresql.ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL', name='firewallseverity'),
                nullable=True)
-    op.drop_index(op.f('ix_firewall_rules_enabled'), table_name='firewall_rules')
-    op.drop_index(op.f('ix_firewall_rules_rule_type'), table_name='firewall_rules')
-    op.create_index(op.f('ix_firewall_rules_created_at'), 'firewall_rules', ['created_at'], unique=False)
-    op.drop_column('firewall_rules', 'config')
-    op.drop_column('firewall_rules', 'updated_at')
-    op.drop_column('firewall_rules', 'enabled')
-    op.drop_column('firewall_rules', 'pattern_type')
-    op.drop_column('firewall_rules', 'description')
+    _drop_index_if_exists(op.f('ix_firewall_rules_enabled'), 'firewall_rules')
+    _drop_index_if_exists(op.f('ix_firewall_rules_rule_type'), 'firewall_rules')
+    _create_index_if_missing(op.f('ix_firewall_rules_created_at'), 'firewall_rules', ['created_at'])
+    for _col in ('config', 'updated_at', 'enabled', 'pattern_type', 'description'):
+        _drop_column_if_exists('firewall_rules', _col)
     op.add_column('judge_feedback', sa.Column('snapshot_id', sa.Integer(), nullable=True))
     op.add_column('judge_feedback', sa.Column('judge_id', sa.Integer(), nullable=True))
     op.add_column('judge_feedback', sa.Column('rating', sa.Integer(), nullable=True))
@@ -327,12 +387,12 @@ def upgrade() -> None:
     op.drop_column('organization_members', 'invited_by')
     op.drop_column('organization_members', 'joined_at')
     op.drop_column('organization_members', 'updated_at')
-    op.drop_index(op.f('idx_org_owner'), table_name='organizations')
-    op.drop_index(op.f('idx_org_plan'), table_name='organizations')
-    op.drop_index(op.f('ix_organizations_paddle_customer_id'), table_name='organizations')
-    op.create_index(op.f('ix_organizations_paddle_customer_id'), 'organizations', ['paddle_customer_id'], unique=False)
-    op.drop_index(op.f('ix_organizations_paddle_subscription_id'), table_name='organizations')
-    op.create_index(op.f('ix_organizations_paddle_subscription_id'), 'organizations', ['paddle_subscription_id'], unique=False)
+    _drop_index_if_exists(op.f('idx_org_owner'), 'organizations')
+    _drop_index_if_exists(op.f('idx_org_plan'), 'organizations')
+    _drop_index_if_exists(op.f('ix_organizations_paddle_customer_id'), 'organizations')
+    _create_index_if_missing(op.f('ix_organizations_paddle_customer_id'), 'organizations', ['paddle_customer_id'])
+    _drop_index_if_exists(op.f('ix_organizations_paddle_subscription_id'), 'organizations')
+    _create_index_if_missing(op.f('ix_organizations_paddle_subscription_id'), 'organizations', ['paddle_subscription_id'])
     op.add_column('pii_patterns', sa.Column('entity_type', sa.String(length=50), nullable=True))
     op.alter_column('pii_patterns', 'name',
                existing_type=sa.VARCHAR(length=255),
@@ -520,21 +580,29 @@ def upgrade() -> None:
     op.alter_column('subscriptions', 'current_period_end',
                existing_type=postgresql.TIMESTAMP(timezone=True),
                nullable=True)
-    op.drop_index(op.f('idx_subscription_plan'), table_name='subscriptions')
-    op.drop_index(op.f('idx_subscription_user_status'), table_name='subscriptions')
-    op.drop_index(op.f('ix_subscriptions_paddle_customer_id'), table_name='subscriptions')
-    op.drop_index(op.f('ix_subscriptions_paddle_subscription_id'), table_name='subscriptions')
-    op.drop_index(op.f('ix_subscriptions_user_id'), table_name='subscriptions')
-    op.create_unique_constraint(None, 'subscriptions', ['user_id'])
-    op.drop_constraint(op.f('subscriptions_user_id_fkey'), 'subscriptions', type_='foreignkey')
-    op.create_foreign_key(None, 'subscriptions', 'users', ['user_id'], ['id'], ondelete='CASCADE')
-    op.drop_column('subscriptions', 'cancel_at_period_end')
-    op.drop_column('subscriptions', 'paddle_customer_id')
-    op.drop_column('subscriptions', 'price_per_month')
-    op.drop_column('subscriptions', 'plan_type')
-    op.drop_column('subscriptions', 'trial_end')
-    op.drop_column('subscriptions', 'current_period_start')
-    op.drop_column('subscriptions', 'paddle_subscription_id')
+    for _ix in (
+        op.f('idx_subscription_plan'),
+        op.f('idx_subscription_user_status'),
+        op.f('ix_subscriptions_paddle_customer_id'),
+        op.f('ix_subscriptions_paddle_subscription_id'),
+        op.f('ix_subscriptions_user_id'),
+    ):
+        _drop_index_if_exists(_ix, 'subscriptions')
+    if not _has_unique('subscriptions', ['user_id']):
+        op.create_unique_constraint(None, 'subscriptions', ['user_id'])
+    _drop_fk_if_exists('subscriptions', op.f('subscriptions_user_id_fkey'))
+    if not _has_fk('subscriptions', 'users', ['user_id']):
+        op.create_foreign_key(None, 'subscriptions', 'users', ['user_id'], ['id'], ondelete='CASCADE')
+    for _col in (
+        'cancel_at_period_end',
+        'paddle_customer_id',
+        'price_per_month',
+        'plan_type',
+        'trial_end',
+        'current_period_start',
+        'paddle_subscription_id',
+    ):
+        _drop_column_if_exists('subscriptions', _col)
     _usage_cols = {col["name"] for col in sa.inspect(bind).get_columns("usage")}
     if 'metric_name' not in _usage_cols:
         op.add_column('usage', sa.Column('metric_name', sa.String(length=50), nullable=False, server_default='generic_usage'))
