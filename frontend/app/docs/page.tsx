@@ -453,6 +453,95 @@ Content-Type: application/json
             step, for each tool.
           </p>
 
+          {/* Ingest API contract (manual HTTP + same path as SDK) */}
+          <div className="rounded-2xl border border-violet-500/25 bg-violet-500/5 p-6 max-w-4xl space-y-3">
+            <h4 className="text-sm font-black uppercase tracking-wider text-violet-200">
+              Ingest API (manual HTTP and SDK)
+            </h4>
+            <ul className="text-sm text-slate-300 space-y-2 list-disc list-inside leading-relaxed">
+              <li>
+                <strong className="text-slate-200">Endpoint:</strong>{" "}
+                <code className="px-1.5 py-0.5 rounded bg-black/40 text-violet-300 font-mono text-xs break-all">
+                  POST https://api.pluvian.ai/api/v1/projects/YOUR_PROJECT_ID/api-calls
+                </code>
+                — put your numeric project ID in the path (same number as in the project URL).
+                Self-hosted? Replace the host with your API base URL.
+              </li>
+              <li>
+                <strong className="text-slate-200">Auth:</strong>{" "}
+                <code className="font-mono text-xs">Authorization: Bearer YOUR_API_KEY</code> — use a
+                project API key with the <strong className="text-slate-200">ingest</strong> scope (or{" "}
+                <code className="font-mono text-xs">*</code>).
+              </li>
+              <li>
+                <strong className="text-slate-200">Success:</strong>{" "}
+                <strong className="text-emerald-400">202 Accepted</strong> — the run will show up in
+                Live View shortly after.
+              </li>
+              <li>
+                <strong className="text-slate-200">Body:</strong> JSON with{" "}
+                <code className="font-mono text-xs">request_data</code>,{" "}
+                <code className="font-mono text-xs">response_data</code>,{" "}
+                <code className="font-mono text-xs">latency_ms</code>,{" "}
+                <code className="font-mono text-xs">status_code</code>, and optional{" "}
+                <code className="font-mono text-xs">agent_name</code>,{" "}
+                <code className="font-mono text-xs">chain_id</code>,{" "}
+                <code className="font-mono text-xs">tool_events</code>. If{" "}
+                <code className="font-mono text-xs">project_id</code> is in the JSON, it must be an
+                integer and match the ID in the URL; you can omit it when the path already includes
+                the project.
+              </li>
+              <li className="text-slate-400 text-xs list-none -ml-4 pl-4">
+                Rich tool timelines in Live View / Release Gate may require optional{" "}
+                <code className="font-mono text-xs">tool_events</code> in the same payload (see SDK
+                README). LLM-only payloads still create snapshots.
+              </li>
+            </ul>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 max-w-4xl overflow-x-auto">
+            <h4 className="text-sm font-black uppercase tracking-wider text-slate-200 mb-4">
+              Where to put HTTP or the SDK
+            </h4>
+            <table className="w-full text-sm text-slate-300 border-collapse min-w-[280px]">
+              <thead>
+                <tr className="border-b border-white/10 text-left">
+                  <th className="py-2 pr-4 font-bold text-slate-200 w-[7rem]">Tool</th>
+                  <th className="py-2 font-bold text-slate-200">Where it lives</th>
+                </tr>
+              </thead>
+              <tbody className="align-top">
+                <tr className="border-b border-white/5">
+                  <td className="py-3 pr-4 font-mono text-xs text-amber-300">n8n</td>
+                  <td className="py-3">
+                    An <strong className="text-slate-200">HTTP Request</strong> node in your
+                    workflow, usually right after the LLM step.
+                  </td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="py-3 pr-4 font-mono text-xs text-violet-300">LangChain</td>
+                  <td className="py-3">
+                    Your <strong className="text-slate-200">Python or TypeScript app</strong> — after
+                    each LLM call, in a callback, or inside a thin wrapper around the model client.
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-3 pr-4 font-mono text-xs text-amber-300">MCP</td>
+                  <td className="py-3">
+                    The <strong className="text-slate-200">host app</strong> that runs your agent and
+                    MCP client, or <strong className="text-slate-200">your MCP server code</strong>{" "}
+                    (e.g. after a tool handler). MCP messages themselves have no PluvianAI hook — you
+                    send from code you control.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="mt-4 text-xs text-slate-400 leading-relaxed">
+              Fastest first check: one n8n HTTP Request using the URL above. LangChain and MCP always
+              mean adding a few lines in your own codebase.
+            </p>
+          </div>
+
           {/* Before you start: for complete beginners */}
           <div className="rounded-2xl border border-slate-500/30 bg-slate-500/5 p-6 max-w-4xl">
             <h4 className="text-sm font-black uppercase tracking-wider text-slate-200 mb-3">
@@ -632,21 +721,23 @@ Content-Type: application/json
               <li>
                 Set the HTTP Request: <strong className="text-slate-200">Method</strong> = POST,{" "}
                 <strong className="text-slate-200">URL</strong> ={" "}
-                <code className="px-1.5 py-0.5 rounded bg-black/40 text-amber-300 font-mono text-xs">
-                  https://api.pluvian.ai/api/v1/api-calls
-                </code>
-                , <strong className="text-slate-200">Authentication</strong> = Header Auth → Header
-                name <code className="font-mono text-xs">Authorization</code>, Value{" "}
-                <code className="font-mono text-xs">Bearer YOUR_API_KEY</code>.
+                <code className="px-1.5 py-0.5 rounded bg-black/40 text-amber-300 font-mono text-xs break-all">
+                  https://api.pluvian.ai/api/v1/projects/YOUR_PROJECT_ID/api-calls
+                </code>{" "}
+                (replace <code className="font-mono text-xs">YOUR_PROJECT_ID</code> with your numeric
+                project ID). <strong className="text-slate-200">Authentication</strong> = Header Auth →
+                Header name <code className="font-mono text-xs">Authorization</code>, Value{" "}
+                <code className="font-mono text-xs">Bearer YOUR_API_KEY</code> (ingest-scoped key).
               </li>
               <li>
-                Body = JSON. Use this shape (fill{" "}
-                <code className="font-mono text-xs">request_data</code> and{" "}
+                Body = JSON. Map <code className="font-mono text-xs">request_data</code> and{" "}
                 <code className="font-mono text-xs">response_data</code> from the previous
-                step&apos;s output):
+                node&apos;s output (field names differ by n8n / OpenAI node version — use the JSON
+                you sent to the model and the JSON you got back). You can omit{" "}
+                <code className="font-mono text-xs">project_id</code> in the body when it is already
+                in the URL.
                 <br />
                 <pre className="mt-2 p-4 rounded-lg bg-black/50 border border-white/5 text-xs text-slate-300 overflow-x-auto">{`{
-  "project_id": YOUR_PROJECT_ID,
   "agent_name": "my_n8n_workflow",
   "request_data": { /* LLM request from previous step */ },
   "response_data": { /* LLM response from previous step */ },
@@ -655,7 +746,8 @@ Content-Type: application/json
 }`}</pre>
               </li>
               <li>
-                Run the workflow once. Then open Live View and refresh — you should see the run.
+                Execute the workflow. A <strong className="text-emerald-400">202</strong> response
+                means ingest was accepted. Open Live View and refresh — you should see the run.
               </li>
             </ol>
           </section>
@@ -668,15 +760,18 @@ Content-Type: application/json
               </span>
               MCP (Model Context Protocol)
             </h3>
+            <p className="text-sm text-slate-400 leading-relaxed max-w-4xl">
+              MCP does not define a PluvianAI slot inside protocol messages. Add a short HTTP (or use
+              the Python / Node SDK) in the <strong className="text-slate-200">host</strong> that
+              orchestrates the LLM, or inside <strong className="text-slate-200">your MCP server</strong>{" "}
+              after you handle a tool — wherever you already have the model request and response
+              objects.
+            </p>
             <ol className="list-decimal list-inside space-y-3 text-sm text-slate-300">
               <li>
-                Where your MCP server or client gets the LLM request and response, add a small piece
-                of code that sends the same data to PluvianAI.
-              </li>
-              <li>
-                Send one HTTP POST to:{" "}
-                <code className="px-1.5 py-0.5 rounded bg-black/40 text-amber-300 font-mono text-xs">
-                  https://api.pluvian.ai/api/v1/api-calls
+                From that code path, send one HTTP POST to:{" "}
+                <code className="px-1.5 py-0.5 rounded bg-black/40 text-amber-300 font-mono text-xs break-all">
+                  https://api.pluvian.ai/api/v1/projects/YOUR_PROJECT_ID/api-calls
                 </code>
               </li>
               <li>
@@ -685,14 +780,26 @@ Content-Type: application/json
                 <code className="font-mono text-xs">Content-Type: application/json</code>
               </li>
               <li>
-                Body (JSON): <code className="font-mono text-xs">project_id</code>,{" "}
+                Body (JSON): same shape as in the ingest box above —{" "}
                 <code className="font-mono text-xs">agent_name</code> (e.g. &quot;mcp_agent&quot;),{" "}
                 <code className="font-mono text-xs">request_data</code>,{" "}
                 <code className="font-mono text-xs">response_data</code>,{" "}
-                <code className="font-mono text-xs">latency_ms</code> (optional, 0 if you don&apos;t
-                have it), <code className="font-mono text-xs">status_code</code> = 200.
+                <code className="font-mono text-xs">latency_ms</code> (use{" "}
+                <code className="font-mono text-xs">0</code> if unknown),{" "}
+                <code className="font-mono text-xs">status_code</code> (e.g.{" "}
+                <code className="font-mono text-xs">200</code>). Optional{" "}
+                <code className="font-mono text-xs">project_id</code> in the body must match the URL
+                if you include it.
               </li>
-              <li>After one LLM call, check Live View — the run should appear.</li>
+              <li>
+                If the host is Python or Node, following the <strong className="text-slate-200">Python</strong>{" "}
+                or <strong className="text-slate-200">Node.js</strong> SDK steps above is usually
+                easier than raw HTTP.
+              </li>
+              <li>
+                After one LLM call, expect <strong className="text-emerald-400">202</strong> and check
+                Live View — the run should appear.
+              </li>
             </ol>
           </section>
 
@@ -713,10 +820,12 @@ Content-Type: application/json
               </li>
               <li>
                 If you prefer not to use the SDK, after each LLM call in LangChain send the same
-                request/response to PluvianAI with a POST to{" "}
-                <code className="font-mono text-xs">https://api.pluvian.ai/api/v1/api-calls</code>{" "}
-                and the same JSON body as in the MCP section (project_id, agent_name, request_data,
-                response_data, latency_ms, status_code).
+                request/response with a POST to{" "}
+                <code className="font-mono text-xs break-all">
+                  https://api.pluvian.ai/api/v1/projects/YOUR_PROJECT_ID/api-calls
+                </code>{" "}
+                and the same JSON body as in the ingest section above (agent_name, request_data,
+                response_data, latency_ms, status_code; optional project_id matching the URL).
               </li>
             </ol>
           </section>
@@ -735,9 +844,10 @@ Content-Type: application/json
               </li>
               <li>
                 Send a POST request to:{" "}
-                <code className="px-1.5 py-0.5 rounded bg-black/40 text-slate-300 font-mono text-xs">
-                  https://api.pluvian.ai/api/v1/api-calls
-                </code>
+                <code className="px-1.5 py-0.5 rounded bg-black/40 text-slate-300 font-mono text-xs break-all">
+                  https://api.pluvian.ai/api/v1/projects/123/api-calls
+                </code>{" "}
+                (replace <code className="font-mono text-xs">123</code> with your project ID).
               </li>
               <li>
                 Headers:{" "}
@@ -748,13 +858,14 @@ Content-Type: application/json
                 Body (JSON):
                 <br />
                 <pre className="mt-2 p-4 rounded-lg bg-black/50 border border-white/5 text-xs text-slate-300 overflow-x-auto">{`{
-  "project_id": 123,
   "agent_name": "my_agent",
   "request_data": { "messages": [...], "model": "gpt-4o" },
   "response_data": { "choices": [...] },
   "latency_ms": 150,
   "status_code": 200
 }`}</pre>
+                You can add <code className="font-mono text-xs">&quot;project_id&quot;: 123</code> if
+                you prefer; it must match the ID in the URL.
               </li>
               <li>
                 If you get <strong className="text-emerald-400">202 Accepted</strong>, the run will
@@ -762,6 +873,30 @@ Content-Type: application/json
               </li>
             </ol>
           </section>
+
+          <div className="rounded-2xl border border-slate-500/30 bg-slate-500/5 p-6 max-w-4xl">
+            <h4 className="text-sm font-black uppercase tracking-wider text-slate-200 mb-3">
+              Troubleshooting (manual HTTP)
+            </h4>
+            <ul className="text-sm text-slate-300 space-y-2 list-disc list-inside">
+              <li>
+                <strong className="text-slate-200">404:</strong> URL missing the project ID in the
+                path — use{" "}
+                <code className="font-mono text-xs">/api/v1/projects/YOUR_PROJECT_ID/api-calls</code>
+                .
+              </li>
+              <li>
+                <strong className="text-slate-200">403:</strong> API key missing the{" "}
+                <code className="font-mono text-xs">ingest</code> scope (or{" "}
+                <code className="font-mono text-xs">*</code>).
+              </li>
+              <li>
+                <strong className="text-slate-200">400:</strong>{" "}
+                <code className="font-mono text-xs">project_id</code> in the JSON does not match the
+                project ID in the URL.
+              </li>
+            </ul>
+          </div>
         </div>
       ),
     },
