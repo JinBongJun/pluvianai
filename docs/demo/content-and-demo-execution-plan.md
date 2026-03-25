@@ -1,7 +1,7 @@
 # 콘텐츠 및 간이 데모 실행 계획
 
 **목적**: 주 고객층의 실제 문제를 우리 제품으로 해결하는 사례를 정리하고, 재현 가능한 간이 프로젝트와 스크린샷 기반 콘텐츠로 홍보하는 실행 계획을 정의한다.  
-**관련 문서**: [mvp-content-playbook-pain-driven-toys.md](../mvp-content-playbook-pain-driven-toys.md), [BUSINESS_PLAN.md](../BUSINESS_PLAN.md), [PRD_AGENT_BEHAVIOR_VALIDATION.md](../PRD_AGENT_BEHAVIOR_VALIDATION.md)
+**관련 문서**: [BUSINESS_PLAN.md](../BUSINESS_PLAN.md), [PRD_AGENT_BEHAVIOR_VALIDATION.md](../PRD_AGENT_BEHAVIOR_VALIDATION.md)
 
 ---
 
@@ -25,7 +25,7 @@
 
 ## 2. 주 고객층에서 생기는 문제 → 우리 해결 가능 여부
 
-조사 및 [mvp-content-playbook-pain-driven-toys.md](../mvp-content-playbook-pain-driven-toys.md) 기반 정리.
+BUSINESS_PLAN·PRD 및 시장 가설 기반 정리.
 
 ### 2.1 Indie / 소규모 팀
 
@@ -135,7 +135,7 @@
 ## 6. 문서·한계 정리
 
 - **Release Gate 한계**: 재생 시 **텍스트 입력만** 동일하게 넣음. 이미지 등 멀티모달 입력은 현재 재생되지 않음. 콘텐츠/데모는 "텍스트 기반 시나리오" 위주로 구성.
-- **기존 플레이북**: 세부 스토리·템플릿·콘텐츠 제목은 [mvp-content-playbook-pain-driven-toys.md](../mvp-content-playbook-pain-driven-toys.md)와 동기화하여 사용.
+- **콘텐츠 각목**: 이 문서의 타임라인·체크리스트와 BUSINESS_PLAN을 기준으로 유지한다.
 
 ---
 
