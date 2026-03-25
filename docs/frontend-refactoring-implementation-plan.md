@@ -76,14 +76,14 @@ flowchart TD
 | ID | 작업 | 크기 | 완료 정의 (DoD) |
 |----|------|------|-----------------|
 | **0.1** | 사용자 **핵심 플로우 5개**를 이 문서 부록 A에 경로로 기술 | S | 리뷰어가 URL만 보고 재현 가능 |
-| **0.2** | **429·폴링 상수 인벤토리** 표 작성 (파일 경로, 상수명, 대략적 주기) | S | 표가 `docs/` 또는 코드 주석에 링크 |
-| **0.3** | Live View·RG에 쓰이는 **SWR 키 패턴** 목록 (문자열 또는 `queryKeys`) | M | 신규 훅 분리 시 참조 가능 |
+| **0.2** | **429·폴링 상수 인벤토리** 표 작성 (파일 경로, 상수명, 대략적 주기) | S | [`live-view-rg-polling-inventory.md`](./live-view-rg-polling-inventory.md) |
+| **0.3** | Live View·RG에 쓰이는 **SWR 키 패턴** 목록 (문자열 또는 `queryKeys`) | M | 동일 문서 §2–3 |
 | **0.4** | (선택) 위 플로우 중 1개 **Playwright 스모크** | M | CI 또는 `npm run e2e` 문서화 |
 
 ### 4.2 산출물
 
 - 부록 A 갱신
-- (선택) `docs/live-view-rg-polling-inventory.md` — Phase 0.2 전용 짧은 문서로 분리 가능
+- [`live-view-rg-polling-inventory.md`](./live-view-rg-polling-inventory.md) — Phase 0.2·0.3 (폴링 상수 + SWR 키)
 
 ---
 
@@ -95,7 +95,7 @@ flowchart TD
 
 | ID | 작업 | 크기 | DoD |
 |----|------|------|-----|
-| **1A.1** | `LIVE_VIEW_*` 상수를 `liveViewPolling.constants.ts`(또는 동일 역할 파일)로 이동, `page`는 import | S | 동일 숫자·주석 유지 |
+| **1A.1** | `LIVE_VIEW_*` 상수를 `liveViewPolling.constants.ts`(또는 동일 역할 파일)로 이동, `page`는 import | S | ✅ `live-view/liveViewPolling.constants.ts` |
 | **1A.2** | SWR 인스턴스별 **`dedupingInterval` / `revalidateOnFocus`** 를 상수 파일 또는 훅 옵션 객체로 모음 | M | grep으로 `useSWR` 옵션 중복 감소 |
 | **1A.3** | 첫 번째 데이터 훅 **`useLiveViewCoreData`** (예: 프로젝트·노드·에이전트 중 2~3개만) 추출 | L | `page.tsx` 줄 수 ≥150 감소 목표 |
 | **1A.4** | **SSE → mutate** 디바운스 로직을 `useLiveViewSseMutate.ts` 등으로 이동 | M | 타이머 상수 한 곳 |
@@ -226,13 +226,13 @@ flowchart TD
 
 ```
 Phase 0
-[ ] 0.1 플로우 5
-[ ] 0.2 폴링·429 표
-[ ] 0.3 SWR 키 목록
+[x] 0.1 플로우 5 (부록 A)
+[x] 0.2 폴링·429 표 (`docs/live-view-rg-polling-inventory.md`)
+[x] 0.3 SWR 키 목록 (동일 문서)
 [ ] 0.4 E2E (선택)
 
 Phase 1A
-[ ] 1A.1 상수 파일
+[x] 1A.1 상수 파일
 [ ] 1A.2 SWR 옵션 모음
 [ ] 1A.3 첫 데이터 훅
 [ ] 1A.4 SSE mutate 훅
@@ -278,15 +278,15 @@ Phase 4–5
 
 ---
 
-## 부록 A — 핵심 사용자 플로우 (템플릿)
+## 부록 A — 핵심 사용자 플로우
 
-*Phase 0.1에서 채움.*
+*Phase 0.1 — 재현 시 로그인된 계정·해당 org/project 권한 필요.*
 
-1. **로그인:** `/login` → 성공 → `/organizations`
-2. **회원가입:** `/login?mode=signup` → …
-3. **프로젝트 진입:** `/organizations/{orgId}/projects/{projectId}` → 리다이렉트 확인
-4. **Live View:** … (노드 선택, 패널 열기)
-5. **Release Gate run:** … (baseline 선택 → run → 결과)
+1. **로그인:** `/login` → 이메일/비밀번호 → 성공 시 `/organizations` (또는 이전 redirect).
+2. **회원가입:** `/login?mode=signup` → 계정 생성 → 조직/프로젝트 온보딩 흐름(제품 설정에 따름) → `/organizations`.
+3. **프로젝트 진입:** `/organizations/{orgId}/projects`에서 프로젝트 카드 선택 → `/organizations/{orgId}/projects/{projectId}` (대시보드/요약).
+4. **Live View:** `/organizations/{orgId}/projects/{projectId}/live-view` → 캔버스에서 에이전트(노드) 클릭 → 우측 패널(로그/평가/데이터/설정) 탭 전환, SSE·폴링으로 목록 갱신.
+5. **Release Gate:** `/organizations/{orgId}/projects/{projectId}/release-gate` → (옵션) URL `?agent_id=` 또는 맵에서 노드 선택 → Live Logs 또는 Saved Data로 baseline 선택 → 설정(모델/도구/오버라이드) → Validate 실행 → PASS/FAIL·히스토리·attempt 상세.
 
 ---
 
