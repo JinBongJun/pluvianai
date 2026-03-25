@@ -713,6 +713,8 @@ function LiveViewContent() {
   const didActuallyDragRef = useRef(false);
   const [dragEndCounter, setDragEndCounter] = useState(0);
   const prevAgentIdsRef = useRef<Set<string>>(new Set());
+  /** Clears agent-id memory when switching projects so fitView / history logic stays per-project. */
+  const agentsSyncProjectIdRef = useRef<number | null>(null);
 
   // Helper to commit current nodes position to history
   const commitHistory = (newNodes: Node[]) => {
@@ -852,6 +854,11 @@ function LiveViewContent() {
   useEffect(() => {
     if (typeof agentsData === "undefined") return;
 
+    if (agentsSyncProjectIdRef.current !== projectId) {
+      agentsSyncProjectIdRef.current = projectId;
+      prevAgentIdsRef.current = new Set();
+    }
+
     if (agentsList.length === 0) {
       prevAgentIdsRef.current = new Set();
       setHistory([]);
@@ -875,6 +882,8 @@ function LiveViewContent() {
     const hasNewAgents =
       prevAgentIds.size > 0 &&
       Array.from(currentAgentIds).some(id => !prevAgentIds.has(id));
+    const firstAgentPopulation =
+      prevAgentIds.size === 0 && currentAgentIds.size > 0;
     prevAgentIdsRef.current = currentAgentIds;
 
     setNodes(currentNodes => {
@@ -914,11 +923,15 @@ function LiveViewContent() {
       return updatedNodes;
     });
 
-    // Auto-fit when new agents appear, but don't interrupt focused investigations or dragging.
-    if (hasNewAgents && !isDraggingRef.current && !selectedAgentId) {
+    // Auto-fit when agents first load (empty→non-empty) or new nodes appear; avoid fighting the user while dragging or inspecting a selection.
+    if (
+      (hasNewAgents || firstAgentPopulation) &&
+      !isDraggingRef.current &&
+      !selectedAgentId
+    ) {
       setTimeout(() => fitView({ duration: 600, padding: 0.2 }), 50);
     }
-  }, [agentsData, agentsList, selectedAgentId, projectId]);
+  }, [agentsData, agentsList, selectedAgentId, projectId, fitView]);
 
   // Reset node selected/blur state after drag ends or selection changes
   useEffect(() => {
