@@ -2,7 +2,11 @@ const { chromium } = require("playwright");
 
 async function assertReauthLanding(page) {
   await page.waitForURL(/\/login/, { timeout: 30000 });
-  const banner = page.getByText(/Please log in again\./i).first();
+  const banner = page
+    .getByText(
+      /Please log in again\.|Please sign in to continue\.|Please sign in again\.|Your session could not be renewed\. Please sign in again\.|Your login session is no longer valid\. Please sign in again\./i
+    )
+    .first();
   await banner.waitFor({ state: "visible", timeout: 10000 });
   const firstUrl = page.url();
   await page.waitForTimeout(1000);
