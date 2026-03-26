@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import type { EditableTool, ReplayProvider } from "./releaseGatePageContent.lib";
+import type { ReleaseGateModelSource } from "./releaseGateReplayConstants";
 import {
   asPayloadObject,
   extractOverridesFromPayload,
@@ -36,7 +37,7 @@ export type UseReleaseGateBaselineHydrationParams = {
   baselineTools: EditableTool[];
   runDataModel: string;
   runDataProvider: ReplayProvider | null;
-  modelOverrideEnabled: boolean;
+  modelSource: ReleaseGateModelSource;
   setToolsList: Dispatch<SetStateAction<EditableTool[]>>;
   setRequestBody: Dispatch<SetStateAction<Record<string, unknown>>>;
   setNewModel: Dispatch<SetStateAction<string>>;
@@ -69,7 +70,7 @@ export function useReleaseGateBaselineHydration(p: UseReleaseGateBaselineHydrati
     baselineTools,
     runDataModel,
     runDataProvider,
-    modelOverrideEnabled,
+    modelSource,
     setToolsList,
     setRequestBody,
     setNewModel,
@@ -103,7 +104,7 @@ export function useReleaseGateBaselineHydration(p: UseReleaseGateBaselineHydrati
 
     if (selectionKey !== overridesHydratedKey) {
       setRequestBody(releaseGateCoreRequestBodyFromBaseline(baselinePayload));
-      if (!modelOverrideEnabled) {
+      if (modelSource === "detected") {
         setNewModel(runDataModel);
         const inferredProvider = runDataProvider || inferProviderFromModelId(runDataModel);
         if (inferredProvider) {
@@ -160,7 +161,7 @@ export function useReleaseGateBaselineHydration(p: UseReleaseGateBaselineHydrati
     baselineTools,
     runDataModel,
     runDataProvider,
-    modelOverrideEnabled,
+    modelSource,
     toolsHydratedKey,
     overridesHydratedKey,
     setToolsList,

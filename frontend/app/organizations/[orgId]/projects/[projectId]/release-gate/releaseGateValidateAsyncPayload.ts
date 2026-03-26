@@ -6,11 +6,13 @@ import {
   type EditableTool,
   type ReplayProvider,
 } from "./releaseGatePageContent.lib";
-import type { ReleaseGateReplayModelMode } from "./releaseGateReplayConstants";
+import type { ReleaseGateModelSource, ReleaseGateReplayModelMode } from "./releaseGateReplayConstants";
 import { sanitizeReplayBodyOverrides } from "./releaseGateReplayMerge";
 
 /** Fields required to build the POST body for `releaseGateAPI.validateAsync`. */
 export type ReleaseGateValidateAsyncPayloadInput = {
+  modelSource?: ReleaseGateModelSource;
+  /** Compatibility field while migrating callers to `modelSource`. */
   modelOverrideEnabled: boolean;
   newModel: string;
   replayProvider: ReplayProvider;
@@ -62,14 +64,20 @@ export function buildReleaseGateValidateAsyncPayload(
     payload.dataset_ids = input.runDatasetIds;
   }
 
-  if (input.modelOverrideEnabled) {
+  const effectiveModelSource: ReleaseGateModelSource =
+    input.modelSource ??
+    (input.modelOverrideEnabled
+      ? ((input.replayModelMode ??
+          (isHostedPlatformModel(input.replayProvider, input.newModel.trim()) ? "hosted" : "custom")) as
+          | ReleaseGateReplayModelMode
+          | "detected")
+      : "detected");
+
+  if (effectiveModelSource !== "detected") {
     const trimmedModel = input.newModel.trim();
     payload.new_model = trimmedModel;
     payload.replay_provider = input.replayProvider;
-    const inferredMode: ReleaseGateReplayModelMode =
-      input.replayModelMode ??
-      (isHostedPlatformModel(input.replayProvider, trimmedModel) ? "hosted" : "custom");
-    if (inferredMode === "hosted") {
+    if (effectiveModelSource === "hosted") {
       if (!isHostedPlatformModel(input.replayProvider, trimmedModel)) {
         return {
           ok: false,

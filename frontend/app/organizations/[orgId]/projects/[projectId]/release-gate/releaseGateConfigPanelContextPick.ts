@@ -28,6 +28,8 @@ export function pickReleaseGateConfigPanelContext(
     setFlakyRateMax: ctx.setFlakyRateMax,
     newModel: ctx.newModel,
     setNewModel: ctx.setNewModel,
+    modelSource: ctx.modelSource,
+    setModelSource: ctx.setModelSource,
     modelOverrideEnabled: ctx.modelOverrideEnabled,
     setModelOverrideEnabled: ctx.setModelOverrideEnabled,
     replayModelMode: ctx.replayModelMode,

@@ -1,5 +1,5 @@
 """
-HTTP ingest demo for AgentGuard / PluvianAI.
+HTTP ingest demo for PluvianAI.
 
 Run:
   pip install -r requirements.txt

@@ -7,6 +7,7 @@ import {
 
 function base(): ReleaseGateValidateAsyncPayloadInput {
   return {
+    modelSource: "detected",
     modelOverrideEnabled: false,
     newModel: "",
     replayProvider: "openai",
@@ -74,6 +75,7 @@ describe("buildReleaseGateValidateAsyncPayload", () => {
   it("uses platform model_source for hosted quick-pick ids", () => {
     const r = buildReleaseGateValidateAsyncPayload({
       ...base(),
+      modelSource: "hosted",
       modelOverrideEnabled: true,
       newModel: "  claude-haiku-4-5-20251001  ",
       replayProvider: "anthropic",
@@ -88,10 +90,10 @@ describe("buildReleaseGateValidateAsyncPayload", () => {
   it("uses detected model_source for custom (non-hosted) ids", () => {
     const r = buildReleaseGateValidateAsyncPayload({
       ...base(),
+      modelSource: "custom",
       modelOverrideEnabled: true,
       newModel: "gpt-4o",
       replayProvider: "openai",
-      replayModelMode: "custom",
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -102,8 +104,8 @@ describe("buildReleaseGateValidateAsyncPayload", () => {
   it("uses detected for BYOK even when model id matches hosted list (explicit custom mode)", () => {
     const r = buildReleaseGateValidateAsyncPayload({
       ...base(),
+      modelSource: "custom",
       modelOverrideEnabled: true,
-      replayModelMode: "custom",
       newModel: "gpt-4o-mini",
       replayProvider: "openai",
       replayUserApiKeyId: 9,
@@ -117,8 +119,8 @@ describe("buildReleaseGateValidateAsyncPayload", () => {
   it("returns error when hosted mode but model is not a hosted quick-pick", () => {
     const r = buildReleaseGateValidateAsyncPayload({
       ...base(),
+      modelSource: "hosted",
       modelOverrideEnabled: true,
-      replayModelMode: "hosted",
       newModel: "gpt-4o",
       replayProvider: "openai",
     });
@@ -130,8 +132,8 @@ describe("buildReleaseGateValidateAsyncPayload", () => {
   it("includes replay_user_api_key_id for detected custom runs when selected", () => {
     const r = buildReleaseGateValidateAsyncPayload({
       ...base(),
+      modelSource: "custom",
       modelOverrideEnabled: true,
-      replayModelMode: "custom",
       newModel: "gpt-4o",
       replayProvider: "openai",
       replayUserApiKeyId: 42,
