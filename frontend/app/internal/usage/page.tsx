@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { internalUsageAPI } from "@/lib/api";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { logger } from "@/lib/logger";
 
 type ProjectUsageItem = {
   project_id: number | null;
@@ -52,7 +53,7 @@ export default function InternalUsagePage() {
         )) as ProjectUsageResponse;
         setData(result);
       } catch (err: any) {
-        console.error("Failed to load platform replay credit usage:", err);
+        logger.error("Failed to load platform replay credit usage", err);
         setError(
           err?.response?.data?.detail ||
             err?.message ||

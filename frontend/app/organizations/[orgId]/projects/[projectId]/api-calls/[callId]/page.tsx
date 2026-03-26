@@ -13,6 +13,7 @@ import { toFixedSafe } from "@/lib/format";
 import { useToast } from "@/components/ToastContainer";
 import { ArrowLeft, ArrowRight, Clock, DollarSign, CheckCircle, AlertCircle } from "lucide-react";
 import { clsx } from "clsx";
+import { logger } from "@/lib/logger";
 
 export default function APICallDetailPage() {
   const router = useRouter();
@@ -66,7 +67,7 @@ export default function APICallDetailPage() {
         // Quality score not available, ignore
       }
     } catch (error: any) {
-      console.error("Failed to load API call:", error);
+      logger.error("Failed to load API call detail", error);
       toast.showToast(error.response?.data?.detail || "Failed to load API call", "error");
       if (error.response?.status === 401) {
         router.push("/login");

@@ -2,6 +2,7 @@
  * Utility function to redirect from old dashboard paths to new org-based paths
  */
 import { projectsAPI } from "@/lib/api";
+import { logger } from "@/lib/logger";
 
 export async function redirectProjectPath(
   projectId: number,
@@ -19,13 +20,7 @@ export async function redirectProjectPath(
       router.push("/organizations");
     }
   } catch (error) {
-    if (process.env.NODE_ENV === "development") {
-      console.error("Failed to redirect project path:", error);
-    } else {
-      import("@sentry/nextjs").then(Sentry => {
-        Sentry.captureException(error as Error, { extra: { projectId, subPath } });
-      });
-    }
+    logger.error("Failed to redirect project path", error, { projectId, subPath });
     router.push("/organizations");
   }
 }

@@ -18,6 +18,7 @@ import ExportButton from "@/components/export/ExportButton";
 import PulseIndicator from "@/components/streaming/PulseIndicator";
 import LiveStreamView from "@/components/streaming/LiveStreamView";
 import { clsx } from "clsx";
+import { logger } from "@/lib/logger";
 import ProjectTabs from "@/components/ProjectTabs";
 import useSWR from "swr";
 
@@ -152,7 +153,7 @@ export default function APICallsListPage() {
       setApiCalls(paginatedResults);
       setTotalItems(filtered.length); // Total filtered count for pagination
     } catch (error: any) {
-      console.error("Failed to load API calls:", error);
+      logger.error("Failed to load API calls", error);
       const errMsg =
         error.response?.data?.error?.message ??
         error.response?.data?.detail ??

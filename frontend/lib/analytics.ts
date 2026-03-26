@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 const SENSITIVE_KEY_PATTERN =
   /(email|token|secret|password|authorization|cookie|api[_-]?key|refresh_token|access_token)/i;
 const EMAIL_VALUE_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -78,7 +80,7 @@ export const analytics = {
       .then(({ default: posthog }) => {
         posthog.capture(event, sanitized);
       })
-      .catch(error => console.error("Error sending analytics event:", error));
+      .catch(error => logger.error("Error sending analytics event", error));
   },
 
   trackError(event: string, context?: Record<string, any>) {

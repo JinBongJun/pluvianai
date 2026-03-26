@@ -10,7 +10,12 @@ import {
   formSuccessResponse,
   formErrorResponse,
 } from "@/lib/action-types";
-import { getLoginErrorMessage, getRegisterErrorMessage } from "@/lib/auth-messages";
+import {
+  getLoginErrorMessage,
+  getRegisterErrorMessage,
+  type AuthErrorSource,
+} from "@/lib/auth-messages";
+import { logger } from "@/lib/logger";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const DEFAULT_ACCESS_TOKEN_MAX_AGE_SEC = 60 * 30;
@@ -127,16 +132,10 @@ export async function loginAction(
     formBody.append("username", parsed.data.email);
     formBody.append("password", parsed.data.password);
 
-    console.log("🔵 [loginAction] Sending request to:", `${API_URL}/api/v1/auth/login`);
-    console.log("🔵 [loginAction] Email:", parsed.data.email);
-
     const response = await fetch(`${API_URL}/api/v1/auth/login`, {
       method: "POST",
       body: formBody,
     });
-
-    console.log("🔵 [loginAction] Response status:", response.status);
-    console.log("🔵 [loginAction] Response ok:", response.ok);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -147,8 +146,6 @@ export async function loginAction(
 
     const data = await response.json();
     const { access_token, refresh_token } = data;
-
-    console.log("✅ [loginAction] Login successful, setting cookies");
 
     // Decode JWT token and extract user info
     let userInfo = null;
@@ -171,23 +168,26 @@ export async function loginAction(
         full_name: payload.full_name || parsed.data.email.split("@")[0], // Use token value when present, fallback to email prefix
       };
     } catch (error) {
-      console.error("🔴 [loginAction] Failed to decode token:", error);
+      logger.error("Failed to decode access token after login", error);
     }
 
     setAuthCookies(access_token, refresh_token);
 
-    console.log("✅ [loginAction] Authentication cookies set");
     return formSuccessResponse({
       access_token,
       refresh_token,
       user_info: userInfo,
     });
-  } catch (error: any) {
-    console.error("🔴 [loginAction] Error:", error);
+  } catch (error: unknown) {
+    logger.error("loginAction failed", error);
+    const e = error as {
+      response?: { status?: number; data?: { detail?: AuthErrorSource["detail"] } };
+      message?: string;
+    };
     const msg = getLoginErrorMessage({
-      status: error?.response?.status,
-      detail: error?.response?.data?.detail,
-      message: error?.message,
+      status: e.response?.status,
+      detail: e.response?.data?.detail,
+      message: e.message,
     });
     return formErrorResponse(msg);
   }
@@ -256,7 +256,9 @@ export async function registerAction(
 
     if (!loginResponse.ok) {
       // Registration succeeded, so return success even if auto-login fails
-      console.error("[registerAction] Auto-login failed");
+      logger.error("registerAction: auto-login failed after successful registration", undefined, {
+        status: loginResponse.status,
+      });
       return formSuccessResponse({ user_id: userData.id });
     }
 
@@ -268,12 +270,16 @@ export async function registerAction(
 
     // Include tokens in return payload (for client-side localStorage usage)
     return formSuccessResponse({ user_id: userData.id, authenticated: true });
-  } catch (error: any) {
-    console.error("[registerAction] Error:", error);
+  } catch (error: unknown) {
+    logger.error("registerAction failed", error);
+    const e = error as {
+      response?: { status?: number; data?: { detail?: AuthErrorSource["detail"] } };
+      message?: string;
+    };
     const msg = getRegisterErrorMessage({
-      status: error?.response?.status,
-      detail: error?.response?.data?.detail,
-      message: error?.message,
+      status: e.response?.status,
+      detail: e.response?.data?.detail,
+      message: e.message,
     });
     return formErrorResponse(msg);
   }
@@ -293,16 +299,12 @@ export async function logoutAction(): Promise<void> {
  */
 export async function getCurrentUser() {
   const token = cookies().get("access_token")?.value;
-  console.log("🔵 [getCurrentUser] Token exists:", !!token);
-  console.log("🔵 [getCurrentUser] Token length:", token?.length || 0);
 
   if (!token) {
-    console.log("🔴 [getCurrentUser] No token found in cookies");
     return null;
   }
 
   try {
-    console.log("🔵 [getCurrentUser] Calling API:", `${API_URL}/api/v1/auth/me`);
     const response = await fetch(`${API_URL}/api/v1/auth/me`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -310,19 +312,14 @@ export async function getCurrentUser() {
       cache: "no-store", // Always fetch fresh user info
     });
 
-    console.log("🔵 [getCurrentUser] Response status:", response.status);
-    console.log("🔵 [getCurrentUser] Response ok:", response.ok);
-
     if (!response.ok) {
-      console.log("🔴 [getCurrentUser] Response not ok, returning null");
       return null;
     }
 
     const user = await response.json();
-    console.log("✅ [getCurrentUser] User retrieved:", user.email);
     return user;
   } catch (error) {
-    console.error("🔴 [getCurrentUser] Error:", error);
+    logger.error("getCurrentUser failed", error);
     return null;
   }
 }

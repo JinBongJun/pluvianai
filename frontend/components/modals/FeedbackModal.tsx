@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, MessageSquare, Send, Image as ImageIcon } from "lucide-react";
 import apiClient from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
+import { logger } from "@/lib/logger";
 
 interface FeedbackModalProps {
   isOpen: boolean;
@@ -68,7 +69,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
       showToast("Feedback sent. Thank you for helping us improve PluvianAI.", "success");
       onClose();
     } catch (err) {
-      console.error("Failed to submit feedback", err);
+      logger.error("Failed to submit feedback", err);
       showToast("Failed to send feedback. Please try again.", "error");
     } finally {
       setIsSubmitting(false);

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { logger } from "@/lib/logger";
 
 function isLikelyBrowserDomGlitch(message: string): boolean {
   const m = message.toLowerCase();
@@ -24,7 +25,7 @@ export default function OrganizationDetailError({
   const showDomHint = isLikelyBrowserDomGlitch(msg);
 
   useEffect(() => {
-    console.error("[Organizations org route]:", error);
+    logger.error("Organization detail route error", error, { digest: error.digest });
   }, [error]);
 
   return (
