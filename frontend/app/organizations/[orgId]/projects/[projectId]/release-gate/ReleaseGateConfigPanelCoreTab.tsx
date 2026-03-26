@@ -229,9 +229,23 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
             value={activeProviderTab}
             onChange={e => {
               const p = e.target.value as ReplayProvider;
+              const prevProvider = replayProvider;
+              const trimmed = newModel.trim();
+              // Must enable override so useReleaseGateConfigPanelCoreTabModel's sync effect
+              // does not reset activeProviderTab to runDataProvider while user is picking a provider.
+              setModelOverrideEnabled?.(true);
               setActiveProviderTab(p);
               setReplayProvider?.(p);
               setReplayUserApiKeyId?.(null);
+              // If the field held another provider's hosted quick-pick, align to this provider.
+              if (
+                trimmed &&
+                isHostedPlatformModel(prevProvider, trimmed) &&
+                !isHostedPlatformModel(p, trimmed)
+              ) {
+                const nextHosted = (REPLAY_PROVIDER_MODEL_LIBRARY?.[p] || [])[0];
+                setNewModel?.(nextHosted ?? "");
+              }
             }}
             className="w-full max-w-md rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50"
           >
