@@ -39,6 +39,7 @@ export function ReleaseGateExpandedView() {
           agents={m.agents}
           agentsLoaded={m.agentsLoaded}
           onSelectAgent={m.onMapSelectAgent}
+          projectId={m.projectId}
           projectName={m.projectName}
           selectedNodeId={m.agentId || null}
           rgDetails={m.rgDetails}

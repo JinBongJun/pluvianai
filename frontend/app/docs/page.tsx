@@ -161,9 +161,10 @@ export default function DocsPage() {
               <p className="text-sm text-slate-400 leading-relaxed">
                 Live View <strong className="text-slate-200">Evaluation</strong> runs configurable,
                 deterministic checks on each snapshot (empty/short output, latency, HTTP status,
-                JSON shape, refusal patterns, length drift, repetition, leakage, and whether
-                tool-use policy rules pass). You tune them per agent in the product UI; results show
-                in Snapshot Details alongside separate diagnostic scores stored on the payload.
+                JSON shape, refusal patterns, length drift, repetition, required keywords/fields,
+                format sections, PII leakage shield, and whether tool-use policy rules pass). You tune
+                them per agent in the product UI; results show in Snapshot Details alongside separate
+                diagnostic scores stored on the payload.
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 hover:bg-white/[0.04] transition-colors">
@@ -192,12 +193,20 @@ export default function DocsPage() {
                 </span>{" "}
                 for sample windows.
               </p>
-              <p className="text-xs text-slate-500 leading-relaxed mb-8 max-w-3xl border-l-2 border-emerald-500/30 pl-4">
+              <p className="text-xs text-slate-500 leading-relaxed mb-4 max-w-3xl border-l-2 border-emerald-500/30 pl-4">
                 Separately, the backend may attach additional{" "}
                 <strong className="text-slate-300">clinical-style diagnostic scores</strong> on the
                 stored payload (radar / taxonomy metrics). Those are not the same knobs as the
                 Evaluation matrix — think of Evaluation as the pass/fail checks you configure in
-                the UI for gating and triage.
+                the UI for gating and triage. Labels and presentation may evolve between releases.
+              </p>
+              <p className="text-xs text-slate-500 leading-relaxed mb-8 max-w-3xl">
+                The matrix below lists all <strong className="text-slate-300">eleven</strong>{" "}
+                evaluation dimensions in the product schema.{" "}
+                <strong className="text-slate-300">Live Logs sample window</strong> (how many recent
+                logs to aggregate) is configured separately via{" "}
+                <code className="font-mono text-[10px]">window.limit</code> — it is not a twelfth
+                check type.
               </p>
 
               <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -205,12 +214,12 @@ export default function DocsPage() {
                   {
                     title: "Empty / Short Answers",
                     desc: "Flags outputs below a minimum character count.",
-                    value: "min_chars threshold",
+                    value: "min_chars",
                   },
                   {
                     title: "Latency Spikes",
-                    desc: "Fails slow snapshots when latency exceeds your limit (e.g. warn vs fail ms).",
-                    value: "fail_ms (and tiers in UI)",
+                    desc: "In Evaluation settings, a single latency threshold (fail at or above this many ms). Snapshot Details may show extra tiers for display.",
+                    value: "fail_ms",
                   },
                   {
                     title: "HTTP Error Codes",
@@ -238,14 +247,24 @@ export default function DocsPage() {
                     value: "max line repeats",
                   },
                   {
-                    title: "Leakage (PII / secrets)",
-                    desc: "Optional heuristic pass for sensitive patterns in the visible output.",
+                    title: "Required Keywords / Fields",
+                    desc: "Optional. Fails if required keywords or JSON fields are missing from the output (off by default).",
+                    value: "keywords_csv / json_fields_csv",
+                  },
+                  {
+                    title: "Format Contract",
+                    desc: "Optional. Enforces required sections in the assistant text (off by default).",
+                    value: "sections_csv",
+                  },
+                  {
+                    title: "PII Leakage Shield",
+                    desc: "Optional heuristic pass for sensitive patterns in the visible output (off by default).",
                     value: "on/off",
                   },
                   {
                     title: "Tool Use Policy",
                     desc: "Runs your behavior rules (allowlist, forbidden, order, args) against the trace.",
-                    value: "ties to Policy tab",
+                    value: "Policy tab + behavior rules",
                     span: true,
                   },
                 ].map((item, i) => (
@@ -264,6 +283,12 @@ export default function DocsPage() {
                   </div>
                 ))}
               </div>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-3xl mt-4">
+                <strong className="text-slate-300">Release Gate</strong> run views may surface
+                additional signals (for example <span className="font-mono text-slate-400">tool_grounding</span>{" "}
+                / “Tool Result Grounding”) that are computed during compare/replay — they are not
+                extra rows in the Live View Evaluation matrix above.
+              </p>
             </div>
           </div>
 
@@ -274,10 +299,11 @@ export default function DocsPage() {
             <p className="text-sm text-slate-400 leading-relaxed">
               Policy is for{" "}
               <span className="text-white font-semibold">
-                deterministic, enforceable constraints
+                deterministic, enforceable constraints on tool trajectories
               </span>
-              . Unlike Evaluation (soft checks), Policy answers: “Did this run violate a hard
-              rule?”.
+              (allowlist, forbidden, order, argument shape). Evaluation covers output-quality checks
+              (length, JSON, refusal, etc.); both can produce pass/fail on a snapshot, but Policy is
+              the place for <span className="text-slate-200">tool-use contracts</span>.
             </p>
             <div className="grid md:grid-cols-2 gap-4">
               <div className="rounded-xl border border-white/10 bg-black/20 p-4">
@@ -307,7 +333,16 @@ export default function DocsPage() {
                 </p>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/20 p-4 md:col-span-2">
-                <h5 className="text-sm font-black text-white">3) What is a “Tool”?</h5>
+                <h5 className="text-sm font-black text-white">3) Canvas scope (advanced)</h5>
+                <p className="mt-2 text-xs text-slate-400">
+                  Rules may use <span className="font-mono text-slate-300">scope_type: canvas</span>{" "}
+                  when run metadata includes a canvas context (forward-compatible with canvas-scoped
+                  validation). Most teams start with <span className="font-mono text-slate-300">project</span>{" "}
+                  and <span className="font-mono text-slate-300">agent</span> only.
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-4 md:col-span-2">
+                <h5 className="text-sm font-black text-white">4) What is a “Tool”?</h5>
                 <p className="mt-2 text-xs text-slate-400">
                   In PluvianAI, a tool is a{" "}
                   <span className="text-white font-semibold">named action</span> the agent requests
@@ -359,7 +394,11 @@ export default function DocsPage() {
               <p className="text-xs text-slate-500 leading-relaxed">
                 Create these from{" "}
                 <span className="text-slate-300 font-semibold">Live View → agent → Policy tab</span>{" "}
-                or via API. Agent overrides are additive on top of project defaults.
+                or via API. Agent overrides are additive on top of project defaults. For{" "}
+                <span className="font-mono text-slate-300">scope_type: agent</span>,{" "}
+                <span className="font-mono text-slate-300">scope_ref</span> must match that
+                node&apos;s <span className="font-mono text-slate-300">agent_id</span> string in Live
+                View (often the 16-character signature hash, not only a human-readable name).
               </p>
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="rounded-lg border border-white/10 bg-black/30 p-3">
@@ -419,10 +458,10 @@ export default function DocsPage() {
                     POST …/api/v1/projects/{"{"}id{"}"}/api-calls
                   </code>{" "}
                   with a <strong className="text-slate-200">project API key</strong> that has the{" "}
-                  <code className="font-mono text-xs">ingest</code> scope. Expect{" "}
-                  <strong className="text-emerald-400">202 Accepted</strong> when the payload is
-                  queued. Full field list is in{" "}
-                  <span className="text-slate-200">Integrations by tool</span>.
+                  <code className="font-mono text-xs">ingest</code> scope. The ingest endpoint returns{" "}
+                  <strong className="text-emerald-400">202 Accepted</strong> to acknowledge the
+                  payload for processing (async queue or worker). Treat any 2xx as success. Full
+                  field list is in <span className="text-slate-200">Integrations by tool</span>.
                 </p>
                 <p>
                   <strong className="text-slate-200">Dashboard / simulation API:</strong>{" "}
@@ -1251,6 +1290,12 @@ Content-Type: application/json
                 </tbody>
               </table>
             </div>
+            <p className="text-xs text-slate-500 leading-relaxed max-w-3xl">
+              Exact numeric caps (snapshots per month, rate limits, seat limits) depend on your plan
+              and can change — use <strong className="text-slate-300">Settings</strong> and{" "}
+              <strong className="text-slate-300">Billing</strong> in the product as the source of
+              truth.
+            </p>
           </section>
 
           <section className="space-y-4">
@@ -1472,14 +1517,15 @@ Content-Type: application/json
     },
     "logic-guard": {
       id: "logic-guard",
-      title: "Logic Guard",
+      title: "Policy (tool rules)",
       icon: <Shield className="w-12 h-12 text-cyan-400 mb-6" />,
       content: (
         <div className="space-y-8">
           <p className="text-xl text-slate-400 leading-relaxed max-w-4xl">
-            Define rule-based policies on tool usage and trace structure. Logic Guard evaluates
-            forbidden tools, allowlists, ordering, and argument schemas so you can enforce strict
-            rules in Release Gate and CI.
+            In the product UI this is the <strong className="text-slate-200">Policy</strong> tab on
+            an agent in Live View (older docs may say “Logic Guard”). Define rule-based policies on
+            tool usage and trace structure: forbidden tools, allowlists, ordering, and argument
+            schemas — enforced in Release Gate, Live Logs, and CI-style gates.
           </p>
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-6 max-w-4xl">
             <h4 className="text-base font-black uppercase tracking-[0.2em] text-slate-300">
@@ -1554,7 +1600,7 @@ Content-Type: application/json
     {
       category: "Core Lab",
       links: [
-        { id: "logic-guard", label: "Logic Guard" },
+        { id: "logic-guard", label: "Policy" },
         { id: "security-scans", label: "Security Scans" },
         { id: "trace-history", label: "Trace History" },
       ],
