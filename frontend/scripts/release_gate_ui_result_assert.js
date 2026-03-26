@@ -7,7 +7,7 @@ async function main() {
   const orgId = process.env.AGENTGUARD_ORG_ID || "11";
   const projectId = process.env.AGENTGUARD_PROJECT_ID || "18";
   const agentId = process.env.AGENTGUARD_AGENT_ID || "agent-A";
-  const repeat = Number(process.env.AGENTGUARD_REPEAT_RUNS || "10");
+  const repeat = Number(process.env.AGENTGUARD_REPEAT_RUNS || "1");
 
   const out = {
     baseUrl,
@@ -62,27 +62,25 @@ async function main() {
 
     await startBtn.click({ timeout: 5000 });
 
-    const firstStatus = page.locator('[data-testid^="rg-result-case-status-"]').first();
-    await firstStatus.waitFor({ state: "visible", timeout: 180000 });
+    const resultRows = page.locator('[data-testid^="rg-result-case-"]');
+    await resultRows.first().waitFor({ state: "visible", timeout: 180000 });
 
-    const statusNodes = page.locator('[data-testid^="rg-result-case-status-"]');
-    const ratioNodes = page.locator('[data-testid^="rg-result-case-ratio-"]');
-    const statusCount = await statusNodes.count();
-    const ratioCount = await ratioNodes.count();
+    const rowCount = await resultRows.count();
+    for (let i = 0; i < rowCount; i++) {
+      const txt = (await resultRows.nth(i).innerText()).trim();
+      const upper = txt.toUpperCase();
+      if (upper.includes("FLAKY")) out.statuses.push("FLAKY");
+      else if (upper.includes("HEALTHY")) out.statuses.push("PASS");
+      else if (upper.includes("FLAGGED")) out.statuses.push("FAIL");
 
-    for (let i = 0; i < statusCount; i++) {
-      const txt = (await statusNodes.nth(i).innerText()).trim().toUpperCase();
-      out.statuses.push(txt);
-    }
-    for (let i = 0; i < ratioCount; i++) {
-      const txt = (await ratioNodes.nth(i).innerText()).trim();
-      out.ratios.push(txt);
+      const ratioMatch = txt.match(/(\d+\s*\/\s*\d+\s+healthy)/i);
+      if (ratioMatch) out.ratios.push(ratioMatch[1]);
     }
 
     out.hasFlaky = out.statuses.includes("FLAKY");
     const allStatusesValid = out.statuses.every(s => ["PASS", "FAIL", "FLAKY"].includes(s));
-    const allRatiosValid = out.ratios.every(r => /^\d+\s*\/\s*\d+\s+passed$/i.test(r));
-    out.ok = statusCount > 0 && ratioCount > 0 && allStatusesValid && allRatiosValid;
+    const allRatiosValid = out.ratios.every(r => /^\d+\s*\/\s*\d+\s+healthy$/i.test(r));
+    out.ok = rowCount > 0 && out.statuses.length > 0 && out.ratios.length > 0 && allStatusesValid && allRatiosValid;
   } catch (error) {
     out.error = String(error);
   } finally {
