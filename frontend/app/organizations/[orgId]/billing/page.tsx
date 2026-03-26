@@ -68,9 +68,27 @@ export default function BillingPage() {
   // Org-scoped usage view – limits come from account-level plan;
   // we only need light defaults here for visualization.
   const usageLimits = {
-    free: { calls: 10000, projects: 1, platformReplayCredits: 50, teamMembers: 3 },
-    pro: { calls: 100000, projects: 10, platformReplayCredits: 10000, teamMembers: 5 },
-    enterprise: { calls: -1, projects: -1, platformReplayCredits: -1, teamMembers: -1 },
+    free: {
+      calls: 10000,
+      snapshots: 10_000,
+      projects: 2,
+      platformReplayCredits: 60,
+      teamMembers: 3,
+    },
+    pro: {
+      calls: 100000,
+      snapshots: 30_000,
+      projects: 10,
+      platformReplayCredits: 800,
+      teamMembers: 5,
+    },
+    enterprise: {
+      calls: -1,
+      snapshots: -1,
+      projects: -1,
+      platformReplayCredits: -1,
+      teamMembers: -1,
+    },
   };
 
   const limitData = usageLimits[currentPlanId as keyof typeof usageLimits] || usageLimits.free;
@@ -87,7 +105,7 @@ export default function BillingPage() {
     limitData.platformReplayCredits;
   const snapshotsUsed = effectiveUsage?.usage_this_month?.snapshots ?? 0;
   const snapshotsLimit =
-    (effectiveUsage?.limits?.snapshots_per_month as number | undefined) ?? limitData.calls;
+    (effectiveUsage?.limits?.snapshots_per_month as number | undefined) ?? limitData.snapshots;
 
   const callsPercent = limitData.calls > 0 ? Math.min(100, (callsUsed / limitData.calls) * 100) : 0;
   const projectsPercent =
@@ -105,11 +123,10 @@ export default function BillingPage() {
       period: "/month",
       desc: "For teams getting started with Live View and Release Gate during the MVP.",
       features: [
-        "1 active project",
+        "1 organization",
+        "2 active projects",
         "10,000 snapshots per month",
-        "50 Release Gate runs per month",
-        "Use your own provider keys anytime",
-        "30-day trace retention",
+        "60 hosted replay credits per month",
       ],
       current: currentPlanId === "free",
     },
@@ -118,12 +135,12 @@ export default function BillingPage() {
       name: "Pro",
       price: "$49",
       period: "/month",
-      desc: "For teams that need higher hosted replay budgets, more retention, and team access.",
+      desc: "For teams that need higher hosted replay budgets and multi-project scale.",
       features: [
+        "5 organizations",
         "10 active projects",
-        "10,000 platform replay credits per month",
-        "30-day trace retention",
-        "Priority support",
+        "30,000 snapshots per month",
+        "800 hosted replay credits per month",
       ],
       current: false,
     },
@@ -171,6 +188,11 @@ export default function BillingPage() {
             <p className="text-slate-400 font-bold uppercase tracking-widest text-sm max-w-2xl leading-relaxed">
               View usage for this organization&apos;s projects. For account-wide quotas and billing, use the Account Usage and Billing pages.
             </p>
+          <p className="text-slate-500 text-xs font-semibold uppercase tracking-widest mt-4 max-w-2xl leading-relaxed">
+            All plans include 30-day trace retention.
+            <br />
+            BYOK runs do not consume hosted replay credits.
+          </p>
         </div>
 
         {/* Telemetry Runway (Usage Summary) */}
