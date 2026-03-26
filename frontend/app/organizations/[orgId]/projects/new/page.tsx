@@ -3,6 +3,7 @@
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
+import { useSWRConfig } from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { projectsAPI, organizationsAPI } from "@/lib/api";
@@ -11,11 +12,13 @@ import { analytics } from "@/lib/analytics";
 import { useToast } from "@/components/ToastContainer";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { PlanLimitBanner } from "@/components/PlanLimitBanner";
+import { revalidateOrganizationProjectLists } from "@/lib/orgProjectMutations";
 
 type UsageMode = "full" | "test_only";
 
 export default function NewProjectPage() {
   const router = useRouter();
+  const { mutate } = useSWRConfig();
   const { orgId } = useOrgProjectParams();
   const toast = useToast();
   const [name, setName] = useState("");
@@ -56,6 +59,7 @@ export default function NewProjectPage() {
       });
 
       toast.showToast("Project created successfully", "success");
+      await revalidateOrganizationProjectLists(mutate, orgId);
       router.push(`/organizations/${orgId}/projects/${project.id}`);
     } catch (err: any) {
       const parsed = parsePlanLimitError(err);
