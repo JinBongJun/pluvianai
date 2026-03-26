@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { logger } from "@/lib/logger";
+
 import { mergeReleaseGateConfigPanelModel } from "./releaseGateConfigPanelModelMerge";
 
 describe("mergeReleaseGateConfigPanelModel", () => {
@@ -10,7 +12,7 @@ describe("mergeReleaseGateConfigPanelModel", () => {
 
   it("warns in development when two layers share a key", () => {
     vi.stubEnv("NODE_ENV", "development");
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
     mergeReleaseGateConfigPanelModel({
       c: { a: 1, shared: "from-c" } as any,
