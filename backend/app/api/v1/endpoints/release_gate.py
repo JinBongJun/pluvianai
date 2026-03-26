@@ -52,6 +52,7 @@ from app.models.behavior_rule import BehaviorRule
 from app.models.release_gate_job import ReleaseGateJob
 from app.models.snapshot import Snapshot
 from app.models.user import User
+from app.models.user_api_key import UserApiKey
 from app.models.validation_dataset import ValidationDataset
 from app.services.data_lifecycle_service import DataLifecycleService
 from app.domain.live_view_release_gate import build_agent_visibility_context, is_agent_hidden
@@ -72,26 +73,37 @@ from app.utils.tool_events import normalize_tool_events
 
 router = APIRouter()
 SUPPORTED_REPLAY_PROVIDERS = {"openai", "anthropic", "google"}
+# Hosted (platform) quick-pick models only — cost-controlled. Premium / Pro models use Custom + BYOK.
 CORE_REPLAY_MODELS: Dict[str, List[str]] = {
-    # Keep this intentionally small and stable; users can still pass custom model ids.
     "openai": [
         "gpt-4o-mini",
-        "gpt-4o",
-        "gpt-4.1",
         "gpt-4.1-mini",
     ],
     "anthropic": [
-        "claude-sonnet-4-5-20250929",
         "claude-haiku-4-5-20251001",
-        "claude-sonnet-4-20250514",
     ],
     "google": [
-        # Prefer current stable Gemini 2.5 ids for Release Gate defaults.
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
-        "gemini-2.5-pro",
     ],
 }
+
+
+def _hosted_platform_model_allowed(provider: Optional[str], model_id: Any) -> bool:
+    p = _normalize_provider(provider)
+    if not p:
+        return False
+    mid = str(model_id or "").strip()
+    if not mid:
+        return False
+    allowed = CORE_REPLAY_MODELS.get(p) or []
+    return mid in allowed
+
+
+def _hosted_platform_policy_bypass(current_user: Optional[User]) -> bool:
+    if current_user and bool(getattr(current_user, "is_superuser", False)):
+        return True
+    return bool(getattr(app_settings, "RELEASE_GATE_ALLOW_CUSTOM_MODELS", False))
 
 
 class ReleaseGateCancelled(Exception):
@@ -960,6 +972,13 @@ class ReleaseGateValidateRequest(BaseModel):
             "When omitted, server-side provider key is used."
         ),
     )
+    replay_user_api_key_id: Optional[int] = Field(
+        None,
+        description=(
+            "Optional saved project User API key id (Settings > API Keys). "
+            "When set in detected/BYOK mode, this key is used for replay instead of the default lookup."
+        ),
+    )
     new_system_prompt: Optional[str] = Field(None, description="Replay system prompt override")
     replay_temperature: Optional[float] = Field(None, description="Replay request temperature override")
     replay_max_tokens: Optional[int] = Field(None, description="Replay request max_tokens override")
@@ -1438,6 +1457,32 @@ def _assert_provider_matches_model(replay_provider: Any, model: Any) -> None:
     )
 
 
+def _early_platform_hosted_model_check(payload: ReleaseGateValidateRequest, current_user: User) -> None:
+    """Fail fast for validate-async when platform mode uses a model not on the hosted allowlist."""
+    if str(getattr(payload, "model_source", None) or "") != "platform":
+        return
+    explicit = _normalize_provider(payload.replay_provider)
+    if not explicit and payload.new_model:
+        explicit = _infer_provider_from_model(payload.new_model)
+    if not explicit or not str(payload.new_model or "").strip():
+        return
+    if _hosted_platform_policy_bypass(current_user):
+        return
+    if not _hosted_platform_model_allowed(explicit, payload.new_model):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error_code": "HOSTED_MODEL_NOT_ALLOWED",
+                "message": (
+                    "This model is not available for hosted (platform) runs. "
+                    "Pick a hosted quick-pick model or use Custom model ID with your saved API key (BYOK)."
+                ),
+                "provider": explicit,
+                "model_id": str(payload.new_model or "").strip(),
+            },
+        )
+
+
 def _resolve_snapshot_provider(snapshot: Snapshot) -> Optional[str]:
     provider = _normalize_provider(getattr(snapshot, "provider", None))
     if provider:
@@ -1691,6 +1736,26 @@ async def _run_release_gate(
             detail="Platform model mode requires replay_provider or provider-inferrable new_model.",
         )
 
+    if (
+        use_platform_model
+        and explicit_provider
+        and str(payload.new_model or "").strip()
+        and not _hosted_platform_policy_bypass(current_user)
+        and not _hosted_platform_model_allowed(explicit_provider, payload.new_model)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error_code": "HOSTED_MODEL_NOT_ALLOWED",
+                "message": (
+                    "This model is not available for hosted (platform) runs. "
+                    "Pick a hosted quick-pick model or use Custom model ID with your saved API key (BYOK)."
+                ),
+                "provider": explicit_provider,
+                "model_id": str(payload.new_model or "").strip(),
+            },
+        )
+
     # Enforce pinned-only model ids for Anthropic in production (Option A),
     # with escape hatch for superusers or RELEASE_GATE_ALLOW_CUSTOM_MODELS=true.
     if (
@@ -1736,8 +1801,50 @@ async def _run_release_gate(
             },
         )
 
+    replay_user_api_key_override: Optional[str] = None
     if not use_platform_model:
         key_service = UserApiKeyService(db)
+        rid = getattr(payload, "replay_user_api_key_id", None)
+        if rid is not None:
+            row = (
+                db.query(UserApiKey)
+                .filter(
+                    UserApiKey.id == int(rid),
+                    UserApiKey.project_id == project_id,
+                    UserApiKey.is_active.is_(True),
+                )
+                .first()
+            )
+            if not row:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "error_code": "invalid_replay_user_api_key_id",
+                        "message": "Saved API key not found for this project.",
+                    },
+                )
+            row_provider = str(row.provider or "").strip().lower()
+            if explicit_provider and row_provider != explicit_provider:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail={
+                        "error_code": "replay_user_api_key_provider_mismatch",
+                        "message": "Selected saved API key does not match replay_provider.",
+                        "expected_provider": explicit_provider,
+                        "key_provider": row_provider,
+                    },
+                )
+            try:
+                replay_user_api_key_override = key_service.decrypt_key(row.encrypted_key)
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "error_code": "invalid_replay_user_api_key_id",
+                        "message": "Could not use saved API key.",
+                    },
+                ) from None
+
         key_presence_cache: Dict[Tuple[str, Optional[str]], bool] = {}
 
         def _env_key_available(provider: str) -> bool:
@@ -1763,9 +1870,12 @@ async def _run_release_gate(
 
         missing_provider_keys_set: Set[str] = set()
         if explicit_provider:
-            for snapshot in snapshots:
-                if not _has_effective_provider_key(explicit_provider, getattr(snapshot, "agent_id", None)):
-                    missing_provider_keys_set.add(explicit_provider)
+            if replay_user_api_key_override:
+                pass
+            else:
+                for snapshot in snapshots:
+                    if not _has_effective_provider_key(explicit_provider, getattr(snapshot, "agent_id", None)):
+                        missing_provider_keys_set.add(explicit_provider)
         else:
             for snapshot in snapshots:
                 resolved_provider = _resolve_snapshot_provider(snapshot)
@@ -1867,7 +1977,7 @@ async def _run_release_gate(
                 ),
                 tool_context=tool_context_payload,
                 replay_provider=payload.replay_provider,
-                api_key=None,
+                api_key=replay_user_api_key_override if not use_platform_model else None,
                 rubric=None,
                 project_id=project_id,
                 db=db,
@@ -2994,6 +3104,7 @@ async def validate_release_gate_async(
             detail="agent_id is required when use_recent_snapshots is True",
         )
     _enforce_platform_replay_credit_limit(payload, db, current_user)
+    _early_platform_hosted_model_check(payload, current_user)
 
     user_id = int(getattr(current_user, "id"))
     active_job = _get_active_release_gate_job(db, project_id=project_id, user_id=user_id)

@@ -60,6 +60,7 @@ export function createDefaultValidateRunDeps(): ReleaseGateValidateRunDeps {
     toolContextGlobalText: "",
     toolContextBySnapshotId: {},
     repeatRuns: 1,
+    replayUserApiKeyId: null,
   };
 }
 

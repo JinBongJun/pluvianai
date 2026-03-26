@@ -7,6 +7,7 @@ import { projectUserApiKeysAPI } from "@/lib/api";
 import {
   describeMissingProviderKeys,
   inferProviderFromModelId,
+  isHostedPlatformModel,
   normalizeReplayProvider,
   type ReplayProvider,
 } from "./releaseGatePageContent.lib";
@@ -25,7 +26,9 @@ export type UseReleaseGateProjectApiKeysParams = {
   runLocked: boolean;
   canValidate: boolean;
   modelOverrideEnabled: boolean;
+  newModel: string;
   replayProvider: ReplayProvider;
+  replayUserApiKeyId: number | null;
   baselineSnapshotsForRun: Record<string, unknown>[];
   runDataProvider: ReplayProvider | null;
   agentId: string;
@@ -37,7 +40,9 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
     runLocked,
     canValidate,
     modelOverrideEnabled,
+    newModel,
     replayProvider,
+    replayUserApiKeyId,
     baselineSnapshotsForRun,
     runDataProvider,
     agentId,
@@ -89,7 +94,11 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
   );
 
   const requiredProviderResolution = useMemo(() => {
-    if (modelOverrideEnabled && replayProvider) {
+    if (
+      modelOverrideEnabled &&
+      replayProvider &&
+      isHostedPlatformModel(replayProvider, newModel)
+    ) {
       return {
         providers: [replayProvider],
         unresolvedSnapshotCount: 0,
@@ -112,10 +121,21 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
       providers: Array.from(providers),
       unresolvedSnapshotCount,
     };
-  }, [modelOverrideEnabled, replayProvider, baselineSnapshotsForRun, runDataProvider]);
+  }, [modelOverrideEnabled, replayProvider, newModel, baselineSnapshotsForRun, runDataProvider]);
 
   const missingProviderKeys = useMemo(() => {
-    if (modelOverrideEnabled) return [];
+    if (modelOverrideEnabled && isHostedPlatformModel(replayProvider, newModel)) return [];
+    if (modelOverrideEnabled && newModel.trim() && replayUserApiKeyId != null) return [];
+    if (
+      modelOverrideEnabled &&
+      newModel.trim() &&
+      !isHostedPlatformModel(replayProvider, newModel)
+    ) {
+      if (!hasEffectiveProviderKey(replayProvider, agentId.trim() || null)) {
+        return [replayProvider];
+      }
+      return [];
+    }
     const missing = new Set<ReplayProvider>();
     for (const snapshot of baselineSnapshotsForRun) {
       const provider =
@@ -136,6 +156,9 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
     return Array.from(missing);
   }, [
     modelOverrideEnabled,
+    newModel,
+    replayUserApiKeyId,
+    replayProvider,
     baselineSnapshotsForRun,
     requiredProviderResolution.providers.length,
     runDataProvider,
@@ -145,7 +168,7 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
 
   const keyRegistrationMessage = useMemo(() => {
     if (!canValidate) return "";
-    if (modelOverrideEnabled) return "";
+    if (modelOverrideEnabled && isHostedPlatformModel(replayProvider, newModel)) return "";
     if (projectUserApiKeysLoading) return "Checking required API keys...";
     if (requiredProviderResolution.providers.length === 0) {
       return "Run blocked: provider could not be detected from selected data. Open Live View and verify the latest agent snapshot.";
@@ -160,6 +183,8 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
   }, [
     canValidate,
     modelOverrideEnabled,
+    newModel,
+    replayProvider,
     projectUserApiKeysLoading,
     requiredProviderResolution.providers.length,
     requiredProviderResolution.unresolvedSnapshotCount,
@@ -168,14 +193,20 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
 
   const keyBlocked =
     canValidate &&
-    !modelOverrideEnabled &&
     (projectUserApiKeysLoading ||
       requiredProviderResolution.providers.length === 0 ||
       requiredProviderResolution.unresolvedSnapshotCount > 0 ||
       missingProviderKeys.length > 0);
 
+  const projectUserApiKeysForUi = useMemo((): ProjectUserApiKeyItem[] => {
+    return Array.isArray(projectUserApiKeysData)
+      ? (projectUserApiKeysData as ProjectUserApiKeyItem[])
+      : [];
+  }, [projectUserApiKeysData]);
+
   return {
     keyBlocked,
     keyRegistrationMessage,
+    projectUserApiKeysForUi,
   };
 }

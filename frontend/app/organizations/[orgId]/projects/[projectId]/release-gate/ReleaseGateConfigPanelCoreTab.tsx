@@ -5,6 +5,7 @@ import clsx from "clsx";
 import { RefreshCcw } from "lucide-react";
 
 import type { ReplayProvider } from "./releaseGatePageContent.lib";
+import { isHostedPlatformModel } from "./releaseGateReplayConstants";
 import { formatProviderLabel } from "./releaseGateConfigPanelHelpers";
 import type { ReleaseGateConfigThresholdPreset } from "./releaseGateConfigPanelTypes";
 import type { ReleaseGateConfigPanelCoreTabProps } from "./releaseGateConfigPanelModel.types";
@@ -26,6 +27,9 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
     setNewModel,
     replayProvider,
     setReplayProvider,
+    replayUserApiKeyId,
+    setReplayUserApiKeyId,
+    projectUserApiKeysForUi,
     setModelOverrideEnabled,
     REPLAY_PROVIDER_MODEL_LIBRARY,
     activeProviderTab,
@@ -54,7 +58,9 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
     <>
       {modelOverrideEnabled && (
         <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/10 px-5 py-4 text-sm text-fuchsia-200 font-medium">
-          Platform-provided model mode is active. Personal provider key is not required for this run.
+          {isHostedPlatformModel(replayProvider, newModel)
+            ? "Hosted quick-pick model: platform inference is used. Personal API key is not required."
+            : "Custom model (BYOK): your saved or project API key for the selected provider will be used for this run."}
         </div>
       )}
 
@@ -214,27 +220,32 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
           </div>
         </div>
 
-        <div className="flex w-fit rounded-xl border border-white/10 bg-[#0a0c10] p-1 mb-4">
-          {(Object.keys(REPLAY_PROVIDER_MODEL_LIBRARY || {}) as ReplayProvider[]).map(provider => {
-            const isActive = activeProviderTab === provider;
-            return (
-              <button
-                key={provider}
-                type="button"
-                onClick={() => setActiveProviderTab(provider)}
-                className={clsx(
-                  "rounded-lg px-5 py-2 text-xs font-semibold transition-all duration-200",
-                  isActive
-                    ? "bg-white/10 text-white shadow-sm"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.02]"
-                )}
-              >
+        <label className="block mb-4">
+          <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2 block">
+            Provider
+          </span>
+          <select
+            disabled={editsLocked}
+            value={activeProviderTab}
+            onChange={e => {
+              const p = e.target.value as ReplayProvider;
+              setActiveProviderTab(p);
+              setReplayProvider?.(p);
+              setReplayUserApiKeyId?.(null);
+            }}
+            className="w-full max-w-md rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50"
+          >
+            {(Object.keys(REPLAY_PROVIDER_MODEL_LIBRARY || {}) as ReplayProvider[]).map(provider => (
+              <option key={provider} value={provider}>
                 {formatProviderLabel(provider)}
-              </button>
-            );
-          })}
-        </div>
+              </option>
+            ))}
+          </select>
+        </label>
 
+        <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-2">
+          Hosted quick picks
+        </div>
         <div className="grid grid-cols-2 gap-3 mb-5">
           {(REPLAY_PROVIDER_MODEL_LIBRARY?.[activeProviderTab] || []).map(modelId => (
             <button
@@ -245,6 +256,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                 if (editsLocked) return;
                 setReplayProvider?.(activeProviderTab);
                 setNewModel?.(modelId);
+                setReplayUserApiKeyId?.(null);
                 setModelOverrideEnabled?.(true);
               }}
               className={clsx(
@@ -263,9 +275,46 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
           <div className="mb-2.5 flex items-center justify-between">
             <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 block">
               Custom model ID{" "}
-              <span className="text-slate-500 font-normal lowercase tracking-normal ml-1">(Advanced)</span>
+              <span className="text-slate-500 font-normal lowercase tracking-normal ml-1">(BYOK)</span>
             </div>
           </div>
+          <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+            Custom models require BYOK. Supported providers: OpenAI, Anthropic, Google. Premium models (e.g. GPT-4o,
+            Claude Sonnet, Gemini Pro) are not available as hosted quick picks — enter the model id here and select a
+            saved key or register a project default key.
+          </p>
+          {!isHostedPlatformModel(replayProvider, newModel) && modelOverrideEnabled && newModel.trim() ? (
+            <label className="block mb-3">
+              <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2 block">
+                Saved API key (optional)
+              </span>
+              <select
+                disabled={editsLocked}
+                value={replayUserApiKeyId ?? ""}
+                onChange={e => {
+                  const v = e.target.value;
+                  setReplayUserApiKeyId?.(v === "" ? null : Number(v));
+                }}
+                className="w-full max-w-md rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-2.5 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50"
+              >
+                <option value="">Use project default key lookup</option>
+                {(projectUserApiKeysForUi || [])
+                  .filter(
+                    k =>
+                      k.is_active &&
+                      String(k.provider || "")
+                        .trim()
+                        .toLowerCase() === replayProvider
+                  )
+                  .map(k => (
+                    <option key={k.id} value={k.id}>
+                      {(k.name || `${k.provider} key`).trim()}
+                      {k.agent_id ? ` · node ${k.agent_id}` : " · project default"}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          ) : null}
           <input
             value={newModel}
             disabled={editsLocked}
@@ -275,7 +324,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
               setNewModel?.(e.target.value);
               setModelOverrideEnabled?.(true);
             }}
-            placeholder="e.g. gpt-4-0613"
+            placeholder="e.g. gpt-4o, claude-sonnet-4-20250514"
             className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 font-mono outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
           />
           {showCustomModelWarning && (
@@ -307,6 +356,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                 setModelOverrideEnabled?.(false);
                 setNewModel?.(runDataModel || "");
                 setReplayProvider?.(runDataProvider);
+                setReplayUserApiKeyId?.(null);
               }}
               className="text-xs font-semibold text-slate-300 hover:text-white px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-all"
             >

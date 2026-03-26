@@ -127,6 +127,8 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     setNewModel,
     replayProvider,
     setReplayProvider,
+    replayUserApiKeyId,
+    setReplayUserApiKeyId,
     modelOverrideEnabled,
     setModelOverrideEnabled,
     setModelProviderTab,
@@ -394,12 +396,14 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     ((dataSource === "recent" && runSnapshotIds.length > 0) ||
       (dataSource === "datasets" && runDatasetIds.length > 0));
 
-  const { keyBlocked, keyRegistrationMessage } = useReleaseGateProjectApiKeys({
+  const { keyBlocked, keyRegistrationMessage, projectUserApiKeysForUi } = useReleaseGateProjectApiKeys({
     projectId,
     runLocked,
     canValidate,
     modelOverrideEnabled,
+    newModel,
     replayProvider,
+    replayUserApiKeyId,
     baselineSnapshotsForRun,
     runDataProvider,
     agentId,
@@ -428,6 +432,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     modelOverrideEnabled,
     newModel,
     replayProvider,
+    replayUserApiKeyId,
     failRateMax,
     flakyRateMax,
     agentId,
@@ -658,6 +663,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       historyItems,
       historyTotal,
       mutateHistory,
+      projectUserApiKeysForUi,
     }),
     [
       lv,
@@ -731,6 +737,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       historyItems,
       historyTotal,
       mutateHistory,
+      projectUserApiKeysForUi,
     ]
   );
 
