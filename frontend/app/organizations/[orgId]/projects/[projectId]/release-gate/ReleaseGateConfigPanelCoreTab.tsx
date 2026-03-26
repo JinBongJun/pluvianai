@@ -52,6 +52,11 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
     setRequestJsonDraft,
     handleRequestJsonBlur,
     requestJsonError,
+    keyBlocked,
+    keyRegistrationMessage,
+    missingProviderKeyDetails,
+    replayApiKey,
+    setReplayApiKey,
   } = m;
 
   const detectedMode = modelSource === "detected";
@@ -63,6 +68,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
     setModelSource?.(next);
     if (next === "detected") {
       setReplayUserApiKeyId?.(null);
+      setReplayApiKey?.("");
       setNewModel?.(runDataModel || "");
       setReplayProvider?.(runDataProvider);
       setActiveProviderTab?.(runDataProvider);
@@ -72,6 +78,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
     setReplayProvider?.(nextProvider);
     setActiveProviderTab?.(nextProvider);
     setReplayUserApiKeyId?.(null);
+    setReplayApiKey?.("");
     if (next === "hosted") {
       const firstHosted = (REPLAY_PROVIDER_MODEL_LIBRARY?.[nextProvider] || [])[0];
       if (firstHosted) setNewModel?.(firstHosted);
@@ -80,6 +87,18 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
     if (!customMode) setNewModel?.("");
   };
 
+  const keyStatusText =
+    keyRegistrationMessage ||
+    (detectedMode
+      ? "Select baseline logs to detect provider, model, and required API keys."
+      : "Paste an API key for this run, choose a saved key, or rely on a project default key.");
+  const keyStatusLabel = keyRegistrationMessage ? (keyBlocked ? "Blocked" : "Ready") : "Pending";
+  const keyStatusToneClasses = keyBlocked
+    ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
+    : keyRegistrationMessage
+      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
+      : "border-white/10 bg-[#0a0c10] text-slate-300";
+
   return (
     <>
       <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/10 px-5 py-4 text-sm text-fuchsia-200 font-medium">
@@ -87,7 +106,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
           ? "Detected: use the provider and model captured from the selected baseline logs."
           : hostedMode
             ? "Hosted: use PluvianAI hosted quick-pick models with included platform credits."
-            : "Custom (BYOK): choose a provider, enter a model id, and use a saved or project default API key."}
+            : "Custom (BYOK): choose a provider, enter a model id, and paste an API key, choose a saved key, or use a project default key."}
       </div>
 
       <div className="rounded-2xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/[0.08] to-transparent p-5">
@@ -302,6 +321,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                 setActiveProviderTab(p);
                 setReplayProvider?.(p);
                 setReplayUserApiKeyId?.(null);
+                setReplayApiKey?.("");
                 if (
                   hostedMode &&
                   trimmed &&
@@ -324,8 +344,48 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
         )}
 
         {detectedMode && (
-          <div className="rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-300">
-            Release Gate will use the provider and model detected from the selected baseline logs for this run.
+          <div className="space-y-3 rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-300">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                  Detected provider
+                </div>
+                <div className="mt-1 text-slate-100">{formatProviderLabel(runDataProvider)}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                  Detected model id
+                </div>
+                <div className="mt-1 font-mono text-slate-100">{runDataModel || "Not detected"}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                  API key status
+                </div>
+                <div
+                  className={clsx(
+                    "mt-1 font-medium",
+                    !keyRegistrationMessage
+                      ? "text-slate-300"
+                      : keyBlocked
+                        ? "text-rose-300"
+                        : "text-emerald-300"
+                  )}
+                >
+                  {keyStatusLabel}
+                </div>
+              </div>
+            </div>
+            <div className={clsx("rounded-xl border px-4 py-3 text-xs leading-relaxed", keyStatusToneClasses)}>
+              {keyStatusText}
+              {missingProviderKeyDetails.length > 0 ? (
+                <ul className="mt-2 list-disc pl-5">
+                  {missingProviderKeyDetails.map(detail => (
+                    <li key={detail}>{detail}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
           </div>
         )}
 
@@ -346,6 +406,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                     setReplayProvider?.(activeProviderTab);
                     setNewModel?.(modelId);
                     setReplayUserApiKeyId?.(null);
+                    setReplayApiKey?.("");
                   }}
                   className={clsx(
                     "rounded-xl border px-4 py-3.5 text-left text-[13px] font-mono transition-all duration-200",
@@ -371,9 +432,40 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
             </div>
             <p className="text-xs text-slate-500 mb-3 leading-relaxed">
               Custom models require BYOK. Supported providers: OpenAI, Anthropic, Google. Premium models (e.g. GPT-4o,
-              Claude Sonnet, Gemini Pro) are not available as hosted quick picks — enter the model id here and select a
-              saved key or register a project default key.
+              Claude Sonnet, Gemini Pro) are not available as hosted quick picks — enter the model id here and either
+              paste an API key, select a saved key, or register a project default key.
             </p>
+            <input
+              value={newModel}
+              disabled={editsLocked}
+              onChange={e => {
+                if (editsLocked) return;
+                setModelSource?.("custom");
+                setReplayProvider?.(activeProviderTab);
+                setNewModel?.(e.target.value);
+              }}
+              placeholder="e.g. gpt-4o, claude-sonnet-4-20250514"
+              className="mb-3 w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 font-mono outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
+            />
+            <label className="block mb-3">
+              <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2 block">
+                API key (for this run only)
+              </span>
+              <input
+                type="password"
+                autoComplete="off"
+                value={replayApiKey}
+                disabled={editsLocked}
+                onChange={e => {
+                  if (editsLocked) return;
+                  const v = e.target.value;
+                  setReplayApiKey?.(v);
+                  if (v.trim()) setReplayUserApiKeyId?.(null);
+                }}
+                placeholder="Paste provider API key"
+                className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
+              />
+            </label>
             <label className="block mb-3">
               <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2 block">
                 Saved API key (optional)
@@ -383,6 +475,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                 value={replayUserApiKeyId ?? ""}
                 onChange={e => {
                   const v = e.target.value;
+                  setReplayApiKey?.("");
                   setReplayUserApiKeyId?.(v === "" ? null : Number(v));
                 }}
                 className="w-full max-w-md rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-2.5 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50"
@@ -404,18 +497,16 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                   ))}
               </select>
             </label>
-            <input
-              value={newModel}
-              disabled={editsLocked}
-              onChange={e => {
-                if (editsLocked) return;
-                setModelSource?.("custom");
-                setReplayProvider?.(activeProviderTab);
-                setNewModel?.(e.target.value);
-              }}
-              placeholder="e.g. gpt-4o, claude-sonnet-4-20250514"
-              className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 font-mono outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
-            />
+            <div className={clsx("rounded-xl border px-4 py-3 text-xs leading-relaxed", keyStatusToneClasses)}>
+              {keyStatusText}
+              {missingProviderKeyDetails.length > 0 ? (
+                <ul className="mt-2 list-disc pl-5">
+                  {missingProviderKeyDetails.map(detail => (
+                    <li key={detail}>{detail}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
             {showCustomModelWarning && (
               <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-200/90 leading-relaxed">
                 For stable Release Gate results, prefer a pinned Anthropic model id ending in{" "}

@@ -62,6 +62,7 @@ export function createDefaultValidateRunDeps(): ReleaseGateValidateRunDeps {
     toolContextBySnapshotId: {},
     repeatRuns: 1,
     replayUserApiKeyId: null,
+    replayApiKey: "",
     replayModelMode: "hosted",
   };
 }

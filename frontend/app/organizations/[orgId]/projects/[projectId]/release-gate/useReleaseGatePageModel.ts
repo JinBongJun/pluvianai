@@ -42,7 +42,11 @@ import {
 
 export type ReleaseGatePageModel = {
   validateRunContextValue: ReleaseGateValidateRunContextValue;
-  releaseGateKeysContextValue: { keyBlocked: boolean; keyRegistrationMessage: string };
+  releaseGateKeysContextValue: {
+    keyBlocked: boolean;
+    keyRegistrationMessage: string;
+    missingProviderKeyDetails: string[];
+  };
   contextValue: ReleaseGatePageContextValue;
   gateBodyProps: ReleaseGateLayoutGateBodyProps;
   planError: PlanLimitError | null;
@@ -129,6 +133,8 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     setReplayProvider,
     replayUserApiKeyId,
     setReplayUserApiKeyId,
+    replayApiKey,
+    setReplayApiKey,
     modelSource,
     setModelProviderTab,
     requestBody,
@@ -397,18 +403,20 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     ((dataSource === "recent" && runSnapshotIds.length > 0) ||
       (dataSource === "datasets" && runDatasetIds.length > 0));
 
-  const { keyBlocked, keyRegistrationMessage, projectUserApiKeysForUi } = useReleaseGateProjectApiKeys({
-    projectId,
-    runLocked,
-    canValidate,
-    modelSource,
-    newModel,
-    replayProvider,
-    replayUserApiKeyId,
-    baselineSnapshotsForRun,
-    runDataProvider,
-    agentId,
-  });
+  const { keyBlocked, keyRegistrationMessage, missingProviderKeyDetails, projectUserApiKeysForUi } =
+    useReleaseGateProjectApiKeys({
+      projectId,
+      runLocked,
+      canValidate,
+      modelSource,
+      newModel,
+      replayProvider,
+      replayUserApiKeyId,
+      replayApiKey,
+      baselineSnapshotsForRun,
+      runDataProvider,
+      agentId,
+    });
 
   const modelSourceInvalid =
     (modelSource === "hosted" || modelSource === "custom") && !newModel.trim();
@@ -436,6 +444,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     newModel,
     replayProvider,
     replayUserApiKeyId,
+    replayApiKey,
     replayModelMode: modelSource === "hosted" ? "hosted" : "custom",
     failRateMax,
     flakyRateMax,
@@ -557,6 +566,8 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
         modelSource,
         newModel,
         replayProvider,
+        replayUserApiKeyId,
+        replayApiKey,
         requestBody,
         requestSystemPrompt,
         toolsList,
@@ -572,6 +583,8 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       modelSource,
       newModel,
       replayProvider,
+      replayUserApiKeyId,
+      replayApiKey,
       requestBody,
       requestSystemPrompt,
       toolsList,
@@ -762,6 +775,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       result,
       keyBlocked,
       keyRegistrationMessage,
+      missingProviderKeyDetails,
       showGateLoadingState,
       showGateAccessDeniedState,
       showGateApiErrorState,
