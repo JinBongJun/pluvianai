@@ -41,6 +41,7 @@ from app.core.dependencies import get_user_service, get_audit_service
 from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.models.user import User
 from app.models.login_attempt import LoginAttempt
+from app.models.organization import Organization
 from app.services.brute_force_protection import brute_force_service
 from app.services.risk_based_auth import risk_based_auth_service
 from app.services.password_policy import password_policy_service
@@ -614,6 +615,14 @@ async def get_my_usage(
         )
         .count()
     )
+    organizations_used = (
+        db.query(Organization)
+        .filter(
+            Organization.owner_id == current_user.id,
+            Organization.is_deleted.is_(False),
+        )
+        .count()
+    )
     return {
         "plan_type": plan_info.get("plan_type", "free"),
         "limits": limits,
@@ -623,6 +632,7 @@ async def get_my_usage(
             "platform_replay_credits": platform_replay_credits,
             "api_calls": api_calls_current,
             "projects_used": int(projects_used),
+            "organizations_used": int(organizations_used),
             "api_calls_limit": api_calls_limit,
         },
     }
