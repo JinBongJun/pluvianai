@@ -129,7 +129,7 @@ async def create_project(
                     "plan_type": plan_type,
                     "current": int(project_count),
                     "limit": project_limit,
-                    "upgrade_path": "/settings/subscription",
+                    "upgrade_path": "/settings/billing",
                 },
             },
         )

@@ -1419,7 +1419,7 @@ async def create_snapshot(
                 "code": "SNAPSHOT_PLAN_LIMIT_REACHED",
                 "message": err_msg or "You have reached the monthly snapshot limit for your plan.",
                 "details": {
-                    "upgrade_path": "/settings/subscription",
+                    "upgrade_path": "/settings/billing",
                 },
             },
         )

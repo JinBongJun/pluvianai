@@ -69,7 +69,8 @@ export function PlanLimitBanner({
       break;
   }
 
-  const target = upgradePath && upgradePath.startsWith("/") ? upgradePath : "/organizations";
+  const target =
+    upgradePath && upgradePath.startsWith("/") ? upgradePath : "/settings/billing";
 
   return (
     <div

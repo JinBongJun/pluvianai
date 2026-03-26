@@ -56,7 +56,7 @@ class UpgradeRequiredException(PluvianAIException):
         self.current_plan = current_plan
         self.required_plan = required_plan
         self.feature = feature
-        self.upgrade_url = upgrade_url or f"/settings/subscription?upgrade={required_plan}"
+        self.upgrade_url = upgrade_url or f"/settings/billing?upgrade={required_plan}"
         super().__init__(message, status_code=403)
 
 
