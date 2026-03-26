@@ -8,6 +8,7 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock
 from app.services.billing_service import BillingService, verify_paddle_webhook_signature
+from app.utils.idempotency import idempotency_service
 from app.models.user import User
 from app.models.subscription import Subscription
 from app.services.cache_service import cache_service
@@ -364,6 +365,36 @@ class TestBillingService:
             result = service.handle_paddle_webhook(raw, sig)
         assert result["status"] == "ignored"
         assert "not handled" in result["message"]
+
+    def test_handle_paddle_webhook_idempotent_duplicate(self, db, test_user):
+        secret = "whsec_paddle_test"
+        payload_obj = {
+            "event_id": "evt_123",
+            "event_type": "transaction.completed",
+            "data": {
+                "id": "txn_1",
+                "custom_data": {"user_id": str(test_user.id), "plan_type": "pro"},
+                "subscription_id": "sub_1",
+                "customer_id": "ctm_1",
+            },
+        }
+        raw = json.dumps(payload_obj).encode("utf-8")
+        sig = self._paddle_sig(raw, secret)
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_WEBHOOK_SECRET = secret
+            service = BillingService(db)
+            with patch("app.services.subscription_service.SubscriptionService") as mock_sub:
+                mock_sub.return_value.create_or_update_subscription = MagicMock()
+                with patch.object(idempotency_service, "get", side_effect=[None, {"status": "success"}]):
+                    with patch.object(idempotency_service, "set") as mock_set:
+                        first = service.handle_paddle_webhook(raw, sig)
+                        second = service.handle_paddle_webhook(raw, sig)
+
+        assert first["status"] == "success"
+        assert second["status"] == "duplicate"
+        assert mock_sub.return_value.create_or_update_subscription.call_count == 1
+        assert mock_set.called
 
     def test_handle_paddle_webhook_paddle_unavailable(self, db):
         with patch("app.services.billing_service.settings") as mock_settings:
