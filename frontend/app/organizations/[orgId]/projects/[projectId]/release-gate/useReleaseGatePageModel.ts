@@ -44,6 +44,7 @@ export type ReleaseGatePageModel = {
   validateRunContextValue: ReleaseGateValidateRunContextValue;
   releaseGateKeysContextValue: {
     keyBlocked: boolean;
+    keyIssueBlocked: boolean;
     keyRegistrationMessage: string;
     missingProviderKeyDetails: string[];
   };
@@ -403,8 +404,14 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     ((dataSource === "recent" && runSnapshotIds.length > 0) ||
       (dataSource === "datasets" && runDatasetIds.length > 0));
 
-  const { keyBlocked, keyRegistrationMessage, missingProviderKeyDetails, projectUserApiKeysForUi } =
-    useReleaseGateProjectApiKeys({
+  const {
+    keyBlocked,
+    keyIssueBlocked,
+    keyRegistrationMessage,
+    missingProviderKeyDetails,
+    projectUserApiKeysForUi,
+    mutateProjectUserApiKeys,
+  } = useReleaseGateProjectApiKeys({
       projectId,
       runLocked,
       canValidate,
@@ -681,6 +688,8 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       historyTotal,
       mutateHistory,
       projectUserApiKeysForUi,
+      canValidate,
+      mutateProjectUserApiKeys,
     }),
     [
       lv,
@@ -755,6 +764,8 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       historyTotal,
       mutateHistory,
       projectUserApiKeysForUi,
+      canValidate,
+      mutateProjectUserApiKeys,
     ]
   );
 
@@ -774,6 +785,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       error,
       result,
       keyBlocked,
+      keyIssueBlocked,
       keyRegistrationMessage,
       missingProviderKeyDetails,
       showGateLoadingState,

@@ -13,7 +13,12 @@ import {
 
 export type ReleaseGateProvidersProps = {
   readonly validateRun: ReleaseGateValidateRunContextValue;
-  readonly keys: { keyBlocked: boolean; keyRegistrationMessage: string; missingProviderKeyDetails: string[] };
+  readonly keys: {
+    keyBlocked: boolean;
+    keyIssueBlocked: boolean;
+    keyRegistrationMessage: string;
+    missingProviderKeyDetails: string[];
+  };
   readonly page: ReleaseGatePageContextValue;
   readonly layout: {
     orgId: string;

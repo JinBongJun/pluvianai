@@ -185,7 +185,10 @@ export interface ReleaseGatePageContextValue {
   repeatDropdownRef: RefObject<HTMLDivElement>;
   REPEAT_OPTIONS: readonly number[];
   isHeavyRepeat: boolean;
+  /** Agent + baseline/dataset selection satisfied for starting a validate run. */
+  canValidate: boolean;
   canRunValidate: boolean;
+  mutateProjectUserApiKeys: () => Promise<unknown>;
   expandedCaseIndex: number | null;
   setExpandedCaseIndex: (n: number | null) => void;
   selectedAttempt: { caseIndex: number; attemptIndex: number } | null;

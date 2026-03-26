@@ -54,7 +54,11 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
 
   const projectUserApiKeysKey =
     projectId && !isNaN(projectId) ? ["project-user-api-keys", projectId] : null;
-  const { data: projectUserApiKeysData, isLoading: projectUserApiKeysLoading } = useSWR(
+  const {
+    data: projectUserApiKeysData,
+    isLoading: projectUserApiKeysLoading,
+    mutate: mutateProjectUserApiKeys,
+  } = useSWR(
     projectUserApiKeysKey,
     () => projectUserApiKeysAPI.list(projectId),
     { isPaused: () => runLocked }
@@ -196,12 +200,11 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
   );
 
   const keyRegistrationMessage = useMemo(() => {
-    if (!canValidate) return "";
     if (
       modelSource === "hosted" &&
       isHostedPlatformModel(replayProvider, newModel)
     ) {
-      return "";
+      return "PluvianAI hosted model — no separate provider API key is required for this run.";
     }
     if (projectUserApiKeysLoading) return "Checking required API keys...";
     if (requiredProviderResolution.providers.length === 0) {
@@ -220,7 +223,6 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
     }
     return "All required API keys are registered. Ready to run.";
   }, [
-    canValidate,
     modelSource,
     newModel,
     replayApiKey,
@@ -231,12 +233,15 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
     missingProviderRequirements,
   ]);
 
-  const keyBlocked =
-    canValidate &&
-    (projectUserApiKeysLoading ||
-      requiredProviderResolution.providers.length === 0 ||
-      requiredProviderResolution.unresolvedSnapshotCount > 0 ||
-      missingProviderRequirements.length > 0);
+  /** Key requirements fail (loading, undetectable provider, or missing registered key). Independent of run selection. */
+  const keyIssueBlocked =
+    projectUserApiKeysLoading ||
+    requiredProviderResolution.providers.length === 0 ||
+    requiredProviderResolution.unresolvedSnapshotCount > 0 ||
+    missingProviderRequirements.length > 0;
+
+  /** Blocks validate only when the run is otherwise ready to start (baseline/dataset selection + agent). */
+  const keyBlocked = canValidate && keyIssueBlocked;
 
   const projectUserApiKeysForUi = useMemo((): ProjectUserApiKeyItem[] => {
     return Array.isArray(projectUserApiKeysData)
@@ -246,8 +251,10 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
 
   return {
     keyBlocked,
+    keyIssueBlocked,
     keyRegistrationMessage,
     missingProviderKeyDetails,
     projectUserApiKeysForUi,
+    mutateProjectUserApiKeys,
   };
 }
