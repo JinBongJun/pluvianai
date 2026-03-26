@@ -44,7 +44,7 @@ class TestUpgradeRequiredException:
             feature="auto_mapping"
         )
         
-        assert exc.upgrade_url == "/settings/subscription?upgrade=pro"
+        assert exc.upgrade_url == "/settings/billing?upgrade=pro"
 
     def test_upgrade_exception_defaults(self):
         """Test UpgradeRequiredException with default values"""

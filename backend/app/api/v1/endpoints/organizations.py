@@ -271,7 +271,7 @@ def create_organization(
                     "plan_type": plan_type,
                     "current": current_orgs,
                     "limit": org_limit,
-                    "upgrade_path": "/settings/subscription",
+                    "upgrade_path": "/settings/billing",
                 },
             },
         )
@@ -719,7 +719,7 @@ def add_organization_member(
                         "plan_type": str(plan_info.get("plan_type") or "free"),
                         "current": int(current_members),
                         "limit": int(member_limit),
-                        "upgrade_path": "/settings/subscription",
+                        "upgrade_path": "/settings/billing",
                     },
                 },
             )
