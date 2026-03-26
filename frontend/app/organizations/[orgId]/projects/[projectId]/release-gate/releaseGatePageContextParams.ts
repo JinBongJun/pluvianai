@@ -74,6 +74,7 @@ export type ReleaseGatePageContextRestSlice = Pick<
   | "historyItems"
   | "historyTotal"
   | "mutateHistory"
+  | "projectUserApiKeysForUi"
 >;
 
 export function buildReleaseGatePageContextParams(
@@ -114,6 +115,9 @@ export function buildReleaseGatePageContextParams(
     setModelOverrideEnabled: lv.setModelOverrideEnabled,
     replayProvider: lv.replayProvider,
     setReplayProvider: lv.setReplayProvider,
+    replayUserApiKeyId: lv.replayUserApiKeyId,
+    setReplayUserApiKeyId: lv.setReplayUserApiKeyId,
+    projectUserApiKeysForUi: rest.projectUserApiKeysForUi,
     requestBody: lv.requestBody,
     setRequestBody: lv.setRequestBody,
     requestJsonDraft: lv.requestJsonDraft,
