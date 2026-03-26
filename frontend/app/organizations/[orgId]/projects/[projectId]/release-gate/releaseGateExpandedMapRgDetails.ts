@@ -134,6 +134,7 @@ export type BuildReleaseGateMapRgDetailsInput = {
   isHeavyRepeat: boolean;
   canRunValidate: boolean;
   keyBlocked: boolean;
+  keyIssueBlocked: boolean;
   keyRegistrationMessage: string;
   handleValidate: () => void;
   activeJobId: string | null;
@@ -171,6 +172,7 @@ export type ReleaseGateMapRgDetails = {
     isHeavyRepeat: boolean;
     canRunValidate: boolean;
     keyBlocked: boolean;
+    keyIssueBlocked: boolean;
     keyRegistrationMessage: string;
     isValidating: boolean;
     handleValidate: () => void;
@@ -240,6 +242,7 @@ export function buildReleaseGateMapRgDetails(
       isHeavyRepeat: p.isHeavyRepeat,
       canRunValidate: p.canRunValidate,
       keyBlocked: p.keyBlocked,
+      keyIssueBlocked: p.keyIssueBlocked,
       keyRegistrationMessage: p.keyRegistrationMessage,
       isValidating: p.isValidating,
       handleValidate: p.handleValidate,
