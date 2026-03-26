@@ -1,9 +1,14 @@
 "use client";
 
 import type { MutableRefObject } from "react";
-import useSWR from "swr";
+import { useEffect, useRef } from "react";
+import useSWR, { useSWRConfig } from "swr";
 
 import { liveViewAPI, organizationsAPI, projectsAPI } from "@/lib/api";
+import {
+  liveViewAgentsPayloadSignature,
+  releaseGateAgentsSwrKey,
+} from "@/lib/laboratoryLabRefresh";
 import { orgKeys } from "@/lib/queryKeys";
 
 import {
@@ -33,6 +38,13 @@ export function useLiveViewCoreData(options: {
     sseConnected,
     sseBackoffUntilRef,
   } = options;
+
+  const { mutate: cacheMutate } = useSWRConfig();
+  const lastLvAgentsSigRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    lastLvAgentsSigRef.current = null;
+  }, [projectId]);
 
   const { data: project } = useSWR(
     projectId && !isNaN(projectId) ? ["project", projectId] : null,
@@ -78,6 +90,18 @@ export function useLiveViewCoreData(options: {
           : agentsPollIntervalMs;
       })(),
       shouldRetryOnError: false,
+      onSuccess: (data: unknown) => {
+        if (!projectId || projectId <= 0 || Number.isNaN(projectId)) return;
+        const sig = liveViewAgentsPayloadSignature(data);
+        if (
+          lastLvAgentsSigRef.current !== null &&
+          sig === lastLvAgentsSigRef.current
+        ) {
+          return;
+        }
+        lastLvAgentsSigRef.current = sig;
+        void cacheMutate(releaseGateAgentsSwrKey(projectId));
+      },
       ...LIVE_VIEW_SWR_DEFAULT_OPTIONS,
     }
   );
