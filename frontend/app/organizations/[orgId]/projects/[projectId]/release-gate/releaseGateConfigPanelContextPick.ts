@@ -1,4 +1,5 @@
 import { toReplayProvider } from "./releaseGateConfigPanelHelpers";
+import type { ReleaseGateKeysContextValue } from "./ReleaseGateKeysContext";
 import type { ReleaseGatePageContextValue } from "./releaseGatePageContext.types";
 import type { ReleaseGateValidateRunContextValue } from "./ReleaseGateValidateRunContext";
 
@@ -10,7 +11,8 @@ export type ReleaseGateConfigPanelContextSlice = ReturnType<typeof pickReleaseGa
  */
 export function pickReleaseGateConfigPanelContext(
   ctx: ReleaseGatePageContextValue,
-  vctx: ReleaseGateValidateRunContextValue
+  vctx: ReleaseGateValidateRunContextValue,
+  kctx: ReleaseGateKeysContextValue
 ) {
   const baselineSeedSnapshot = ctx.baselineSeedSnapshot;
   const representativeBaselineId =
@@ -38,7 +40,12 @@ export function pickReleaseGateConfigPanelContext(
     setReplayProvider: ctx.setReplayProvider,
     replayUserApiKeyId: ctx.replayUserApiKeyId,
     setReplayUserApiKeyId: ctx.setReplayUserApiKeyId,
+    replayApiKey: ctx.replayApiKey,
+    setReplayApiKey: ctx.setReplayApiKey,
     projectUserApiKeysForUi: ctx.projectUserApiKeysForUi,
+    keyBlocked: kctx.keyBlocked,
+    keyRegistrationMessage: kctx.keyRegistrationMessage,
+    missingProviderKeyDetails: kctx.missingProviderKeyDetails,
     requestBody: ctx.requestBody,
     setRequestBody: ctx.setRequestBody,
     requestBodyJson: ctx.requestBodyJson,

@@ -35,6 +35,8 @@ export function useReleaseGatePageLocalState() {
   const [replayProvider, setReplayProvider] = useState<ReplayProvider>("openai");
   /** Saved project API key row id for Custom (BYOK) runs; optional. */
   const [replayUserApiKeyId, setReplayUserApiKeyId] = useState<number | null>(null);
+  /** Raw provider API key override for a single Custom (BYOK) run; optional. */
+  const [replayApiKey, setReplayApiKey] = useState("");
   const [modelSource, setModelSource] = useState<ReleaseGateModelSource>("detected");
   const [modelProviderTab, setModelProviderTab] = useState<ReplayProvider>("openai");
   const [requestBody, setRequestBody] = useState<Record<string, unknown>>({});
@@ -113,6 +115,8 @@ export function useReleaseGatePageLocalState() {
       setReplayProvider,
       replayUserApiKeyId,
       setReplayUserApiKeyId,
+      replayApiKey,
+      setReplayApiKey,
       modelSource,
       setModelSource,
       modelProviderTab,
@@ -183,6 +187,7 @@ export function useReleaseGatePageLocalState() {
       newModel,
       replayProvider,
       replayUserApiKeyId,
+      replayApiKey,
       modelSource,
       modelProviderTab,
       requestBody,

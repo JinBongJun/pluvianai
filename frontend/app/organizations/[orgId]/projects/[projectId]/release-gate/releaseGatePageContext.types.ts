@@ -119,6 +119,8 @@ export interface ReleaseGatePageContextValue {
   setReplayProvider: (p: ReleaseGateReplayProvider) => void;
   replayUserApiKeyId: number | null;
   setReplayUserApiKeyId: (id: number | null) => void;
+  replayApiKey: string;
+  setReplayApiKey: Dispatch<SetStateAction<string>>;
   projectUserApiKeysForUi: Array<{
     id: number;
     provider: string;

@@ -33,6 +33,8 @@ export type ReleaseGateValidateAsyncPayloadInput = {
   repeatRuns: number;
   /** When set, server uses this saved project API key for BYOK replay. */
   replayUserApiKeyId?: number | null;
+  /** Raw provider API key pasted for a single BYOK replay run. */
+  replayApiKey?: string;
   /** Explicit UI mode; when omitted, inferred from hosted allowlist + model id. */
   replayModelMode?: ReleaseGateReplayModelMode;
 };
@@ -88,9 +90,14 @@ export function buildReleaseGateValidateAsyncPayload(
       payload.model_source = "platform";
     } else {
       payload.model_source = "detected";
-      const kid = input.replayUserApiKeyId;
-      if (kid != null && Number.isFinite(Number(kid))) {
-        payload.replay_user_api_key_id = Number(kid);
+      const directKey = (input.replayApiKey || "").trim();
+      if (directKey) {
+        payload.replay_api_key = directKey;
+      } else {
+        const kid = input.replayUserApiKeyId;
+        if (kid != null && Number.isFinite(Number(kid))) {
+          payload.replay_user_api_key_id = Number(kid);
+        }
       }
     }
   }

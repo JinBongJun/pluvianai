@@ -5,13 +5,14 @@ import useSWR from "swr";
 
 import { projectUserApiKeysAPI } from "@/lib/api";
 import {
-  describeMissingProviderKeys,
+  describeMissingProviderKeyRequirements,
   inferProviderFromModelId,
   isHostedPlatformModel,
   normalizeReplayProvider,
   type ReplayProvider,
+  type MissingProviderKeyRequirement,
 } from "./releaseGatePageContent.lib";
-import type { ReleaseGateModelSource } from "./releaseGateReplayConstants";
+import { REPLAY_PROVIDER_LABEL, type ReleaseGateModelSource } from "./releaseGateReplayConstants";
 
 export type ProjectUserApiKeyItem = {
   id: number;
@@ -30,6 +31,7 @@ export type UseReleaseGateProjectApiKeysParams = {
   newModel: string;
   replayProvider: ReplayProvider;
   replayUserApiKeyId: number | null;
+  replayApiKey: string;
   baselineSnapshotsForRun: Record<string, unknown>[];
   runDataProvider: ReplayProvider | null;
   agentId: string;
@@ -44,6 +46,7 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
     newModel,
     replayProvider,
     replayUserApiKeyId,
+    replayApiKey,
     baselineSnapshotsForRun,
     runDataProvider,
     agentId,
@@ -97,7 +100,7 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
   const requiredProviderResolution = useMemo(() => {
     if (
       (modelSource === "hosted" && replayProvider && isHostedPlatformModel(replayProvider, newModel)) ||
-      (modelSource === "custom" && replayProvider && newModel.trim())
+      (modelSource === "custom" && replayProvider)
     ) {
       return {
         providers: [replayProvider],
@@ -129,21 +132,22 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
     runDataProvider,
   ]);
 
-  const missingProviderKeys = useMemo(() => {
+  const missingProviderRequirements = useMemo((): MissingProviderKeyRequirement[] => {
     if (
       modelSource === "hosted" &&
       isHostedPlatformModel(replayProvider, newModel)
     ) {
       return [];
     }
-    if (modelSource === "custom" && newModel.trim() && replayUserApiKeyId != null) return [];
-    if (modelSource === "custom" && newModel.trim()) {
+    if (modelSource === "custom" && replayApiKey.trim()) return [];
+    if (modelSource === "custom" && replayUserApiKeyId != null) return [];
+    if (modelSource === "custom") {
       if (!hasEffectiveProviderKey(replayProvider, agentId.trim() || null)) {
-        return [replayProvider];
+        return [{ provider: replayProvider, agentId: agentId.trim() || null }];
       }
       return [];
     }
-    const missing = new Set<ReplayProvider>();
+    const missing = new Map<string, MissingProviderKeyRequirement>();
     for (const snapshot of baselineSnapshotsForRun) {
       const provider =
         normalizeReplayProvider((snapshot as Record<string, unknown>).provider) ||
@@ -152,19 +156,26 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
       const snapshotAgentIdRaw = (snapshot as Record<string, unknown>).agent_id;
       const snapshotAgentId = typeof snapshotAgentIdRaw === "string" ? snapshotAgentIdRaw : null;
       if (!hasEffectiveProviderKey(provider, snapshotAgentId)) {
-        missing.add(provider);
+        const key = `${provider}::${snapshotAgentId || ""}`;
+        if (!missing.has(key)) {
+          missing.set(key, { provider, agentId: snapshotAgentId });
+        }
       }
     }
     if (missing.size === 0 && requiredProviderResolution.providers.length > 0 && runDataProvider) {
       if (!hasEffectiveProviderKey(runDataProvider, agentId.trim() || null)) {
-        missing.add(runDataProvider);
+        missing.set(`${runDataProvider}::${agentId.trim() || ""}`, {
+          provider: runDataProvider,
+          agentId: agentId.trim() || null,
+        });
       }
     }
-    return Array.from(missing);
+    return Array.from(missing.values());
   }, [
     modelSource,
     newModel,
     replayUserApiKeyId,
+    replayApiKey,
     replayProvider,
     baselineSnapshotsForRun,
     requiredProviderResolution.providers.length,
@@ -172,6 +183,17 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
     hasEffectiveProviderKey,
     agentId,
   ]);
+
+  const missingProviderKeyDetails = useMemo(
+    () =>
+      missingProviderRequirements.map(req => {
+        const providerLabel = REPLAY_PROVIDER_LABEL[req.provider];
+        return req.agentId?.trim()
+          ? `${providerLabel} key missing for node ${req.agentId.trim()}`
+          : `${providerLabel} key missing for the selected baseline logs`;
+      }),
+    [missingProviderRequirements]
+  );
 
   const keyRegistrationMessage = useMemo(() => {
     if (!canValidate) return "";
@@ -188,19 +210,25 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
     if (requiredProviderResolution.unresolvedSnapshotCount > 0) {
       return "Run blocked: one or more selected snapshots have no detectable provider. Open Live View and verify the latest agent snapshot.";
     }
-    if (missingProviderKeys.length > 0) {
-      return describeMissingProviderKeys(missingProviderKeys);
+    if (missingProviderRequirements.length > 0) {
+      return describeMissingProviderKeyRequirements(missingProviderRequirements, {
+        allowDirectApiKey: modelSource === "custom",
+      });
+    }
+    if (modelSource === "custom" && replayApiKey.trim()) {
+      return "Direct API key provided for this custom run. Ready to run.";
     }
     return "All required API keys are registered. Ready to run.";
   }, [
     canValidate,
     modelSource,
     newModel,
+    replayApiKey,
     replayProvider,
     projectUserApiKeysLoading,
     requiredProviderResolution.providers.length,
     requiredProviderResolution.unresolvedSnapshotCount,
-    missingProviderKeys,
+    missingProviderRequirements,
   ]);
 
   const keyBlocked =
@@ -208,7 +236,7 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
     (projectUserApiKeysLoading ||
       requiredProviderResolution.providers.length === 0 ||
       requiredProviderResolution.unresolvedSnapshotCount > 0 ||
-      missingProviderKeys.length > 0);
+      missingProviderRequirements.length > 0);
 
   const projectUserApiKeysForUi = useMemo((): ProjectUserApiKeyItem[] => {
     return Array.isArray(projectUserApiKeysData)
@@ -219,6 +247,7 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
   return {
     keyBlocked,
     keyRegistrationMessage,
+    missingProviderKeyDetails,
     projectUserApiKeysForUi,
   };
 }
