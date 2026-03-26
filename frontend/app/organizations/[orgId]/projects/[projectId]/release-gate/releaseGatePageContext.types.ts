@@ -3,8 +3,10 @@ import type { SnapshotForDetail } from "@/components/shared/SnapshotDetailModal"
 import type { AgentForPicker } from "@/components/release-gate/AgentPickerCard";
 import type { ReleaseGateHistoryItem } from "@/lib/api/types";
 import type { GateTab, ThresholdPreset } from "./releaseGateExpandedHelpers";
+import type { ReleaseGateReplayModelMode } from "./releaseGateReplayConstants";
 
 export type ReleaseGateReplayProvider = "openai" | "anthropic" | "google";
+export type { ReleaseGateReplayModelMode };
 
 export type ReleaseGateHistoryDatePreset = "all" | "24h" | "7d" | "30d";
 
@@ -107,6 +109,8 @@ export interface ReleaseGatePageContextValue {
   setNewModel: (s: string) => void;
   modelOverrideEnabled: boolean;
   setModelOverrideEnabled: (b: boolean) => void;
+  replayModelMode: ReleaseGateReplayModelMode;
+  setReplayModelMode: Dispatch<SetStateAction<ReleaseGateReplayModelMode>>;
   replayProvider: ReleaseGateReplayProvider;
   setReplayProvider: (p: ReleaseGateReplayProvider) => void;
   replayUserApiKeyId: number | null;

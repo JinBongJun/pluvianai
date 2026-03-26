@@ -1,5 +1,8 @@
 export type ReplayProvider = "openai" | "anthropic" | "google";
 
+/** Hosted (platform credits) vs Custom (BYOK / detected) when model override is on. */
+export type ReleaseGateReplayModelMode = "hosted" | "custom";
+
 export const RECENT_SNAPSHOT_LIMIT = 100;
 export const BASELINE_SNAPSHOT_LIMIT = 200;
 /** Stable fallback for SWR `data?.items` — inline `[]` is a new reference each render and breaks useMemo/useEffect dependencies. */

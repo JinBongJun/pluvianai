@@ -6,6 +6,7 @@ import {
   type EditableTool,
   type ReplayProvider,
 } from "./releaseGatePageContent.lib";
+import type { ReleaseGateReplayModelMode } from "./releaseGateReplayConstants";
 import { sanitizeReplayBodyOverrides } from "./releaseGateReplayMerge";
 
 /** Fields required to build the POST body for `releaseGateAPI.validateAsync`. */
@@ -30,6 +31,8 @@ export type ReleaseGateValidateAsyncPayloadInput = {
   repeatRuns: number;
   /** When set, server uses this saved project API key for BYOK replay. */
   replayUserApiKeyId?: number | null;
+  /** Explicit UI mode; when omitted, inferred from hosted allowlist + model id. */
+  replayModelMode?: ReleaseGateReplayModelMode;
 };
 
 export type BuildReleaseGateValidateAsyncPayloadResult =
@@ -63,10 +66,24 @@ export function buildReleaseGateValidateAsyncPayload(
     const trimmedModel = input.newModel.trim();
     payload.new_model = trimmedModel;
     payload.replay_provider = input.replayProvider;
-    payload.model_source = isHostedPlatformModel(input.replayProvider, trimmedModel) ? "platform" : "detected";
-    const kid = input.replayUserApiKeyId;
-    if (kid != null && Number.isFinite(Number(kid)) && payload.model_source === "detected") {
-      payload.replay_user_api_key_id = Number(kid);
+    const inferredMode: ReleaseGateReplayModelMode =
+      input.replayModelMode ??
+      (isHostedPlatformModel(input.replayProvider, trimmedModel) ? "hosted" : "custom");
+    if (inferredMode === "hosted") {
+      if (!isHostedPlatformModel(input.replayProvider, trimmedModel)) {
+        return {
+          ok: false,
+          error:
+            "Hosted mode requires a hosted quick-pick model for the selected provider, or switch to Custom (BYOK).",
+        };
+      }
+      payload.model_source = "platform";
+    } else {
+      payload.model_source = "detected";
+      const kid = input.replayUserApiKeyId;
+      if (kid != null && Number.isFinite(Number(kid))) {
+        payload.replay_user_api_key_id = Number(kid);
+      }
     }
   }
 

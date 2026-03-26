@@ -41,6 +41,8 @@ export type ReleaseGateConfigPanelCoreTabProps = Pick<
   | "isJsonModified"
   | "isSystemPromptOverridden"
   | "modelOverrideEnabled"
+  | "replayModelMode"
+  | "setReplayModelMode"
   | "newModel"
   | "normalizeGateThresholds"
   | "pinnedBadge"

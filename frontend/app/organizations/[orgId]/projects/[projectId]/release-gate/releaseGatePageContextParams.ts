@@ -113,6 +113,8 @@ export function buildReleaseGatePageContextParams(
     setNewModel: lv.setNewModel,
     modelOverrideEnabled: lv.modelOverrideEnabled,
     setModelOverrideEnabled: lv.setModelOverrideEnabled,
+    replayModelMode: lv.replayModelMode,
+    setReplayModelMode: lv.setReplayModelMode,
     replayProvider: lv.replayProvider,
     setReplayProvider: lv.setReplayProvider,
     replayUserApiKeyId: lv.replayUserApiKeyId,

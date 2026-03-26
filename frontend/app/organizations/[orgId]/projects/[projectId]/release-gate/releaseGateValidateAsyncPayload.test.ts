@@ -91,6 +91,7 @@ describe("buildReleaseGateValidateAsyncPayload", () => {
       modelOverrideEnabled: true,
       newModel: "gpt-4o",
       replayProvider: "openai",
+      replayModelMode: "custom",
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -98,10 +99,39 @@ describe("buildReleaseGateValidateAsyncPayload", () => {
     expect(r.payload.new_model).toBe("gpt-4o");
   });
 
+  it("uses detected for BYOK even when model id matches hosted list (explicit custom mode)", () => {
+    const r = buildReleaseGateValidateAsyncPayload({
+      ...base(),
+      modelOverrideEnabled: true,
+      replayModelMode: "custom",
+      newModel: "gpt-4o-mini",
+      replayProvider: "openai",
+      replayUserApiKeyId: 9,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.payload.model_source).toBe("detected");
+    expect(r.payload.replay_user_api_key_id).toBe(9);
+  });
+
+  it("returns error when hosted mode but model is not a hosted quick-pick", () => {
+    const r = buildReleaseGateValidateAsyncPayload({
+      ...base(),
+      modelOverrideEnabled: true,
+      replayModelMode: "hosted",
+      newModel: "gpt-4o",
+      replayProvider: "openai",
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toContain("Hosted mode");
+  });
+
   it("includes replay_user_api_key_id for detected custom runs when selected", () => {
     const r = buildReleaseGateValidateAsyncPayload({
       ...base(),
       modelOverrideEnabled: true,
+      replayModelMode: "custom",
       newModel: "gpt-4o",
       replayProvider: "openai",
       replayUserApiKeyId: 42,
