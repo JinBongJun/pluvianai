@@ -28,6 +28,7 @@ import { SnapshotDetailModal } from "@/components/shared/SnapshotDetailModal";
 import { useToast } from "@/components/ToastContainer";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { PlanLimitBanner } from "@/components/PlanLimitBanner";
+import { logger } from "@/lib/logger";
 
 interface EvaluationMetric {
   score: number;
@@ -805,7 +806,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
       await mutate();
       await Promise.resolve(onLogsMutated?.()).catch(() => undefined);
     } catch (error) {
-      console.error("Failed to delete snapshots:", error);
+      logger.error("Failed to delete snapshots", error);
       toast.showToast("Failed to delete selected logs. Please try again.", "error");
     } finally {
       setIsDeletingSnapshots(false);

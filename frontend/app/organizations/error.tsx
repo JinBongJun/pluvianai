@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { logger } from "@/lib/logger";
 
 export default function OrganizationsError({
   error,
@@ -11,7 +12,7 @@ export default function OrganizationsError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[Organizations Error]:", error);
+    logger.error("Organizations route error", error, { digest: error.digest });
   }, [error]);
 
   return (

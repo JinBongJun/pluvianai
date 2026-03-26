@@ -7,6 +7,7 @@ import { orgKeys } from "@/lib/queryKeys";
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
 import { useRouter, usePathname } from "next/navigation";
 import { clsx } from "clsx";
+import { logger } from "@/lib/logger";
 
 type AccountLayoutProps = {
   children: React.ReactNode;
@@ -30,7 +31,7 @@ const AccountLayout: React.FC<AccountLayoutProps> = ({ children, breadcrumb, act
         setUserName(user.full_name || "");
         setUserEmail(user.email || "");
       } catch (error) {
-        console.error("Failed to load user info in AccountLayout:", error);
+        logger.error("Failed to load user info in AccountLayout", error);
       }
     };
     void loadUser();
