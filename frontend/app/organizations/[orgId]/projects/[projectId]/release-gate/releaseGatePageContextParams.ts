@@ -123,6 +123,8 @@ export function buildReleaseGatePageContextParams(
     setReplayProvider: lv.setReplayProvider,
     replayUserApiKeyId: lv.replayUserApiKeyId,
     setReplayUserApiKeyId: lv.setReplayUserApiKeyId,
+    replayApiKey: lv.replayApiKey,
+    setReplayApiKey: lv.setReplayApiKey,
     projectUserApiKeysForUi: rest.projectUserApiKeysForUi,
     requestBody: lv.requestBody,
     setRequestBody: lv.setRequestBody,

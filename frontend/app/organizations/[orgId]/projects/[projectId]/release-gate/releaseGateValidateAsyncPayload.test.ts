@@ -144,6 +144,22 @@ describe("buildReleaseGateValidateAsyncPayload", () => {
     expect(r.payload.replay_user_api_key_id).toBe(42);
   });
 
+  it("includes replay_api_key for direct custom BYOK runs", () => {
+    const r = buildReleaseGateValidateAsyncPayload({
+      ...base(),
+      modelSource: "custom",
+      modelOverrideEnabled: true,
+      newModel: "gpt-4o",
+      replayProvider: "openai",
+      replayApiKey: "  sk-test-direct  ",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.payload.model_source).toBe("detected");
+    expect(r.payload.replay_api_key).toBe("sk-test-direct");
+    expect(r.payload.replay_user_api_key_id).toBeUndefined();
+  });
+
   it("returns error when tool parameters JSON is invalid", () => {
     const b = base();
     const r = buildReleaseGateValidateAsyncPayload({

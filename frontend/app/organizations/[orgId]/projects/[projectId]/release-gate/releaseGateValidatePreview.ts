@@ -9,6 +9,8 @@ export type BuildValidateOverridePreviewInput = {
   modelSource: ReleaseGateModelSource;
   newModel: string;
   replayProvider: ReplayProvider;
+  replayUserApiKeyId?: number | null;
+  replayApiKey?: string;
   requestBody: Record<string, unknown>;
   requestSystemPrompt: string;
   toolsList: EditableTool[];
@@ -33,6 +35,8 @@ export function buildValidateOverridePreview(
     modelSource,
     newModel,
     replayProvider,
+    replayUserApiKeyId,
+    replayApiKey,
     requestBody,
     requestSystemPrompt,
     toolsList,
@@ -57,6 +61,11 @@ export function buildValidateOverridePreview(
       preview.new_model = trimmedModel;
       preview.replay_provider = effectiveProvider;
       preview.model_source = modelSource === "hosted" ? "platform" : "detected";
+      if (modelSource === "custom" && replayApiKey?.trim()) {
+        preview.replay_api_key = "[provided]";
+      } else if (modelSource === "custom" && replayUserApiKeyId != null) {
+        preview.replay_user_api_key_id = replayUserApiKeyId;
+      }
     }
   }
 
