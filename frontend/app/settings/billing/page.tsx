@@ -37,8 +37,10 @@ export default function AccountBillingPage() {
       if (!session?.url) throw new Error("Missing checkout URL");
       window.location.href = session.url;
     } catch (err: any) {
+      const apiError = err?.response?.data?.error;
       const detail = err?.response?.data?.detail;
       const msg =
+        (typeof apiError?.message === "string" ? apiError.message : null) ||
         (typeof detail === "string" ? detail : detail?.message) ||
         err?.message ||
         "Failed to start checkout";
@@ -104,7 +106,25 @@ export default function AccountBillingPage() {
           All plans include 30-day trace retention.
           <br />
           BYOK runs do not consume hosted replay credits.
+          <br />
+          Subscriptions auto-renew unless canceled before the next billing cycle.
         </p>
+        <div className="mb-8 text-xs text-slate-400 space-y-1">
+          <p>
+            By upgrading, you agree to our{" "}
+            <a href="/trust" className="text-emerald-300 hover:text-emerald-200 underline">
+              Terms and Privacy
+            </a>
+            {" "}and refund/cancellation policy.
+          </p>
+          <p>
+            Need to cancel or billing help? Contact support via{" "}
+            <a href="/settings/profile" className="text-emerald-300 hover:text-emerald-200 underline">
+              account settings
+            </a>
+            .
+          </p>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
           {plans.map(plan => {
             const isCurrent = plan.id === currentPlanId;
