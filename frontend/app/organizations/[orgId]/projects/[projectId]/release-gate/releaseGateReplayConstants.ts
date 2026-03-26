@@ -1,6 +1,9 @@
 export type ReplayProvider = "openai" | "anthropic" | "google";
 
-/** Hosted (platform credits) vs Custom (BYOK / detected) when model override is on. */
+/** User-facing replay source selection shown in Release Gate. */
+export type ReleaseGateModelSource = "detected" | "hosted" | "custom";
+
+/** Compatibility subtype for the non-detected branches. */
 export type ReleaseGateReplayModelMode = "hosted" | "custom";
 
 export const RECENT_SNAPSHOT_LIMIT = 100;

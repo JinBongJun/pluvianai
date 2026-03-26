@@ -3,9 +3,10 @@ import type { SnapshotForDetail } from "@/components/shared/SnapshotDetailModal"
 import type { AgentForPicker } from "@/components/release-gate/AgentPickerCard";
 import type { ReleaseGateHistoryItem } from "@/lib/api/types";
 import type { GateTab, ThresholdPreset } from "./releaseGateExpandedHelpers";
-import type { ReleaseGateReplayModelMode } from "./releaseGateReplayConstants";
+import type { ReleaseGateModelSource, ReleaseGateReplayModelMode } from "./releaseGateReplayConstants";
 
 export type ReleaseGateReplayProvider = "openai" | "anthropic" | "google";
+export type { ReleaseGateModelSource };
 export type { ReleaseGateReplayModelMode };
 
 export type ReleaseGateHistoryDatePreset = "all" | "24h" | "7d" | "30d";
@@ -107,6 +108,9 @@ export interface ReleaseGatePageContextValue {
   setFlakyRateMax: (n: number) => void;
   newModel: string;
   setNewModel: (s: string) => void;
+  modelSource: ReleaseGateModelSource;
+  setModelSource: Dispatch<SetStateAction<ReleaseGateModelSource>>;
+  /** Compatibility flags derived from `modelSource`; keep consumers thin during migration. */
   modelOverrideEnabled: boolean;
   setModelOverrideEnabled: (b: boolean) => void;
   replayModelMode: ReleaseGateReplayModelMode;

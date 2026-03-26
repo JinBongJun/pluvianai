@@ -5,7 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import type { AgentForPicker } from "@/components/release-gate/AgentPickerCard";
 import { useDismissOnDocumentClickOutside } from "./useDismissOnDocumentClickOutside";
 import type { EditableTool, ReplayProvider } from "./releaseGatePageContent.lib";
-import type { ReleaseGateReplayModelMode } from "./releaseGateReplayConstants";
+import type { ReleaseGateModelSource } from "./releaseGateReplayConstants";
 import { REPLAY_THRESHOLD_PRESETS } from "./releaseGatePageContent.lib";
 import type { GateTab, ThresholdPreset } from "./releaseGateExpandedHelpers";
 
@@ -35,8 +35,7 @@ export function useReleaseGatePageLocalState() {
   const [replayProvider, setReplayProvider] = useState<ReplayProvider>("openai");
   /** Saved project API key row id for Custom (BYOK) runs; optional. */
   const [replayUserApiKeyId, setReplayUserApiKeyId] = useState<number | null>(null);
-  const [replayModelMode, setReplayModelMode] = useState<ReleaseGateReplayModelMode>("hosted");
-  const [modelOverrideEnabled, setModelOverrideEnabled] = useState(false);
+  const [modelSource, setModelSource] = useState<ReleaseGateModelSource>("detected");
   const [modelProviderTab, setModelProviderTab] = useState<ReplayProvider>("openai");
   const [requestBody, setRequestBody] = useState<Record<string, unknown>>({});
   const [requestJsonDraft, setRequestJsonDraft] = useState<string | null>(null);
@@ -114,10 +113,8 @@ export function useReleaseGatePageLocalState() {
       setReplayProvider,
       replayUserApiKeyId,
       setReplayUserApiKeyId,
-      replayModelMode,
-      setReplayModelMode,
-      modelOverrideEnabled,
-      setModelOverrideEnabled,
+      modelSource,
+      setModelSource,
       modelProviderTab,
       setModelProviderTab,
       requestBody,
@@ -186,8 +183,7 @@ export function useReleaseGatePageLocalState() {
       newModel,
       replayProvider,
       replayUserApiKeyId,
-      replayModelMode,
-      modelOverrideEnabled,
+      modelSource,
       modelProviderTab,
       requestBody,
       requestJsonDraft,

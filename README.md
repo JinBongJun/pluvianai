@@ -147,9 +147,9 @@ docker-compose up -d
 ## Environment variables (SDK)
 
 ```bash
-export AGENTGUARD_API_KEY="your-api-key"
-export AGENTGUARD_PROJECT_ID="your-project-id"
-export AGENTGUARD_API_URL="https://api.example.com"  # Optional, defaults to hosted API
+export PLUVIANAI_API_KEY="your-api-key"
+export PLUVIANAI_PROJECT_ID="your-project-id"
+export PLUVIANAI_API_URL="https://api.example.com"  # Optional, defaults to hosted API
 ```
 
 Refer to the SDK READMEs under `sdk/python` and `sdk/node` for more details.

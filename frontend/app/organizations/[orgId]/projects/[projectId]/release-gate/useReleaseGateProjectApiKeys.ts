@@ -11,7 +11,7 @@ import {
   normalizeReplayProvider,
   type ReplayProvider,
 } from "./releaseGatePageContent.lib";
-import type { ReleaseGateReplayModelMode } from "./releaseGateReplayConstants";
+import type { ReleaseGateModelSource } from "./releaseGateReplayConstants";
 
 export type ProjectUserApiKeyItem = {
   id: number;
@@ -26,9 +26,7 @@ export type UseReleaseGateProjectApiKeysParams = {
   projectId: number;
   runLocked: boolean;
   canValidate: boolean;
-  modelOverrideEnabled: boolean;
-  /** When override is on: hosted = platform credits; custom = always BYOK/detected path. */
-  replayModelMode: ReleaseGateReplayModelMode;
+  modelSource: ReleaseGateModelSource;
   newModel: string;
   replayProvider: ReplayProvider;
   replayUserApiKeyId: number | null;
@@ -42,8 +40,7 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
     projectId,
     runLocked,
     canValidate,
-    modelOverrideEnabled,
-    replayModelMode,
+    modelSource,
     newModel,
     replayProvider,
     replayUserApiKeyId,
@@ -99,10 +96,8 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
 
   const requiredProviderResolution = useMemo(() => {
     if (
-      modelOverrideEnabled &&
-      replayModelMode === "hosted" &&
-      replayProvider &&
-      isHostedPlatformModel(replayProvider, newModel)
+      (modelSource === "hosted" && replayProvider && isHostedPlatformModel(replayProvider, newModel)) ||
+      (modelSource === "custom" && replayProvider && newModel.trim())
     ) {
       return {
         providers: [replayProvider],
@@ -127,8 +122,7 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
       unresolvedSnapshotCount,
     };
   }, [
-    modelOverrideEnabled,
-    replayModelMode,
+    modelSource,
     replayProvider,
     newModel,
     baselineSnapshotsForRun,
@@ -137,18 +131,13 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
 
   const missingProviderKeys = useMemo(() => {
     if (
-      modelOverrideEnabled &&
-      replayModelMode === "hosted" &&
+      modelSource === "hosted" &&
       isHostedPlatformModel(replayProvider, newModel)
     ) {
       return [];
     }
-    if (modelOverrideEnabled && newModel.trim() && replayUserApiKeyId != null) return [];
-    if (
-      modelOverrideEnabled &&
-      newModel.trim() &&
-      (replayModelMode === "custom" || !isHostedPlatformModel(replayProvider, newModel))
-    ) {
+    if (modelSource === "custom" && newModel.trim() && replayUserApiKeyId != null) return [];
+    if (modelSource === "custom" && newModel.trim()) {
       if (!hasEffectiveProviderKey(replayProvider, agentId.trim() || null)) {
         return [replayProvider];
       }
@@ -173,8 +162,7 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
     }
     return Array.from(missing);
   }, [
-    modelOverrideEnabled,
-    replayModelMode,
+    modelSource,
     newModel,
     replayUserApiKeyId,
     replayProvider,
@@ -188,8 +176,7 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
   const keyRegistrationMessage = useMemo(() => {
     if (!canValidate) return "";
     if (
-      modelOverrideEnabled &&
-      replayModelMode === "hosted" &&
+      modelSource === "hosted" &&
       isHostedPlatformModel(replayProvider, newModel)
     ) {
       return "";
@@ -207,8 +194,7 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
     return "All required API keys are registered. Ready to run.";
   }, [
     canValidate,
-    modelOverrideEnabled,
-    replayModelMode,
+    modelSource,
     newModel,
     replayProvider,
     projectUserApiKeysLoading,

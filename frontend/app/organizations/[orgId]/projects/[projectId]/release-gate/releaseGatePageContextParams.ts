@@ -82,6 +82,8 @@ export function buildReleaseGatePageContextParams(
   rd: ReleaseGateRunDataDerivationsBundle,
   rest: ReleaseGatePageContextRestSlice
 ): UseReleaseGatePageContextValueParams {
+  const modelOverrideEnabled = lv.modelSource !== "detected";
+  const replayModelMode = lv.modelSource === "hosted" ? "hosted" : "custom";
   return {
     ...rest,
     tab: lv.tab,
@@ -111,10 +113,12 @@ export function buildReleaseGatePageContextParams(
     setFlakyRateMax: lv.setFlakyRateMax,
     newModel: lv.newModel,
     setNewModel: lv.setNewModel,
-    modelOverrideEnabled: lv.modelOverrideEnabled,
-    setModelOverrideEnabled: lv.setModelOverrideEnabled,
-    replayModelMode: lv.replayModelMode,
-    setReplayModelMode: lv.setReplayModelMode,
+    modelSource: lv.modelSource,
+    setModelSource: lv.setModelSource,
+    modelOverrideEnabled,
+    setModelOverrideEnabled: enabled => lv.setModelSource(enabled ? "hosted" : "detected"),
+    replayModelMode,
+    setReplayModelMode: mode => lv.setModelSource(typeof mode === "function" ? mode(replayModelMode) : mode),
     replayProvider: lv.replayProvider,
     setReplayProvider: lv.setReplayProvider,
     replayUserApiKeyId: lv.replayUserApiKeyId,

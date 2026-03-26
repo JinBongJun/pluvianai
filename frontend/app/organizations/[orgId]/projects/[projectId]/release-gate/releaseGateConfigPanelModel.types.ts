@@ -40,6 +40,8 @@ export type ReleaseGateConfigPanelCoreTabProps = Pick<
   | "handleResetSystemPrompt"
   | "isJsonModified"
   | "isSystemPromptOverridden"
+  | "modelSource"
+  | "setModelSource"
   | "modelOverrideEnabled"
   | "replayModelMode"
   | "setReplayModelMode"
