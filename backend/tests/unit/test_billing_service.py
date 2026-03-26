@@ -403,3 +403,23 @@ class TestBillingService:
             result = service.handle_paddle_webhook(b"{}", "ts=1;h1=x")
         assert "error" in result
         assert "not configured" in result["error"].lower()
+
+    def test_handle_paddle_webhook_without_event_id_skips_idempotency(self, db):
+        secret = "whsec_paddle_test"
+        payload_obj = {"event_type": "transaction.created", "data": {"id": "txn_1"}}
+        raw = json.dumps(payload_obj).encode("utf-8")
+        sig = self._paddle_sig(raw, secret)
+
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_WEBHOOK_SECRET = secret
+            service = BillingService(db)
+            with patch.object(idempotency_service, "get") as mock_get:
+                with patch.object(idempotency_service, "set") as mock_set:
+                    first = service.handle_paddle_webhook(raw, sig)
+                    second = service.handle_paddle_webhook(raw, sig)
+
+        assert first["status"] == "ignored"
+        assert second["status"] == "ignored"
+        assert mock_get.call_count == 0
+        assert mock_set.call_count == 0
