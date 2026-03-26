@@ -58,19 +58,19 @@ jobs:
         image: postgres:16-alpine
         env:
           # Loopback-only service on the runner; trust auth avoids embedding any password in this file (secret scanners).
-          POSTGRES_USER: agentguard_ci
+          POSTGRES_USER: pluvianai_ci
           POSTGRES_DB: pluvianai
           POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U agentguard_ci -d pluvianai"
+          --health-cmd "pg_isready -U pluvianai_ci -d pluvianai"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
 
     env:
-      DATABASE_URL: postgresql://agentguard_ci@localhost:5432/pluvianai
+      DATABASE_URL: postgresql://pluvianai_ci@localhost:5432/pluvianai
       ENVIRONMENT: development
       REDIS_URL: redis://127.0.0.1:6379/0
 
