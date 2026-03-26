@@ -129,6 +129,8 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     setReplayProvider,
     replayUserApiKeyId,
     setReplayUserApiKeyId,
+    replayModelMode,
+    setReplayModelMode,
     modelOverrideEnabled,
     setModelOverrideEnabled,
     setModelProviderTab,
@@ -401,6 +403,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     runLocked,
     canValidate,
     modelOverrideEnabled,
+    replayModelMode,
     newModel,
     replayProvider,
     replayUserApiKeyId,
@@ -433,6 +436,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     newModel,
     replayProvider,
     replayUserApiKeyId,
+    replayModelMode,
     failRateMax,
     flakyRateMax,
     agentId,
@@ -551,6 +555,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     () =>
       buildValidateOverridePreview({
         modelOverrideEnabled,
+        replayModelMode,
         newModel,
         replayProvider,
         requestBody,
@@ -566,6 +571,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       }),
     [
       modelOverrideEnabled,
+      replayModelMode,
       newModel,
       replayProvider,
       requestBody,

@@ -30,6 +30,8 @@ export function pickReleaseGateConfigPanelContext(
     setNewModel: ctx.setNewModel,
     modelOverrideEnabled: ctx.modelOverrideEnabled,
     setModelOverrideEnabled: ctx.setModelOverrideEnabled,
+    replayModelMode: ctx.replayModelMode,
+    setReplayModelMode: ctx.setReplayModelMode,
     replayProvider: toReplayProvider(ctx.replayProvider),
     setReplayProvider: ctx.setReplayProvider,
     replayUserApiKeyId: ctx.replayUserApiKeyId,

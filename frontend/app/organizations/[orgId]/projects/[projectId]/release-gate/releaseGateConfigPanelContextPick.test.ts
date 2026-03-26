@@ -45,6 +45,8 @@ function ctxPickFixture(
     setNewModel: () => {},
     modelOverrideEnabled: false,
     setModelOverrideEnabled: () => {},
+    replayModelMode: "hosted",
+    setReplayModelMode: () => {},
     replayProvider: "openai",
     setReplayProvider: () => {},
     replayUserApiKeyId: null,

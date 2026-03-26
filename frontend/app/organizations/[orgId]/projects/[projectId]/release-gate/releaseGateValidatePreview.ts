@@ -3,11 +3,12 @@ import type { EditableTool } from "./releaseGateEditableTools";
 import { buildOpenAIStyleToolsFromEditableTools } from "./releaseGateEditableTools";
 import { inferProviderFromModelId } from "./releaseGateProviderModel";
 import { isHostedPlatformModel } from "./releaseGateReplayConstants";
-import type { ReplayProvider } from "./releaseGateReplayConstants";
+import type { ReleaseGateReplayModelMode, ReplayProvider } from "./releaseGateReplayConstants";
 import { buildToolContextPayload } from "./releaseGateToolContext";
 
 export type BuildValidateOverridePreviewInput = {
   modelOverrideEnabled: boolean;
+  replayModelMode?: ReleaseGateReplayModelMode;
   newModel: string;
   replayProvider: ReplayProvider;
   requestBody: Record<string, unknown>;
@@ -32,6 +33,7 @@ export function buildValidateOverridePreview(
 ): Record<string, unknown> {
   const {
     modelOverrideEnabled,
+    replayModelMode,
     newModel,
     replayProvider,
     requestBody,
@@ -57,9 +59,10 @@ export function buildValidateOverridePreview(
       const effectiveProvider = inferredProvider || replayProvider;
       preview.new_model = trimmedModel;
       preview.replay_provider = effectiveProvider;
-      preview.model_source = isHostedPlatformModel(effectiveProvider as ReplayProvider, trimmedModel)
-        ? "platform"
-        : "detected";
+      const mode: ReleaseGateReplayModelMode =
+        replayModelMode ??
+        (isHostedPlatformModel(effectiveProvider as ReplayProvider, trimmedModel) ? "hosted" : "custom");
+      preview.model_source = mode === "hosted" ? "platform" : "detected";
     }
   }
 
