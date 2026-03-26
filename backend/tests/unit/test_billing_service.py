@@ -423,3 +423,86 @@ class TestBillingService:
         assert second["status"] == "ignored"
         assert mock_get.call_count == 0
         assert mock_set.call_count == 0
+
+    def test_handle_paddle_webhook_error_records_dlq(self, db):
+        secret = "whsec_paddle_test"
+        payload_obj = {
+            "event_id": "evt_dlq_1",
+            "event_type": "transaction.completed",
+            "data": {"id": "txn_1", "custom_data": {}},
+        }
+        raw = json.dumps(payload_obj).encode("utf-8")
+        sig = self._paddle_sig(raw, secret)
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_WEBHOOK_SECRET = secret
+            service = BillingService(db)
+            with patch.object(cache_service, "enabled", True):
+                mock_redis = MagicMock()
+                with patch.object(cache_service, "redis_client", mock_redis):
+                    result = service.handle_paddle_webhook(raw, sig)
+        assert result["status"] == "error"
+        assert mock_redis.setex.called
+
+    def test_retry_failed_webhook_event_not_found(self, db):
+        service = BillingService(db)
+        with patch.object(cache_service, "enabled", True):
+            mock_redis = MagicMock()
+            mock_redis.get.return_value = None
+            with patch.object(cache_service, "redis_client", mock_redis):
+                result = service.retry_failed_webhook_event("missing_event")
+        assert result["status"] == "error"
+        assert result["code"] == "BILLING_EVENT_NOT_FOUND"
+
+    def test_retry_failed_webhook_event_success_deletes_from_dlq(self, db):
+        service = BillingService(db)
+        doc = {
+            "event_id": "evt_retry_1",
+            "payload": '{"event_type":"transaction.created","data":{"id":"txn_1"}}',
+            "paddle_signature": "ts=1;h1=x",
+        }
+        with patch.object(cache_service, "enabled", True):
+            mock_redis = MagicMock()
+            mock_redis.get.return_value = json.dumps(doc)
+            with patch.object(cache_service, "redis_client", mock_redis):
+                with patch.object(service, "handle_paddle_webhook", return_value={"status": "ignored"}) as mock_handle:
+                    result = service.retry_failed_webhook_event("evt_retry_1")
+        assert result["status"] == "ignored"
+        assert mock_handle.called
+        assert mock_redis.delete.called
+
+    def test_reconcile_paddle_subscriptions_fixes_mismatch(self, db, test_user):
+        sub = Subscription(
+            user_id=test_user.id,
+            plan_type="free",
+            status="active",
+            paddle_subscription_id="sub_123",
+            paddle_customer_id="ctm_123",
+        )
+        db.add(sub)
+        db.commit()
+        service = BillingService(db)
+        service.paddle_available = True
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_PRICE_ID_PRO = "pri_pro"
+            mock_settings.PADDLE_PRICE_ID_INDIE = None
+            mock_settings.PADDLE_PRICE_ID_STARTUP = None
+            mock_settings.PADDLE_PRICE_ID_ENTERPRISE = None
+            with patch.object(
+                service,
+                "_paddle_get",
+                return_value=(
+                    {
+                        "id": "sub_123",
+                        "status": "active",
+                        "customer_id": "ctm_123",
+                        "items": [{"price": {"id": "pri_pro"}}],
+                        "current_billing_period": {},
+                    },
+                    None,
+                ),
+            ):
+                result = service.reconcile_paddle_subscriptions(limit=10)
+        assert result["status"] == "success"
+        assert result["fixed"] == 1

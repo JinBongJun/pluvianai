@@ -4,12 +4,12 @@ Billing endpoints (Paddle checkout + webhook + usage helpers).
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from pydantic import BaseModel, HttpUrl
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.responses import success_response
+from app.core.responses import error_response, success_response
 from app.core.security import (
     get_current_user,
     require_csrf_for_cookie_auth,
@@ -65,9 +65,10 @@ def create_checkout_session(
         cancel_url=str(req.cancel_url),
     )
     if not result or not result.get("url"):
-        raise HTTPException(
+        return error_response(
+            code="BILLING_CHECKOUT_UNAVAILABLE",
+            message="Failed to create checkout session",
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Failed to create checkout session",
         )
     return success_response(data=result)
 
@@ -82,5 +83,41 @@ async def handle_paddle_webhook(
     payload = await request.body()
     result = BillingService(db).handle_paddle_webhook(payload, paddle_signature or "")
     if result.get("error"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result["error"])
+        return error_response(
+            code="BILLING_WEBHOOK_INVALID",
+            message=str(result["error"]),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    return success_response(data=result)
+
+
+@router.post("/webhook/retry/{event_id}")
+def retry_paddle_webhook_event(
+    event_id: str,
+    current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
+    db: Session = Depends(get_db),
+):
+    _ = current_user
+    result = BillingService(db).retry_failed_webhook_event(event_id)
+    if result.get("status") == "error":
+        return error_response(
+            code=str(result.get("code") or "BILLING_RETRY_FAILED"),
+            message=str(result.get("message") or "Retry failed"),
+            status_code=status.HTTP_404_NOT_FOUND
+            if str(result.get("code")) == "BILLING_EVENT_NOT_FOUND"
+            else status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return success_response(data=result)
+
+
+@router.post("/reconcile")
+def reconcile_billing_subscriptions(
+    limit: int = 200,
+    current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
+    db: Session = Depends(get_db),
+):
+    _ = current_user
+    result = BillingService(db).reconcile_paddle_subscriptions(limit=limit)
     return success_response(data=result)

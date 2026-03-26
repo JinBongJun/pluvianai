@@ -86,38 +86,25 @@ class TestBillingAPI:
             headers=auth_headers
         )
         
-        # May succeed or fail depending on billing route / Paddle configuration
-        assert response.status_code in [
-            status.HTTP_200_OK,
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            status.HTTP_503_SERVICE_UNAVAILABLE
-        ]
-        
-        if response.status_code == status.HTTP_200_OK:
-            data = response.json()
-            if "data" in data:
-                data = data["data"]
-            assert "session_id" in data or "url" in data
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()["data"]
+        assert "session_id" in data or "url" in data
 
     @patch("app.services.billing_service.BillingService.create_checkout_session", return_value=None)
     async def test_create_checkout_session_paddle_unavailable(self, _mock_checkout, async_client, auth_headers):
         """Test creating checkout session when Paddle checkout cannot be created"""
         response = await async_client.post(
-                "/api/v1/billing/checkout",
-                json={
-                    "plan_type": "pro",
-                    "success_url": "https://example.com/success",
-                    "cancel_url": "https://example.com/cancel"
-                },
-                headers=auth_headers
-            )
-            
-            # Should handle gracefully
-            assert response.status_code in [
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                status.HTTP_503_SERVICE_UNAVAILABLE,
-                status.HTTP_200_OK  # If it returns None gracefully
-            ]
+            "/api/v1/billing/checkout",
+            json={
+                "plan_type": "pro",
+                "success_url": "https://example.com/success",
+                "cancel_url": "https://example.com/cancel"
+            },
+            headers=auth_headers
+        )
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        body = response.json()
+        assert body["error"]["code"] == "BILLING_CHECKOUT_UNAVAILABLE"
 
     async def test_create_checkout_session_unauthorized(self, async_client):
         """Test creating checkout session without authentication"""
@@ -149,12 +136,8 @@ class TestBillingAPI:
                 }
             )
             
-            # Webhook may succeed or fail depending on configuration
-            assert response.status_code in [
-                status.HTTP_200_OK,
-                status.HTTP_400_BAD_REQUEST,
-                status.HTTP_500_INTERNAL_SERVER_ERROR
-            ]
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json()["data"]["status"] == "success"
 
     @patch(
         "app.services.billing_service.BillingService.handle_paddle_webhook",
@@ -173,15 +156,11 @@ class TestBillingAPI:
                 }
             )
             
-            assert response.status_code in [
-                status.HTTP_400_BAD_REQUEST,
-                status.HTTP_500_INTERNAL_SERVER_ERROR
-            ]
-            
+            assert response.status_code == status.HTTP_400_BAD_REQUEST
             data = response.json()
-            error_msg = data.get("error", {}).get("message") or data.get("detail", "")
-            if error_msg:
-                assert "signature" in error_msg.lower() or "invalid" in error_msg.lower()
+            assert data["error"]["code"] == "BILLING_WEBHOOK_INVALID"
+            error_msg = data["error"]["message"]
+            assert "signature" in error_msg.lower() or "invalid" in error_msg.lower()
 
     async def test_paddle_webhook_no_signature(self, async_client):
         """Test handling webhook without signature header"""
@@ -190,9 +169,43 @@ class TestBillingAPI:
             content=b'{"test": "data"}'
         )
         
-        # Should handle missing signature
-        assert response.status_code in [
-            status.HTTP_400_BAD_REQUEST,
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            status.HTTP_500_INTERNAL_SERVER_ERROR
-        ]
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json()["error"]["code"] == "BILLING_WEBHOOK_INVALID"
+
+    @patch(
+        "app.services.billing_service.BillingService.retry_failed_webhook_event",
+        return_value={"status": "success", "event_id": "evt_1", "event_type": "transaction.completed"},
+    )
+    async def test_retry_failed_webhook_success(self, _mock_retry, async_client, auth_headers):
+        response = await async_client.post(
+            "/api/v1/billing/webhook/retry/evt_1",
+            headers=auth_headers,
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["data"]["status"] == "success"
+
+    @patch(
+        "app.services.billing_service.BillingService.retry_failed_webhook_event",
+        return_value={"status": "error", "code": "BILLING_EVENT_NOT_FOUND", "message": "Event not found"},
+    )
+    async def test_retry_failed_webhook_not_found(self, _mock_retry, async_client, auth_headers):
+        response = await async_client.post(
+            "/api/v1/billing/webhook/retry/missing",
+            headers=auth_headers,
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json()["error"]["code"] == "BILLING_EVENT_NOT_FOUND"
+
+    @patch(
+        "app.services.billing_service.BillingService.reconcile_paddle_subscriptions",
+        return_value={"status": "success", "checked": 1, "fixed": 1, "failed": 0},
+    )
+    async def test_reconcile_billing_success(self, _mock_reconcile, async_client, auth_headers):
+        response = await async_client.post(
+            "/api/v1/billing/reconcile?limit=50",
+            headers=auth_headers,
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()["data"]
+        assert data["status"] == "success"
+        assert data["fixed"] == 1
