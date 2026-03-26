@@ -302,20 +302,24 @@ class BillingService:
             ).inc()
 
         if not self.paddle_available:
+            logger.warning("Paddle webhook rejected: Paddle not configured")
             _record("error", "config")
             return {"error": "Paddle not configured"}
 
         secret = settings.PADDLE_WEBHOOK_SECRET or ""
         if not paddle_signature:
+            logger.warning("Paddle webhook rejected: Missing Paddle-Signature header")
             _record("error", "signature")
             return {"error": "Missing Paddle-Signature header"}
         if not verify_paddle_webhook_signature(payload, paddle_signature, secret):
+            logger.warning("Paddle webhook rejected: Invalid signature")
             _record("error", "signature")
             return {"error": "Invalid signature"}
 
         try:
             event = json.loads(payload.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
+            logger.warning("Paddle webhook rejected: Invalid payload")
             _record("error", "payload")
             return {"error": "Invalid payload"}
 
