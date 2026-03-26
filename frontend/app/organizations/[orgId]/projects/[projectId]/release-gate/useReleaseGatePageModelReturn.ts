@@ -18,6 +18,7 @@ export type UseReleaseGatePageModelReturnParams = {
   error: string;
   result: ReleaseGateValidateRunContextValue["result"];
   keyBlocked: boolean;
+  keyIssueBlocked: boolean;
   keyRegistrationMessage: string;
   missingProviderKeyDetails: string[];
   showGateLoadingState: boolean;
@@ -45,6 +46,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
     error,
     result,
     keyBlocked,
+    keyIssueBlocked,
     keyRegistrationMessage,
     missingProviderKeyDetails,
     showGateLoadingState,
@@ -119,8 +121,8 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
   );
 
   const releaseGateKeysContextValue = useMemo(
-    () => ({ keyBlocked, keyRegistrationMessage, missingProviderKeyDetails }),
-    [keyBlocked, keyRegistrationMessage, missingProviderKeyDetails]
+    () => ({ keyBlocked, keyIssueBlocked, keyRegistrationMessage, missingProviderKeyDetails }),
+    [keyBlocked, keyIssueBlocked, keyRegistrationMessage, missingProviderKeyDetails]
   );
 
   return { validateRunContextValue, gateBodyProps, releaseGateKeysContextValue };

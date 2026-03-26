@@ -21,6 +21,7 @@ function vctxBase(overrides: Partial<ReleaseGateValidateRunContextValue> = {}): 
 function kctxBase(overrides: Partial<ReleaseGateKeysContextValue> = {}): ReleaseGateKeysContextValue {
   return {
     keyBlocked: false,
+    keyIssueBlocked: false,
     keyRegistrationMessage: "",
     missingProviderKeyDetails: [],
     ...overrides,
@@ -66,6 +67,8 @@ function ctxPickFixture(
     replayApiKey: "",
     setReplayApiKey: () => {},
     projectUserApiKeysForUi: [],
+    canValidate: true,
+    mutateProjectUserApiKeys: async () => undefined,
     requestBody: {},
     setRequestBody: () => {},
     requestBodyJson: "{}",

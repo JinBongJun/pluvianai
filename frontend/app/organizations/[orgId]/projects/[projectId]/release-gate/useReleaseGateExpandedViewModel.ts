@@ -110,6 +110,7 @@ export function useReleaseGateExpandedViewModel({
   const isHeavyRepeat = ctx.isHeavyRepeat;
   const canRunValidate = ctx.canRunValidate;
   const keyBlocked = keysCtx.keyBlocked;
+  const keyIssueBlocked = keysCtx.keyIssueBlocked;
   const keyRegistrationMessage = keysCtx.keyRegistrationMessage || "";
   const isValidating = vctx.isValidating;
   const activeJobId = vctx.activeJobId ?? null;
@@ -341,6 +342,7 @@ export function useReleaseGateExpandedViewModel({
         isHeavyRepeat,
         canRunValidate,
         keyBlocked,
+        keyIssueBlocked,
         keyRegistrationMessage,
         handleValidate,
         activeJobId,
@@ -382,6 +384,7 @@ export function useReleaseGateExpandedViewModel({
       isHeavyRepeat,
       canRunValidate,
       keyBlocked,
+      keyIssueBlocked,
       keyRegistrationMessage,
       handleValidate,
       activeJobId,

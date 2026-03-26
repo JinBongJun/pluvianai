@@ -60,6 +60,8 @@ export type ReleaseGatePageContextRestSlice = Pick<
   | "handleLoadToolContextFromSnapshots"
   | "selectedSnapshotIdsForRun"
   | "canRunValidate"
+  | "canValidate"
+  | "mutateProjectUserApiKeys"
   | "historyStatus"
   | "setHistoryStatus"
   | "historyTraceId"

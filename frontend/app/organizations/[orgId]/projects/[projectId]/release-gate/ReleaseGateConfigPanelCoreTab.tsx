@@ -1,12 +1,17 @@
 "use client";
 
-import React from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import clsx from "clsx";
 import { RefreshCcw } from "lucide-react";
 
+import { projectUserApiKeysAPI } from "@/lib/api";
 import type { ReplayProvider } from "./releaseGatePageContent.lib";
 import { isHostedPlatformModel } from "./releaseGateReplayConstants";
 import { formatProviderLabel } from "./releaseGateConfigPanelHelpers";
+import {
+  isReleaseGateSavedProjectKey,
+  RELEASE_GATE_SAVED_API_KEY_NAME_PREFIX,
+} from "./releaseGateSavedApiKeys";
 import type { ReleaseGateConfigThresholdPreset } from "./releaseGateConfigPanelTypes";
 import type { ReleaseGateConfigPanelCoreTabProps } from "./releaseGateConfigPanelModel.types";
 
@@ -52,12 +57,19 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
     setRequestJsonDraft,
     handleRequestJsonBlur,
     requestJsonError,
-    keyBlocked,
+    keyIssueBlocked,
     keyRegistrationMessage,
     missingProviderKeyDetails,
+    canValidate,
+    mutateProjectUserApiKeys,
+    projectId,
     replayApiKey,
     setReplayApiKey,
   } = m;
+
+  const [rgSaveBusy, setRgSaveBusy] = useState(false);
+  const [rgDeleteBusyId, setRgDeleteBusyId] = useState<number | null>(null);
+  const [rgSaveLabel, setRgSaveLabel] = useState("");
 
   const detectedMode = modelSource === "detected";
   const hostedMode = modelSource === "hosted";
@@ -89,15 +101,83 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
 
   const keyStatusText =
     keyRegistrationMessage ||
-    (detectedMode
-      ? "Select baseline logs to detect provider, model, and required API keys."
-      : "Paste an API key for this run, choose a saved key, or rely on a project default key.");
-  const keyStatusLabel = keyRegistrationMessage ? (keyBlocked ? "Blocked" : "Ready") : "Pending";
-  const keyStatusToneClasses = keyBlocked
+    (detectedMode && !canValidate
+      ? "Select baseline logs or saved datasets for this run to verify required API keys."
+      : detectedMode
+        ? "Select baseline logs to detect provider, model, and required API keys."
+        : customMode
+          ? "Paste a provider API key for this run, or save it below for reuse on this project."
+          : "Paste an API key for this run or rely on project default key lookup.");
+
+  const keyStatusLabel = keyIssueBlocked ? "Blocked" : keyRegistrationMessage ? "Ready" : "Pending";
+  const keyStatusToneClasses = keyIssueBlocked
     ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
     : keyRegistrationMessage
       ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
       : "border-white/10 bg-[#0a0c10] text-slate-300";
+
+  const rgSavedKeysForProvider = useMemo(
+    () =>
+      (projectUserApiKeysForUi || []).filter(k =>
+        isReleaseGateSavedProjectKey(k, String(replayProvider || "").trim().toLowerCase())
+      ),
+    [projectUserApiKeysForUi, replayProvider]
+  );
+
+  const saveRgKeyFromPaste = useCallback(async () => {
+    const trimmed = replayApiKey.trim();
+    if (!projectId || !trimmed || rgSaveBusy || editsLocked) return;
+    setRgSaveBusy(true);
+    try {
+      const labelPart = rgSaveLabel.trim().slice(0, 80);
+      const name = labelPart
+        ? `${RELEASE_GATE_SAVED_API_KEY_NAME_PREFIX} ${labelPart}`
+        : `${RELEASE_GATE_SAVED_API_KEY_NAME_PREFIX} ${formatProviderLabel(replayProvider)} · ${new Date().toISOString().slice(0, 10)}`;
+      const created = (await projectUserApiKeysAPI.create(projectId, {
+        provider: replayProvider,
+        api_key: trimmed,
+        name,
+      })) as { id?: number };
+      await mutateProjectUserApiKeys?.();
+      setReplayApiKey?.("");
+      setRgSaveLabel("");
+      if (typeof created?.id === "number") setReplayUserApiKeyId?.(created.id);
+    } finally {
+      setRgSaveBusy(false);
+    }
+  }, [
+    projectId,
+    replayApiKey,
+    rgSaveBusy,
+    editsLocked,
+    rgSaveLabel,
+    replayProvider,
+    mutateProjectUserApiKeys,
+    setReplayApiKey,
+    setReplayUserApiKeyId,
+  ]);
+
+  const deleteRgSavedKey = useCallback(
+    async (keyId: number) => {
+      if (!projectId || rgDeleteBusyId != null || editsLocked) return;
+      setRgDeleteBusyId(keyId);
+      try {
+        await projectUserApiKeysAPI.delete(projectId, keyId);
+        await mutateProjectUserApiKeys?.();
+        if (replayUserApiKeyId === keyId) setReplayUserApiKeyId?.(null);
+      } finally {
+        setRgDeleteBusyId(null);
+      }
+    },
+    [
+      projectId,
+      rgDeleteBusyId,
+      editsLocked,
+      mutateProjectUserApiKeys,
+      replayUserApiKeyId,
+      setReplayUserApiKeyId,
+    ]
+  );
 
   return (
     <>
@@ -106,7 +186,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
           ? "Detected: use the provider and model captured from the selected baseline logs."
           : hostedMode
             ? "Hosted: use PluvianAI hosted quick-pick models with included platform credits."
-            : "Custom (BYOK): choose a provider, enter a model id, and paste an API key, choose a saved key, or use a project default key."}
+            : "Custom (BYOK): choose a provider, enter a model id, paste an API key for one run, or save it below for reuse. Live View node keys apply to Detected mode only."}
       </div>
 
       <div className="rounded-2xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/[0.08] to-transparent p-5">
@@ -367,7 +447,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                     "mt-1 font-medium",
                     !keyRegistrationMessage
                       ? "text-slate-300"
-                      : keyBlocked
+                      : keyIssueBlocked
                         ? "text-rose-300"
                         : "text-emerald-300"
                   )}
@@ -432,10 +512,13 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
             </div>
             <p className="text-xs text-slate-500 mb-3 leading-relaxed">
               Custom models require BYOK. Supported providers: OpenAI, Anthropic, Google. Premium models (e.g. GPT-4o,
-              Claude Sonnet, Gemini Pro) are not available as hosted quick picks — enter the model id here and either
-              paste an API key, select a saved key, or register a project default key.
+              Claude Sonnet, Gemini Pro) are not available as hosted quick picks — enter the provider model id here
+              (for example <span className="font-mono text-slate-400">gpt-4o-mini</span>), then paste a key or use a
+              key you saved from this screen.
             </p>
             <input
+              name="release-gate-custom-model-id"
+              autoComplete="off"
               value={newModel}
               disabled={editsLocked}
               onChange={e => {
@@ -444,7 +527,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                 setReplayProvider?.(activeProviderTab);
                 setNewModel?.(e.target.value);
               }}
-              placeholder="e.g. gpt-4o, claude-sonnet-4-20250514"
+              placeholder="e.g. gpt-4o-mini, claude-sonnet-4-20250514"
               className="mb-3 w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 font-mono outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
             />
             <label className="block mb-3">
@@ -466,37 +549,74 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                 className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
               />
             </label>
-            <label className="block mb-3">
-              <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2 block">
-                Saved API key (optional)
-              </span>
-              <select
+            <div className="mb-3 rounded-xl border border-white/10 bg-[#0a0c10]/80 px-4 py-3">
+              <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2">
+                Save key for Release Gate (optional)
+              </div>
+              <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                Keys registered in Live View apply to Detected mode. To reuse a key in Custom without pasting each
+                time, save it here (project-wide, not tied to a node). Optional label helps you tell keys apart.
+              </p>
+              <input
+                type="text"
+                name="release-gate-saved-key-label"
+                autoComplete="off"
+                value={rgSaveLabel}
                 disabled={editsLocked}
-                value={replayUserApiKeyId ?? ""}
-                onChange={e => {
-                  const v = e.target.value;
-                  setReplayApiKey?.("");
-                  setReplayUserApiKeyId?.(v === "" ? null : Number(v));
-                }}
-                className="w-full max-w-md rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-2.5 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50"
+                onChange={e => setRgSaveLabel(e.target.value)}
+                placeholder="Optional label (e.g. staging)"
+                className="mb-2 w-full max-w-md rounded-lg border border-white/10 bg-[#0a0c10] px-3 py-2 text-sm text-slate-200 outline-none focus:border-fuchsia-500/50"
+              />
+              <button
+                type="button"
+                disabled={editsLocked || !replayApiKey.trim() || rgSaveBusy || !projectId}
+                onClick={() => void saveRgKeyFromPaste()}
+                className="rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-fuchsia-100 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <option value="">Use project default key lookup</option>
-                {(projectUserApiKeysForUi || [])
-                  .filter(
-                    k =>
-                      k.is_active &&
-                      String(k.provider || "")
-                        .trim()
-                        .toLowerCase() === replayProvider
-                  )
-                  .map(k => (
-                    <option key={k.id} value={k.id}>
-                      {(k.name || `${k.provider} key`).trim()}
-                      {k.agent_id ? ` · node ${k.agent_id}` : " · project default"}
-                    </option>
-                  ))}
-              </select>
-            </label>
+                {rgSaveBusy ? "Saving…" : "Save pasted key to project"}
+              </button>
+              {rgSavedKeysForProvider.length > 0 ? (
+                <ul className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                  {rgSavedKeysForProvider.map(k => {
+                    const selected = replayUserApiKeyId === k.id && !replayApiKey.trim();
+                    return (
+                      <li
+                        key={k.id}
+                        className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300"
+                      >
+                        <span className="font-mono text-[11px] text-slate-400">
+                          {(k.name || "Saved key").replace(/^\[RG\]\s*/, "")}
+                          {selected ? (
+                            <span className="ml-2 text-fuchsia-300">· in use for this run</span>
+                          ) : null}
+                        </span>
+                        <span className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={editsLocked}
+                            onClick={() => {
+                              setReplayApiKey?.("");
+                              setReplayUserApiKeyId?.(k.id);
+                            }}
+                            className="rounded border border-white/15 px-2 py-1 text-[11px] font-medium text-slate-200 hover:bg-white/5 disabled:opacity-40"
+                          >
+                            Use for run
+                          </button>
+                          <button
+                            type="button"
+                            disabled={editsLocked || rgDeleteBusyId === k.id}
+                            onClick={() => void deleteRgSavedKey(k.id)}
+                            className="rounded border border-rose-500/30 px-2 py-1 text-[11px] font-medium text-rose-200 hover:bg-rose-500/10 disabled:opacity-40"
+                          >
+                            {rgDeleteBusyId === k.id ? "…" : "Delete"}
+                          </button>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+            </div>
             <div className={clsx("rounded-xl border px-4 py-3 text-xs leading-relaxed", keyStatusToneClasses)}>
               {keyStatusText}
               {missingProviderKeyDetails.length > 0 ? (
