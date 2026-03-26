@@ -1,12 +1,23 @@
 "use client";
 
-import { useMemo } from "react";
-import useSWR from "swr";
+import { useEffect, useMemo, useRef } from "react";
+import useSWR, { useSWRConfig } from "swr";
 import type { AgentForPicker } from "@/components/release-gate/AgentPickerCard";
 import { releaseGateAPI } from "@/lib/api";
+import {
+  liveViewAgentsSwrKey,
+  releaseGateAgentsPayloadSignature,
+} from "@/lib/laboratoryLabRefresh";
 
 export function useReleaseGateAgents(options: { projectId: number; runLocked: boolean }) {
   const { projectId, runLocked } = options;
+
+  const { mutate: cacheMutate } = useSWRConfig();
+  const lastRgAgentsSigRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    lastRgAgentsSigRef.current = null;
+  }, [projectId]);
 
   const agentsKey =
     projectId && !isNaN(projectId) ? ["release-gate-agents", projectId] : null;
@@ -18,7 +29,21 @@ export function useReleaseGateAgents(options: { projectId: number; runLocked: bo
   } = useSWR(
     agentsKey,
     () => releaseGateAPI.getAgents(projectId, 50),
-    { isPaused: () => runLocked }
+    {
+      isPaused: () => runLocked,
+      onSuccess: (data: unknown) => {
+        if (!projectId || projectId <= 0 || Number.isNaN(projectId)) return;
+        const sig = releaseGateAgentsPayloadSignature(data);
+        if (
+          lastRgAgentsSigRef.current !== null &&
+          sig === lastRgAgentsSigRef.current
+        ) {
+          return;
+        }
+        lastRgAgentsSigRef.current = sig;
+        void cacheMutate(liveViewAgentsSwrKey(projectId));
+      },
+    }
   );
   const agentsLoaded = agentsKey !== null && typeof agentsData !== "undefined";
   const agents = useMemo<AgentForPicker[]>(() => {

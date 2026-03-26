@@ -8,8 +8,7 @@ import clsx from "clsx";
 import {
   LABORATORY_REFRESH_EVENT,
   type LaboratoryRefreshDetail,
-  liveViewAgentsSwrKey,
-  releaseGateAgentsSwrKey,
+  revalidateLaboratoryAgentListCaches,
 } from "@/lib/laboratoryLabRefresh";
 
 const shellClass =
@@ -23,10 +22,7 @@ export function LaboratoryRefreshButton({ projectId }: { projectId: number }) {
     if (!projectId || Number.isNaN(projectId)) return;
     setBusy(true);
     try {
-      await Promise.all([
-        mutate(liveViewAgentsSwrKey(projectId)),
-        mutate(releaseGateAgentsSwrKey(projectId)),
-      ]);
+      await revalidateLaboratoryAgentListCaches(mutate, projectId);
     } finally {
       window.setTimeout(() => {
         window.dispatchEvent(

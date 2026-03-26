@@ -12,11 +12,10 @@ const tiers = [
     priceLabel: "Free",
     description: "For teams getting started with Live View and Release Gate.",
     features: [
-      "Live View & Release Gate",
-      "Up to 10,000 snapshots per month",
-      "Up to 50 Release Gate runs per month",
-      "Bring your own provider key anytime",
-      "No credit card required",
+      "1 organization",
+      "2 active projects",
+      "10,000 snapshots per month",
+      "60 hosted replay credits per month",
     ],
     icon: Zap,
     color: "text-slate-400",
@@ -26,13 +25,12 @@ const tiers = [
   {
     name: "Pro",
     priceLabel: "Coming soon",
-    description: "For teams that need higher hosted replay budgets, retention, and support.",
+    description: "For teams that need higher hosted replay budgets and multi-project scale.",
     features: [
+      "5 organizations",
       "10 active projects",
-      "10,000 platform replay credits per month",
-      "Longer trace retention",
-      "Priority support",
-      "API access & webhooks",
+      "30,000 snapshots per month",
+      "800 hosted replay credits per month",
     ],
     icon: Shield,
     color: "text-emerald-400",
@@ -75,8 +73,13 @@ export default function PricingSection({ isLoggedIn }: PricingSectionProps) {
           </div>
           <h2 className="text-4xl md:text-5xl font-black text-white mb-6">Pricing</h2>
           <p className="text-xl text-slate-400 leading-relaxed font-medium">
-            Start for free with product limits and included platform replay credits. <br />
+            Start for free with product limits and included hosted replay credits. <br />
             Paid plans are preview-only during the MVP.
+          </p>
+          <p className="text-sm text-slate-500 leading-relaxed font-medium mt-4 max-w-2xl mx-auto">
+            All plans include 30-day trace retention.
+            <br />
+            BYOK runs do not consume hosted replay credits.
           </p>
         </div>
 
