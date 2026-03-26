@@ -4,6 +4,9 @@ import AccountLayout from "@/components/layout/AccountLayout";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import useSWR from "swr";
 import { apiClient } from "@/lib/api/client";
+import { billingAPI } from "@/lib/api";
+import { useToast } from "@/components/ToastContainer";
+import { useState } from "react";
 
 type UsageResponse = {
   plan_type: string;
@@ -11,6 +14,8 @@ type UsageResponse = {
 
 export default function AccountBillingPage() {
   const hasToken = useRequireAuth();
+  const toast = useToast();
+  const [upgradeBusy, setUpgradeBusy] = useState<string | null>(null);
   const { data } = useSWR<UsageResponse>(
     hasToken ? "/auth/me/usage" : null,
     async () => {
@@ -20,6 +25,30 @@ export default function AccountBillingPage() {
   );
 
   const currentPlanId = (data?.plan_type || "free").toLowerCase();
+
+  const startUpgrade = async (planType: string) => {
+    if (!hasToken || upgradeBusy) return;
+    setUpgradeBusy(planType);
+    try {
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const successUrl = `${origin}/settings/billing?checkout=success`;
+      const cancelUrl = `${origin}/settings/billing?checkout=cancel`;
+      const session = await billingAPI.createCheckoutSession(planType, successUrl, cancelUrl);
+      if (!session?.url) throw new Error("Missing checkout URL");
+      window.location.href = session.url;
+    } catch (err: any) {
+      const apiError = err?.response?.data?.error;
+      const detail = err?.response?.data?.detail;
+      const msg =
+        (typeof apiError?.message === "string" ? apiError.message : null) ||
+        (typeof detail === "string" ? detail : detail?.message) ||
+        err?.message ||
+        "Failed to start checkout";
+      toast.showToast(msg, "error");
+    } finally {
+      setUpgradeBusy(null);
+    }
+  };
 
   const plans = [
     {
@@ -77,11 +106,29 @@ export default function AccountBillingPage() {
           All plans include 30-day trace retention.
           <br />
           BYOK runs do not consume hosted replay credits.
+          <br />
+          Subscriptions auto-renew unless canceled before the next billing cycle.
         </p>
+        <div className="mb-8 text-xs text-slate-400 space-y-1">
+          <p>
+            By upgrading, you agree to our{" "}
+            <a href="/trust" className="text-emerald-300 hover:text-emerald-200 underline">
+              Terms and Privacy
+            </a>
+            {" "}and refund/cancellation policy.
+          </p>
+          <p>
+            Need to cancel or billing help? Contact support via{" "}
+            <a href="/settings/profile" className="text-emerald-300 hover:text-emerald-200 underline">
+              account settings
+            </a>
+            .
+          </p>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
           {plans.map(plan => {
             const isCurrent = plan.id === currentPlanId;
-            const isComingSoon = plan.id !== "free";
+            const canCheckout = plan.id === "pro" || plan.id === "enterprise";
             return (
               <div
                 key={plan.id}
@@ -134,15 +181,19 @@ export default function AccountBillingPage() {
                     >
                       Current Plan
                     </button>
-                  ) : isComingSoon ? (
+                  ) : canCheckout ? (
                     <button
-                      disabled
-                      className="w-full py-2.5 rounded-xl border border-slate-600/60 bg-slate-900/60 text-[11px] font-bold uppercase tracking-widest text-slate-400 cursor-not-allowed"
+                      onClick={() => void startUpgrade(plan.id)}
+                      disabled={upgradeBusy !== null}
+                      className="w-full py-2.5 rounded-xl border border-emerald-500/60 bg-emerald-500 text-[11px] font-bold uppercase tracking-widest text-black hover:bg-emerald-400 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Preview Only
+                      {upgradeBusy === plan.id ? "Opening checkout..." : "Upgrade"}
                     </button>
                   ) : (
-                    <button className="w-full py-2.5 rounded-xl border border-emerald-500/60 bg-emerald-500 text-[11px] font-bold uppercase tracking-widest text-black hover:bg-emerald-400 transition-colors">
+                    <button
+                      disabled
+                      className="w-full py-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-[11px] font-bold uppercase tracking-widest text-emerald-300 cursor-default"
+                    >
                       Stay on Free
                     </button>
                   )}

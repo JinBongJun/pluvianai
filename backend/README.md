@@ -84,3 +84,12 @@ python -m pytest -c pytest-ci.ini
 ```
 
 See [`tests/README.md`](./tests/README.md) for more on the test layout.
+
+## Billing Webhook Observability
+
+- Prometheus metric: `billing_webhook_events_total{result,event_type}`
+- Result labels: `success`, `ignored`, `duplicate`, `error`
+- Check endpoint: `GET /metrics`
+- Webhook logs include `event_id`, `event_type`, `status`
+- DLQ retry endpoint: `POST /api/v1/billing/webhook/retry/{event_id}`
+- Manual reconcile endpoint: `POST /api/v1/billing/reconcile?limit=200`

@@ -8,17 +8,19 @@ import hashlib
 import hmac
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.logging_config import logger
+from app.core.metrics import billing_webhook_events_total
 from app.core.subscription_limits import PLAN_LIMITS
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.cache_service import cache_service
+from app.utils.idempotency import idempotency_service
 
 
 def verify_paddle_webhook_signature(raw_body: bytes, signature_header: str, secret: str) -> bool:
@@ -89,6 +91,147 @@ class BillingService:
         except Exception as e:
             logger.error("Paddle API request failed: %s", str(e), exc_info=True)
             return None, str(e)
+
+    def _paddle_get(self, path: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        if not self.paddle_available:
+            return None, "Paddle not configured"
+        url = f"{self._paddle_base_url().rstrip('/')}/{path.lstrip('/')}"
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                r = client.get(url, headers=self._paddle_headers())
+            body = r.json() if r.content else {}
+            if r.status_code >= 400:
+                err = body.get("error", body) if isinstance(body, dict) else str(body)
+                logger.error("Paddle API error %s: %s", r.status_code, err)
+                return None, str(err)
+            if isinstance(body, dict) and "data" in body:
+                return body["data"], None
+            return body if isinstance(body, dict) else None, None
+        except Exception as e:
+            logger.error("Paddle API request failed: %s", str(e), exc_info=True)
+            return None, str(e)
+
+    def _failed_webhook_key(self, event_id: str) -> str:
+        return f"billing:webhook:failed:{event_id}"
+
+    def _record_failed_webhook_event(
+        self,
+        event_id: str,
+        event_type: Optional[str],
+        payload: bytes,
+        paddle_signature: str,
+        error_message: str,
+    ) -> None:
+        if not cache_service.enabled:
+            return
+        try:
+            doc = {
+                "event_id": event_id,
+                "event_type": event_type or "unknown",
+                "payload": payload.decode("utf-8", errors="ignore"),
+                "paddle_signature": paddle_signature or "",
+                "error_message": error_message,
+                "failed_at": datetime.now(timezone.utc).isoformat(),
+            }
+            key = self._failed_webhook_key(event_id)
+            cache_service.redis_client.setex(key, 7 * 24 * 3600, json.dumps(doc))
+        except Exception:
+            logger.warning("Failed to store webhook DLQ event", exc_info=True)
+
+    def retry_failed_webhook_event(self, event_id: str) -> Dict[str, Any]:
+        if not cache_service.enabled:
+            return {"status": "error", "code": "BILLING_DLQ_UNAVAILABLE", "message": "DLQ unavailable"}
+        try:
+            raw_doc = cache_service.redis_client.get(self._failed_webhook_key(event_id))
+            if not raw_doc:
+                return {"status": "error", "code": "BILLING_EVENT_NOT_FOUND", "message": "Event not found"}
+            doc = json.loads(raw_doc)
+            payload = str(doc.get("payload") or "").encode("utf-8")
+            signature = str(doc.get("paddle_signature") or "")
+            result = self.handle_paddle_webhook(payload, signature)
+            if result.get("status") in {"success", "ignored", "duplicate"}:
+                cache_service.redis_client.delete(self._failed_webhook_key(event_id))
+            return result
+        except Exception as e:
+            logger.error("Failed to retry webhook event %s: %s", event_id, str(e), exc_info=True)
+            return {"status": "error", "code": "BILLING_RETRY_FAILED", "message": str(e)}
+
+    def reconcile_paddle_subscriptions(self, limit: int = 200) -> Dict[str, Any]:
+        """
+        Reconcile local subscriptions against Paddle subscription status/price.
+        Returns summary for ops visibility.
+        """
+        if not self.paddle_available:
+            return {"status": "skipped", "reason": "paddle_not_configured"}
+
+        from app.services.subscription_service import SubscriptionService
+
+        q = (
+            self.db.query(Subscription)
+            .filter(Subscription.paddle_subscription_id.isnot(None))
+            .order_by(Subscription.id.desc())
+            .limit(max(1, min(limit, 1000)))
+        )
+        subs: List[Subscription] = q.all()
+        service = SubscriptionService(self.db)
+
+        checked = 0
+        fixed = 0
+        failed = 0
+        for sub in subs:
+            checked += 1
+            sub_id = (sub.paddle_subscription_id or "").strip()
+            if not sub_id:
+                continue
+            data, err = self._paddle_get(f"subscriptions/{sub_id}")
+            if not data:
+                failed += 1
+                logger.warning(
+                    "Billing reconciliation lookup failed",
+                    extra={"subscription_id": sub_id, "user_id": sub.user_id, "error": err},
+                )
+                continue
+            price_id = self._paddle_subscription_price_id(data)
+            mapped_plan = self._map_paddle_price_id_to_plan_type(price_id) if price_id else None
+            normalized_status = self._normalize_paddle_status(str(data.get("status") or "active"))
+            if not mapped_plan:
+                failed += 1
+                logger.warning(
+                    "Billing reconciliation unknown price id",
+                    extra={"subscription_id": sub_id, "price_id": price_id, "user_id": sub.user_id},
+                )
+                continue
+            if sub.plan_type != mapped_plan or (sub.status or "").lower() != normalized_status:
+                try:
+                    cbp = data.get("current_billing_period") or {}
+                    service.create_or_update_subscription(
+                        user_id=sub.user_id,
+                        plan_type=mapped_plan,
+                        status=normalized_status,
+                        paddle_subscription_id=sub_id,
+                        paddle_customer_id=data.get("customer_id"),
+                        current_period_start=self._parse_paddle_datetime(cbp.get("starts_at")),
+                        current_period_end=self._parse_paddle_datetime(cbp.get("ends_at")),
+                    )
+                    fixed += 1
+                    logger.info(
+                        "Billing reconciliation fixed local subscription",
+                        extra={
+                            "subscription_id": sub_id,
+                            "user_id": sub.user_id,
+                            "plan_type_before": sub.plan_type,
+                            "plan_type_after": mapped_plan,
+                            "status_after": normalized_status,
+                        },
+                    )
+                except Exception:
+                    failed += 1
+                    logger.error(
+                        "Billing reconciliation apply failed",
+                        extra={"subscription_id": sub_id, "user_id": sub.user_id},
+                        exc_info=True,
+                    )
+        return {"status": "success", "checked": checked, "fixed": fixed, "failed": failed}
 
     def get_current_usage(self, user_id: int) -> Dict[str, Any]:
         """
@@ -293,36 +436,114 @@ class BillingService:
 
     def handle_paddle_webhook(self, payload: bytes, paddle_signature: str) -> Dict[str, Any]:
         """Verify signature and handle Paddle Billing webhook events."""
+        def _record(result: str, ev_type: str | None) -> None:
+            billing_webhook_events_total.labels(
+                result=result,
+                event_type=(ev_type or "unknown"),
+            ).inc()
+            if not cache_service.enabled:
+                return
+            # Rolling ratio alarms for quick ops detection.
+            try:
+                window = max(60, int(settings.BILLING_WEBHOOK_ALERT_WINDOW_SECONDS))
+                total_key = "billing:webhook:stats:total"
+                result_key = f"billing:webhook:stats:{result}"
+                total = cache_service.redis_client.incr(total_key)
+                cache_service.redis_client.expire(total_key, window)
+                part = cache_service.redis_client.incr(result_key)
+                cache_service.redis_client.expire(result_key, window)
+                if total <= 0:
+                    return
+                ratio = float(part) / float(total)
+                if result == "error" and ratio >= float(settings.BILLING_WEBHOOK_ERROR_RATIO_THRESHOLD):
+                    logger.error(
+                        "Billing webhook error ratio exceeded threshold",
+                        extra={"ratio": ratio, "threshold": settings.BILLING_WEBHOOK_ERROR_RATIO_THRESHOLD},
+                    )
+                if result == "duplicate" and ratio >= float(settings.BILLING_WEBHOOK_DUPLICATE_RATIO_THRESHOLD):
+                    logger.warning(
+                        "Billing webhook duplicate ratio exceeded threshold",
+                        extra={"ratio": ratio, "threshold": settings.BILLING_WEBHOOK_DUPLICATE_RATIO_THRESHOLD},
+                    )
+            except Exception:
+                logger.warning("Failed to update webhook ratio counters", exc_info=True)
+
         if not self.paddle_available:
+            logger.warning("Paddle webhook rejected: Paddle not configured")
+            _record("error", "config")
             return {"error": "Paddle not configured"}
 
         secret = settings.PADDLE_WEBHOOK_SECRET or ""
         if not paddle_signature:
+            logger.warning("Paddle webhook rejected: Missing Paddle-Signature header")
+            _record("error", "signature")
             return {"error": "Missing Paddle-Signature header"}
         if not verify_paddle_webhook_signature(payload, paddle_signature, secret):
+            logger.warning("Paddle webhook rejected: Invalid signature")
+            _record("error", "signature")
             return {"error": "Invalid signature"}
 
         try:
             event = json.loads(payload.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
+            logger.warning("Paddle webhook rejected: Invalid payload")
+            _record("error", "payload")
             return {"error": "Invalid payload"}
 
         event_type = event.get("event_type")
         data = event.get("data") or {}
+        event_id = event.get("event_id") or event.get("id") or hashlib.sha256(payload).hexdigest()
+        raw_event_id = event.get("event_id") or event.get("id")
+        idem_key = f"paddle:webhook:{raw_event_id}" if raw_event_id else None
+        if idem_key:
+            cached = idempotency_service.get(idem_key)
+            if isinstance(cached, dict):
+                _record("duplicate", event_type)
+                logger.info(
+                    "Duplicate Paddle webhook ignored",
+                    extra={"event_id": event_id, "event_type": event_type},
+                )
+                return {
+                    "status": "duplicate",
+                    "message": "Webhook already processed",
+                    "event_type": event_type,
+                    "event_id": event_id,
+                    "result": cached,
+                }
+                
 
+        result: Dict[str, Any]
         if event_type == "transaction.completed":
-            return self._handle_transaction_completed(data, event_type)
-        if event_type == "subscription.updated":
-            return self._handle_subscription_updated(data, event_type)
-        if event_type in ("subscription.canceled", "subscription.cancelled"):
-            return self._handle_subscription_canceled(data, event_type)
+            result = self._handle_transaction_completed(data, event_type)
+        elif event_type == "subscription.updated":
+            result = self._handle_subscription_updated(data, event_type)
+        elif event_type in ("subscription.canceled", "subscription.cancelled"):
+            result = self._handle_subscription_canceled(data, event_type)
+        else:
+            logger.info(f"Unhandled Paddle webhook event type: {event_type}")
+            result = {
+                "status": "ignored",
+                "message": f"Event type {event_type} not handled",
+                "event_type": event_type,
+            }
 
-        logger.info(f"Unhandled Paddle webhook event type: {event_type}")
-        return {
-            "status": "ignored",
-            "message": f"Event type {event_type} not handled",
-            "event_type": event_type,
-        }
+        if idem_key and result.get("status") in {"success", "ignored"}:
+            idempotency_service.set(idem_key, result)
+        result["event_id"] = event_id
+        if str(result.get("status")) == "error":
+            self._record_failed_webhook_event(
+                event_id=event_id,
+                event_type=event_type,
+                payload=payload,
+                paddle_signature=paddle_signature,
+                error_message=str(result.get("message") or "Webhook processing failed"),
+            )
+        _record(str(result.get("status") or "unknown"), event_type)
+        logger.info(
+            "Processed Paddle webhook",
+            extra={"event_id": event_id, "event_type": event_type, "status": result.get("status")},
+        )
+        return result
 
     def _handle_transaction_completed(self, data: Dict[str, Any], event_type: str) -> Dict[str, Any]:
         custom = data.get("custom_data") or {}
