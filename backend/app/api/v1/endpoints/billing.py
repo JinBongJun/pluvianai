@@ -72,6 +72,7 @@ def create_checkout_session(
     return success_response(data=result)
 
 
+@router.post("/webhook")
 @router.post("/webhook/paddle")
 async def handle_paddle_webhook(
     request: Request,

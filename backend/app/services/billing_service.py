@@ -19,6 +19,7 @@ from app.core.subscription_limits import PLAN_LIMITS
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.cache_service import cache_service
+from app.utils.idempotency import idempotency_service
 
 
 def verify_paddle_webhook_signature(raw_body: bytes, signature_header: str, secret: str) -> bool:
@@ -309,20 +310,36 @@ class BillingService:
 
         event_type = event.get("event_type")
         data = event.get("data") or {}
+        event_id = event.get("event_id") or event.get("id") or hashlib.sha256(payload).hexdigest()
+        idem_key = f"paddle:webhook:{event_id}"
+        cached = idempotency_service.get(idem_key)
+        if isinstance(cached, dict):
+            return {
+                "status": "duplicate",
+                "message": "Webhook already processed",
+                "event_type": event_type,
+                "event_id": event_id,
+                "result": cached,
+            }
 
+        result: Dict[str, Any]
         if event_type == "transaction.completed":
-            return self._handle_transaction_completed(data, event_type)
-        if event_type == "subscription.updated":
-            return self._handle_subscription_updated(data, event_type)
-        if event_type in ("subscription.canceled", "subscription.cancelled"):
-            return self._handle_subscription_canceled(data, event_type)
+            result = self._handle_transaction_completed(data, event_type)
+        elif event_type == "subscription.updated":
+            result = self._handle_subscription_updated(data, event_type)
+        elif event_type in ("subscription.canceled", "subscription.cancelled"):
+            result = self._handle_subscription_canceled(data, event_type)
+        else:
+            logger.info(f"Unhandled Paddle webhook event type: {event_type}")
+            result = {
+                "status": "ignored",
+                "message": f"Event type {event_type} not handled",
+                "event_type": event_type,
+            }
 
-        logger.info(f"Unhandled Paddle webhook event type: {event_type}")
-        return {
-            "status": "ignored",
-            "message": f"Event type {event_type} not handled",
-            "event_type": event_type,
-        }
+        if result.get("status") in {"success", "ignored"}:
+            idempotency_service.set(idem_key, result)
+        return result
 
     def _handle_transaction_completed(self, data: Dict[str, Any], event_type: str) -> Dict[str, Any]:
         custom = data.get("custom_data") or {}
