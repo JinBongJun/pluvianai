@@ -20,14 +20,14 @@ def normalize_plan_type(plan_type: str | None) -> str:
 FREE_LIMITS: Dict[str, Any] = {
     "organizations": 1,
     # Beta Free plan (publicly exposed)
-    "projects": 1,
+    "projects": 2,
     "api_calls_per_month": 10_000,
     "snapshots_per_month": 10_000,
     # Guard credits are kept higher as an internal accounting unit even if
     # UI-level "runs per month" is lower.
     "guard_credits_per_month": 10_000,
     # Platform replay credits roughly map to hosted Release Gate runs.
-    "platform_replay_credits_per_month": 50,
+    "platform_replay_credits_per_month": 60,
     "judge_calls_per_month": 100,
     "team_members_per_project": 3,
     "data_retention_days": 30,
@@ -56,9 +56,9 @@ PRO_LIMITS: Dict[str, Any] = {
     "organizations": 5,
     "projects": 10,
     "api_calls_per_month": 100_000,
-    "snapshots_per_month": 10_000,
+    "snapshots_per_month": 30_000,
     "guard_credits_per_month": 10_000,
-    "platform_replay_credits_per_month": 10_000,
+    "platform_replay_credits_per_month": 800,
     "judge_calls_per_month": 1_000,
     "team_members_per_project": 5,
     "data_retention_days": 30,

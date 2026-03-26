@@ -29,11 +29,10 @@ export default function AccountBillingPage() {
       period: "/month",
       desc: "For teams getting started with Live View and Release Gate during the MVP.",
       features: [
-        "1 active project",
+        "1 organization",
+        "2 active projects",
         "10,000 snapshots per month",
-        "50 Release Gate runs per month",
-        "Use your own provider keys anytime",
-        "30-day trace retention",
+        "60 hosted replay credits per month",
       ],
     },
     {
@@ -41,12 +40,12 @@ export default function AccountBillingPage() {
       name: "Pro",
       price: "$49",
       period: "/month",
-      desc: "For teams that need higher hosted replay budgets, more retention, and team access.",
+      desc: "For teams that need higher hosted replay budgets and multi-project scale.",
       features: [
+        "5 organizations",
         "10 active projects",
-        "10,000 platform replay credits per month",
-        "30-day trace retention",
-        "Priority support",
+        "30,000 snapshots per month",
+        "800 hosted replay credits per month",
       ],
     },
     {
@@ -74,6 +73,11 @@ export default function AccountBillingPage() {
       ]}
     >
       <div className="pb-24 relative">
+        <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed">
+          All plans include 30-day trace retention.
+          <br />
+          BYOK runs do not consume hosted replay credits.
+        </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
           {plans.map(plan => {
             const isCurrent = plan.id === currentPlanId;
