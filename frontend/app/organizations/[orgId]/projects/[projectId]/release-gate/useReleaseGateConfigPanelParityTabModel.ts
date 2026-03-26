@@ -21,7 +21,7 @@ export function useReleaseGateConfigPanelParityTabModel(
   }
 ) {
   const {
-    modelOverrideEnabled,
+    modelSource,
     toolsList,
     setToolsList,
     requestBodyOverrides,
@@ -147,7 +147,12 @@ export function useReleaseGateConfigPanelParityTabModel(
     () => [
       {
         label: "Model",
-        value: modelOverrideEnabled ? "Overridden vs baseline" : "Same as detected baseline",
+        value:
+          modelSource === "detected"
+            ? "Same as detected baseline"
+            : modelSource === "hosted"
+              ? "Hosted model selected"
+              : "Custom BYOK model selected",
       },
       {
         label: "System prompt",
@@ -182,7 +187,7 @@ export function useReleaseGateConfigPanelParityTabModel(
       },
     ],
     [
-      modelOverrideEnabled,
+      modelSource,
       isSystemPromptOverridden,
       isJsonModified,
       toolsList.length,

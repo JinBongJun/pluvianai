@@ -1,6 +1,6 @@
 # HTTP Ingest Demo
 
-A small demo that sends AgentGuard / PluvianAI ingest payloads over plain HTTP instead of the SDK.
+A small demo that sends PluvianAI ingest payloads over plain HTTP instead of the SDK.
 
 ## Purpose
 

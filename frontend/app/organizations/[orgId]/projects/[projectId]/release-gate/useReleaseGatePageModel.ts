@@ -129,10 +129,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     setReplayProvider,
     replayUserApiKeyId,
     setReplayUserApiKeyId,
-    replayModelMode,
-    setReplayModelMode,
-    modelOverrideEnabled,
-    setModelOverrideEnabled,
+    modelSource,
     setModelProviderTab,
     requestBody,
     setRequestBody,
@@ -183,6 +180,8 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     selectedRunId,
     setSelectedRunId,
   } = lv;
+  const modelOverrideEnabled = modelSource !== "detected";
+  const replayModelMode = modelSource === "hosted" ? "hosted" : "custom";
 
   const {
     baselineDetailSnapshot,
@@ -361,7 +360,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     baselineTools,
     runDataModel,
     runDataProvider,
-    modelOverrideEnabled,
+    modelSource,
     setToolsList,
     setRequestBody,
     setNewModel,
@@ -402,8 +401,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     projectId,
     runLocked,
     canValidate,
-    modelOverrideEnabled,
-    replayModelMode,
+    modelSource,
     newModel,
     replayProvider,
     replayUserApiKeyId,
@@ -412,10 +410,11 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     agentId,
   });
 
-  const modelOverrideInvalid = modelOverrideEnabled && !newModel.trim();
+  const modelSourceInvalid =
+    (modelSource === "hosted" || modelSource === "custom") && !newModel.trim();
   const runValidateCooldownActive = runValidateCooldownUntilMs > Date.now();
   const canRunValidate =
-    canValidate && !keyBlocked && !modelOverrideInvalid && !runValidateCooldownActive;
+    canValidate && !keyBlocked && !modelSourceInvalid && !runValidateCooldownActive;
 
   const requestSystemPrompt = useMemo(() => {
     const fromBody =
@@ -432,11 +431,12 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     canValidate,
     keyBlocked,
     keyRegistrationMessage,
+    modelSource,
     modelOverrideEnabled,
     newModel,
     replayProvider,
     replayUserApiKeyId,
-    replayModelMode,
+    replayModelMode: modelSource === "hosted" ? "hosted" : "custom",
     failRateMax,
     flakyRateMax,
     agentId,
@@ -531,7 +531,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
         nodeBasePayload,
         requestBody,
         requestSystemPrompt,
-        modelOverrideEnabled,
+        modelSource,
         newModel,
         requestBodyOverrides,
         requestBodyOverridesBySnapshotId,
@@ -543,7 +543,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       nodeBasePayload,
       requestBody,
       requestSystemPrompt,
-      modelOverrideEnabled,
+      modelSource,
       newModel,
       requestBodyOverrides,
       requestBodyOverridesBySnapshotId,
@@ -554,8 +554,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
   const validateOverridePreview = useMemo(
     () =>
       buildValidateOverridePreview({
-        modelOverrideEnabled,
-        replayModelMode,
+        modelSource,
         newModel,
         replayProvider,
         requestBody,
@@ -570,8 +569,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
         requestBodyOverridesBySnapshotId,
       }),
     [
-      modelOverrideEnabled,
-      replayModelMode,
+      modelSource,
       newModel,
       replayProvider,
       requestBody,
@@ -590,7 +588,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
   useReleaseGateToolsAndModelSync({
     toolsList,
     setRequestBody,
-    modelOverrideEnabled,
+    modelSource,
     runDataModel,
     runDataProvider,
     setNewModel,

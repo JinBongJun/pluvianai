@@ -42,6 +42,7 @@ export function createDefaultValidateRunDeps(): ReleaseGateValidateRunDeps {
     canValidate: false,
     keyBlocked: true,
     keyRegistrationMessage: "",
+    modelSource: "detected",
     modelOverrideEnabled: false,
     newModel: "",
     replayProvider: "openai",
@@ -315,11 +316,11 @@ export function useReleaseGateValidateRun(options: {
       setError(d.keyRegistrationMessage || "Run blocked: required API key is not registered.");
       return;
     }
-    if (d.modelOverrideEnabled && !d.newModel.trim()) {
-      setError("Run blocked: select a model id for override or switch back to detected model.");
+    if ((d.modelSource === "hosted" || d.modelSource === "custom") && !d.newModel.trim()) {
+      setError("Run blocked: select a model for Hosted or enter a model id for Custom (BYOK).");
       return;
     }
-    if (d.modelOverrideEnabled) {
+    if (d.modelSource === "custom") {
       const modelValidation = validateCustomModelForProvider(d.replayProvider, d.newModel);
       if (!modelValidation.ok) {
         setError(modelValidation.message);

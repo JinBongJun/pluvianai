@@ -12,7 +12,7 @@ import type { ReleaseGateConfigPanelCoreTabProps } from "./releaseGateConfigPane
 
 export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanelCoreTabProps }) {
   const {
-    modelOverrideEnabled,
+    modelSource,
     repeatRuns,
     REPLAY_THRESHOLD_PRESETS,
     thresholdPreset,
@@ -30,9 +30,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
     replayUserApiKeyId,
     setReplayUserApiKeyId,
     projectUserApiKeysForUi,
-    setModelOverrideEnabled,
-    replayModelMode,
-    setReplayModelMode,
+    setModelSource,
     REPLAY_PROVIDER_MODEL_LIBRARY,
     activeProviderTab,
     setActiveProviderTab,
@@ -56,18 +54,41 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
     requestJsonError,
   } = m;
 
-  const hostedMode = replayModelMode === "hosted";
-  const customMode = replayModelMode === "custom";
+  const detectedMode = modelSource === "detected";
+  const hostedMode = modelSource === "hosted";
+  const customMode = modelSource === "custom";
+
+  const selectModelSource = (next: typeof modelSource) => {
+    if (editsLocked) return;
+    setModelSource?.(next);
+    if (next === "detected") {
+      setReplayUserApiKeyId?.(null);
+      setNewModel?.(runDataModel || "");
+      setReplayProvider?.(runDataProvider);
+      setActiveProviderTab?.(runDataProvider);
+      return;
+    }
+    const nextProvider = activeProviderTab || replayProvider;
+    setReplayProvider?.(nextProvider);
+    setActiveProviderTab?.(nextProvider);
+    setReplayUserApiKeyId?.(null);
+    if (next === "hosted") {
+      const firstHosted = (REPLAY_PROVIDER_MODEL_LIBRARY?.[nextProvider] || [])[0];
+      if (firstHosted) setNewModel?.(firstHosted);
+      return;
+    }
+    if (!customMode) setNewModel?.("");
+  };
 
   return (
     <>
-      {modelOverrideEnabled && (
-        <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/10 px-5 py-4 text-sm text-fuchsia-200 font-medium">
-          {hostedMode
-            ? "Hosted (PluvianAI): platform inference and included credits. Personal API key is not required."
-            : "Custom (BYOK): enter any supported model id; your saved or project default API key is used for this run."}
-        </div>
-      )}
+      <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/10 px-5 py-4 text-sm text-fuchsia-200 font-medium">
+        {detectedMode
+          ? "Detected: use the provider and model captured from the selected baseline logs."
+          : hostedMode
+            ? "Hosted: use PluvianAI hosted quick-pick models with included platform credits."
+            : "Custom (BYOK): choose a provider, enter a model id, and use a saved or project default API key."}
+      </div>
 
       <div className="rounded-2xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/[0.08] to-transparent p-5">
         <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-fuchsia-300/90 mb-2">
@@ -187,7 +208,9 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
             </div>
             <div className="flex items-center gap-3">
               <div className="text-base font-semibold text-white">
-                {modelOverrideEnabled ? newModel || "Not specified" : runDataModel || "Not detected"}
+                {detectedMode
+                  ? runDataModel || "Not detected"
+                  : newModel || (hostedMode ? "Select a hosted model" : "Enter a custom model")}
               </div>
               {pinnedBadge && (
                 <span
@@ -212,150 +235,145 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
             <div>
               Provider:{" "}
               <span className="text-slate-200">
-                {modelOverrideEnabled ? formatProviderLabel(replayProvider) : formatProviderLabel(runDataProvider)}
+                {formatProviderLabel(detectedMode ? runDataProvider : replayProvider)}
               </span>
             </div>
             <div className="mt-0.5">
-              {modelOverrideEnabled ? (
-                <span className="text-fuchsia-300">Override active</span>
-              ) : (
-                "Using detected model"
-              )}
+              <span className={detectedMode ? "text-slate-400" : "text-fuchsia-300"}>
+                {detectedMode ? "Using detected baseline model" : hostedMode ? "Using hosted model" : "Using custom BYOK model"}
+              </span>
             </div>
           </div>
         </div>
 
-        {modelOverrideEnabled && (
-          <div className="mb-5 rounded-xl border border-white/10 bg-[#0a0c10]/80 px-4 py-3">
-            <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2">
-              Model source
-            </div>
-            <div className="flex flex-wrap gap-4">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
-                <input
-                  type="radio"
-                  name="release-gate-replay-model-mode"
-                  className="accent-fuchsia-500"
-                  disabled={editsLocked}
-                  checked={hostedMode}
-                  onChange={() => {
-                    if (editsLocked) return;
-                    setModelOverrideEnabled?.(true);
-                    setReplayModelMode?.("hosted");
-                    setReplayUserApiKeyId?.(null);
-                    const first = (REPLAY_PROVIDER_MODEL_LIBRARY?.[replayProvider] || [])[0];
-                    if (first) setNewModel?.(first);
-                  }}
-                />
-                Hosted (PluvianAI)
-              </label>
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
-                <input
-                  type="radio"
-                  name="release-gate-replay-model-mode"
-                  className="accent-fuchsia-500"
-                  disabled={editsLocked}
-                  checked={customMode}
-                  onChange={() => {
-                    if (editsLocked) return;
-                    setModelOverrideEnabled?.(true);
-                    setReplayModelMode?.("custom");
-                    setReplayUserApiKeyId?.(null);
-                    setNewModel?.("");
-                  }}
-                />
-                Custom (BYOK)
-              </label>
-            </div>
+        <div className="mb-5 rounded-xl border border-white/10 bg-[#0a0c10]/80 px-4 py-3">
+          <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2">
+            Model source
+          </div>
+          <div className="flex flex-wrap gap-4">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
+              <input
+                type="radio"
+                name="release-gate-model-source"
+                className="accent-fuchsia-500"
+                disabled={editsLocked}
+                checked={detectedMode}
+                onChange={() => selectModelSource("detected")}
+              />
+              Detected from baseline
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
+              <input
+                type="radio"
+                name="release-gate-model-source"
+                className="accent-fuchsia-500"
+                disabled={editsLocked}
+                checked={hostedMode}
+                onChange={() => selectModelSource("hosted")}
+              />
+              Hosted by PluvianAI
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
+              <input
+                type="radio"
+                name="release-gate-model-source"
+                className="accent-fuchsia-500"
+                disabled={editsLocked}
+                checked={customMode}
+                onChange={() => selectModelSource("custom")}
+              />
+              Custom (BYOK)
+            </label>
+          </div>
+        </div>
+
+        {!detectedMode && (
+          <label className="block mb-4">
+            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2 block">
+              Provider
+            </span>
+            <select
+              disabled={editsLocked}
+              value={activeProviderTab}
+              onChange={e => {
+                const p = e.target.value as ReplayProvider;
+                const prevProvider = replayProvider;
+                const trimmed = newModel.trim();
+                setActiveProviderTab(p);
+                setReplayProvider?.(p);
+                setReplayUserApiKeyId?.(null);
+                if (
+                  hostedMode &&
+                  trimmed &&
+                  isHostedPlatformModel(prevProvider, trimmed) &&
+                  !isHostedPlatformModel(p, trimmed)
+                ) {
+                  const nextHosted = (REPLAY_PROVIDER_MODEL_LIBRARY?.[p] || [])[0];
+                  setNewModel?.(nextHosted ?? "");
+                }
+              }}
+              className="w-full max-w-md rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50"
+            >
+              {(Object.keys(REPLAY_PROVIDER_MODEL_LIBRARY || {}) as ReplayProvider[]).map(provider => (
+                <option key={provider} value={provider}>
+                  {formatProviderLabel(provider)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {detectedMode && (
+          <div className="rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-300">
+            Release Gate will use the provider and model detected from the selected baseline logs for this run.
           </div>
         )}
 
-        <label className="block mb-4">
-          <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2 block">
-            Provider
-          </span>
-          <select
-            disabled={editsLocked || !modelOverrideEnabled}
-            value={activeProviderTab}
-            onChange={e => {
-              const p = e.target.value as ReplayProvider;
-              const prevProvider = replayProvider;
-              const trimmed = newModel.trim();
-              // Must enable override so useReleaseGateConfigPanelCoreTabModel's sync effect
-              // does not reset activeProviderTab to runDataProvider while user is picking a provider.
-              setModelOverrideEnabled?.(true);
-              setActiveProviderTab(p);
-              setReplayProvider?.(p);
-              setReplayUserApiKeyId?.(null);
-              // Hosted: align quick-pick id when switching away from another provider's hosted model.
-              if (
-                hostedMode &&
-                trimmed &&
-                isHostedPlatformModel(prevProvider, trimmed) &&
-                !isHostedPlatformModel(p, trimmed)
-              ) {
-                const nextHosted = (REPLAY_PROVIDER_MODEL_LIBRARY?.[p] || [])[0];
-                setNewModel?.(nextHosted ?? "");
-              }
-            }}
-            className="w-full max-w-md rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50"
-          >
-            {(Object.keys(REPLAY_PROVIDER_MODEL_LIBRARY || {}) as ReplayProvider[]).map(provider => (
-              <option key={provider} value={provider}>
-                {formatProviderLabel(provider)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-2">
-          Hosted quick picks
-        </div>
-        <div className="grid grid-cols-2 gap-3 mb-5">
-          {(REPLAY_PROVIDER_MODEL_LIBRARY?.[activeProviderTab] || []).map(modelId => (
-            <button
-              key={modelId}
-              type="button"
-              disabled={editsLocked || !modelOverrideEnabled || customMode}
-              onClick={() => {
-                if (editsLocked || customMode) return;
-                setReplayModelMode?.("hosted");
-                setReplayProvider?.(activeProviderTab);
-                setNewModel?.(modelId);
-                setReplayUserApiKeyId?.(null);
-                setModelOverrideEnabled?.(true);
-              }}
-              className={clsx(
-                "rounded-xl border px-4 py-3.5 text-left text-[13px] font-mono transition-all duration-200",
-                newModel === modelId && replayProvider === activeProviderTab
-                  ? "border-fuchsia-500/50 bg-fuchsia-500/10 text-fuchsia-100 shadow-[0_0_15px_rgba(217,70,239,0.15)]"
-                  : "border-white/10 bg-[#0a0c10] text-slate-300 hover:border-white/20 hover:bg-white/[0.04]",
-                (!modelOverrideEnabled || customMode) && "opacity-40 cursor-not-allowed hover:border-white/10 hover:bg-[#0a0c10]"
-              )}
-            >
-              {modelId}
-            </button>
-          ))}
-        </div>
-
-        <div
-          className={clsx(
-            "pt-4 border-t border-white/5",
-            hostedMode && modelOverrideEnabled && "opacity-50 pointer-events-none"
-          )}
-        >
-          <div className="mb-2.5 flex items-center justify-between">
-            <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 block">
-              Custom model ID{" "}
-              <span className="text-slate-500 font-normal lowercase tracking-normal ml-1">(BYOK)</span>
+        {hostedMode && (
+          <>
+            <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-2">
+              Hosted quick picks
             </div>
-          </div>
-          <p className="text-xs text-slate-500 mb-3 leading-relaxed">
-            Custom models require BYOK. Supported providers: OpenAI, Anthropic, Google. Premium models (e.g. GPT-4o,
-            Claude Sonnet, Gemini Pro) are not available as hosted quick picks — enter the model id here and select a
-            saved key or register a project default key.
-          </p>
-          {customMode && modelOverrideEnabled && newModel.trim() ? (
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              {(REPLAY_PROVIDER_MODEL_LIBRARY?.[activeProviderTab] || []).map(modelId => (
+                <button
+                  key={modelId}
+                  type="button"
+                  disabled={editsLocked}
+                  onClick={() => {
+                    if (editsLocked) return;
+                    setModelSource?.("hosted");
+                    setReplayProvider?.(activeProviderTab);
+                    setNewModel?.(modelId);
+                    setReplayUserApiKeyId?.(null);
+                  }}
+                  className={clsx(
+                    "rounded-xl border px-4 py-3.5 text-left text-[13px] font-mono transition-all duration-200",
+                    newModel === modelId && replayProvider === activeProviderTab
+                      ? "border-fuchsia-500/50 bg-fuchsia-500/10 text-fuchsia-100 shadow-[0_0_15px_rgba(217,70,239,0.15)]"
+                      : "border-white/10 bg-[#0a0c10] text-slate-300 hover:border-white/20 hover:bg-white/[0.04]"
+                  )}
+                >
+                  {modelId}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {customMode && (
+          <div className="pt-4 border-t border-white/5">
+            <div className="mb-2.5 flex items-center justify-between">
+              <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 block">
+                Custom model ID{" "}
+                <span className="text-slate-500 font-normal lowercase tracking-normal ml-1">(BYOK)</span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+              Custom models require BYOK. Supported providers: OpenAI, Anthropic, Google. Premium models (e.g. GPT-4o,
+              Claude Sonnet, Gemini Pro) are not available as hosted quick picks — enter the model id here and select a
+              saved key or register a project default key.
+            </p>
             <label className="block mb-3">
               <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2 block">
                 Saved API key (optional)
@@ -386,55 +404,49 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                   ))}
               </select>
             </label>
-          ) : null}
-          <input
-            value={newModel}
-            disabled={editsLocked || !modelOverrideEnabled || hostedMode}
-            onChange={e => {
-              if (editsLocked || hostedMode) return;
-              setReplayModelMode?.("custom");
-              setReplayProvider?.(activeProviderTab);
-              setNewModel?.(e.target.value);
-              setModelOverrideEnabled?.(true);
-            }}
-            placeholder="e.g. gpt-4o, claude-sonnet-4-20250514"
-            className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 font-mono outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          />
-          {showCustomModelWarning && customMode && (
-            <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-200/90 leading-relaxed">
-              For stable Release Gate results, prefer a pinned Anthropic model id ending in{" "}
-              <span className="font-mono bg-black/20 px-1 py-0.5 rounded">YYYYMMDD</span>.
-              <span className="block mt-1 text-amber-400/80">Custom/latest ids can change behavior over time.</span>
-            </div>
-          )}
-        </div>
+            <input
+              value={newModel}
+              disabled={editsLocked}
+              onChange={e => {
+                if (editsLocked) return;
+                setModelSource?.("custom");
+                setReplayProvider?.(activeProviderTab);
+                setNewModel?.(e.target.value);
+              }}
+              placeholder="e.g. gpt-4o, claude-sonnet-4-20250514"
+              className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 font-mono outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
+            />
+            {showCustomModelWarning && (
+              <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-200/90 leading-relaxed">
+                For stable Release Gate results, prefer a pinned Anthropic model id ending in{" "}
+                <span className="font-mono bg-black/20 px-1 py-0.5 rounded">YYYYMMDD</span>.
+                <span className="block mt-1 text-amber-400/80">Custom/latest ids can change behavior over time.</span>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center justify-between mt-5 pt-4 border-t border-white/5">
           <span
             className={clsx(
               "text-xs font-medium",
-              modelOverrideEnabled ? "text-fuchsia-300" : "text-slate-500"
+              detectedMode ? "text-slate-500" : "text-fuchsia-300"
             )}
           >
-            {modelOverrideEnabled
-              ? "Model override is active for this run"
-              : "Currently using detected baseline model"}
+            {detectedMode
+              ? "Using detected baseline model"
+              : hostedMode
+                ? "Hosted model is active for this run"
+                : "Custom BYOK model is active for this run"}
           </span>
-          {modelOverrideEnabled && (
+          {!detectedMode && (
             <button
               type="button"
               disabled={editsLocked}
-              onClick={() => {
-                if (editsLocked) return;
-                setModelOverrideEnabled?.(false);
-                setReplayModelMode?.("hosted");
-                setNewModel?.(runDataModel || "");
-                setReplayProvider?.(runDataProvider);
-                setReplayUserApiKeyId?.(null);
-              }}
+              onClick={() => selectModelSource("detected")}
               className="text-xs font-semibold text-slate-300 hover:text-white px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-all"
             >
-              Reset to detected
+              Use detected
             </button>
           )}
         </div>

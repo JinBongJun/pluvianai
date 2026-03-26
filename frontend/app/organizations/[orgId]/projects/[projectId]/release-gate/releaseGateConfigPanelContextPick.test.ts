@@ -43,6 +43,8 @@ function ctxPickFixture(
     setFlakyRateMax: () => {},
     newModel: "",
     setNewModel: () => {},
+    modelSource: "detected",
+    setModelSource: () => {},
     modelOverrideEnabled: false,
     setModelOverrideEnabled: () => {},
     replayModelMode: "hosted",

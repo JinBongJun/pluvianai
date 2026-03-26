@@ -96,7 +96,7 @@ export function useReleaseGateExpandedViewModel({
   const failRateMax = Number(ctx.failRateMax ?? 0);
   const flakyRateMax = Number(ctx.flakyRateMax ?? 0);
   const newModel = ctx.newModel;
-  const modelOverrideEnabled = ctx.modelOverrideEnabled;
+  const modelSource = ctx.modelSource;
   const replayProvider = String(ctx.replayProvider ?? "")
     .trim()
     .toLowerCase();
@@ -330,7 +330,7 @@ export function useReleaseGateExpandedViewModel({
         configSourceLabel,
         selectedBaselineCount,
         selectedDataSummary,
-        modelOverrideEnabled,
+        modelSource,
         replayProvider,
         newModel,
         repeatRuns,
@@ -371,7 +371,7 @@ export function useReleaseGateExpandedViewModel({
       configSourceLabel,
       selectedBaselineCount,
       selectedDataSummary,
-      modelOverrideEnabled,
+      modelSource,
       replayProvider,
       newModel,
       repeatRuns,

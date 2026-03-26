@@ -16,7 +16,7 @@ export function useReleaseGateConfigPanelCoreTabModel(
   editsLocked: boolean
 ) {
   const {
-    modelOverrideEnabled,
+    modelSource,
     replayProvider,
     runDataProvider,
     newModel,
@@ -30,11 +30,13 @@ export function useReleaseGateConfigPanelCoreTabModel(
   } = c;
 
   const [activeProviderTab, setActiveProviderTab] = useState<ReplayProvider>("openai");
+  const usingDetectedModel = modelSource === "detected";
+  const usingCustomModel = modelSource === "custom";
 
   useEffect(() => {
     if (!isOpen) return;
-    setActiveProviderTab(modelOverrideEnabled ? replayProvider : runDataProvider);
-  }, [isOpen, modelOverrideEnabled, replayProvider, runDataProvider]);
+    setActiveProviderTab(usingDetectedModel ? runDataProvider : replayProvider);
+  }, [isOpen, usingDetectedModel, replayProvider, runDataProvider]);
 
   const candidateJsonValue = requestJsonDraft ?? requestBodyJson;
 
@@ -68,17 +70,17 @@ export function useReleaseGateConfigPanelCoreTabModel(
     setRequestJsonDraft?.(null);
   }, [editsLocked, setRequestBody, setRequestJsonDraft]);
 
-  const activeProviderForModel = modelOverrideEnabled ? replayProvider : runDataProvider;
+  const activeProviderForModel = usingDetectedModel ? runDataProvider : replayProvider;
   const pinnedBadge =
-    modelOverrideEnabled &&
+    usingCustomModel &&
     activeProviderForModel === "anthropic" &&
     isPinnedAnthropicModelId(newModel)
       ? "Pinned"
-      : modelOverrideEnabled
+      : usingCustomModel
         ? "Custom"
         : null;
   const showCustomModelWarning =
-    modelOverrideEnabled &&
+    usingCustomModel &&
     activeProviderForModel === "anthropic" &&
     newModel.trim().length > 0 &&
     (!isPinnedAnthropicModelId(newModel) || newModel.toLowerCase().includes("latest"));

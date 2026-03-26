@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import type { EditableTool, ReplayProvider } from "./releaseGatePageContent.lib";
+import type { ReleaseGateModelSource } from "./releaseGateReplayConstants";
 import {
   buildOpenAIStyleToolsFromEditableTools,
   inferProviderFromModelId,
@@ -12,7 +13,7 @@ import {
 export type UseReleaseGateToolsAndModelSyncParams = {
   toolsList: EditableTool[];
   setRequestBody: Dispatch<SetStateAction<Record<string, unknown>>>;
-  modelOverrideEnabled: boolean;
+  modelSource: ReleaseGateModelSource;
   runDataModel: string;
   runDataProvider: ReplayProvider | null;
   setNewModel: Dispatch<SetStateAction<string>>;
@@ -25,7 +26,7 @@ export function useReleaseGateToolsAndModelSync(p: UseReleaseGateToolsAndModelSy
   const {
     toolsList,
     setRequestBody,
-    modelOverrideEnabled,
+    modelSource,
     runDataModel,
     runDataProvider,
     setNewModel,
@@ -47,14 +48,14 @@ export function useReleaseGateToolsAndModelSync(p: UseReleaseGateToolsAndModelSy
   }, [toolsList, setRequestBody]);
 
   useEffect(() => {
-    if (modelOverrideEnabled) return;
+    if (modelSource !== "detected") return;
     if (runDataModel) setNewModel(runDataModel);
     const inferredProvider = runDataProvider || inferProviderFromModelId(runDataModel);
     if (!inferredProvider) return;
     setReplayProvider(inferredProvider);
     setModelProviderTab(inferredProvider);
   }, [
-    modelOverrideEnabled,
+    modelSource,
     runDataModel,
     runDataProvider,
     setNewModel,
