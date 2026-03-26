@@ -1,5 +1,17 @@
 import { extractApiErrorPayload } from "./api/client";
 
+/** App routes billing at `/settings/billing`; legacy API responses used `/settings/subscription`. */
+const BILLING_PATH = "/settings/billing";
+
+function normalizeUpgradePath(raw: string): string {
+  const t = raw.trim();
+  if (!t.startsWith("/")) return BILLING_PATH;
+  if (t === "/settings/subscription" || t.startsWith("/settings/subscription?")) {
+    return t.replace(/^\/settings\/subscription/, BILLING_PATH);
+  }
+  return t;
+}
+
 export type PlanLimitError = {
   code: string;
   message: string;
@@ -19,10 +31,14 @@ export function parsePlanLimitError(error: any): PlanLimitError | null {
     return Number.isFinite(n) ? n : undefined;
   };
 
-  const upgradePathRaw =
-    (typeof (d.upgrade_path as string | undefined) === "string"
+  const fromDetails =
+    typeof (d.upgrade_path as string | undefined) === "string"
       ? (d.upgrade_path as string)
-      : "/organizations") || "/organizations";
+      : typeof (d.upgrade_url as string | undefined) === "string"
+        ? (d.upgrade_url as string)
+        : null;
+
+  const upgradePathRaw = fromDetails ? normalizeUpgradePath(fromDetails) : BILLING_PATH;
 
   return {
     code,
@@ -30,7 +46,7 @@ export function parsePlanLimitError(error: any): PlanLimitError | null {
     planType: typeof d.plan_type === "string" ? (d.plan_type as string) : undefined,
     current: num(d.current),
     limit: num(d.limit),
-    upgradePath: upgradePathRaw.startsWith("/") ? upgradePathRaw : "/organizations",
+    upgradePath: upgradePathRaw,
   };
 }
 

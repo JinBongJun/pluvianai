@@ -126,7 +126,7 @@ async def add_project_member(
                     "plan_type": plan_type,
                     "current": current_members,
                     "limit": member_limit,
-                    "upgrade_path": "/settings/subscription",
+                    "upgrade_path": "/settings/billing",
                 },
             },
         )
