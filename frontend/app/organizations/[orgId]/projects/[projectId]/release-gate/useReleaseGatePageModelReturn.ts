@@ -97,6 +97,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
       agents,
       agentsLoaded,
       onSelectAgent: onMapSelectAgent,
+      projectId,
       projectName: project?.name,
     }),
     [
@@ -110,6 +111,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
       agents,
       agentsLoaded,
       onMapSelectAgent,
+      projectId,
       project?.name,
     ]
   );

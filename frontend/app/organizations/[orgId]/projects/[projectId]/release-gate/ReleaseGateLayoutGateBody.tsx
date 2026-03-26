@@ -17,6 +17,7 @@ export type ReleaseGateLayoutGateBodyProps = {
   agents: AgentForPicker[];
   agentsLoaded: boolean;
   onSelectAgent: (id: string) => void;
+  projectId: number;
   projectName?: string;
 };
 
@@ -31,6 +32,7 @@ function ReleaseGateLayoutGateBodyInner({
   agents,
   agentsLoaded,
   onSelectAgent,
+  projectId,
   projectName,
 }: ReleaseGateLayoutGateBodyProps) {
   if (showGateLoadingState) {
@@ -89,6 +91,7 @@ function ReleaseGateLayoutGateBodyInner({
         agents={agents}
         agentsLoaded={agentsLoaded}
         onSelectAgent={onSelectAgent}
+        projectId={projectId}
         projectName={projectName}
       />
     );

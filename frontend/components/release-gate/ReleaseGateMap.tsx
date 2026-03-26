@@ -17,6 +17,11 @@ import DrawIOEdge from "@/components/shared/DrawIOEdge";
 import { Plus, Minus, Maximize, LayoutGrid, Undo, Redo } from "lucide-react";
 import clsx from "clsx";
 
+import {
+  LABORATORY_REFRESH_EVENT,
+  type LaboratoryRefreshDetail,
+} from "@/lib/laboratoryLabRefresh";
+
 const NODE_TYPES = { agentCard: AgentCardNode };
 const EDGE_TYPES = { default: DrawIOEdge };
 
@@ -123,6 +128,7 @@ export function ReleaseGateMapContent({
   agents,
   agentsLoaded = false,
   onSelectAgent,
+  projectId,
   projectName,
   selectedNodeId = null,
   rgDetails = null,
@@ -130,6 +136,7 @@ export function ReleaseGateMapContent({
   agents: any[];
   agentsLoaded?: boolean;
   onSelectAgent: (agentId: string) => void;
+  projectId: number;
   projectName?: string;
   selectedNodeId?: string | null;
   rgDetails?: any;
@@ -278,6 +285,17 @@ export function ReleaseGateMapContent({
   }, [nodes.length, selectedNodeId, fitView]);
 
   useEffect(() => {
+    if (!projectId || Number.isNaN(projectId) || projectId <= 0) return;
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent<LaboratoryRefreshDetail>).detail;
+      if (!d || d.projectId !== projectId) return;
+      window.setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 120);
+    };
+    window.addEventListener(LABORATORY_REFRESH_EVENT, handler as EventListener);
+    return () => window.removeEventListener(LABORATORY_REFRESH_EVENT, handler as EventListener);
+  }, [projectId, fitView]);
+
+  useEffect(() => {
     if (nodes.length > 0 && history.length === 0) {
       setHistory([nodes.map(n => ({ ...n, position: { ...n.position } }))]);
       setHistoryIndex(0);
@@ -403,6 +421,7 @@ export function ReleaseGateMap({
   agents,
   agentsLoaded = false,
   onSelectAgent,
+  projectId,
   projectName,
   selectedNodeId = null,
   rgDetails = null,
@@ -410,6 +429,7 @@ export function ReleaseGateMap({
   agents: any[];
   agentsLoaded?: boolean;
   onSelectAgent: (agentId: string) => void;
+  projectId: number;
   projectName?: string;
   selectedNodeId?: string | null;
   rgDetails?: any;
@@ -420,6 +440,7 @@ export function ReleaseGateMap({
         agents={agents}
         agentsLoaded={agentsLoaded}
         onSelectAgent={onSelectAgent}
+        projectId={projectId}
         projectName={projectName}
         selectedNodeId={selectedNodeId}
         rgDetails={rgDetails}
