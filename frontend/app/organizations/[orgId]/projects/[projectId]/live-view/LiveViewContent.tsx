@@ -53,6 +53,10 @@ import {
   type LiveViewAgentRow,
 } from "./mapAgentsToLiveViewNodes";
 import { useLiveViewGraphState } from "./useLiveViewGraphState";
+import {
+  LABORATORY_REFRESH_EVENT,
+  type LaboratoryRefreshDetail,
+} from "@/lib/laboratoryLabRefresh";
 
 export function LiveViewContent() {
   const params = useParams();
@@ -237,11 +241,7 @@ export function LiveViewContent() {
       return updatedNodes;
     });
 
-    if (
-      (hasNewAgents || firstAgentPopulation) &&
-      !isDraggingRef.current &&
-      !selectedAgentId
-    ) {
+    if ((hasNewAgents || firstAgentPopulation) && !isDraggingRef.current) {
       setTimeout(() => fitView({ duration: 600, padding: 0.2 }), 50);
     }
   }, [
@@ -254,6 +254,17 @@ export function LiveViewContent() {
     setHistoryIndex,
     setNodes,
   ]);
+
+  useEffect(() => {
+    if (!projectId || Number.isNaN(projectId) || projectId <= 0) return;
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent<LaboratoryRefreshDetail>).detail;
+      if (!d || d.projectId !== projectId) return;
+      window.setTimeout(() => fitView({ duration: 600, padding: 0.2 }), 120);
+    };
+    window.addEventListener(LABORATORY_REFRESH_EVENT, handler as EventListener);
+    return () => window.removeEventListener(LABORATORY_REFRESH_EVENT, handler as EventListener);
+  }, [projectId, fitView]);
 
   useEffect(() => {
     if (isDraggingRef.current) return;
