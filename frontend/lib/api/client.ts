@@ -2,13 +2,14 @@
  * Shared API client and helpers for PluvianAI backend.
  */
 import axios from "axios";
+import { logger } from "@/lib/logger";
 
 export const logError = (
   message: string,
   error?: unknown,
   context?: Record<string, unknown>
 ) => {
-  console.error(message, error, context);
+  logger.error(message, error, context);
 };
 
 export const logWarn = (message: string, context?: Record<string, unknown>) => {

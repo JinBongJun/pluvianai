@@ -35,9 +35,6 @@ export function LiveViewPageLayout({
       activeTab="live-view"
       showTelemetry={false}
       navigationVariant="side"
-      onAction={actionId => {
-        console.log("Live HUD Action:", actionId);
-      }}
       customActions={[]}
       rightPanel={rightPanel}
     >

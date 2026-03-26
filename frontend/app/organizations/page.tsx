@@ -10,6 +10,7 @@ import { useDebouncedValue } from "@/hooks/useDebounce";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { Plus, Search, Building2, Briefcase } from "lucide-react";
 import { clsx } from "clsx";
+import { logger } from "@/lib/logger";
 
 export default function OrganizationsPage() {
   const router = useRouter();
@@ -30,7 +31,7 @@ export default function OrganizationsPage() {
         setUserName(user?.full_name || "");
         setAuthReady(true);
       } catch (error) {
-        console.error("🔴 [OrganizationsPage] Error in loadUser:", error);
+        logger.error("OrganizationsPage loadUser failed", error);
         router.push("/login?reauth=1");
       }
     };

@@ -6,6 +6,7 @@ import { settingsAPI } from "@/lib/api";
 import { Key, Trash2, Copy, UserCircle2, Pencil, Check, X } from "lucide-react";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import AccountLayout from "@/components/layout/AccountLayout";
+import { logger } from "@/lib/logger";
 
 type UserProfile = {
   id: number;
@@ -61,7 +62,7 @@ export default function ProfileSettingsPage() {
         setFullName((p?.full_name || "").trim());
         setApiKeys(Array.isArray(keys) ? keys : []);
       } catch (err) {
-        console.error(err);
+        logger.error("Failed to load profile or API keys", err);
         setNotice("Failed to load profile settings.");
       } finally {
         setLoading(false);
@@ -86,7 +87,7 @@ export default function ProfileSettingsPage() {
       setFullName((updated?.full_name || "").trim());
       setNotice("Profile updated.");
     } catch (err) {
-      console.error(err);
+      logger.error("Failed to update profile", err);
       setNotice("Failed to update profile.");
     } finally {
       setSaveBusy(false);
@@ -107,7 +108,7 @@ export default function ProfileSettingsPage() {
       setApiKeys(Array.isArray(keys) ? keys : []);
       setNotice("API key created. Copy it now - it will not be shown again.");
     } catch (err) {
-      console.error(err);
+      logger.error("Failed to create API key", err);
       setNotice("Failed to create API key.");
     } finally {
       setKeyBusy(false);
@@ -137,7 +138,7 @@ export default function ProfileSettingsPage() {
       setConfirmNewPassword("");
       setNotice("Password changed successfully.");
     } catch (err) {
-      console.error(err);
+      logger.error("Failed to change password", err);
       setNotice("Failed to change password. Check your current password.");
     } finally {
       setPasswordBusy(false);
@@ -152,7 +153,7 @@ export default function ProfileSettingsPage() {
       setApiKeys(prev => prev.filter(k => k.id !== keyId));
       setNotice("API key removed.");
     } catch (err) {
-      console.error(err);
+      logger.error("Failed to delete API key", err);
       setNotice("Failed to remove API key.");
     } finally {
       setDeleteBusyId(null);
@@ -185,7 +186,7 @@ export default function ProfileSettingsPage() {
       setEditingKeyName("");
       setNotice("API key name updated.");
     } catch (err) {
-      console.error(err);
+      logger.error("Failed to rename API key", err);
       setNotice("Failed to rename API key.");
     } finally {
       setRenameBusyId(null);

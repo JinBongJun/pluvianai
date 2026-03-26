@@ -6,6 +6,7 @@ import type {
 import type { ReleaseGateConfigPanelCoreTabModel } from "./useReleaseGateConfigPanelCoreTabModel";
 import type { ReleaseGateConfigPanelParityTabModel } from "./useReleaseGateConfigPanelParityTabModel";
 import type { ReleaseGateConfigPanelPreviewTabModel } from "./useReleaseGateConfigPanelPreviewTabModel";
+import { logger } from "@/lib/logger";
 
 function warnDuplicateMergeKeys(
   layers: ReadonlyArray<readonly [string, Record<string, unknown>]>
@@ -13,9 +14,8 @@ function warnDuplicateMergeKeys(
   const seen = new Set<string>();
   for (const [label, obj] of layers) {
     for (const k of Object.keys(obj)) {
-      if (seen.has(k)) {
-        // eslint-disable-next-line no-console -- dev-only invariant
-        console.warn(
+      if (seen.has(k) && process.env.NODE_ENV === "development") {
+        logger.warn(
           `[ReleaseGateConfigPanel] duplicate merge key "${k}" (layer "${label}" overlaps a prior layer)`
         );
       }

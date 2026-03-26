@@ -9,6 +9,7 @@ import { useToast } from "@/components/ToastContainer";
 import { Button } from "@/components/ui/Button";
 import { Plus, Trash2 } from "lucide-react";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { logger } from "@/lib/logger";
 
 interface UserApiKeyItem {
   id: number;
@@ -46,7 +47,7 @@ export default function ProjectApiKeysPage() {
       const list = await projectUserApiKeysAPI.list(projectId);
       setKeys(Array.isArray(list) ? list : []);
     } catch (e) {
-      if (process.env.NODE_ENV === "development") console.error(e);
+      logger.error("Failed to load project user API keys", e);
       toast.showToast("Failed to load API keys", "error");
       setKeys([]);
     } finally {

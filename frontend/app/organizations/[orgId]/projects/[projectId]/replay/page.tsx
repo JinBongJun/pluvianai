@@ -17,6 +17,7 @@ import { clsx } from "clsx";
 import useSWR from "swr";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { PlanLimitBanner } from "@/components/PlanLimitBanner";
+import { logger } from "@/lib/logger";
 
 export default function ReplayPage() {
   const router = useRouter();
@@ -58,9 +59,7 @@ export default function ReplayPage() {
       const data = await replayAPI.listRubrics(projectId);
       setRubrics(data);
     } catch (err) {
-      if (process.env.NODE_ENV === "development") {
-        console.error("Failed to load rubrics");
-      }
+      logger.error("Failed to load replay rubrics", err);
     }
   }, [projectId]);
 

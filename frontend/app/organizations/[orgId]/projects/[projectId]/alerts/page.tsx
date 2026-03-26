@@ -10,6 +10,7 @@ import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import DateRangePicker from "@/components/ui/DateRangePicker";
 import { alertsAPI, organizationsAPI } from "@/lib/api";
+import { logger } from "@/lib/logger";
 import { orgKeys } from "@/lib/queryKeys";
 import { useToast } from "@/components/ToastContainer";
 import {
@@ -178,7 +179,7 @@ export default function AlertsPage() {
       setAlerts(paginated);
       setTotalItems(filtered.length);
     } catch (error: any) {
-      console.error("Failed to load alerts:", error);
+      logger.error("Failed to load alerts", error);
 
       // Only show error toast for actual API failures, not empty results
       const status = error.response?.status;
@@ -246,7 +247,7 @@ export default function AlertsPage() {
       toast.showToast("Alert resolved successfully", "success");
       loadAlerts();
     } catch (error: any) {
-      console.error("Failed to resolve alert:", error);
+      logger.error("Failed to resolve alert", error);
       toast.showToast(error.response?.data?.detail || "Failed to resolve alert", "error");
     }
   };
@@ -257,7 +258,7 @@ export default function AlertsPage() {
       toast.showToast("Alert sent successfully", "success");
       loadAlerts();
     } catch (error: any) {
-      console.error("Failed to send alert:", error);
+      logger.error("Failed to send alert", error);
       toast.showToast(error.response?.data?.detail || "Failed to send alert", "error");
     }
   };

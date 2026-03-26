@@ -15,6 +15,7 @@ import { authAPI, organizationsAPI } from "@/lib/api";
 import { orgKeys } from "@/lib/queryKeys";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
+import { logger } from "@/lib/logger";
 
 interface Breadcrumb {
   label: string;
@@ -54,7 +55,7 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
         setUserName(user.full_name || "");
         setUserEmail(user.email || "");
       } catch (error) {
-        console.error("Failed to load user info in OrgLayout:", error);
+        logger.error("Failed to load user info in OrgLayout", error);
       }
     };
     loadUser();

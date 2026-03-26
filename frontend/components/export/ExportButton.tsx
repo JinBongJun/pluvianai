@@ -10,7 +10,9 @@ interface ExportButtonProps {
 
 const ExportButton: React.FC<ExportButtonProps> = ({ projectId, filters }) => {
   const handleExport = () => {
-    console.log("Export data for project:", projectId, filters);
+    // Export wiring TBD
+    void projectId;
+    void filters;
   };
 
   return (

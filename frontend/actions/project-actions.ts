@@ -4,6 +4,7 @@ import { z } from "zod";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { ActionState, successResponse, errorResponse } from "@/lib/action-types";
+import { logger } from "@/lib/logger";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -85,7 +86,7 @@ export async function createProjectAction(
 
     return successResponse({ id: data.id, name: data.name });
   } catch (error) {
-    console.error("[createProjectAction] Error:", error);
+    logger.error("createProjectAction failed", error);
     return errorResponse("Failed to connect to server");
   }
 }
@@ -144,7 +145,7 @@ export async function updateProjectAction(
 
     return successResponse({ id: data.id, name: data.name });
   } catch (error) {
-    console.error("[updateProjectAction] Error:", error);
+    logger.error("updateProjectAction failed", error);
     return errorResponse("Failed to connect to server");
   }
 }
@@ -176,7 +177,7 @@ export async function deleteProjectAction(projectId: number): Promise<ActionStat
 
     return successResponse(undefined);
   } catch (error) {
-    console.error("[deleteProjectAction] Error:", error);
+    logger.error("deleteProjectAction failed", error);
     return errorResponse("Failed to connect to server");
   }
 }

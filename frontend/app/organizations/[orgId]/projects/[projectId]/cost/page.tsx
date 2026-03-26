@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { apiCallsAPI } from "@/lib/api";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { ArrowLeft, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
+import { logger } from "@/lib/logger";
 
 interface CostData {
   total_cost: number;
@@ -39,7 +40,7 @@ export default function CostPage() {
         by_model: [],
       });
     } catch (error) {
-      console.error("Failed to load cost data:", error);
+      logger.error("Failed to load cost data", error);
       // Set default data on error
       setData({ total_cost: 0, daily_average: 0, change_percent: 0, by_model: [] });
     } finally {
