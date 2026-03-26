@@ -103,6 +103,14 @@ rate_limit_exceeded_total = Counter(
     registry=registry,
 )
 
+# Billing/Webhook Metrics
+billing_webhook_events_total = Counter(
+    "billing_webhook_events_total",
+    "Total number of billing webhook events by result and type",
+    ["result", "event_type"],
+    registry=registry,
+)
+
 # Resilience Metrics
 retry_attempts_total = Counter("retry_attempts_total", "Total number of retry attempts", ["service"], registry=registry)
 

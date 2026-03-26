@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.logging_config import logger
+from app.core.metrics import billing_webhook_events_total
 from app.core.subscription_limits import PLAN_LIMITS
 from app.models.subscription import Subscription
 from app.models.user import User
@@ -294,18 +295,28 @@ class BillingService:
 
     def handle_paddle_webhook(self, payload: bytes, paddle_signature: str) -> Dict[str, Any]:
         """Verify signature and handle Paddle Billing webhook events."""
+        def _record(result: str, ev_type: str | None) -> None:
+            billing_webhook_events_total.labels(
+                result=result,
+                event_type=(ev_type or "unknown"),
+            ).inc()
+
         if not self.paddle_available:
+            _record("error", "config")
             return {"error": "Paddle not configured"}
 
         secret = settings.PADDLE_WEBHOOK_SECRET or ""
         if not paddle_signature:
+            _record("error", "signature")
             return {"error": "Missing Paddle-Signature header"}
         if not verify_paddle_webhook_signature(payload, paddle_signature, secret):
+            _record("error", "signature")
             return {"error": "Invalid signature"}
 
         try:
             event = json.loads(payload.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
+            _record("error", "payload")
             return {"error": "Invalid payload"}
 
         event_type = event.get("event_type")
@@ -316,6 +327,7 @@ class BillingService:
         if idem_key:
             cached = idempotency_service.get(idem_key)
             if isinstance(cached, dict):
+                _record("duplicate", event_type)
                 logger.info(
                     "Duplicate Paddle webhook ignored",
                     extra={"event_id": event_id, "event_type": event_type},
@@ -327,6 +339,7 @@ class BillingService:
                     "event_id": event_id,
                     "result": cached,
                 }
+                
 
         result: Dict[str, Any]
         if event_type == "transaction.completed":
@@ -346,6 +359,7 @@ class BillingService:
         if idem_key and result.get("status") in {"success", "ignored"}:
             idempotency_service.set(idem_key, result)
         result["event_id"] = event_id
+        _record(str(result.get("status") or "unknown"), event_type)
         logger.info(
             "Processed Paddle webhook",
             extra={"event_id": event_id, "event_type": event_type, "status": result.get("status")},
