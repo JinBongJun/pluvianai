@@ -109,6 +109,16 @@ export interface ReleaseGatePageContextValue {
   setModelOverrideEnabled: (b: boolean) => void;
   replayProvider: ReleaseGateReplayProvider;
   setReplayProvider: (p: ReleaseGateReplayProvider) => void;
+  replayUserApiKeyId: number | null;
+  setReplayUserApiKeyId: (id: number | null) => void;
+  projectUserApiKeysForUi: Array<{
+    id: number;
+    provider: string;
+    agent_id?: string | null;
+    is_active: boolean;
+    name?: string | null;
+    created_at?: string | null;
+  }>;
   requestBody: Record<string, unknown>;
   setRequestBody: Dispatch<SetStateAction<Record<string, unknown>>>;
   requestBodyJson: string;

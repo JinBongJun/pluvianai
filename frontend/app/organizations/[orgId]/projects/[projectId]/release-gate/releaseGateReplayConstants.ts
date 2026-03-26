@@ -9,25 +9,20 @@ export const REPLAY_PROVIDER_LABEL: Record<ReplayProvider, string> = {
   anthropic: "Anthropic",
   google: "Google",
 };
+/** Hosted (platform) quick picks — must match backend `CORE_REPLAY_MODELS`. Premium models: Custom model ID + BYOK. */
 export const DEFAULT_REPLAY_PROVIDER_MODEL_LIBRARY: Record<ReplayProvider, string[]> = {
-  openai: [
-    "gpt-4o-mini",
-    "gpt-4o",
-    "gpt-4.1",
-    "gpt-4.1-mini",
-  ],
-  anthropic: [
-    // Keep conservative, pinned IDs for reproducible Release Gate runs.
-    "claude-sonnet-4-5-20250929",
-    "claude-haiku-4-5-20251001",
-    "claude-sonnet-4-20250514",
-  ],
-  google: [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-pro",
-  ],
+  openai: ["gpt-4o-mini", "gpt-4.1-mini"],
+  anthropic: ["claude-haiku-4-5-20251001"],
+  google: ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
 };
+
+/** True when this model id is allowed for `model_source: platform` (hosted credits). */
+export function isHostedPlatformModel(provider: ReplayProvider, modelId: string): boolean {
+  const mid = (modelId || "").trim();
+  if (!mid) return false;
+  const list = DEFAULT_REPLAY_PROVIDER_MODEL_LIBRARY[provider] || [];
+  return list.includes(mid);
+}
 export const REPLAY_THRESHOLD_PRESETS = {
   strict: {
     label: "Strict",

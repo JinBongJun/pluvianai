@@ -2,6 +2,7 @@ import { sanitizeReplayBodyOverrides } from "./releaseGateReplayMerge";
 import type { EditableTool } from "./releaseGateEditableTools";
 import { buildOpenAIStyleToolsFromEditableTools } from "./releaseGateEditableTools";
 import { inferProviderFromModelId } from "./releaseGateProviderModel";
+import { isHostedPlatformModel } from "./releaseGateReplayConstants";
 import type { ReplayProvider } from "./releaseGateReplayConstants";
 import { buildToolContextPayload } from "./releaseGateToolContext";
 
@@ -46,7 +47,7 @@ export function buildValidateOverridePreview(
   } = input;
 
   const preview: Record<string, unknown> = {
-    model_source: modelOverrideEnabled ? "platform" : "detected",
+    model_source: "detected",
   };
 
   if (modelOverrideEnabled) {
@@ -56,6 +57,9 @@ export function buildValidateOverridePreview(
       const effectiveProvider = inferredProvider || replayProvider;
       preview.new_model = trimmedModel;
       preview.replay_provider = effectiveProvider;
+      preview.model_source = isHostedPlatformModel(effectiveProvider as ReplayProvider, trimmedModel)
+        ? "platform"
+        : "detected";
     }
   }
 
