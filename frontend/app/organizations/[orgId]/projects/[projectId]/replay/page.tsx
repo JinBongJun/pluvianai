@@ -6,7 +6,7 @@ import ProjectLayout from "@/components/layout/ProjectLayout";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { replayAPI, apiCallsAPI, organizationsAPI } from "@/lib/api";
+import { replayAPI, apiCallsAPI, organizationsAPI, projectUserApiKeysAPI } from "@/lib/api";
 import { orgKeys } from "@/lib/queryKeys";
 import { useToast } from "@/components/ToastContainer";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
@@ -18,6 +18,13 @@ import useSWR from "swr";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 import { logger } from "@/lib/logger";
+import type { ReplayProvider } from "../release-gate/releaseGatePageContent.lib";
+import {
+  DEFAULT_REPLAY_PROVIDER_MODEL_LIBRARY,
+  isHostedPlatformModel,
+} from "../release-gate/releaseGateReplayConstants";
+import { formatProviderLabel } from "../release-gate/releaseGateConfigPanelHelpers";
+import { validateCustomModelForProvider } from "../release-gate/releaseGateProviderModel";
 
 export default function ReplayPage() {
   const router = useRouter();
@@ -27,6 +34,11 @@ export default function ReplayPage() {
 
   const { data: org } = useSWR(orgId ? orgKeys.detail(orgId) : null, () =>
     organizationsAPI.get(orgId, { includeStats: false })
+  );
+
+  const { data: projectUserApiKeysData } = useSWR(
+    projectId && !isNaN(projectId) && projectId > 0 ? ["project-user-api-keys", projectId] : null,
+    () => projectUserApiKeysAPI.list(projectId)
   );
 
   const [snapshots, setSnapshots] = useState<any[]>([]);
@@ -44,9 +56,12 @@ export default function ReplayPage() {
 
   // Overrides
   const [targetModel, setTargetModel] = useState("");
+  const [replayProvider, setReplayProvider] = useState<ReplayProvider>("openai");
+  const [replayUserApiKeyId, setReplayUserApiKeyId] = useState<number | null>(null);
   const [targetPrompt, setTargetPrompt] = useState("");
   const [rubrics, setRubrics] = useState<any[]>([]);
   const [selectedRubricId, setSelectedRubricId] = useState<number | null>(null);
+  /** Hosted judge models only (aligned with Release Gate cheap tier). */
   const [judgeModel, setJudgeModel] = useState("gpt-4o-mini");
   const [showRubricModal, setShowRubricModal] = useState(false);
 
@@ -100,12 +115,29 @@ export default function ReplayPage() {
     }
     if (isConcurrencyBlocked) return;
 
+    const trimmedModel = targetModel.trim();
+    if (trimmedModel) {
+      const check = validateCustomModelForProvider(replayProvider, trimmedModel);
+      if (!check.ok) {
+        toast.showToast(check.message, "warning");
+        return;
+      }
+    }
+
     setReplaying(true);
     setPlanError(null);
     try {
       const replayResults = await replayAPI.runBatchReplay(projectId, {
         snapshot_ids: selectedIds,
-        new_model: targetModel || undefined,
+        new_model: trimmedModel || undefined,
+        ...(trimmedModel
+          ? {
+              replay_provider: replayProvider,
+              ...(!isHostedPlatformModel(replayProvider, trimmedModel) && replayUserApiKeyId != null
+                ? { replay_user_api_key_id: replayUserApiKeyId }
+                : {}),
+            }
+          : {}),
         new_system_prompt: targetPrompt || undefined,
         rubric_id: selectedRubricId || undefined,
         judge_model: judgeModel,
@@ -116,7 +148,7 @@ export default function ReplayPage() {
         project_id: projectId,
         item_count: selectedIds.length,
         has_rubric: !!selectedRubricId,
-        has_target_model: !!targetModel,
+        has_target_model: !!trimmedModel,
         success_count: replayResults.filter((r: any) => r.success).length,
       });
 
@@ -257,19 +289,109 @@ export default function ReplayPage() {
                 Override Settings
               </h3>
               <div className="space-y-4">
+                {!!targetModel.trim() && (
+                  <div className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/10 px-3 py-2 text-[11px] text-fuchsia-100/95 leading-relaxed">
+                    {isHostedPlatformModel(replayProvider, targetModel)
+                      ? "Hosted quick-pick: platform inference. No personal API key required."
+                      : "Custom model (BYOK): use a saved project key below, or rely on project default key lookup."}
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase mb-2">
-                    Target Model
+                    Provider
                   </label>
+                  <select
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-ag-accent transition-colors text-white"
+                    value={replayProvider}
+                    onChange={e => {
+                      const p = e.target.value as ReplayProvider;
+                      setReplayProvider(p);
+                      setReplayUserApiKeyId(null);
+                    }}
+                  >
+                    {(["openai", "anthropic", "google"] as const).map(p => (
+                      <option key={p} value={p}>
+                        {formatProviderLabel(p)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase mb-2">
+                    Hosted quick picks
+                  </label>
+                  <div className="grid grid-cols-1 gap-2">
+                    {(DEFAULT_REPLAY_PROVIDER_MODEL_LIBRARY[replayProvider] || []).map(modelId => (
+                      <button
+                        key={modelId}
+                        type="button"
+                        onClick={() => {
+                          setReplayProvider(replayProvider);
+                          setTargetModel(modelId);
+                          setReplayUserApiKeyId(null);
+                        }}
+                        className={clsx(
+                          "text-left rounded-lg border px-3 py-2 text-xs font-mono transition-colors",
+                          targetModel === modelId
+                            ? "border-ag-accent/60 bg-ag-accent/15 text-white"
+                            : "border-white/10 bg-black/30 text-slate-300 hover:border-white/20"
+                        )}
+                      >
+                        {modelId}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase mb-2">
+                    Custom model ID <span className="text-slate-500 normal-case">(BYOK)</span>
+                  </label>
+                  <p className="text-[10px] text-slate-500 mb-2 leading-relaxed">
+                    Premium models are not hosted here — enter the model id and optionally pick a saved API key
+                    (Settings → API keys). Leave empty to keep each log&apos;s original model.
+                  </p>
+                  {!isHostedPlatformModel(replayProvider, targetModel) && !!targetModel.trim() ? (
+                    <label className="block mb-2">
+                      <span className="block text-[10px] font-medium text-slate-500 uppercase mb-1">
+                        Saved API key (optional)
+                      </span>
+                      <select
+                        className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-ag-accent transition-colors text-white"
+                        value={replayUserApiKeyId ?? ""}
+                        onChange={e => {
+                          const v = e.target.value;
+                          setReplayUserApiKeyId(v === "" ? null : Number(v));
+                        }}
+                      >
+                        <option value="">Use project default key lookup</option>
+                        {(Array.isArray(projectUserApiKeysData) ? projectUserApiKeysData : [])
+                          .filter(
+                            (k: { is_active?: boolean; provider?: string }) =>
+                              k?.is_active &&
+                              String(k.provider || "")
+                                .trim()
+                                .toLowerCase() === replayProvider
+                          )
+                          .map((k: { id: number; name?: string | null; provider?: string; agent_id?: string | null }) => (
+                            <option key={k.id} value={k.id}>
+                              {(k.name || `${k.provider} key`).trim()}
+                              {k.agent_id ? ` · node ${k.agent_id}` : " · project default"}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  ) : null}
                   <input
                     type="text"
-                    placeholder="e.g. gpt-4o-mini, claude-3-5-sonnet"
-                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-ag-accent transition-colors"
+                    placeholder="e.g. gpt-4o-mini, claude-haiku-4-5-20251001"
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm focus:border-ag-accent transition-colors font-mono"
                     value={targetModel}
-                    onChange={e => setTargetModel(e.target.value)}
+                    onChange={e => {
+                      setTargetModel(e.target.value);
+                    }}
                   />
                   <p className="text-[10px] text-slate-500 mt-1">
-                    Leave empty to keep original model.
+                    Leave empty to keep original model per log.
                   </p>
                 </div>
                 <div>
@@ -312,9 +434,8 @@ export default function ReplayPage() {
                       value={judgeModel}
                       onChange={e => setJudgeModel(e.target.value)}
                     >
-                      <option value="gpt-4o-mini">GPT-4o Mini (Fast & Cheap)</option>
-                      <option value="gpt-4o">GPT-4o (High Precision)</option>
-                      <option value="o1-preview">o1-preview (Reasoning)</option>
+                      <option value="gpt-4o-mini">gpt-4o-mini (hosted)</option>
+                      <option value="gpt-4.1-mini">gpt-4.1-mini (hosted)</option>
                     </select>
                   </div>
                 )}

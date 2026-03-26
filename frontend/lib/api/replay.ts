@@ -6,6 +6,10 @@ export const replayAPI = {
     data: {
       snapshot_ids: number[];
       new_model?: string;
+      /** When overriding the replay model, align with Release Gate (OpenAI / Anthropic / Google). */
+      replay_provider?: "openai" | "anthropic" | "google";
+      /** Optional saved project key for BYOK when using a non-hosted model id. */
+      replay_user_api_key_id?: number;
       new_system_prompt?: string;
       rubric_id?: number;
       judge_model?: string;
