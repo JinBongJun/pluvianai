@@ -204,3 +204,5 @@ class TestAuthAPI:
         assert data["limits"]["guard_credits_per_month"] == 10000
         assert data["usage_this_month"]["platform_replay_credits"] == 125
         assert data["usage_this_month"]["guard_credits"] == 125
+        assert "organizations_used" in data["usage_this_month"]
+        assert isinstance(data["usage_this_month"]["organizations_used"], int)

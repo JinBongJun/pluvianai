@@ -4,7 +4,7 @@ import useSWR from "swr";
 import AccountLayout from "@/components/layout/AccountLayout";
 import { apiClient } from "@/lib/api/client";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-import { BarChart3, Zap, Database } from "lucide-react";
+import { BarChart3, Zap, Building2 } from "lucide-react";
 
 type UsageResponse = {
   plan_type: string;
@@ -15,8 +15,16 @@ type UsageResponse = {
     platform_replay_credits?: number;
     api_calls?: number;
     projects_used?: number;
+    organizations_used?: number;
     api_calls_limit?: number | null;
   };
+};
+
+/** When API limits are missing, match Phase 0 product defaults (subscription_limits.py). */
+const FALLBACK_BY_PLAN: Record<string, { projects: number; organizations: number; replay: number }> = {
+  free: { projects: 2, organizations: 1, replay: 60 },
+  pro: { projects: 10, organizations: 5, replay: 800 },
+  enterprise: { projects: -1, organizations: -1, replay: -1 },
 };
 
 const asNumber = (v: unknown, fallback = 0): number => {
@@ -38,6 +46,7 @@ export default function AccountUsagePage() {
   const planType = (data?.plan_type || "free").toLowerCase();
   const limits = data?.limits || {};
   const usage = data?.usage_this_month || {};
+  const fb = FALLBACK_BY_PLAN[planType] ?? FALLBACK_BY_PLAN.free;
 
   const snapshotsUsed = usage.snapshots ?? 0;
   const snapshotsLimit = asNumber(
@@ -49,13 +58,15 @@ export default function AccountUsagePage() {
   const apiCallsLimit = usage.api_calls_limit ?? asNumber((limits as any).api_calls_per_month, 10000);
 
   const projectsUsed = usage.projects_used ?? 0;
-  const projectsLimit = asNumber((limits as any).projects, planType === "free" ? 1 : planType === "pro" ? 10 : -1);
+  const projectsLimit = asNumber((limits as any).projects, fb.projects);
+
+  const organizationsUsed = usage.organizations_used ?? 0;
+  const organizationsLimit = asNumber((limits as any).organizations, fb.organizations);
 
   const replayUsed = usage.platform_replay_credits ?? usage.guard_credits ?? 0;
   const replayLimit = asNumber(
-    (limits as any).platform_replay_credits_per_month ??
-      (limits as any).guard_credits_per_month,
-    planType === "free" ? 50 : planType === "pro" ? 10000 : -1
+    (limits as any).platform_replay_credits_per_month ?? (limits as any).guard_credits_per_month,
+    fb.replay
   );
 
   const pct = (used: number, limit: number) =>
@@ -71,6 +82,12 @@ export default function AccountUsagePage() {
     >
       <div className="pb-24 relative">
         <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none" />
+
+        <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed relative z-10">
+          All plans include 30-day trace retention.
+          <br />
+          BYOK runs do not consume hosted replay credits.
+        </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16 relative z-10">
           {/* Snapshots */}
@@ -175,7 +192,7 @@ export default function AccountUsagePage() {
             Usage Overview
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
               <div className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2">
                 Api Calls
@@ -187,6 +204,25 @@ export default function AccountUsagePage() {
                     / {apiCallsLimit.toLocaleString()}
                   </span>
                 ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2">
+                <Building2 className="h-4 w-4 text-slate-400" />
+                Organizations
+              </div>
+              <div className="text-3xl font-bold text-white">
+                {organizationsUsed}
+                {organizationsLimit > 0 ? (
+                  <span className="text-slate-500 text-sm font-bold ml-1">
+                    / {organizationsLimit}
+                  </span>
+                ) : (
+                  <span className="text-emerald-500 text-[10px] font-bold uppercase tracking-widest ml-2 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20">
+                    Unlimited
+                  </span>
+                )}
               </div>
             </div>
 

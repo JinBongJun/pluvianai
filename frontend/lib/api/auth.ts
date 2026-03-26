@@ -62,6 +62,10 @@ export const authAPI = {
       snapshots: number;
       guard_credits: number;
       platform_replay_credits?: number;
+      api_calls?: number;
+      projects_used?: number;
+      organizations_used?: number;
+      api_calls_limit?: number | null;
     };
   }> => {
     const response = await apiClient.get("/auth/me/usage");
