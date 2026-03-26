@@ -311,16 +311,22 @@ class BillingService:
         event_type = event.get("event_type")
         data = event.get("data") or {}
         event_id = event.get("event_id") or event.get("id") or hashlib.sha256(payload).hexdigest()
-        idem_key = f"paddle:webhook:{event_id}"
-        cached = idempotency_service.get(idem_key)
-        if isinstance(cached, dict):
-            return {
-                "status": "duplicate",
-                "message": "Webhook already processed",
-                "event_type": event_type,
-                "event_id": event_id,
-                "result": cached,
-            }
+        raw_event_id = event.get("event_id") or event.get("id")
+        idem_key = f"paddle:webhook:{raw_event_id}" if raw_event_id else None
+        if idem_key:
+            cached = idempotency_service.get(idem_key)
+            if isinstance(cached, dict):
+                logger.info(
+                    "Duplicate Paddle webhook ignored",
+                    extra={"event_id": event_id, "event_type": event_type},
+                )
+                return {
+                    "status": "duplicate",
+                    "message": "Webhook already processed",
+                    "event_type": event_type,
+                    "event_id": event_id,
+                    "result": cached,
+                }
 
         result: Dict[str, Any]
         if event_type == "transaction.completed":
@@ -337,8 +343,13 @@ class BillingService:
                 "event_type": event_type,
             }
 
-        if result.get("status") in {"success", "ignored"}:
+        if idem_key and result.get("status") in {"success", "ignored"}:
             idempotency_service.set(idem_key, result)
+        result["event_id"] = event_id
+        logger.info(
+            "Processed Paddle webhook",
+            extra={"event_id": event_id, "event_type": event_type, "status": result.get("status")},
+        )
         return result
 
     def _handle_transaction_completed(self, data: Dict[str, Any], event_type: str) -> Dict[str, Any]:
