@@ -2,11 +2,16 @@
 
 import AccountLayout from "@/components/layout/AccountLayout";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-import useSWR from "swr";
+import { usePathname, useSearchParams } from "next/navigation";
+import useSWR, { useSWRConfig } from "swr";
 import { apiClient } from "@/lib/api/client";
 import { billingAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  getPaddleCheckoutState,
+  stripBillingCheckoutParams,
+} from "@/components/billing/paddlePaymentLink";
 
 type UsageResponse = {
   plan_type: string;
@@ -15,6 +20,10 @@ type UsageResponse = {
 export default function AccountBillingPage() {
   const hasToken = useRequireAuth();
   const toast = useToast();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
+  const { mutate } = useSWRConfig();
   const [upgradeBusy, setUpgradeBusy] = useState<string | null>(null);
   const { data } = useSWR<UsageResponse>(
     hasToken ? "/auth/me/usage" : null,
@@ -25,6 +34,37 @@ export default function AccountBillingPage() {
   );
 
   const currentPlanId = (data?.plan_type || "free").toLowerCase();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const checkoutState = getPaddleCheckoutState(new URLSearchParams(search));
+    if (!checkoutState) return;
+
+    const refreshBillingState = () =>
+      Promise.allSettled([
+        mutate("/auth/me/usage"),
+        mutate("/billing/usage"),
+        mutate("/billing/limits"),
+      ]);
+
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    if (checkoutState === "success") {
+      toast.showToast("Checkout completed. Refreshing billing status...", "success");
+      void refreshBillingState();
+      timers.push(setTimeout(() => void refreshBillingState(), 1500));
+      timers.push(setTimeout(() => void refreshBillingState(), 5000));
+    } else {
+      toast.showToast("Checkout canceled.", "info");
+    }
+
+    const nextUrl = stripBillingCheckoutParams(new URL(window.location.href));
+    window.history.replaceState({}, "", nextUrl);
+
+    return () => {
+      for (const timer of timers) clearTimeout(timer);
+    };
+  }, [mutate, pathname, search, toast]);
 
   const startUpgrade = async (planType: string) => {
     if (!hasToken || upgradeBusy) return;

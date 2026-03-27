@@ -1,7 +1,9 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { Plus_Jakarta_Sans } from "next/font/google";
+import PaddlePaymentLinkHandler from "@/components/billing/PaddlePaymentLinkHandler";
 import { ToastProvider } from "@/components/ToastContainer";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { MouseSpotlight } from "@/components/ui/MouseSpotlight";
@@ -44,6 +46,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ErrorBoundary>
           <PostHogProviderWrapper>
             <ToastProvider>
+              <Suspense fallback={null}>
+                <PaddlePaymentLinkHandler />
+              </Suspense>
               <div className="relative z-10">{children}</div>
             </ToastProvider>
           </PostHogProviderWrapper>
