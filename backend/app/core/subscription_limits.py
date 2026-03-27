@@ -35,7 +35,7 @@ FREE_LIMITS: Dict[str, Any] = {
     "repeat_count_per_test": 5,
     "csv_import_row_limit": 200,
     "total_calls_per_single_test": 1_000,
-    "concurrent_tests_per_project": 1,
+    "concurrent_tests_per_project": 0,
     "features": {
         "drift_detection": "basic",
         "quality_checks": "basic",
@@ -66,7 +66,7 @@ STARTER_LIMITS: Dict[str, Any] = {
     "repeat_count_per_test": 12,
     "csv_import_row_limit": 1_000,
     "total_calls_per_single_test": 10_000,
-    "concurrent_tests_per_project": 2,
+    "concurrent_tests_per_project": 0,
     "features": {
         "drift_detection": "enhanced",
         "quality_checks": "advanced",
@@ -98,7 +98,7 @@ PRO_LIMITS: Dict[str, Any] = {
     "repeat_count_per_test": 25,
     "csv_import_row_limit": 2_000,
     "total_calls_per_single_test": 25_000,
-    "concurrent_tests_per_project": 3,
+    "concurrent_tests_per_project": 0,
     "features": {
         "drift_detection": "enhanced",
         "quality_checks": "advanced",
@@ -134,7 +134,7 @@ ENTERPRISE_LIMITS: Dict[str, Any] = {
     "repeat_count_per_test": 1_000,
     "csv_import_row_limit": 10_000,
     "total_calls_per_single_test": 1_000_000,
-    "concurrent_tests_per_project": 10,
+    "concurrent_tests_per_project": 0,
     "features": {
         "drift_detection": "enhanced",
         "quality_checks": "advanced",
@@ -179,7 +179,7 @@ PLAN_PRICING: Dict[str, int] = {
     "free": 0,
     "starter": 49,
     "pro": 129,
-    "enterprise": 499,
+    "enterprise": 0,
     "indie": 49,
     "startup": 49,
 }

@@ -118,6 +118,12 @@ def get_project_with_access(project_id: int, required_roles: Optional[List[str]]
     return _get_project
 
 
+def get_current_superuser(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency: authenticated user must be a superuser (ops/admin)."""
+    require_admin(current_user)
+    return current_user
+
+
 def require_admin(user: User) -> None:
     """
     Require admin access (superuser)

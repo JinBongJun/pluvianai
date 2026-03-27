@@ -1,7 +1,7 @@
 /**
  * Shared types used across API modules.
  */
-export type PlanType = "free" | "pro" | "enterprise";
+export type PlanType = "free" | "starter" | "pro" | "enterprise";
 
 export interface OrganizationSummary {
   id: number;

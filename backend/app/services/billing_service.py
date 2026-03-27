@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.logging_config import logger
 from app.core.metrics import billing_webhook_events_total
-from app.core.subscription_limits import PLAN_LIMITS
+from app.core.subscription_limits import PLAN_LIMITS, normalize_plan_type
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.cache_service import cache_service
@@ -390,6 +390,11 @@ class BillingService:
         """Create a Paddle transaction and return checkout URL (and transaction id)."""
         if not self.paddle_available:
             logger.error("Paddle not configured (missing PADDLE_API_KEY)")
+            return None
+
+        plan_type = normalize_plan_type(plan_type)
+        if plan_type not in ("starter", "pro"):
+            logger.warning("Checkout rejected for plan_type=%s", plan_type)
             return None
 
         price_id = self._get_paddle_price_id(plan_type)
