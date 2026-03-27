@@ -33,7 +33,7 @@ const tiers = [
   },
   {
     name: "Pro",
-    priceLabel: "$149/month",
+    priceLabel: "$129/month",
     description: "For teams running high-throughput validation and release workflows.",
     features: [
       "10 organizations",

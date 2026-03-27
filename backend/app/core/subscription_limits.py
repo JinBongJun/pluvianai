@@ -178,7 +178,7 @@ PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
 PLAN_PRICING: Dict[str, int] = {
     "free": 0,
     "starter": 49,
-    "pro": 149,
+    "pro": 129,
     "enterprise": 499,
     "indie": 49,
     "startup": 49,
