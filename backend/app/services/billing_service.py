@@ -420,7 +420,8 @@ class BillingService:
         }
         checkout: Dict[str, Any] = {}
         if success_url:
-            checkout["url"] = success_url
+            # Use Paddle's success_url so users land back in app only after checkout completes.
+            checkout["success_url"] = success_url
         if checkout:
             payload["checkout"] = checkout
 
