@@ -154,7 +154,7 @@ export default function AccountBillingPage() {
         { label: "Billing" },
       ]}
     >
-      <div className="pb-24 relative">
+      <div className="max-w-[1400px] mx-auto pb-24 relative">
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed">
           BYOK runs do not consume hosted replay credits.
           <br />
@@ -187,7 +187,7 @@ export default function AccountBillingPage() {
             Temporary 429 responses are shared system safety limits, separate from plan quotas.
           </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 xl:gap-7 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 xl:gap-7 relative z-10">
           {plans.map(plan => {
             const isCurrent = plan.id === currentPlanId;
             const canCheckout = plan.id === "starter" || plan.id === "pro";
