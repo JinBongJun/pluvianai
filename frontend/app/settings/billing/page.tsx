@@ -155,8 +155,8 @@ export default function AccountBillingPage() {
         { label: "Billing" },
       ]}
     >
-      <div className="max-w-[1700px] mx-auto pb-24 relative px-4 xl:px-8">
-        <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed">
+      <div className="pb-24 relative">
+        <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 leading-relaxed">
           BYOK runs do not consume hosted replay credits.
           <br />
           Subscriptions auto-renew unless canceled before the next billing cycle.
