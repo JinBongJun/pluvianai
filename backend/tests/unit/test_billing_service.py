@@ -266,6 +266,9 @@ class TestBillingService:
                             "https://success.com",
                             "https://cancel.com",
                         )
+        called_payload = mock_post.call_args.args[1]
+        assert called_payload["checkout"]["success_url"] == "https://success.com"
+        assert "url" not in called_payload["checkout"]
         assert result is not None
         assert result["session_id"] == "txn_test_123"
         assert result["url"].startswith("https://")
