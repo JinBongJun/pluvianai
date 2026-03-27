@@ -10,6 +10,7 @@ import { useToast } from "@/components/ToastContainer";
 import { useRouter } from "next/navigation";
 import { Zap, Activity, Database, ShieldCheck, CheckCircle2, BarChart3 } from "lucide-react";
 import Link from "next/link";
+import clsx from "clsx";
 
 export default function BillingPage() {
   const { orgId } = useOrgProjectParams();
@@ -121,6 +122,12 @@ export default function BillingPage() {
   const snapshotsExhausted = snapshotsLimit > 0 && snapshotsUsed >= snapshotsLimit;
   const replayExhausted =
     platformReplayCreditsLimit > 0 && platformReplayCreditsUsed >= platformReplayCreditsLimit;
+  const snapshotsNearLimit =
+    snapshotsLimit > 0 && !snapshotsExhausted && (snapshotsUsed / snapshotsLimit) * 100 >= 80;
+  const replayNearLimit =
+    platformReplayCreditsLimit > 0 &&
+    !replayExhausted &&
+    (platformReplayCreditsUsed / platformReplayCreditsLimit) * 100 >= 80;
 
   const callsPercent =
     hasMonthlyCalls && callsLimit > 0 ? Math.min(100, (callsUsed / callsLimit) * 100) : 0;
@@ -225,17 +232,35 @@ export default function BillingPage() {
           <p className="text-slate-500 text-xs font-semibold uppercase tracking-widest mt-4 max-w-2xl leading-relaxed">
             BYOK runs do not consume hosted replay credits.
           </p>
-          {(snapshotsExhausted || replayExhausted) && (
-            <div className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 max-w-3xl">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-amber-200">
-                Plan quota exhausted
+          {(snapshotsExhausted || replayExhausted || snapshotsNearLimit || replayNearLimit) && (
+            <div
+              className={clsx(
+                "mt-4 rounded-2xl p-4 max-w-3xl",
+                snapshotsExhausted || replayExhausted
+                  ? "border border-rose-500/30 bg-rose-500/10"
+                  : "border border-amber-500/30 bg-amber-500/10"
+              )}
+            >
+              <p
+                className={clsx(
+                  "text-[11px] font-bold uppercase tracking-widest",
+                  snapshotsExhausted || replayExhausted ? "text-rose-200" : "text-amber-200"
+                )}
+              >
+                {snapshotsExhausted || replayExhausted ? "Plan quota exhausted" : "Plan quota warning"}
               </p>
-              <p className="mt-1 text-xs text-amber-100/90">
-                {snapshotsExhausted && replayExhausted
-                  ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and hosted replay credits (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}) are exhausted.`
-                  : snapshotsExhausted
-                    ? `Snapshots are exhausted (${snapshotsUsed}/${snapshotsLimit}).`
-                    : `Hosted replay credits are exhausted (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}).`}{" "}
+              <p className="mt-1 text-xs text-white/90">
+                {snapshotsExhausted || replayExhausted
+                  ? snapshotsExhausted && replayExhausted
+                    ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and hosted replay credits (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}) are exhausted.`
+                    : snapshotsExhausted
+                      ? `Snapshots are exhausted (${snapshotsUsed}/${snapshotsLimit}).`
+                      : `Hosted replay credits are exhausted (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}).`
+                  : snapshotsNearLimit && replayNearLimit
+                    ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and hosted replay credits (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}) are above 80%.`
+                    : snapshotsNearLimit
+                      ? `Snapshots are above 80% (${snapshotsUsed}/${snapshotsLimit}).`
+                      : `Hosted replay credits are above 80% (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}).`}{" "}
                 Upgrade in account billing or run BYOK where supported.
               </p>
               <Link
@@ -422,7 +447,14 @@ export default function BillingPage() {
                   </div>
                   <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-emerald-500 rounded-full transition-all"
+                      className={clsx(
+                        "h-full rounded-full transition-all",
+                        snapshotsExhausted
+                          ? "bg-rose-500"
+                          : snapshotsNearLimit
+                            ? "bg-amber-500"
+                            : "bg-emerald-500"
+                      )}
                       style={{
                         width: `${Math.min(
                           100,
@@ -444,7 +476,14 @@ export default function BillingPage() {
                 </div>
                 <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-cyan-500 rounded-full transition-all"
+                    className={clsx(
+                      "h-full rounded-full transition-all",
+                      replayExhausted
+                        ? "bg-rose-500"
+                        : replayNearLimit
+                          ? "bg-amber-500"
+                          : "bg-cyan-500"
+                    )}
                     style={{
                       width: `${platformReplayCreditsPercent}%`,
                     }}
