@@ -47,12 +47,24 @@ export default function PaddlePaymentLinkHandler() {
     sessionStorage.setItem(openedKey, "1");
 
     let disposed = false;
+    let checkoutCompleted = false;
 
     const openCheckout = async () => {
       try {
         const paddle = await initializePaddle({
           environment,
           token: clientToken,
+          eventCallback: (event: { name?: string }) => {
+            const eventName = event?.name;
+            if (eventName === "checkout.completed") {
+              checkoutCompleted = true;
+              return;
+            }
+            if (eventName === "checkout.closed" && !checkoutCompleted && !disposed) {
+              sessionStorage.removeItem(openedKey);
+              window.location.href = "/settings/billing?checkout=cancel";
+            }
+          },
         });
 
         if (!paddle || disposed) {
