@@ -112,3 +112,33 @@ def test_starter_plan_allows_multiple_organizations(client, db, test_user, auth_
         headers=auth_headers,
     )
     assert response.status_code == 201
+
+
+def test_org_limit_error_includes_normalized_details(client, db, test_user, auth_headers):
+    # Free plan allows exactly 1 organization.
+    first = client.post(
+        "/api/v1/organizations",
+        json={"name": "First Org", "description": "fill free slot"},
+        headers=auth_headers,
+    )
+    assert first.status_code == 201
+
+    response = client.post(
+        "/api/v1/organizations",
+        json={"name": "Blocked Org", "description": "should hit org cap"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 403
+    body = response.json()
+    payload = body.get("detail") or body.get("error") or {}
+    direct_code = payload.get("code")
+    details = payload.get("details") or {}
+    nested_payload = details if isinstance(details, dict) else {}
+    if isinstance(nested_payload.get("details"), dict):
+        nested_payload = nested_payload["details"]
+    code = direct_code or (details.get("code") if isinstance(details, dict) else None)
+    assert code == "ORG_LIMIT_REACHED"
+    assert nested_payload.get("metric") == "organizations"
+    assert isinstance(nested_payload.get("remaining"), int)
+    assert nested_payload.get("remaining") == 0
+    assert isinstance(nested_payload.get("reset_at"), str)

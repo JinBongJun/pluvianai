@@ -69,7 +69,11 @@ class TestProjectsAPI:
         if response.status_code == status.HTTP_409_CONFLICT:
             data = response.json()
             # Check for either "detail" (FastAPI default) or "message" (our custom handler)
-            error_msg = data.get("message") or data.get("detail", "")
+            error_msg = (
+                data.get("message")
+                or data.get("detail", "")
+                or (data.get("error", {}) if isinstance(data.get("error"), dict) else {}).get("message", "")
+            )
             assert "already exists" in error_msg.lower() or "duplicate" in error_msg.lower()
     
     async def test_list_projects(self, async_client, auth_headers, test_project):
@@ -189,3 +193,40 @@ class TestProjectsAPI:
         )
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    async def test_project_limit_error_includes_normalized_details(self, async_client, auth_headers):
+        """Project limit errors should include canonical metric payload fields."""
+        # Free plan allows up to 2 projects. Fill slots, then assert normalized 403 payload.
+        first = await async_client.post(
+            "/api/v1/projects",
+            json={"name": "limit-test-project-1", "description": "fill slot"},
+            headers=auth_headers,
+        )
+        assert first.status_code == status.HTTP_201_CREATED
+
+        second = await async_client.post(
+            "/api/v1/projects",
+            json={"name": "limit-test-project-2", "description": "fill second slot"},
+            headers=auth_headers,
+        )
+        assert second.status_code == status.HTTP_201_CREATED
+
+        blocked = await async_client.post(
+            "/api/v1/projects",
+            json={"name": "limit-test-project-3", "description": "should block"},
+            headers=auth_headers,
+        )
+        assert blocked.status_code == status.HTTP_403_FORBIDDEN
+        body = blocked.json()
+        payload = body.get("detail") or body.get("error") or {}
+        direct_code = payload.get("code")
+        details = payload.get("details") or {}
+        nested_payload = details if isinstance(details, dict) else {}
+        if isinstance(nested_payload.get("details"), dict):
+            nested_payload = nested_payload["details"]
+        code = direct_code or (details.get("code") if isinstance(details, dict) else None)
+        assert code == "PROJECT_LIMIT_REACHED"
+        assert nested_payload.get("metric") == "projects"
+        assert isinstance(nested_payload.get("remaining"), int)
+        assert nested_payload.get("remaining") == 0
+        assert isinstance(nested_payload.get("reset_at"), str)

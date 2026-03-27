@@ -17,8 +17,8 @@ from app.core.dependencies import get_project_service, get_evaluation_rubric_rep
 from app.infrastructure.repositories.evaluation_rubric_repository import EvaluationRubricRepository
 from app.services.cache_service import cache_service
 from app.services.firewall_service import firewall_service
-from app.services.subscription_service import SubscriptionService
 from app.middleware.usage_middleware import check_project_limit
+from app.core.usage_limits import get_limit_status
 from app.services.activity_logger import activity_logger
 from app.core.analytics import analytics_service
 from app.models.user import User
@@ -106,29 +106,19 @@ async def create_project(
         is_superuser=bool(getattr(current_user, "is_superuser", False)),
     )
     if not can_create:
-        plan_info = SubscriptionService(db).get_user_plan(current_user.id)
-        plan_type = str(plan_info.get("plan_type") or "free")
-        limits = plan_info.get("limits") or {}
-        project_limit = int(limits.get("projects", 1))
-
-        project_count = (
-            db.query(Project)
-            .filter(
-                Project.owner_id == current_user.id,
-                Project.is_active.is_(True),
-                Project.is_deleted.is_(False),
-            )
-            .count()
-        )
+        limit_status = get_limit_status(db, current_user.id, "projects")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "PROJECT_LIMIT_REACHED",
                 "message": error_msg or "You have reached the project limit for your current plan.",
                 "details": {
-                    "plan_type": plan_type,
-                    "current": int(project_count),
-                    "limit": project_limit,
+                    "plan_type": limit_status.get("plan_type"),
+                    "metric": limit_status.get("metric"),
+                    "current": limit_status.get("current"),
+                    "limit": limit_status.get("limit"),
+                    "remaining": limit_status.get("remaining"),
+                    "reset_at": limit_status.get("reset_at"),
                     "upgrade_path": "/settings/billing",
                 },
             },
