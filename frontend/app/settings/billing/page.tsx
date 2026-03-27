@@ -187,7 +187,7 @@ export default function AccountBillingPage() {
             Temporary 429 responses are shared system safety limits, separate from plan quotas.
           </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 xl:gap-7 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 xl:gap-6 relative z-10">
           {plans.map(plan => {
             const isCurrent = plan.id === currentPlanId;
             const canCheckout = plan.id === "starter" || plan.id === "pro";
@@ -195,24 +195,29 @@ export default function AccountBillingPage() {
             return (
               <div
                 key={plan.id}
-                className={`rounded-[32px] border bg-white/[0.02] backdrop-blur-xl px-6 py-7 xl:px-7 xl:py-8 flex flex-col justify-between min-h-[440px] ${
-                  plan.id === "pro"
-                    ? "border-emerald-500/40 shadow-[0_0_30px_rgba(16,185,129,0.25)]"
-                    : "border-white/10"
+                className={`relative rounded-[32px] border bg-white/[0.02] backdrop-blur-xl px-5 py-6 xl:px-6 xl:py-7 flex flex-col justify-between min-h-[460px] transition-all duration-500 group ${
+                  isCurrent
+                    ? "border-emerald-500/50 shadow-[0_0_40px_rgba(16,185,129,0.2)] bg-white/[0.04]"
+                    : "border-white/10 hover:border-white/20"
                 }`}
               >
-                <div>
-                  <div className="flex items-center justify-between mb-5">
-                    <div className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
-                      {plan.id === "free" ? "Active License" : isContactSales ? "Contact Sales" : "Paid Plan"}
+                {/* Premium Gradient Glow for Current Plan */}
+                {isCurrent && (
+                  <div className="absolute inset-0 rounded-[32px] bg-gradient-to-b from-emerald-500/5 to-transparent pointer-events-none" />
+                )}
+
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+                      {isCurrent ? "Active License" : isContactSales ? "Contact Sales" : "Paid Plan"}
                     </div>
                     {isCurrent && (
-                      <span className="px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/40 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">
-                        Current Plan
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-500 text-[9px] font-black uppercase tracking-[0.15em] text-black shadow-[0_0_15px_rgba(16,185,129,0.4)]">
+                        Current
                       </span>
                     )}
                   </div>
-                  <h2 className="text-[26px] leading-none font-black text-white uppercase tracking-tight mb-2">
+                  <h2 className="text-[24px] xl:text-[28px] leading-none font-black text-white uppercase tracking-tight mb-2">
                     {plan.name}
                   </h2>
                   <div className="flex items-baseline gap-1.5 mb-5">
