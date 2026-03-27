@@ -9,6 +9,7 @@ import { orgKeys } from "@/lib/queryKeys";
 import { useToast } from "@/components/ToastContainer";
 import { useRouter } from "next/navigation";
 import { Zap, Activity, Database, ShieldCheck, CheckCircle2, BarChart3 } from "lucide-react";
+import Link from "next/link";
 
 export default function BillingPage() {
   const { orgId } = useOrgProjectParams();
@@ -117,6 +118,9 @@ export default function BillingPage() {
   const snapshotsUsed = effectiveUsage?.usage_this_month?.snapshots ?? 0;
   const snapshotsLimit =
     (effectiveUsage?.limits?.snapshots_per_month as number | undefined) ?? limitData.snapshots;
+  const snapshotsExhausted = snapshotsLimit > 0 && snapshotsUsed >= snapshotsLimit;
+  const replayExhausted =
+    platformReplayCreditsLimit > 0 && platformReplayCreditsUsed >= platformReplayCreditsLimit;
 
   const callsPercent =
     hasMonthlyCalls && callsLimit > 0 ? Math.min(100, (callsUsed / callsLimit) * 100) : 0;
@@ -221,6 +225,27 @@ export default function BillingPage() {
           <p className="text-slate-500 text-xs font-semibold uppercase tracking-widest mt-4 max-w-2xl leading-relaxed">
             BYOK runs do not consume hosted replay credits.
           </p>
+          {(snapshotsExhausted || replayExhausted) && (
+            <div className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 max-w-3xl">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-amber-200">
+                Plan quota exhausted
+              </p>
+              <p className="mt-1 text-xs text-amber-100/90">
+                {snapshotsExhausted && replayExhausted
+                  ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and hosted replay credits (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}) are exhausted.`
+                  : snapshotsExhausted
+                    ? `Snapshots are exhausted (${snapshotsUsed}/${snapshotsLimit}).`
+                    : `Hosted replay credits are exhausted (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}).`}{" "}
+                Upgrade in account billing or run BYOK where supported.
+              </p>
+              <Link
+                href="/settings/billing"
+                className="mt-3 inline-flex rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/20"
+              >
+                Open account billing
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Telemetry Runway (Usage Summary) */}

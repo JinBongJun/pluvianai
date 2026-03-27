@@ -5,6 +5,7 @@ import AccountLayout from "@/components/layout/AccountLayout";
 import { apiClient } from "@/lib/api/client";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { BarChart3, Zap, Building2 } from "lucide-react";
+import Link from "next/link";
 
 type UsageResponse = {
   plan_type: string;
@@ -69,6 +70,8 @@ export default function AccountUsagePage() {
     (limits as any).platform_replay_credits_per_month ?? (limits as any).guard_credits_per_month,
     fb.replay
   );
+  const snapshotsExhausted = snapshotsLimit > 0 && snapshotsUsed >= snapshotsLimit;
+  const replayExhausted = replayLimit > 0 && replayUsed >= replayLimit;
 
   const pct = (used: number, limit: number) =>
     limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
@@ -87,6 +90,27 @@ export default function AccountUsagePage() {
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed relative z-10">
           BYOK runs do not consume hosted replay credits.
         </p>
+        {(snapshotsExhausted || replayExhausted) && (
+          <div className="mb-8 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-amber-200">
+              Plan quota exhausted
+            </p>
+            <p className="mt-1 text-xs text-amber-100/90">
+              {snapshotsExhausted && replayExhausted
+                ? "Snapshots and hosted replay credits are exhausted for this billing period."
+                : snapshotsExhausted
+                  ? "Snapshots are exhausted for this billing period."
+                  : "Hosted replay credits are exhausted for this billing period."}
+              {" "}Switch to BYOK where possible or upgrade plan.
+            </p>
+            <Link
+              href="/settings/billing"
+              className="mt-3 inline-flex rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/20"
+            >
+              Open billing
+            </Link>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16 relative z-10">
           {/* Snapshots */}
