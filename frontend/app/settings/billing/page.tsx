@@ -149,6 +149,7 @@ export default function AccountBillingPage() {
   return (
     <AccountLayout
       activeTab="billing"
+      isWide={true}
       breadcrumb={[
         { label: "Account", href: "/settings/profile" },
         { label: "Billing" },
