@@ -30,3 +30,18 @@ def test_get_limit_status_uses_paid_plan_limits(db, test_user):
     assert replay_status["limit"] == 600
     assert replay_status["current"] == 0
     assert replay_status["remaining"] == 600
+
+
+def test_get_limit_status_handles_missing_db_for_error_payload():
+    snapshots_status = get_limit_status(None, user_id=999, metric="snapshots")
+    replay_status = get_limit_status(None, user_id=999, metric="platform_replay_credits")
+
+    assert snapshots_status["plan_type"] == "free"
+    assert snapshots_status["current"] == 0
+    assert snapshots_status["limit"] == 10_000
+    assert snapshots_status["remaining"] == 10_000
+
+    assert replay_status["plan_type"] == "free"
+    assert replay_status["current"] == 0
+    assert replay_status["limit"] == 60
+    assert replay_status["remaining"] == 60

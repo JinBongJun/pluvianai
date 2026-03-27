@@ -69,8 +69,10 @@ def get_platform_replay_credits_this_month(db: Session, user_id: int) -> int:
     return get_guard_credits_this_month(db, user_id)
 
 
-def _resolve_user_plan_type(db: Session, user_id: int) -> str:
+def _resolve_user_plan_type(db: Session | None, user_id: int) -> str:
     """Resolve canonical plan type for a user from subscription row."""
+    if db is None:
+        return "free"
     sub = db.query(Subscription).filter(Subscription.user_id == user_id).first()
     if sub:
         raw_plan = getattr(sub, "plan_type", None) or getattr(sub, "plan_id", None) or "free"
@@ -80,13 +82,13 @@ def _resolve_user_plan_type(db: Session, user_id: int) -> str:
     return plan_type
 
 
-def _get_user_plan_limits(db: Session, user_id: int) -> dict:
+def _get_user_plan_limits(db: Session | None, user_id: int) -> dict:
     """Resolve plan limits for user from canonical plan type."""
     plan_type = _resolve_user_plan_type(db, user_id)
     return PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
 
-def get_limit_status(db: Session, user_id: int, metric: str) -> Dict[str, Any]:
+def get_limit_status(db: Session | None, user_id: int, metric: str) -> Dict[str, Any]:
     """
     Return a normalized limit status payload for limit-aware APIs/UI.
     Metrics: snapshots | platform_replay_credits
@@ -98,11 +100,11 @@ def get_limit_status(db: Session, user_id: int, metric: str) -> Dict[str, Any]:
 
     if metric == "snapshots":
         limit = int(limits.get("snapshots_per_month", 10_000))
-        current = int(get_snapshots_count_this_month(db, user_id))
+        current = int(get_snapshots_count_this_month(db, user_id)) if db is not None else 0
     elif metric == "platform_replay_credits":
         cap = limits.get("platform_replay_credits_per_month", limits.get("guard_credits_per_month"))
         limit = int(cap) if cap is not None else -1
-        current = int(get_platform_replay_credits_this_month(db, user_id))
+        current = int(get_platform_replay_credits_this_month(db, user_id)) if db is not None else 0
     else:
         raise ValueError(f"Unsupported metric for limit status: {metric}")
 
