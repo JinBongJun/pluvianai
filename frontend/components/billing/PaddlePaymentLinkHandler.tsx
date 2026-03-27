@@ -33,7 +33,13 @@ export default function PaddlePaymentLinkHandler() {
     if (!transactionId) return;
 
     const openedKey = buildOpenedTransactionStorageKey(transactionId);
-    if (sessionStorage.getItem(openedKey) === "1") return;
+    const alreadyOpened = sessionStorage.getItem(openedKey) === "1";
+    const onCheckoutPage = pathname === "/checkout";
+    if (alreadyOpened && !onCheckoutPage) return;
+    if (alreadyOpened && onCheckoutPage) {
+      // Allow manual refresh on /checkout to retry opening the same transaction modal.
+      sessionStorage.removeItem(openedKey);
+    }
 
     const clientToken = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
     const environment =
