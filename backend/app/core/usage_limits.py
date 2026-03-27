@@ -11,6 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.subscription_limits import PLAN_LIMITS, normalize_plan_type
+from app.models.organization import Organization
 from app.models.project import Project
 from app.models.snapshot import Snapshot
 from app.models.subscription import Subscription
@@ -91,7 +92,7 @@ def _get_user_plan_limits(db: Session | None, user_id: int) -> dict:
 def get_limit_status(db: Session | None, user_id: int, metric: str) -> Dict[str, Any]:
     """
     Return a normalized limit status payload for limit-aware APIs/UI.
-    Metrics: snapshots | platform_replay_credits
+    Metrics: organizations | projects | snapshots | platform_replay_credits
     """
     plan_type = _resolve_user_plan_type(db, user_id)
     limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
@@ -101,6 +102,35 @@ def get_limit_status(db: Session | None, user_id: int, metric: str) -> Dict[str,
     if metric == "snapshots":
         limit = int(limits.get("snapshots_per_month", 10_000))
         current = int(get_snapshots_count_this_month(db, user_id)) if db is not None else 0
+    elif metric == "organizations":
+        limit = int(limits.get("organizations", 1))
+        current = (
+            int(
+                db.query(Organization)
+                .filter(
+                    Organization.owner_id == user_id,
+                    Organization.is_deleted.is_(False),
+                )
+                .count()
+            )
+            if db is not None
+            else 0
+        )
+    elif metric == "projects":
+        limit = int(limits.get("projects", 1))
+        current = (
+            int(
+                db.query(Project)
+                .filter(
+                    Project.owner_id == user_id,
+                    Project.is_active.is_(True),
+                    Project.is_deleted.is_(False),
+                )
+                .count()
+            )
+            if db is not None
+            else 0
+        )
     elif metric == "platform_replay_credits":
         cap = limits.get("platform_replay_credits_per_month", limits.get("guard_credits_per_month"))
         limit = int(cap) if cap is not None else -1
