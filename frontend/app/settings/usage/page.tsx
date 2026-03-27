@@ -6,6 +6,7 @@ import { apiClient } from "@/lib/api/client";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { BarChart3, Zap, Building2 } from "lucide-react";
 import Link from "next/link";
+import clsx from "clsx";
 
 type UsageResponse = {
   plan_type: string;
@@ -72,6 +73,9 @@ export default function AccountUsagePage() {
   );
   const snapshotsExhausted = snapshotsLimit > 0 && snapshotsUsed >= snapshotsLimit;
   const replayExhausted = replayLimit > 0 && replayUsed >= replayLimit;
+  const snapshotsNearLimit =
+    snapshotsLimit > 0 && !snapshotsExhausted && (snapshotsUsed / snapshotsLimit) * 100 >= 80;
+  const replayNearLimit = replayLimit > 0 && !replayExhausted && (replayUsed / replayLimit) * 100 >= 80;
 
   const pct = (used: number, limit: number) =>
     limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
@@ -90,17 +94,35 @@ export default function AccountUsagePage() {
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed relative z-10">
           BYOK runs do not consume hosted replay credits.
         </p>
-        {(snapshotsExhausted || replayExhausted) && (
-          <div className="mb-8 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-amber-200">
-              Plan quota exhausted
+        {(snapshotsExhausted || replayExhausted || snapshotsNearLimit || replayNearLimit) && (
+          <div
+            className={clsx(
+              "mb-8 rounded-2xl p-4",
+              snapshotsExhausted || replayExhausted
+                ? "border border-rose-500/30 bg-rose-500/10"
+                : "border border-amber-500/30 bg-amber-500/10"
+            )}
+          >
+            <p
+              className={clsx(
+                "text-[11px] font-bold uppercase tracking-widest",
+                snapshotsExhausted || replayExhausted ? "text-rose-200" : "text-amber-200"
+              )}
+            >
+              {snapshotsExhausted || replayExhausted ? "Plan quota exhausted" : "Plan quota warning"}
             </p>
-            <p className="mt-1 text-xs text-amber-100/90">
-              {snapshotsExhausted && replayExhausted
-                ? "Snapshots and hosted replay credits are exhausted for this billing period."
-                : snapshotsExhausted
-                  ? "Snapshots are exhausted for this billing period."
-                  : "Hosted replay credits are exhausted for this billing period."}
+            <p className="mt-1 text-xs text-white/90">
+              {snapshotsExhausted || replayExhausted
+                ? snapshotsExhausted && replayExhausted
+                  ? "Snapshots and hosted replay credits are exhausted for this billing period."
+                  : snapshotsExhausted
+                    ? "Snapshots are exhausted for this billing period."
+                    : "Hosted replay credits are exhausted for this billing period."
+                : snapshotsNearLimit && replayNearLimit
+                  ? "Snapshots and hosted replay credits are above 80% usage."
+                  : snapshotsNearLimit
+                    ? "Snapshots are above 80% usage."
+                    : "Hosted replay credits are above 80% usage."}
               {" "}Switch to BYOK where possible or upgrade plan.
             </p>
             <Link
@@ -152,7 +174,14 @@ export default function AccountUsagePage() {
                 </div>
                 <div className="h-3 bg-black/40 rounded-full overflow-hidden border border-white/5 shadow-inner">
                   <div
-                    className="h-full bg-emerald-500 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.6)] transition-all duration-1000"
+                    className={clsx(
+                      "h-full rounded-full transition-all duration-1000",
+                      snapshotsExhausted
+                        ? "bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.6)]"
+                        : snapshotsNearLimit
+                          ? "bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.6)]"
+                          : "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.6)]"
+                    )}
                     style={{ width: `${pct(snapshotsUsed, snapshotsLimit)}%` }}
                   />
                 </div>
@@ -199,7 +228,14 @@ export default function AccountUsagePage() {
                 </div>
                 <div className="h-3 bg-black/40 rounded-full overflow-hidden border border-white/5 shadow-inner">
                   <div
-                    className="h-full bg-sky-400 rounded-full shadow-[0_0_15px_rgba(56,189,248,0.6)] transition-all duration-1000"
+                    className={clsx(
+                      "h-full rounded-full transition-all duration-1000",
+                      replayExhausted
+                        ? "bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.6)]"
+                        : replayNearLimit
+                          ? "bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.6)]"
+                          : "bg-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.6)]"
+                    )}
                     style={{ width: `${pct(replayUsed, replayLimit)}%` }}
                   />
                 </div>
