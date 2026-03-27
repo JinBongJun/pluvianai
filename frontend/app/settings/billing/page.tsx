@@ -128,7 +128,8 @@ export default function AccountBillingPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
           {plans.map(plan => {
             const isCurrent = plan.id === currentPlanId;
-            const canCheckout = plan.id === "pro" || plan.id === "enterprise";
+            const canCheckout = plan.id === "pro";
+            const isContactSales = plan.id === "enterprise";
             return (
               <div
                 key={plan.id}
@@ -141,7 +142,7 @@ export default function AccountBillingPage() {
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <div className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
-                      {plan.id === "free" ? "Active License" : "Coming Soon"}
+                      {plan.id === "free" ? "Active License" : isContactSales ? "Contact Sales" : "Paid Plan"}
                     </div>
                     {isCurrent && (
                       <span className="px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/40 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">
@@ -189,6 +190,13 @@ export default function AccountBillingPage() {
                     >
                       {upgradeBusy === plan.id ? "Opening checkout..." : "Upgrade"}
                     </button>
+                  ) : isContactSales ? (
+                    <a
+                      href="mailto:support@pluvianai.com?subject=Enterprise%20Plan%20Inquiry"
+                      className="w-full inline-flex items-center justify-center py-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-[11px] font-bold uppercase tracking-widest text-emerald-300 hover:bg-emerald-500/15 transition-colors"
+                    >
+                      Contact Sales
+                    </a>
                   ) : (
                     <button
                       disabled
