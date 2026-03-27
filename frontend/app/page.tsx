@@ -271,6 +271,11 @@ export default function Home() {
                 </Link>
               </li>
               <li>
+                <Link href="/refund" className="hover:text-emerald-400 transition-colors">
+                  Refund Policy
+                </Link>
+              </li>
+              <li>
                 <Link href="/trust" className="hover:text-emerald-400 transition-colors">
                   Live View data (Trust)
                 </Link>
@@ -319,6 +324,9 @@ export default function Home() {
             </Link>
             <Link href="/privacy" className="hover:text-emerald-400 transition-colors">
               Privacy
+            </Link>
+            <Link href="/refund" className="hover:text-emerald-400 transition-colors">
+              Refund
             </Link>
             <Link href="/trust" className="hover:text-emerald-400 transition-colors">
               Trust

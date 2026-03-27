@@ -123,10 +123,18 @@ export default function AccountBillingPage() {
         <div className="mb-8 text-xs text-slate-400 space-y-1">
           <p>
             By upgrading, you agree to our{" "}
-            <a href="/trust" className="text-emerald-300 hover:text-emerald-200 underline">
-              Terms and Privacy
+            <a href="/terms" className="text-emerald-300 hover:text-emerald-200 underline">
+              Terms
             </a>
-            {" "}and refund/cancellation policy.
+            {" "}and{" "}
+            <a href="/privacy" className="text-emerald-300 hover:text-emerald-200 underline">
+              Privacy
+            </a>
+            {" "}and{" "}
+            <a href="/refund" className="text-emerald-300 hover:text-emerald-200 underline">
+              refund/cancellation policy
+            </a>
+            .
           </p>
           <p>
             Need to cancel or billing help? Contact support via{" "}
