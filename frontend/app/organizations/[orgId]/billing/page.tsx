@@ -154,7 +154,7 @@ export default function BillingPage() {
     {
       id: "pro",
       name: "Pro",
-      price: "$149",
+      price: "$129",
       period: "/month",
       desc: "For teams running higher-throughput validation and release workflows.",
       features: [
