@@ -63,7 +63,7 @@ export default function BillingPage() {
 
   const effectiveUsage = myUsage || fallbackUsage;
 
-  const currentPlanId = org?.plan || "free";
+  const currentPlanId = String(org?.plan || "free").toLowerCase();
 
   // Org-scoped usage view – limits come from account-level plan;
   // we only need light defaults here for visualization.
@@ -75,11 +75,18 @@ export default function BillingPage() {
       platformReplayCredits: 60,
       teamMembers: 3,
     },
+    starter: {
+      calls: 50_000,
+      snapshots: 50_000,
+      projects: 8,
+      platformReplayCredits: 600,
+      teamMembers: 5,
+    },
     pro: {
-      calls: 100000,
-      snapshots: 30_000,
-      projects: 10,
-      platformReplayCredits: 800,
+      calls: 200000,
+      snapshots: 200_000,
+      projects: 30,
+      platformReplayCredits: 3_000,
       teamMembers: 5,
     },
     enterprise: {
@@ -131,18 +138,32 @@ export default function BillingPage() {
       current: currentPlanId === "free",
     },
     {
-      id: "pro",
-      name: "Pro",
+      id: "starter",
+      name: "Starter",
       price: "$49",
       period: "/month",
-      desc: "For teams that need higher hosted replay budgets and multi-project scale.",
+      desc: "For teams scaling validation volume with predictable monthly limits.",
       features: [
-        "5 organizations",
-        "10 active projects",
-        "30,000 snapshots per month",
-        "800 hosted replay credits per month",
+        "3 organizations",
+        "8 active projects",
+        "50,000 snapshots per month",
+        "600 hosted replay credits per month",
       ],
-      current: false,
+      current: currentPlanId === "starter",
+    },
+    {
+      id: "pro",
+      name: "Pro",
+      price: "$149",
+      period: "/month",
+      desc: "For teams running higher-throughput validation and release workflows.",
+      features: [
+        "10 organizations",
+        "30 active projects",
+        "200,000 snapshots per month",
+        "3,000 hosted replay credits per month",
+      ],
+      current: currentPlanId === "pro",
     },
     {
       id: "enterprise",
@@ -189,8 +210,6 @@ export default function BillingPage() {
               View usage for this organization&apos;s projects. For account-wide quotas and billing, use the Account Usage and Billing pages.
             </p>
           <p className="text-slate-500 text-xs font-semibold uppercase tracking-widest mt-4 max-w-2xl leading-relaxed">
-            All plans include 30-day trace retention.
-            <br />
             BYOK runs do not consume hosted replay credits.
           </p>
         </div>
@@ -458,10 +477,10 @@ export default function BillingPage() {
           </h2>
 
           <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mb-8">
-            During the MVP, only the free plan is available. Paid plans are preview-only.
+            Quotas shown here follow account plan limits. Upgrade is managed in Account Billing.
           </p>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-center">
             {plans.map(plan => {
               const isCurrent = plan.current;
 
@@ -475,7 +494,7 @@ export default function BillingPage() {
                   {!isCurrent && (
                     <div className="absolute top-8 right-8 px-3 py-1 bg-white/5 border border-white/10 rounded-full">
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                        Coming Soon
+                        Account Managed
                       </span>
                     </div>
                   )}
@@ -540,7 +559,7 @@ export default function BillingPage() {
                         }
                       `}
                     >
-                      {isCurrent ? "Current Plan" : "Preview Only"}
+                      {isCurrent ? "Current Plan" : "Manage in Account Billing"}
                     </button>
                   </div>
                 </div>

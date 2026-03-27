@@ -19,14 +19,27 @@ const tiers = [
     color: "text-slate-400",
   },
   {
-    name: "Pro",
+    name: "Starter",
     priceLabel: "$49/month",
     description: "For teams that need higher hosted replay budgets and multi-project scale.",
     features: [
-      "5 organizations",
-      "10 active projects",
-      "30,000 snapshots per month",
-      "800 hosted replay credits per month",
+      "3 organizations",
+      "8 active projects",
+      "50,000 snapshots per month",
+      "600 hosted replay credits per month",
+    ],
+    icon: Shield,
+    color: "text-emerald-400",
+  },
+  {
+    name: "Pro",
+    priceLabel: "$149/month",
+    description: "For teams running high-throughput validation and release workflows.",
+    features: [
+      "10 organizations",
+      "30 active projects",
+      "200,000 snapshots per month",
+      "3,000 hosted replay credits per month",
     ],
     icon: Shield,
     color: "text-emerald-400",
@@ -67,13 +80,11 @@ export default function PricingSection({ isLoggedIn }: PricingSectionProps) {
             Transparent plan pricing and limits.
           </p>
           <p className="text-sm text-slate-500 leading-relaxed font-medium mt-4 max-w-2xl mx-auto">
-            All plans include 30-day trace retention.
-            <br />
             BYOK runs do not consume hosted replay credits.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 w-full max-w-[1400px] mx-auto">
+        <div className="grid md:grid-cols-4 gap-8 w-full max-w-[1600px] mx-auto">
           {tiers.map(tier => (
             <motion.div
               key={tier.name}
