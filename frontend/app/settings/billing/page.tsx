@@ -15,6 +15,16 @@ import {
 
 type UsageResponse = {
   plan_type: string;
+  limits?: {
+    snapshots_per_month?: number;
+    guard_credits_per_month?: number;
+    platform_replay_credits_per_month?: number;
+  };
+  usage_this_month?: {
+    snapshots?: number;
+    guard_credits?: number;
+    platform_replay_credits?: number;
+  };
 };
 
 export default function AccountBillingPage() {
@@ -34,6 +44,16 @@ export default function AccountBillingPage() {
   );
 
   const currentPlanId = (data?.plan_type || "free").toLowerCase();
+  const snapshotsUsed = Number(data?.usage_this_month?.snapshots ?? 0);
+  const snapshotsLimit = Number(data?.limits?.snapshots_per_month ?? -1);
+  const replayUsed = Number(
+    data?.usage_this_month?.platform_replay_credits ?? data?.usage_this_month?.guard_credits ?? 0
+  );
+  const replayLimit = Number(
+    data?.limits?.platform_replay_credits_per_month ?? data?.limits?.guard_credits_per_month ?? -1
+  );
+  const snapshotsExhausted = snapshotsLimit > 0 && snapshotsUsed >= snapshotsLimit;
+  const replayExhausted = replayLimit > 0 && replayUsed >= replayLimit;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -161,6 +181,21 @@ export default function AccountBillingPage() {
           <br />
           Subscriptions auto-renew unless canceled before the next billing cycle.
         </p>
+        {(snapshotsExhausted || replayExhausted) && (
+          <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-amber-200">
+              Plan quota exhausted
+            </p>
+            <p className="mt-1 text-xs text-amber-100/90">
+              {snapshotsExhausted && replayExhausted
+                ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and hosted replay credits (${replayUsed}/${replayLimit}) are exhausted.`
+                : snapshotsExhausted
+                  ? `Snapshots are exhausted (${snapshotsUsed}/${snapshotsLimit}).`
+                  : `Hosted replay credits are exhausted (${replayUsed}/${replayLimit}).`}{" "}
+              BYOK is still available where supported.
+            </p>
+          </div>
+        )}
         <div className="mb-8 text-xs text-slate-400 space-y-1">
           <p>
             By upgrading, you agree to our{" "}
