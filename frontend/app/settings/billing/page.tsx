@@ -154,7 +154,7 @@ export default function AccountBillingPage() {
         { label: "Billing" },
       ]}
     >
-      <div className="max-w-[1400px] mx-auto pb-24 relative">
+      <div className="max-w-[1700px] mx-auto pb-24 relative px-4 xl:px-8">
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed">
           BYOK runs do not consume hosted replay credits.
           <br />
@@ -187,7 +187,7 @@ export default function AccountBillingPage() {
             Temporary 429 responses are shared system safety limits, separate from plan quotas.
           </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 xl:gap-6 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 xl:gap-5 relative z-10">
           {plans.map(plan => {
             const isCurrent = plan.id === currentPlanId;
             const canCheckout = plan.id === "starter" || plan.id === "pro";
@@ -195,7 +195,7 @@ export default function AccountBillingPage() {
             return (
               <div
                 key={plan.id}
-                className={`relative rounded-[32px] border bg-white/[0.02] backdrop-blur-xl px-5 py-6 xl:px-6 xl:py-7 flex flex-col justify-between min-h-[460px] transition-all duration-500 group ${
+                className={`relative rounded-[32px] border bg-white/[0.02] backdrop-blur-xl px-5 py-6 xl:px-7 xl:py-8 flex flex-col justify-between min-h-[480px] transition-all duration-500 group ${
                   isCurrent
                     ? "border-emerald-500/50 shadow-[0_0_40px_rgba(16,185,129,0.2)] bg-white/[0.04]"
                     : "border-white/10 hover:border-white/20"
@@ -217,7 +217,7 @@ export default function AccountBillingPage() {
                       </span>
                     )}
                   </div>
-                  <h2 className="text-[24px] xl:text-[28px] leading-none font-black text-white uppercase tracking-tight mb-2">
+                  <h2 className="text-[24px] xl:text-[30px] leading-none font-black text-white uppercase tracking-tight mb-2">
                     {plan.name}
                   </h2>
                   <div className="flex items-baseline gap-1.5 mb-5">
