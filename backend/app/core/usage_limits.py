@@ -5,7 +5,7 @@ Used by snapshot creation, hosted Release Gate replay credits, and usage APIs.
 
 from calendar import monthrange
 from datetime import datetime, timezone
-from typing import Tuple
+from typing import Any, Dict, Tuple
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -69,11 +69,52 @@ def get_platform_replay_credits_this_month(db: Session, user_id: int) -> int:
     return get_guard_credits_this_month(db, user_id)
 
 
-def _get_user_plan_limits(db: Session, user_id: int) -> dict:
-    """Resolve plan limits for user from Subscription (plan_id = plan_type)."""
+def _resolve_user_plan_type(db: Session, user_id: int) -> str:
+    """Resolve canonical plan type for a user from subscription row."""
     sub = db.query(Subscription).filter(Subscription.user_id == user_id).first()
-    plan_type = normalize_plan_type((sub.plan_id or "free") if sub else "free")
+    if sub:
+        raw_plan = getattr(sub, "plan_type", None) or getattr(sub, "plan_id", None) or "free"
+    else:
+        raw_plan = "free"
+    plan_type = normalize_plan_type(raw_plan)
+    return plan_type
+
+
+def _get_user_plan_limits(db: Session, user_id: int) -> dict:
+    """Resolve plan limits for user from canonical plan type."""
+    plan_type = _resolve_user_plan_type(db, user_id)
     return PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
+
+
+def get_limit_status(db: Session, user_id: int, metric: str) -> Dict[str, Any]:
+    """
+    Return a normalized limit status payload for limit-aware APIs/UI.
+    Metrics: snapshots | platform_replay_credits
+    """
+    plan_type = _resolve_user_plan_type(db, user_id)
+    limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
+    _, end = _current_month_bounds_utc()
+    reset_at = end.isoformat()
+
+    if metric == "snapshots":
+        limit = int(limits.get("snapshots_per_month", 10_000))
+        current = int(get_snapshots_count_this_month(db, user_id))
+    elif metric == "platform_replay_credits":
+        cap = limits.get("platform_replay_credits_per_month", limits.get("guard_credits_per_month"))
+        limit = int(cap) if cap is not None else -1
+        current = int(get_platform_replay_credits_this_month(db, user_id))
+    else:
+        raise ValueError(f"Unsupported metric for limit status: {metric}")
+
+    remaining = -1 if limit == -1 else max(0, limit - current)
+    return {
+        "plan_type": plan_type,
+        "metric": metric,
+        "current": current,
+        "limit": limit,
+        "remaining": remaining,
+        "reset_at": reset_at,
+    }
 
 
 def check_snapshot_limit(db: Session, user_id: int, is_superuser: bool = False) -> Tuple[bool, str | None]:
@@ -90,7 +131,7 @@ def check_snapshot_limit(db: Session, user_id: int, is_superuser: bool = False) 
     if current + 1 > cap:
         return (
             False,
-            f"Free plan limit: {cap} snapshots per month. You've reached the limit. Upgrade or try again next month.",
+            f"Snapshot limit reached: {current} / {cap} this month. Upgrade or wait for monthly reset.",
         )
     return (True, None)
 
