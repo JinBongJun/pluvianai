@@ -6,6 +6,7 @@ from fastapi import Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.subscription_limits import PLAN_LIMITS, normalize_plan_type
 from app.services.subscription_service import SubscriptionService
 from app.services.billing_service import BillingService
 from app.core.logging_config import logger
@@ -64,7 +65,10 @@ def check_organization_limit(user_id: int, db: Session, is_superuser: bool = Fal
     service = SubscriptionService(db)
     plan_info = service.get_user_plan(user_id)
     limits = plan_info["limits"]
-    org_limit = limits.get("organizations", 1)
+    # Never silently downgrade paid users to free cap when a limits payload key is missing.
+    plan_type = normalize_plan_type(plan_info.get("plan_type"))
+    default_org_limit = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"]).get("organizations", 1)
+    org_limit = limits.get("organizations", default_org_limit)
 
     if org_limit == -1:  # unlimited
         return (True, None)

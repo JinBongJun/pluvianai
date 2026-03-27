@@ -44,7 +44,7 @@ from app.core.database import get_db
 from app.core.logging_config import logger
 from app.core.permissions import check_project_access
 from app.core.config import settings as app_settings
-from app.core.usage_limits import check_guard_credits_limit
+from app.core.usage_limits import check_guard_credits_limit, get_limit_status
 from app.core.security import get_current_user, get_user_from_api_key
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.behavior_report import BehaviorReport
@@ -767,12 +767,22 @@ def _enforce_platform_replay_credit_limit(
     )
     if allowed:
         return
+    limit_status = get_limit_status(db, current_user.id, "platform_replay_credits")
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail={
             "code": "LIMIT_PLATFORM_REPLAY_CREDITS",
             "message": err_msg,
+            "details": {
+                "plan_type": limit_status.get("plan_type"),
+                "metric": limit_status.get("metric"),
+                "current": limit_status.get("current"),
+                "limit": limit_status.get("limit"),
+                "remaining": limit_status.get("remaining"),
+                "reset_at": limit_status.get("reset_at"),
+                "upgrade_path": "/settings/billing",
+            },
             "model_source": payload.model_source,
             "next_steps": [
                 "Use your own provider key for this run.",

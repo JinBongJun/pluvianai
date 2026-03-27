@@ -1,5 +1,7 @@
 # Billing Hardening Runbook (Paddle)
 
+See also: `docs/subscription-commercial-readiness-plan.md` for the full product, enforcement, UX, test, and policy hardening plan.
+
 ## Scope
 - Webhook reliability: DLQ + retry API + idempotency
 - Subscription consistency: hourly reconciliation

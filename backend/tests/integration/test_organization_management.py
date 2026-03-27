@@ -2,6 +2,7 @@ import pytest
 from fastapi import status
 from app.models.organization import Organization
 from app.models.project import Project
+from app.models.subscription import Subscription
 from app.models.user import User
 from app.core.security import get_password_hash
 
@@ -85,3 +86,29 @@ def test_organization_delete_not_owner(client, db, test_user, auth_headers):
     )
     assert response.status_code == 403
     assert "organization owner role" in response.json()["error"]["message"]
+
+
+def test_organization_list_uses_account_subscription_plan(client, db, test_user, auth_headers):
+    db.add(Subscription(user_id=test_user.id, plan_type="starter", status="active"))
+    db.add(Organization(name="Starter Org", owner_id=test_user.id, plan_type="free"))
+    db.commit()
+
+    response = client.get("/api/v1/organizations", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) >= 1
+    assert data[0]["plan_type"] == "starter"
+
+
+def test_starter_plan_allows_multiple_organizations(client, db, test_user, auth_headers):
+    db.add(Subscription(user_id=test_user.id, plan_type="starter", status="active"))
+    db.add(Organization(name="Existing Org", owner_id=test_user.id, plan_type="free"))
+    db.commit()
+
+    response = client.post(
+        "/api/v1/organizations",
+        json={"name": "Second Org", "description": "starter should allow >1 org"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 201

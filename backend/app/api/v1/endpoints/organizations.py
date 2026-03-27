@@ -321,6 +321,7 @@ def list_organizations(
 ):
     """List organizations for the current user with optional stats."""
     orgs = _get_user_orgs(org_service, current_user)
+    account_plan_type = str(SubscriptionService(db).get_user_plan(current_user.id).get("plan_type") or "free")
 
     if not orgs:
         return []
@@ -419,7 +420,7 @@ def list_organizations(
             OrganizationSummary(
                 id=org.id,
                 name=org.name,
-                plan_type=org.plan_type,
+                plan_type=account_plan_type,
                 projects_count=projects_counts.get(org.id, 0),
                 calls_7d=calls_map.get(org.id, 0),
                 cost_7d=cost_map.get(org.id, 0.0),
@@ -441,6 +442,7 @@ def get_organization(
 ):
     """Get organization details with optional stats."""
     logger.info(f"🔵 GET ORGANIZATION: org_id={org_id}, include_stats={include_stats}, user_id={current_user.id}")
+    account_plan_type = str(SubscriptionService(db).get_user_plan(current_user.id).get("plan_type") or "free")
     
     try:
         # Use service to get organization
@@ -476,7 +478,7 @@ def get_organization(
                 name=org.name,
                 description=getattr(org, "description", None),
                 type=org.type,
-                plan_type=org.plan_type,
+                plan_type=account_plan_type,
                 stats=None,
             )
 
@@ -587,7 +589,7 @@ def get_organization(
             "name": org.name,
             "description": getattr(org, "description", None),
             "type": org.type,
-            "plan_type": org.plan_type,
+            "plan_type": account_plan_type,
             "stats": {
                 "usage": {
                     "calls": calls_count,
