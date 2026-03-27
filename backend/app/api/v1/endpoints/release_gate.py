@@ -753,7 +753,7 @@ def _build_replay_request_meta(
 
 
 def _enforce_platform_replay_credit_limit(
-    payload: "ReleaseGateValidateRequest", db: Session, current_user: User
+    payload: "ReleaseGateValidateRequest", db: Session | None, current_user: User
 ) -> None:
     """
     Hosted replay credits only apply when Release Gate uses platform-hosted models.
