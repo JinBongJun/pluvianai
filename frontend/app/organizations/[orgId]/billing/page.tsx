@@ -63,7 +63,7 @@ export default function BillingPage() {
 
   const effectiveUsage = myUsage || fallbackUsage;
 
-  const currentPlanId = String(org?.plan || "free").toLowerCase();
+  const currentPlanId = String(effectiveUsage?.plan_type || org?.plan || "free").toLowerCase();
 
   // Org-scoped usage view – limits come from account-level plan;
   // we only need light defaults here for visualization.
@@ -100,7 +100,11 @@ export default function BillingPage() {
 
   const limitData = usageLimits[currentPlanId as keyof typeof usageLimits] || usageLimits.free;
 
-  const callsUsed = org?.calls7d || 0; // Ideally backend should provide monthly usage, defaulting to 7d for demo
+  const monthlyCallsUsedRaw = effectiveUsage?.usage_this_month?.api_calls;
+  const hasMonthlyCalls = typeof monthlyCallsUsedRaw === "number";
+  const callsUsed = hasMonthlyCalls ? Number(monthlyCallsUsedRaw) : (org?.calls7d || 0);
+  const callsLimit =
+    (effectiveUsage?.limits?.api_calls_per_month as number | undefined) ?? limitData.calls;
   const projectsUsed = org?.projects || 0;
   const platformReplayCreditsUsed =
     effectiveUsage?.usage_this_month?.platform_replay_credits ??
@@ -114,13 +118,18 @@ export default function BillingPage() {
   const snapshotsLimit =
     (effectiveUsage?.limits?.snapshots_per_month as number | undefined) ?? limitData.snapshots;
 
-  const callsPercent = limitData.calls > 0 ? Math.min(100, (callsUsed / limitData.calls) * 100) : 0;
+  const callsPercent =
+    hasMonthlyCalls && callsLimit > 0 ? Math.min(100, (callsUsed / callsLimit) * 100) : 0;
   const projectsPercent =
     limitData.projects > 0 ? Math.min(100, (projectsUsed / limitData.projects) * 100) : 0;
   const platformReplayCreditsPercent =
     platformReplayCreditsLimit > 0
       ? Math.min(100, (platformReplayCreditsUsed / platformReplayCreditsLimit) * 100)
       : 0;
+  const orgAny = org as any;
+  const teamMembersUsedRaw =
+    orgAny?.member_count ?? orgAny?.memberCount ?? orgAny?.members_count ?? orgAny?.membersCount;
+  const teamMembersUsed = typeof teamMembersUsedRaw === "number" ? teamMembersUsedRaw : null;
 
   const plans = [
     {
@@ -236,7 +245,7 @@ export default function BillingPage() {
                       Validations Executed
                     </h3>
                     <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">
-                      Rolling 30-Day Limit
+                      {hasMonthlyCalls ? "Rolling 30-Day Limit" : "Recent 7-Day Activity"}
                     </p>
                   </div>
                 </div>
@@ -247,9 +256,9 @@ export default function BillingPage() {
                     <span className="text-2xl font-black text-white">
                       {callsUsed.toLocaleString()}
                     </span>
-                    {limitData.calls > 0 ? (
+                    {callsLimit > 0 ? (
                       <span className="text-slate-500 text-sm font-bold ml-1">
-                        / {limitData.calls.toLocaleString()}
+                        / {callsLimit.toLocaleString()}
                       </span>
                     ) : (
                       <span className="text-emerald-500 text-[10px] font-bold uppercase tracking-widest ml-2 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20">
@@ -260,12 +269,12 @@ export default function BillingPage() {
                 )}
               </div>
 
-              {limitData.calls > 0 && (
+              {hasMonthlyCalls && callsLimit > 0 && (
                 <div className="relative z-10">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">
                     <span>Quota Used: {callsPercent.toFixed(1)}%</span>
                     <span className={callsPercent > 80 ? "text-amber-400" : ""}>
-                      {limitData.calls - callsUsed} Remaining
+                      {Math.max(0, callsLimit - callsUsed)} Remaining
                     </span>
                   </div>
                   <div className="h-3 bg-black/40 rounded-full overflow-hidden border border-white/5 shadow-inner">
@@ -342,7 +351,9 @@ export default function BillingPage() {
             <div className="rounded-xl border border-white/10 bg-white/5 p-6">
               <div className="flex items-center gap-2 mb-2">
                 <Activity className="h-5 w-5 text-blue-400" />
-                <span className="text-sm text-slate-400">API Calls (7d)</span>
+                <span className="text-sm text-slate-400">
+                  API Calls {hasMonthlyCalls ? "(month)" : "(7d)"}
+                </span>
               </div>
               <div className="text-3xl font-bold text-white">{callsUsed.toLocaleString()}</div>
             </div>
@@ -424,13 +435,13 @@ export default function BillingPage() {
                 <span className="text-slate-400">API Calls</span>
                 <span className="text-white">
                   {callsUsed.toLocaleString()}{" "}
-                  {limitData.calls > 0 ? `/ ${limitData.calls.toLocaleString()}` : ""}
+                  {hasMonthlyCalls && callsLimit > 0 ? `/ ${callsLimit.toLocaleString()}` : ""}
                 </span>
               </div>
               <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-emerald-500 rounded-full transition-all"
-                  style={{ width: `${Math.min(callsPercent, 100)}%` }}
+                  style={{ width: `${hasMonthlyCalls ? Math.min(callsPercent, 100) : 0}%` }}
                 />
               </div>
             </div>
@@ -454,14 +465,15 @@ export default function BillingPage() {
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-slate-400">Team Members</span>
                 <span className="text-white">
-                  1{limitData.teamMembers > 0 ? ` / ${limitData.teamMembers}` : ""}
+                  {teamMembersUsed == null ? "N/A" : teamMembersUsed}
+                  {limitData.teamMembers > 0 ? ` / ${limitData.teamMembers}` : ""}
                 </span>
               </div>
               <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-emerald-500 rounded-full transition-all"
                   style={{
-                    width: `${limitData.teamMembers > 0 ? Math.min(100, (1 / limitData.teamMembers) * 100) : 0}%`,
+                    width: `${limitData.teamMembers > 0 && teamMembersUsed != null ? Math.min(100, (teamMembersUsed / limitData.teamMembers) * 100) : 0}%`,
                   }}
                 />
               </div>
