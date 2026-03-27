@@ -7,6 +7,8 @@ from fastapi import status
 from app.models.snapshot import Snapshot
 from app.models.subscription import Subscription
 from app.models.trace import Trace
+from app.models.user_api_key import UserApiKey
+from app.models.validation_dataset import ValidationDataset
 
 
 def _extract_error_code(data: dict) -> str | None:
@@ -321,3 +323,126 @@ class TestReleaseGateOverridesAndExport:
         detected_attempt = detected_case["attempts"][0]
         assert (detected_attempt["candidate_snapshot"] or {}).get("provider") == "openai"
         assert (detected_attempt["candidate_snapshot"] or {}).get("model") == "gpt-4.1-mini"
+
+    async def test_saved_key_provider_mismatch_returns_expected_error(
+        self, async_client, auth_headers, db, test_user, test_project, monkeypatch
+    ):
+        trace = Trace(id="rg-ovr-trace-saved-key-mismatch", project_id=test_project.id)
+        db.add(trace)
+        db.add(
+            Snapshot(
+                project_id=test_project.id,
+                trace_id=trace.id,
+                agent_id="agent-A",
+                provider="openai",
+                model="gpt-4.1-mini",
+                payload={},
+                user_message="hello",
+                response="world",
+            )
+        )
+        db.add(Subscription(user_id=test_user.id, plan_type="starter", status="active"))
+        key_row = UserApiKey(
+            project_id=test_project.id,
+            user_id=test_user.id,
+            agent_id="agent-A",
+            provider="google",
+            encrypted_key="enc-key",
+            is_active=True,
+        )
+        db.add(key_row)
+        db.commit()
+        db.refresh(key_row)
+
+        # Ensure guard path reaches provider mismatch check and does not fail decrypt first.
+        from app.api.v1.endpoints import release_gate as rg
+
+        monkeypatch.setattr(rg.app_settings, "SELF_HOSTED_MODE", False, raising=False)
+        monkeypatch.setattr(rg.UserApiKeyService, "decrypt_key", lambda *_args, **_kwargs: "decrypted", raising=True)
+
+        response = await async_client.post(
+            f"/api/v1/projects/{test_project.id}/release-gate/validate",
+            json={
+                "trace_id": trace.id,
+                "model_source": "detected",
+                "replay_provider": "openai",
+                "replay_user_api_key_id": int(key_row.id),
+                "repeat_runs": 1,
+                "max_snapshots": 1,
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        data = response.json()
+        assert _extract_error_code(data) == "replay_user_api_key_provider_mismatch"
+
+    async def test_dataset_ids_spanning_multiple_agents_returns_dataset_agent_mismatch(
+        self, async_client, auth_headers, db, test_user, test_project, monkeypatch
+    ):
+        from app.api.v1.endpoints import release_gate as rg
+
+        trace = Trace(id="rg-ovr-trace-dataset-agent-mismatch", project_id=test_project.id)
+        db.add(trace)
+        s1 = Snapshot(
+            project_id=test_project.id,
+            trace_id=trace.id,
+            agent_id="agent-A",
+            provider="openai",
+            model="gpt-4.1-mini",
+            payload={},
+            user_message="a",
+            response="a",
+        )
+        s2 = Snapshot(
+            project_id=test_project.id,
+            trace_id=trace.id,
+            agent_id="agent-B",
+            provider="openai",
+            model="gpt-4.1-mini",
+            payload={},
+            user_message="b",
+            response="b",
+        )
+        db.add_all([s1, s2])
+        db.add(Subscription(user_id=test_user.id, plan_type="starter", status="active"))
+        db.commit()
+        db.refresh(s1)
+        db.refresh(s2)
+
+        ds1 = ValidationDataset(
+            project_id=test_project.id,
+            label="DS Agent A",
+            agent_id="agent-A",
+            trace_ids=[trace.id],
+            snapshot_ids=[s1.id],
+        )
+        ds2 = ValidationDataset(
+            project_id=test_project.id,
+            label="DS Agent B",
+            agent_id="agent-B",
+            trace_ids=[trace.id],
+            snapshot_ids=[s2.id],
+        )
+        db.add_all([ds1, ds2])
+        db.commit()
+        db.refresh(ds1)
+        db.refresh(ds2)
+
+        monkeypatch.setattr(rg.app_settings, "SELF_HOSTED_MODE", True, raising=False)
+        monkeypatch.setattr(rg.app_settings, "OPENAI_API_KEY", "sk-openai", raising=False)
+
+        response = await async_client.post(
+            f"/api/v1/projects/{test_project.id}/release-gate/validate",
+            json={
+                "model_source": "detected",
+                "dataset_ids": [str(ds1.id), str(ds2.id)],
+                "repeat_runs": 1,
+                "max_snapshots": 2,
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        data = response.json()
+        assert _extract_error_code(data) == "dataset_agent_mismatch"
