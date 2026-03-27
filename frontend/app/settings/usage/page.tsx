@@ -23,7 +23,8 @@ type UsageResponse = {
 /** When API limits are missing, match Phase 0 product defaults (subscription_limits.py). */
 const FALLBACK_BY_PLAN: Record<string, { projects: number; organizations: number; replay: number }> = {
   free: { projects: 2, organizations: 1, replay: 60 },
-  pro: { projects: 10, organizations: 5, replay: 800 },
+  starter: { projects: 8, organizations: 3, replay: 600 },
+  pro: { projects: 30, organizations: 10, replay: 3000 },
   enterprise: { projects: -1, organizations: -1, replay: -1 },
 };
 
@@ -84,8 +85,6 @@ export default function AccountUsagePage() {
         <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none" />
 
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed relative z-10">
-          All plans include 30-day trace retention.
-          <br />
           BYOK runs do not consume hosted replay credits.
         </p>
 

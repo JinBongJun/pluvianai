@@ -65,16 +65,29 @@ export default function AccountBillingPage() {
       ],
     },
     {
-      id: "pro",
-      name: "Pro",
+      id: "starter",
+      name: "Starter",
       price: "$49",
       period: "/month",
-      desc: "For teams that need higher hosted replay budgets and multi-project scale.",
+      desc: "For teams scaling validation volume with predictable monthly limits.",
       features: [
-        "5 organizations",
-        "10 active projects",
-        "30,000 snapshots per month",
-        "800 hosted replay credits per month",
+        "3 organizations",
+        "8 active projects",
+        "50,000 snapshots per month",
+        "600 hosted replay credits per month",
+      ],
+    },
+    {
+      id: "pro",
+      name: "Pro",
+      price: "$149",
+      period: "/month",
+      desc: "For teams running higher-throughput validation and release workflows.",
+      features: [
+        "10 organizations",
+        "30 active projects",
+        "200,000 snapshots per month",
+        "3,000 hosted replay credits per month",
       ],
     },
     {
@@ -103,8 +116,6 @@ export default function AccountBillingPage() {
     >
       <div className="pb-24 relative">
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed">
-          All plans include 30-day trace retention.
-          <br />
           BYOK runs do not consume hosted replay credits.
           <br />
           Subscriptions auto-renew unless canceled before the next billing cycle.
@@ -124,11 +135,14 @@ export default function AccountBillingPage() {
             </a>
             .
           </p>
+          <p>
+            Temporary 429 responses are shared system safety limits, separate from plan quotas.
+          </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative z-10">
           {plans.map(plan => {
             const isCurrent = plan.id === currentPlanId;
-            const canCheckout = plan.id === "pro";
+            const canCheckout = plan.id === "starter" || plan.id === "pro";
             const isContactSales = plan.id === "enterprise";
             return (
               <div

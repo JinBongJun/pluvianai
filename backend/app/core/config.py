@@ -133,6 +133,7 @@ class Settings(BaseSettings):
     PADDLE_API_KEY: Optional[str] = None
     PADDLE_WEBHOOK_SECRET: Optional[str] = None
     PADDLE_USE_SANDBOX: bool = True
+    PADDLE_PRICE_ID_STARTER: Optional[str] = None
     PADDLE_PRICE_ID_INDIE: Optional[str] = None
     PADDLE_PRICE_ID_STARTUP: Optional[str] = None
     PADDLE_PRICE_ID_PRO: Optional[str] = None

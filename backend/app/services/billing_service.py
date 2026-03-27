@@ -343,9 +343,10 @@ class BillingService:
     def _get_soft_caps(self, plan_type: str) -> Dict[str, int]:
         soft_caps = {
             "free": {"snapshots": 500, "judge_calls": 100},
-            "indie": {"snapshots": 10000, "judge_calls": 1000},
-            "startup": {"snapshots": 50000, "judge_calls": 10000},
-            "pro": {"snapshots": 100000, "judge_calls": 100000},
+            "starter": {"snapshots": 50000, "judge_calls": 1000},
+            "indie": {"snapshots": 50000, "judge_calls": 1000},
+            "startup": {"snapshots": 50000, "judge_calls": 1000},
+            "pro": {"snapshots": 200000, "judge_calls": 10000},
             "enterprise": {"snapshots": 1000000, "judge_calls": 1000000},
         }
         return soft_caps.get(plan_type, soft_caps["free"])
@@ -709,6 +710,7 @@ class BillingService:
 
     def _get_paddle_price_id(self, plan_type: str) -> Optional[str]:
         price_ids = {
+            "starter": getattr(settings, "PADDLE_PRICE_ID_STARTER", None),
             "indie": getattr(settings, "PADDLE_PRICE_ID_INDIE", None),
             "startup": getattr(settings, "PADDLE_PRICE_ID_STARTUP", None),
             "pro": getattr(settings, "PADDLE_PRICE_ID_PRO", None),
@@ -718,6 +720,7 @@ class BillingService:
 
     def _map_paddle_price_id_to_plan_type(self, price_id: str) -> Optional[str]:
         mapping = {
+            getattr(settings, "PADDLE_PRICE_ID_STARTER", None): "starter",
             getattr(settings, "PADDLE_PRICE_ID_INDIE", None): "indie",
             getattr(settings, "PADDLE_PRICE_ID_STARTUP", None): "startup",
             getattr(settings, "PADDLE_PRICE_ID_PRO", None): "pro",
