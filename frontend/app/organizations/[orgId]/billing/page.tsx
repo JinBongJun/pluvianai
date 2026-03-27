@@ -63,7 +63,7 @@ export default function BillingPage() {
 
   const effectiveUsage = myUsage || fallbackUsage;
 
-  const currentPlanId = org?.plan || "free";
+  const currentPlanId = String(org?.plan || "free").toLowerCase();
 
   // Org-scoped usage view – limits come from account-level plan;
   // we only need light defaults here for visualization.
