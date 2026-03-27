@@ -28,10 +28,29 @@ from app.models.quality_score import QualityScore
 from app.services.cost_analyzer import CostAnalyzer
 from app.services.cache_service import cache_service
 from app.services.subscription_service import SubscriptionService
+from app.core.subscription_limits import PLAN_LIMITS, normalize_plan_type
 
 
 def _utcnow_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _owner_usage_limit_caps(db: Session, org: Organization) -> tuple[int, float]:
+    """
+    Display caps for org stats (7d calls vs monthly plan ceiling).
+    Uses the org owner's subscription plan, not Organization.plan_type.
+    """
+    plan_info = SubscriptionService(db).get_user_plan(int(org.owner_id))
+    pt = normalize_plan_type(plan_info.get("plan_type"))
+    pl = PLAN_LIMITS.get(pt, PLAN_LIMITS["free"])
+    calls_cap = pl.get("api_calls_per_month", 0)
+    if calls_cap == -1:
+        calls_limit = 1_000_000
+    else:
+        calls_limit = int(calls_cap)
+    # Cost is informational only (no hard cap in PLAN_LIMITS); scale with tier for UI.
+    cost_limit = max(10.0, float(calls_limit) / 100.0) if calls_limit < 1_000_000 else 1_000_000.0
+    return calls_limit, cost_limit
 
 
 router = APIRouter()
@@ -82,8 +101,8 @@ def _invalidate_project_list_caches_for_org(db: Session, org: Organization) -> N
 class OrganizationCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=2000)
-    # Public plans: free, pro, enterprise (MVP: all free)
-    plan_type: str = Field("free", pattern="^(free|pro|enterprise)$")
+    # Public plans: free, starter, pro, enterprise (billing is account-level; org stores label)
+    plan_type: str = Field("free", pattern="^(free|starter|pro|enterprise)$")
 
 
 class OrganizationUpdate(BaseModel):
@@ -533,14 +552,8 @@ def get_organization(
         else:
             avg_quality = 0.0
 
-        plan_limits = {
-            "free": {"calls": 1000, "cost": 10.0},
-            "indie": {"calls": 30000, "cost": 100.0},
-            "startup": {"calls": 200000, "cost": 500.0},
-            "pro": {"calls": 100000, "cost": 1000.0},
-            "enterprise": {"calls": 1000000, "cost": 10000.0},
-        }
-        limits = plan_limits.get(org.plan_type, plan_limits["free"])
+        calls_limit, cost_limit = _owner_usage_limit_caps(db, org)
+        limits = {"calls": calls_limit, "cost": cost_limit}
 
         alerts_list = []
         if project_ids:
@@ -591,31 +604,6 @@ def get_organization(
     except Exception as e:
         logger.error(f"🔴🔴🔴 GET ORGANIZATION ERROR: {type(e).__name__}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
-        # Return basic org info without stats if response building fails
-        plan_limits = {
-            "free": {"calls": 1000, "cost": 10.0},
-            "indie": {"calls": 30000, "cost": 100.0},
-            "startup": {"calls": 200000, "cost": 500.0},
-            "pro": {"calls": 100000, "cost": 1000.0},
-            "enterprise": {"calls": 1000000, "cost": 10000.0},
-        }
-        fallback_limits = plan_limits.get(org.plan_type if org else "free", plan_limits["free"])
-        return {
-            "id": org.id if org else org_id,
-            "name": org.name if org else "Unknown",
-            "type": org.type if org else None,
-            "plan_type": org.plan_type if org else "free",
-            "stats": {
-                "usage": {
-                    "calls": 0,
-                    "calls_limit": fallback_limits["calls"],
-                    "cost": 0.0,
-                    "cost_limit": fallback_limits["cost"],
-                    "quality": 0.0,
-                },
-                "alerts": [],
-            },
-        }
 
 
 @router.get("/{org_id}/members", response_model=List[OrganizationMemberResponse])

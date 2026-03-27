@@ -119,6 +119,34 @@ class TestBillingAPI:
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
+    async def test_create_checkout_session_invalid_plan(self, async_client, auth_headers):
+        """Self-serve checkout only allows Starter and Pro."""
+        response = await async_client.post(
+            "/api/v1/billing/checkout",
+            json={
+                "plan_type": "enterprise",
+                "success_url": "https://example.com/success",
+                "cancel_url": "https://example.com/cancel",
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json()["error"]["code"] == "BILLING_CHECKOUT_INVALID_PLAN"
+
+    async def test_retry_webhook_forbidden_non_superuser(self, async_client, auth_headers):
+        response = await async_client.post(
+            "/api/v1/billing/webhook/retry/evt_x",
+            headers=auth_headers,
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    async def test_reconcile_forbidden_non_superuser(self, async_client, auth_headers):
+        response = await async_client.post(
+            "/api/v1/billing/reconcile",
+            headers=auth_headers,
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
     @patch(
         "app.services.billing_service.BillingService.handle_paddle_webhook",
         return_value={"status": "success", "message": "ok"},
@@ -176,10 +204,10 @@ class TestBillingAPI:
         "app.services.billing_service.BillingService.retry_failed_webhook_event",
         return_value={"status": "success", "event_id": "evt_1", "event_type": "transaction.completed"},
     )
-    async def test_retry_failed_webhook_success(self, _mock_retry, async_client, auth_headers):
+    async def test_retry_failed_webhook_success(self, _mock_retry, async_client, superuser_auth_headers):
         response = await async_client.post(
             "/api/v1/billing/webhook/retry/evt_1",
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["data"]["status"] == "success"
@@ -188,10 +216,10 @@ class TestBillingAPI:
         "app.services.billing_service.BillingService.retry_failed_webhook_event",
         return_value={"status": "error", "code": "BILLING_EVENT_NOT_FOUND", "message": "Event not found"},
     )
-    async def test_retry_failed_webhook_not_found(self, _mock_retry, async_client, auth_headers):
+    async def test_retry_failed_webhook_not_found(self, _mock_retry, async_client, superuser_auth_headers):
         response = await async_client.post(
             "/api/v1/billing/webhook/retry/missing",
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.json()["error"]["code"] == "BILLING_EVENT_NOT_FOUND"
@@ -200,10 +228,10 @@ class TestBillingAPI:
         "app.services.billing_service.BillingService.reconcile_paddle_subscriptions",
         return_value={"status": "success", "checked": 1, "fixed": 1, "failed": 0},
     )
-    async def test_reconcile_billing_success(self, _mock_reconcile, async_client, auth_headers):
+    async def test_reconcile_billing_success(self, _mock_reconcile, async_client, superuser_auth_headers):
         response = await async_client.post(
             "/api/v1/billing/reconcile?limit=50",
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()["data"]

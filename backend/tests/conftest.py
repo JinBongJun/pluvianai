@@ -182,6 +182,25 @@ def auth_headers(test_user):
 
 
 @pytest.fixture
+def superuser_auth_headers(test_user, db):
+    """Auth as a superuser (for ops-only billing endpoints)."""
+    from app.core.security import create_access_token, get_current_user
+
+    test_user.is_superuser = True
+    db.add(test_user)
+    db.commit()
+    db.refresh(test_user)
+
+    def override_get_current_user():
+        return test_user
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
+
+    token = create_access_token(data={"sub": str(test_user.id), "email": test_user.email})
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
 def test_project(db, test_user):
     """Create a test project"""
     from app.models.project import Project

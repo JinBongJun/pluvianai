@@ -295,6 +295,18 @@ class TestBillingService:
                 )
         assert result is None
 
+    def test_create_checkout_session_rejects_non_self_serve_plan(self, db, test_user):
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test_key"
+            service = BillingService(db)
+            result = service.create_checkout_session(
+                test_user.id,
+                "free",
+                "https://success.com",
+                "https://cancel.com",
+            )
+        assert result is None
+
     def test_handle_paddle_webhook_transaction_completed(self, db, test_user):
         secret = "whsec_paddle_test"
         payload_obj = {

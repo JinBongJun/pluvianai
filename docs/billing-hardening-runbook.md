@@ -9,14 +9,15 @@
 ## API Contract
 - `POST /api/v1/billing/checkout`
   - success: `200 { data: { session_id, url } }`
+  - invalid plan (not Starter/Pro after normalization): `400 { error: { code: "BILLING_CHECKOUT_INVALID_PLAN", ... } }`
   - failure: `503 { error: { code: "BILLING_CHECKOUT_UNAVAILABLE", ... } }`
 - `POST /api/v1/billing/webhook`
   - success: `200 { data: { status, event_id, event_type, ... } }`
   - invalid request/signature/payload: `400 { error: { code: "BILLING_WEBHOOK_INVALID", ... } }`
-- `POST /api/v1/billing/webhook/retry/{event_id}`
+- `POST /api/v1/billing/webhook/retry/{event_id}` (superuser only; CSRF for cookie auth)
   - success: `200 { data: { status, event_id?, event_type? } }`
   - not found: `404 { error: { code: "BILLING_EVENT_NOT_FOUND", ... } }`
-- `POST /api/v1/billing/reconcile?limit=200`
+- `POST /api/v1/billing/reconcile?limit=200` (superuser only; CSRF for cookie auth)
   - success: `200 { data: { status, checked, fixed, failed } }`
 
 ## Monitoring

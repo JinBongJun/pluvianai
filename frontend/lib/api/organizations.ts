@@ -6,7 +6,8 @@ import { OrganizationSchema, OrganizationProjectStatsSchema } from "@/lib/schema
 const normalizePlan = (plan?: string): PlanType => {
   const normalized = (plan || "free").toLowerCase();
   if (normalized === "free") return "free";
-  if (normalized === "indie" || normalized === "startup" || normalized === "pro") return "pro";
+  if (normalized === "starter" || normalized === "indie" || normalized === "startup") return "starter";
+  if (normalized === "pro") return "pro";
   if (normalized === "enterprise") return "enterprise";
   return "free";
 };

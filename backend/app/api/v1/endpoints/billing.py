@@ -9,11 +9,13 @@ from pydantic import BaseModel, HttpUrl
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.permissions import get_current_superuser
 from app.core.responses import error_response, success_response
 from app.core.security import (
     get_current_user,
     require_csrf_for_cookie_auth,
 )
+from app.core.subscription_limits import normalize_plan_type
 from app.models.user import User
 from app.services.billing_service import BillingService
 
@@ -57,10 +59,17 @@ def create_checkout_session(
     _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
+    normalized = normalize_plan_type(req.plan_type)
+    if normalized not in ("starter", "pro"):
+        return error_response(
+            code="BILLING_CHECKOUT_INVALID_PLAN",
+            message="Self-serve checkout is only available for Starter and Pro.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
     billing = BillingService(db)
     result = billing.create_checkout_session(
         user_id=current_user.id,
-        plan_type=req.plan_type,
+        plan_type=normalized,
         success_url=str(req.success_url),
         cancel_url=str(req.cancel_url),
     )
@@ -94,7 +103,7 @@ async def handle_paddle_webhook(
 @router.post("/webhook/retry/{event_id}")
 def retry_paddle_webhook_event(
     event_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_superuser),
     _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
@@ -114,7 +123,7 @@ def retry_paddle_webhook_event(
 @router.post("/reconcile")
 def reconcile_billing_subscriptions(
     limit: int = 200,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_superuser),
     _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
 ):
