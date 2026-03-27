@@ -154,7 +154,7 @@ export default function AccountBillingPage() {
         { label: "Billing" },
       ]}
     >
-      <div className="pb-24 relative">
+      <div className="max-w-[1400px] mx-auto pb-24 relative">
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed">
           BYOK runs do not consume hosted replay credits.
           <br />
@@ -187,7 +187,7 @@ export default function AccountBillingPage() {
             Temporary 429 responses are shared system safety limits, separate from plan quotas.
           </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 xl:gap-7 relative z-10">
           {plans.map(plan => {
             const isCurrent = plan.id === currentPlanId;
             const canCheckout = plan.id === "starter" || plan.id === "pro";
@@ -195,14 +195,14 @@ export default function AccountBillingPage() {
             return (
               <div
                 key={plan.id}
-                className={`rounded-[32px] border bg-white/[0.02] backdrop-blur-xl p-6 flex flex-col justify-between ${
+                className={`rounded-[32px] border bg-white/[0.02] backdrop-blur-xl px-6 py-7 xl:px-7 xl:py-8 flex flex-col justify-between min-h-[440px] ${
                   plan.id === "pro"
                     ? "border-emerald-500/40 shadow-[0_0_30px_rgba(16,185,129,0.25)]"
                     : "border-white/10"
                 }`}
               >
                 <div>
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-5">
                     <div className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
                       {plan.id === "free" ? "Active License" : isContactSales ? "Contact Sales" : "Paid Plan"}
                     </div>
@@ -212,24 +212,24 @@ export default function AccountBillingPage() {
                       </span>
                     )}
                   </div>
-                  <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-1">
+                  <h2 className="text-[26px] leading-none font-black text-white uppercase tracking-tight mb-2">
                     {plan.name}
                   </h2>
-                  <div className="flex items-baseline gap-1 mb-4">
-                    <span className="text-3xl font-black text-white">{plan.price}</span>
+                  <div className="flex items-baseline gap-1.5 mb-5">
+                    <span className="text-[34px] font-black text-white leading-none">{plan.price}</span>
                     {plan.period && (
-                      <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
                         {plan.period}
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-widest mb-4">
+                  <p className="text-[11px] leading-5 text-slate-400 font-semibold uppercase tracking-widest mb-5">
                     {plan.desc}
                   </p>
-                  <ul className="space-y-1.5 text-[11px] text-slate-300">
+                  <ul className="space-y-2 text-[11px] leading-[1.45] text-slate-300">
                     {plan.features.map(feature => (
-                      <li key={feature} className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/60" />
+                      <li key={feature} className="flex items-start gap-2.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/60 mt-[6px]" />
                         <span>{feature}</span>
                       </li>
                     ))}
