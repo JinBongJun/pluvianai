@@ -492,7 +492,7 @@ export default function BillingPage() {
             Quotas shown here follow account plan limits. Upgrade is managed in Account Billing.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 xl:gap-7 items-stretch">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 xl:gap-7 items-stretch">
             {plans.map(plan => {
               const isCurrent = plan.current;
 
