@@ -1,8 +1,8 @@
 """
 Subscription plan limits and feature configuration.
 
-Publicly supported plans are `free`, `pro`, and `enterprise`.
-Legacy `indie` / `startup` plan ids are normalized into `pro` for backward compatibility.
+Publicly supported plans are `free`, `starter`, `pro`, and `enterprise`.
+Legacy `indie` / `startup` plan ids are normalized into `starter` for backward compatibility.
 """
 
 from typing import Any, Dict
@@ -11,8 +11,8 @@ from typing import Any, Dict
 def normalize_plan_type(plan_type: str | None) -> str:
     normalized = str(plan_type or "free").strip().lower()
     if normalized in {"indie", "startup"}:
-        return "pro"
-    if normalized in {"free", "pro", "enterprise"}:
+        return "starter"
+    if normalized in {"free", "starter", "pro", "enterprise"}:
         return normalized
     return "free"
 
@@ -52,16 +52,48 @@ FREE_LIMITS: Dict[str, Any] = {
     },
 }
 
-PRO_LIMITS: Dict[str, Any] = {
-    "organizations": 5,
-    "projects": 10,
-    "api_calls_per_month": 100_000,
-    "snapshots_per_month": 30_000,
-    "guard_credits_per_month": 10_000,
-    "platform_replay_credits_per_month": 800,
+STARTER_LIMITS: Dict[str, Any] = {
+    "organizations": 3,
+    "projects": 8,
+    "api_calls_per_month": 50_000,
+    "snapshots_per_month": 50_000,
+    "guard_credits_per_month": 50_000,
+    "platform_replay_credits_per_month": 600,
     "judge_calls_per_month": 1_000,
     "team_members_per_project": 5,
     "data_retention_days": 30,
+    "input_prompts_per_test": 120,
+    "repeat_count_per_test": 12,
+    "csv_import_row_limit": 1_000,
+    "total_calls_per_single_test": 10_000,
+    "concurrent_tests_per_project": 2,
+    "features": {
+        "drift_detection": "enhanced",
+        "quality_checks": "advanced",
+        "cost_monitoring": True,
+        "latency_analysis": True,
+        "error_monitoring": True,
+        "alerts": "full",
+        "multi_model_comparison": True,
+        "cost_anomaly_detection": True,
+        "auto_mapping": True,
+        "production_guard": True,
+        "byok": True,
+        "hosted_replay_models": "expanded",
+    },
+}
+
+
+PRO_LIMITS: Dict[str, Any] = {
+    "organizations": 10,
+    "projects": 30,
+    "api_calls_per_month": 200_000,
+    "snapshots_per_month": 200_000,
+    "guard_credits_per_month": 200_000,
+    "platform_replay_credits_per_month": 3_000,
+    "judge_calls_per_month": 10_000,
+    "team_members_per_project": 5,
+    "data_retention_days": 90,
     "input_prompts_per_test": 250,
     "repeat_count_per_test": 25,
     "csv_import_row_limit": 2_000,
@@ -134,17 +166,19 @@ ENTERPRISE_LIMITS: Dict[str, Any] = {
 
 PLAN_LIMITS: Dict[str, Dict[str, Any]] = {
     "free": FREE_LIMITS,
+    "starter": STARTER_LIMITS,
     "pro": PRO_LIMITS,
     "enterprise": ENTERPRISE_LIMITS,
     # Legacy aliases kept so existing subscriptions continue to resolve safely.
-    "indie": PRO_LIMITS,
-    "startup": PRO_LIMITS,
+    "indie": STARTER_LIMITS,
+    "startup": STARTER_LIMITS,
 }
 
 
 PLAN_PRICING: Dict[str, int] = {
     "free": 0,
-    "pro": 49,
+    "starter": 49,
+    "pro": 149,
     "enterprise": 499,
     "indie": 49,
     "startup": 49,
