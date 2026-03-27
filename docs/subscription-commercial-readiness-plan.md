@@ -734,6 +734,220 @@ Upgrade, cancel, refresh, stale cache, webhook repair.
 
 Pricing page, billing page, footer, terms, privacy, refund.
 
+## Execution Package: Consistency + Durability + Maintainability
+
+This section is the concrete "finish everything" package for Live View, Release Gate, and every remaining quota-aware surface.
+
+### Package Goal
+
+Ship one production-grade standard across all quota-aware features:
+
+- same entitlement source
+- same limit error contract
+- same proactive UI behavior
+- same operational diagnostics and alert thresholds
+- lower maintenance cost for future plan changes
+
+### Track 1: Live View and Release Gate Consistency Sweep
+
+Scope:
+
+- Live View snapshot creation, list refresh, empty/degraded states
+- Release Gate hosted replay run actions, retry/cancel, validation presets
+- shared plan banner/copy and upgrade CTA behavior
+
+Required outcomes:
+
+1. Every over-limit path returns canonical 403 details.
+2. Every actionable UI path pre-checks usage and disables where practical.
+3. Every banner uses one canonical copy rule per error code.
+4. Every upgrade CTA resolves to `/settings/billing` with no legacy routes.
+
+### Track 2: Full Surface Audit (All Remaining Quota Actions)
+
+Audit all product surfaces that can consume quota or create entities:
+
+- org create, project create, member invite
+- snapshot-related actions
+- hosted replay/run actions
+- any future "start/run/create" mutations under `/organizations/[orgId]/projects/[projectId]`
+
+For each action, verify all 3 layers:
+
+1. proactive UI disable/guidance
+2. API preflight validation (where applicable)
+3. backend hard enforcement with canonical payload
+
+Deliverable:
+
+- one "quota action matrix" table in this doc or a follow-up appendix with columns:
+  - action
+  - metric
+  - UI pre-disable implemented (Y/N)
+  - backend enforced (Y/N)
+  - error code
+  - tested cases
+
+### Track 3: Operational Durability (Webhooks, Reconcile, Observability)
+
+Harden operations for long-running commercial usage:
+
+1. Webhook reliability
+   - monitor delivery success ratio
+   - alert on repeated failures
+   - verify idempotency for duplicate events
+2. Reconcile durability
+   - scheduled reconciliation job must be observable
+   - capture mismatches repaired vs unresolved
+3. Runtime visibility
+   - expose current effective plan and limits for support/admin diagnostics
+   - add one-click support procedure for "customer paid but still blocked"
+4. Failure isolation
+   - separate plan-limit failures from rate-limit and provider failures in logs/metrics
+
+Target SLO examples:
+
+- webhook processing success >= 99.9% (excluding provider outage windows)
+- reconcile catches and repairs stale subscription mismatches within 15 minutes
+- limit error diagnostics triageable in < 10 minutes from logs + usage endpoint
+
+### Track 4: Code Optimization and Maintainability
+
+Objective: lower complexity and future change risk.
+
+1. Centralize limit response builder
+   - single helper for all plan-limit HTTP 403 payloads
+2. Centralize frontend plan-limit parsing + copy
+   - one parser (`parsePlanLimitError`)
+   - one presentation policy (`PlanLimitBanner` variants)
+3. Remove stale branching
+   - eliminate residual `Organization.plan_type` display dependencies for account billing truth
+4. Add contract tests instead of ad hoc tests
+   - snapshot-style assertions for canonical limit payload schema
+5. Add "new plan rollout checklist"
+   - updating limits/pricing must include resolver tests + UI matrix revalidation
+
+### Completion Definition for This Package
+
+Call this package complete only when all are true:
+
+- [ ] Live View and Release Gate both pass proactive + backend enforcement checks.
+- [ ] Quota action matrix covers all known quota mutations.
+- [ ] All limit 403 responses follow canonical schema.
+- [ ] Frontend renders consistent limit messaging from canonical parser.
+- [ ] Webhook + reconcile dashboards/alerts are active.
+- [ ] Support runbook has deterministic steps for mismatch recovery.
+- [ ] "Change plan limits" requires touching one canonical backend map and one canonical frontend policy layer.
+
+### Minimal Test Matrix For Sign-off
+
+For each plan (free/starter/pro) and each key metric (organizations/projects/snapshots/platform replay credits/team members):
+
+1. at limit-1: action succeeds
+2. at limit: action fails with canonical 403
+3. after upgrade: action succeeds without manual cache hacks
+4. after downgrade/cancel: over-limit new actions are blocked, existing data remains policy-compliant
+
+Live View and Release Gate must additionally verify:
+
+- no silent dead-end state after limit rejection
+- no contradictory state between disabled UI and backend acceptance
+- no contradictory state between enabled UI and backend rejection without pre-warning
+
+## Release Gate + Eval Engine Production Qualification
+
+This section is mandatory for the concern: "Do all Release Gate settings combinations really behave correctly, and is the eval engine trustworthy under load and edge conditions?"
+
+### 1) Release Gate Settings Combination Matrix (Must Pass)
+
+Validate these dimensions as a matrix, not one-by-one smoke tests:
+
+- model source:
+  - `detected`
+  - `platform` (hosted)
+- provider family:
+  - `openai`
+  - `anthropic`
+  - `google`
+- key mode:
+  - detected mode with project/provider key present
+  - detected mode with missing key (must fail fast with clear code)
+  - detected mode with `replay_user_api_key_id`
+  - `replay_user_api_key_id` provider mismatch (must fail fast)
+- replay model policy:
+  - hosted allow-list model (pass preflight)
+  - hosted non-allow-list model (must return `HOSTED_MODEL_NOT_ALLOWED`)
+  - anthropic pinned model policy in production (must enforce pinned id unless bypass conditions)
+- data source:
+  - `trace_id`
+  - `snapshot_ids`
+  - `dataset_ids`
+  - `use_recent_snapshots + agent_id`
+- run shape:
+  - `repeat_runs` quick path (1)
+  - stability path (10+)
+  - high `max_snapshots` edge
+
+For each combo, assert:
+
+1. expected acceptance/rejection
+2. expected error code (if rejected)
+3. no hidden fallback to wrong provider/key
+4. report metadata consistency (`candidate.model`, provider, override metadata)
+
+### 2) Eval Engine Reliability Qualification (Must Pass)
+
+The eval engine is production-ready only when the following hold:
+
+1. Determinism window
+   - same input + same eval config + same rule set should stay within agreed variance band
+2. Config-at-time correctness
+   - snapshots are evaluated with config active at snapshot creation time where intended
+3. Check-level contract
+   - each enabled check emits pass/fail/na with valid schema
+   - disabled checks are not silently treated as pass
+4. Failure isolation
+   - provider replay failures, eval parsing failures, and policy failures are separately observable
+5. Performance envelope
+   - worst-case repeat/snapshot combinations stay within timeout and memory budgets
+6. Degradation behavior
+   - partial failures still produce diagnosable result payloads (not opaque 500s)
+
+### 3) Required Automated Test Buckets
+
+Use these buckets as release criteria:
+
+- unit:
+  - model policy helpers
+  - provider/model mismatch
+  - override sanitization
+  - eval config normalization and per-check logic
+- integration:
+  - preflight guard error codes
+  - async job lifecycle and cancellation
+  - missing key paths and saved-key mismatch paths
+  - hosted credit limit gate
+- regression:
+  - known incident replay fixtures (at least 5 "previously broken" scenarios)
+
+### 4) Manual High-Risk Scenarios (No Launch Without These)
+
+1. Detected mode with node key removed mid-session.
+2. Platform mode using disallowed hosted model id.
+3. Anthropic unpinned id in production policy mode.
+4. Dataset spanning multiple nodes (`dataset_agent_mismatch` paths).
+5. Long run (`repeat_runs` high) with cancel request during replay.
+6. One provider fails while others succeed in mixed historical snapshots.
+
+### 5) Exit Criteria For "I Trust Release Gate"
+
+Mark Release Gate/Eval as production-trustworthy only when:
+
+- [ ] settings matrix pass rate is 100% on required combinations
+- [ ] eval reliability suite passes in CI on main branch
+- [ ] no unknown/uncategorized errors in replay/eval path for 7 consecutive days in staging
+- [ ] support can map every common failure to a deterministic runbook step
+
 ## Launch Gate Checklist
 
 Do not call subscriptions commercially ready until all items below are true.
