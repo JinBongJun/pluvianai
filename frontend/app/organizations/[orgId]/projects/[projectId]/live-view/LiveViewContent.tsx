@@ -19,6 +19,7 @@ import { LiveViewPageLayout } from "@/components/live-view/LiveViewPageLayout";
 import type { LiveViewPanelRouteContext } from "@/components/live-view/liveViewPanelContext";
 import { LIVE_VIEW_EDGE_TYPES, LIVE_VIEW_NODE_TYPES } from "@/components/live-view/LiveViewFlowShell";
 import { LiveViewToolbar } from "@/components/live-view/LiveViewToolbar";
+import { LiveViewPanelSnapshotUsage } from "@/components/live-view/LiveViewPanelSnapshotUsage";
 import { liveViewAPI } from "@/lib/api";
 import {
   getApiErrorCode,
@@ -36,7 +37,6 @@ import { AgentSettingsPanel } from "@/components/live-view/AgentSettingsPanel";
 import { useToast } from "@/components/ToastContainer";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
-import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 import {
   LIVE_VIEW_BASE_POLL_MS,
   LIVE_VIEW_MAX_POLL_MS,
@@ -376,6 +376,7 @@ export function LiveViewContent() {
       rightPanel={
         <RailwaySidePanel
           title={selectedAgentId || "Agent Diagnostics"}
+          headerActions={selectedAgentId ? <LiveViewPanelSnapshotUsage /> : undefined}
           isOpen={!!selectedAgentId}
           width={760}
           contentClassName="h-0 min-h-0"
@@ -427,11 +428,6 @@ export function LiveViewContent() {
           <div className="absolute inset-x-0 bottom-[-40%] h-[80%] bg-emerald-500/12 rounded-full blur-[170px]" />
         </div>
 
-        {agentsPlanError && (
-          <div className="absolute left-4 right-4 top-4 z-20">
-            <PlanLimitBanner {...agentsPlanError} context="snapshots" />
-          </div>
-        )}
         {showLoadingOverlay && <LiveViewLoadingState />}
         {showAccessDeniedOverlay && (
           <LiveViewErrorState

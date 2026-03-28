@@ -9,6 +9,7 @@ import type { ReleaseGatePageContextValue } from "./releaseGatePageContext.types
 import type { ReleaseGateValidateRunContextValue } from "./ReleaseGateValidateRunContext";
 import type { PlanLimitError } from "@/lib/planErrors";
 import { authAPI } from "@/lib/api/auth";
+import { ACCOUNT_USAGE_SWR_KEY } from "@/lib/accountUsage";
 import { useReleaseGatePageModelReturn } from "./useReleaseGatePageModelReturn";
 import { useReleaseGatePageContextValue } from "./useReleaseGatePageContextValue";
 import { useReleaseGatePageContextParams } from "./useReleaseGatePageContextParams";
@@ -87,8 +88,9 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
   const { project, org } = useReleaseGatePageBootstrap(orgId, projectId, href =>
     router.replace(href)
   );
-  const { data: myUsage } = useSWR(projectId ? ["my-usage", projectId] : null, () => authAPI.getMyUsage(), {
-    revalidateOnFocus: false,
+  const { data: myUsage } = useSWR(projectId ? ACCOUNT_USAGE_SWR_KEY : null, () => authAPI.getMyUsage(), {
+    revalidateOnFocus: true,
+    dedupingInterval: 30_000,
   });
   const {
     mutateHistoryRef,

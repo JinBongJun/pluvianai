@@ -2,83 +2,55 @@
 
 import useSWR from "swr";
 import AccountLayout from "@/components/layout/AccountLayout";
-import { apiClient } from "@/lib/api/client";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { authAPI } from "@/lib/api/auth";
+import {
+  ACCOUNT_USAGE_FALLBACK_BY_PLAN,
+  ACCOUNT_USAGE_SWR_KEY,
+  accountUsageAsNumber,
+  computeAccountUsageMetrics,
+  usageQuotaPercent,
+} from "@/lib/accountUsage";
 import { BarChart3, Zap, Building2 } from "lucide-react";
 import Link from "next/link";
 import clsx from "clsx";
 
-type UsageResponse = {
-  plan_type: string;
-  limits: Record<string, unknown>;
-  usage_this_month: {
-    snapshots?: number;
-    guard_credits?: number;
-    platform_replay_credits?: number;
-    api_calls?: number;
-    projects_used?: number;
-    organizations_used?: number;
-    api_calls_limit?: number | null;
-  };
-};
-
-/** When API limits are missing, match Phase 0 product defaults (subscription_limits.py). */
-const FALLBACK_BY_PLAN: Record<string, { projects: number; organizations: number; replay: number }> = {
-  free: { projects: 2, organizations: 1, replay: 60 },
-  starter: { projects: 8, organizations: 3, replay: 600 },
-  pro: { projects: 30, organizations: 10, replay: 3000 },
-  enterprise: { projects: -1, organizations: -1, replay: -1 },
-};
-
-const asNumber = (v: unknown, fallback = 0): number => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-};
-
 export default function AccountUsagePage() {
   const hasToken = useRequireAuth();
 
-  const { data, isLoading } = useSWR<UsageResponse>(
-    hasToken ? "/auth/me/usage" : null,
-    async () => {
-      const res = await apiClient.get("/auth/me/usage");
-      return res.data as UsageResponse;
-    }
+  const { data, isLoading } = useSWR(
+    hasToken ? ACCOUNT_USAGE_SWR_KEY : null,
+    () => authAPI.getMyUsage()
   );
 
   const planType = (data?.plan_type || "free").toLowerCase();
   const limits = data?.limits || {};
-  const usage = data?.usage_this_month || {};
-  const fb = FALLBACK_BY_PLAN[planType] ?? FALLBACK_BY_PLAN.free;
+  const usage = (data?.usage_this_month || {}) as Record<string, unknown>;
+  const fb = ACCOUNT_USAGE_FALLBACK_BY_PLAN[planType] ?? ACCOUNT_USAGE_FALLBACK_BY_PLAN.free;
 
-  const snapshotsUsed = usage.snapshots ?? 0;
-  const snapshotsLimit = asNumber(
-    (limits as any).snapshots_per_month,
-    asNumber((limits as any).api_calls_per_month, 10000)
+  const metrics = computeAccountUsageMetrics(data);
+  const snapshotsUsed = metrics?.snapshotsUsed ?? 0;
+  const snapshotsLimit = metrics?.snapshotsLimit ?? 0;
+  const replayUsed = metrics?.replayUsed ?? 0;
+  const replayLimit = metrics?.replayLimit ?? 0;
+  const snapshotsExhausted = metrics?.snapshotsExhausted ?? false;
+  const replayExhausted = metrics?.replayExhausted ?? false;
+  const snapshotsNearLimit = metrics?.snapshotsNearLimit ?? false;
+  const replayNearLimit = metrics?.replayNearLimit ?? false;
+
+  const apiCallsUsed = accountUsageAsNumber(usage.api_calls, 0);
+  const apiCallsLimit = accountUsageAsNumber(
+    usage.api_calls_limit ?? (limits as Record<string, unknown>).api_calls_per_month,
+    10000
   );
 
-  const apiCallsUsed = usage.api_calls ?? 0;
-  const apiCallsLimit = usage.api_calls_limit ?? asNumber((limits as any).api_calls_per_month, 10000);
+  const projectsUsed = accountUsageAsNumber(usage.projects_used, 0);
+  const projectsLimit = accountUsageAsNumber((limits as Record<string, unknown>).projects, fb.projects);
 
-  const projectsUsed = usage.projects_used ?? 0;
-  const projectsLimit = asNumber((limits as any).projects, fb.projects);
+  const organizationsUsed = accountUsageAsNumber(usage.organizations_used, 0);
+  const organizationsLimit = accountUsageAsNumber((limits as Record<string, unknown>).organizations, fb.organizations);
 
-  const organizationsUsed = usage.organizations_used ?? 0;
-  const organizationsLimit = asNumber((limits as any).organizations, fb.organizations);
-
-  const replayUsed = usage.platform_replay_credits ?? usage.guard_credits ?? 0;
-  const replayLimit = asNumber(
-    (limits as any).platform_replay_credits_per_month ?? (limits as any).guard_credits_per_month,
-    fb.replay
-  );
-  const snapshotsExhausted = snapshotsLimit > 0 && snapshotsUsed >= snapshotsLimit;
-  const replayExhausted = replayLimit > 0 && replayUsed >= replayLimit;
-  const snapshotsNearLimit =
-    snapshotsLimit > 0 && !snapshotsExhausted && (snapshotsUsed / snapshotsLimit) * 100 >= 80;
-  const replayNearLimit = replayLimit > 0 && !replayExhausted && (replayUsed / replayLimit) * 100 >= 80;
-
-  const pct = (used: number, limit: number) =>
-    limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+  const pct = usageQuotaPercent;
 
   return (
     <AccountLayout
