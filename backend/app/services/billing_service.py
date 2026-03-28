@@ -441,6 +441,68 @@ class BillingService:
             "url": url,
         }
 
+    def _customer_portal_url_from_session_data(
+        self, data: Dict[str, Any], paddle_subscription_id: Optional[str]
+    ) -> Optional[str]:
+        """Pick cancel deep link when subscription id matches, else overview URL."""
+        urls = data.get("urls") or {}
+        general = urls.get("general") or {}
+        overview = general.get("overview")
+        sub_id = (paddle_subscription_id or "").strip()
+        if sub_id:
+            for item in urls.get("subscriptions") or []:
+                if not isinstance(item, dict):
+                    continue
+                if str(item.get("id") or "") == sub_id:
+                    cancel = item.get("cancel_subscription")
+                    if isinstance(cancel, str) and cancel.strip():
+                        return cancel.strip()
+                    break
+        if isinstance(overview, str) and overview.strip():
+            return overview.strip()
+        return None
+
+    def create_customer_portal_session(self, user_id: int) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """
+        Create a Paddle customer portal session for the current user.
+        Returns ({"url": ...}, None) on success, or (None, error_code) where error_code is
+        'paddle_not_configured' | 'no_billing_customer' | 'paddle_error'.
+        """
+        if not self.paddle_available:
+            logger.warning("Customer portal requested but Paddle is not configured")
+            return None, "paddle_not_configured"
+
+        subscription = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
+        customer_id = (subscription.paddle_customer_id or "").strip() if subscription else ""
+        if not customer_id:
+            logger.info("Customer portal unavailable: no paddle_customer_id for user %s", user_id)
+            return None, "no_billing_customer"
+
+        paddle_sub_id = (subscription.paddle_subscription_id or "").strip() if subscription else ""
+        body: Dict[str, Any] = {}
+        if paddle_sub_id:
+            body["subscription_ids"] = [paddle_sub_id]
+
+        path = f"customers/{customer_id}/portal-sessions"
+        data, err = self._paddle_post(path, body)
+        if not data:
+            logger.error(
+                "Failed to create Paddle customer portal session: %s",
+                err,
+                extra={"user_id": user_id},
+            )
+            return None, "paddle_error"
+
+        url = self._customer_portal_url_from_session_data(data, paddle_sub_id or None)
+        if not url:
+            logger.error(
+                "Paddle portal session missing usable URL",
+                extra={"user_id": user_id, "customer_id": customer_id},
+            )
+            return None, "paddle_error"
+
+        return ({"url": url}, None)
+
     def handle_paddle_webhook(self, payload: bytes, paddle_signature: str) -> Dict[str, Any]:
         """Verify signature and handle Paddle Billing webhook events."""
         def _record(result: str, ev_type: str | None) -> None:
