@@ -1,5 +1,10 @@
 # Subscription Commercial Readiness Plan
 
+## Companion Execution Docs
+
+- `docs/billing-hardening-runbook.md` (billing operations runbook)
+- `docs/flow-100-readiness-execution-plan.md` (E2E full sweep, soak, and 7-day webhook monitoring execution plan)
+
 ## Why This Document Exists
 
 This document is the conservative, production-facing plan for making subscriptions, quota enforcement, billing UX, and customer trust flows safe enough for paid usage.

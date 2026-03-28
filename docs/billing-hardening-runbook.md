@@ -31,6 +31,15 @@ See also: `docs/subscription-commercial-readiness-plan.md` for the full product,
   - reject logs: missing/invalid signature, invalid payload
   - process logs: `event_id`, `event_type`, `status`
 
+### Quick Metric Check Commands
+- Linux/macOS:
+  - `./scripts/check-billing-webhook-metrics.sh`
+- Windows PowerShell:
+  - `powershell -ExecutionPolicy Bypass -File scripts/check-billing-webhook-metrics.ps1`
+- Optional thresholds:
+  - `WARN_ERROR_RATIO=0.05 ./scripts/check-billing-webhook-metrics.sh`
+  - `powershell -ExecutionPolicy Bypass -File scripts/check-billing-webhook-metrics.ps1 -WarnErrorRatio 0.05`
+
 ## Incident Triage Order
 1. Signature validation failures (`BILLING_WEBHOOK_INVALID`)
 2. `event_id` duplication (`duplicate`)
@@ -42,6 +51,19 @@ See also: `docs/subscription-commercial-readiness-plan.md` for the full product,
   - `POST /api/v1/billing/webhook/retry/{event_id}`
 - Bulk consistency repair:
   - `POST /api/v1/billing/reconcile?limit=500`
+
+## 7-Day Operational Verification
+
+Run this checklist daily for at least 7 consecutive days:
+
+1. collect webhook metric snapshot and error ratio
+2. verify no unresolved failed webhook event exceeds SLA window
+3. run targeted retry for failed event IDs
+4. run reconcile if paid-status mismatch is reported
+5. record root cause category for each incident (signature, provider outage, payload, duplicate, internal)
+
+Template:
+- `docs/billing-webhook-7day-monitoring-template.md`
 
 ## Production Policy Checklist (Paddle-facing)
 - Public docs:
