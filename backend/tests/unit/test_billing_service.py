@@ -681,3 +681,50 @@ class TestBillingService:
             result, err = service.change_paddle_subscription_plan(test_user.id, "pro")
         assert result is None
         assert err == "checkout_required"
+
+    def test_preview_paddle_subscription_plan_upgrade_includes_due_now(self, db, test_user):
+        sub = Subscription(
+            user_id=test_user.id,
+            plan_id="starter",
+            status="active",
+            paddle_subscription_id="sub_test",
+            paddle_customer_id="ctm_test",
+        )
+        db.add(sub)
+        db.commit()
+        preview_body = {
+            "currency_code": "USD",
+            "next_billed_at": "2026-02-01T00:00:00Z",
+            "current_billing_period": {
+                "starts_at": "2026-01-01T00:00:00Z",
+                "ends_at": "2026-02-01T00:00:00Z",
+            },
+            "immediate_transaction": {
+                "details": {
+                    "totals": {
+                        "grand_total": "8000",
+                        "currency_code": "USD",
+                    }
+                }
+            },
+            "recurring_transaction_details": {
+                "totals": {"grand_total": "12900", "currency_code": "USD"}
+            },
+        }
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_PRICE_ID_STARTER = "pri_st"
+            mock_settings.PADDLE_PRICE_ID_PRO = "pri_pr"
+            service = BillingService(db)
+            service.paddle_available = True
+            with patch.object(
+                service,
+                "_paddle_get",
+                return_value=({"id": "sub_test", "status": "active", "items": []}, None),
+            ):
+                with patch.object(service, "_paddle_patch", return_value=(preview_body, None)):
+                    result, err = service.preview_paddle_subscription_plan(test_user.id, "pro")
+        assert err is None
+        assert result["change_type"] == "upgrade"
+        assert result["due_now_display"] == "$80.00"
+        assert result["current_plan"] == "starter"
