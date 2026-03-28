@@ -17,14 +17,15 @@ try {
 }
 
 $lines = $raw -split "`n" | Where-Object { $_ -match '^billing_webhook_events_total\{' }
+$familyPresent = (($raw -split "`n") | Where-Object { $_ -match '^# HELP billing_webhook_events_total ' }).Count -gt 0
 
-if (-not $lines -or $lines.Count -eq 0) {
+if ((-not $lines -or $lines.Count -eq 0) -and -not $familyPresent) {
     Write-Host "billing_webhook_events_total not found in metrics output."
     exit 0
 }
 
 $total = 0.0
-$error = 0.0
+$errorCount = 0.0
 $duplicate = 0.0
 
 foreach ($line in $lines) {
@@ -32,18 +33,18 @@ foreach ($line in $lines) {
         $result = $matches[1]
         $value = [double]$matches[2]
         $total += $value
-        if ($result -eq "error") { $error += $value }
+        if ($result -eq "error") { $errorCount += $value }
         if ($result -eq "duplicate") { $duplicate += $value }
     }
 }
 
 $ratio = 0.0
 if ($total -gt 0) {
-    $ratio = $error / $total
+    $ratio = $errorCount / $total
 }
 
 Write-Host "billing_webhook_events_total summary"
-Write-Host ("total={0} error={1} duplicate={2} error_ratio={3:p2}" -f $total, $error, $duplicate, $ratio)
+Write-Host ("total={0} error={1} duplicate={2} error_ratio={3:p2}" -f $total, $errorCount, $duplicate, $ratio)
 
 if ($ratio -ge $WarnErrorRatio) {
     Write-Host ("ALERT: error_ratio {0:p2} >= threshold {1:p2}" -f $ratio, $WarnErrorRatio)

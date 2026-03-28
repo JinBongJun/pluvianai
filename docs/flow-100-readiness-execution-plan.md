@@ -84,6 +84,25 @@ Deliverables:
 - expanded Playwright suite under `frontend/tests`
 - runbook entry for required env vars and deterministic seed strategy
 
+### Release Gate configuration full-sweep matrix
+
+| Priority | Area | Scenario | Preconditions | Expected result |
+| --- | --- | --- | --- | --- |
+| P0 | Baseline gate | No baseline selected | Open settings with zero selected logs | Warning banner shown, run remains blocked until baseline chosen |
+| P0 | Core setup / detected | Detected baseline mode | One baseline log selected | Detected provider/model/API key status visible |
+| P0 | Core setup / hosted | Hosted quick pick mode | One baseline log selected | Hosted provider selector + hosted quick-pick model list visible |
+| P0 | Core setup / custom | Custom BYOK mode | One baseline log selected | Custom model id, direct API key field, saved key controls visible |
+| P0 | Core setup / saved key UI | Saved project key present | One baseline log selected + one saved project key seeded | Saved key row shown with `Use for run` and `Delete` actions |
+| P0 | Preview | Final override payload | One baseline log selected + core config changed | Using provider/model summary visible; expand full JSON works |
+| P0 | Environment parity / request JSON | Per-log replay overrides | Two baseline logs selected | Shared JSON + per-log editors shown for both selected logs |
+| P0 | Environment parity / context | Per-log context injection | Two baseline logs selected | Append-to-system-prompt mode + per-log context editors visible |
+| P1 | Environment parity / tools | Tool definition editing | One baseline log selected | Reset/add/remove tool actions work; recorded calls section visible |
+| P1 | Core setup / strictness | Threshold presets and custom threshold inputs | One baseline log selected | Preset toggle works; custom fail/flaky inputs editable |
+| P1 | Core setup / sampling | Temperature / max tokens / top-p | One baseline log selected | Sampling inputs editable and reflected in preview payload |
+| P1 | Core setup / config JSON | Reset to baseline + validation | One baseline log selected | Reset button/state + invalid JSON error handling visible |
+| P2 | Parity / file imports | Load JSON/text files | Browser file fixture available | Shared/per-log import actions populate editors correctly |
+| P2 | Preview / representative baseline | Multi-baseline representative note | Two or more baselines selected | Representative preview note shown with selected log id |
+
 ### Track 2 - Soak Qualification
 
 1. Define soak profile set:
@@ -182,6 +201,8 @@ Mark this package complete only when all are true:
 - 20-iteration cooldown soak completed:
   - summary: `logs/soak/release-gate-soak-20260328-015759-summary.txt`
   - result: `failures=0`
+- Local webhook metrics checker now reports zero-state summary correctly:
+  - `total=0 error=0 duplicate=0 error_ratio=0.00%`
 - Day-2 onward: append one row per day using the same format and checklist (see `docs/billing-webhook-7day-monitoring-template.md` → Day-2 through Day-7).
 
 ## Next actions

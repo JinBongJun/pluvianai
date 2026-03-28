@@ -6,7 +6,7 @@ Use this template for daily operational verification.
 
 | Day | Date (KST/UTC) | total events | error events | duplicate events | error ratio | alerts fired | retry executed | reconcile executed | unresolved > SLA | incident category | action/result |
 | --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- | --- | --- | --- |
-| 1 | 2026-03-28 / 2026-03-27 | n/a | n/a | n/a | n/a | no | no | no | no | observability_gap | webhook checker executed (`billing_webhook_events_total not found`). Soak completed with cooldown: `logs/soak/release-gate-soak-20260328-015759-summary.txt` (`iterations=20`, `failures=0`, `avg=62.37s`, `p95=68.19s`, `max=69.08s`). |
+| 1 | 2026-03-28 / 2026-03-27 | 0 | 0 | 0 | 0.00% | no | no | no | no | none | webhook checker now reports `total=0 error=0 duplicate=0 error_ratio=0.00%`. Soak completed with cooldown: `logs/soak/release-gate-soak-20260328-015759-summary.txt` (`iterations=20`, `failures=0`, `avg=62.37s`, `p95=68.19s`, `max=69.08s`). Follow-up smoke: `logs/soak/release-gate-soak-20260328-093732-summary.txt` (`iterations=1`, `failures=0`). |
 | 2 |  |  |  |  |  |  |  |  |  |  |  |
 | 3 |  |  |  |  |  |  |  |  |  |  |  |
 | 4 |  |  |  |  |  |  |  |  |  |  |  |
