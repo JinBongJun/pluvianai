@@ -124,7 +124,11 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
               <div className="flex h-full flex-col overflow-y-auto custom-scrollbar">
                 {rightPanelTab === "results" && (
                   <div className="flex-1 space-y-4 p-4">
-                    <div className="flex flex-wrap items-center justify-end gap-1 rounded-xl border border-white/8 bg-black/20 p-1">
+                    <div
+                      className="flex w-full gap-0.5 rounded-xl border border-white/8 bg-black/20 p-1"
+                      role="group"
+                      aria-label="Filter result rows"
+                    >
                       {(
                         [
                           { id: "all" as const, label: "All" },
@@ -138,9 +142,9 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                           data-testid={`rg-result-case-filter-${option.id}`}
                           onClick={() => setResultCaseFilter(option.id)}
                           className={clsx(
-                            "rounded-lg px-3 py-1.5 text-[11px] font-semibold transition",
+                            "min-w-0 flex-1 rounded-lg px-1.5 py-1.5 text-center text-[10px] font-semibold leading-tight transition sm:text-[11px] sm:px-2",
                             resultCaseFilter === option.id
-                              ? "bg-white/[0.12] text-white"
+                              ? "bg-white/[0.12] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]"
                               : "text-slate-400 hover:bg-white/[0.05] hover:text-slate-200"
                           )}
                         >
