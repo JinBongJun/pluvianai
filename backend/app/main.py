@@ -278,13 +278,25 @@ async def startup_event():
     from app.services.stream_processor import stream_processor
     import asyncio
 
+    def _start_background_task(task_name: str, factory) -> bool:
+        """Start non-critical background work without risking app boot."""
+        try:
+            factory()
+            logger.info("%s started", task_name)
+            return True
+        except Exception:
+            logger.warning("%s failed to start; continuing without it", task_name, exc_info=True)
+            return False
+
     logger.info("Starting PluvianAI API...")
     logger.info(f"Environment: {'DEBUG' if settings.DEBUG else 'PRODUCTION'}")
     logger.info(f"🔐 Security: SECRET_KEY_LEN: {len(settings.SECRET_KEY)}, ALGORITHM: {settings.ALGORITHM}")
     
-    # Start stream processor background task
-    asyncio.create_task(stream_processor.start())
-    logger.info("Stream processor background task started")
+    # Start stream processor only when cache is available, and never let it block boot.
+    if cache_service.enabled:
+        _start_background_task("Stream processor background task", lambda: asyncio.create_task(stream_processor.start()))
+    else:
+        logger.info("Stream processor disabled because cache is unavailable")
 
     # Update app info metrics
     update_app_info(
@@ -368,18 +380,14 @@ async def startup_event():
         from app.services.scheduler_service import scheduler_service
         from app.services.release_gate_job_runner import release_gate_job_runner
 
-        scheduler_service.start()
-        logger.info("Background scheduler started")
-
-        # Start periodic metrics update task
-        import asyncio
-
-        asyncio.create_task(update_business_metrics_periodically())
-        logger.info("Business metrics update task started")
+        _start_background_task("Background scheduler", scheduler_service.start)
+        _start_background_task("Business metrics update task", lambda: asyncio.create_task(update_business_metrics_periodically()))
 
         if getattr(settings, "RELEASE_GATE_JOB_RUNNER_ENABLED", True):
-            asyncio.create_task(release_gate_job_runner.start())
-            logger.info("Release Gate job runner background task started")
+            _start_background_task(
+                "Release Gate job runner background task",
+                lambda: asyncio.create_task(release_gate_job_runner.start()),
+            )
         else:
             logger.info("Release Gate job runner disabled in web process (RELEASE_GATE_JOB_RUNNER_ENABLED=false)")
     else:
