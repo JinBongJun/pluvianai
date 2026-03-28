@@ -39,7 +39,7 @@ import {
   buildFinalCandidateRequest,
   buildValidateOverridePreview,
   editableRequestBodyWithoutTools,
-  extractSystemPromptFromPayload,
+  extractSystemPromptRawFromPayload,
 } from "./releaseGatePageContent.lib";
 
 export type ReleaseGatePageModel = {
@@ -466,13 +466,11 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
   const effectivePlanError = planError ?? hostedReplayPlanError;
 
   const requestSystemPrompt = useMemo(() => {
-    const fromBody =
-      typeof requestBody.system_prompt === "string"
-        ? requestBody.system_prompt
-        : extractSystemPromptFromPayload(requestBody);
-    if (fromBody && fromBody.trim()) {
-      return fromBody.trim();
+    if (typeof requestBody.system_prompt === "string") {
+      return requestBody.system_prompt;
     }
+    const raw = extractSystemPromptRawFromPayload(requestBody);
+    if (raw.length > 0) return raw;
     return runDataPrompt || "";
   }, [requestBody, runDataPrompt]);
 
