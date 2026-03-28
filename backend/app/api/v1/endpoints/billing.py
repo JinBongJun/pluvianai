@@ -86,6 +86,109 @@ def create_checkout_session(
     return success_response(data=result)
 
 
+@router.get("/subscription")
+def get_billing_subscription(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Next billing date and current period bounds from Paddle (paid accounts only)."""
+    billing = BillingService(db)
+    result, err = billing.get_billing_subscription_snapshot(current_user.id)
+    if err == "paddle_not_configured":
+        return error_response(
+            code="BILLING_UNAVAILABLE",
+            message="Billing is temporarily unavailable.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if err == "no_paddle_subscription":
+        return error_response(
+            code="BILLING_NO_SUBSCRIPTION",
+            message="No active Paddle subscription on file.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    if err == "paddle_lookup_failed":
+        return error_response(
+            code="BILLING_PADDLE_LOOKUP_FAILED",
+            message="Could not load subscription from Paddle. Try again shortly.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if not result:
+        return error_response(
+            code="BILLING_SUBSCRIPTION_FAILED",
+            message="Could not load subscription details.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return success_response(data=result)
+
+
+@router.post("/preview-plan-change")
+def preview_plan_change(
+    req: ChangePlanRequest,
+    current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
+    db: Session = Depends(get_db),
+):
+    """Preview proration / next renewal for Starter ↔ Pro before applying changes."""
+    normalized = normalize_plan_type(req.plan_type)
+    if normalized not in ("starter", "pro"):
+        return error_response(
+            code="BILLING_CHANGE_PLAN_INVALID",
+            message="Plan preview is only available between Starter and Pro.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    billing = BillingService(db)
+    result, err = billing.preview_paddle_subscription_plan(current_user.id, normalized)
+    if err == "paddle_not_configured":
+        return error_response(
+            code="BILLING_UNAVAILABLE",
+            message="Billing is temporarily unavailable.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if err == "invalid_plan":
+        return error_response(
+            code="BILLING_CHANGE_PLAN_INVALID",
+            message="Invalid plan.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if err == "same_plan":
+        return error_response(
+            code="BILLING_CHANGE_PLAN_SAME",
+            message="You are already on this plan.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if err == "checkout_required":
+        return error_response(
+            code="BILLING_CHANGE_PLAN_USE_CHECKOUT",
+            message="Use checkout to subscribe first.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if err == "subscription_inactive":
+        return error_response(
+            code="BILLING_SUBSCRIPTION_INACTIVE",
+            message="This subscription cannot be changed.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if err == "subscription_past_due":
+        return error_response(
+            code="BILLING_SUBSCRIPTION_PAST_DUE",
+            message="Update your payment method in the billing portal before changing plans.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if err == "paddle_lookup_failed":
+        return error_response(
+            code="BILLING_PADDLE_LOOKUP_FAILED",
+            message="Could not load subscription from Paddle. Try again shortly.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if err == "paddle_error" or not result:
+        return error_response(
+            code="BILLING_PREVIEW_FAILED",
+            message="Could not preview plan change. Try again or use the billing portal.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return success_response(data=result)
+
+
 @router.post("/change-plan")
 def change_subscription_plan(
     req: ChangePlanRequest,
