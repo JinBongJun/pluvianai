@@ -1,0 +1,41 @@
+# Example Prometheus alerting rules for Paddle billing webhooks.
+# Copy into your Prometheus config or Kubernetes PrometheusRule CRD and adjust:
+# - "for" durations
+# - thresholds
+# - labels (team, severity)
+#
+# Metric: billing_webhook_events_total{result,event_type}
+# Requires: GET /metrics exposed (EXPOSE_METRICS_ENDPOINT=true in production)
+
+groups:
+  - name: pluvianai-billing-webhooks
+    interval: 30s
+    rules:
+      - alert: BillingWebhookErrorRateHigh
+        expr: |
+          (
+            sum(rate(billing_webhook_events_total{result="error"}[5m]))
+            /
+            clamp_min(sum(rate(billing_webhook_events_total[5m])), 0.0001)
+          ) > 0.10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Billing webhook error ratio above 10% (5m rate)"
+          description: "Paddle webhook processing error share is high. Check logs, Paddle delivery, and DLQ retry."
+
+      - alert: BillingWebhookErrorsSustained
+        expr: sum(rate(billing_webhook_events_total{result="error"}[5m])) > 0.001
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Billing webhook errors occurring (sustained)"
+          description: "Non-zero error rate on billing_webhook_events_total. Investigate signature, payload, or downstream DB."
+
+      # Optional: alert if you expect steady webhook volume (tune or omit for low-traffic envs)
+      # - alert: BillingWebhookNoEvents48h
+      #   expr: sum(increase(billing_webhook_events_total[48h])) == 0
+      #   for: 1h
+      #   ...

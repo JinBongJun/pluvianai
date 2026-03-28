@@ -30,6 +30,8 @@ See also: `docs/subscription-commercial-readiness-plan.md` for the full product,
 - Logs:
   - reject logs: missing/invalid signature, invalid payload
   - process logs: `event_id`, `event_type`, `status`
+- **Prometheus / Grafana:** PromQL examples, alert rules, and `EXPOSE_METRICS_ENDPOINT` → [`billing-prometheus-grafana-alerts.md`](./billing-prometheus-grafana-alerts.md)
+- **Example PrometheusRule file:** [`deploy/prometheus/billing-webhook-alerts.example.yml`](../deploy/prometheus/billing-webhook-alerts.example.yml)
 
 ### Quick Metric Check Commands
 - Linux/macOS:
