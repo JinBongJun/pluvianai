@@ -19,4 +19,10 @@ export const billingAPI = {
     });
     return unwrapResponse(response);
   },
+
+  /** Paddle-hosted customer portal (cancel subscription, payment method, invoices). */
+  createCustomerPortalSession: async () => {
+    const response = await apiClient.post("/billing/customer-portal", {});
+    return unwrapResponse(response);
+  },
 };

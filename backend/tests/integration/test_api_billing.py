@@ -119,6 +119,28 @@ class TestBillingAPI:
         
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
+    @patch(
+        "app.services.billing_service.BillingService.create_customer_portal_session",
+        return_value=({"url": "https://customer-portal.paddle.com/test"}, None),
+    )
+    async def test_create_customer_portal_success(self, _mock_portal, async_client, auth_headers):
+        response = await async_client.post("/api/v1/billing/customer-portal", json={}, headers=auth_headers)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["data"]["url"].startswith("https://")
+
+    @patch(
+        "app.services.billing_service.BillingService.create_customer_portal_session",
+        return_value=(None, "no_billing_customer"),
+    )
+    async def test_create_customer_portal_no_customer(self, _mock_portal, async_client, auth_headers):
+        response = await async_client.post("/api/v1/billing/customer-portal", json={}, headers=auth_headers)
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json()["error"]["code"] == "BILLING_PORTAL_NO_CUSTOMER"
+
+    async def test_create_customer_portal_unauthorized(self, async_client):
+        response = await async_client.post("/api/v1/billing/customer-portal", json={})
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
     async def test_create_checkout_session_invalid_plan(self, async_client, auth_headers):
         """Self-serve checkout only allows Starter and Pro."""
         response = await async_client.post(

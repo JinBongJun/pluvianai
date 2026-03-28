@@ -82,6 +82,39 @@ def create_checkout_session(
     return success_response(data=result)
 
 
+@router.post("/customer-portal")
+def create_customer_portal_session(
+    current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Open Paddle's hosted customer portal (authenticated session).
+    Deep-links to subscription cancellation when a Paddle subscription id is stored.
+    """
+    billing = BillingService(db)
+    result, err = billing.create_customer_portal_session(current_user.id)
+    if err == "paddle_not_configured":
+        return error_response(
+            code="BILLING_PORTAL_UNAVAILABLE",
+            message="Billing portal is temporarily unavailable.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if err == "no_billing_customer":
+        return error_response(
+            code="BILLING_PORTAL_NO_CUSTOMER",
+            message="No Paddle billing profile found for this account. Subscribe first or contact support.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    if err == "paddle_error" or not result or not result.get("url"):
+        return error_response(
+            code="BILLING_PORTAL_FAILED",
+            message="Could not open the billing portal. Try again or contact support.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return success_response(data=result)
+
+
 @router.post("/webhook")
 @router.post("/webhook/paddle")
 async def handle_paddle_webhook(

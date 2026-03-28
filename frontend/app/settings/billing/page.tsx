@@ -13,6 +13,7 @@ import {
   getPaddleCheckoutState,
   stripBillingCheckoutParams,
 } from "@/components/billing/paddlePaymentLink";
+import { BillingManageSubscriptionCard } from "@/components/billing/BillingManageSubscriptionCard";
 
 type UsageResponse = {
   plan_type: string;
@@ -45,6 +46,8 @@ export default function AccountBillingPage() {
   );
 
   const currentPlanId = (data?.plan_type || "free").toLowerCase();
+  const showManageSubscription =
+    currentPlanId === "starter" || currentPlanId === "pro";
   const snapshotsUsed = Number(data?.usage_this_month?.snapshots ?? 0);
   const snapshotsLimit = Number(data?.limits?.snapshots_per_month ?? -1);
   const replayUsed = Number(
@@ -235,16 +238,30 @@ export default function AccountBillingPage() {
             .
           </p>
           <p>
-            Need to cancel or billing help? Contact support via{" "}
-            <a href="/settings/profile" className="text-emerald-300 hover:text-emerald-200 underline">
-              account settings
-            </a>
-            .
+            {showManageSubscription ? (
+              <>
+                To cancel or update payment details, use <strong className="text-slate-200">Cancel</strong>{" "}
+                below (Paddle billing portal). For other billing help, contact support via{" "}
+                <a href="/settings/profile" className="text-emerald-300 hover:text-emerald-200 underline">
+                  account settings
+                </a>
+                .
+              </>
+            ) : (
+              <>
+                Need to cancel or billing help? Contact support via{" "}
+                <a href="/settings/profile" className="text-emerald-300 hover:text-emerald-200 underline">
+                  account settings
+                </a>
+                .
+              </>
+            )}
           </p>
           <p>
             Temporary 429 responses are shared system safety limits, separate from plan quotas.
           </p>
         </div>
+        {showManageSubscription && <BillingManageSubscriptionCard />}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 xl:gap-5 relative z-10">
           {plans.map(plan => {
             const isCurrent = plan.id === currentPlanId;
