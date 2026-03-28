@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { SUPPORT_EMAIL, supportMailtoHref } from "@/lib/supportContact";
 
 export default function RefundPolicyPage() {
   const router = useRouter();
@@ -54,10 +54,13 @@ export default function RefundPolicyPage() {
           <section>
             <h2 className="text-xl font-bold text-white">4. Contact</h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-400">
-              For billing-related questions or refund requests, contact us via{" "}
-              <Link href="/settings/profile" className="text-emerald-400 hover:text-emerald-300">
-                account settings support
-              </Link>
+              For billing-related questions or refund requests, email{" "}
+              <a
+                href={supportMailtoHref("PluvianAI — Billing / refund")}
+                className="text-emerald-400 hover:text-emerald-300 underline"
+              >
+                {SUPPORT_EMAIL}
+              </a>
               .
             </p>
           </section>
