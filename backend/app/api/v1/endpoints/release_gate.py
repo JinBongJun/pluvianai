@@ -1414,6 +1414,48 @@ def _collect_replay_error_messages(results: List[Dict[str, Any]], limit: int = 3
     return msgs
 
 
+def _replay_usage_from_provider_result(res: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize token/credit fields from replay_service batch results."""
+
+    def _ni(v: Any) -> Optional[int]:
+        if v is None:
+            return None
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return None
+
+    in_i = _ni(res.get("input_tokens"))
+    out_i = _ni(res.get("output_tokens"))
+    cred = _ni(res.get("used_credits"))
+    if in_i is None and out_i is None:
+        total: Optional[int] = None
+    else:
+        total = (in_i or 0) + (out_i or 0)
+    return {
+        "input_tokens": in_i,
+        "output_tokens": out_i,
+        "tokens_total": total,
+        "used_credits": cred,
+    }
+
+
+def _baseline_capture_usage(snapshot: Any) -> Dict[str, Any]:
+    """Tokens/cost stored on the original snapshot row (Live View capture), if any."""
+    tu = getattr(snapshot, "tokens_used", None)
+    cost_raw = getattr(snapshot, "cost", None)
+    out: Dict[str, Any] = {
+        "tokens_used": int(tu) if tu is not None else None,
+        "cost": None,
+    }
+    if cost_raw is not None:
+        try:
+            out["cost"] = float(cost_raw)
+        except (TypeError, ValueError):
+            out["cost"] = None
+    return out
+
+
 def _normalize_provider(value: Any) -> Optional[str]:
     provider = str(value or "").strip().lower()
     if provider in SUPPORTED_REPLAY_PROVIDERS:
@@ -2368,6 +2410,7 @@ async def _run_release_gate(
                                     if isinstance(res.get("tool_loop_events"), list)
                                     else []
                                 ),
+                                **_replay_usage_from_provider_result({}),
                             },
                             "behavior_diff": behavior_diff,
                             "signals": signals_obj,
@@ -2382,6 +2425,7 @@ async def _run_release_gate(
                                 "response_data_keys": baseline_response_data_keys,
                                 "response_preview_status": baseline_response_preview_status,
                                 "capture_reason": baseline_response_capture_reason,
+                                **_baseline_capture_usage(snapshot),
                             },
                             "candidate_snapshot": {
                                 "provider": replay_provider,
@@ -2456,6 +2500,7 @@ async def _run_release_gate(
                                     if isinstance(res.get("tool_loop_events"), list)
                                     else []
                                 ),
+                                **_replay_usage_from_provider_result({}),
                             },
                             "behavior_diff": behavior_diff,
                             "signals": signals_obj,
@@ -2470,6 +2515,7 @@ async def _run_release_gate(
                                 "response_data_keys": baseline_response_data_keys,
                                 "response_preview_status": baseline_response_preview_status,
                                 "capture_reason": baseline_response_capture_reason,
+                                **_baseline_capture_usage(snapshot),
                             },
                             "candidate_snapshot": {
                                 "provider": str(res.get("replay_provider") or "").strip() or None,
@@ -2561,6 +2607,7 @@ async def _run_release_gate(
                                 if isinstance(res.get("tool_loop_events"), list)
                                 else []
                             ),
+                            **_replay_usage_from_provider_result(res),
                         },
                         "behavior_diff": behavior_diff,
                         "signals": signals_obj,
@@ -2575,6 +2622,7 @@ async def _run_release_gate(
                             "response_data_keys": baseline_response_data_keys,
                             "response_preview_status": baseline_response_preview_status,
                             "capture_reason": baseline_response_capture_reason,
+                            **_baseline_capture_usage(snapshot),
                         },
                         "candidate_snapshot": {
                             "provider": str(res.get("replay_provider") or "").strip() or None,
@@ -2639,6 +2687,30 @@ async def _run_release_gate(
             ]
             latency_min_ms = min(latencies) if latencies else None
             latency_max_ms = max(latencies) if latencies else None
+
+            sum_input_tokens = 0
+            sum_output_tokens = 0
+            sum_tokens_total = 0
+            sum_used_credits = 0
+            any_input_tokens = False
+            any_output_tokens = False
+            any_tokens_total = False
+            any_used_credits = False
+            for a in attempts:
+                rp = a.get("replay") or {}
+                if isinstance(rp, dict):
+                    if rp.get("input_tokens") is not None:
+                        any_input_tokens = True
+                        sum_input_tokens += int(rp.get("input_tokens") or 0)
+                    if rp.get("output_tokens") is not None:
+                        any_output_tokens = True
+                        sum_output_tokens += int(rp.get("output_tokens") or 0)
+                    if rp.get("tokens_total") is not None:
+                        any_tokens_total = True
+                        sum_tokens_total += int(rp.get("tokens_total") or 0)
+                    if rp.get("used_credits") is not None:
+                        any_used_credits = True
+                        sum_used_credits += int(rp.get("used_credits") or 0)
 
             failed_rule_counts: Dict[str, int] = {}
             failed_reasons: List[str] = []
@@ -2731,7 +2803,12 @@ async def _run_release_gate(
                         "error_messages": replay_error_messages,
                         "error_codes": replay_error_codes,
                         "missing_provider_keys": missing_provider_keys,
+                        "input_tokens_sum": sum_input_tokens if any_input_tokens else None,
+                        "output_tokens_sum": sum_output_tokens if any_output_tokens else None,
+                        "tokens_total_sum": sum_tokens_total if any_tokens_total else None,
+                        "used_credits_sum": sum_used_credits if any_used_credits else None,
                     },
+                    "baseline_capture": _baseline_capture_usage(snapshot),
                     "attempts": attempts,
                 }
             )

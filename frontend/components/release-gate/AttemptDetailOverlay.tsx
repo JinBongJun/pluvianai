@@ -12,6 +12,11 @@ import {
 import { formatDurationMs, percentFromRate } from "@/app/organizations/[orgId]/projects/[projectId]/release-gate/releaseGateViewUtils";
 import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel";
 import type { LiveViewToolTimelineRow } from "@/lib/api/live-view";
+import {
+  formatReplayCredits,
+  formatSnapshotCost,
+  formatSnapshotTokens,
+} from "@/lib/snapshotMetrics";
 
 export type AttemptDetailMainTab = "summary" | "comparison" | "debug";
 
@@ -59,6 +64,37 @@ export function AttemptDetailOverlay({
     baselineSnapshot?.user_message ?? baselineSnapshot?.request_prompt ?? "No input text captured."
   ).trim();
   const baselineModel = String(baselineSnapshot?.model ?? "—").trim() || "—";
+
+  const baselineCapture = useMemo(() => {
+    const full =
+      baselineSnapshot && typeof baselineSnapshot === "object"
+        ? (baselineSnapshot as Record<string, unknown>)
+        : null;
+    const first = attempts[0] as Record<string, unknown> | undefined;
+    const nested = first?.baseline_snapshot as Record<string, unknown> | undefined;
+    const tokensRaw = full?.tokens_used ?? nested?.tokens_used;
+    const costRaw = full?.cost ?? nested?.cost;
+    const tokens =
+      tokensRaw != null && Number.isFinite(Number(tokensRaw)) ? Math.round(Number(tokensRaw)) : null;
+    return { tokens_used: tokens, cost: costRaw };
+  }, [baselineSnapshot, attempts]);
+
+  const replayUsage = useMemo(() => {
+    const r =
+      attempt?.replay && typeof attempt.replay === "object" && !Array.isArray(attempt.replay)
+        ? (attempt.replay as Record<string, unknown>)
+        : {};
+    const ni = (v: unknown): number | null => {
+      if (v == null || !Number.isFinite(Number(v))) return null;
+      return Math.round(Number(v));
+    };
+    return {
+      input_tokens: ni(r.input_tokens),
+      output_tokens: ni(r.output_tokens),
+      tokens_total: ni(r.tokens_total),
+      used_credits: ni(r.used_credits),
+    };
+  }, [attempt]);
 
   const attemptViolations = Array.isArray(attempt?.violations) ? attempt.violations : [];
   type PolicyRow = {
@@ -876,6 +912,35 @@ export function AttemptDetailOverlay({
     diffConfidenceLabel,
   ]);
   const runContextItems = useMemo(() => {
+    const baselineTok = baselineCapture.tokens_used;
+    const costRaw = baselineCapture.cost;
+    const costFormatted = formatSnapshotCost(
+      typeof costRaw === "number" || typeof costRaw === "string" ? costRaw : undefined
+    );
+    const baselineValue =
+      baselineTok == null && costFormatted === "—"
+        ? "—"
+        : [baselineTok != null ? `${formatSnapshotTokens(baselineTok)} tokens` : null, costFormatted !== "—" ? costFormatted : null]
+            .filter(Boolean)
+            .join(" · ") || "—";
+
+    const { tokens_total, input_tokens, output_tokens, used_credits } = replayUsage;
+    let replayValue = "—";
+    if (tokens_total != null) {
+      replayValue = `${formatSnapshotTokens(tokens_total)} tokens`;
+    } else if (input_tokens != null || output_tokens != null) {
+      replayValue = `${formatSnapshotTokens((input_tokens ?? 0) + (output_tokens ?? 0))} tokens`;
+    }
+    const replayDetailParts: string[] = [];
+    if (input_tokens != null) replayDetailParts.push(`in ${formatSnapshotTokens(input_tokens)}`);
+    if (output_tokens != null) replayDetailParts.push(`out ${formatSnapshotTokens(output_tokens)}`);
+    const replayDetail =
+      replayDetailParts.length > 0
+        ? `Provider tokens · ${replayDetailParts.join(" · ")}`
+        : tokens_total != null
+          ? "Total provider tokens for this replay"
+          : undefined;
+
     const items: Array<{ label: string; value: string; detail?: string }> = [
       {
         label: "Models",
@@ -886,6 +951,21 @@ export function AttemptDetailOverlay({
         label: "Latency",
         value: replayLatencyLabel,
         detail: attempt?.trace_id ? `Trace ${String(attempt.trace_id)}` : "Trace not captured",
+      },
+      {
+        label: "Baseline (capture)",
+        value: baselineValue,
+        detail: "Original Live View snapshot",
+      },
+      {
+        label: "Replay (this attempt)",
+        value: replayValue,
+        detail: replayDetail,
+      },
+      {
+        label: "Replay credits",
+        value: formatReplayCredits(used_credits ?? undefined),
+        detail: "Hosted replay credits when using platform models",
       },
       {
         label: "Eval Coverage",
@@ -906,6 +986,8 @@ export function AttemptDetailOverlay({
     evalTotalCount,
     evalPassCount,
     failedSignals.length,
+    baselineCapture,
+    replayUsage,
   ]);
   const riskItems = useMemo(() => {
     const items: Array<{

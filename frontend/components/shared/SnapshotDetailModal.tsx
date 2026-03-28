@@ -9,8 +9,10 @@ import {
   AlertCircle,
   AlertTriangle,
   CheckCircle2,
+  CircleDollarSign,
   Clock,
   Code2,
+  Coins,
   FileCheck,
   FileText,
   Lock,
@@ -35,6 +37,7 @@ import type {
 import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel";
 import { RequestContextPanel } from "@/components/live-view/RequestContextPanel";
 import { buildNodeRequestOverview } from "@/lib/requestOverview";
+import { formatSnapshotCost, formatSnapshotTokens } from "@/lib/snapshotMetrics";
 
 export interface SnapshotForDetail {
   id: string | number;
@@ -530,7 +533,7 @@ export function SnapshotDetailModal({
 
         <div className="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar">
           <div className="bg-[#030806] p-6 rounded-[24px] mb-10 shadow-inner shrink-0">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               <div className="bg-[#18191e] border border-white/5 rounded-[20px] p-5 flex flex-col items-center justify-center gap-2 hover:border-white/10 transition-colors">
                 <Activity className="w-6 h-6 text-blue-500 mb-1" />
                 <span className="text-sm font-medium text-slate-400">Status</span>
@@ -556,6 +559,26 @@ export function SnapshotDetailModal({
                 <span className="text-sm font-medium text-slate-400">Latency</span>
                 <span className="text-lg font-black text-slate-200">
                   {s.latency_ms != null ? `${s.latency_ms}ms` : "—"}
+                </span>
+              </div>
+              <div className="bg-[#18191e] border border-white/5 rounded-[20px] p-5 flex flex-col items-center justify-center gap-2 hover:border-white/10 transition-colors">
+                <Coins className="w-6 h-6 text-violet-400 mb-1" />
+                <span className="text-sm font-medium text-slate-400">Tokens</span>
+                <span
+                  className="text-lg font-black text-slate-200 tabular-nums"
+                  title={s.tokens_used != null ? String(s.tokens_used) : undefined}
+                >
+                  {formatSnapshotTokens(s.tokens_used)}
+                </span>
+              </div>
+              <div className="bg-[#18191e] border border-white/5 rounded-[20px] p-5 flex flex-col items-center justify-center gap-2 hover:border-white/10 transition-colors">
+                <CircleDollarSign className="w-6 h-6 text-emerald-400/90 mb-1" />
+                <span className="text-sm font-medium text-slate-400">Cost</span>
+                <span
+                  className="text-lg font-black text-slate-200 tabular-nums"
+                  title={s.cost != null && s.cost !== "" ? String(s.cost) : undefined}
+                >
+                  {formatSnapshotCost(s.cost)}
                 </span>
               </div>
             </div>
