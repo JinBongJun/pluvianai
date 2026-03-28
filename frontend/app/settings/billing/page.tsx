@@ -14,6 +14,7 @@ import {
   stripBillingCheckoutParams,
 } from "@/components/billing/paddlePaymentLink";
 import { BillingManageSubscriptionCard } from "@/components/billing/BillingManageSubscriptionCard";
+import { SUPPORT_EMAIL, supportMailtoHref } from "@/lib/supportContact";
 
 type UsageResponse = {
   plan_type: string;
@@ -241,17 +242,23 @@ export default function AccountBillingPage() {
             {showManageSubscription ? (
               <>
                 To cancel or update payment details, use <strong className="text-slate-200">Cancel</strong>{" "}
-                below (Paddle billing portal). For other billing help, contact support via{" "}
-                <a href="/settings/profile" className="text-emerald-300 hover:text-emerald-200 underline">
-                  account settings
+                below (Paddle billing portal). For other billing help, email{" "}
+                <a
+                  href={supportMailtoHref("PluvianAI — Billing support")}
+                  className="text-emerald-300 hover:text-emerald-200 underline"
+                >
+                  {SUPPORT_EMAIL}
                 </a>
                 .
               </>
             ) : (
               <>
-                Need to cancel or billing help? Contact support via{" "}
-                <a href="/settings/profile" className="text-emerald-300 hover:text-emerald-200 underline">
-                  account settings
+                Need to cancel or billing help? Email{" "}
+                <a
+                  href={supportMailtoHref("PluvianAI — Billing support")}
+                  className="text-emerald-300 hover:text-emerald-200 underline"
+                >
+                  {SUPPORT_EMAIL}
                 </a>
                 .
               </>
