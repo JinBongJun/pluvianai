@@ -49,6 +49,12 @@ export default function AccountBillingPage() {
   const currentPlanId = (data?.plan_type || "free").toLowerCase();
   const showManageSubscription =
     currentPlanId === "starter" || currentPlanId === "pro";
+
+  const paidPlanRank = (id: string): number => {
+    if (id === "starter") return 1;
+    if (id === "pro") return 2;
+    return 0;
+  };
   const snapshotsUsed = Number(data?.usage_this_month?.snapshots ?? 0);
   const snapshotsLimit = Number(data?.limits?.snapshots_per_month ?? -1);
   const replayUsed = Number(
@@ -98,6 +104,16 @@ export default function AccountBillingPage() {
     if (!hasToken || upgradeBusy) return;
     setUpgradeBusy(planType);
     try {
+      if (showManageSubscription && (planType === "starter" || planType === "pro")) {
+        await billingAPI.changePlan(planType);
+        toast.showToast("Plan updated. Refreshing billing status...", "success");
+        await Promise.allSettled([
+          mutate("/auth/me/usage"),
+          mutate("/billing/usage"),
+          mutate("/billing/limits"),
+        ]);
+        return;
+      }
       const origin = typeof window !== "undefined" ? window.location.origin : "";
       const successUrl = `${origin}/settings/billing?checkout=success`;
       const cancelUrl = `${origin}/settings/billing?checkout=cancel`;
@@ -274,6 +290,13 @@ export default function AccountBillingPage() {
             const isCurrent = plan.id === currentPlanId;
             const canCheckout = plan.id === "starter" || plan.id === "pro";
             const isContactSales = plan.id === "enterprise";
+            const currentRank = paidPlanRank(currentPlanId);
+            const targetRank = paidPlanRank(plan.id);
+            const isPaidPlanSwitch = showManageSubscription && canCheckout && !isCurrent;
+            const actionLabel =
+              isPaidPlanSwitch && currentRank > targetRank
+                ? "Downgrade"
+                : "Upgrade";
             return (
               <div
                 key={plan.id}
@@ -337,7 +360,11 @@ export default function AccountBillingPage() {
                       disabled={upgradeBusy !== null}
                       className="w-full py-2.5 rounded-xl border border-emerald-500/60 bg-emerald-500 text-[11px] font-bold uppercase tracking-widest text-black hover:bg-emerald-400 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {upgradeBusy === plan.id ? "Opening checkout..." : "Upgrade"}
+                      {upgradeBusy === plan.id
+                        ? showManageSubscription
+                          ? "Updating plan..."
+                          : "Opening checkout..."
+                        : actionLabel}
                     </button>
                   ) : isContactSales ? (
                     <a

@@ -578,3 +578,106 @@ class TestBillingService:
                 result = service.reconcile_paddle_subscriptions(limit=10)
         assert result["status"] == "success"
         assert result["fixed"] == 1
+
+    def test_change_paddle_subscription_plan_upgrade_uses_prorated_immediately(self, db, test_user):
+        sub = Subscription(
+            user_id=test_user.id,
+            plan_id="starter",
+            status="active",
+            paddle_subscription_id="sub_test",
+            paddle_customer_id="ctm_test",
+        )
+        db.add(sub)
+        db.commit()
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_PRICE_ID_STARTER = "pri_st"
+            mock_settings.PADDLE_PRICE_ID_PRO = "pri_pr"
+            service = BillingService(db)
+            service.paddle_available = True
+            with patch.object(
+                service,
+                "_paddle_get",
+                return_value=({"id": "sub_test", "status": "active", "items": []}, None),
+            ):
+                with patch.object(service, "_paddle_patch") as mock_patch:
+                    mock_patch.return_value = (
+                        {
+                            "id": "sub_test",
+                            "status": "active",
+                            "customer_id": "ctm_test",
+                            "items": [{"price": {"id": "pri_pr"}}],
+                            "current_billing_period": {
+                                "starts_at": "2026-01-01T00:00:00Z",
+                                "ends_at": "2026-02-01T00:00:00Z",
+                            },
+                        },
+                        None,
+                    )
+                    with patch("app.services.subscription_service.SubscriptionService") as mock_sub:
+                        mock_sub.return_value.create_or_update_subscription = MagicMock()
+                        result, err = service.change_paddle_subscription_plan(test_user.id, "pro")
+        assert err is None
+        assert result is not None
+        assert result["change_type"] == "upgrade"
+        assert result["proration_billing_mode"] == "prorated_immediately"
+        payload = mock_patch.call_args[0][1]
+        assert payload["proration_billing_mode"] == "prorated_immediately"
+        assert payload["items"][0]["price_id"] == "pri_pr"
+
+    def test_change_paddle_subscription_plan_downgrade_uses_full_next_billing_period(self, db, test_user):
+        sub = Subscription(
+            user_id=test_user.id,
+            plan_id="pro",
+            status="active",
+            paddle_subscription_id="sub_test",
+            paddle_customer_id="ctm_test",
+        )
+        db.add(sub)
+        db.commit()
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_PRICE_ID_STARTER = "pri_st"
+            mock_settings.PADDLE_PRICE_ID_PRO = "pri_pr"
+            service = BillingService(db)
+            service.paddle_available = True
+            with patch.object(
+                service,
+                "_paddle_get",
+                return_value=({"id": "sub_test", "status": "active", "items": []}, None),
+            ):
+                with patch.object(service, "_paddle_patch") as mock_patch:
+                    mock_patch.return_value = (
+                        {
+                            "id": "sub_test",
+                            "status": "active",
+                            "customer_id": "ctm_test",
+                            "items": [{"price": {"id": "pri_st"}}],
+                            "current_billing_period": {},
+                        },
+                        None,
+                    )
+                    with patch("app.services.subscription_service.SubscriptionService") as mock_sub:
+                        mock_sub.return_value.create_or_update_subscription = MagicMock()
+                        result, err = service.change_paddle_subscription_plan(test_user.id, "starter")
+        assert err is None
+        assert result["change_type"] == "downgrade"
+        assert result["proration_billing_mode"] == "full_next_billing_period"
+        payload = mock_patch.call_args[0][1]
+        assert payload["proration_billing_mode"] == "full_next_billing_period"
+
+    def test_change_paddle_subscription_plan_free_user_returns_checkout_required(self, db, test_user):
+        sub = Subscription(
+            user_id=test_user.id,
+            plan_id="free",
+            status="active",
+        )
+        db.add(sub)
+        db.commit()
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            service = BillingService(db)
+            service.paddle_available = True
+            result, err = service.change_paddle_subscription_plan(test_user.id, "pro")
+        assert result is None
+        assert err == "checkout_required"
