@@ -55,6 +55,8 @@ export type ReleaseGateRunOutputSidePanelProps = {
   setHistoryDatePreset: (p: "all" | "24h" | "7d" | "30d") => void;
   historyRefreshing: boolean;
   mutateHistory: () => void;
+  /** Shared with main History tab; used only to detect “default” filters for empty copy. */
+  historyTraceId: string;
   selectedRunId: string | null;
   selectedRunReportLoading: boolean;
   selectHistoryRun: (id: string) => void;
@@ -86,10 +88,16 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
     setHistoryDatePreset,
     historyRefreshing,
     mutateHistory,
+    historyTraceId,
     selectedRunId,
     selectedRunReportLoading,
     selectHistoryRun,
   } = props;
+
+  const historyFiltersAreDefault =
+    historyStatus === "all" &&
+    historyDatePreset === "all" &&
+    !historyTraceId.trim();
 
   return (
             <RailwaySidePanel
@@ -302,13 +310,6 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                           />
                         ))}
                       </div>
-                    ) : nodeHistoryItems.length === 0 ? (
-                      <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
-                        <Flag className="mx-auto mb-2 h-10 w-10 text-slate-600" />
-                        <p className="text-sm text-slate-500">
-                          No retained runs yet for this agent.
-                        </p>
-                      </div>
                     ) : (
                       <>
                         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -406,20 +407,31 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                             </button>
                           </div>
                         </div>
-                        <div className="space-y-2">
-                          {nodeHistoryItems.map(item => (
-                            <HistoryRunRowButton
-                              key={item.id}
-                              item={item}
-                              selected={selectedRunId === item.id}
-                              loading={
-                                selectedRunReportLoading && selectedRunId === item.id
-                              }
-                              onClick={() => selectHistoryRun(String(item.id))}
-                              testId={`rg-node-history-row-${item.id}`}
-                            />
-                          ))}
-                        </div>
+                        {nodeHistoryItems.length === 0 ? (
+                          <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
+                            <Flag className="mx-auto mb-2 h-10 w-10 text-slate-600" />
+                            <p className="text-sm text-slate-500">
+                              {historyFiltersAreDefault
+                                ? "No retained runs yet for this agent."
+                                : "No runs match these filters. Try All or widen the date range."}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {nodeHistoryItems.map(item => (
+                              <HistoryRunRowButton
+                                key={item.id}
+                                item={item}
+                                selected={selectedRunId === item.id}
+                                loading={
+                                  selectedRunReportLoading && selectedRunId === item.id
+                                }
+                                onClick={() => selectHistoryRun(String(item.id))}
+                                testId={`rg-node-history-row-${item.id}`}
+                              />
+                            ))}
+                          </div>
+                        )}
                       </>
                     )}
                   </div>

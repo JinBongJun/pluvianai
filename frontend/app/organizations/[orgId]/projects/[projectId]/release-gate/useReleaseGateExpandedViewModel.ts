@@ -96,7 +96,7 @@ export function useReleaseGateExpandedViewModel({
   const failRateMax = Number(ctx.failRateMax ?? 0);
   const flakyRateMax = Number(ctx.flakyRateMax ?? 0);
   const newModel = ctx.newModel;
-  const modelOverrideEnabled = ctx.modelOverrideEnabled;
+  const modelSource = ctx.modelSource;
   const replayProvider = String(ctx.replayProvider ?? "")
     .trim()
     .toLowerCase();
@@ -110,6 +110,7 @@ export function useReleaseGateExpandedViewModel({
   const isHeavyRepeat = ctx.isHeavyRepeat;
   const canRunValidate = ctx.canRunValidate;
   const keyBlocked = keysCtx.keyBlocked;
+  const keyIssueBlocked = keysCtx.keyIssueBlocked;
   const keyRegistrationMessage = keysCtx.keyRegistrationMessage || "";
   const isValidating = vctx.isValidating;
   const activeJobId = vctx.activeJobId ?? null;
@@ -330,7 +331,7 @@ export function useReleaseGateExpandedViewModel({
         configSourceLabel,
         selectedBaselineCount,
         selectedDataSummary,
-        modelOverrideEnabled,
+        modelSource,
         replayProvider,
         newModel,
         repeatRuns,
@@ -341,6 +342,7 @@ export function useReleaseGateExpandedViewModel({
         isHeavyRepeat,
         canRunValidate,
         keyBlocked,
+        keyIssueBlocked,
         keyRegistrationMessage,
         handleValidate,
         activeJobId,
@@ -371,7 +373,7 @@ export function useReleaseGateExpandedViewModel({
       configSourceLabel,
       selectedBaselineCount,
       selectedDataSummary,
-      modelOverrideEnabled,
+      modelSource,
       replayProvider,
       newModel,
       repeatRuns,
@@ -382,6 +384,7 @@ export function useReleaseGateExpandedViewModel({
       isHeavyRepeat,
       canRunValidate,
       keyBlocked,
+      keyIssueBlocked,
       keyRegistrationMessage,
       handleValidate,
       activeJobId,

@@ -5,6 +5,23 @@ import { orgKeys } from "@/lib/queryKeys";
 import { safeReplace } from "@/lib/navigation";
 
 type Mutate = ScopedMutator;
+
+/**
+ * Revalidate all SWR entries for an org's project list (`orgKeys.projects(orgId, anySearch)`).
+ * Call after creating or updating a project so OrgLayout / project list pages stay in sync without a full reload.
+ */
+export function revalidateOrganizationProjectLists(mutate: Mutate, orgId: string) {
+  return mutate(
+    (key: unknown) =>
+      Array.isArray(key) &&
+      key[0] === "organizations" &&
+      key[1] === "projects" &&
+      key[2] === String(orgId),
+    undefined,
+    { revalidate: true }
+  );
+}
+
 type Toast = {
   showToast: (msg: string, type?: "success" | "error" | "info" | "warning") => void;
 };

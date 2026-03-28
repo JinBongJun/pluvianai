@@ -17,7 +17,7 @@ from app.core.database import get_db, SessionLocal
 from app.core.security import get_current_user
 from app.core.dependencies import get_snapshot_service
 from app.core.permissions import check_project_access, ProjectRole
-from app.core.usage_limits import check_snapshot_limit
+from app.core.usage_limits import check_snapshot_limit, get_limit_status
 from app.models.user import User
 from app.models.snapshot import Snapshot
 from app.models.trajectory_step import TrajectoryStep
@@ -1413,13 +1413,20 @@ async def create_snapshot(
     project = _ensure_project(project_id, current_user, db)
     allowed, err_msg = check_snapshot_limit(db, project.owner_id, getattr(current_user, "is_superuser", False))
     if not allowed:
+        limit_status = get_limit_status(db, project.owner_id, "snapshots")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "SNAPSHOT_PLAN_LIMIT_REACHED",
                 "message": err_msg or "You have reached the monthly snapshot limit for your plan.",
                 "details": {
-                    "upgrade_path": "/settings/subscription",
+                    "plan_type": limit_status.get("plan_type"),
+                    "metric": limit_status.get("metric"),
+                    "current": limit_status.get("current"),
+                    "limit": limit_status.get("limit"),
+                    "remaining": limit_status.get("remaining"),
+                    "reset_at": limit_status.get("reset_at"),
+                    "upgrade_path": "/settings/billing",
                 },
             },
         )

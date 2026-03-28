@@ -60,6 +60,8 @@ export type ReleaseGatePageContextRestSlice = Pick<
   | "handleLoadToolContextFromSnapshots"
   | "selectedSnapshotIdsForRun"
   | "canRunValidate"
+  | "canValidate"
+  | "mutateProjectUserApiKeys"
   | "historyStatus"
   | "setHistoryStatus"
   | "historyTraceId"
@@ -74,6 +76,7 @@ export type ReleaseGatePageContextRestSlice = Pick<
   | "historyItems"
   | "historyTotal"
   | "mutateHistory"
+  | "projectUserApiKeysForUi"
 >;
 
 export function buildReleaseGatePageContextParams(
@@ -81,6 +84,8 @@ export function buildReleaseGatePageContextParams(
   rd: ReleaseGateRunDataDerivationsBundle,
   rest: ReleaseGatePageContextRestSlice
 ): UseReleaseGatePageContextValueParams {
+  const modelOverrideEnabled = lv.modelSource !== "detected";
+  const replayModelMode = lv.modelSource === "hosted" ? "hosted" : "custom";
   return {
     ...rest,
     tab: lv.tab,
@@ -110,10 +115,19 @@ export function buildReleaseGatePageContextParams(
     setFlakyRateMax: lv.setFlakyRateMax,
     newModel: lv.newModel,
     setNewModel: lv.setNewModel,
-    modelOverrideEnabled: lv.modelOverrideEnabled,
-    setModelOverrideEnabled: lv.setModelOverrideEnabled,
+    modelSource: lv.modelSource,
+    setModelSource: lv.setModelSource,
+    modelOverrideEnabled,
+    setModelOverrideEnabled: enabled => lv.setModelSource(enabled ? "hosted" : "detected"),
+    replayModelMode,
+    setReplayModelMode: mode => lv.setModelSource(typeof mode === "function" ? mode(replayModelMode) : mode),
     replayProvider: lv.replayProvider,
     setReplayProvider: lv.setReplayProvider,
+    replayUserApiKeyId: lv.replayUserApiKeyId,
+    setReplayUserApiKeyId: lv.setReplayUserApiKeyId,
+    replayApiKey: lv.replayApiKey,
+    setReplayApiKey: lv.setReplayApiKey,
+    projectUserApiKeysForUi: rest.projectUserApiKeysForUi,
     requestBody: lv.requestBody,
     setRequestBody: lv.setRequestBody,
     requestJsonDraft: lv.requestJsonDraft,

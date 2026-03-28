@@ -6,15 +6,15 @@ CI runs **migrations on an empty PostgreSQL database**, then **`alembic check`**
 
 ### Reproduce CI locally (recommended before merging DB changes)
 
-Use the same URL as CI: `postgresql://agentguard_ci@localhost:5432/pluvianai` (trust auth, empty DB).
+Use the same URL as CI: `postgresql://pluvianai_ci@localhost:5432/pluvianai` (trust auth, empty DB).
 
 **1. Start Postgres 16** (pick one):
 
 - **Docker** (matches CI image):
 
   ```bash
-  docker run --rm -d --name agentguard-ci-pg \
-    -e POSTGRES_USER=agentguard_ci \
+  docker run --rm -d --name pluvianai-ci-pg \
+    -e POSTGRES_USER=pluvianai_ci \
     -e POSTGRES_DB=pluvianai \
     -e POSTGRES_HOST_AUTH_METHOD=trust \
     -p 5432:5432 \
@@ -28,7 +28,7 @@ Use the same URL as CI: `postgresql://agentguard_ci@localhost:5432/pluvianai` (t
 **2. Point the backend at that database and run Alembic** (from repo root or `backend/`):
 
 ```bash
-export DATABASE_URL="postgresql://agentguard_ci@localhost:5432/pluvianai"
+export DATABASE_URL="postgresql://pluvianai_ci@localhost:5432/pluvianai"
 export ENVIRONMENT=development
 cd backend
 python -m pip install -r requirements.txt
@@ -39,7 +39,7 @@ python -m alembic check
 PowerShell:
 
 ```powershell
-$env:DATABASE_URL = "postgresql://agentguard_ci@127.0.0.1:5432/pluvianai"
+$env:DATABASE_URL = "postgresql://pluvianai_ci@127.0.0.1:5432/pluvianai"
 $env:ENVIRONMENT = "development"
 cd backend
 python -m pip install -r requirements.txt
@@ -84,3 +84,12 @@ python -m pytest -c pytest-ci.ini
 ```
 
 See [`tests/README.md`](./tests/README.md) for more on the test layout.
+
+## Billing Webhook Observability
+
+- Prometheus metric: `billing_webhook_events_total{result,event_type}`
+- Result labels: `success`, `ignored`, `duplicate`, `error`
+- Check endpoint: `GET /metrics`
+- Webhook logs include `event_id`, `event_type`, `status`
+- DLQ retry endpoint: `POST /api/v1/billing/webhook/retry/{event_id}`
+- Manual reconcile endpoint: `POST /api/v1/billing/reconcile?limit=200`

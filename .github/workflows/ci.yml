@@ -58,19 +58,19 @@ jobs:
         image: postgres:16-alpine
         env:
           # Loopback-only service on the runner; trust auth avoids embedding any password in this file (secret scanners).
-          POSTGRES_USER: agentguard_ci
+          POSTGRES_USER: pluvianai_ci
           POSTGRES_DB: pluvianai
           POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U agentguard_ci -d pluvianai"
+          --health-cmd "pg_isready -U pluvianai_ci -d pluvianai"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
 
     env:
-      DATABASE_URL: postgresql://agentguard_ci@localhost:5432/pluvianai
+      DATABASE_URL: postgresql://pluvianai_ci@localhost:5432/pluvianai
       ENVIRONMENT: development
       REDIS_URL: redis://127.0.0.1:6379/0
 
@@ -126,3 +126,39 @@ jobs:
           NEXT_TELEMETRY_DISABLED: "1"
           NEXT_PUBLIC_API_URL: "http://127.0.0.1:8000"
         run: npm run build
+
+  release-gate-eval-qualification:
+    name: Backend (Release Gate/Eval qualification)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-test.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-test.txt
+
+      - name: Run Release Gate/Eval qualification suite
+        env:
+          CI: "true"
+        run: |
+          python -m pytest -c pytest-ci.ini \
+            tests/integration/test_release_gate_preflight_guards.py \
+            tests/integration/test_release_gate_overrides_and_export.py \
+            tests/integration/test_release_gate_async_jobs.py \
+            tests/unit/test_release_gate_model_policy.py \
+            tests/unit/test_live_eval_service.py -q

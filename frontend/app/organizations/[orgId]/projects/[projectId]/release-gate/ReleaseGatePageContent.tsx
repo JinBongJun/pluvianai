@@ -19,7 +19,7 @@ export default function ReleaseGatePageContent() {
       page={m.contextValue}
       layout={m.layout}
     >
-      <ReleaseGatePlanLimitedLayout planError={m.planError} gateBodyProps={m.gateBodyProps} />
+      <ReleaseGatePlanLimitedLayout gateBodyProps={m.gateBodyProps} />
     </ReleaseGateProviders>
   );
 }

@@ -133,10 +133,14 @@ class Settings(BaseSettings):
     PADDLE_API_KEY: Optional[str] = None
     PADDLE_WEBHOOK_SECRET: Optional[str] = None
     PADDLE_USE_SANDBOX: bool = True
+    PADDLE_PRICE_ID_STARTER: Optional[str] = None
     PADDLE_PRICE_ID_INDIE: Optional[str] = None
     PADDLE_PRICE_ID_STARTUP: Optional[str] = None
     PADDLE_PRICE_ID_PRO: Optional[str] = None
     PADDLE_PRICE_ID_ENTERPRISE: Optional[str] = None
+    BILLING_WEBHOOK_ALERT_WINDOW_SECONDS: int = 3600
+    BILLING_WEBHOOK_ERROR_RATIO_THRESHOLD: float = 0.10
+    BILLING_WEBHOOK_DUPLICATE_RATIO_THRESHOLD: float = 0.20
 
     # Free Plan Limits
     ENABLE_FREE_PLAN_HARD_LIMIT: bool = False  # If True, Free plan users are blocked when limits are exceeded

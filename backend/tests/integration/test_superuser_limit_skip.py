@@ -43,7 +43,7 @@ class TestSuperuserLimitSkip:
         self, async_client, auth_headers, db, test_user, test_project
     ):
         db.add(Subscription(user_id=test_user.id, plan_type="free", status="active"))
-        # Free cap is 50; seed over cap.
+        # Free cap is 60; seed at cap so non-superusers would be blocked.
         db.add(
             Usage(
                 user_id=test_user.id,

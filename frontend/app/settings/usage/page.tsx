@@ -2,64 +2,55 @@
 
 import useSWR from "swr";
 import AccountLayout from "@/components/layout/AccountLayout";
-import { apiClient } from "@/lib/api/client";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-import { BarChart3, Zap, Database } from "lucide-react";
-
-type UsageResponse = {
-  plan_type: string;
-  limits: Record<string, unknown>;
-  usage_this_month: {
-    snapshots?: number;
-    guard_credits?: number;
-    platform_replay_credits?: number;
-    api_calls?: number;
-    projects_used?: number;
-    api_calls_limit?: number | null;
-  };
-};
-
-const asNumber = (v: unknown, fallback = 0): number => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-};
+import { authAPI } from "@/lib/api/auth";
+import {
+  ACCOUNT_USAGE_FALLBACK_BY_PLAN,
+  ACCOUNT_USAGE_SWR_KEY,
+  accountUsageAsNumber,
+  computeAccountUsageMetrics,
+  usageQuotaPercent,
+} from "@/lib/accountUsage";
+import { BarChart3, Zap, Building2 } from "lucide-react";
+import Link from "next/link";
+import clsx from "clsx";
 
 export default function AccountUsagePage() {
   const hasToken = useRequireAuth();
 
-  const { data, isLoading } = useSWR<UsageResponse>(
-    hasToken ? "/auth/me/usage" : null,
-    async () => {
-      const res = await apiClient.get("/auth/me/usage");
-      return res.data as UsageResponse;
-    }
+  const { data, isLoading } = useSWR(
+    hasToken ? ACCOUNT_USAGE_SWR_KEY : null,
+    () => authAPI.getMyUsage()
   );
 
   const planType = (data?.plan_type || "free").toLowerCase();
   const limits = data?.limits || {};
-  const usage = data?.usage_this_month || {};
+  const usage = (data?.usage_this_month || {}) as Record<string, unknown>;
+  const fb = ACCOUNT_USAGE_FALLBACK_BY_PLAN[planType] ?? ACCOUNT_USAGE_FALLBACK_BY_PLAN.free;
 
-  const snapshotsUsed = usage.snapshots ?? 0;
-  const snapshotsLimit = asNumber(
-    (limits as any).snapshots_per_month,
-    asNumber((limits as any).api_calls_per_month, 10000)
+  const metrics = computeAccountUsageMetrics(data);
+  const snapshotsUsed = metrics?.snapshotsUsed ?? 0;
+  const snapshotsLimit = metrics?.snapshotsLimit ?? 0;
+  const replayUsed = metrics?.replayUsed ?? 0;
+  const replayLimit = metrics?.replayLimit ?? 0;
+  const snapshotsExhausted = metrics?.snapshotsExhausted ?? false;
+  const replayExhausted = metrics?.replayExhausted ?? false;
+  const snapshotsNearLimit = metrics?.snapshotsNearLimit ?? false;
+  const replayNearLimit = metrics?.replayNearLimit ?? false;
+
+  const apiCallsUsed = accountUsageAsNumber(usage.api_calls, 0);
+  const apiCallsLimit = accountUsageAsNumber(
+    usage.api_calls_limit ?? (limits as Record<string, unknown>).api_calls_per_month,
+    10000
   );
 
-  const apiCallsUsed = usage.api_calls ?? 0;
-  const apiCallsLimit = usage.api_calls_limit ?? asNumber((limits as any).api_calls_per_month, 10000);
+  const projectsUsed = accountUsageAsNumber(usage.projects_used, 0);
+  const projectsLimit = accountUsageAsNumber((limits as Record<string, unknown>).projects, fb.projects);
 
-  const projectsUsed = usage.projects_used ?? 0;
-  const projectsLimit = asNumber((limits as any).projects, planType === "free" ? 1 : planType === "pro" ? 10 : -1);
+  const organizationsUsed = accountUsageAsNumber(usage.organizations_used, 0);
+  const organizationsLimit = accountUsageAsNumber((limits as Record<string, unknown>).organizations, fb.organizations);
 
-  const replayUsed = usage.platform_replay_credits ?? usage.guard_credits ?? 0;
-  const replayLimit = asNumber(
-    (limits as any).platform_replay_credits_per_month ??
-      (limits as any).guard_credits_per_month,
-    planType === "free" ? 50 : planType === "pro" ? 10000 : -1
-  );
-
-  const pct = (used: number, limit: number) =>
-    limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+  const pct = usageQuotaPercent;
 
   return (
     <AccountLayout
@@ -71,6 +62,49 @@ export default function AccountUsagePage() {
     >
       <div className="pb-24 relative">
         <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none" />
+
+        <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed relative z-10">
+          BYOK runs do not consume hosted replay credits.
+        </p>
+        {(snapshotsExhausted || replayExhausted || snapshotsNearLimit || replayNearLimit) && (
+          <div
+            className={clsx(
+              "mb-8 rounded-2xl p-4",
+              snapshotsExhausted || replayExhausted
+                ? "border border-rose-500/30 bg-rose-500/10"
+                : "border border-amber-500/30 bg-amber-500/10"
+            )}
+          >
+            <p
+              className={clsx(
+                "text-[11px] font-bold uppercase tracking-widest",
+                snapshotsExhausted || replayExhausted ? "text-rose-200" : "text-amber-200"
+              )}
+            >
+              {snapshotsExhausted || replayExhausted ? "Plan quota exhausted" : "Plan quota warning"}
+            </p>
+            <p className="mt-1 text-xs text-white/90">
+              {snapshotsExhausted || replayExhausted
+                ? snapshotsExhausted && replayExhausted
+                  ? "Snapshots and hosted replay credits are exhausted for this billing period."
+                  : snapshotsExhausted
+                    ? "Snapshots are exhausted for this billing period."
+                    : "Hosted replay credits are exhausted for this billing period."
+                : snapshotsNearLimit && replayNearLimit
+                  ? "Snapshots and hosted replay credits are above 80% usage."
+                  : snapshotsNearLimit
+                    ? "Snapshots are above 80% usage."
+                    : "Hosted replay credits are above 80% usage."}
+              {" "}Switch to BYOK where possible or upgrade plan.
+            </p>
+            <Link
+              href="/settings/billing"
+              className="mt-3 inline-flex rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/20"
+            >
+              Open billing
+            </Link>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16 relative z-10">
           {/* Snapshots */}
@@ -112,7 +146,14 @@ export default function AccountUsagePage() {
                 </div>
                 <div className="h-3 bg-black/40 rounded-full overflow-hidden border border-white/5 shadow-inner">
                   <div
-                    className="h-full bg-emerald-500 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.6)] transition-all duration-1000"
+                    className={clsx(
+                      "h-full rounded-full transition-all duration-1000",
+                      snapshotsExhausted
+                        ? "bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.6)]"
+                        : snapshotsNearLimit
+                          ? "bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.6)]"
+                          : "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.6)]"
+                    )}
                     style={{ width: `${pct(snapshotsUsed, snapshotsLimit)}%` }}
                   />
                 </div>
@@ -159,7 +200,14 @@ export default function AccountUsagePage() {
                 </div>
                 <div className="h-3 bg-black/40 rounded-full overflow-hidden border border-white/5 shadow-inner">
                   <div
-                    className="h-full bg-sky-400 rounded-full shadow-[0_0_15px_rgba(56,189,248,0.6)] transition-all duration-1000"
+                    className={clsx(
+                      "h-full rounded-full transition-all duration-1000",
+                      replayExhausted
+                        ? "bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.6)]"
+                        : replayNearLimit
+                          ? "bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.6)]"
+                          : "bg-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.6)]"
+                    )}
                     style={{ width: `${pct(replayUsed, replayLimit)}%` }}
                   />
                 </div>
@@ -175,7 +223,7 @@ export default function AccountUsagePage() {
             Usage Overview
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
               <div className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2">
                 Api Calls
@@ -187,6 +235,25 @@ export default function AccountUsagePage() {
                     / {apiCallsLimit.toLocaleString()}
                   </span>
                 ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2">
+                <Building2 className="h-4 w-4 text-slate-400" />
+                Organizations
+              </div>
+              <div className="text-3xl font-bold text-white">
+                {organizationsUsed}
+                {organizationsLimit > 0 ? (
+                  <span className="text-slate-500 text-sm font-bold ml-1">
+                    / {organizationsLimit}
+                  </span>
+                ) : (
+                  <span className="text-emerald-500 text-[10px] font-bold uppercase tracking-widest ml-2 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20">
+                    Unlimited
+                  </span>
+                )}
               </div>
             </div>
 

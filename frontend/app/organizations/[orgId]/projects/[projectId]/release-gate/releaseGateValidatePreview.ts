@@ -2,13 +2,15 @@ import { sanitizeReplayBodyOverrides } from "./releaseGateReplayMerge";
 import type { EditableTool } from "./releaseGateEditableTools";
 import { buildOpenAIStyleToolsFromEditableTools } from "./releaseGateEditableTools";
 import { inferProviderFromModelId } from "./releaseGateProviderModel";
-import type { ReplayProvider } from "./releaseGateReplayConstants";
+import type { ReleaseGateModelSource, ReplayProvider } from "./releaseGateReplayConstants";
 import { buildToolContextPayload } from "./releaseGateToolContext";
 
 export type BuildValidateOverridePreviewInput = {
-  modelOverrideEnabled: boolean;
+  modelSource: ReleaseGateModelSource;
   newModel: string;
   replayProvider: ReplayProvider;
+  replayUserApiKeyId?: number | null;
+  replayApiKey?: string;
   requestBody: Record<string, unknown>;
   requestSystemPrompt: string;
   toolsList: EditableTool[];
@@ -30,9 +32,11 @@ export function buildValidateOverridePreview(
   input: BuildValidateOverridePreviewInput
 ): Record<string, unknown> {
   const {
-    modelOverrideEnabled,
+    modelSource,
     newModel,
     replayProvider,
+    replayUserApiKeyId,
+    replayApiKey,
     requestBody,
     requestSystemPrompt,
     toolsList,
@@ -46,16 +50,22 @@ export function buildValidateOverridePreview(
   } = input;
 
   const preview: Record<string, unknown> = {
-    model_source: modelOverrideEnabled ? "platform" : "detected",
+    model_source: "detected",
   };
 
-  if (modelOverrideEnabled) {
+  if (modelSource !== "detected") {
     const trimmedModel = newModel.trim();
     if (trimmedModel) {
       const inferredProvider = inferProviderFromModelId(trimmedModel);
       const effectiveProvider = inferredProvider || replayProvider;
       preview.new_model = trimmedModel;
       preview.replay_provider = effectiveProvider;
+      preview.model_source = modelSource === "hosted" ? "platform" : "detected";
+      if (modelSource === "custom" && replayApiKey?.trim()) {
+        preview.replay_api_key = "[provided]";
+      } else if (modelSource === "custom" && replayUserApiKeyId != null) {
+        preview.replay_user_api_key_id = replayUserApiKeyId;
+      }
     }
   }
 

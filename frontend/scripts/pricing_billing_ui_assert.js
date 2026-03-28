@@ -20,30 +20,15 @@ async function checkLoggedOutLanding(baseUrl) {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
   const result = {
-    free_cta_to_signup_or_login: false,
-    paid_cta_disabled: false,
-    free_href: null,
-    paid_disabled_count: 0,
+    landing_has_pricing_section: false,
+    landing_lists_starter_tier: false,
   };
 
   try {
     await page.goto(`${baseUrl}/`, { waitUntil: "domcontentloaded", timeout: 45000 });
-    const freeLink = page.locator('a[href*="/login?mode=signup"]').first();
-    await freeLink.waitFor({ state: "visible", timeout: 10000 });
-    const href = await freeLink.getAttribute("href");
-    result.free_href = href;
-    result.free_cta_to_signup_or_login = String(href || "").includes("/login?mode=signup");
-
-    const paidButtons = page.getByRole("button", { name: /join waitlist|contact sales/i });
-    const count = await paidButtons.count();
-    let disabledCount = 0;
-    for (let i = 0; i < count; i++) {
-      if (await paidButtons.nth(i).isDisabled()) {
-        disabledCount += 1;
-      }
-    }
-    result.paid_disabled_count = disabledCount;
-    result.paid_cta_disabled = count >= 2 && disabledCount >= 2;
+    result.landing_has_pricing_section = (await page.locator("#pricing").count()) > 0;
+    const body = (await page.locator("body").innerText().catch(() => "")) || "";
+    result.landing_lists_starter_tier = /\bStarter\b/i.test(body);
   } finally {
     await browser.close();
   }
@@ -55,12 +40,10 @@ async function checkLoggedInLandingAndBilling(baseUrl, backendUrl, email, passwo
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1800, height: 1100 } });
   const result = {
-    free_cta_to_org_console: false,
-    billing_free_plan_badge: false,
-    billing_snapshots_ratio: false,
-    billing_platform_credits_ratio: false,
-    billing_free_current_plan: false,
-    billing_paid_preview_only_disabled: false,
+    home_links_to_organizations: false,
+    billing_h1_organization_usage: false,
+    billing_shows_infrastructure_licenses: false,
+    billing_account_managed_cta: false,
     details: {},
   };
 
@@ -68,9 +51,9 @@ async function checkLoggedInLandingAndBilling(baseUrl, backendUrl, email, passwo
     await login(page, baseUrl, email, password);
 
     await page.goto(`${baseUrl}/`, { waitUntil: "domcontentloaded", timeout: 45000 });
-    const freeLink = page.locator('a[href="/organizations"]').first();
-    await freeLink.waitFor({ state: "visible", timeout: 10000 });
-    result.free_cta_to_org_console = true;
+    const orgLink = page.locator('a[href="/organizations"]').first();
+    result.home_links_to_organizations =
+      (await orgLink.count()) > 0 && (await orgLink.first().isVisible());
 
     await page.waitForTimeout(1000);
     let resolvedOrgId = String(orgId || "").trim();
@@ -133,14 +116,6 @@ async function checkLoggedInLandingAndBilling(baseUrl, backendUrl, email, passwo
       waitUntil: "domcontentloaded",
       timeout: 45000,
     });
-    // SWR can populate usage after initial paint; allow a short polling window.
-    for (let i = 0; i < 20; i++) {
-      const hasSnapshotSection = await page.evaluate(() =>
-        (document.body?.innerText || "").includes("Snapshots this month")
-      );
-      if (hasSnapshotSection) break;
-      await page.waitForTimeout(500);
-    }
     const currentUrl = page.url();
     let h1Text = "";
     let bodyTextSample = "";
@@ -161,41 +136,10 @@ async function checkLoggedInLandingAndBilling(baseUrl, backendUrl, email, passwo
       await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => null);
     }
 
-    const freeBadge = page.getByText(/Free plan/i).first();
-    result.billing_free_plan_badge = await freeBadge.isVisible();
-
-    const snapshotsLine = page.getByText(/Snapshots this month/i).first();
-    const snapshotsLineVisible = (await snapshotsLine.count()) > 0 && (await snapshotsLine.isVisible());
-    const snapshotsRatioFound = await page.evaluate(() => {
-      const all = Array.from(document.querySelectorAll("*"));
-      const label = all.find(el => /Snapshots this month/i.test(el.textContent || ""));
-      if (!label) return false;
-      const scopeText =
-        label.closest("div")?.parentElement?.textContent ||
-        label.parentElement?.textContent ||
-        label.textContent ||
-        "";
-      return /\d+\s*\/\s*\d+/.test(scopeText);
-    });
-    result.billing_snapshots_ratio = snapshotsLineVisible && snapshotsRatioFound;
-
-    const creditsLine = page.getByText(/Platform replay credits this month/i).first();
-    const creditsValue = page.getByText(/\d[\d,]*\s*\/\s*\d[\d,]*/).first();
-    result.billing_platform_credits_ratio =
-      (await creditsLine.isVisible()) && (await creditsValue.isVisible());
-
-    const currentPlanBtn = page.getByRole("button", { name: /Current Plan/i }).first();
-    result.billing_free_current_plan = await currentPlanBtn.isVisible();
-
-    const previewButtons = page.getByRole("button", { name: /Preview Only/i });
-    const previewCount = await previewButtons.count();
-    let previewDisabled = 0;
-    for (let i = 0; i < previewCount; i++) {
-      if (await previewButtons.nth(i).isDisabled()) {
-        previewDisabled += 1;
-      }
-    }
-    result.billing_paid_preview_only_disabled = previewCount >= 2 && previewDisabled >= 2;
+    const bodyText = (await page.locator("body").innerText().catch(() => "")) || "";
+    result.billing_h1_organization_usage = /Organization Usage/i.test(h1Text);
+    result.billing_shows_infrastructure_licenses = /Infrastructure Licenses/i.test(bodyText);
+    result.billing_account_managed_cta = /Manage in Account Billing/i.test(bodyText);
     result.details = {
       orgIdUsed: resolvedOrgId,
       tokenPresent: Boolean(cookieHeader),
@@ -207,10 +151,6 @@ async function checkLoggedInLandingAndBilling(baseUrl, backendUrl, email, passwo
       h1Text,
       bodyTextSample,
       screenshotPath,
-      snapshotsLineVisible,
-      snapshotsRatioFound,
-      previewCount,
-      previewDisabled,
     };
   } finally {
     await browser.close();

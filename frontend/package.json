@@ -21,9 +21,12 @@
     "qa:l-m-legal-ux": "node scripts/projects_legal_ux_assert.js",
     "qa:rg-warn-ui": "node scripts/release_gate_warn_ui_assert.js",
     "e2e": "playwright test",
-    "e2e:ui": "playwright test --ui"
+    "e2e:ui": "playwright test --ui",
+    "e2e:quota-matrix": "playwright test tests/org-project-stability.spec.ts tests/authenticated-tool-flow.spec.ts",
+    "e2e:release-gate-matrix": "playwright test tests/release-gate-ui-smoke.spec.ts tests/authenticated-tool-flow.spec.ts"
   },
   "dependencies": {
+    "@paddle/paddle-js": "^1.6.2",
     "@sentry/nextjs": "^10.32.1",
     "autoprefixer": "^10.4.16",
     "axios": "^1.13.6",

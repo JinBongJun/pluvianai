@@ -103,6 +103,14 @@ rate_limit_exceeded_total = Counter(
     registry=registry,
 )
 
+# Billing/Webhook Metrics
+billing_webhook_events_total = Counter(
+    "billing_webhook_events_total",
+    "Total number of billing webhook events by result and type",
+    ["result", "event_type"],
+    registry=registry,
+)
+
 # Resilience Metrics
 retry_attempts_total = Counter("retry_attempts_total", "Total number of retry attempts", ["service"], registry=registry)
 
@@ -163,8 +171,19 @@ def update_app_info(version: str, environment: str):
     )
 
 
+def initialize_billing_webhook_metrics() -> None:
+    """Pre-create billing webhook label sets so the metric is visible before first event."""
+    for result in ("success", "ignored", "duplicate", "error"):
+        billing_webhook_events_total.labels(result=result, event_type="unknown").inc(0)
+
+
 def get_metrics_response() -> Response:
     """Generate Prometheus metrics response"""
+    try:
+        initialize_billing_webhook_metrics()
+    except Exception:
+        # Metrics endpoint should degrade gracefully and must not affect app startup paths.
+        pass
     return Response(content=generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
 
 

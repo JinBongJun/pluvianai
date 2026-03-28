@@ -55,15 +55,16 @@ function isPinnedAnthropicModelId(modelId: unknown): boolean {
 }
 
 export function buildExpandedMapOverrideSummary(
-  modelOverrideEnabled: boolean,
+  modelSource: "detected" | "hosted" | "custom",
   replayProvider: string,
   newModel: string
 ): string {
-  if (!modelOverrideEnabled) return "Using detected model";
+  if (modelSource === "detected") return "Using detected model";
+  if (modelSource === "hosted") return "Using hosted model";
   if (replayProvider === "anthropic") {
-    return isPinnedAnthropicModelId(newModel) ? "Pinned override" : "Custom override";
+    return isPinnedAnthropicModelId(newModel) ? "Pinned BYOK model" : "Custom BYOK model";
   }
-  return "Override active";
+  return "Custom BYOK model";
 }
 
 export function buildExpandedMapLastRunStatusLabel(input: {
@@ -122,7 +123,7 @@ export type BuildReleaseGateMapRgDetailsInput = {
   configSourceLabel: string;
   selectedBaselineCount: number;
   selectedDataSummary: string;
-  modelOverrideEnabled: boolean;
+  modelSource: "detected" | "hosted" | "custom";
   replayProvider: string;
   newModel: string;
   repeatRuns: number;
@@ -133,6 +134,7 @@ export type BuildReleaseGateMapRgDetailsInput = {
   isHeavyRepeat: boolean;
   canRunValidate: boolean;
   keyBlocked: boolean;
+  keyIssueBlocked: boolean;
   keyRegistrationMessage: string;
   handleValidate: () => void;
   activeJobId: string | null;
@@ -170,6 +172,7 @@ export type ReleaseGateMapRgDetails = {
     isHeavyRepeat: boolean;
     canRunValidate: boolean;
     keyBlocked: boolean;
+    keyIssueBlocked: boolean;
     keyRegistrationMessage: string;
     isValidating: boolean;
     handleValidate: () => void;
@@ -177,7 +180,7 @@ export type ReleaseGateMapRgDetails = {
     cancelRequested: boolean;
     handleCancel: (() => void) | undefined;
     handleRepeatSelect: (runs: number) => void;
-    modelOverrideEnabled: boolean;
+    modelSource: "detected" | "hosted" | "custom";
     openSettings: () => void;
   };
 };
@@ -194,7 +197,7 @@ export function buildReleaseGateMapRgDetails(
   const samplingSummary = buildExpandedMapSamplingSummary(p.requestBody);
   const toolsSummary = buildExpandedMapToolsSummary(toolsCount);
   const overrideSummary = buildExpandedMapOverrideSummary(
-    p.modelOverrideEnabled,
+    p.modelSource,
     p.replayProvider,
     p.newModel
   );
@@ -239,6 +242,7 @@ export function buildReleaseGateMapRgDetails(
       isHeavyRepeat: p.isHeavyRepeat,
       canRunValidate: p.canRunValidate,
       keyBlocked: p.keyBlocked,
+      keyIssueBlocked: p.keyIssueBlocked,
       keyRegistrationMessage: p.keyRegistrationMessage,
       isValidating: p.isValidating,
       handleValidate: p.handleValidate,
@@ -246,7 +250,7 @@ export function buildReleaseGateMapRgDetails(
       cancelRequested: p.cancelRequested,
       handleCancel: p.handleCancelActiveJob,
       handleRepeatSelect: p.handleRepeatSelect,
-      modelOverrideEnabled: p.modelOverrideEnabled,
+      modelSource: p.modelSource,
       openSettings: p.openSettings,
     },
   };

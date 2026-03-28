@@ -166,3 +166,20 @@ export function extractSystemPromptFromPayload(payload: Record<string, unknown> 
   }
   return "";
 }
+
+/** System prompt for editing — preserves leading/trailing spaces (unlike {@link extractSystemPromptFromPayload}). */
+export function extractSystemPromptRawFromPayload(payload: Record<string, unknown> | null): string {
+  if (!payload) return "";
+  const direct = payload.system_prompt;
+  if (typeof direct === "string") return direct;
+  const msgs = payload.messages;
+  if (!Array.isArray(msgs)) return "";
+  for (const msg of msgs) {
+    if (!msg || typeof msg !== "object") continue;
+    const m = msg as Record<string, unknown>;
+    if (m.role !== "system") continue;
+    const content = m.content;
+    if (typeof content === "string") return content;
+  }
+  return "";
+}

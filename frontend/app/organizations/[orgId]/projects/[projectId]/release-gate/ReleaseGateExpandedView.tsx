@@ -39,6 +39,7 @@ export function ReleaseGateExpandedView() {
           agents={m.agents}
           agentsLoaded={m.agentsLoaded}
           onSelectAgent={m.onMapSelectAgent}
+          projectId={m.projectId}
           projectName={m.projectName}
           selectedNodeId={m.agentId || null}
           rgDetails={m.rgDetails}
@@ -123,6 +124,7 @@ export function ReleaseGateExpandedView() {
               setHistoryDatePreset={m.setHistoryDatePreset}
               historyRefreshing={m.historyRefreshing}
               mutateHistory={m.mutateHistory}
+              historyTraceId={m.historyTraceId}
               selectedRunId={m.selectedRunId}
               selectedRunReportLoading={m.selectedRunReportLoading}
               selectHistoryRun={m.selectHistoryRun}

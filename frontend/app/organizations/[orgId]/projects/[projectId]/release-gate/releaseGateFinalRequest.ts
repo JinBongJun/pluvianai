@@ -2,6 +2,7 @@ import {
   applyBodyOverridesToRequestBody,
   mergeReplayBodyOverridesForSnapshot,
 } from "./releaseGateReplayMerge";
+import type { ReleaseGateModelSource } from "./releaseGateReplayConstants";
 import {
   applySystemPromptToBody,
   asPayloadObject,
@@ -14,7 +15,7 @@ export function buildFinalCandidateRequest(options: {
   nodeBasePayload: Record<string, unknown> | null;
   requestBody: Record<string, unknown>;
   requestSystemPrompt: string;
-  modelOverrideEnabled: boolean;
+  modelSource: ReleaseGateModelSource;
   newModel: string;
   /** Merged after requestBody; wins on conflict. Does not replace messages/user text (sanitized). */
   requestBodyOverrides?: Record<string, unknown> | null;
@@ -29,7 +30,7 @@ export function buildFinalCandidateRequest(options: {
     nodeBasePayload,
     requestBody,
     requestSystemPrompt,
-    modelOverrideEnabled,
+    modelSource,
     newModel,
     requestBodyOverrides,
     requestBodyOverridesBySnapshotId,
@@ -43,7 +44,7 @@ export function buildFinalCandidateRequest(options: {
 
   let finalReq: Record<string, unknown> = JSON.parse(JSON.stringify(baseRequest || {}));
 
-  if (modelOverrideEnabled && newModel.trim()) {
+  if (modelSource !== "detected" && newModel.trim()) {
     finalReq.model = newModel.trim();
   }
 

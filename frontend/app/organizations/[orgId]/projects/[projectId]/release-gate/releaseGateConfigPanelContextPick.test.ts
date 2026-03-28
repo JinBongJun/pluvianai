@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { ReleaseGateKeysContextValue } from "./ReleaseGateKeysContext";
 import { pickReleaseGateConfigPanelContext } from "./releaseGateConfigPanelContextPick";
 import type { ReleaseGatePageContextValue } from "./releaseGatePageContext.types";
 import type { ReleaseGateValidateRunContextValue } from "./ReleaseGateValidateRunContext";
@@ -13,6 +14,16 @@ function vctxBase(overrides: Partial<ReleaseGateValidateRunContextValue> = {}): 
     handleCancelActiveJob: undefined,
     error: "",
     result: null,
+    ...overrides,
+  };
+}
+
+function kctxBase(overrides: Partial<ReleaseGateKeysContextValue> = {}): ReleaseGateKeysContextValue {
+  return {
+    keyBlocked: false,
+    keyIssueBlocked: false,
+    keyRegistrationMessage: "",
+    missingProviderKeyDetails: [],
     ...overrides,
   };
 }
@@ -43,10 +54,21 @@ function ctxPickFixture(
     setFlakyRateMax: () => {},
     newModel: "",
     setNewModel: () => {},
+    modelSource: "detected",
+    setModelSource: () => {},
     modelOverrideEnabled: false,
     setModelOverrideEnabled: () => {},
+    replayModelMode: "hosted",
+    setReplayModelMode: () => {},
     replayProvider: "openai",
     setReplayProvider: () => {},
+    replayUserApiKeyId: null,
+    setReplayUserApiKeyId: () => {},
+    replayApiKey: "",
+    setReplayApiKey: () => {},
+    projectUserApiKeysForUi: [],
+    canValidate: true,
+    mutateProjectUserApiKeys: async () => undefined,
     requestBody: {},
     setRequestBody: () => {},
     requestBodyJson: "{}",
@@ -113,9 +135,9 @@ function ctxPickFixture(
 describe("pickReleaseGateConfigPanelContext", () => {
   it("sets runLocked when validating or job active", () => {
     const ctx = ctxPickFixture();
-    expect(pickReleaseGateConfigPanelContext(ctx, vctxBase()).runLocked).toBe(false);
-    expect(pickReleaseGateConfigPanelContext(ctx, vctxBase({ isValidating: true })).runLocked).toBe(true);
-    expect(pickReleaseGateConfigPanelContext(ctx, vctxBase({ activeJobId: "job-1" })).runLocked).toBe(
+    expect(pickReleaseGateConfigPanelContext(ctx, vctxBase(), kctxBase()).runLocked).toBe(false);
+    expect(pickReleaseGateConfigPanelContext(ctx, vctxBase({ isValidating: true }), kctxBase()).runLocked).toBe(true);
+    expect(pickReleaseGateConfigPanelContext(ctx, vctxBase({ activeJobId: "job-1" }), kctxBase()).runLocked).toBe(
       true
     );
   });
@@ -124,20 +146,20 @@ describe("pickReleaseGateConfigPanelContext", () => {
     const ctx = ctxPickFixture({
       baselineSeedSnapshot: { id: 7 },
     });
-    const p = pickReleaseGateConfigPanelContext(ctx, vctxBase());
+    const p = pickReleaseGateConfigPanelContext(ctx, vctxBase(), kctxBase());
     expect(p.representativeBaselineId).toBe("7");
     expect(p.baselineSeedSnapshotForOverview).toEqual({ id: 7 });
   });
 
   it("defaults thresholdPreset when missing on context", () => {
     const ctx = ctxPickFixture({ thresholdPreset: undefined });
-    const p = pickReleaseGateConfigPanelContext(ctx, vctxBase());
+    const p = pickReleaseGateConfigPanelContext(ctx, vctxBase(), kctxBase());
     expect(p.thresholdPreset).toBe("default");
   });
 
   it("coerces projectId and repeatRuns", () => {
     const ctx = ctxPickFixture({ projectId: 0, repeatRuns: 3 });
-    const p = pickReleaseGateConfigPanelContext(ctx, vctxBase());
+    const p = pickReleaseGateConfigPanelContext(ctx, vctxBase(), kctxBase());
     expect(p.projectId).toBe(0);
     expect(p.repeatRuns).toBe(3);
   });

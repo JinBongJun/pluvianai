@@ -7,6 +7,7 @@ import {
 
 function base(): ReleaseGateValidateAsyncPayloadInput {
   return {
+    modelSource: "detected",
     modelOverrideEnabled: false,
     newModel: "",
     replayProvider: "openai",
@@ -71,18 +72,92 @@ describe("buildReleaseGateValidateAsyncPayload", () => {
     expect(r.payload.dataset_ids).toEqual(["d1"]);
   });
 
-  it("adds platform override fields when enabled", () => {
+  it("uses platform model_source for hosted quick-pick ids", () => {
     const r = buildReleaseGateValidateAsyncPayload({
       ...base(),
+      modelSource: "hosted",
       modelOverrideEnabled: true,
-      newModel: "  gpt-x  ",
+      newModel: "  claude-haiku-4-5-20251001  ",
       replayProvider: "anthropic",
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.payload.model_source).toBe("platform");
-    expect(r.payload.new_model).toBe("gpt-x");
+    expect(r.payload.new_model).toBe("claude-haiku-4-5-20251001");
     expect(r.payload.replay_provider).toBe("anthropic");
+  });
+
+  it("uses detected model_source for custom (non-hosted) ids", () => {
+    const r = buildReleaseGateValidateAsyncPayload({
+      ...base(),
+      modelSource: "custom",
+      modelOverrideEnabled: true,
+      newModel: "gpt-4o",
+      replayProvider: "openai",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.payload.model_source).toBe("detected");
+    expect(r.payload.new_model).toBe("gpt-4o");
+  });
+
+  it("uses detected for BYOK even when model id matches hosted list (explicit custom mode)", () => {
+    const r = buildReleaseGateValidateAsyncPayload({
+      ...base(),
+      modelSource: "custom",
+      modelOverrideEnabled: true,
+      newModel: "gpt-4o-mini",
+      replayProvider: "openai",
+      replayUserApiKeyId: 9,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.payload.model_source).toBe("detected");
+    expect(r.payload.replay_user_api_key_id).toBe(9);
+  });
+
+  it("returns error when hosted mode but model is not a hosted quick-pick", () => {
+    const r = buildReleaseGateValidateAsyncPayload({
+      ...base(),
+      modelSource: "hosted",
+      modelOverrideEnabled: true,
+      newModel: "gpt-4o",
+      replayProvider: "openai",
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toContain("Hosted mode");
+  });
+
+  it("includes replay_user_api_key_id for detected custom runs when selected", () => {
+    const r = buildReleaseGateValidateAsyncPayload({
+      ...base(),
+      modelSource: "custom",
+      modelOverrideEnabled: true,
+      newModel: "gpt-4o",
+      replayProvider: "openai",
+      replayUserApiKeyId: 42,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.payload.model_source).toBe("detected");
+    expect(r.payload.replay_user_api_key_id).toBe(42);
+  });
+
+  it("includes replay_api_key for direct custom BYOK runs", () => {
+    const r = buildReleaseGateValidateAsyncPayload({
+      ...base(),
+      modelSource: "custom",
+      modelOverrideEnabled: true,
+      newModel: "gpt-4o",
+      replayProvider: "openai",
+      replayApiKey: "  sk-test-direct  ",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.payload.model_source).toBe("detected");
+    expect(r.payload.replay_api_key).toBe("sk-test-direct");
+    expect(r.payload.replay_user_api_key_id).toBeUndefined();
   });
 
   it("returns error when tool parameters JSON is invalid", () => {

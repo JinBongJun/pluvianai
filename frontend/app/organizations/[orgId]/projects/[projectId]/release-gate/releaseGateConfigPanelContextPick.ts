@@ -1,4 +1,5 @@
 import { toReplayProvider } from "./releaseGateConfigPanelHelpers";
+import type { ReleaseGateKeysContextValue } from "./ReleaseGateKeysContext";
 import type { ReleaseGatePageContextValue } from "./releaseGatePageContext.types";
 import type { ReleaseGateValidateRunContextValue } from "./ReleaseGateValidateRunContext";
 
@@ -10,7 +11,8 @@ export type ReleaseGateConfigPanelContextSlice = ReturnType<typeof pickReleaseGa
  */
 export function pickReleaseGateConfigPanelContext(
   ctx: ReleaseGatePageContextValue,
-  vctx: ReleaseGateValidateRunContextValue
+  vctx: ReleaseGateValidateRunContextValue,
+  kctx: ReleaseGateKeysContextValue
 ) {
   const baselineSeedSnapshot = ctx.baselineSeedSnapshot;
   const representativeBaselineId =
@@ -28,10 +30,25 @@ export function pickReleaseGateConfigPanelContext(
     setFlakyRateMax: ctx.setFlakyRateMax,
     newModel: ctx.newModel,
     setNewModel: ctx.setNewModel,
+    modelSource: ctx.modelSource,
+    setModelSource: ctx.setModelSource,
     modelOverrideEnabled: ctx.modelOverrideEnabled,
     setModelOverrideEnabled: ctx.setModelOverrideEnabled,
+    replayModelMode: ctx.replayModelMode,
+    setReplayModelMode: ctx.setReplayModelMode,
     replayProvider: toReplayProvider(ctx.replayProvider),
     setReplayProvider: ctx.setReplayProvider,
+    replayUserApiKeyId: ctx.replayUserApiKeyId,
+    setReplayUserApiKeyId: ctx.setReplayUserApiKeyId,
+    replayApiKey: ctx.replayApiKey,
+    setReplayApiKey: ctx.setReplayApiKey,
+    projectUserApiKeysForUi: ctx.projectUserApiKeysForUi,
+    canValidate: ctx.canValidate,
+    mutateProjectUserApiKeys: ctx.mutateProjectUserApiKeys,
+    keyBlocked: kctx.keyBlocked,
+    keyIssueBlocked: kctx.keyIssueBlocked,
+    keyRegistrationMessage: kctx.keyRegistrationMessage,
+    missingProviderKeyDetails: kctx.missingProviderKeyDetails,
     requestBody: ctx.requestBody,
     setRequestBody: ctx.setRequestBody,
     requestBodyJson: ctx.requestBodyJson,

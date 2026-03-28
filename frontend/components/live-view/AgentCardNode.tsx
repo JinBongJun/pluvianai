@@ -54,7 +54,7 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
           if (Boolean((rgConfig as any)?.cancelRequested)) return "Canceling…";
           return "Run in progress.";
         }
-        if (rgConfig.keyBlocked && !rgConfig.modelOverrideEnabled) {
+        if (rgConfig.keyIssueBlocked) {
           return String(
             rgConfig.keyRegistrationMessage || "Run blocked: API key not registered."
           ).trim();

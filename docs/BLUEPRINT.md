@@ -500,6 +500,7 @@ Organization (조직)
 - 📋 Shadow testing (실트래픽 기반 후보 모델 검증)
 - 📋 Self-Hosted 옵션
 - 📋 Advanced Analytics
+- 📋 Billing hardening (DLQ/retry/reconcile/ops runbook)
 
 ---
 

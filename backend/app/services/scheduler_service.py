@@ -63,6 +63,14 @@ class SchedulerService:
             name="Hourly Health Check",
             replace_existing=True,
         )
+        # Schedule billing reconciliation: Run hourly at :15
+        self.scheduler.add_job(
+            self.run_billing_reconciliation,
+            trigger=CronTrigger(minute=15),
+            id="billing_reconciliation_hourly",
+            name="Hourly Billing Reconciliation",
+            replace_existing=True,
+        )
 
         # Schedule infrastructure cost check: Run daily at 9 AM UTC
         self.scheduler.add_job(
@@ -106,6 +114,7 @@ class SchedulerService:
         logger.info("  - Drift Detection: Daily at 2:00 AM UTC")
         logger.info("  - Cost Anomaly Detection: Daily at 3:00 AM UTC")
         logger.info("  - Health Check: Hourly")
+        logger.info("  - Billing Reconciliation: Hourly at :15")
         logger.info("  - Infrastructure Cost Check: Daily at 9:00 AM UTC")
         logger.info("  - Data Lifecycle Cleanup: Daily at 4:00 AM UTC")
         logger.info("  - Monthly Usage Reset: 1st of month at 1:00 AM UTC")
@@ -244,6 +253,21 @@ class SchedulerService:
                 logger.info("Health check completed: System healthy")
         except Exception as e:
             logger.error(f"Error in scheduled health check: {str(e)}")
+        finally:
+            db.close()
+
+    async def run_billing_reconciliation(self):
+        """Reconcile local subscriptions with Paddle hourly."""
+        logger.info("Starting scheduled billing reconciliation...")
+        db: Session = SessionLocal()
+        try:
+            from app.services.billing_service import BillingService
+
+            billing = BillingService(db)
+            result = billing.reconcile_paddle_subscriptions(limit=500)
+            logger.info("Scheduled billing reconciliation result: %s", result)
+        except Exception as e:
+            logger.error(f"Error in scheduled billing reconciliation: {str(e)}", exc_info=True)
         finally:
             db.close()
 

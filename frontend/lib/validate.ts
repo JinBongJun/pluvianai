@@ -1,5 +1,6 @@
 // lib/validate.ts
 import { z } from "zod";
+import { logger } from "@/lib/logger";
 
 export const validateEmail = (email: string): string | null => {
   if (!email) return "Email is required";
@@ -54,9 +55,8 @@ export const validateArrayResponse = <T>(
       try {
         validated.push(schema.parse(item));
       } catch (error) {
-        // Skip invalid items but log in development
         if (process.env.NODE_ENV === "development") {
-          console.warn(`[Validation] Skipping invalid item from ${endpoint}:`, error);
+          logger.warn(`[Validation] Skipping invalid item from ${endpoint}`, { error });
         }
       }
     }
@@ -64,7 +64,7 @@ export const validateArrayResponse = <T>(
     return validated;
   } catch (error) {
     if (process.env.NODE_ENV === "development") {
-      console.error(`[Validation] Failed to validate array response from ${endpoint}:`, error);
+      logger.error(`[Validation] Failed to validate array response from ${endpoint}`, error);
     }
     return [];
   }

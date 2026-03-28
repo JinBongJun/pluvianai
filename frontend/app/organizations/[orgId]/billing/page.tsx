@@ -9,6 +9,8 @@ import { orgKeys } from "@/lib/queryKeys";
 import { useToast } from "@/components/ToastContainer";
 import { useRouter } from "next/navigation";
 import { Zap, Activity, Database, ShieldCheck, CheckCircle2, BarChart3 } from "lucide-react";
+import Link from "next/link";
+import clsx from "clsx";
 
 export default function BillingPage() {
   const { orgId } = useOrgProjectParams();
@@ -63,19 +65,48 @@ export default function BillingPage() {
 
   const effectiveUsage = myUsage || fallbackUsage;
 
-  const currentPlanId = org?.plan || "free";
+  const currentPlanId = String(effectiveUsage?.plan_type || org?.plan || "free").toLowerCase();
 
   // Org-scoped usage view – limits come from account-level plan;
   // we only need light defaults here for visualization.
   const usageLimits = {
-    free: { calls: 10000, projects: 1, platformReplayCredits: 50, teamMembers: 3 },
-    pro: { calls: 100000, projects: 10, platformReplayCredits: 10000, teamMembers: 5 },
-    enterprise: { calls: -1, projects: -1, platformReplayCredits: -1, teamMembers: -1 },
+    free: {
+      calls: 10000,
+      snapshots: 10_000,
+      projects: 2,
+      platformReplayCredits: 60,
+      teamMembers: 3,
+    },
+    starter: {
+      calls: 50_000,
+      snapshots: 50_000,
+      projects: 8,
+      platformReplayCredits: 600,
+      teamMembers: 5,
+    },
+    pro: {
+      calls: 200000,
+      snapshots: 200_000,
+      projects: 30,
+      platformReplayCredits: 3_000,
+      teamMembers: 5,
+    },
+    enterprise: {
+      calls: -1,
+      snapshots: -1,
+      projects: -1,
+      platformReplayCredits: -1,
+      teamMembers: -1,
+    },
   };
 
   const limitData = usageLimits[currentPlanId as keyof typeof usageLimits] || usageLimits.free;
 
-  const callsUsed = org?.calls7d || 0; // Ideally backend should provide monthly usage, defaulting to 7d for demo
+  const monthlyCallsUsedRaw = effectiveUsage?.usage_this_month?.api_calls;
+  const hasMonthlyCalls = typeof monthlyCallsUsedRaw === "number";
+  const callsUsed = hasMonthlyCalls ? Number(monthlyCallsUsedRaw) : (org?.calls7d || 0);
+  const callsLimit =
+    (effectiveUsage?.limits?.api_calls_per_month as number | undefined) ?? limitData.calls;
   const projectsUsed = org?.projects || 0;
   const platformReplayCreditsUsed =
     effectiveUsage?.usage_this_month?.platform_replay_credits ??
@@ -87,15 +118,29 @@ export default function BillingPage() {
     limitData.platformReplayCredits;
   const snapshotsUsed = effectiveUsage?.usage_this_month?.snapshots ?? 0;
   const snapshotsLimit =
-    (effectiveUsage?.limits?.snapshots_per_month as number | undefined) ?? limitData.calls;
+    (effectiveUsage?.limits?.snapshots_per_month as number | undefined) ?? limitData.snapshots;
+  const snapshotsExhausted = snapshotsLimit > 0 && snapshotsUsed >= snapshotsLimit;
+  const replayExhausted =
+    platformReplayCreditsLimit > 0 && platformReplayCreditsUsed >= platformReplayCreditsLimit;
+  const snapshotsNearLimit =
+    snapshotsLimit > 0 && !snapshotsExhausted && (snapshotsUsed / snapshotsLimit) * 100 >= 80;
+  const replayNearLimit =
+    platformReplayCreditsLimit > 0 &&
+    !replayExhausted &&
+    (platformReplayCreditsUsed / platformReplayCreditsLimit) * 100 >= 80;
 
-  const callsPercent = limitData.calls > 0 ? Math.min(100, (callsUsed / limitData.calls) * 100) : 0;
+  const callsPercent =
+    hasMonthlyCalls && callsLimit > 0 ? Math.min(100, (callsUsed / callsLimit) * 100) : 0;
   const projectsPercent =
     limitData.projects > 0 ? Math.min(100, (projectsUsed / limitData.projects) * 100) : 0;
   const platformReplayCreditsPercent =
     platformReplayCreditsLimit > 0
       ? Math.min(100, (platformReplayCreditsUsed / platformReplayCreditsLimit) * 100)
       : 0;
+  const orgAny = org as any;
+  const teamMembersUsedRaw =
+    orgAny?.member_count ?? orgAny?.memberCount ?? orgAny?.members_count ?? orgAny?.membersCount;
+  const teamMembersUsed = typeof teamMembersUsedRaw === "number" ? teamMembersUsedRaw : null;
 
   const plans = [
     {
@@ -105,27 +150,40 @@ export default function BillingPage() {
       period: "/month",
       desc: "For teams getting started with Live View and Release Gate during the MVP.",
       features: [
-        "1 active project",
+        "1 organization",
+        "2 active projects",
         "10,000 snapshots per month",
-        "50 Release Gate runs per month",
-        "Use your own provider keys anytime",
-        "30-day trace retention",
+        "60 hosted replay credits per month",
       ],
       current: currentPlanId === "free",
     },
     {
-      id: "pro",
-      name: "Pro",
+      id: "starter",
+      name: "Starter",
       price: "$49",
       period: "/month",
-      desc: "For teams that need higher hosted replay budgets, more retention, and team access.",
+      desc: "For teams scaling validation volume with predictable monthly limits.",
       features: [
-        "10 active projects",
-        "10,000 platform replay credits per month",
-        "30-day trace retention",
-        "Priority support",
+        "3 organizations",
+        "8 active projects",
+        "50,000 snapshots per month",
+        "600 hosted replay credits per month",
       ],
-      current: false,
+      current: currentPlanId === "starter",
+    },
+    {
+      id: "pro",
+      name: "Pro",
+      price: "$129",
+      period: "/month",
+      desc: "For teams running higher-throughput validation and release workflows.",
+      features: [
+        "10 organizations",
+        "30 active projects",
+        "200,000 snapshots per month",
+        "3,000 hosted replay credits per month",
+      ],
+      current: currentPlanId === "pro",
     },
     {
       id: "enterprise",
@@ -171,6 +229,48 @@ export default function BillingPage() {
             <p className="text-slate-400 font-bold uppercase tracking-widest text-sm max-w-2xl leading-relaxed">
               View usage for this organization&apos;s projects. For account-wide quotas and billing, use the Account Usage and Billing pages.
             </p>
+          <p className="text-slate-500 text-xs font-semibold uppercase tracking-widest mt-4 max-w-2xl leading-relaxed">
+            BYOK runs do not consume hosted replay credits.
+          </p>
+          {(snapshotsExhausted || replayExhausted || snapshotsNearLimit || replayNearLimit) && (
+            <div
+              className={clsx(
+                "mt-4 rounded-2xl p-4 max-w-3xl",
+                snapshotsExhausted || replayExhausted
+                  ? "border border-rose-500/30 bg-rose-500/10"
+                  : "border border-amber-500/30 bg-amber-500/10"
+              )}
+            >
+              <p
+                className={clsx(
+                  "text-[11px] font-bold uppercase tracking-widest",
+                  snapshotsExhausted || replayExhausted ? "text-rose-200" : "text-amber-200"
+                )}
+              >
+                {snapshotsExhausted || replayExhausted ? "Plan quota exhausted" : "Plan quota warning"}
+              </p>
+              <p className="mt-1 text-xs text-white/90">
+                {snapshotsExhausted || replayExhausted
+                  ? snapshotsExhausted && replayExhausted
+                    ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and hosted replay credits (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}) are exhausted.`
+                    : snapshotsExhausted
+                      ? `Snapshots are exhausted (${snapshotsUsed}/${snapshotsLimit}).`
+                      : `Hosted replay credits are exhausted (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}).`
+                  : snapshotsNearLimit && replayNearLimit
+                    ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and hosted replay credits (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}) are above 80%.`
+                    : snapshotsNearLimit
+                      ? `Snapshots are above 80% (${snapshotsUsed}/${snapshotsLimit}).`
+                      : `Hosted replay credits are above 80% (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}).`}{" "}
+                Upgrade in account billing or run BYOK where supported.
+              </p>
+              <Link
+                href="/settings/billing"
+                className="mt-3 inline-flex rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/20"
+              >
+                Open account billing
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Telemetry Runway (Usage Summary) */}
@@ -195,7 +295,7 @@ export default function BillingPage() {
                       Validations Executed
                     </h3>
                     <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">
-                      Rolling 30-Day Limit
+                      {hasMonthlyCalls ? "Rolling 30-Day Limit" : "Recent 7-Day Activity"}
                     </p>
                   </div>
                 </div>
@@ -206,9 +306,9 @@ export default function BillingPage() {
                     <span className="text-2xl font-black text-white">
                       {callsUsed.toLocaleString()}
                     </span>
-                    {limitData.calls > 0 ? (
+                    {callsLimit > 0 ? (
                       <span className="text-slate-500 text-sm font-bold ml-1">
-                        / {limitData.calls.toLocaleString()}
+                        / {callsLimit.toLocaleString()}
                       </span>
                     ) : (
                       <span className="text-emerald-500 text-[10px] font-bold uppercase tracking-widest ml-2 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20">
@@ -219,12 +319,12 @@ export default function BillingPage() {
                 )}
               </div>
 
-              {limitData.calls > 0 && (
+              {hasMonthlyCalls && callsLimit > 0 && (
                 <div className="relative z-10">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">
                     <span>Quota Used: {callsPercent.toFixed(1)}%</span>
                     <span className={callsPercent > 80 ? "text-amber-400" : ""}>
-                      {limitData.calls - callsUsed} Remaining
+                      {Math.max(0, callsLimit - callsUsed)} Remaining
                     </span>
                   </div>
                   <div className="h-3 bg-black/40 rounded-full overflow-hidden border border-white/5 shadow-inner">
@@ -301,7 +401,9 @@ export default function BillingPage() {
             <div className="rounded-xl border border-white/10 bg-white/5 p-6">
               <div className="flex items-center gap-2 mb-2">
                 <Activity className="h-5 w-5 text-blue-400" />
-                <span className="text-sm text-slate-400">API Calls (7d)</span>
+                <span className="text-sm text-slate-400">
+                  API Calls {hasMonthlyCalls ? "(month)" : "(7d)"}
+                </span>
               </div>
               <div className="text-3xl font-bold text-white">{callsUsed.toLocaleString()}</div>
             </div>
@@ -345,7 +447,14 @@ export default function BillingPage() {
                   </div>
                   <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-emerald-500 rounded-full transition-all"
+                      className={clsx(
+                        "h-full rounded-full transition-all",
+                        snapshotsExhausted
+                          ? "bg-rose-500"
+                          : snapshotsNearLimit
+                            ? "bg-amber-500"
+                            : "bg-emerald-500"
+                      )}
                       style={{
                         width: `${Math.min(
                           100,
@@ -367,7 +476,14 @@ export default function BillingPage() {
                 </div>
                 <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-cyan-500 rounded-full transition-all"
+                    className={clsx(
+                      "h-full rounded-full transition-all",
+                      replayExhausted
+                        ? "bg-rose-500"
+                        : replayNearLimit
+                          ? "bg-amber-500"
+                          : "bg-cyan-500"
+                    )}
                     style={{
                       width: `${platformReplayCreditsPercent}%`,
                     }}
@@ -383,13 +499,13 @@ export default function BillingPage() {
                 <span className="text-slate-400">API Calls</span>
                 <span className="text-white">
                   {callsUsed.toLocaleString()}{" "}
-                  {limitData.calls > 0 ? `/ ${limitData.calls.toLocaleString()}` : ""}
+                  {hasMonthlyCalls && callsLimit > 0 ? `/ ${callsLimit.toLocaleString()}` : ""}
                 </span>
               </div>
               <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-emerald-500 rounded-full transition-all"
-                  style={{ width: `${Math.min(callsPercent, 100)}%` }}
+                  style={{ width: `${hasMonthlyCalls ? Math.min(callsPercent, 100) : 0}%` }}
                 />
               </div>
             </div>
@@ -413,14 +529,15 @@ export default function BillingPage() {
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-slate-400">Team Members</span>
                 <span className="text-white">
-                  1{limitData.teamMembers > 0 ? ` / ${limitData.teamMembers}` : ""}
+                  {teamMembersUsed == null ? "N/A" : teamMembersUsed}
+                  {limitData.teamMembers > 0 ? ` / ${limitData.teamMembers}` : ""}
                 </span>
               </div>
               <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-emerald-500 rounded-full transition-all"
                   style={{
-                    width: `${limitData.teamMembers > 0 ? Math.min(100, (1 / limitData.teamMembers) * 100) : 0}%`,
+                    width: `${limitData.teamMembers > 0 && teamMembersUsed != null ? Math.min(100, (teamMembersUsed / limitData.teamMembers) * 100) : 0}%`,
                   }}
                 />
               </div>
@@ -436,31 +553,31 @@ export default function BillingPage() {
           </h2>
 
           <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mb-8">
-            During the MVP, only the free plan is available. Paid plans are preview-only.
+            Quotas shown here follow account plan limits. Upgrade is managed in Account Billing.
           </p>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 xl:gap-7 items-stretch">
             {plans.map(plan => {
               const isCurrent = plan.current;
 
               return (
                 <div
                   key={plan.id}
-                  className={`relative w-full rounded-[40px] p-10 transition-all duration-300 group
-                    ${isCurrent ? "bg-[#0a0f12] border-2 border-emerald-500/40 shadow-[0_0_50px_-15px_rgba(16,185,129,0.3)]" : "bg-white/[0.02] border border-white/10 backdrop-blur-3xl hover:bg-white/[0.04]"}
+                  className={`relative w-full rounded-[32px] px-6 py-7 xl:px-7 xl:py-8 min-h-[440px] transition-all duration-300 group
+                    ${isCurrent ? "bg-[#0a0f12] border-2 border-emerald-500/40 shadow-[0_0_36px_-14px_rgba(16,185,129,0.3)]" : "bg-white/[0.02] border border-white/10 backdrop-blur-3xl hover:bg-white/[0.04]"}
                   `}
                 >
                   {!isCurrent && (
-                    <div className="absolute top-8 right-8 px-3 py-1 bg-white/5 border border-white/10 rounded-full">
+                    <div className="absolute top-6 right-6 px-3 py-1 bg-white/5 border border-white/10 rounded-full">
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                        Coming Soon
+                        Account Managed
                       </span>
                     </div>
                   )}
 
                   {/* Active Indicator inside card */}
                   {isCurrent && (
-                    <div className="absolute top-8 right-8 flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
+                    <div className="absolute top-6 right-6 flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                       <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">
                         Active License
@@ -470,37 +587,37 @@ export default function BillingPage() {
 
                   <div className="relative z-10">
                     <h3
-                      className={`text-2xl font-black uppercase tracking-tighter mb-2 ${isCurrent ? "text-white" : "text-slate-300"}`}
+                      className={`text-[26px] leading-none font-black uppercase tracking-tight mb-2 ${isCurrent ? "text-white" : "text-slate-300"}`}
                     >
                       {plan.name}
                     </h3>
-                    <p className="text-sm text-slate-500 font-bold uppercase tracking-widest leading-relaxed min-h-[40px] mb-8 pr-12">
+                    <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest leading-5 min-h-[54px] mb-5 pr-10">
                       {plan.desc}
                     </p>
 
-                    <div className="flex items-baseline gap-2 mb-10 pb-10 border-b border-white/10">
+                    <div className="flex items-baseline gap-1.5 mb-6 pb-6 border-b border-white/10">
                       <span
-                        className={`text-6xl font-black tracking-tighter ${isCurrent ? "text-emerald-400" : "text-white"}`}
+                        className={`text-[34px] font-black tracking-tight leading-none ${isCurrent ? "text-emerald-400" : "text-white"}`}
                       >
                         {plan.price}
                       </span>
                       {plan.period && (
-                        <span className="text-sm font-bold text-slate-500 uppercase tracking-widest">
+                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
                           {plan.period}
                         </span>
                       )}
                     </div>
 
-                    <ul className="space-y-5 mb-12">
+                    <ul className="space-y-2.5 mb-8">
                       {plan.features.map((feature, i) => (
-                        <li key={i} className="flex items-start gap-4">
+                        <li key={i} className="flex items-start gap-2.5">
                           <div
-                            className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${isCurrent ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-slate-400"}`}
+                            className={`mt-[2px] w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${isCurrent ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-slate-400"}`}
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <CheckCircle2 className="w-3 h-3" />
                           </div>
                           <span
-                            className={`${isCurrent ? "text-slate-200" : "text-slate-400"} text-sm font-semibold tracking-wide flex-1`}
+                            className={`${isCurrent ? "text-slate-200" : "text-slate-400"} text-[11px] leading-[1.45] font-semibold tracking-wide flex-1`}
                           >
                             {feature}
                           </span>
@@ -510,7 +627,7 @@ export default function BillingPage() {
 
                     <button
                       disabled={true}
-                      className={`w-full h-14 rounded-2xl flex items-center justify-center text-sm font-black uppercase tracking-widest transition-all duration-300
+                      className={`w-full h-12 rounded-xl flex items-center justify-center text-[11px] font-black uppercase tracking-widest transition-all duration-300
                         ${
                           isCurrent
                             ? "bg-white/5 text-slate-500 cursor-not-allowed border border-white/5"
@@ -518,7 +635,7 @@ export default function BillingPage() {
                         }
                       `}
                     >
-                      {isCurrent ? "Current Plan" : "Preview Only"}
+                      {isCurrent ? "Current Plan" : "Manage in Account Billing"}
                     </button>
                   </div>
                 </div>

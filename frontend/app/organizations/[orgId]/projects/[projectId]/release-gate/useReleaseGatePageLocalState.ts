@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import type { AgentForPicker } from "@/components/release-gate/AgentPickerCard";
 import { useDismissOnDocumentClickOutside } from "./useDismissOnDocumentClickOutside";
 import type { EditableTool, ReplayProvider } from "./releaseGatePageContent.lib";
+import type { ReleaseGateModelSource } from "./releaseGateReplayConstants";
 import { REPLAY_THRESHOLD_PRESETS } from "./releaseGatePageContent.lib";
 import type { GateTab, ThresholdPreset } from "./releaseGateExpandedHelpers";
 
@@ -32,7 +33,11 @@ export function useReleaseGatePageLocalState() {
   const [snapshotIds, setSnapshotIds] = useState<string[]>([]);
   const [newModel, setNewModel] = useState("");
   const [replayProvider, setReplayProvider] = useState<ReplayProvider>("openai");
-  const [modelOverrideEnabled, setModelOverrideEnabled] = useState(false);
+  /** Saved project API key row id for Custom (BYOK) runs; optional. */
+  const [replayUserApiKeyId, setReplayUserApiKeyId] = useState<number | null>(null);
+  /** Raw provider API key override for a single Custom (BYOK) run; optional. */
+  const [replayApiKey, setReplayApiKey] = useState("");
+  const [modelSource, setModelSource] = useState<ReleaseGateModelSource>("detected");
   const [modelProviderTab, setModelProviderTab] = useState<ReplayProvider>("openai");
   const [requestBody, setRequestBody] = useState<Record<string, unknown>>({});
   const [requestJsonDraft, setRequestJsonDraft] = useState<string | null>(null);
@@ -108,8 +113,12 @@ export function useReleaseGatePageLocalState() {
       setNewModel,
       replayProvider,
       setReplayProvider,
-      modelOverrideEnabled,
-      setModelOverrideEnabled,
+      replayUserApiKeyId,
+      setReplayUserApiKeyId,
+      replayApiKey,
+      setReplayApiKey,
+      modelSource,
+      setModelSource,
       modelProviderTab,
       setModelProviderTab,
       requestBody,
@@ -177,7 +186,9 @@ export function useReleaseGatePageLocalState() {
       snapshotIds,
       newModel,
       replayProvider,
-      modelOverrideEnabled,
+      replayUserApiKeyId,
+      replayApiKey,
+      modelSource,
       modelProviderTab,
       requestBody,
       requestJsonDraft,

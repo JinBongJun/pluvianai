@@ -8,6 +8,13 @@ async function login(page, baseUrl, email, password) {
   await page.waitForURL(/\/organizations/, { timeout: 60000 });
 }
 
+async function closeSettings(page) {
+  const closeBtn = page.getByRole("button", { name: /Close Release Gate settings/i }).first();
+  await closeBtn.waitFor({ state: "visible", timeout: 10000 });
+  await closeBtn.click({ timeout: 5000 });
+  await page.getByRole("dialog").waitFor({ state: "hidden", timeout: 10000 });
+}
+
 async function main() {
   const baseUrl = process.env.AGENTGUARD_FRONTEND_URL || "http://localhost:3000";
   const projectId = String(process.env.AGENTGUARD_PROJECT_ID || "18");
@@ -128,11 +135,14 @@ async function main() {
     await configJsonArea.blur();
     const invalidJsonVisible = await page.getByText(/Invalid JSON|Must be a JSON object/i).first().isVisible();
     out.checks.warn5_invalid_json_message_visible = invalidJsonVisible;
+    await configJsonArea.fill("{}");
+    await configJsonArea.blur();
+    await page.waitForTimeout(250);
 
     // WARN-2 prep: enable platform override by selecting a model from provider tab.
     await page.getByRole("button", { name: /OpenAI/i }).first().click();
     await page.locator("button", { hasText: "gpt-4o-mini" }).first().click();
-    await page.getByRole("button", { name: /Close settings/i }).click();
+    await closeSettings(page);
     await page.waitForTimeout(300);
 
     // WARN-2: key missing warning should not be shown once override is active.
@@ -145,7 +155,9 @@ async function main() {
     // WARN-6: invalid tool params -> start triggers top error.
     await page.getByRole("button", { name: /^Settings$/i }).first().click();
     await page.getByRole("dialog").waitFor({ state: "visible", timeout: 10000 });
-    await page.getByRole("button", { name: /Add Tool/i }).click();
+    await page.getByRole("tab", { name: /Environment parity/i }).click();
+    await page.getByRole("button", { name: /Tools \(definitions \+ recorded calls\)/i }).click();
+    await page.getByRole("button", { name: /Add tool/i }).click();
     const nameInput = page.getByPlaceholder("e.g. get_weather").first();
     await nameInput.fill("bad_tool");
     const paramsArea = page.locator("textarea").last();
@@ -154,19 +166,22 @@ async function main() {
       .getByText(/Parameters must be valid JSON\./i)
       .first()
       .isVisible();
-    await page.getByRole("button", { name: /Close settings/i }).click();
+    await closeSettings(page);
     await page.waitForTimeout(300);
     await startBtn.click();
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(800);
     const topToolErrorCount = await page.getByText(/Tool "bad_tool": parameters must be valid JSON\./i).count();
     const genericToolErrorCount = await page.getByText(/parameters must be valid JSON/i).count();
+    const resultCaseCount = await page.locator('[data-testid^="rg-result-case-"]').count();
     out.details.warn6 = {
       inlineToolParamsErrorVisible,
       topToolErrorCount,
       genericToolErrorCount,
+      resultCaseCount,
     };
     out.checks.warn6_invalid_tool_params_blocks_start_with_error = Boolean(
-      inlineToolParamsErrorVisible
+      inlineToolParamsErrorVisible &&
+        (topToolErrorCount > 0 || genericToolErrorCount > 0 || resultCaseCount === 0)
     );
 
     out.ok = Object.values(out.checks).every(Boolean);

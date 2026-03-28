@@ -3,8 +3,11 @@ import type { SnapshotForDetail } from "@/components/shared/SnapshotDetailModal"
 import type { AgentForPicker } from "@/components/release-gate/AgentPickerCard";
 import type { ReleaseGateHistoryItem } from "@/lib/api/types";
 import type { GateTab, ThresholdPreset } from "./releaseGateExpandedHelpers";
+import type { ReleaseGateModelSource, ReleaseGateReplayModelMode } from "./releaseGateReplayConstants";
 
 export type ReleaseGateReplayProvider = "openai" | "anthropic" | "google";
+export type { ReleaseGateModelSource };
+export type { ReleaseGateReplayModelMode };
 
 export type ReleaseGateHistoryDatePreset = "all" | "24h" | "7d" | "30d";
 
@@ -105,10 +108,27 @@ export interface ReleaseGatePageContextValue {
   setFlakyRateMax: (n: number) => void;
   newModel: string;
   setNewModel: (s: string) => void;
+  modelSource: ReleaseGateModelSource;
+  setModelSource: Dispatch<SetStateAction<ReleaseGateModelSource>>;
+  /** Compatibility flags derived from `modelSource`; keep consumers thin during migration. */
   modelOverrideEnabled: boolean;
   setModelOverrideEnabled: (b: boolean) => void;
+  replayModelMode: ReleaseGateReplayModelMode;
+  setReplayModelMode: Dispatch<SetStateAction<ReleaseGateReplayModelMode>>;
   replayProvider: ReleaseGateReplayProvider;
   setReplayProvider: (p: ReleaseGateReplayProvider) => void;
+  replayUserApiKeyId: number | null;
+  setReplayUserApiKeyId: (id: number | null) => void;
+  replayApiKey: string;
+  setReplayApiKey: Dispatch<SetStateAction<string>>;
+  projectUserApiKeysForUi: Array<{
+    id: number;
+    provider: string;
+    agent_id?: string | null;
+    is_active: boolean;
+    name?: string | null;
+    created_at?: string | null;
+  }>;
   requestBody: Record<string, unknown>;
   setRequestBody: Dispatch<SetStateAction<Record<string, unknown>>>;
   requestBodyJson: string;
@@ -165,7 +185,10 @@ export interface ReleaseGatePageContextValue {
   repeatDropdownRef: RefObject<HTMLDivElement>;
   REPEAT_OPTIONS: readonly number[];
   isHeavyRepeat: boolean;
+  /** Agent + baseline/dataset selection satisfied for starting a validate run. */
+  canValidate: boolean;
   canRunValidate: boolean;
+  mutateProjectUserApiKeys: () => Promise<unknown>;
   expandedCaseIndex: number | null;
   setExpandedCaseIndex: (n: number | null) => void;
   selectedAttempt: { caseIndex: number; attemptIndex: number } | null;

@@ -2,6 +2,7 @@
 
 import { useContext, useEffect, useState } from "react";
 
+import { ReleaseGateKeysContext } from "./ReleaseGateKeysContext";
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
 import { ReleaseGateValidateRunContext } from "./ReleaseGateValidateRunContext";
 import { mergeReleaseGateConfigPanelModel } from "./releaseGateConfigPanelModelMerge";
@@ -28,8 +29,9 @@ export type {
 export function useReleaseGateConfigPanelModel(isOpen: boolean): ReleaseGateConfigPanelModel {
   const ctx = useContext(ReleaseGatePageContext)!;
   const vctx = useContext(ReleaseGateValidateRunContext)!;
+  const kctx = useContext(ReleaseGateKeysContext)!;
 
-  const c = pickReleaseGateConfigPanelContext(ctx, vctx);
+  const c = pickReleaseGateConfigPanelContext(ctx, vctx, kctx);
   const editsLocked = c.runLocked;
 
   const [showRawBaseline, setShowRawBaseline] = useState(false);

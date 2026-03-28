@@ -52,6 +52,7 @@ class SubscriptionService:
             "status": subscription.status if subscription else "active",
             "price_per_month": PLAN_PRICING.get(plan_type, 0),
             "limits": {
+                "organizations": limits["organizations"],
                 "projects": limits["projects"],
                 "api_calls_per_month": limits["api_calls_per_month"],
                 "team_members_per_project": limits["team_members_per_project"],

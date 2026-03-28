@@ -1,17 +1,23 @@
 "use client";
 
-import React from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import clsx from "clsx";
 import { RefreshCcw } from "lucide-react";
 
+import { projectUserApiKeysAPI } from "@/lib/api";
 import type { ReplayProvider } from "./releaseGatePageContent.lib";
+import { isHostedPlatformModel } from "./releaseGateReplayConstants";
 import { formatProviderLabel } from "./releaseGateConfigPanelHelpers";
+import {
+  isReleaseGateSavedProjectKey,
+  RELEASE_GATE_SAVED_API_KEY_NAME_PREFIX,
+} from "./releaseGateSavedApiKeys";
 import type { ReleaseGateConfigThresholdPreset } from "./releaseGateConfigPanelTypes";
 import type { ReleaseGateConfigPanelCoreTabProps } from "./releaseGateConfigPanelModel.types";
 
 export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanelCoreTabProps }) {
   const {
-    modelOverrideEnabled,
+    modelSource,
     repeatRuns,
     REPLAY_THRESHOLD_PRESETS,
     thresholdPreset,
@@ -26,7 +32,10 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
     setNewModel,
     replayProvider,
     setReplayProvider,
-    setModelOverrideEnabled,
+    replayUserApiKeyId,
+    setReplayUserApiKeyId,
+    projectUserApiKeysForUi,
+    setModelSource,
     REPLAY_PROVIDER_MODEL_LIBRARY,
     activeProviderTab,
     setActiveProviderTab,
@@ -48,15 +57,137 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
     setRequestJsonDraft,
     handleRequestJsonBlur,
     requestJsonError,
+    keyIssueBlocked,
+    keyRegistrationMessage,
+    missingProviderKeyDetails,
+    canValidate,
+    mutateProjectUserApiKeys,
+    projectId,
+    replayApiKey,
+    setReplayApiKey,
   } = m;
+
+  const [rgSaveBusy, setRgSaveBusy] = useState(false);
+  const [rgDeleteBusyId, setRgDeleteBusyId] = useState<number | null>(null);
+  const [rgSaveLabel, setRgSaveLabel] = useState("");
+
+  const detectedMode = modelSource === "detected";
+  const hostedMode = modelSource === "hosted";
+  const customMode = modelSource === "custom";
+
+  const selectModelSource = (next: typeof modelSource) => {
+    if (editsLocked) return;
+    setModelSource?.(next);
+    if (next === "detected") {
+      setReplayUserApiKeyId?.(null);
+      setReplayApiKey?.("");
+      setNewModel?.(runDataModel || "");
+      setReplayProvider?.(runDataProvider);
+      setActiveProviderTab?.(runDataProvider);
+      return;
+    }
+    const nextProvider = activeProviderTab || replayProvider;
+    setReplayProvider?.(nextProvider);
+    setActiveProviderTab?.(nextProvider);
+    setReplayUserApiKeyId?.(null);
+    setReplayApiKey?.("");
+    if (next === "hosted") {
+      const firstHosted = (REPLAY_PROVIDER_MODEL_LIBRARY?.[nextProvider] || [])[0];
+      if (firstHosted) setNewModel?.(firstHosted);
+      return;
+    }
+    if (!customMode) setNewModel?.("");
+  };
+
+  const keyStatusText =
+    keyRegistrationMessage ||
+    (detectedMode && !canValidate
+      ? "Select baseline logs or saved datasets for this run to verify required API keys."
+      : detectedMode
+        ? "Select baseline logs to detect provider, model, and required API keys."
+        : customMode
+          ? "Paste a provider API key for this run, or save it below for reuse on this project."
+          : "Paste an API key for this run or rely on project default key lookup.");
+
+  const keyStatusLabel = keyIssueBlocked ? "Blocked" : keyRegistrationMessage ? "Ready" : "Pending";
+  const keyStatusToneClasses = keyIssueBlocked
+    ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
+    : keyRegistrationMessage
+      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
+      : "border-white/10 bg-[#0a0c10] text-slate-300";
+
+  const rgSavedKeysForProvider = useMemo(
+    () =>
+      (projectUserApiKeysForUi || []).filter(k =>
+        isReleaseGateSavedProjectKey(k, String(replayProvider || "").trim().toLowerCase())
+      ),
+    [projectUserApiKeysForUi, replayProvider]
+  );
+
+  const saveRgKeyFromPaste = useCallback(async () => {
+    const trimmed = replayApiKey.trim();
+    if (!projectId || !trimmed || rgSaveBusy || editsLocked) return;
+    setRgSaveBusy(true);
+    try {
+      const labelPart = rgSaveLabel.trim().slice(0, 80);
+      const name = labelPart
+        ? `${RELEASE_GATE_SAVED_API_KEY_NAME_PREFIX} ${labelPart}`
+        : `${RELEASE_GATE_SAVED_API_KEY_NAME_PREFIX} ${formatProviderLabel(replayProvider)} · ${new Date().toISOString().slice(0, 10)}`;
+      const created = (await projectUserApiKeysAPI.create(projectId, {
+        provider: replayProvider,
+        api_key: trimmed,
+        name,
+      })) as { id?: number };
+      await mutateProjectUserApiKeys?.();
+      setReplayApiKey?.("");
+      setRgSaveLabel("");
+      if (typeof created?.id === "number") setReplayUserApiKeyId?.(created.id);
+    } finally {
+      setRgSaveBusy(false);
+    }
+  }, [
+    projectId,
+    replayApiKey,
+    rgSaveBusy,
+    editsLocked,
+    rgSaveLabel,
+    replayProvider,
+    mutateProjectUserApiKeys,
+    setReplayApiKey,
+    setReplayUserApiKeyId,
+  ]);
+
+  const deleteRgSavedKey = useCallback(
+    async (keyId: number) => {
+      if (!projectId || rgDeleteBusyId != null || editsLocked) return;
+      setRgDeleteBusyId(keyId);
+      try {
+        await projectUserApiKeysAPI.delete(projectId, keyId);
+        await mutateProjectUserApiKeys?.();
+        if (replayUserApiKeyId === keyId) setReplayUserApiKeyId?.(null);
+      } finally {
+        setRgDeleteBusyId(null);
+      }
+    },
+    [
+      projectId,
+      rgDeleteBusyId,
+      editsLocked,
+      mutateProjectUserApiKeys,
+      replayUserApiKeyId,
+      setReplayUserApiKeyId,
+    ]
+  );
 
   return (
     <>
-      {modelOverrideEnabled && (
-        <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/10 px-5 py-4 text-sm text-fuchsia-200 font-medium">
-          Platform-provided model mode is active. Personal provider key is not required for this run.
-        </div>
-      )}
+      <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/10 px-5 py-4 text-sm text-fuchsia-200 font-medium">
+        {detectedMode
+          ? "Detected: use the provider and model captured from the selected baseline logs."
+          : hostedMode
+            ? "Hosted: use PluvianAI hosted quick-pick models with included platform credits."
+            : "Custom (BYOK): choose a provider, enter a model id, paste an API key for one run, or save it below for reuse. Live View node keys apply to Detected mode only."}
+      </div>
 
       <div className="rounded-2xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/[0.08] to-transparent p-5">
         <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-fuchsia-300/90 mb-2">
@@ -176,7 +307,9 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
             </div>
             <div className="flex items-center gap-3">
               <div className="text-base font-semibold text-white">
-                {modelOverrideEnabled ? newModel || "Not specified" : runDataModel || "Not detected"}
+                {detectedMode
+                  ? runDataModel || "Not detected"
+                  : newModel || (hostedMode ? "Select a hosted model" : "Enter a custom model")}
               </div>
               {pinnedBadge && (
                 <span
@@ -201,116 +334,330 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
             <div>
               Provider:{" "}
               <span className="text-slate-200">
-                {modelOverrideEnabled ? formatProviderLabel(replayProvider) : formatProviderLabel(runDataProvider)}
+                {formatProviderLabel(detectedMode ? runDataProvider : replayProvider)}
               </span>
             </div>
             <div className="mt-0.5">
-              {modelOverrideEnabled ? (
-                <span className="text-fuchsia-300">Override active</span>
-              ) : (
-                "Using detected model"
-              )}
+              <span className={detectedMode ? "text-slate-400" : "text-fuchsia-300"}>
+                {detectedMode ? "Using detected baseline model" : hostedMode ? "Using hosted model" : "Using custom BYOK model"}
+              </span>
             </div>
           </div>
         </div>
 
-        <div className="flex w-fit rounded-xl border border-white/10 bg-[#0a0c10] p-1 mb-4">
-          {(Object.keys(REPLAY_PROVIDER_MODEL_LIBRARY || {}) as ReplayProvider[]).map(provider => {
-            const isActive = activeProviderTab === provider;
-            return (
-              <button
-                key={provider}
-                type="button"
-                onClick={() => setActiveProviderTab(provider)}
-                className={clsx(
-                  "rounded-lg px-5 py-2 text-xs font-semibold transition-all duration-200",
-                  isActive
-                    ? "bg-white/10 text-white shadow-sm"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.02]"
-                )}
-              >
-                {formatProviderLabel(provider)}
-              </button>
-            );
-          })}
+        <div className="mb-5 rounded-xl border border-white/10 bg-[#0a0c10]/80 px-4 py-3">
+          <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2">
+            Model source
+          </div>
+          <div className="flex flex-wrap gap-4">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
+              <input
+                type="radio"
+                name="release-gate-model-source"
+                className="accent-fuchsia-500"
+                disabled={editsLocked}
+                checked={detectedMode}
+                onChange={() => selectModelSource("detected")}
+              />
+              Detected from baseline
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
+              <input
+                type="radio"
+                name="release-gate-model-source"
+                className="accent-fuchsia-500"
+                disabled={editsLocked}
+                checked={hostedMode}
+                onChange={() => selectModelSource("hosted")}
+              />
+              Hosted by PluvianAI
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
+              <input
+                type="radio"
+                name="release-gate-model-source"
+                className="accent-fuchsia-500"
+                disabled={editsLocked}
+                checked={customMode}
+                onChange={() => selectModelSource("custom")}
+              />
+              Custom (BYOK)
+            </label>
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-5">
-          {(REPLAY_PROVIDER_MODEL_LIBRARY?.[activeProviderTab] || []).map(modelId => (
-            <button
-              key={modelId}
-              type="button"
+        {!detectedMode && (
+          <label className="block mb-4">
+            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2 block">
+              Provider
+            </span>
+            <select
               disabled={editsLocked}
-              onClick={() => {
-                if (editsLocked) return;
-                setReplayProvider?.(activeProviderTab);
-                setNewModel?.(modelId);
-                setModelOverrideEnabled?.(true);
+              value={activeProviderTab}
+              onChange={e => {
+                const p = e.target.value as ReplayProvider;
+                const prevProvider = replayProvider;
+                const trimmed = newModel.trim();
+                setActiveProviderTab(p);
+                setReplayProvider?.(p);
+                setReplayUserApiKeyId?.(null);
+                setReplayApiKey?.("");
+                if (
+                  hostedMode &&
+                  trimmed &&
+                  isHostedPlatformModel(prevProvider, trimmed) &&
+                  !isHostedPlatformModel(p, trimmed)
+                ) {
+                  const nextHosted = (REPLAY_PROVIDER_MODEL_LIBRARY?.[p] || [])[0];
+                  setNewModel?.(nextHosted ?? "");
+                }
               }}
-              className={clsx(
-                "rounded-xl border px-4 py-3.5 text-left text-[13px] font-mono transition-all duration-200",
-                newModel === modelId && replayProvider === activeProviderTab
-                  ? "border-fuchsia-500/50 bg-fuchsia-500/10 text-fuchsia-100 shadow-[0_0_15px_rgba(217,70,239,0.15)]"
-                  : "border-white/10 bg-[#0a0c10] text-slate-300 hover:border-white/20 hover:bg-white/[0.04]"
-              )}
+              className="w-full max-w-md rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50"
             >
-              {modelId}
-            </button>
-          ))}
-        </div>
+              {(Object.keys(REPLAY_PROVIDER_MODEL_LIBRARY || {}) as ReplayProvider[]).map(provider => (
+                <option key={provider} value={provider}>
+                  {formatProviderLabel(provider)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
-        <div className="pt-4 border-t border-white/5">
-          <div className="mb-2.5 flex items-center justify-between">
-            <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 block">
-              Custom model ID{" "}
-              <span className="text-slate-500 font-normal lowercase tracking-normal ml-1">(Advanced)</span>
+        {detectedMode && (
+          <div className="space-y-3 rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-300">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                  Detected provider
+                </div>
+                <div className="mt-1 text-slate-100">{formatProviderLabel(runDataProvider)}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                  Detected model id
+                </div>
+                <div className="mt-1 font-mono text-slate-100">{runDataModel || "Not detected"}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                  API key status
+                </div>
+                <div
+                  className={clsx(
+                    "mt-1 font-medium",
+                    !keyRegistrationMessage
+                      ? "text-slate-300"
+                      : keyIssueBlocked
+                        ? "text-rose-300"
+                        : "text-emerald-300"
+                  )}
+                >
+                  {keyStatusLabel}
+                </div>
+              </div>
+            </div>
+            <div className={clsx("rounded-xl border px-4 py-3 text-xs leading-relaxed", keyStatusToneClasses)}>
+              {keyStatusText}
+              {missingProviderKeyDetails.length > 0 ? (
+                <ul className="mt-2 list-disc pl-5">
+                  {missingProviderKeyDetails.map(detail => (
+                    <li key={detail}>{detail}</li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           </div>
-          <input
-            value={newModel}
-            disabled={editsLocked}
-            onChange={e => {
-              if (editsLocked) return;
-              setReplayProvider?.(activeProviderTab);
-              setNewModel?.(e.target.value);
-              setModelOverrideEnabled?.(true);
-            }}
-            placeholder="e.g. gpt-4-0613"
-            className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 font-mono outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
-          />
-          {showCustomModelWarning && (
-            <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-200/90 leading-relaxed">
-              For stable Release Gate results, prefer a pinned Anthropic model id ending in{" "}
-              <span className="font-mono bg-black/20 px-1 py-0.5 rounded">YYYYMMDD</span>.
-              <span className="block mt-1 text-amber-400/80">Custom/latest ids can change behavior over time.</span>
+        )}
+
+        {hostedMode && (
+          <>
+            <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-2">
+              Hosted quick picks
             </div>
-          )}
-        </div>
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              {(REPLAY_PROVIDER_MODEL_LIBRARY?.[activeProviderTab] || []).map(modelId => (
+                <button
+                  key={modelId}
+                  type="button"
+                  disabled={editsLocked}
+                  onClick={() => {
+                    if (editsLocked) return;
+                    setModelSource?.("hosted");
+                    setReplayProvider?.(activeProviderTab);
+                    setNewModel?.(modelId);
+                    setReplayUserApiKeyId?.(null);
+                    setReplayApiKey?.("");
+                  }}
+                  className={clsx(
+                    "rounded-xl border px-4 py-3.5 text-left text-[13px] font-mono transition-all duration-200",
+                    newModel === modelId && replayProvider === activeProviderTab
+                      ? "border-fuchsia-500/50 bg-fuchsia-500/10 text-fuchsia-100 shadow-[0_0_15px_rgba(217,70,239,0.15)]"
+                      : "border-white/10 bg-[#0a0c10] text-slate-300 hover:border-white/20 hover:bg-white/[0.04]"
+                  )}
+                >
+                  {modelId}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {customMode && (
+          <div className="pt-4 border-t border-white/5">
+            <div className="mb-2.5 flex items-center justify-between">
+              <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 block">
+                Custom model ID{" "}
+                <span className="text-slate-500 font-normal lowercase tracking-normal ml-1">(BYOK)</span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+              Custom models require BYOK. Supported providers: OpenAI, Anthropic, Google. Premium models (e.g. GPT-4o,
+              Claude Sonnet, Gemini Pro) are not available as hosted quick picks — enter the provider model id here
+              (for example <span className="font-mono text-slate-400">gpt-4o-mini</span>), then paste a key or use a
+              key you saved from this screen.
+            </p>
+            <input
+              name="release-gate-custom-model-id"
+              autoComplete="off"
+              value={newModel}
+              disabled={editsLocked}
+              onChange={e => {
+                if (editsLocked) return;
+                setModelSource?.("custom");
+                setReplayProvider?.(activeProviderTab);
+                setNewModel?.(e.target.value);
+              }}
+              placeholder="e.g. gpt-4o-mini, claude-sonnet-4-20250514"
+              className="mb-3 w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 font-mono outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
+            />
+            <label className="block mb-3">
+              <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2 block">
+                API key (for this run only)
+              </span>
+              <input
+                type="password"
+                autoComplete="off"
+                value={replayApiKey}
+                disabled={editsLocked}
+                onChange={e => {
+                  if (editsLocked) return;
+                  const v = e.target.value;
+                  setReplayApiKey?.(v);
+                  if (v.trim()) setReplayUserApiKeyId?.(null);
+                }}
+                placeholder="Paste provider API key"
+                className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
+              />
+            </label>
+            <div className="mb-3 rounded-xl border border-white/10 bg-[#0a0c10]/80 px-4 py-3">
+              <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2">
+                Save key for Release Gate (optional)
+              </div>
+              <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                Keys registered in Live View apply to Detected mode. To reuse a key in Custom without pasting each
+                time, save it here (project-wide, not tied to a node). Optional label helps you tell keys apart.
+              </p>
+              <input
+                type="text"
+                name="release-gate-saved-key-label"
+                autoComplete="off"
+                value={rgSaveLabel}
+                disabled={editsLocked}
+                onChange={e => setRgSaveLabel(e.target.value)}
+                placeholder="Optional label (e.g. staging)"
+                className="mb-2 w-full max-w-md rounded-lg border border-white/10 bg-[#0a0c10] px-3 py-2 text-sm text-slate-200 outline-none focus:border-fuchsia-500/50"
+              />
+              <button
+                type="button"
+                disabled={editsLocked || !replayApiKey.trim() || rgSaveBusy || !projectId}
+                onClick={() => void saveRgKeyFromPaste()}
+                className="rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-fuchsia-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {rgSaveBusy ? "Saving…" : "Save pasted key to project"}
+              </button>
+              {rgSavedKeysForProvider.length > 0 ? (
+                <ul className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                  {rgSavedKeysForProvider.map(k => {
+                    const selected = replayUserApiKeyId === k.id && !replayApiKey.trim();
+                    return (
+                      <li
+                        key={k.id}
+                        className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300"
+                      >
+                        <span className="font-mono text-[11px] text-slate-400">
+                          {(k.name || "Saved key").replace(/^\[RG\]\s*/, "")}
+                          {selected ? (
+                            <span className="ml-2 text-fuchsia-300">· in use for this run</span>
+                          ) : null}
+                        </span>
+                        <span className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={editsLocked}
+                            onClick={() => {
+                              setReplayApiKey?.("");
+                              setReplayUserApiKeyId?.(k.id);
+                            }}
+                            className="rounded border border-white/15 px-2 py-1 text-[11px] font-medium text-slate-200 hover:bg-white/5 disabled:opacity-40"
+                          >
+                            Use for run
+                          </button>
+                          <button
+                            type="button"
+                            disabled={editsLocked || rgDeleteBusyId === k.id}
+                            onClick={() => void deleteRgSavedKey(k.id)}
+                            className="rounded border border-rose-500/30 px-2 py-1 text-[11px] font-medium text-rose-200 hover:bg-rose-500/10 disabled:opacity-40"
+                          >
+                            {rgDeleteBusyId === k.id ? "…" : "Delete"}
+                          </button>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+            </div>
+            <div className={clsx("rounded-xl border px-4 py-3 text-xs leading-relaxed", keyStatusToneClasses)}>
+              {keyStatusText}
+              {missingProviderKeyDetails.length > 0 ? (
+                <ul className="mt-2 list-disc pl-5">
+                  {missingProviderKeyDetails.map(detail => (
+                    <li key={detail}>{detail}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+            {showCustomModelWarning && (
+              <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-200/90 leading-relaxed">
+                For stable Release Gate results, prefer a pinned Anthropic model id ending in{" "}
+                <span className="font-mono bg-black/20 px-1 py-0.5 rounded">YYYYMMDD</span>.
+                <span className="block mt-1 text-amber-400/80">Custom/latest ids can change behavior over time.</span>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center justify-between mt-5 pt-4 border-t border-white/5">
           <span
             className={clsx(
               "text-xs font-medium",
-              modelOverrideEnabled ? "text-fuchsia-300" : "text-slate-500"
+              detectedMode ? "text-slate-500" : "text-fuchsia-300"
             )}
           >
-            {modelOverrideEnabled
-              ? "Model override is active for this run"
-              : "Currently using detected baseline model"}
+            {detectedMode
+              ? "Using detected baseline model"
+              : hostedMode
+                ? "Hosted model is active for this run"
+                : "Custom BYOK model is active for this run"}
           </span>
-          {modelOverrideEnabled && (
+          {!detectedMode && (
             <button
               type="button"
               disabled={editsLocked}
-              onClick={() => {
-                if (editsLocked) return;
-                setModelOverrideEnabled?.(false);
-                setNewModel?.(runDataModel || "");
-                setReplayProvider?.(runDataProvider);
-              }}
+              onClick={() => selectModelSource("detected")}
               className="text-xs font-semibold text-slate-300 hover:text-white px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-all"
             >
-              Reset to detected
+              Use detected
             </button>
           )}
         </div>

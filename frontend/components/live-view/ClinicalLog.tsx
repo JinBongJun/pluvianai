@@ -27,7 +27,7 @@ import useSWR from "swr";
 import { SnapshotDetailModal } from "@/components/shared/SnapshotDetailModal";
 import { useToast } from "@/components/ToastContainer";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
-import { PlanLimitBanner } from "@/components/PlanLimitBanner";
+import { logger } from "@/lib/logger";
 
 interface EvaluationMetric {
   score: number;
@@ -473,7 +473,6 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
     () => liveViewAPI.getAgentSettings(projectId, agentId),
     { revalidateOnFocus: false }
   );
-
   React.useEffect(() => {
     const persisted = Number(settingsData?.diagnostic_config?.eval?.window?.limit);
     if (Number.isFinite(persisted)) {
@@ -514,7 +513,6 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
       setPlanError(null);
     }
   }, [error]);
-
   React.useEffect(() => {
     if (!projectId || !agentId) return;
     if (!error) {
@@ -805,7 +803,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
       await mutate();
       await Promise.resolve(onLogsMutated?.()).catch(() => undefined);
     } catch (error) {
-      console.error("Failed to delete snapshots:", error);
+      logger.error("Failed to delete snapshots", error);
       toast.showToast("Failed to delete selected logs. Please try again.", "error");
     } finally {
       setIsDeletingSnapshots(false);
@@ -1143,11 +1141,6 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
           )}
         </div>
       </div>
-      {planError && (
-        <div className="mx-4 mb-3">
-          <PlanLimitBanner {...planError} context="snapshots" />
-        </div>
-      )}
       {error && !planError && (
         <div className="mx-4 mb-3 px-3 py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 flex items-center justify-between gap-3">
           <span className="text-xs text-rose-300 font-medium">

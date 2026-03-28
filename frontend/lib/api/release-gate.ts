@@ -25,6 +25,7 @@ export type ReleaseGateValidatePayload = {
   new_model?: string;
   replay_provider?: "openai" | "anthropic" | "google";
   replay_api_key?: string;
+  replay_user_api_key_id?: number;
   new_system_prompt?: string;
   replay_temperature?: number;
   replay_max_tokens?: number;

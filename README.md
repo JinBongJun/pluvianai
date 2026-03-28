@@ -10,6 +10,7 @@ Agent behavior firewall for multi‑LLM applications — capture traffic, replay
 - **Deterministic, judge‑free evaluation**: atomic signals (JSON validity, latency, length, keywords, PII, etc.) instead of fuzzy “LLM judges”.
 - **Agent‑level diagnostics**: Live View shows nodes, clinical logs, input/output data, and evaluation on a single canvas.
 - **Release Gate**: replay saved traffic with model/prompt overrides, evaluate against policies, and get a pass/fail gate verdict so you can see whether the node still behaves like the baseline before you decide to ship.
+- **Flexible model source control**: run validation with **Detected baseline**, **PluvianAI Hosted**, or **Custom (BYOK)** model sources, including direct one-run keys and reusable saved keys for custom runs.
 
 ---
 
@@ -18,7 +19,7 @@ Agent behavior firewall for multi‑LLM applications — capture traffic, replay
 | Area | Description |
 |------|-------------|
 | **Live View** | Ingest traffic via SDKs and inspect each agent node with logs, payloads, and evaluation signals. |
-| **Release Gate** | Fix a baseline trace or saved dataset, replay with new models/prompts, and run regression policies → pass/fail decision per run. |
+| **Release Gate** | Fix a baseline trace or saved dataset, replay with new models/prompts, and run regression policies → pass/fail decision per run. Supports Detected/Hosted/Custom (BYOK) model sources. |
 | **Atomic Signals** | Rule‑based checks (latency, length, JSON schema, PII, keywords, etc.) that are reproducible and provider‑agnostic. |
 | **Behavior Rules** | Validate tool usage and trajectories using a canonical step layer across OpenAI, Anthropic, Google, and others. |
 
@@ -81,11 +82,16 @@ Once SDKs are initialized and traffic flows, agents and nodes will appear in **L
 
 1. Go to the **Release Gate** tab for a project.  
 2. Pick a node and a dataset (recent snapshots or a saved dataset).  
-3. Configure model/prompt overrides and gate thresholds (fail/flaky rates).  
+3. Choose model source (**Detected**, **Hosted by PluvianAI**, or **Custom (BYOK)**), then configure prompt overrides and gate thresholds (fail/flaky rates).  
+   - **Detected** uses provider/model seen in baseline data and checks required keys.
+   - **Hosted** uses platform hosted models and hosted replay credits.
+   - **Custom (BYOK)** accepts direct provider API keys for one run, and supports saving reusable custom-run keys from the Release Gate UI.
 4. Run **Validate** to:
    - replay snapshots with the new configuration,
    - evaluate behavior using atomic signals and behavior rules,
    - get a gate decision: **PASS** or **FAIL**, with per‑run breakdown and history.
+
+If a plan limit is reached, use the in-app upgrade CTA to open **`/settings/billing`**.
 
 ---
 
@@ -147,9 +153,9 @@ docker-compose up -d
 ## Environment variables (SDK)
 
 ```bash
-export AGENTGUARD_API_KEY="your-api-key"
-export AGENTGUARD_PROJECT_ID="your-project-id"
-export AGENTGUARD_API_URL="https://api.example.com"  # Optional, defaults to hosted API
+export PLUVIANAI_API_KEY="your-api-key"
+export PLUVIANAI_PROJECT_ID="your-project-id"
+export PLUVIANAI_API_URL="https://api.example.com"  # Optional, defaults to hosted API
 ```
 
 Refer to the SDK READMEs under `sdk/python` and `sdk/node` for more details.

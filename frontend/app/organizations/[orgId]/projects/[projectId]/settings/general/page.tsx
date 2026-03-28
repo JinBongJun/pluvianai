@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { orgKeys } from "@/lib/queryKeys";
-import { deleteProject } from "@/lib/orgProjectMutations";
+import { deleteProject, revalidateOrganizationProjectLists } from "@/lib/orgProjectMutations";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export default function ProjectGeneralSettingsPage() {
@@ -96,6 +96,7 @@ export default function ProjectGeneralSettingsPage() {
         name: name.trim() || undefined,
         description: description.trim() || undefined,
       });
+      if (orgId) await revalidateOrganizationProjectLists(mutate, orgId);
       showToast("Project updated", "success");
     } catch (err: any) {
       showToast(err?.response?.data?.detail ?? "Failed to update project", "error");

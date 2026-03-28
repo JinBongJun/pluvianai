@@ -8,6 +8,7 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock
 from app.services.billing_service import BillingService, verify_paddle_webhook_signature
+from app.utils.idempotency import idempotency_service
 from app.models.user import User
 from app.models.subscription import Subscription
 from app.services.cache_service import cache_service
@@ -265,6 +266,9 @@ class TestBillingService:
                             "https://success.com",
                             "https://cancel.com",
                         )
+        called_payload = mock_post.call_args.args[1]
+        assert called_payload["checkout"]["success_url"] == "https://success.com"
+        assert "url" not in called_payload["checkout"]
         assert result is not None
         assert result["session_id"] == "txn_test_123"
         assert result["url"].startswith("https://")
@@ -292,6 +296,18 @@ class TestBillingService:
                     "https://success.com",
                     "https://cancel.com",
                 )
+        assert result is None
+
+    def test_create_checkout_session_rejects_non_self_serve_plan(self, db, test_user):
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test_key"
+            service = BillingService(db)
+            result = service.create_checkout_session(
+                test_user.id,
+                "free",
+                "https://success.com",
+                "https://cancel.com",
+            )
         assert result is None
 
     def test_handle_paddle_webhook_transaction_completed(self, db, test_user):
@@ -365,6 +381,36 @@ class TestBillingService:
         assert result["status"] == "ignored"
         assert "not handled" in result["message"]
 
+    def test_handle_paddle_webhook_idempotent_duplicate(self, db, test_user):
+        secret = "whsec_paddle_test"
+        payload_obj = {
+            "event_id": "evt_123",
+            "event_type": "transaction.completed",
+            "data": {
+                "id": "txn_1",
+                "custom_data": {"user_id": str(test_user.id), "plan_type": "pro"},
+                "subscription_id": "sub_1",
+                "customer_id": "ctm_1",
+            },
+        }
+        raw = json.dumps(payload_obj).encode("utf-8")
+        sig = self._paddle_sig(raw, secret)
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_WEBHOOK_SECRET = secret
+            service = BillingService(db)
+            with patch("app.services.subscription_service.SubscriptionService") as mock_sub:
+                mock_sub.return_value.create_or_update_subscription = MagicMock()
+                with patch.object(idempotency_service, "get", side_effect=[None, {"status": "success"}]):
+                    with patch.object(idempotency_service, "set") as mock_set:
+                        first = service.handle_paddle_webhook(raw, sig)
+                        second = service.handle_paddle_webhook(raw, sig)
+
+        assert first["status"] == "success"
+        assert second["status"] == "duplicate"
+        assert mock_sub.return_value.create_or_update_subscription.call_count == 1
+        assert mock_set.called
+
     def test_handle_paddle_webhook_paddle_unavailable(self, db):
         with patch("app.services.billing_service.settings") as mock_settings:
             mock_settings.PADDLE_API_KEY = ""
@@ -372,3 +418,106 @@ class TestBillingService:
             result = service.handle_paddle_webhook(b"{}", "ts=1;h1=x")
         assert "error" in result
         assert "not configured" in result["error"].lower()
+
+    def test_handle_paddle_webhook_without_event_id_skips_idempotency(self, db):
+        secret = "whsec_paddle_test"
+        payload_obj = {"event_type": "transaction.created", "data": {"id": "txn_1"}}
+        raw = json.dumps(payload_obj).encode("utf-8")
+        sig = self._paddle_sig(raw, secret)
+
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_WEBHOOK_SECRET = secret
+            service = BillingService(db)
+            with patch.object(idempotency_service, "get") as mock_get:
+                with patch.object(idempotency_service, "set") as mock_set:
+                    first = service.handle_paddle_webhook(raw, sig)
+                    second = service.handle_paddle_webhook(raw, sig)
+
+        assert first["status"] == "ignored"
+        assert second["status"] == "ignored"
+        assert mock_get.call_count == 0
+        assert mock_set.call_count == 0
+
+    def test_handle_paddle_webhook_error_records_dlq(self, db):
+        secret = "whsec_paddle_test"
+        payload_obj = {
+            "event_id": "evt_dlq_1",
+            "event_type": "transaction.completed",
+            "data": {"id": "txn_1", "custom_data": {}},
+        }
+        raw = json.dumps(payload_obj).encode("utf-8")
+        sig = self._paddle_sig(raw, secret)
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_WEBHOOK_SECRET = secret
+            service = BillingService(db)
+            with patch.object(cache_service, "enabled", True):
+                mock_redis = MagicMock()
+                with patch.object(cache_service, "redis_client", mock_redis):
+                    result = service.handle_paddle_webhook(raw, sig)
+        assert result["status"] == "error"
+        assert mock_redis.setex.called
+
+    def test_retry_failed_webhook_event_not_found(self, db):
+        service = BillingService(db)
+        with patch.object(cache_service, "enabled", True):
+            mock_redis = MagicMock()
+            mock_redis.get.return_value = None
+            with patch.object(cache_service, "redis_client", mock_redis):
+                result = service.retry_failed_webhook_event("missing_event")
+        assert result["status"] == "error"
+        assert result["code"] == "BILLING_EVENT_NOT_FOUND"
+
+    def test_retry_failed_webhook_event_success_deletes_from_dlq(self, db):
+        service = BillingService(db)
+        doc = {
+            "event_id": "evt_retry_1",
+            "payload": '{"event_type":"transaction.created","data":{"id":"txn_1"}}',
+            "paddle_signature": "ts=1;h1=x",
+        }
+        with patch.object(cache_service, "enabled", True):
+            mock_redis = MagicMock()
+            mock_redis.get.return_value = json.dumps(doc)
+            with patch.object(cache_service, "redis_client", mock_redis):
+                with patch.object(service, "handle_paddle_webhook", return_value={"status": "ignored"}) as mock_handle:
+                    result = service.retry_failed_webhook_event("evt_retry_1")
+        assert result["status"] == "ignored"
+        assert mock_handle.called
+        assert mock_redis.delete.called
+
+    def test_reconcile_paddle_subscriptions_fixes_mismatch(self, db, test_user):
+        sub = Subscription(
+            user_id=test_user.id,
+            plan_type="free",
+            status="active",
+            paddle_subscription_id="sub_123",
+            paddle_customer_id="ctm_123",
+        )
+        db.add(sub)
+        db.commit()
+        service = BillingService(db)
+        service.paddle_available = True
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_PRICE_ID_PRO = "pri_pro"
+            mock_settings.PADDLE_PRICE_ID_INDIE = None
+            mock_settings.PADDLE_PRICE_ID_STARTUP = None
+            mock_settings.PADDLE_PRICE_ID_ENTERPRISE = None
+            with patch.object(
+                service,
+                "_paddle_get",
+                return_value=(
+                    {
+                        "id": "sub_123",
+                        "status": "active",
+                        "customer_id": "ctm_123",
+                        "items": [{"price": {"id": "pri_pro"}}],
+                        "current_billing_period": {},
+                    },
+                    None,
+                ),
+            ):
+                result = service.reconcile_paddle_subscriptions(limit=10)
+        assert result["status"] == "success"
+        assert result["fixed"] == 1

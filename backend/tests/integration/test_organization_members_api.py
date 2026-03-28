@@ -1,5 +1,6 @@
 from app.main import app
 from app.core.security import get_current_user, get_password_hash
+from app.models.subscription import Subscription
 from app.models.organization import Organization, OrganizationMember
 from app.models.user import User
 
@@ -122,3 +123,75 @@ def test_organization_member_mutation_requires_owner_or_admin(client, db, test_u
     response = client.delete(f"/api/v1/organizations/{org.id}/members/{viewer_membership.id}")
     assert response.status_code == 403
     assert "Current role: viewer" in response.text
+
+
+def test_team_member_limit_error_has_normalized_details(client, db, test_user):
+    owner = test_user
+    db.add(Subscription(user_id=owner.id, plan_type="free", status="active"))
+    db.commit()
+
+    org = Organization(name="Limit Org", owner_id=owner.id, plan_type="free")
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    owner_membership = OrganizationMember(
+        organization_id=org.id,
+        user_id=owner.id,
+        role="owner",
+    )
+    db.add(owner_membership)
+
+    first = User(
+        email="limit-first@example.com",
+        hashed_password=get_password_hash("password123"),
+        full_name="Limit First",
+        is_active=True,
+    )
+    second = User(
+        email="limit-second@example.com",
+        hashed_password=get_password_hash("password123"),
+        full_name="Limit Second",
+        is_active=True,
+    )
+    blocked = User(
+        email="limit-blocked@example.com",
+        hashed_password=get_password_hash("password123"),
+        full_name="Limit Blocked",
+        is_active=True,
+    )
+    db.add_all([first, second, blocked])
+    db.commit()
+    db.refresh(first)
+    db.refresh(second)
+    db.refresh(blocked)
+
+    db.add_all(
+        [
+            OrganizationMember(organization_id=org.id, user_id=first.id, role="member"),
+            OrganizationMember(organization_id=org.id, user_id=second.id, role="viewer"),
+        ]
+    )
+    db.commit()
+
+    _as_user(owner)
+    response = client.post(
+        f"/api/v1/organizations/{org.id}/members",
+        json={"email": blocked.email, "role": "member"},
+    )
+
+    assert response.status_code == 403
+    body = response.json()
+    payload = body.get("detail") or body.get("error") or {}
+    direct_code = payload.get("code")
+    details = payload.get("details") or {}
+    nested_payload = details if isinstance(details, dict) else {}
+    if isinstance(nested_payload.get("details"), dict):
+        nested_payload = nested_payload["details"]
+    code = direct_code or (details.get("code") if isinstance(details, dict) else None)
+    assert code == "TEAM_MEMBER_LIMIT_REACHED"
+    assert nested_payload.get("metric") == "team_members"
+    assert nested_payload.get("current") == 3
+    assert nested_payload.get("limit") == 3
+    assert nested_payload.get("remaining") == 0
+    assert nested_payload.get("reset_at") is None

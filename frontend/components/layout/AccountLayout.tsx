@@ -7,14 +7,16 @@ import { orgKeys } from "@/lib/queryKeys";
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
 import { useRouter, usePathname } from "next/navigation";
 import { clsx } from "clsx";
+import { logger } from "@/lib/logger";
 
 type AccountLayoutProps = {
   children: React.ReactNode;
   breadcrumb?: { label: string; href?: string }[];
   activeTab?: "profile" | "usage" | "billing";
+  isWide?: boolean;
 };
 
-const AccountLayout: React.FC<AccountLayoutProps> = ({ children, breadcrumb, activeTab }) => {
+const AccountLayout: React.FC<AccountLayoutProps> = ({ children, breadcrumb, activeTab, isWide }) => {
   const hasToken = useRequireAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -30,7 +32,7 @@ const AccountLayout: React.FC<AccountLayoutProps> = ({ children, breadcrumb, act
         setUserName(user.full_name || "");
         setUserEmail(user.email || "");
       } catch (error) {
-        console.error("Failed to load user info in AccountLayout:", error);
+        logger.error("Failed to load user info in AccountLayout", error);
       }
     };
     void loadUser();
@@ -78,7 +80,10 @@ const AccountLayout: React.FC<AccountLayoutProps> = ({ children, breadcrumb, act
       />
 
       <main className="relative z-10 pt-[90px]">
-        <div className="w-full max-w-5xl mx-auto px-8 lg:px-10 xl:px-12 pb-20">
+        <div className={clsx(
+          "w-full mx-auto px-8 lg:px-10 xl:px-12 pb-20",
+          isWide ? "max-w-[1750px]" : "max-w-5xl"
+        )}>
           {/* Breadcrumb */}
           {breadcrumb && breadcrumb.length > 0 && (
             <nav className="mb-6 text-xs font-bold uppercase tracking-[0.25em] text-slate-500 flex flex-wrap gap-1 items-center">

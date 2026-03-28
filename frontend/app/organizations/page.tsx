@@ -10,6 +10,7 @@ import { useDebouncedValue } from "@/hooks/useDebounce";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { Plus, Search, Building2, Briefcase } from "lucide-react";
 import { clsx } from "clsx";
+import { logger } from "@/lib/logger";
 
 export default function OrganizationsPage() {
   const router = useRouter();
@@ -30,7 +31,7 @@ export default function OrganizationsPage() {
         setUserName(user?.full_name || "");
         setAuthReady(true);
       } catch (error) {
-        console.error("🔴 [OrganizationsPage] Error in loadUser:", error);
+        logger.error("OrganizationsPage loadUser failed", error);
         router.push("/login?reauth=1");
       }
     };
@@ -42,6 +43,9 @@ export default function OrganizationsPage() {
   const { data: orgs, mutate } = useSWR(authReady ? orgKeys.list() : null, () =>
     organizationsAPI.list({ includeStats: false })
   );
+  const { data: myUsage } = useSWR(authReady ? "my-usage" : null, () => authAPI.getMyUsage(), {
+    revalidateOnFocus: false,
+  });
 
   const filtered = useMemo(() => {
     if (!orgs) return [];
@@ -49,6 +53,10 @@ export default function OrganizationsPage() {
     if (!q) return orgs;
     return orgs.filter(org => org.name.toLowerCase().includes(q));
   }, [debouncedQuery, orgs]);
+
+  const orgLimit = Number(myUsage?.limits?.organizations ?? 1);
+  const orgUsed = Number(myUsage?.usage_this_month?.organizations_used ?? orgs?.length ?? 0);
+  const orgCreateBlocked = orgLimit !== -1 && orgUsed >= orgLimit;
 
   return (
     <div className="min-h-screen text-white selection:bg-emerald-500/30 font-sans relative">
@@ -103,9 +111,20 @@ export default function OrganizationsPage() {
 
             <button
               onClick={() => router.push("/organizations/new")}
-              className="h-12 px-6 bg-emerald-500 hover:bg-emerald-400 text-black text-sm font-bold rounded-full shadow-[0_0_40px_-5px_rgba(16,185,129,0.5)] transition-all hover:scale-[1.02] active:scale-[0.98] uppercase tracking-widest whitespace-nowrap relative group/btn overflow-hidden"
+              disabled={orgCreateBlocked}
+              title={
+                orgCreateBlocked ? `Organization limit reached (${orgUsed}/${orgLimit}).` : "Create organization"
+              }
+              className={clsx(
+                "h-12 px-6 text-sm font-bold rounded-full uppercase tracking-widest whitespace-nowrap relative overflow-hidden transition-all",
+                orgCreateBlocked
+                  ? "bg-white/10 text-slate-500 border border-white/10 cursor-not-allowed"
+                  : "bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_40px_-5px_rgba(16,185,129,0.5)] hover:scale-[1.02] active:scale-[0.98] group/btn"
+              )}
             >
-              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover/btn:translate-y-0 transition-transform duration-300" />
+              {!orgCreateBlocked && (
+                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover/btn:translate-y-0 transition-transform duration-300" />
+              )}
               <div className="relative z-10 flex items-center gap-3">
                 <Plus className="w-5 h-5 stroke-[3px]" />
                 <span>New organization</span>

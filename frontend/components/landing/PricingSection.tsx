@@ -1,10 +1,8 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
 import { motion } from "framer-motion";
-import { Check, Zap, Shield, Crown, ArrowRight, Lock } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Check, Zap, Shield, Crown } from "lucide-react";
 
 const tiers = [
   {
@@ -12,33 +10,39 @@ const tiers = [
     priceLabel: "Free",
     description: "For teams getting started with Live View and Release Gate.",
     features: [
-      "Live View & Release Gate",
-      "Up to 10,000 snapshots per month",
-      "Up to 50 Release Gate runs per month",
-      "Bring your own provider key anytime",
-      "No credit card required",
+      "1 organization",
+      "2 active projects",
+      "10,000 snapshots per month",
+      "60 hosted replay credits per month",
     ],
     icon: Zap,
     color: "text-slate-400",
-    ctaLabel: "Get started free",
-    buttonVariant: "outline" as const,
   },
   {
-    name: "Pro",
-    priceLabel: "Coming soon",
-    description: "For teams that need higher hosted replay budgets, retention, and support.",
+    name: "Starter",
+    priceLabel: "$49/month",
+    description: "For teams that need higher hosted replay budgets and multi-project scale.",
     features: [
-      "10 active projects",
-      "10,000 platform replay credits per month",
-      "Longer trace retention",
-      "Priority support",
-      "API access & webhooks",
+      "3 organizations",
+      "8 active projects",
+      "50,000 snapshots per month",
+      "600 hosted replay credits per month",
     ],
     icon: Shield,
     color: "text-emerald-400",
-    bestValue: true,
-    ctaLabel: "Join waitlist",
-    buttonVariant: "primary" as const,
+  },
+  {
+    name: "Pro",
+    priceLabel: "$129/month",
+    description: "For teams running high-throughput validation and release workflows.",
+    features: [
+      "10 organizations",
+      "30 active projects",
+      "200,000 snapshots per month",
+      "3,000 hosted replay credits per month",
+    ],
+    icon: Shield,
+    color: "text-emerald-400",
   },
   {
     name: "Enterprise",
@@ -52,8 +56,6 @@ const tiers = [
     ],
     icon: Crown,
     color: "text-cyan-400",
-    ctaLabel: "Contact sales",
-    buttonVariant: "outline" as const,
   },
 ];
 
@@ -63,7 +65,7 @@ type PricingSectionProps = {
 };
 
 export default function PricingSection({ isLoggedIn }: PricingSectionProps) {
-  const primaryHref = isLoggedIn ? "/organizations" : "/login?mode=signup&intent=trial";
+  void isLoggedIn;
 
   return (
     <section id="pricing" className="py-32 relative bg-transparent overflow-hidden">
@@ -75,12 +77,14 @@ export default function PricingSection({ isLoggedIn }: PricingSectionProps) {
           </div>
           <h2 className="text-4xl md:text-5xl font-black text-white mb-6">Pricing</h2>
           <p className="text-xl text-slate-400 leading-relaxed font-medium">
-            Start for free with product limits and included platform replay credits. <br />
-            Paid plans are preview-only during the MVP.
+            Transparent plan pricing and limits.
+          </p>
+          <p className="text-sm text-slate-500 leading-relaxed font-medium mt-4 max-w-2xl mx-auto">
+            BYOK runs do not consume hosted replay credits.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 w-full max-w-[1400px] mx-auto">
+        <div className="grid md:grid-cols-4 gap-8 w-full max-w-[1600px] mx-auto">
           {tiers.map(tier => (
             <motion.div
               key={tier.name}
@@ -88,14 +92,8 @@ export default function PricingSection({ isLoggedIn }: PricingSectionProps) {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               whileHover={{ y: -10 }}
-              className={`relative p-8 rounded-3xl bg-[#0d0d11]/80 backdrop-blur-xl border ${tier.bestValue ? "border-emerald-500/50 shadow-[0_0_40px_-10px_rgba(16,185,129,0.3)] bg-[#0d0d11]/90" : "border-white/5"} flex flex-col`}
+              className="relative p-8 rounded-3xl bg-[#0d0d11]/80 backdrop-blur-xl border border-white/5 flex flex-col"
             >
-              {tier.bestValue && (
-                <div className="absolute top-0 right-8 -translate-y-1/2 px-4 py-1 bg-emerald-500 text-black text-[10px] font-black uppercase tracking-widest rounded-full">
-                  Preview
-                </div>
-              )}
-
               <div className="mb-8">
                 <div
                   className={`w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center mb-6 ${tier.color} border border-white/10`}
@@ -119,27 +117,6 @@ export default function PricingSection({ isLoggedIn }: PricingSectionProps) {
                   </div>
                 ))}
               </div>
-
-              {tier.name === "Free" ? (
-                <Link href={primaryHref} className="w-full">
-                  <Button
-                    variant={tier.buttonVariant}
-                    className={`w-full h-14 text-sm font-black uppercase tracking-widest rounded-full ${tier.bestValue ? "shadow-[0_0_30px_-5px_rgba(16,185,129,0.4)]" : "bg-transparent text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500/10"}`}
-                  >
-                    {tier.ctaLabel}
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </Link>
-              ) : (
-                <Button
-                  variant={tier.buttonVariant}
-                  disabled={true}
-                  className="w-full h-14 text-sm font-black uppercase tracking-widest rounded-full bg-transparent text-slate-500 border border-white/10 opacity-70"
-                >
-                  <Lock className="w-4 h-4 mr-2" />
-                  {tier.ctaLabel}
-                </Button>
-              )}
             </motion.div>
           ))}
         </div>

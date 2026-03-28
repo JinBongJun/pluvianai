@@ -28,10 +28,30 @@ from app.models.quality_score import QualityScore
 from app.services.cost_analyzer import CostAnalyzer
 from app.services.cache_service import cache_service
 from app.services.subscription_service import SubscriptionService
+from app.core.subscription_limits import PLAN_LIMITS, normalize_plan_type
+from app.core.usage_limits import get_limit_status
 
 
 def _utcnow_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _owner_usage_limit_caps(db: Session, org: Organization) -> tuple[int, float]:
+    """
+    Display caps for org stats (7d calls vs monthly plan ceiling).
+    Uses the org owner's subscription plan, not Organization.plan_type.
+    """
+    plan_info = SubscriptionService(db).get_user_plan(int(org.owner_id))
+    pt = normalize_plan_type(plan_info.get("plan_type"))
+    pl = PLAN_LIMITS.get(pt, PLAN_LIMITS["free"])
+    calls_cap = pl.get("api_calls_per_month", 0)
+    if calls_cap == -1:
+        calls_limit = 1_000_000
+    else:
+        calls_limit = int(calls_cap)
+    # Cost is informational only (no hard cap in PLAN_LIMITS); scale with tier for UI.
+    cost_limit = max(10.0, float(calls_limit) / 100.0) if calls_limit < 1_000_000 else 1_000_000.0
+    return calls_limit, cost_limit
 
 
 router = APIRouter()
@@ -82,8 +102,8 @@ def _invalidate_project_list_caches_for_org(db: Session, org: Organization) -> N
 class OrganizationCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=2000)
-    # Public plans: free, pro, enterprise (MVP: all free)
-    plan_type: str = Field("free", pattern="^(free|pro|enterprise)$")
+    # Public plans: free, starter, pro, enterprise (billing is account-level; org stores label)
+    plan_type: str = Field("free", pattern="^(free|starter|pro|enterprise)$")
 
 
 class OrganizationUpdate(BaseModel):
@@ -250,28 +270,20 @@ def create_organization(
         is_superuser=bool(getattr(current_user, "is_superuser", False)),
     )
     if not can_create:
-        plan_info = SubscriptionService(db).get_user_plan(current_user.id)
-        plan_type = str(plan_info.get("plan_type") or "free")
-        limits = plan_info.get("limits") or {}
-        org_limit = int(limits.get("organizations", 1))
-        current_orgs = (
-            db.query(Organization)
-            .filter(
-                Organization.owner_id == current_user.id,
-                Organization.is_deleted.is_(False),
-            )
-            .count()
-        )
+        limit_status = get_limit_status(db, current_user.id, "organizations")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "ORG_LIMIT_REACHED",
                 "message": error_msg or "You have reached the organization limit for your current plan.",
                 "details": {
-                    "plan_type": plan_type,
-                    "current": current_orgs,
-                    "limit": org_limit,
-                    "upgrade_path": "/settings/subscription",
+                    "plan_type": limit_status.get("plan_type"),
+                    "metric": limit_status.get("metric"),
+                    "current": limit_status.get("current"),
+                    "limit": limit_status.get("limit"),
+                    "remaining": limit_status.get("remaining"),
+                    "reset_at": limit_status.get("reset_at"),
+                    "upgrade_path": "/settings/billing",
                 },
             },
         )
@@ -302,6 +314,7 @@ def list_organizations(
 ):
     """List organizations for the current user with optional stats."""
     orgs = _get_user_orgs(org_service, current_user)
+    account_plan_type = str(SubscriptionService(db).get_user_plan(current_user.id).get("plan_type") or "free")
 
     if not orgs:
         return []
@@ -400,7 +413,7 @@ def list_organizations(
             OrganizationSummary(
                 id=org.id,
                 name=org.name,
-                plan_type=org.plan_type,
+                plan_type=account_plan_type,
                 projects_count=projects_counts.get(org.id, 0),
                 calls_7d=calls_map.get(org.id, 0),
                 cost_7d=cost_map.get(org.id, 0.0),
@@ -422,6 +435,7 @@ def get_organization(
 ):
     """Get organization details with optional stats."""
     logger.info(f"🔵 GET ORGANIZATION: org_id={org_id}, include_stats={include_stats}, user_id={current_user.id}")
+    account_plan_type = str(SubscriptionService(db).get_user_plan(current_user.id).get("plan_type") or "free")
     
     try:
         # Use service to get organization
@@ -457,7 +471,7 @@ def get_organization(
                 name=org.name,
                 description=getattr(org, "description", None),
                 type=org.type,
-                plan_type=org.plan_type,
+                plan_type=account_plan_type,
                 stats=None,
             )
 
@@ -533,14 +547,8 @@ def get_organization(
         else:
             avg_quality = 0.0
 
-        plan_limits = {
-            "free": {"calls": 1000, "cost": 10.0},
-            "indie": {"calls": 30000, "cost": 100.0},
-            "startup": {"calls": 200000, "cost": 500.0},
-            "pro": {"calls": 100000, "cost": 1000.0},
-            "enterprise": {"calls": 1000000, "cost": 10000.0},
-        }
-        limits = plan_limits.get(org.plan_type, plan_limits["free"])
+        calls_limit, cost_limit = _owner_usage_limit_caps(db, org)
+        limits = {"calls": calls_limit, "cost": cost_limit}
 
         alerts_list = []
         if project_ids:
@@ -574,7 +582,7 @@ def get_organization(
             "name": org.name,
             "description": getattr(org, "description", None),
             "type": org.type,
-            "plan_type": org.plan_type,
+            "plan_type": account_plan_type,
             "stats": {
                 "usage": {
                     "calls": calls_count,
@@ -591,31 +599,6 @@ def get_organization(
     except Exception as e:
         logger.error(f"🔴🔴🔴 GET ORGANIZATION ERROR: {type(e).__name__}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
-        # Return basic org info without stats if response building fails
-        plan_limits = {
-            "free": {"calls": 1000, "cost": 10.0},
-            "indie": {"calls": 30000, "cost": 100.0},
-            "startup": {"calls": 200000, "cost": 500.0},
-            "pro": {"calls": 100000, "cost": 1000.0},
-            "enterprise": {"calls": 1000000, "cost": 10000.0},
-        }
-        fallback_limits = plan_limits.get(org.plan_type if org else "free", plan_limits["free"])
-        return {
-            "id": org.id if org else org_id,
-            "name": org.name if org else "Unknown",
-            "type": org.type if org else None,
-            "plan_type": org.plan_type if org else "free",
-            "stats": {
-                "usage": {
-                    "calls": 0,
-                    "calls_limit": fallback_limits["calls"],
-                    "cost": 0.0,
-                    "cost_limit": fallback_limits["cost"],
-                    "quality": 0.0,
-                },
-                "alerts": [],
-            },
-        }
 
 
 @router.get("/{org_id}/members", response_model=List[OrganizationMemberResponse])
@@ -710,6 +693,7 @@ def add_organization_member(
             .count()
         )
         if current_members >= member_limit:
+            remaining = max(0, int(member_limit) - int(current_members))
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
@@ -717,9 +701,12 @@ def add_organization_member(
                     "message": "You have reached the team member limit for your current plan.",
                     "details": {
                         "plan_type": str(plan_info.get("plan_type") or "free"),
+                        "metric": "team_members",
                         "current": int(current_members),
                         "limit": int(member_limit),
-                        "upgrade_path": "/settings/subscription",
+                        "remaining": remaining,
+                        "reset_at": None,
+                        "upgrade_path": "/settings/billing",
                     },
                 },
             )

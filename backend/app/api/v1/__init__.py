@@ -36,6 +36,7 @@ from app.api.v1.endpoints import (
     release_gate,
     internal_usage,
     feedback,
+    billing,
 )
 
 api_router = APIRouter()
@@ -55,7 +56,7 @@ api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(health.router, prefix="/health", tags=["health"])
 api_router.include_router(organizations.router, prefix="/organizations", tags=["organizations"])
 # api_router.include_router(onboarding.router, prefix="/onboarding", tags=["onboarding"])
-# api_router.include_router(billing.router, prefix="/billing", tags=["billing"])
+api_router.include_router(billing.router, prefix="/billing", tags=["billing"])
 # api_router.include_router(trust_center.router, prefix="/trust-center", tags=["trust-center"])
 # api_router.include_router(referral.router, prefix="/referral", tags=["referral"])
 api_router.include_router(user_api_keys.router, prefix="/projects/{project_id}/user-api-keys", tags=["user-api-keys"])

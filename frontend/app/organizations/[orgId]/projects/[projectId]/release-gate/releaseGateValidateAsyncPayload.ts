@@ -1,14 +1,18 @@
 import type { ReleaseGateValidatePayload } from "@/lib/api/release-gate";
 import {
   buildToolContextPayload,
+  isHostedPlatformModel,
   normalizeGateThresholds,
   type EditableTool,
   type ReplayProvider,
 } from "./releaseGatePageContent.lib";
+import type { ReleaseGateModelSource, ReleaseGateReplayModelMode } from "./releaseGateReplayConstants";
 import { sanitizeReplayBodyOverrides } from "./releaseGateReplayMerge";
 
 /** Fields required to build the POST body for `releaseGateAPI.validateAsync`. */
 export type ReleaseGateValidateAsyncPayloadInput = {
+  modelSource?: ReleaseGateModelSource;
+  /** Compatibility field while migrating callers to `modelSource`. */
   modelOverrideEnabled: boolean;
   newModel: string;
   replayProvider: ReplayProvider;
@@ -27,6 +31,12 @@ export type ReleaseGateValidateAsyncPayloadInput = {
   toolContextGlobalText: string;
   toolContextBySnapshotId: Record<string, string>;
   repeatRuns: number;
+  /** When set, server uses this saved project API key for BYOK replay. */
+  replayUserApiKeyId?: number | null;
+  /** Raw provider API key pasted for a single BYOK replay run. */
+  replayApiKey?: string;
+  /** Explicit UI mode; when omitted, inferred from hosted allowlist + model id. */
+  replayModelMode?: ReleaseGateReplayModelMode;
 };
 
 export type BuildReleaseGateValidateAsyncPayloadResult =
@@ -43,7 +53,7 @@ export function buildReleaseGateValidateAsyncPayload(
   const payload: ReleaseGateValidatePayload = {
     agent_id: input.agentId.trim() || undefined,
     evaluation_mode: "replay_test",
-    model_source: input.modelOverrideEnabled ? "platform" : "detected",
+    model_source: "detected",
     max_snapshots: 100,
     repeat_runs: input.repeatRuns,
     fail_rate_max: thresholds.failRateMax,
@@ -56,10 +66,40 @@ export function buildReleaseGateValidateAsyncPayload(
     payload.dataset_ids = input.runDatasetIds;
   }
 
-  if (input.modelOverrideEnabled) {
+  const effectiveModelSource: ReleaseGateModelSource =
+    input.modelSource ??
+    (input.modelOverrideEnabled
+      ? ((input.replayModelMode ??
+          (isHostedPlatformModel(input.replayProvider, input.newModel.trim()) ? "hosted" : "custom")) as
+          | ReleaseGateReplayModelMode
+          | "detected")
+      : "detected");
+
+  if (effectiveModelSource !== "detected") {
     const trimmedModel = input.newModel.trim();
     payload.new_model = trimmedModel;
     payload.replay_provider = input.replayProvider;
+    if (effectiveModelSource === "hosted") {
+      if (!isHostedPlatformModel(input.replayProvider, trimmedModel)) {
+        return {
+          ok: false,
+          error:
+            "Hosted mode requires a hosted quick-pick model for the selected provider, or switch to Custom (BYOK).",
+        };
+      }
+      payload.model_source = "platform";
+    } else {
+      payload.model_source = "detected";
+      const directKey = (input.replayApiKey || "").trim();
+      if (directKey) {
+        payload.replay_api_key = directKey;
+      } else {
+        const kid = input.replayUserApiKeyId;
+        if (kid != null && Number.isFinite(Number(kid))) {
+          payload.replay_user_api_key_id = Number(kid);
+        }
+      }
+    }
   }
 
   payload.new_system_prompt =
