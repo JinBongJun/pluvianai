@@ -14,6 +14,10 @@ import {
   stripBillingCheckoutParams,
 } from "@/components/billing/paddlePaymentLink";
 import { BillingManageSubscriptionCard } from "@/components/billing/BillingManageSubscriptionCard";
+import {
+  PlanChangeConfirmModal,
+  type PlanChangeTarget,
+} from "@/components/billing/PlanChangeConfirmModal";
 import { SUPPORT_EMAIL, supportMailtoHref } from "@/lib/supportContact";
 
 type UsageResponse = {
@@ -38,6 +42,7 @@ export default function AccountBillingPage() {
   const search = searchParams.toString();
   const { mutate } = useSWRConfig();
   const [upgradeBusy, setUpgradeBusy] = useState<string | null>(null);
+  const [planChangeTarget, setPlanChangeTarget] = useState<PlanChangeTarget | null>(null);
   const { data } = useSWR<UsageResponse>(
     hasToken ? "/auth/me/usage" : null,
     async () => {
@@ -100,20 +105,20 @@ export default function AccountBillingPage() {
     };
   }, [mutate, pathname, search, toast]);
 
-  const startUpgrade = async (planType: string) => {
-    if (!hasToken || upgradeBusy) return;
+  const refreshAfterPlanChange = () => {
+    toast.showToast("Plan updated. Refreshing billing status...", "success");
+    void Promise.allSettled([
+      mutate("/auth/me/usage"),
+      mutate("/billing/usage"),
+      mutate("/billing/limits"),
+      mutate("/billing/subscription"),
+    ]);
+  };
+
+  const startCheckout = async (planType: string) => {
+    if (!hasToken || upgradeBusy || planChangeTarget) return;
     setUpgradeBusy(planType);
     try {
-      if (showManageSubscription && (planType === "starter" || planType === "pro")) {
-        await billingAPI.changePlan(planType);
-        toast.showToast("Plan updated. Refreshing billing status...", "success");
-        await Promise.allSettled([
-          mutate("/auth/me/usage"),
-          mutate("/billing/usage"),
-          mutate("/billing/limits"),
-        ]);
-        return;
-      }
       const origin = typeof window !== "undefined" ? window.location.origin : "";
       const successUrl = `${origin}/settings/billing?checkout=success`;
       const cancelUrl = `${origin}/settings/billing?checkout=cancel`;
@@ -132,6 +137,12 @@ export default function AccountBillingPage() {
     } finally {
       setUpgradeBusy(null);
     }
+  };
+
+  const openPaidPlanChange = (planType: string) => {
+    if (!hasToken || upgradeBusy || planChangeTarget) return;
+    if (planType !== "starter" && planType !== "pro") return;
+    setPlanChangeTarget(planType);
   };
 
   const plans = [
@@ -285,6 +296,14 @@ export default function AccountBillingPage() {
           </p>
         </div>
         {showManageSubscription && <BillingManageSubscriptionCard />}
+        {planChangeTarget && (
+          <PlanChangeConfirmModal
+            open={!!planChangeTarget}
+            targetPlan={planChangeTarget}
+            onClose={() => setPlanChangeTarget(null)}
+            onApplied={refreshAfterPlanChange}
+          />
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 xl:gap-5 relative z-10">
           {plans.map(plan => {
             const isCurrent = plan.id === currentPlanId;
@@ -356,14 +375,16 @@ export default function AccountBillingPage() {
                     </button>
                   ) : canCheckout ? (
                     <button
-                      onClick={() => void startUpgrade(plan.id)}
-                      disabled={upgradeBusy !== null}
+                      onClick={() =>
+                        void (showManageSubscription
+                          ? openPaidPlanChange(plan.id)
+                          : startCheckout(plan.id))
+                      }
+                      disabled={upgradeBusy !== null || planChangeTarget !== null}
                       className="w-full py-2.5 rounded-xl border border-emerald-500/60 bg-emerald-500 text-[11px] font-bold uppercase tracking-widest text-black hover:bg-emerald-400 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {upgradeBusy === plan.id
-                        ? showManageSubscription
-                          ? "Updating plan..."
-                          : "Opening checkout..."
+                      {upgradeBusy === plan.id && !showManageSubscription
+                        ? "Opening checkout..."
                         : actionLabel}
                     </button>
                   ) : isContactSales ? (

@@ -593,6 +593,211 @@ class BillingService:
             None,
         )
 
+    @staticmethod
+    def _format_money_minor_units(amount_str: Optional[str], currency_code: str) -> Optional[str]:
+        """Format Paddle minor-unit amount strings (e.g. cents) for English UI display."""
+        if amount_str is None:
+            return None
+        s = str(amount_str).strip()
+        if not s:
+            return None
+        try:
+            if "." in s:
+                minor = int(float(s))
+            else:
+                minor = int(s)
+        except (TypeError, ValueError):
+            return None
+        major = minor / 100.0
+        code = (currency_code or "USD").upper()
+        if code == "USD":
+            return f"${major:,.2f}"
+        return f"{major:,.2f} {code}"
+
+    def _totals_dict_from_transaction_preview(self, tx: Optional[Dict[str, Any]]) -> Tuple[Optional[str], str]:
+        """Return (grand_total_minor_str, currency_code) from a preview transaction object."""
+        if not tx or not isinstance(tx, dict):
+            return None, "USD"
+        details = tx.get("details") or {}
+        totals = details.get("totals") or tx.get("totals") or {}
+        currency = (
+            totals.get("currency_code")
+            or tx.get("currency_code")
+            or "USD"
+        )
+        if not isinstance(currency, str):
+            currency = "USD"
+        gt = totals.get("grand_total") or totals.get("total") or totals.get("subtotal")
+        if gt is None:
+            return None, currency
+        return str(gt), currency
+
+    def _build_plan_change_preview_ui(
+        self,
+        *,
+        preview: Dict[str, Any],
+        is_upgrade: bool,
+        target_plan: str,
+    ) -> Dict[str, Any]:
+        """Reduce Paddle subscription preview payload to UI-safe fields."""
+        currency = str(preview.get("currency_code") or "USD")
+        next_billed_at = preview.get("next_billed_at")
+        cbp = preview.get("current_billing_period") or {}
+        period_starts = cbp.get("starts_at")
+        period_ends = cbp.get("ends_at")
+
+        due_now_display: Optional[str] = None
+        at_next_renewal_display: Optional[str] = None
+        recurring_display: Optional[str] = None
+
+        imm = preview.get("immediate_transaction")
+        if imm and is_upgrade:
+            gt, ccy = self._totals_dict_from_transaction_preview(imm)
+            due_now_display = self._format_money_minor_units(gt, ccy)
+
+        next_tx = preview.get("next_transaction")
+        if next_tx and not is_upgrade:
+            gt, ccy = self._totals_dict_from_transaction_preview(next_tx)
+            at_next_renewal_display = self._format_money_minor_units(gt, ccy)
+
+        rec = preview.get("recurring_transaction_details") or {}
+        if isinstance(rec, dict):
+            totals = rec.get("totals") or {}
+            gt = totals.get("grand_total") or totals.get("total")
+            ccy = totals.get("currency_code") or currency
+            if gt is not None:
+                recurring_display = self._format_money_minor_units(str(gt), str(ccy))
+
+        us = preview.get("update_summary")
+        summary_brief: Optional[str] = None
+        if isinstance(us, dict):
+            # Paddle may include charge/credit totals; keep a light hint for support.
+            cr = us.get("credit")
+            ch = us.get("charge")
+            if cr or ch:
+                summary_brief = "Paddle calculated credits/charges for this change."
+
+        return {
+            "currency_code": currency,
+            "next_billed_at": next_billed_at,
+            "current_period_starts_at": period_starts,
+            "current_period_ends_at": period_ends,
+            "due_now_display": due_now_display,
+            "at_next_renewal_display": at_next_renewal_display,
+            "recurring_after_change_display": recurring_display,
+            "update_summary_hint": summary_brief,
+            "target_plan": target_plan,
+            "change_type": "upgrade" if is_upgrade else "downgrade",
+        }
+
+    def get_billing_subscription_snapshot(self, user_id: int) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Lightweight Paddle subscription fields for billing UI (next renewal, period)."""
+        if not self.paddle_available:
+            return None, "paddle_not_configured"
+
+        sub = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
+        if not sub or not (sub.paddle_subscription_id or "").strip():
+            return None, "no_paddle_subscription"
+
+        sub_id = (sub.paddle_subscription_id or "").strip()
+        paddle_sub, err = self._paddle_get(f"subscriptions/{sub_id}")
+        if not paddle_sub:
+            logger.warning(
+                "Paddle subscription snapshot failed",
+                extra={"user_id": user_id, "error": err},
+            )
+            return None, "paddle_lookup_failed"
+
+        price_id = self._paddle_subscription_price_id(paddle_sub)
+        plan_type = self._map_paddle_price_id_to_plan_type(price_id) if price_id else normalize_plan_type(sub.plan_type)
+        cbp = paddle_sub.get("current_billing_period") or {}
+        return (
+            {
+                "plan_type": plan_type,
+                "paddle_status": str(paddle_sub.get("status") or ""),
+                "next_billed_at": paddle_sub.get("next_billed_at"),
+                "current_period_starts_at": cbp.get("starts_at"),
+                "current_period_ends_at": cbp.get("ends_at"),
+            },
+            None,
+        )
+
+    def preview_paddle_subscription_plan(self, user_id: int, target_plan: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Call Paddle preview subscription update API; does not change the subscription."""
+        if not self.paddle_available:
+            return None, "paddle_not_configured"
+
+        target = normalize_plan_type(target_plan)
+        if target not in ("starter", "pro"):
+            return None, "invalid_plan"
+
+        target_rank = self._self_serve_paid_plan_rank(target)
+        if target_rank is None:
+            return None, "invalid_plan"
+
+        sub = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
+        if not sub or not (sub.paddle_subscription_id or "").strip():
+            return None, "checkout_required"
+
+        current = normalize_plan_type(sub.plan_type)
+        current_rank = self._self_serve_paid_plan_rank(current)
+        if current_rank is None:
+            return None, "checkout_required"
+
+        if current == target:
+            return None, "same_plan"
+
+        local_status = (sub.status or "").lower()
+        if local_status in ("cancelled", "canceled"):
+            return None, "subscription_inactive"
+
+        new_price_id = self._get_paddle_price_id(target)
+        if not new_price_id:
+            return None, "paddle_error"
+
+        sub_id = (sub.paddle_subscription_id or "").strip()
+        paddle_sub, err = self._paddle_get(f"subscriptions/{sub_id}")
+        if not paddle_sub:
+            return None, "paddle_lookup_failed"
+
+        ps = str(paddle_sub.get("status") or "").lower()
+        if ps in ("canceled", "cancelled", "paused"):
+            return None, "subscription_inactive"
+        if ps == "past_due":
+            return None, "subscription_past_due"
+
+        is_upgrade = target_rank > current_rank
+        proration_mode = "prorated_immediately" if is_upgrade else "full_next_billing_period"
+
+        payload: Dict[str, Any] = {
+            "items": [{"price_id": new_price_id, "quantity": 1}],
+            "proration_billing_mode": proration_mode,
+        }
+
+        preview, perr = self._paddle_patch(f"subscriptions/{sub_id}/preview", payload)
+        if not preview:
+            logger.error(
+                "Paddle subscription preview failed",
+                extra={"user_id": user_id, "error": perr},
+            )
+            return None, "paddle_error"
+
+        ui = self._build_plan_change_preview_ui(
+            preview=preview,
+            is_upgrade=is_upgrade,
+            target_plan=target,
+        )
+        ui["current_plan"] = current
+        ui["proration_billing_mode"] = proration_mode
+        amounts_ok = bool(
+            (is_upgrade and ui.get("due_now_display"))
+            or (not is_upgrade and (ui.get("at_next_renewal_display") or ui.get("recurring_after_change_display")))
+            or ui.get("recurring_after_change_display")
+        )
+        ui["preview_amounts_available"] = amounts_ok
+
+        return (ui, None)
+
     def _customer_portal_url_from_session_data(
         self, data: Dict[str, Any], paddle_subscription_id: Optional[str]
     ) -> Optional[str]:

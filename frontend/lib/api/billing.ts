@@ -11,6 +11,22 @@ export const billingAPI = {
     return unwrapResponse(response);
   },
 
+  /** Paddle-backed subscription times (paid accounts). */
+  getSubscription: async () => {
+    const response = await apiClient.get("/billing/subscription");
+    return unwrapResponse(response);
+  },
+
+  /** Preview plan change (proration / next renewal) without applying. */
+  previewPlanChange: async (planType: string) => {
+    const response = await apiClient.post(
+      "/billing/preview-plan-change",
+      { plan_type: planType },
+      { timeout: 60_000 }
+    );
+    return unwrapResponse(response);
+  },
+
   createCheckoutSession: async (planType: string, successUrl: string, cancelUrl: string) => {
     const response = await apiClient.post("/billing/checkout", {
       plan_type: planType,
