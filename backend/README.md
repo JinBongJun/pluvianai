@@ -89,7 +89,9 @@ See [`tests/README.md`](./tests/README.md) for more on the test layout.
 
 - Prometheus metric: `billing_webhook_events_total{result,event_type}`
 - Result labels: `success`, `ignored`, `duplicate`, `error`
-- Check endpoint: `GET /metrics`
+- Metrics endpoint: `GET /metrics` (in **production**, set `EXPOSE_METRICS_ENDPOINT=true` or it stays disabled by default)
 - Webhook logs include `event_id`, `event_type`, `status`
 - DLQ retry endpoint: `POST /api/v1/billing/webhook/retry/{event_id}`
 - Manual reconcile endpoint: `POST /api/v1/billing/reconcile?limit=200`
+- **Grafana / Prometheus alerts:** [`../docs/billing-prometheus-grafana-alerts.md`](../docs/billing-prometheus-grafana-alerts.md)
+- **Example alert rules:** [`../deploy/prometheus/billing-webhook-alerts.example.yml`](../deploy/prometheus/billing-webhook-alerts.example.yml)
