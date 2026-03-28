@@ -17,6 +17,7 @@ import {
   pickReleaseGateConfigPanelPreviewTabProps,
 } from "./releaseGateConfigPanelPickTabProps";
 import { useReleaseGateConfigPanelModel } from "./useReleaseGateConfigPanelModel";
+import { ReleaseGateConfigHostedReplayUsage } from "@/components/release-gate/ReleaseGateConfigHostedReplayUsage";
 
 export function ReleaseGateConfigPanel({
   isOpen,
@@ -61,9 +62,9 @@ export function ReleaseGateConfigPanel({
           role="dialog"
           aria-labelledby="release-gate-config-title"
         >
-          <div className="flex items-center justify-between border-b border-white/5 px-8 py-6 shrink-0 relative">
+          <div className="flex items-start justify-between gap-4 border-b border-white/5 px-8 py-6 shrink-0 relative">
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-            <div>
+            <div className="min-w-0 flex-1">
               <h2
                 id="release-gate-config-title"
                 className="text-2xl font-bold tracking-tight text-white"
@@ -75,15 +76,18 @@ export function ReleaseGateConfigPanel({
                 payload.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2.5 rounded-xl border border-white/10 text-slate-400 bg-white/[0.02] hover:bg-white/10 hover:text-white transition-all duration-200"
-              title="Close settings"
-              aria-label="Close Release Gate settings"
-            >
-              <X className="w-5 h-5" aria-hidden />
-            </button>
+            <div className="flex shrink-0 items-start gap-3">
+              <ReleaseGateConfigHostedReplayUsage />
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2.5 rounded-xl border border-white/10 text-slate-400 bg-white/[0.02] hover:bg-white/10 hover:text-white transition-all duration-200"
+                title="Close settings"
+                aria-label="Close Release Gate settings"
+              >
+                <X className="w-5 h-5" aria-hidden />
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto overscroll-y-contain p-8 custom-scrollbar">

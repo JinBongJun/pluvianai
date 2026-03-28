@@ -5,6 +5,7 @@ import useSWR from "swr";
 import TopHeader from "./TopHeader";
 import { LaboratoryNavbar } from "./LaboratoryNavbar";
 import { LaboratoryRefreshButton } from "./LaboratoryRefreshButton";
+import { AccountUsageStrip } from "./AccountUsageStrip";
 import { TelemetryHUD, type TelemetryStat } from "./TelemetryHUD";
 import clsx from "clsx";
 import { organizationsAPI } from "@/lib/api";
@@ -96,8 +97,9 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
         <main className="flex-1 flex flex-col relative z-0 overflow-y-auto custom-scrollbar bg-[#0d0d12] rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] border-t border-l border-r border-white/5">
           {navigationVariant === "side" && hasValidProject && (
             <>
-              <div className="absolute left-6 top-6 z-[100]">
+              <div className="absolute left-6 top-6 z-[100] flex flex-wrap items-center gap-3">
                 <LaboratoryNavbar orgId={orgId!} projectId={effectiveProjectId!} variant="side" />
+                <AccountUsageStrip />
               </div>
               <LaboratoryRefreshButton projectId={effectiveProjectId!} />
             </>
