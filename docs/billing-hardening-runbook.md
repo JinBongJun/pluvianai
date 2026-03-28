@@ -65,6 +65,18 @@ Run this checklist daily for at least 7 consecutive days:
 Template:
 - `docs/billing-webhook-7day-monitoring-template.md`
 
+## Real Event Verification
+
+Before trusting the 7-day table, force at least one real Paddle event in the chosen environment (sandbox or live):
+
+1. trigger one checkout flow that should emit a billing event
+2. confirm backend logs show `event_id`, `event_type`, and final result
+3. re-run webhook metrics checker and verify `billing_webhook_events_total` changed from the prior snapshot
+4. if counts do not change, inspect:
+   - webhook delivery status in Paddle
+   - backend webhook signature/config
+   - retry / reconcile path
+
 ## Production Policy Checklist (Paddle-facing)
 - Public docs:
   - Terms

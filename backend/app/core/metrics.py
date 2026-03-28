@@ -171,6 +171,12 @@ def update_app_info(version: str, environment: str):
     )
 
 
+def initialize_billing_webhook_metrics() -> None:
+    """Pre-create billing webhook label sets so the metric is visible before first event."""
+    for result in ("success", "ignored", "duplicate", "error"):
+        billing_webhook_events_total.labels(result=result, event_type="unknown").inc(0)
+
+
 def get_metrics_response() -> Response:
     """Generate Prometheus metrics response"""
     return Response(content=generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
