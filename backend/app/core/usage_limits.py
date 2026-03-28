@@ -1,10 +1,13 @@
 """
-Helpers for free-tier usage limits (DB-backed, no Redis dependency for enforcement).
-Used by snapshot creation, hosted Release Gate replay credits, and usage APIs.
+Usage limits (DB-backed, no Redis dependency for enforcement).
+
+Paid plans: quota window follows Paddle/Stripe **current billing period** on `subscriptions`
+when `current_period_start` / `current_period_end` are set (plus roll-forward if webhook is late).
+Free / no subscription: **calendar month (UTC)**.
 """
 
 from calendar import monthrange
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Tuple
 
 from sqlalchemy import func
@@ -18,8 +21,15 @@ from app.models.subscription import Subscription
 from app.models.usage import Usage
 
 
-def _current_month_bounds_utc() -> Tuple[datetime, datetime]:
-    """Return (start, end) of current month in UTC (end is exclusive)."""
+def _ensure_utc_aware(dt: datetime) -> datetime:
+    """DB may return naive datetimes; all quota math uses UTC-aware instants."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _calendar_month_bounds_utc() -> Tuple[datetime, datetime]:
+    """Return (start, end) of current calendar month in UTC (inclusive end for queries)."""
     now = datetime.now(timezone.utc)
     start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     _, last_day = monthrange(now.year, now.month)
@@ -27,12 +37,60 @@ def _current_month_bounds_utc() -> Tuple[datetime, datetime]:
     return start, end
 
 
+def _roll_forward_billing_window(
+    period_start: datetime, period_end: datetime, now: datetime
+) -> Tuple[datetime, datetime]:
+    """Project current period when DB still holds the previous cycle (delayed webhook)."""
+    duration = period_end - period_start
+    if duration <= timedelta(0):
+        return _calendar_month_bounds_utc()
+    cur_s, cur_e = period_start, period_end
+    for _ in range(48):
+        if cur_s <= now <= cur_e:
+            return cur_s, cur_e
+        if now < cur_s:
+            return cur_s, cur_e
+        cur_s = cur_e + timedelta(microseconds=1)
+        cur_e = cur_s + duration
+    return _calendar_month_bounds_utc()
+
+
+def get_usage_period_bounds_utc(db: Session, user_id: int) -> Tuple[datetime, datetime]:
+    """
+    Quota accounting window: subscription billing period when applicable, else calendar month (UTC).
+    """
+    now = datetime.now(timezone.utc)
+    sub = db.query(Subscription).filter(Subscription.user_id == user_id).first()
+    plan_type = normalize_plan_type(sub.plan_type if sub else "free")
+    if plan_type == "free" or not sub:
+        return _calendar_month_bounds_utc()
+
+    has_provider = bool(
+        (sub.paddle_subscription_id or "").strip() or (sub.stripe_subscription_id or "").strip()
+    )
+    if not has_provider:
+        return _calendar_month_bounds_utc()
+
+    ps = sub.current_period_start
+    pe = sub.current_period_end
+    if ps is None or pe is None:
+        return _calendar_month_bounds_utc()
+
+    ps = _ensure_utc_aware(ps)
+    pe = _ensure_utc_aware(pe)
+
+    if ps <= now <= pe:
+        return ps, pe
+    if now > pe:
+        return _roll_forward_billing_window(ps, pe, now)
+    return _calendar_month_bounds_utc()
+
+
 def get_snapshots_count_this_month(db: Session, user_id: int) -> int:
     """
-    Count snapshots created this month in projects owned by this user.
-    Used for free-tier snapshots_per_month enforcement.
+    Count snapshots in the current usage window (subscription period or calendar month).
     """
-    start, end = _current_month_bounds_utc()
+    start, end = get_usage_period_bounds_utc(db, user_id)
     count = (
         db.query(Snapshot.id)
         .join(Project, Snapshot.project_id == Project.id)
@@ -48,10 +106,9 @@ def get_snapshots_count_this_month(db: Session, user_id: int) -> int:
 
 def get_guard_credits_this_month(db: Session, user_id: int) -> int:
     """
-    Sum of hosted replay credits (metric_name='guard_credits_replay') for this user this month.
-    Used for free-tier platform replay credit enforcement.
+    Sum hosted replay credits (guard_credits_replay) in the current usage window.
     """
-    start, end = _current_month_bounds_utc()
+    start, end = get_usage_period_bounds_utc(db, user_id)
     row = (
         db.query(func.coalesce(func.sum(Usage.quantity), 0))
         .filter(
@@ -96,7 +153,10 @@ def get_limit_status(db: Session | None, user_id: int, metric: str) -> Dict[str,
     """
     plan_type = _resolve_user_plan_type(db, user_id)
     limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
-    _, end = _current_month_bounds_utc()
+    if db is not None:
+        _, end = get_usage_period_bounds_utc(db, user_id)
+    else:
+        _, end = _calendar_month_bounds_utc()
     reset_at = end.isoformat()
 
     if metric == "snapshots":
@@ -163,7 +223,7 @@ def check_snapshot_limit(db: Session, user_id: int, is_superuser: bool = False) 
     if current + 1 > cap:
         return (
             False,
-            f"Snapshot limit reached: {current} / {cap} this month. Upgrade or wait for monthly reset.",
+            f"Snapshot limit reached: {current} / {cap} for this billing period. Upgrade or wait until the period resets.",
         )
     return (True, None)
 
@@ -182,7 +242,7 @@ def check_guard_credits_limit(db: Session, user_id: int, is_superuser: bool = Fa
     if current >= cap:
         return (
             False,
-            "You have used all included platform replay credits for this month. Switch to your own provider key or upgrade your plan to keep running Release Gate.",
+            "You have used all included platform replay credits for this billing period. Switch to your own provider key or upgrade your plan to keep running Release Gate.",
         )
     return (True, None)
 

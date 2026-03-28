@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import TopHeader from "@/components/layout/TopHeader";
 import { authAPI, organizationsAPI } from "@/lib/api";
+import { ACCOUNT_USAGE_SWR_KEY } from "@/lib/accountUsage";
 import { orgKeys } from "@/lib/queryKeys";
 import { useDebouncedValue } from "@/hooks/useDebounce";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
@@ -43,7 +44,7 @@ export default function OrganizationsPage() {
   const { data: orgs, mutate } = useSWR(authReady ? orgKeys.list() : null, () =>
     organizationsAPI.list({ includeStats: false })
   );
-  const { data: myUsage } = useSWR(authReady ? "my-usage" : null, () => authAPI.getMyUsage(), {
+  const { data: myUsage } = useSWR(authReady ? ACCOUNT_USAGE_SWR_KEY : null, () => authAPI.getMyUsage(), {
     revalidateOnFocus: false,
   });
 

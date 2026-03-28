@@ -1,9 +1,12 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from app.core.usage_limits import (
     check_snapshot_limit,
     check_platform_replay_credits_limit,
     get_platform_replay_credits_this_month,
+    get_usage_period_bounds_utc,
 )
 from app.models.subscription import Subscription
 from app.models.usage import Usage
@@ -78,3 +81,47 @@ class TestUsageLimits:
         allowed, message = check_snapshot_limit(db, test_user.id, is_superuser=True)
         assert allowed is True
         assert message is None
+
+    def test_paid_usage_window_matches_subscription_period(self, db, test_user, test_project):
+        """Hosted replay credits sum over Paddle billing period, not calendar month only."""
+        now = datetime.now(timezone.utc)
+        ps = now - timedelta(days=2)
+        pe = now + timedelta(days=28)
+        db.add(
+            Subscription(
+                user_id=test_user.id,
+                plan_id="pro",
+                status="active",
+                paddle_subscription_id="sub_test_usage",
+                current_period_start=ps,
+                current_period_end=pe,
+            )
+        )
+        db.add(
+            Usage(
+                user_id=test_user.id,
+                project_id=test_project.id,
+                metric_name="guard_credits_replay",
+                quantity=40,
+                unit="credits",
+            )
+        )
+        db.commit()
+
+        window_start, window_end = get_usage_period_bounds_utc(db, test_user.id)
+        assert window_start == ps
+        assert window_end == pe
+        assert get_platform_replay_credits_this_month(db, test_user.id) == 40
+
+        stale = Usage(
+            user_id=test_user.id,
+            project_id=test_project.id,
+            metric_name="guard_credits_replay",
+            quantity=999,
+            unit="credits",
+        )
+        stale.timestamp = ps - timedelta(days=1)
+        db.add(stale)
+        db.commit()
+
+        assert get_platform_replay_credits_this_month(db, test_user.id) == 40
