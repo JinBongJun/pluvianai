@@ -112,6 +112,25 @@ class BillingService:
             logger.error("Paddle API request failed: %s", str(e), exc_info=True)
             return None, str(e)
 
+    def _paddle_patch(self, path: str, json_body: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        if not self.paddle_available:
+            return None, "Paddle not configured"
+        url = f"{self._paddle_base_url().rstrip('/')}/{path.lstrip('/')}"
+        try:
+            with httpx.Client(timeout=60.0) as client:
+                r = client.patch(url, headers=self._paddle_headers(), json=json_body)
+            body = r.json() if r.content else {}
+            if r.status_code >= 400:
+                err = body.get("error", body) if isinstance(body, dict) else str(body)
+                logger.error("Paddle API error %s: %s", r.status_code, err)
+                return None, str(err)
+            if isinstance(body, dict) and "data" in body:
+                return body["data"], None
+            return body if isinstance(body, dict) else None, None
+        except Exception as e:
+            logger.error("Paddle API request failed: %s", str(e), exc_info=True)
+            return None, str(e)
+
     def _failed_webhook_key(self, event_id: str) -> str:
         return f"billing:webhook:failed:{event_id}"
 
@@ -442,6 +461,137 @@ class BillingService:
             "session_id": data.get("id"),
             "url": url,
         }
+
+    @staticmethod
+    def _self_serve_paid_plan_rank(plan_type: str) -> Optional[int]:
+        """Ordering for public paid tiers (starter < pro). Other plans are not self-serve-swappable."""
+        p = normalize_plan_type(plan_type)
+        if p == "starter":
+            return 1
+        if p == "pro":
+            return 2
+        return None
+
+    def _sync_local_subscription_from_paddle_subscription_data(self, user_id: int, data: Dict[str, Any]) -> None:
+        """Apply Paddle subscription entity fields to the local Subscription row (after API update)."""
+        from app.services.subscription_service import SubscriptionService
+
+        price_id = self._paddle_subscription_price_id(data)
+        if not price_id:
+            logger.warning(
+                "Paddle subscription payload missing price id during sync",
+                extra={"user_id": user_id},
+            )
+            return
+        plan_type = self._map_paddle_price_id_to_plan_type(price_id)
+        if not plan_type:
+            logger.warning(
+                "Unknown Paddle price id after plan change",
+                extra={"price_id": price_id, "user_id": user_id},
+            )
+            return
+        cbp = data.get("current_billing_period") or {}
+        period_start = self._parse_paddle_datetime(cbp.get("starts_at"))
+        period_end = self._parse_paddle_datetime(cbp.get("ends_at"))
+        status = self._normalize_paddle_status(str(data.get("status") or "active"))
+        subscription_service = SubscriptionService(self.db)
+        subscription_service.create_or_update_subscription(
+            user_id=user_id,
+            plan_type=plan_type,
+            status=status,
+            paddle_subscription_id=data.get("id"),
+            paddle_customer_id=data.get("customer_id"),
+            current_period_start=period_start,
+            current_period_end=period_end,
+        )
+
+    def change_paddle_subscription_plan(self, user_id: int, target_plan: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """
+        Move an existing Paddle subscription between Starter and Pro without a new checkout:
+        upgrades bill a prorated amount immediately; downgrades use Paddle's next-billing-period mode
+        so the lower price is charged from the next renewal (see Paddle proration docs).
+        """
+        if not self.paddle_available:
+            return None, "paddle_not_configured"
+
+        target = normalize_plan_type(target_plan)
+        if target not in ("starter", "pro"):
+            return None, "invalid_plan"
+
+        target_rank = self._self_serve_paid_plan_rank(target)
+        if target_rank is None:
+            return None, "invalid_plan"
+
+        sub = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
+        if not sub or not (sub.paddle_subscription_id or "").strip():
+            return None, "checkout_required"
+
+        current = normalize_plan_type(sub.plan_type)
+        current_rank = self._self_serve_paid_plan_rank(current)
+        if current_rank is None:
+            return None, "checkout_required"
+
+        if current == target:
+            return None, "same_plan"
+
+        local_status = (sub.status or "").lower()
+        if local_status in ("cancelled", "canceled"):
+            return None, "subscription_inactive"
+
+        new_price_id = self._get_paddle_price_id(target)
+        if not new_price_id:
+            logger.error("Missing Paddle price id for target plan %s", target)
+            return None, "paddle_error"
+
+        sub_id = (sub.paddle_subscription_id or "").strip()
+        paddle_sub, err = self._paddle_get(f"subscriptions/{sub_id}")
+        if not paddle_sub:
+            logger.warning(
+                "Paddle subscription lookup failed before plan change",
+                extra={"user_id": user_id, "subscription_id": sub_id, "error": err},
+            )
+            return None, "paddle_lookup_failed"
+
+        ps = str(paddle_sub.get("status") or "").lower()
+        if ps in ("canceled", "cancelled", "paused"):
+            return None, "subscription_inactive"
+        if ps == "past_due":
+            return None, "subscription_past_due"
+
+        is_upgrade = target_rank > current_rank
+        proration_mode = "prorated_immediately" if is_upgrade else "full_next_billing_period"
+
+        payload: Dict[str, Any] = {
+            "items": [{"price_id": new_price_id, "quantity": 1}],
+            "proration_billing_mode": proration_mode,
+        }
+
+        updated, perr = self._paddle_patch(f"subscriptions/{sub_id}", payload)
+        if not updated:
+            logger.error(
+                "Paddle subscription plan change failed",
+                extra={"user_id": user_id, "error": perr},
+            )
+            return None, "paddle_error"
+
+        try:
+            self._sync_local_subscription_from_paddle_subscription_data(user_id, updated)
+        except Exception as e:
+            logger.error(
+                "Failed to sync local subscription after Paddle plan change: %s",
+                str(e),
+                exc_info=True,
+            )
+
+        return (
+            {
+                "plan_type": target,
+                "change_type": "upgrade" if is_upgrade else "downgrade",
+                "proration_billing_mode": proration_mode,
+                "paddle_subscription_id": updated.get("id") or sub_id,
+            },
+            None,
+        )
 
     def _customer_portal_url_from_session_data(
         self, data: Dict[str, Any], paddle_subscription_id: Optional[str]
