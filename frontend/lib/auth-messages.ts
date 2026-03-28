@@ -3,6 +3,12 @@
  * Maps backend status codes and details to clear, consistent messages.
  */
 
+/** Avoid showing non-English API copy in the auth UI (e.g. localized server messages). */
+function blockNonLatinMessage(msg: string, fallback: string): string {
+  if (/[\uac00-\ud7a3\u3040-\u30ff\u4e00-\u9fff]/.test(msg)) return fallback;
+  return msg;
+}
+
 export type AuthErrorSource = {
   status?: number;
   detail?: string | { message?: string; reasons?: string[]; code?: string };
@@ -84,7 +90,7 @@ export function getLoginErrorMessage(source: AuthErrorSource): string {
     return "This account has been deactivated. Contact support if you need access.";
   }
   if (parsed && parsed.length > 0 && parsed.length < 200) {
-    return parsed;
+    return blockNonLatinMessage(parsed, "Login failed. Please check your credentials and try again.");
   }
   if (status && LOGIN_MESSAGES[status]) {
     return LOGIN_MESSAGES[status];
@@ -124,7 +130,12 @@ export function getRegisterErrorMessage(source: AuthErrorSource): string {
     if (parsed?.toLowerCase().includes("liability") || parsed?.toLowerCase().includes("accept")) {
       return "You must accept the terms to continue.";
     }
-    if (parsed && parsed.length > 0 && parsed.length < 200) return parsed;
+    if (parsed && parsed.length > 0 && parsed.length < 200) {
+      return blockNonLatinMessage(
+        parsed,
+        "Registration failed. Please check your information and try again."
+      );
+    }
   }
 
   if (status && REGISTER_MESSAGES[status]) {
@@ -154,6 +165,8 @@ export function getReauthMessage(code?: string | null, fallback?: string | null)
   if (code && SESSION_REAUTH_MESSAGES[code]) {
     return SESSION_REAUTH_MESSAGES[code];
   }
-  if (fallback && fallback.trim()) return fallback.trim();
+  if (fallback && fallback.trim()) {
+    return blockNonLatinMessage(fallback.trim(), "Please log in again.");
+  }
   return "Please log in again.";
 }

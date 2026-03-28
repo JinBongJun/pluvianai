@@ -11,6 +11,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { useLoading } from "@/hooks/useLoading";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function SubmitButton({
   isLogin,
   liabilityAccepted,
@@ -148,11 +150,25 @@ export default function LoginPage() {
   const handleClientLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
-    setIsSubmitting(true);
 
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") || "").trim();
     const rawPassword = String(formData.get("password") || "");
+
+    if (!email) {
+      setFormError("Please enter your email address.");
+      return;
+    }
+    if (!EMAIL_RE.test(email)) {
+      setFormError("Please enter a valid email address (include @ and a domain).");
+      return;
+    }
+    if (!rawPassword) {
+      setFormError("Please enter your password.");
+      return;
+    }
+
+    setIsSubmitting(true);
 
     try {
       await authAPI.login(email, rawPassword);
@@ -170,13 +186,35 @@ export default function LoginPage() {
   const handleClientRegister = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
-    setIsSubmitting(true);
 
     const formData = new FormData(event.currentTarget);
     const fullName = String(formData.get("fullName") || "").trim() || undefined;
     const email = String(formData.get("email") || "").trim();
     const rawPassword = String(formData.get("password") || "");
     const accepted = formData.get("liabilityAgreementAccepted") === "true";
+
+    if (!fullName?.trim()) {
+      setFormError("Please enter your full name.");
+      return;
+    }
+    if (!email) {
+      setFormError("Please enter your email address.");
+      return;
+    }
+    if (!EMAIL_RE.test(email)) {
+      setFormError("Please enter a valid email address (include @ and a domain).");
+      return;
+    }
+    if (!rawPassword) {
+      setFormError("Please enter a password.");
+      return;
+    }
+    if (!accepted) {
+      setFormError("Please accept the terms to continue.");
+      return;
+    }
+
+    setIsSubmitting(true);
 
     try {
       await authAPI.register(email, rawPassword, fullName, accepted);
@@ -294,6 +332,7 @@ export default function LoginPage() {
 
               <form
                 className="space-y-6 relative z-10"
+                noValidate
                 onSubmit={isLogin ? handleClientLogin : handleClientRegister}
               >
                 {/* Error Message */}
