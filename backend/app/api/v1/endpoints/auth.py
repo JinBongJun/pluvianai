@@ -589,7 +589,7 @@ async def get_my_usage(
     db: Session = Depends(get_db),
 ):
     """
-    Return current user's plan, limits, and usage this month.
+    Return current user's plan, limits, and usage for the active quota window (billing period or calendar month).
     Billing/Usage uses this to show snapshot usage and hosted replay credit usage.
     """
     service = SubscriptionService(db)

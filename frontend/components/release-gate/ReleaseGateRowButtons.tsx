@@ -174,9 +174,6 @@ export function HistoryRunRowButton({
   const inputTotal = passedInputs + failedInputs || explicitInputTotal;
   const repeatRuns = Number(item.repeat_runs ?? 0);
   const hasExplicitPassSummary = passedInputs + failedInputs > 0;
-  const inputSummary = hasExplicitPassSummary ? `${passedInputs}/${inputTotal} healthy` : null;
-  const inputCountLabel =
-    inputTotal > 0 ? `${inputTotal} input${inputTotal === 1 ? "" : "s"}` : "Run details limited";
   const preview = item.trace_id ? shortText(String(item.trace_id), "", 48) : "";
 
   return (
@@ -213,28 +210,6 @@ export function HistoryRunRowButton({
             >
               {caseStatusLabel}
             </span>
-            <span
-              className={clsx(
-                "text-sm font-semibold",
-                inputTotal > 0 ? "text-slate-100" : "text-slate-400"
-              )}
-            >
-              {inputCountLabel}
-            </span>
-            {inputSummary ? (
-              <span
-                className={clsx(
-                  "rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                  caseIsPass
-                    ? "border-emerald-500/15 bg-emerald-500/10 text-emerald-200"
-                    : caseIsFlaky
-                      ? "border-amber-500/20 bg-amber-500/10 text-amber-200"
-                      : "border-rose-500/20 bg-rose-500/10 text-rose-200"
-                )}
-              >
-                {inputSummary}
-              </span>
-            ) : null}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {repeatRuns > 0 ? (
@@ -242,8 +217,8 @@ export function HistoryRunRowButton({
                 {repeatRuns}x each
               </span>
             ) : null}
-            {!inputSummary && inputTotal <= 0 ? (
-              <span className="text-[10px] text-slate-500">Legacy run: input breakdown unavailable</span>
+            {!hasExplicitPassSummary && inputTotal <= 0 ? (
+              <span className="text-[10px] text-slate-500">Legacy run: breakdown unavailable</span>
             ) : null}
           </div>
           <div className="mt-2 flex min-w-0 items-center gap-2 text-[11px] text-slate-500">

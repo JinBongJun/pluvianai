@@ -188,6 +188,8 @@ export interface ReleaseGatePageContextValue {
   /** Agent + baseline/dataset selection satisfied for starting a validate run. */
   canValidate: boolean;
   canRunValidate: boolean;
+  /** Monthly hosted replay quota exhausted — "Hosted by PluvianAI" is not selectable. */
+  hostedReplayCreditsExhausted: boolean;
   mutateProjectUserApiKeys: () => Promise<unknown>;
   expandedCaseIndex: number | null;
   setExpandedCaseIndex: (n: number | null) => void;

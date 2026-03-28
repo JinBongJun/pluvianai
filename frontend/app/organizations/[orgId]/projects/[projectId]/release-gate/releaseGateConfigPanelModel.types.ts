@@ -38,6 +38,7 @@ export type ReleaseGateConfigPanelCoreTabProps = Pick<
   | "handleRequestJsonBlur"
   | "handleResetJsonToBaseline"
   | "handleResetSystemPrompt"
+  | "hostedReplayCreditsExhausted"
   | "isJsonModified"
   | "isSystemPromptOverridden"
   | "keyIssueBlocked"
