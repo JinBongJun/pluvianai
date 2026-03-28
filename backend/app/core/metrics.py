@@ -179,6 +179,11 @@ def initialize_billing_webhook_metrics() -> None:
 
 def get_metrics_response() -> Response:
     """Generate Prometheus metrics response"""
+    try:
+        initialize_billing_webhook_metrics()
+    except Exception:
+        # Metrics endpoint should degrade gracefully and must not affect app startup paths.
+        pass
     return Response(content=generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
 
 
