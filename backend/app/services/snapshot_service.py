@@ -218,13 +218,27 @@ class SnapshotService:
         eval_config = (diagnostic_config or {}).get("eval") if isinstance(diagnostic_config, dict) else None
         eval_config = eval_config if isinstance(eval_config, dict) else {}
         eval_checks_result = None
+        response_text = prompt_fields.get("response") or ""
+        latency_ms = payload.get("latency_ms")
+        if latency_ms is not None and not isinstance(latency_ms, (int, float)):
+            latency_ms = None
+        tokens_used = payload.get("tokens_used")
+        cost_val = payload.get("cost")
         try:
-            response_text = prompt_fields.get("response") or ""
-            latency_ms = payload.get("latency_ms")
-            if latency_ms is not None and not isinstance(latency_ms, (int, float)):
-                latency_ms = None
-            tokens_used = payload.get("tokens_used")
-            cost_val = payload.get("cost")
+            # If explicit tokens missing, derive from embedded response.usage (proxy path).
+            try:
+                from app.utils.ingest_metrics import resolve_tokens_used_for_proxy_payload
+
+                resp_obj = (
+                    (sanitized_payload.get("response") if isinstance(sanitized_payload, dict) else None)
+                    or (request_payload.get("response") if isinstance(request_payload, dict) else None)
+                )
+                if isinstance(resp_obj, dict):
+                    resolved = resolve_tokens_used_for_proxy_payload(tokens_used, resp_obj)
+                    if resolved is not None:
+                        tokens_used = resolved
+            except Exception:
+                pass
             eval_checks_result = evaluate_one_snapshot_at_save(
                 response_text=response_text,
                 latency_ms=int(latency_ms) if latency_ms is not None else None,
@@ -247,6 +261,11 @@ class SnapshotService:
         except Exception:
             pass
         tool_calls_summary = extract_tool_calls_summary(sanitized_payload)
+        try:
+            _tu_int = int(tokens_used) if tokens_used is not None else None
+        except (TypeError, ValueError):
+            _tu_int = None
+        _cost_f = float(cost_val) if cost_val is not None else None
         snapshot_data = {
             "trace_id": trace_id,
             "agent_id": agent_id,
@@ -266,6 +285,9 @@ class SnapshotService:
             "eval_checks_result": eval_checks_result,
             "eval_config_version": eval_config_version,
             "tool_calls_summary": tool_calls_summary if tool_calls_summary else None,
+            "latency_ms": int(latency_ms) if latency_ms is not None else None,
+            "tokens_used": _tu_int,
+            "cost": _cost_f,
         }
         
         # Try to write to Redis Stream (async buffering)
@@ -293,6 +315,9 @@ class SnapshotService:
                     "is_worst": str(snapshot_data["is_worst"]),
                     "worst_status": str(snapshot_data["worst_status"]) if snapshot_data["worst_status"] else "",
                     "tool_calls_summary": json.dumps(snapshot_data["tool_calls_summary"]) if snapshot_data.get("tool_calls_summary") else "[]",
+                    "latency_ms": str(snapshot_data["latency_ms"]) if snapshot_data.get("latency_ms") is not None else "",
+                    "tokens_used": str(snapshot_data["tokens_used"]) if snapshot_data.get("tokens_used") is not None else "",
+                    "cost": str(snapshot_data["cost"]) if snapshot_data.get("cost") is not None else "",
                 }
                 cache_service.redis_client.xadd(
                     stream_key,
@@ -322,6 +347,9 @@ class SnapshotService:
             payload=sanitized_payload,
             is_sanitized=is_sanitized,
             status_code=status_code,
+            latency_ms=snapshot_data.get("latency_ms"),
+            tokens_used=snapshot_data.get("tokens_used"),
+            cost=snapshot_data.get("cost"),
             signal_result=snapshot_data["signal_result"],
             evaluation_result=snapshot_data["evaluation_result"],
             eval_checks_result=snapshot_data.get("eval_checks_result"),

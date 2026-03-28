@@ -3,6 +3,7 @@ import {
   request as playwrightRequest,
   test,
   type APIRequestContext,
+  type APIResponse,
   type Locator,
   type Page,
 } from "@playwright/test";
@@ -119,9 +120,9 @@ async function responseTextSafe(response: { text(): Promise<string> }) {
 
 async function expectOkWithRetry(
   label: string,
-  action: () => Promise<{ ok(): boolean; status(): number; text(): Promise<string> }>,
+  action: () => Promise<APIResponse>,
   attempts = 4
-) {
+): Promise<APIResponse> {
   let lastError = `${label} failed`;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const response = await action();

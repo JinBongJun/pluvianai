@@ -20,6 +20,7 @@ from app.utils.secret_redaction import redact_secrets
 from app.utils.agent_signature import build_node_key
 from app.services.live_view_events import publish_agents_changed
 from app.core.logging_config import logger
+from app.utils.ingest_metrics import cost_from_normalized, total_tokens_for_ingest
 
 
 class BackgroundTaskService:
@@ -97,9 +98,8 @@ class BackgroundTaskService:
             if response_text and len(response_text) > 10000:
                 response_text = response_text[:10000] + "...[truncated]"
 
-            request_tokens = int(normalized.get("request_tokens") or 0)
-            response_tokens = int(normalized.get("response_tokens") or 0)
-            total_tokens = request_tokens + response_tokens if (request_tokens or response_tokens) else None
+            total_tokens = total_tokens_for_ingest(response_data, normalized)
+            snapshot_cost = cost_from_normalized(normalized)
 
             request_content = request_prompt or (
                 request_data_compressed if request_data_compressed else str(request_data)[:5000]
@@ -207,8 +207,8 @@ class BackgroundTaskService:
                             response_text=response_text or "",
                             latency_ms=int(latency_ms) if latency_ms is not None else None,
                             status_code=status_code,
-                            tokens_used=None,
-                            cost=None,
+                            tokens_used=total_tokens,
+                            cost=snapshot_cost,
                             eval_config=eval_config,
                             payload=payload_for_snapshot,
                             project_id=project_id,
@@ -231,6 +231,8 @@ class BackgroundTaskService:
                         payload=payload_for_snapshot,
                         tool_calls_summary=tool_calls_summary if tool_calls_summary else None,
                         latency_ms=int(latency_ms) if latency_ms is not None else None,
+                        tokens_used=total_tokens,
+                        cost=snapshot_cost,
                         status_code=status_code,
                         eval_checks_result=eval_checks_result,
                         eval_config_version=eval_config_version,
