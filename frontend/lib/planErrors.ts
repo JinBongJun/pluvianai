@@ -16,8 +16,11 @@ export type PlanLimitError = {
   code: string;
   message: string;
   planType?: string;
+  metric?: string;
   current?: number;
   limit?: number;
+  remaining?: number;
+  resetAt?: string | null;
   upgradePath?: string;
 };
 
@@ -25,7 +28,11 @@ export function parsePlanLimitError(error: any): PlanLimitError | null {
   const { status, code, message, details } = extractApiErrorPayload(error);
   if (status !== 403 || !code) return null;
 
-  const d = (details || {}) as Record<string, unknown>;
+  const raw = (details || {}) as Record<string, unknown>;
+  const d =
+    raw && typeof raw.details === "object" && raw.details !== null
+      ? (raw.details as Record<string, unknown>)
+      : raw;
   const num = (v: unknown): number | undefined => {
     const n = Number(v);
     return Number.isFinite(n) ? n : undefined;
@@ -42,10 +49,17 @@ export function parsePlanLimitError(error: any): PlanLimitError | null {
 
   return {
     code,
-    message: (d.message as string) || message || "",
+    message:
+      (typeof d.message === "string" ? (d.message as string) : undefined) ||
+      (typeof raw.message === "string" ? (raw.message as string) : undefined) ||
+      message ||
+      "",
     planType: typeof d.plan_type === "string" ? (d.plan_type as string) : undefined,
+    metric: typeof d.metric === "string" ? (d.metric as string) : undefined,
     current: num(d.current),
     limit: num(d.limit),
+    remaining: num(d.remaining),
+    resetAt: typeof d.reset_at === "string" || d.reset_at === null ? (d.reset_at as string | null) : undefined,
     upgradePath: upgradePathRaw,
   };
 }

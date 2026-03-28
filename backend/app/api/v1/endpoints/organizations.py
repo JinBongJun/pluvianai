@@ -29,6 +29,7 @@ from app.services.cost_analyzer import CostAnalyzer
 from app.services.cache_service import cache_service
 from app.services.subscription_service import SubscriptionService
 from app.core.subscription_limits import PLAN_LIMITS, normalize_plan_type
+from app.core.usage_limits import get_limit_status
 
 
 def _utcnow_naive() -> datetime:
@@ -269,27 +270,19 @@ def create_organization(
         is_superuser=bool(getattr(current_user, "is_superuser", False)),
     )
     if not can_create:
-        plan_info = SubscriptionService(db).get_user_plan(current_user.id)
-        plan_type = str(plan_info.get("plan_type") or "free")
-        limits = plan_info.get("limits") or {}
-        org_limit = int(limits.get("organizations", 1))
-        current_orgs = (
-            db.query(Organization)
-            .filter(
-                Organization.owner_id == current_user.id,
-                Organization.is_deleted.is_(False),
-            )
-            .count()
-        )
+        limit_status = get_limit_status(db, current_user.id, "organizations")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "ORG_LIMIT_REACHED",
                 "message": error_msg or "You have reached the organization limit for your current plan.",
                 "details": {
-                    "plan_type": plan_type,
-                    "current": current_orgs,
-                    "limit": org_limit,
+                    "plan_type": limit_status.get("plan_type"),
+                    "metric": limit_status.get("metric"),
+                    "current": limit_status.get("current"),
+                    "limit": limit_status.get("limit"),
+                    "remaining": limit_status.get("remaining"),
+                    "reset_at": limit_status.get("reset_at"),
                     "upgrade_path": "/settings/billing",
                 },
             },
@@ -321,6 +314,7 @@ def list_organizations(
 ):
     """List organizations for the current user with optional stats."""
     orgs = _get_user_orgs(org_service, current_user)
+    account_plan_type = str(SubscriptionService(db).get_user_plan(current_user.id).get("plan_type") or "free")
 
     if not orgs:
         return []
@@ -419,7 +413,7 @@ def list_organizations(
             OrganizationSummary(
                 id=org.id,
                 name=org.name,
-                plan_type=org.plan_type,
+                plan_type=account_plan_type,
                 projects_count=projects_counts.get(org.id, 0),
                 calls_7d=calls_map.get(org.id, 0),
                 cost_7d=cost_map.get(org.id, 0.0),
@@ -441,6 +435,7 @@ def get_organization(
 ):
     """Get organization details with optional stats."""
     logger.info(f"🔵 GET ORGANIZATION: org_id={org_id}, include_stats={include_stats}, user_id={current_user.id}")
+    account_plan_type = str(SubscriptionService(db).get_user_plan(current_user.id).get("plan_type") or "free")
     
     try:
         # Use service to get organization
@@ -476,7 +471,7 @@ def get_organization(
                 name=org.name,
                 description=getattr(org, "description", None),
                 type=org.type,
-                plan_type=org.plan_type,
+                plan_type=account_plan_type,
                 stats=None,
             )
 
@@ -587,7 +582,7 @@ def get_organization(
             "name": org.name,
             "description": getattr(org, "description", None),
             "type": org.type,
-            "plan_type": org.plan_type,
+            "plan_type": account_plan_type,
             "stats": {
                 "usage": {
                     "calls": calls_count,
@@ -698,6 +693,7 @@ def add_organization_member(
             .count()
         )
         if current_members >= member_limit:
+            remaining = max(0, int(member_limit) - int(current_members))
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
@@ -705,8 +701,11 @@ def add_organization_member(
                     "message": "You have reached the team member limit for your current plan.",
                     "details": {
                         "plan_type": str(plan_info.get("plan_type") or "free"),
+                        "metric": "team_members",
                         "current": int(current_members),
                         "limit": int(member_limit),
+                        "remaining": remaining,
+                        "reset_at": None,
                         "upgrade_path": "/settings/billing",
                     },
                 },

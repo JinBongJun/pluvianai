@@ -8,6 +8,7 @@ import { apiClient } from "@/lib/api/client";
 import { billingAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
 import { useEffect, useState } from "react";
+import clsx from "clsx";
 import {
   getPaddleCheckoutState,
   stripBillingCheckoutParams,
@@ -15,6 +16,16 @@ import {
 
 type UsageResponse = {
   plan_type: string;
+  limits?: {
+    snapshots_per_month?: number;
+    guard_credits_per_month?: number;
+    platform_replay_credits_per_month?: number;
+  };
+  usage_this_month?: {
+    snapshots?: number;
+    guard_credits?: number;
+    platform_replay_credits?: number;
+  };
 };
 
 export default function AccountBillingPage() {
@@ -34,6 +45,19 @@ export default function AccountBillingPage() {
   );
 
   const currentPlanId = (data?.plan_type || "free").toLowerCase();
+  const snapshotsUsed = Number(data?.usage_this_month?.snapshots ?? 0);
+  const snapshotsLimit = Number(data?.limits?.snapshots_per_month ?? -1);
+  const replayUsed = Number(
+    data?.usage_this_month?.platform_replay_credits ?? data?.usage_this_month?.guard_credits ?? 0
+  );
+  const replayLimit = Number(
+    data?.limits?.platform_replay_credits_per_month ?? data?.limits?.guard_credits_per_month ?? -1
+  );
+  const snapshotsExhausted = snapshotsLimit > 0 && snapshotsUsed >= snapshotsLimit;
+  const replayExhausted = replayLimit > 0 && replayUsed >= replayLimit;
+  const snapshotsNearLimit =
+    snapshotsLimit > 0 && !snapshotsExhausted && (snapshotsUsed / snapshotsLimit) * 100 >= 80;
+  const replayNearLimit = replayLimit > 0 && !replayExhausted && (replayUsed / replayLimit) * 100 >= 80;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -155,12 +179,45 @@ export default function AccountBillingPage() {
         { label: "Billing" },
       ]}
     >
-      <div className="max-w-[1700px] mx-auto pb-24 relative px-4 xl:px-8">
-        <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed">
+      <div className="pb-24 relative">
+        <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 leading-relaxed">
           BYOK runs do not consume hosted replay credits.
           <br />
           Subscriptions auto-renew unless canceled before the next billing cycle.
         </p>
+        {(snapshotsExhausted || replayExhausted || snapshotsNearLimit || replayNearLimit) && (
+          <div
+            className={clsx(
+              "mb-6 rounded-2xl p-4",
+              snapshotsExhausted || replayExhausted
+                ? "border border-rose-500/30 bg-rose-500/10"
+                : "border border-amber-500/30 bg-amber-500/10"
+            )}
+          >
+            <p
+              className={clsx(
+                "text-[11px] font-bold uppercase tracking-widest",
+                snapshotsExhausted || replayExhausted ? "text-rose-200" : "text-amber-200"
+              )}
+            >
+              {snapshotsExhausted || replayExhausted ? "Plan quota exhausted" : "Plan quota warning"}
+            </p>
+            <p className="mt-1 text-xs text-white/90">
+              {snapshotsExhausted || replayExhausted
+                ? snapshotsExhausted && replayExhausted
+                  ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and hosted replay credits (${replayUsed}/${replayLimit}) are exhausted.`
+                  : snapshotsExhausted
+                    ? `Snapshots are exhausted (${snapshotsUsed}/${snapshotsLimit}).`
+                    : `Hosted replay credits are exhausted (${replayUsed}/${replayLimit}).`
+                : snapshotsNearLimit && replayNearLimit
+                  ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and hosted replay credits (${replayUsed}/${replayLimit}) are above 80%.`
+                  : snapshotsNearLimit
+                    ? `Snapshots are above 80% (${snapshotsUsed}/${snapshotsLimit}).`
+                    : `Hosted replay credits are above 80% (${replayUsed}/${replayLimit}).`}{" "}
+              BYOK is still available where supported.
+            </p>
+          </div>
+        )}
         <div className="mb-8 text-xs text-slate-400 space-y-1">
           <p>
             By upgrading, you agree to our{" "}

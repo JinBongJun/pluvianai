@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { behaviorAPI, liveViewAPI } from "@/lib/api";
+import { authAPI } from "@/lib/api/auth";
 import type { LiveViewRequestOverview, RequestContextMeta } from "@/lib/api/live-view";
 import { getRateLimitInfo, isRateLimitError } from "@/lib/api/client";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
@@ -474,6 +475,9 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
     () => liveViewAPI.getAgentSettings(projectId, agentId),
     { revalidateOnFocus: false }
   );
+  const { data: myUsage } = useSWR(projectId ? ["my-usage", projectId, "live-view"] : null, () =>
+    authAPI.getMyUsage()
+  );
 
   React.useEffect(() => {
     const persisted = Number(settingsData?.diagnostic_config?.eval?.window?.limit);
@@ -515,6 +519,26 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
       setPlanError(null);
     }
   }, [error]);
+  const snapshotsUsed = Number(myUsage?.usage_this_month?.snapshots ?? 0);
+  const snapshotsLimitRaw = myUsage?.limits?.snapshots_per_month;
+  const snapshotsLimit =
+    snapshotsLimitRaw == null || Number.isNaN(Number(snapshotsLimitRaw))
+      ? null
+      : Number(snapshotsLimitRaw);
+  const snapshotsQuotaExhausted =
+    snapshotsLimit != null && snapshotsLimit !== -1 && snapshotsUsed >= snapshotsLimit;
+  const proactivePlanError: PlanLimitError | null =
+    !planError && snapshotsQuotaExhausted
+      ? {
+          code: "SNAPSHOT_PLAN_LIMIT_REACHED",
+          message: `Snapshot quota exhausted (${snapshotsUsed}/${snapshotsLimit}). New hosted captures are paused until monthly reset or upgrade.`,
+          planType: String(myUsage?.plan_type || "free"),
+          current: snapshotsUsed,
+          limit: snapshotsLimit ?? undefined,
+          upgradePath: "/settings/billing",
+        }
+      : null;
+  const effectivePlanError = planError ?? proactivePlanError;
 
   React.useEffect(() => {
     if (!projectId || !agentId) return;
@@ -1144,12 +1168,12 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
           )}
         </div>
       </div>
-      {planError && (
+      {effectivePlanError && (
         <div className="mx-4 mb-3">
-          <PlanLimitBanner {...planError} context="snapshots" />
+          <PlanLimitBanner {...effectivePlanError} context="snapshots" />
         </div>
       )}
-      {error && !planError && (
+      {error && !effectivePlanError && (
         <div className="mx-4 mb-3 px-3 py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 flex items-center justify-between gap-3">
           <span className="text-xs text-rose-300 font-medium">
             {isRateLimited

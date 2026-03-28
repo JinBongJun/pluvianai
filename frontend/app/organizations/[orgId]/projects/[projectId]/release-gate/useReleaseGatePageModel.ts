@@ -2,11 +2,13 @@
 
 import { useCallback, useMemo } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
+import useSWR from "swr";
 
 import type { ReleaseGateLayoutGateBodyProps } from "./ReleaseGateLayoutGateBody";
 import type { ReleaseGatePageContextValue } from "./releaseGatePageContext.types";
 import type { ReleaseGateValidateRunContextValue } from "./ReleaseGateValidateRunContext";
 import type { PlanLimitError } from "@/lib/planErrors";
+import { authAPI } from "@/lib/api/auth";
 import { useReleaseGatePageModelReturn } from "./useReleaseGatePageModelReturn";
 import { useReleaseGatePageContextValue } from "./useReleaseGatePageContextValue";
 import { useReleaseGatePageContextParams } from "./useReleaseGatePageContextParams";
@@ -85,6 +87,9 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
   const { project, org } = useReleaseGatePageBootstrap(orgId, projectId, href =>
     router.replace(href)
   );
+  const { data: myUsage } = useSWR(projectId ? ["my-usage", projectId] : null, () => authAPI.getMyUsage(), {
+    revalidateOnFocus: false,
+  });
   const {
     mutateHistoryRef,
     validateRunDepsRef,
@@ -405,9 +410,9 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       (dataSource === "datasets" && runDatasetIds.length > 0));
 
   const {
-    keyBlocked,
-    keyIssueBlocked,
-    keyRegistrationMessage,
+    keyBlocked: providerKeyBlocked,
+    keyIssueBlocked: providerKeyIssueBlocked,
+    keyRegistrationMessage: providerKeyRegistrationMessage,
     missingProviderKeyDetails,
     projectUserApiKeysForUi,
     mutateProjectUserApiKeys,
@@ -425,11 +430,40 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       agentId,
     });
 
+  const replayCreditsUsed = Number(
+    myUsage?.usage_this_month?.platform_replay_credits ?? myUsage?.usage_this_month?.guard_credits ?? 0
+  );
+  const replayCreditsLimitRaw =
+    myUsage?.limits?.platform_replay_credits_per_month ?? myUsage?.limits?.guard_credits_per_month;
+  const replayCreditsLimit =
+    replayCreditsLimitRaw == null || Number.isNaN(Number(replayCreditsLimitRaw))
+      ? null
+      : Number(replayCreditsLimitRaw);
+  const hostedReplayCreditsExhausted =
+    replayCreditsLimit != null && replayCreditsLimit !== -1 && replayCreditsUsed >= replayCreditsLimit;
+  const hostedReplayBlocked = modelSource === "hosted" && hostedReplayCreditsExhausted;
+  const keyBlocked = providerKeyBlocked || hostedReplayBlocked;
+  const keyIssueBlocked = providerKeyIssueBlocked || hostedReplayBlocked;
+  const keyRegistrationMessage = hostedReplayBlocked
+    ? `Hosted replay credits exhausted (${replayCreditsUsed}/${replayCreditsLimit}). Switch to Custom (BYOK) or upgrade your plan.`
+    : providerKeyRegistrationMessage;
+
   const modelSourceInvalid =
     (modelSource === "hosted" || modelSource === "custom") && !newModel.trim();
   const runValidateCooldownActive = runValidateCooldownUntilMs > Date.now();
   const canRunValidate =
     canValidate && !keyBlocked && !modelSourceInvalid && !runValidateCooldownActive;
+  const hostedReplayPlanError: PlanLimitError | null = hostedReplayBlocked
+    ? {
+        code: "LIMIT_PLATFORM_REPLAY_CREDITS",
+        message: keyRegistrationMessage,
+        planType: String(myUsage?.plan_type || "free"),
+        current: replayCreditsUsed,
+        limit: replayCreditsLimit ?? undefined,
+        upgradePath: "/settings/billing",
+      }
+    : null;
+  const effectivePlanError = planError ?? hostedReplayPlanError;
 
   const requestSystemPrompt = useMemo(() => {
     const fromBody =
@@ -806,7 +840,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     releaseGateKeysContextValue,
     contextValue,
     gateBodyProps,
-    planError,
+    planError: effectivePlanError,
     layout: {
       orgId,
       projectId,

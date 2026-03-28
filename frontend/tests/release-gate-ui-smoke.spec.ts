@@ -6,8 +6,10 @@ import { test, expect } from "@playwright/test";
  */
 test.describe("Release Gate tool IO (smoke)", () => {
   test("organizations page still loads (sanity)", async ({ page }) => {
-    await page.goto("/organizations");
-    await expect(page.locator("body")).toBeVisible({ timeout: 15000 });
+    const res = await page.goto("/organizations", { waitUntil: "domcontentloaded" });
+    expect(res?.status() ?? 0).toBeLessThan(500);
+    await expect(page).toHaveURL(/\/(organizations|login)/, { timeout: 15000 });
+    await expect(page.locator("body")).toBeAttached({ timeout: 15000 });
   });
 
   test("release gate URL does not 500 (may redirect to login)", async ({ page }) => {
