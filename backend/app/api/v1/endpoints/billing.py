@@ -28,6 +28,10 @@ class CheckoutRequest(BaseModel):
     cancel_url: HttpUrl
 
 
+class ChangePlanRequest(BaseModel):
+    plan_type: str
+
+
 @router.get("/usage")
 def get_billing_usage(
     db: Session = Depends(get_db),
@@ -77,6 +81,78 @@ def create_checkout_session(
         return error_response(
             code="BILLING_CHECKOUT_UNAVAILABLE",
             message="Failed to create checkout session",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return success_response(data=result)
+
+
+@router.post("/change-plan")
+def change_subscription_plan(
+    req: ChangePlanRequest,
+    current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Switch Starter ↔ Pro on the existing Paddle subscription (no new checkout).
+    Upgrades use prorated immediate billing; downgrades use next-billing-period per Paddle.
+    Free accounts must use /billing/checkout instead.
+    """
+    normalized = normalize_plan_type(req.plan_type)
+    if normalized not in ("starter", "pro"):
+        return error_response(
+            code="BILLING_CHANGE_PLAN_INVALID",
+            message="Plan change is only available between Starter and Pro.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    billing = BillingService(db)
+    result, err = billing.change_paddle_subscription_plan(current_user.id, normalized)
+    if err == "paddle_not_configured":
+        return error_response(
+            code="BILLING_UNAVAILABLE",
+            message="Billing is temporarily unavailable.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if err == "invalid_plan":
+        return error_response(
+            code="BILLING_CHANGE_PLAN_INVALID",
+            message="Invalid plan.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if err == "same_plan":
+        return error_response(
+            code="BILLING_CHANGE_PLAN_SAME",
+            message="You are already on this plan.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if err == "checkout_required":
+        return error_response(
+            code="BILLING_CHANGE_PLAN_USE_CHECKOUT",
+            message="Use checkout to subscribe or change from your current state.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if err == "subscription_inactive":
+        return error_response(
+            code="BILLING_SUBSCRIPTION_INACTIVE",
+            message="This subscription cannot be changed. Open the billing portal or subscribe again.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if err == "subscription_past_due":
+        return error_response(
+            code="BILLING_SUBSCRIPTION_PAST_DUE",
+            message="Update your payment method in the billing portal before changing plans.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if err == "paddle_lookup_failed":
+        return error_response(
+            code="BILLING_PADDLE_LOOKUP_FAILED",
+            message="Could not load subscription from Paddle. Try again shortly.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if err == "paddle_error" or not result:
+        return error_response(
+            code="BILLING_CHANGE_PLAN_FAILED",
+            message="Could not change plan. Try again or use the billing portal.",
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
     return success_response(data=result)
