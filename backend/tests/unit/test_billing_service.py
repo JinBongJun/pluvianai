@@ -310,6 +310,63 @@ class TestBillingService:
             )
         assert result is None
 
+    def test_create_customer_portal_session_success_prefers_cancel_link(self, db, test_user):
+        sub = Subscription(
+            user_id=test_user.id,
+            plan_id="pro",
+            status="active",
+            paddle_customer_id="ctm_test",
+            paddle_subscription_id="sub_deep",
+        )
+        db.add(sub)
+        db.commit()
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test_key"
+            service = BillingService(db)
+            portal_payload = {
+                "urls": {
+                    "general": {"overview": "https://portal.example/o"},
+                    "subscriptions": [
+                        {
+                            "id": "sub_deep",
+                            "cancel_subscription": "https://portal.example/cancel",
+                        }
+                    ],
+                }
+            }
+            with patch.object(service, "_paddle_post", return_value=(portal_payload, None)):
+                data, err = service.create_customer_portal_session(test_user.id)
+        assert err is None
+        assert data is not None
+        assert data["url"] == "https://portal.example/cancel"
+
+    def test_create_customer_portal_session_falls_back_to_overview(self, db, test_user):
+        sub = Subscription(
+            user_id=test_user.id,
+            plan_id="pro",
+            status="active",
+            paddle_customer_id="ctm_test",
+            paddle_subscription_id=None,
+        )
+        db.add(sub)
+        db.commit()
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test_key"
+            service = BillingService(db)
+            portal_payload = {"urls": {"general": {"overview": "https://portal.example/o"}}}
+            with patch.object(service, "_paddle_post", return_value=(portal_payload, None)):
+                data, err = service.create_customer_portal_session(test_user.id)
+        assert err is None
+        assert data["url"] == "https://portal.example/o"
+
+    def test_create_customer_portal_session_no_customer(self, db, test_user):
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test_key"
+            service = BillingService(db)
+            data, err = service.create_customer_portal_session(test_user.id)
+        assert data is None
+        assert err == "no_billing_customer"
+
     def test_handle_paddle_webhook_transaction_completed(self, db, test_user):
         secret = "whsec_paddle_test"
         payload_obj = {
