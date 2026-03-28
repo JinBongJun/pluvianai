@@ -1418,7 +1418,7 @@ async def create_snapshot(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "SNAPSHOT_PLAN_LIMIT_REACHED",
-                "message": err_msg or "You have reached the monthly snapshot limit for your plan.",
+                "message": err_msg or "You have reached the snapshot limit for your plan for this billing period.",
                 "details": {
                     "plan_type": limit_status.get("plan_type"),
                     "metric": limit_status.get("metric"),

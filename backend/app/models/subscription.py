@@ -16,6 +16,7 @@ class Subscription(Base):
     stripe_subscription_id = Column(String(255), nullable=True, index=True)
     paddle_subscription_id = Column(String(255), nullable=True, index=True)
     paddle_customer_id = Column(String(255), nullable=True, index=True)
+    current_period_start = Column(DateTime(timezone=True), nullable=True)
     current_period_end = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -32,7 +33,6 @@ class Subscription(Base):
             kwargs["plan_id"] = plan_type
         for legacy_key in (
             "price_per_month",
-            "current_period_start",
             "trial_end",
             "cancel_at_period_end",
         ):
@@ -54,14 +54,6 @@ class Subscription(Base):
     @price_per_month.setter
     def price_per_month(self, value):
         self._price_per_month = value
-
-    @property
-    def current_period_start(self):
-        return getattr(self, "_current_period_start", None)
-
-    @current_period_start.setter
-    def current_period_start(self, value):
-        self._current_period_start = value
 
     @property
     def trial_end(self):

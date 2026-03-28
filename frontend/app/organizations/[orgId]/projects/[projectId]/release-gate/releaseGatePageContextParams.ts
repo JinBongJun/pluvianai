@@ -61,6 +61,7 @@ export type ReleaseGatePageContextRestSlice = Pick<
   | "selectedSnapshotIdsForRun"
   | "canRunValidate"
   | "canValidate"
+  | "hostedReplayCreditsExhausted"
   | "mutateProjectUserApiKeys"
   | "historyStatus"
   | "setHistoryStatus"

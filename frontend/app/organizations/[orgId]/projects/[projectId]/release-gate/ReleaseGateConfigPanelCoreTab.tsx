@@ -28,6 +28,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
     flakyRateMax,
     setFlakyRateMax,
     editsLocked,
+    hostedReplayCreditsExhausted,
     newModel,
     setNewModel,
     replayProvider,
@@ -77,6 +78,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
 
   const selectModelSource = (next: typeof modelSource) => {
     if (editsLocked) return;
+    if (next === "hosted" && hostedReplayCreditsExhausted) return;
     setModelSource?.(next);
     if (next === "detected") {
       setReplayUserApiKeyId?.(null);
@@ -361,12 +363,24 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
               />
               Detected from baseline
             </label>
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
+            <label
+              className={clsx(
+                "flex items-center gap-2 text-sm",
+                editsLocked || hostedReplayCreditsExhausted
+                  ? "cursor-not-allowed text-slate-500"
+                  : "cursor-pointer text-slate-200"
+              )}
+              title={
+                hostedReplayCreditsExhausted
+                  ? "Monthly hosted replay credits are exhausted. Use Custom (BYOK) or wait for the next billing period."
+                  : undefined
+              }
+            >
               <input
                 type="radio"
                 name="release-gate-model-source"
                 className="accent-fuchsia-500"
-                disabled={editsLocked}
+                disabled={editsLocked || hostedReplayCreditsExhausted}
                 checked={hostedMode}
                 onChange={() => selectModelSource("hosted")}
               />

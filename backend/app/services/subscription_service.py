@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.subscription import Subscription
 from app.models.usage import Usage
 from app.core.subscription_limits import PLAN_LIMITS, PLAN_PRICING, normalize_plan_type
+from app.core.usage_limits import get_usage_period_bounds_utc
 from app.core.logging_config import logger
 
 
@@ -18,14 +19,6 @@ class SubscriptionService:
 
     def __init__(self, db: Session):
         self.db = db
-
-    def _period_bounds(self, now: datetime) -> tuple[datetime, datetime]:
-        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        if now.month == 12:
-            period_end = period_start.replace(year=now.year + 1, month=1)
-        else:
-            period_end = period_start.replace(month=now.month + 1)
-        return period_start, period_end
 
     def _usage_metric_name(self, metric_type: str) -> str:
         normalized = str(metric_type or "").strip().lower()
@@ -86,8 +79,7 @@ class SubscriptionService:
         plan_type = normalize_plan_type(plan_info["plan_type"])
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
-        now = datetime.now(timezone.utc)
-        period_start, period_end = self._period_bounds(now)
+        period_start, period_end = get_usage_period_bounds_utc(self.db, user_id)
         metric_name = self._usage_metric_name(metric_type)
         current_usage = (
             self.db.query(func.coalesce(func.sum(Usage.quantity), 0))
@@ -95,7 +87,7 @@ class SubscriptionService:
                 Usage.user_id == user_id,
                 Usage.metric_name == metric_name,
                 Usage.timestamp >= period_start,
-                Usage.timestamp < period_end,
+                Usage.timestamp <= period_end,
             )
             .scalar()
             or 0
@@ -153,17 +145,16 @@ class SubscriptionService:
         plan_type = plan_info["plan_type"]
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
-        now = datetime.now(timezone.utc)
-        period_start, period_end = self._period_bounds(now)
+        period_start, period_end = get_usage_period_bounds_utc(self.db, user_id)
 
-        # Aggregate usage by metric_name for the current month.
+        # Aggregate usage by metric_name for the current billing window.
         usage_by_metric: Dict[str, int] = {}
         usage_rows = (
             self.db.query(Usage.metric_name, func.coalesce(func.sum(Usage.quantity), 0).label("total"))
             .filter(
                 Usage.user_id == user_id,
                 Usage.timestamp >= period_start,
-                Usage.timestamp < period_end,
+                Usage.timestamp <= period_end,
             )
             .group_by(Usage.metric_name)
             .all()
@@ -196,7 +187,7 @@ class SubscriptionService:
         """
         from app.services.cache_service import cache_service
         from app.models.user import User
-        
+
         if not cache_service.enabled:
             logger.warning("Redis not available, cannot reset monthly usage")
             return 0
@@ -212,13 +203,17 @@ class SubscriptionService:
             
             # Delete monthly usage keys for all users
             for user in users:
-                # Delete all monthly usage keys (they will be recreated with new month on next increment)
+                p_start, p_end = get_usage_period_bounds_utc(self.db, user.id)
+                period_tag = f"{int(p_start.timestamp())}_{int(p_end.timestamp())}"
                 keys_to_delete = [
                     f"user:{user.id}:usage:monthly:{current_year_month}",
                     f"user:{user.id}:snapshots:monthly:{current_year_month}",
                     f"user:{user.id}:judge_calls:monthly:{current_year_month}",
+                    f"user:{user.id}:usage:period:{period_tag}",
+                    f"user:{user.id}:snapshots:period:{period_tag}",
+                    f"user:{user.id}:judge_calls:period:{period_tag}",
                 ]
-                
+
                 for key in keys_to_delete:
                     try:
                         cache_service.redis_client.delete(key)

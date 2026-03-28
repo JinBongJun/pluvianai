@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.logging_config import logger
 from app.core.metrics import billing_webhook_events_total
 from app.core.subscription_limits import PLAN_LIMITS, normalize_plan_type
+from app.core.usage_limits import get_usage_period_bounds_utc
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.cache_service import cache_service
@@ -233,6 +234,17 @@ class BillingService:
                     )
         return {"status": "success", "checked": checked, "fixed": fixed, "failed": failed}
 
+    def _usage_period_redis_suffix(self, user_id: int) -> str:
+        """Stable Redis key segment aligned with DB usage window (billing period or calendar month)."""
+        start, end = get_usage_period_bounds_utc(self.db, user_id)
+        return f"{int(start.timestamp())}_{int(end.timestamp())}"
+
+    def _redis_ttl_for_usage_period(self, user_id: int) -> int:
+        _, end = get_usage_period_bounds_utc(self.db, user_id)
+        now = datetime.now(timezone.utc)
+        sec = int((end - now).total_seconds()) + 120
+        return max(3600, sec)
+
     def get_current_usage(self, user_id: int) -> Dict[str, Any]:
         """
         Get current usage for user from Redis counters
@@ -240,12 +252,12 @@ class BillingService:
         """
         now = datetime.now(timezone.utc)
         today = now.strftime("%Y-%m-%d")
-        year_month = now.strftime("%Y-%m")
+        period_tag = self._usage_period_redis_suffix(user_id)
 
         daily_key = f"user:{user_id}:usage:daily:{today}"
-        monthly_key = f"user:{user_id}:usage:monthly:{year_month}"
-        judge_calls_key = f"user:{user_id}:judge_calls:monthly:{year_month}"
-        snapshots_key = f"user:{user_id}:snapshots:monthly:{year_month}"
+        monthly_key = f"user:{user_id}:usage:period:{period_tag}"
+        judge_calls_key = f"user:{user_id}:judge_calls:period:{period_tag}"
+        snapshots_key = f"user:{user_id}:snapshots:period:{period_tag}"
 
         daily_usage = int(cache_service.redis_client.get(daily_key) or 0) if cache_service.enabled else 0
         monthly_usage = int(cache_service.redis_client.get(monthly_key) or 0) if cache_service.enabled else 0
@@ -288,8 +300,8 @@ class BillingService:
             return (True, None)
 
         now = datetime.now(timezone.utc)
-        today = now.strftime("%Y-%m-%d")
-        year_month = now.strftime("%Y-%m")
+        period_tag = self._usage_period_redis_suffix(user_id)
+        ttl = self._redis_ttl_for_usage_period(user_id)
 
         subscription = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
         plan_type = subscription.plan_type if subscription else "free"
@@ -297,20 +309,20 @@ class BillingService:
         soft_caps = self._get_soft_caps(plan_type)
 
         if metric_type == "api_calls":
-            counter_key = f"user:{user_id}:usage:monthly:{year_month}"
+            counter_key = f"user:{user_id}:usage:period:{period_tag}"
             limit = limits.get("api_calls_per_month", 1000)
         elif metric_type == "snapshots":
-            counter_key = f"user:{user_id}:snapshots:monthly:{year_month}"
+            counter_key = f"user:{user_id}:snapshots:period:{period_tag}"
             limit = soft_caps.get("snapshots", 500)
         elif metric_type == "judge_calls":
-            counter_key = f"user:{user_id}:judge_calls:monthly:{year_month}"
+            counter_key = f"user:{user_id}:judge_calls:period:{period_tag}"
             limit = soft_caps.get("judge_calls", 100)
         else:
             return (True, None)
 
         if limit == -1:
             current = cache_service.redis_client.incrby(counter_key, amount)
-            cache_service.redis_client.expire(counter_key, self._get_seconds_until_month_end())
+            cache_service.redis_client.expire(counter_key, ttl)
             return (True, None)
 
         current = int(cache_service.redis_client.get(counter_key) or 0)
@@ -326,12 +338,12 @@ class BillingService:
                 return (False, error_message)
             warning = f"Soft cap exceeded: {new_total} / {limit} {metric_type}. Consider upgrading."
             cache_service.redis_client.incrby(counter_key, amount)
-            cache_service.redis_client.expire(counter_key, self._get_seconds_until_month_end())
+            cache_service.redis_client.expire(counter_key, ttl)
             logger.warning(f"User {user_id} exceeded soft cap for {metric_type}: {new_total}/{limit}")
             return (True, warning)
 
         cache_service.redis_client.incrby(counter_key, amount)
-        cache_service.redis_client.expire(counter_key, self._get_seconds_until_month_end())
+        cache_service.redis_client.expire(counter_key, ttl)
 
         if metric_type == "api_calls":
             daily_key = f"user:{user_id}:usage:daily:{now.strftime('%Y-%m-%d')}"
@@ -350,16 +362,6 @@ class BillingService:
             "enterprise": {"snapshots": 1000000, "judge_calls": 1000000},
         }
         return soft_caps.get(plan_type, soft_caps["free"])
-
-    def _get_seconds_until_month_end(self) -> int:
-        now = datetime.now(timezone.utc)
-        if now.month == 12:
-            next_month = now.replace(year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0)
-        else:
-            next_month = now.replace(month=now.month + 1, day=1, hour=0, minute=0, second=0)
-
-        delta = next_month - now
-        return int(delta.total_seconds())
 
     def check_soft_cap_exceeded(self, user_id: int, metric_type: str) -> Tuple[bool, Optional[str]]:
         usage = self.get_current_usage(user_id)
@@ -656,12 +658,22 @@ class BillingService:
         subscription_service = SubscriptionService(self.db)
         sub_id = data.get("subscription_id")
         cust_id = data.get("customer_id")
+        cbp = data.get("billing_period") or {}
+        if not cbp:
+            sub_obj = data.get("subscription") or {}
+            if isinstance(sub_obj, dict):
+                cbp = sub_obj.get("current_billing_period") or {}
+        period_start = self._parse_paddle_datetime(cbp.get("starts_at")) if cbp else None
+        period_end = self._parse_paddle_datetime(cbp.get("ends_at")) if cbp else None
+
         subscription_service.create_or_update_subscription(
             user_id=user_id,
             plan_type=plan_str,
             status="active",
             paddle_subscription_id=sub_id if sub_id else None,
             paddle_customer_id=cust_id if cust_id else None,
+            current_period_start=period_start,
+            current_period_end=period_end,
         )
 
         logger.info(

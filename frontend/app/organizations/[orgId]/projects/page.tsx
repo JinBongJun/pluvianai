@@ -7,7 +7,12 @@ import OrgLayout from "@/components/layout/OrgLayout";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import Button from "@/components/ui/Button";
 import { clsx } from "clsx";
-import { OrganizationDetail, OrganizationProject, organizationsAPI } from "@/lib/api";
+import { OrganizationDetail, OrganizationProject, organizationsAPI, authAPI } from "@/lib/api";
+import {
+  ACCOUNT_USAGE_FALLBACK_BY_PLAN,
+  ACCOUNT_USAGE_SWR_KEY,
+  accountUsageAsNumber,
+} from "@/lib/accountUsage";
 import { orgKeys } from "@/lib/queryKeys";
 import { useDebouncedValue } from "@/hooks/useDebounce";
 import {
@@ -64,6 +69,20 @@ export default function OrgProjectsPage() {
     ([, , id, search]) =>
       organizationsAPI.listProjects(id as string, { includeStats: false, search: search as string })
   );
+
+  const { data: myUsage } = useSWR(orgId ? ACCOUNT_USAGE_SWR_KEY : null, () => authAPI.getMyUsage(), {
+    revalidateOnFocus: false,
+  });
+
+  const projectCreateBlocked = useMemo(() => {
+    const planType = (myUsage?.plan_type || "free").toLowerCase();
+    const limits = myUsage?.limits || {};
+    const usage = (myUsage?.usage_this_month || {}) as Record<string, unknown>;
+    const fb = ACCOUNT_USAGE_FALLBACK_BY_PLAN[planType] ?? ACCOUNT_USAGE_FALLBACK_BY_PLAN.free;
+    const projectLimit = accountUsageAsNumber((limits as Record<string, unknown>).projects, fb.projects);
+    const projectsUsed = accountUsageAsNumber(usage.projects_used, 0);
+    return projectLimit !== -1 && projectsUsed >= projectLimit;
+  }, [myUsage]);
 
   const filteredProjects = useMemo(() => {
     if (!projects) return [];
@@ -221,6 +240,12 @@ export default function OrgProjectsPage() {
               </div>
               <Button
                 onClick={() => router.push(`/organizations/${orgId}/projects/new`)}
+                disabled={projectCreateBlocked}
+                title={
+                  projectCreateBlocked
+                    ? "You have reached the project limit for your current plan. Upgrade in Billing to add more."
+                    : undefined
+                }
                 className="h-12 px-6 bg-emerald-500 hover:bg-emerald-400 text-black font-bold flex items-center gap-2 shadow-[0_0_30px_-5px_rgba(16,185,129,0.4)] rounded-full transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
                 <Plus className="w-5 h-5" />
@@ -327,8 +352,18 @@ export default function OrgProjectsPage() {
             </p>
             {!projectQuery.trim() && (
               <button
-                onClick={() => router.push(`/organizations/${orgId}/projects/new`)}
-                className="mt-10 px-8 py-4 bg-white/5 hover:bg-white/10 text-white rounded-full border border-white/10 transition-all font-black uppercase tracking-widest text-sm"
+                type="button"
+                onClick={() => {
+                  if (projectCreateBlocked) return;
+                  router.push(`/organizations/${orgId}/projects/new`);
+                }}
+                disabled={projectCreateBlocked}
+                title={
+                  projectCreateBlocked
+                    ? "You have reached the project limit for your current plan."
+                    : undefined
+                }
+                className="mt-10 px-8 py-4 bg-white/5 hover:bg-white/10 text-white rounded-full border border-white/10 transition-all font-black uppercase tracking-widest text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Initialize First Project
               </button>

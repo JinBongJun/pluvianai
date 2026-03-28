@@ -107,6 +107,7 @@ export function pickReleaseGateConfigPanelContext(
     toolContextLoadBusy: ctx.toolContextLoadBusy,
     handleLoadToolContextFromSnapshots: ctx.handleLoadToolContextFromSnapshots,
     selectedSnapshotIdsForRun: ctx.selectedSnapshotIdsForRun,
+    hostedReplayCreditsExhausted: ctx.hostedReplayCreditsExhausted,
     representativeBaselineUserSnapshotId: ctx.representativeBaselineUserSnapshotId,
     setRepresentativeBaselineUserSnapshotId: ctx.setRepresentativeBaselineUserSnapshotId,
     autoRepresentativeBaselineSnapshotId: ctx.autoRepresentativeBaselineSnapshotId,

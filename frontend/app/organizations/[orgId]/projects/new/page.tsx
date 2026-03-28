@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { useSWRConfig } from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
-import { projectsAPI, organizationsAPI } from "@/lib/api";
+import { projectsAPI, organizationsAPI, authAPI } from "@/lib/api";
+import {
+  ACCOUNT_USAGE_FALLBACK_BY_PLAN,
+  ACCOUNT_USAGE_SWR_KEY,
+  accountUsageAsNumber,
+} from "@/lib/accountUsage";
 import { orgKeys } from "@/lib/queryKeys";
 import { analytics } from "@/lib/analytics";
 import { useToast } from "@/components/ToastContainer";
@@ -31,10 +36,47 @@ export default function NewProjectPage() {
     organizationsAPI.get(orgId, { includeStats: false })
   );
 
+  const { data: myUsage } = useSWR(orgId ? ACCOUNT_USAGE_SWR_KEY : null, () => authAPI.getMyUsage(), {
+    revalidateOnFocus: false,
+  });
+
+  const projectCreateBlocked = useMemo(() => {
+    const planType = (myUsage?.plan_type || "free").toLowerCase();
+    const limits = myUsage?.limits || {};
+    const usage = (myUsage?.usage_this_month || {}) as Record<string, unknown>;
+    const fb = ACCOUNT_USAGE_FALLBACK_BY_PLAN[planType] ?? ACCOUNT_USAGE_FALLBACK_BY_PLAN.free;
+    const projectLimit = accountUsageAsNumber((limits as Record<string, unknown>).projects, fb.projects);
+    const projectsUsed = accountUsageAsNumber(usage.projects_used, 0);
+    return projectLimit !== -1 && projectsUsed >= projectLimit;
+  }, [myUsage]);
+
+  const clientProjectLimitPlanError = useMemo((): PlanLimitError | null => {
+    if (!projectCreateBlocked) return null;
+    const planType = (myUsage?.plan_type || "free").toLowerCase();
+    const limits = myUsage?.limits || {};
+    const usage = (myUsage?.usage_this_month || {}) as Record<string, unknown>;
+    const fb = ACCOUNT_USAGE_FALLBACK_BY_PLAN[planType] ?? ACCOUNT_USAGE_FALLBACK_BY_PLAN.free;
+    const projectLimit = accountUsageAsNumber((limits as Record<string, unknown>).projects, fb.projects);
+    const projectsUsed = accountUsageAsNumber(usage.projects_used, 0);
+    return {
+      code: "PROJECT_LIMIT_REACHED",
+      message: "",
+      planType: String(myUsage?.plan_type || "free"),
+      current: projectsUsed,
+      limit: projectLimit,
+      upgradePath: "/settings/billing",
+    };
+  }, [projectCreateBlocked, myUsage]);
+
+  const displayPlanLimitError = planError ?? clientProjectLimitPlanError;
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       setError("Project name is required");
+      return;
+    }
+    if (projectCreateBlocked) {
       return;
     }
 
@@ -108,9 +150,9 @@ export default function NewProjectPage() {
           </div>
         </div>
 
-        {planError && (
+        {displayPlanLimitError && (
           <div className="mb-8">
-            <PlanLimitBanner {...planError} context="project" />
+            <PlanLimitBanner {...displayPlanLimitError} context="project" />
           </div>
         )}
         {error && !planError && (
@@ -198,7 +240,7 @@ export default function NewProjectPage() {
             </button>
             <button
               type="submit"
-              disabled={loading || !name.trim()}
+              disabled={loading || !name.trim() || projectCreateBlocked}
               className="h-14 px-10 rounded-full font-black uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed
                 bg-emerald-500 text-black hover:bg-emerald-400 hover:scale-[1.02] shadow-[0_0_30px_-5px_rgba(16,185,129,0.5)] text-sm
               "
