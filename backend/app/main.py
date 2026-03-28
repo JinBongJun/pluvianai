@@ -57,7 +57,7 @@ from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.logging_middleware import LoggingMiddleware
 from app.middleware.metrics_middleware import MetricsMiddleware
 from app.middleware.security_middleware import SecurityHeadersMiddleware
-from app.core.metrics import initialize_billing_webhook_metrics, update_app_info
+from app.core.metrics import update_app_info
 from app.services.cache_service import cache_service
 
 # Import all models to ensure they are registered with Base
@@ -295,7 +295,6 @@ async def startup_event():
             else ("development" if settings.DEBUG else "production")
         ),
     )
-    initialize_billing_webhook_metrics()
     logger.info("App info metrics updated")
 
     db_available = False
