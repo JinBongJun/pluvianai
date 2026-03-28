@@ -35,7 +35,11 @@ export function useReleaseGateExpandedResultPanel({
     () =>
       resultCases
         .map((run: any, caseIndex: number) => ({ run, caseIndex }))
-        .filter(({ run }: VisibleResultCase) => (resultCaseFilter === "all" ? true : !isCasePassing(run))),
+        .filter(({ run }: VisibleResultCase) => {
+          if (resultCaseFilter === "all") return true;
+          if (resultCaseFilter === "failed") return !isCasePassing(run);
+          return isCasePassing(run);
+        }),
     [resultCases, resultCaseFilter]
   );
 

@@ -124,6 +124,31 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
               <div className="flex h-full flex-col overflow-y-auto custom-scrollbar">
                 {rightPanelTab === "results" && (
                   <div className="flex-1 space-y-4 p-4">
+                    <div className="flex flex-wrap items-center justify-end gap-1 rounded-xl border border-white/8 bg-black/20 p-1">
+                      {(
+                        [
+                          { id: "all" as const, label: "All" },
+                          { id: "failed" as const, label: "Needs review" },
+                          { id: "passed" as const, label: "Healthy" },
+                        ] as const
+                      ).map(option => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          data-testid={`rg-result-case-filter-${option.id}`}
+                          onClick={() => setResultCaseFilter(option.id)}
+                          className={clsx(
+                            "rounded-lg px-3 py-1.5 text-[11px] font-semibold transition",
+                            resultCaseFilter === option.id
+                              ? "bg-white/[0.12] text-white"
+                              : "text-slate-400 hover:bg-white/[0.05] hover:text-slate-200"
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+
                     {!result ? (
                       <div className="flex flex-col items-center justify-center py-14 text-center opacity-70">
                         <Activity className="mb-4 h-8 w-8 text-slate-400" />
@@ -221,44 +246,13 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                         )}
 
                         <div className="flex flex-col gap-2">
-                          <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="text-[11px] font-medium text-slate-400">Per-input breakdown</div>
-                                <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                                  Review individual inputs below and open a row to inspect attempts in detail.
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-1 rounded-xl border border-white/8 bg-black/20 p-1">
-                                {(
-                                  [
-                                    { id: "all" as const, label: "All inputs" },
-                                    { id: "failed" as const, label: "Needs review" },
-                                  ] as const
-                                ).map(option => (
-                                  <button
-                                    key={option.id}
-                                    type="button"
-                                    onClick={() => setResultCaseFilter(option.id)}
-                                    className={clsx(
-                                      "rounded-lg px-3 py-1.5 text-[11px] font-semibold transition",
-                                      resultCaseFilter === option.id
-                                        ? "bg-white/[0.12] text-white"
-                                        : "text-slate-400 hover:bg-white/[0.05] hover:text-slate-200"
-                                    )}
-                                  >
-                                    {option.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-
                           {visibleResultCases.length === 0 ? (
                             <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-4 text-sm text-slate-500">
                               {resultCaseFilter === "failed"
                                 ? "No failed or flaky inputs in this run."
-                                : "No per-input result rows returned for this run."}
+                                : resultCaseFilter === "passed"
+                                  ? "No healthy inputs in this run."
+                                  : "No per-input result rows returned for this run."}
                             </div>
                           ) : (
                             visibleResultCases.map(({ run, caseIndex: idx }: VisibleResultCase) => {

@@ -4,7 +4,7 @@ Stream Processor for batch writing snapshots from Redis Stream to DB
 
 import json
 import asyncio
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from app.models.snapshot import Snapshot
 from app.models.trace import Trace
@@ -17,6 +17,24 @@ from app.utils.tool_calls import extract_tool_calls_summary
 from app.utils.agent_signature import build_node_key
 from app.services.live_view_events import publish_agents_changed
 import httpx
+
+
+def _stream_opt_int(raw: Any) -> Optional[int]:
+    if raw is None or raw == "":
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _stream_opt_float(raw: Any) -> Optional[float]:
+    if raw is None or raw == "":
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
 
 
 class StreamProcessor:
@@ -114,6 +132,9 @@ class StreamProcessor:
                             "eval_checks_result": eval_checks_result,
                             "eval_config_version": eval_config_version,
                             "tool_calls_summary": tool_calls_summary if tool_calls_summary else None,
+                            "latency_ms": _stream_opt_int(data.get("latency_ms")),
+                            "tokens_used": _stream_opt_int(data.get("tokens_used")),
+                            "cost": _stream_opt_float(data.get("cost")),
                         }
                         # v1.0 node identity: always recompute from signature to avoid mixing
                         # (stream payload may contain legacy agent_id/agent_name fields)
@@ -227,6 +248,9 @@ class StreamProcessor:
                             payload=snapshot_data["payload"],
                             is_sanitized=snapshot_data["is_sanitized"],
                             status_code=snapshot_data["status_code"],
+                            latency_ms=snapshot_data.get("latency_ms"),
+                            tokens_used=snapshot_data.get("tokens_used"),
+                            cost=snapshot_data.get("cost"),
                             eval_checks_result=snapshot_data.get("eval_checks_result"),
                             eval_config_version=snapshot_data.get("eval_config_version"),
                             tool_calls_summary=snapshot_data.get("tool_calls_summary"),

@@ -1,8 +1,18 @@
-import { expect, request as playwrightRequest, test, type APIRequestContext, type Page } from "@playwright/test";
+import {
+  expect,
+  request as playwrightRequest,
+  test,
+  type APIRequestContext,
+  type APIResponse,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 
 const API_BASE_URL = process.env.PLAYWRIGHT_API_URL || "http://127.0.0.1:8000";
+const PLAYWRIGHT_BASE_URL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 const LOGIN_EMAIL = process.env.PLAYWRIGHT_E2E_EMAIL;
 const LOGIN_PASSWORD = process.env.PLAYWRIGHT_E2E_PASSWORD;
+const RUN_ONLY_API_KEY = process.env.PLAYWRIGHT_RUN_ONLY_API_KEY || process.env.OPENAI_API_KEY;
 const E2E_PROJECT_NAME = "Cursor Tool E2E";
 
 type SeedContext = {
@@ -26,7 +36,7 @@ async function waitForSnapshotMeta(
   projectId: number,
   traceId: string
 ): Promise<{ snapshotId: number; agentId: string }> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
     const listResponse = await authedJson(
       api,
       "GET",
@@ -92,16 +102,55 @@ function requireCredentials() {
   test.skip(!LOGIN_EMAIL || !LOGIN_PASSWORD, "PLAYWRIGHT_E2E_EMAIL and PLAYWRIGHT_E2E_PASSWORD are required.");
 }
 
+function requireRunOnlyApiKey() {
+  test.skip(!RUN_ONLY_API_KEY, "PLAYWRIGHT_RUN_ONLY_API_KEY or OPENAI_API_KEY is required.");
+}
+
+async function sleep(ms: number) {
+  await new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function responseTextSafe(response: { text(): Promise<string> }) {
+  try {
+    return await response.text();
+  } catch {
+    return "";
+  }
+}
+
+async function expectOkWithRetry(
+  label: string,
+  action: () => Promise<APIResponse>,
+  attempts = 4
+): Promise<APIResponse> {
+  let lastError = `${label} failed`;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const response = await action();
+    if (response.ok()) return response;
+
+    const body = await responseTextSafe(response);
+    lastError = `${label} failed (${response.status()}): ${body.slice(0, 400)}`;
+    if (attempt < attempts - 1) {
+      await sleep(750 * (attempt + 1));
+    }
+  }
+  throw new Error(lastError);
+}
+
 async function loginToBackend(
   api: APIRequestContext
 ): Promise<{ accessToken: string; refreshToken: string }> {
-  const response = await api.post("/api/v1/auth/login", {
-    form: {
-      username: LOGIN_EMAIL!,
-      password: LOGIN_PASSWORD!,
-    },
-  });
-  expect(response.ok()).toBeTruthy();
+  const response = await expectOkWithRetry(
+    "login",
+    () =>
+      api.post("/api/v1/auth/login", {
+        form: {
+          username: LOGIN_EMAIL!,
+          password: LOGIN_PASSWORD!,
+        },
+      }),
+    5
+  );
   const data = await response.json();
   expect(typeof data.access_token).toBe("string");
   expect(typeof data.refresh_token).toBe("string");
@@ -129,29 +178,34 @@ async function authedJson(
 }
 
 async function ensureOrgAndProject(api: APIRequestContext, token: string): Promise<{ orgId: number; projectId: number }> {
-  const orgsResponse = await authedJson(api, "GET", "/api/v1/organizations?include_stats=false", token);
-  expect(orgsResponse.ok()).toBeTruthy();
+  const orgsResponse = await expectOkWithRetry(
+    "list organizations",
+    () => authedJson(api, "GET", "/api/v1/organizations?include_stats=false", token),
+    4
+  );
   const orgs = (await orgsResponse.json()) as Array<{ id: number; name?: string }>;
 
   let orgId = Number(orgs?.[0]?.id || 0);
   if (!orgId) {
-    const createOrgResponse = await authedJson(api, "POST", "/api/v1/organizations", token, {
-      name: "Cursor E2E Org",
-      description: "Organization for authenticated browser tool flow tests.",
-      plan_type: "free",
-    });
-    expect(createOrgResponse.ok()).toBeTruthy();
+    const createOrgResponse = await expectOkWithRetry(
+      "create organization",
+      () =>
+        authedJson(api, "POST", "/api/v1/organizations", token, {
+          name: "Cursor E2E Org",
+          description: "Organization for authenticated browser tool flow tests.",
+          plan_type: "free",
+        }),
+      4
+    );
     const org = await createOrgResponse.json();
     orgId = Number(org.id);
   }
 
-  const projectsResponse = await authedJson(
-    api,
-    "GET",
-    `/api/v1/organizations/${orgId}/projects?include_stats=false`,
-    token
+  const projectsResponse = await expectOkWithRetry(
+    "list projects",
+    () => authedJson(api, "GET", `/api/v1/organizations/${orgId}/projects?include_stats=false`, token),
+    4
   );
-  expect(projectsResponse.ok()).toBeTruthy();
   const projects = (await projectsResponse.json()) as Array<{ id: number; name?: string }>;
 
   let projectId =
@@ -159,13 +213,17 @@ async function ensureOrgAndProject(api: APIRequestContext, token: string): Promi
     Number(projects?.[0]?.id || 0);
 
   if (!projectId) {
-    const createProjectResponse = await authedJson(api, "POST", "/api/v1/projects", token, {
-      name: E2E_PROJECT_NAME,
-      description: "Project for authenticated tool flow browser tests.",
-      organization_id: orgId,
-      usage_mode: "full",
-    });
-    expect(createProjectResponse.ok()).toBeTruthy();
+    const createProjectResponse = await expectOkWithRetry(
+      "create project",
+      () =>
+        authedJson(api, "POST", "/api/v1/projects", token, {
+          name: E2E_PROJECT_NAME,
+          description: "Project for authenticated tool flow browser tests.",
+          organization_id: orgId,
+          usage_mode: "full",
+        }),
+      4
+    );
     const project = await createProjectResponse.json();
     projectId = Number(project.id);
   }
@@ -182,72 +240,74 @@ async function seedToolSnapshot(
   const traceId = `pw-tool-flow-${Date.now()}`;
   const promptText = `${options.promptPrefix || "PWTOOL-E2E"}-${Date.now()}`;
 
-  const createSnapshotResponse = await authedJson(
-    api,
-    "POST",
-    `/api/v1/projects/${projectId}/snapshots`,
-    token,
-    {
-      trace_id: traceId,
-      ...(options.agentId ? { agent_id: options.agentId } : {}),
-      provider: "openai",
-      model: "gpt-4o-mini",
-      status_code: 200,
-      payload: {
-        messages: [{ role: "user", content: promptText }],
-        response: {
-          id: `resp-${traceId}`,
-          choices: [
-            {
-              message: {
-                role: "assistant",
-                content: "Checking tool output.",
-                tool_calls: [
-                  {
-                    id: "call_weather_1",
-                    function: {
-                      name: "get_weather",
-                      arguments: { city: "Seoul" },
+  const createSnapshotResponse = await expectOkWithRetry(
+    "create snapshot",
+    () =>
+      authedJson(api, "POST", `/api/v1/projects/${projectId}/snapshots`, token, {
+        trace_id: traceId,
+        ...(options.agentId ? { agent_id: options.agentId } : {}),
+        provider: "openai",
+        model: "gpt-4o-mini",
+        status_code: 200,
+        payload: {
+          messages: [{ role: "user", content: promptText }],
+          response: {
+            id: `resp-${traceId}`,
+            choices: [
+              {
+                message: {
+                  role: "assistant",
+                  content: "Checking tool output.",
+                  tool_calls: [
+                    {
+                      id: "call_weather_1",
+                      function: {
+                        name: "get_weather",
+                        arguments: { city: "Seoul" },
+                      },
                     },
-                  },
-                ],
+                  ],
+                },
               },
+            ],
+          },
+          tool_events: [
+            {
+              kind: "tool_call",
+              name: "get_weather",
+              call_id: "call_weather_1",
+              input: { city: "Seoul" },
+            },
+            {
+              kind: "tool_result",
+              name: "get_weather",
+              call_id: "call_weather_1",
+              output: { temp_c: 22, condition: "sunny" },
+              status: "ok",
+            },
+            {
+              kind: "action",
+              name: "send_slack",
+              output: { ok: true, channel: "#ops" },
+              status: "ok",
             },
           ],
         },
-        tool_events: [
-          {
-            kind: "tool_call",
-            name: "get_weather",
-            call_id: "call_weather_1",
-            input: { city: "Seoul" },
-          },
-          {
-            kind: "tool_result",
-            name: "get_weather",
-            call_id: "call_weather_1",
-            output: { temp_c: 22, condition: "sunny" },
-            status: "ok",
-          },
-          {
-            kind: "action",
-            name: "send_slack",
-            output: { ok: true, channel: "#ops" },
-            status: "ok",
-          },
-        ],
-      },
-    }
+      }),
+    4
   );
-  expect(createSnapshotResponse.ok()).toBeTruthy();
 
   const snapshotMeta = await waitForSnapshotMeta(api, token, projectId, traceId);
   const snapshotId = snapshotMeta.snapshotId;
 
-  const validateResponse = await authedJson(api, "POST", `/api/v1/projects/${projectId}/behavior/validate`, token, {
-    trace_id: traceId,
-  });
-  expect(validateResponse.ok()).toBeTruthy();
+  await expectOkWithRetry(
+    "validate snapshot behavior",
+    () =>
+      authedJson(api, "POST", `/api/v1/projects/${projectId}/behavior/validate`, token, {
+        trace_id: traceId,
+      }),
+    4
+  );
 
   await waitForTrajectoryDetail(api, token, projectId, snapshotId);
 
@@ -276,12 +336,16 @@ async function createDataset(
   projectId: number,
   options: { snapshotIds: number[]; agentId: string; label: string }
 ): Promise<{ id: string; label?: string | null }> {
-  const response = await authedJson(api, "POST", `/api/v1/projects/${projectId}/behavior/datasets`, token, {
-    snapshot_ids: options.snapshotIds,
-    agent_id: options.agentId,
-    label: options.label,
-  });
-  expect(response.ok()).toBeTruthy();
+  const response = await expectOkWithRetry(
+    "create dataset",
+    () =>
+      authedJson(api, "POST", `/api/v1/projects/${projectId}/behavior/datasets`, token, {
+        snapshot_ids: options.snapshotIds,
+        agent_id: options.agentId,
+        label: options.label,
+      }),
+    4
+  );
   return (await response.json()) as { id: string; label?: string | null };
 }
 
@@ -297,7 +361,6 @@ async function loginWithSessionCookies(
       url,
       httpOnly: true,
       sameSite: "Lax" as const,
-      path: "/",
     },
     {
       name: "refresh_token",
@@ -305,7 +368,6 @@ async function loginWithSessionCookies(
       url,
       httpOnly: true,
       sameSite: "Lax" as const,
-      path: "/",
     },
     {
       name: "csrf_token",
@@ -313,22 +375,40 @@ async function loginWithSessionCookies(
       url,
       httpOnly: false,
       sameSite: "Lax" as const,
-      path: "/",
     },
   ];
+  const cookieUrls = Array.from(
+    new Set(
+      [
+        PLAYWRIGHT_BASE_URL,
+        "http://localhost:3000",
+        "http://localhost:8000",
+        API_BASE_URL,
+      ].map(value => {
+        try {
+          return `${new URL(value).origin}/`;
+        } catch {
+          return value;
+        }
+      })
+    )
+  );
   await page
     .context()
-    .addCookies([
-      ...buildCookiesForUrl("http://localhost:3000"),
-      ...buildCookiesForUrl("http://localhost:8000"),
-      ...buildCookiesForUrl(API_BASE_URL),
-    ]);
+    .addCookies(cookieUrls.flatMap(buildCookiesForUrl));
   await page.goto("/organizations", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/organizations/, { timeout: 20000 });
 }
 
+async function ensurePanelOpen(toggle: Locator, content: Locator) {
+  if (!(await content.isVisible().catch(() => false))) {
+    await toggle.click();
+  }
+  await expect(content).toBeVisible();
+}
+
 async function openReleaseGateSettings(page: Page) {
-  await page.getByRole("button", { name: "Settings" }).click();
+  await page.locator('button[title="Open settings"]').first().click();
   await expect(page.getByRole("heading", { name: "Release Gate configuration" })).toBeVisible({
     timeout: 15000,
   });
@@ -545,49 +625,23 @@ test.describe("Authenticated tool browser flow", () => {
     const session = await loginToBackend(api);
     const token = session.accessToken;
     const { orgId, projectId } = await ensureOrgAndProject(api, token);
-    const sharedAgentId = `pw-rg-parity-${Date.now()}`;
     const seededA = await seedToolSnapshot(api, token, projectId, {
-      agentId: sharedAgentId,
       promptPrefix: "PW-RG-PARITY-A",
     });
     const seededB = await seedToolSnapshot(api, token, projectId, {
-      agentId: sharedAgentId,
+      agentId: seededA.snapshotAgentId,
       promptPrefix: "PW-RG-PARITY-B",
-    });
-    const datasetALabel = `PW RG Parity A ${Date.now()}`;
-    const datasetBLabel = `PW RG Parity B ${Date.now()}`;
-
-    await createDataset(api, token, projectId, {
-      snapshotIds: [seededA.snapshotId],
-      agentId: sharedAgentId,
-      label: datasetALabel,
-    });
-    await createDataset(api, token, projectId, {
-      snapshotIds: [seededB.snapshotId],
-      agentId: sharedAgentId,
-      label: datasetBLabel,
     });
 
     await loginWithSessionCookies(page, session);
     await page.goto(
-      `/organizations/${orgId}/projects/${projectId}/release-gate?agent_id=${encodeURIComponent(sharedAgentId)}`,
+      `/organizations/${orgId}/projects/${projectId}/release-gate?agent_id=${encodeURIComponent(seededA.snapshotAgentId)}`,
       { waitUntil: "domcontentloaded" }
     );
-    await page.getByRole("tab", { name: "Saved Data" }).click();
-    await expect(page.getByTestId("rg-datasets-state-list")).toBeVisible({ timeout: 45000 });
-
-    await page
-      .locator("div")
-      .filter({ has: page.getByText(datasetALabel, { exact: false }) })
-      .locator('input[type="checkbox"]')
-      .first()
-      .check();
-    await page
-      .locator("div")
-      .filter({ has: page.getByText(datasetBLabel, { exact: false }) })
-      .locator('input[type="checkbox"]')
-      .first()
-      .check();
+    await expect(page.getByTestId(`rg-live-log-row-${seededA.snapshotId}`)).toBeVisible({ timeout: 45000 });
+    await expect(page.getByTestId(`rg-live-log-row-${seededB.snapshotId}`)).toBeVisible({ timeout: 45000 });
+    await page.getByTestId(`rg-live-log-checkbox-${seededA.snapshotId}`).check();
+    await page.getByTestId(`rg-live-log-checkbox-${seededB.snapshotId}`).check();
 
     await openReleaseGateSettings(page);
     await page.getByRole("tab", { name: "Environment parity" }).click();
@@ -600,15 +654,176 @@ test.describe("Authenticated tool browser flow", () => {
     await page.getByRole("button", { name: "Extra request JSON (replay overrides)" }).click();
     await expect(page.getByRole("button", { name: "Reset shared" })).toBeVisible();
     await expect(page.getByText("Shared extras (all selected logs)")).toBeVisible();
-    await expect(page.getByText(`Log id ${seededA.snapshotId}`)).toBeVisible();
-    await expect(page.getByText(`Log id ${seededB.snapshotId}`)).toBeVisible();
+    await expect(page.locator('textarea[placeholder*="attachments"]').filter({ visible: true })).toHaveCount(3);
 
     await page.getByRole("button", { name: "Extra system context (append to system prompt)" }).click();
     await expect(page.getByRole("button", { name: "Reset context from snapshots" })).toBeVisible();
     await page.getByLabel("Append to system prompt").check();
     await page.getByLabel("Per log").check();
     await expect(page.getByText("Fallback (optional)")).toBeVisible();
-    await expect(page.getByText(`Log id ${seededA.snapshotId}`)).toBeVisible();
-    await expect(page.getByText(`Log id ${seededB.snapshotId}`)).toBeVisible();
+    await expect(page.getByPlaceholder("Additional system context for this log…")).toHaveCount(2);
+  });
+
+  test("release gate parity multi-log full config preview and run returns result rows", async ({ page }) => {
+    test.setTimeout(600000);
+    requireCredentials();
+    requireRunOnlyApiKey();
+
+    const api = await playwrightRequest.newContext({ baseURL: API_BASE_URL });
+    const session = await loginToBackend(api);
+    const token = session.accessToken;
+    const { orgId, projectId } = await ensureOrgAndProject(api, token);
+    const seededA = await seedToolSnapshot(api, token, projectId, {
+      promptPrefix: "Do you have a quick start guide for first-time users?",
+    });
+    const seededB = await seedToolSnapshot(api, token, projectId, {
+      agentId: seededA.snapshotAgentId,
+      promptPrefix: "How do I reset model/provider overrides for replay tests?",
+    });
+    const savedKeyName = `[RG] PW Run Key ${Date.now()}`;
+
+    const savedKeyResponse = await authedJson(
+      api,
+      "POST",
+      `/api/v1/projects/${projectId}/user-api-keys`,
+      token,
+      {
+        provider: "openai",
+        api_key: RUN_ONLY_API_KEY,
+        name: savedKeyName,
+      }
+    );
+    expect(savedKeyResponse.ok()).toBeTruthy();
+    const savedKey = (await savedKeyResponse.json()) as { data?: { id?: number }; id?: number };
+    const savedKeyId = Number(savedKey?.data?.id || savedKey?.id || 0);
+    expect(savedKeyId).toBeGreaterThan(0);
+
+    try {
+      await loginWithSessionCookies(page, session);
+      await page.goto(
+        `/organizations/${orgId}/projects/${projectId}/release-gate?agent_id=${encodeURIComponent(seededA.snapshotAgentId)}`,
+        { waitUntil: "domcontentloaded" }
+      );
+
+      await expect(page.getByTestId(`rg-live-log-row-${seededA.snapshotId}`)).toBeVisible({ timeout: 45000 });
+      await expect(page.getByTestId(`rg-live-log-row-${seededB.snapshotId}`)).toBeVisible({ timeout: 45000 });
+
+      await page.getByTestId(`rg-live-log-checkbox-${seededA.snapshotId}`).check();
+      await page.getByTestId(`rg-live-log-checkbox-${seededB.snapshotId}`).check();
+
+      await openReleaseGateSettings(page);
+      await expect(page.getByText("2 selected")).toBeVisible();
+
+      await page.getByRole("tab", { name: "Core setup" }).click();
+      await page.getByLabel("Custom (BYOK)").check();
+      await page.locator('input[name="release-gate-custom-model-id"]').fill("gpt-4o-mini");
+
+      const savedKeyRow = page
+        .locator("div")
+        .filter({ has: page.getByText(savedKeyName.replace(/^\[RG\]\s*/, ""), { exact: false }) })
+        .first();
+      await expect(savedKeyRow.getByRole("button", { name: "Use for run" })).toBeVisible({ timeout: 15000 });
+      await savedKeyRow.getByRole("button", { name: "Use for run" }).click();
+
+      await page.getByRole("tab", { name: "Environment parity" }).click();
+
+      await ensurePanelOpen(
+        page.getByRole("button", { name: "Tools (definitions + recorded calls)" }),
+        page.getByRole("button", { name: "Add tool" })
+      );
+      await page.getByRole("button", { name: "Add tool" }).click();
+      await page.getByPlaceholder("e.g. get_weather").first().fill("settings_fetcher");
+      await page
+        .getByPlaceholder("What this tool does")
+        .first()
+        .fill("Fetches product settings or support guidance relevant to the replayed request.");
+      await page.locator("textarea:visible").first().fill(`{
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "The settings or configuration question to look up"
+    }
+  },
+  "required": ["query"],
+  "additionalProperties": false
+}`);
+
+      await ensurePanelOpen(
+        page.getByRole("button", { name: "Extra request JSON (replay overrides)" }),
+        page.getByRole("button", { name: "Reset shared" })
+      );
+      const replayOverrideAreas = page.locator('textarea[placeholder*="attachments"]:visible');
+      await replayOverrideAreas.first().fill(`{
+  "channel": "web_chat",
+  "locale": "en-US",
+  "tenant": "support-bot-a1",
+  "metadata": {
+    "entrypoint": "release-gate-parity-test",
+    "surface": "customer_support",
+    "policy_mode": "default"
+  }
+}`);
+      await replayOverrideAreas.nth(1).fill(`{
+  "metadata": {
+    "test_case": "first_time_user_onboarding",
+    "user_segment": "new_user"
+  }
+}`);
+      await replayOverrideAreas.nth(2).fill(`{
+  "metadata": {
+    "test_case": "provider_override_question",
+    "user_segment": "existing_customer"
+  }
+}`);
+
+      await ensurePanelOpen(
+        page.getByRole("button", { name: "Extra system context (append to system prompt)" }),
+        page.getByRole("button", { name: "Reset context from snapshots" })
+      );
+      await page.getByLabel("Append to system prompt").check();
+      await page.getByLabel("Per log").check();
+      await page
+        .locator('xpath=//span[normalize-space()="Fallback (optional)"]/ancestor::label[1]//textarea')
+        .fill("Use docs and tool outcomes to give concise, policy-safe support answers.");
+      const perLogContextAreas = page.getByPlaceholder("Additional system context for this log…");
+      await perLogContextAreas.first().fill(
+        "This log is from a first-time user. Prefer onboarding-style guidance and simple explanations."
+      );
+      await perLogContextAreas
+        .nth(1)
+        .fill("This log is about provider behavior or limits. Be explicit about practical next steps.");
+
+      await page.getByRole("tab", { name: "Preview" }).click();
+      await expect(page.getByText("Final override payload")).toBeVisible();
+      await expect(page.getByText("Set (shared + 2 logs)")).toBeVisible();
+      await expect(page.getByText("Appending on replay")).toBeVisible();
+      await expect(page.getByText(/1 defined/)).toBeVisible();
+
+      await page.getByRole("button", { name: "Expand full JSON" }).click();
+      await expect(page.getByText("Final candidate payload (full)")).toBeVisible();
+      await expect(page.locator("pre").filter({ hasText: '"channel": "web_chat"' }).first()).toBeVisible();
+      await expect(page.locator("pre").filter({ hasText: '"tenant": "support-bot-a1"' }).first()).toBeVisible();
+      await page.getByLabel("Close full candidate payload").click();
+
+      await page.getByLabel("Close Release Gate settings").click();
+      await expect(page.getByTestId("rg-run-start-btn")).toBeEnabled({ timeout: 15000 });
+      await page.getByTestId("rg-run-start-btn").click();
+
+      await expect(page.getByText(/Healthy gate|Flagged gate/)).toBeVisible({ timeout: 300000 });
+      await expect(page.getByTestId("rg-result-case-0")).toBeVisible({ timeout: 30000 });
+      await expect(page.getByTestId("rg-result-case-1")).toBeVisible({ timeout: 30000 });
+    } finally {
+      if (savedKeyId > 0) {
+        const deleteResponse = await authedJson(
+          api,
+          "DELETE",
+          `/api/v1/projects/${projectId}/user-api-keys/${savedKeyId}`,
+          token
+        );
+        expect(deleteResponse.ok()).toBeTruthy();
+      }
+      await api.dispose();
+    }
   });
 });

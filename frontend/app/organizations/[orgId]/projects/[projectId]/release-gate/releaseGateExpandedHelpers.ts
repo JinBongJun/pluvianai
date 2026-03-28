@@ -4,7 +4,7 @@
 
 export type GateTab = "validate" | "history";
 export type ThresholdPreset = "strict" | "default" | "lenient" | "custom";
-export type ResultCaseFilter = "all" | "failed";
+export type ResultCaseFilter = "all" | "failed" | "passed";
 export type LogsStatusFilter = "all" | "failed" | "passed";
 
 export type FixHint = {
