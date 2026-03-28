@@ -9,8 +9,9 @@ WARN_ERROR_RATIO="${WARN_ERROR_RATIO:-0.05}"
 
 raw="$(curl -fsS "$METRICS_URL")"
 lines="$(printf '%s\n' "$raw" | rg '^billing_webhook_events_total\{' || true)"
+family_present="$(printf '%s\n' "$raw" | rg '^# HELP billing_webhook_events_total ' || true)"
 
-if [ -z "$lines" ]; then
+if [ -z "$lines" ] && [ -z "$family_present" ]; then
   echo "billing_webhook_events_total not found in metrics output."
   exit 0
 fi
