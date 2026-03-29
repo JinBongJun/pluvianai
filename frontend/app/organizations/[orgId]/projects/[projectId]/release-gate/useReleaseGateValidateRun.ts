@@ -5,12 +5,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReleaseGateResult } from "@/lib/api";
 import { releaseGateAPI } from "@/lib/api";
 import {
+  API_URL,
   getApiErrorCode,
   getApiErrorMessage,
   getRateLimitInfo,
   isRateLimitError,
   redirectToLogin,
 } from "@/lib/api/client";
+import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import {
   describeMissingProviderKeys,
@@ -30,11 +32,31 @@ const CANCEL_BURST_INTERVAL_MS = 2000;
 const BASE_POLL_INTERVAL_MS = 4000;
 const FAST_POLL_INTERVAL_MS = 3200;
 const FAST_POLL_WINDOW_MS = 2500;
+const SSE_FALLBACK_POLL_MS = 15_000;
+const SSE_POLL_BACKOFF_MS = 30_000;
 /** Spread concurrent tabs / clients so polls do not align on the same second. */
 const POLL_JITTER_MS_MAX = 900;
+const TERMINAL_JOB_STATUSES = new Set(["succeeded", "failed", "canceled"]);
 
 function pollDelayMs(baseMs: number): number {
   return baseMs + Math.floor(Math.random() * POLL_JITTER_MS_MAX);
+}
+
+type ReleaseGateJobUpdateEvent = {
+  job?: {
+    id?: string;
+    status?: string | null;
+    cancel_requested_at?: string | null;
+  };
+};
+
+function parseReleaseGateJobUpdateEvent(raw: string): ReleaseGateJobUpdateEvent | null {
+  try {
+    const data = JSON.parse(raw);
+    return data && typeof data === "object" ? (data as ReleaseGateJobUpdateEvent) : null;
+  } catch {
+    return null;
+  }
 }
 
 export type ReleaseGateValidateRunDeps = ReleaseGateValidateAsyncPayloadInput & {
@@ -79,6 +101,7 @@ export function useReleaseGateValidateRun(options: {
   mutateHistoryRef: MutableRefObject<(() => unknown) | undefined>;
 }) {
   const { projectId, depsRef, mutateHistoryRef } = options;
+  const isPageVisible = usePageVisibility();
 
   const [isValidating, setIsValidating] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
@@ -110,6 +133,11 @@ export function useReleaseGateValidateRun(options: {
     const id = window.setTimeout(() => setRunValidateCooldownUntilMs(0), ms);
     return () => window.clearTimeout(id);
   }, [runValidateCooldownUntilMs]);
+
+  useEffect(() => {
+    if (!isPageVisible) return;
+    pollNowRef.current?.();
+  }, [isPageVisible]);
 
   const clearRunUi = useCallback(() => {
     setResult(null);
@@ -146,8 +174,57 @@ export function useReleaseGateValidateRun(options: {
     if (!activeJobId) return;
     if (!projectId || isNaN(projectId)) return;
     let cancelled = false;
+    let sse: EventSource | null = null;
+    let sseConnected = false;
+    let sseBackoffUntilMs = 0;
+    let terminalStatusHint: "succeeded" | "failed" | "canceled" | null = null;
 
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    const closeSse = () => {
+      if (!sse) return;
+      try {
+        sse.close();
+      } catch {
+        /* ignore */
+      }
+      sse = null;
+      sseConnected = false;
+    };
+
+    const connectSseIfAllowed = () => {
+      if (cancelled || sse || !isPageVisible) return;
+      if (Date.now() < sseBackoffUntilMs) return;
+      try {
+        const url = `${API_URL}/api/v1/projects/${projectId}/release-gate/jobs/${encodeURIComponent(activeJobId)}/stream`;
+        const es = new EventSource(url, { withCredentials: true });
+        sse = es;
+        es.addEventListener("connected", () => {
+          sseConnected = true;
+        });
+        es.addEventListener("job_updated", event => {
+          const payload = parseReleaseGateJobUpdateEvent(event.data);
+          const job = payload?.job;
+          if (!job || String(job.id || "").trim() !== activeJobId) return;
+          if (job.cancel_requested_at && !cancelRequestedRef.current) {
+            cancelRequestedRef.current = true;
+            setCancelRequested(true);
+          }
+          const status = String(job.status || "").trim().toLowerCase();
+          if (TERMINAL_JOB_STATUSES.has(status)) {
+            terminalStatusHint = status as "succeeded" | "failed" | "canceled";
+            pollNowRef.current?.();
+          }
+        });
+        es.onerror = () => {
+          closeSse();
+          sseBackoffUntilMs = Date.now() + SSE_POLL_BACKOFF_MS;
+        };
+      } catch {
+        closeSse();
+        sseBackoffUntilMs = Date.now() + SSE_POLL_BACKOFF_MS;
+      }
+    };
 
     const finalize = async (
       status: "succeeded" | "failed" | "canceled",
@@ -201,6 +278,9 @@ export function useReleaseGateValidateRun(options: {
           return CANCEL_BURST_INTERVAL_MS;
         }
         const now = Date.now();
+        if (sseConnected && isPageVisible && now >= sseBackoffUntilMs) {
+          return SSE_FALLBACK_POLL_MS;
+        }
         if (now < suppressFastPollUntilMs) {
           return Math.max(backoffMs, BASE_POLL_INTERVAL_MS);
         }
@@ -215,7 +295,18 @@ export function useReleaseGateValidateRun(options: {
         }
       };
       while (!cancelled) {
+        connectSseIfAllowed();
         try {
+          if (terminalStatusHint) {
+            const finalRes = await releaseGateAPI.getJob(projectId, activeJobId, 1);
+            const finalStatus = String(finalRes?.job?.status || "").toLowerCase();
+            const finalResult = (finalRes as any)?.result ?? null;
+            if (TERMINAL_JOB_STATUSES.has(finalStatus)) {
+              await finalize(finalStatus as "succeeded" | "failed" | "canceled", finalResult, finalRes?.job);
+              return;
+            }
+            terminalStatusHint = null;
+          }
           const res = await releaseGateAPI.getJob(projectId, activeJobId, 0);
           if (res?.job?.cancel_requested_at && !cancelRequestedRef.current) {
             cancelRequestedRef.current = true;
@@ -315,9 +406,10 @@ export function useReleaseGateValidateRun(options: {
     run();
     return () => {
       cancelled = true;
+      closeSse();
       if (pollNowRef.current) pollNowRef.current = null;
     };
-  }, [activeJobId, projectId, mutateHistoryRef]);
+  }, [activeJobId, projectId, mutateHistoryRef, isPageVisible]);
 
   const handleValidate = useCallback(async () => {
     const d = depsRef.current;

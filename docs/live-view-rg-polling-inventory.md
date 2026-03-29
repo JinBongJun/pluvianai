@@ -56,7 +56,32 @@ SSE 연결 시 해당 훅의 `refreshInterval`이 0이 되고, 폴링은 위 상
 
 ---
 
-## 4. Live View — 에러·재시도 패턴 (Phase 1A.5)
+## 4. Release Gate — 실시간 상태 추적
+
+**주 경로:** `useReleaseGateValidateRun.ts`
+
+| 항목 | 값 / 동작 | 비고 |
+|------|-----------|------|
+| 기본 poll | `BASE_POLL_INTERVAL_MS = 4000` | SSE 미연결 또는 fallback 시 기준 |
+| 초기 fast poll | `FAST_POLL_INTERVAL_MS = 3200` | run 시작 직후 짧은 구간 |
+| cancel burst | `CANCEL_BURST_INTERVAL_MS = 2000` | cancel 요청 직후만 제한적으로 사용 |
+| jitter | `POLL_JITTER_MS_MAX = 900` | 다중 탭 정렬 완화 |
+| SSE fallback poll | `SSE_FALLBACK_POLL_MS = 15000` | SSE 연결이 건강할 때의 안전 poll |
+| SSE backoff | `SSE_POLL_BACKOFF_MS = 30000` | stream 에러 후 재연결 완화 |
+
+**SSE 엔드포인트:** `GET /api/v1/projects/{projectId}/release-gate/jobs/{jobId}/stream`
+
+**이벤트:** `connected`, `job_updated`
+
+**현재 전략:** Release Gate는 이제 `SSE-first, poll-fallback`.
+
+- SSE가 건강하면 빠른 반복 poll 대신 느린 안전 poll만 유지
+- terminal 상태는 SSE 이벤트로 감지하고 `include_result=1` 최종 fetch 1회만 수행
+- Redis가 없거나 stream 에러가 나면 기존 polling 경로로 안전하게 폴백
+
+---
+
+## 5. Live View — 에러·재시도 패턴 (Phase 1A.5)
 
 | 구분 | 처리 위치 | 동작 |
 |------|-----------|------|
@@ -69,7 +94,7 @@ SSE 연결 시 해당 훅의 `refreshInterval`이 0이 되고, 폴링은 위 상
 
 ---
 
-## 5. 관련 설계 문서
+## 6. 관련 설계 문서
 
 - [rate-limit-heavy-endpoints-design.md](./rate-limit-heavy-endpoints-design.md)
 - [mvp-realtime-pipeline-implementation-plan.md](./mvp-realtime-pipeline-implementation-plan.md)

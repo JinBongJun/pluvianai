@@ -90,6 +90,9 @@ def classify_rate_limit_bucket(request: Request) -> str:
             return "mutations"
 
     if method == "GET":
+        if "/release-gate/jobs/" in path and path.rstrip("/").endswith("/stream"):
+            return "dashboard_read"
+
         if "/release-gate/jobs/" in path:
             return "release_gate_job_poll"
 

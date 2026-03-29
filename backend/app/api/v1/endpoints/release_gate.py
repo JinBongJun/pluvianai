@@ -16,15 +16,19 @@ Baseline vs Run eval:
 
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import re
+import threading
 import time
+import uuid
 from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import String, cast, desc, func
 from sqlalchemy.orm import Session
@@ -61,6 +65,11 @@ from app.services.replay_service import replay_service, resolve_tool_context_inj
 from app.services.data_normalizer import DataNormalizer
 from app.services.user_api_key_service import UserApiKeyService
 from app.services.cache_service import cache_service
+from app.services.release_gate_events import (
+    invalidate_release_gate_job_poll_cache,
+    publish_release_gate_job_updated,
+    release_gate_job_events_channel,
+)
 from app.services.behavior_rules_service import (
     resolve_effective_rules,
     run_behavior_validation,
@@ -1088,14 +1097,12 @@ def _job_to_out(job: ReleaseGateJob) -> ReleaseGateJobOut:
     )
 
 
+def _job_to_out_payload(job: ReleaseGateJob) -> Dict[str, Any]:
+    return _job_to_out(job).model_dump()
+
+
 def _release_gate_job_poll_cache_key(project_id: int, job_id: str, include_result: int = 0) -> str:
     return f"project:{project_id}:release_gate:job:{job_id}:include_result:{1 if include_result else 0}"
-
-
-def _invalidate_release_gate_job_poll_cache(project_id: int, job_id: str) -> None:
-    if not cache_service.enabled:
-        return
-    cache_service.delete_pattern(f"project:{project_id}:release_gate:job:{job_id}:include_result:*")
 
 
 def _release_gate_job_poll_cache_ttl(status_value: Any) -> int:
@@ -3238,6 +3245,7 @@ async def validate_release_gate_async(
     db.add(job)
     db.commit()
     db.refresh(job)
+    publish_release_gate_job_updated(project_id, str(job.id), _job_to_out_payload(job))
     return ReleaseGateJobCreateResponse(job=_job_to_out(job))
 
 
@@ -3279,6 +3287,188 @@ async def get_release_gate_job(
     return payload
 
 
+@router.get("/projects/{project_id}/release-gate/jobs/{job_id}/stream")
+async def stream_release_gate_job(
+    project_id: int,
+    job_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    check_project_access(project_id, current_user, db)
+    job = (
+        db.query(ReleaseGateJob)
+        .filter(ReleaseGateJob.project_id == project_id, ReleaseGateJob.id == job_id)
+        .first()
+    )
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release Gate job not found")
+
+    MAX_SSE_PER_USER = 5
+    MAX_SSE_PER_JOB = 200
+    PRESENCE_TTL_SEC = 120
+    RETRY_AFTER_SEC = 30
+
+    conn_id = str(uuid.uuid4())
+    user_id = str(getattr(current_user, "id", "") or "")
+
+    def _zset_key_job(pid: int, jid: str) -> str:
+        return f"sse:release_gate:project:{int(pid)}:job:{str(jid)}"
+
+    def _zset_key_user(uid: str) -> str:
+        return f"sse:release_gate:user:{uid}"
+
+    def _reject(detail: str, scope: str) -> None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "SSE_LIMIT_EXCEEDED",
+                "message": detail,
+                "details": {
+                    "scope": scope,
+                    "project_id": int(project_id),
+                    "job_id": str(job_id),
+                    "retry_after_sec": RETRY_AFTER_SEC,
+                },
+            },
+            headers={"Retry-After": str(RETRY_AFTER_SEC)},
+        )
+
+    job_zkey = _zset_key_job(project_id, job_id)
+    user_zkey = _zset_key_user(user_id)
+    if cache_service.enabled and user_id:
+        try:
+            now_ts = time.time()
+            pipe = cache_service.redis_client.pipeline()
+            pipe.zremrangebyscore(job_zkey, "-inf", now_ts)
+            pipe.zremrangebyscore(user_zkey, "-inf", now_ts)
+            pipe.zcard(job_zkey)
+            pipe.zcard(user_zkey)
+            result = pipe.execute()
+            job_count = int(result[-2] or 0)
+            user_count = int(result[-1] or 0)
+            if user_count >= MAX_SSE_PER_USER:
+                _reject(f"Too many Release Gate streams for this user (max={MAX_SSE_PER_USER}).", "user")
+            if job_count >= MAX_SSE_PER_JOB:
+                _reject(f"Too many Release Gate streams for this job (max={MAX_SSE_PER_JOB}).", "job")
+            expire_at = now_ts + PRESENCE_TTL_SEC
+            pipe = cache_service.redis_client.pipeline()
+            pipe.zadd(job_zkey, {conn_id: expire_at})
+            pipe.zadd(user_zkey, {conn_id: expire_at})
+            pipe.expire(job_zkey, PRESENCE_TTL_SEC * 2)
+            pipe.expire(user_zkey, PRESENCE_TTL_SEC * 2)
+            pipe.execute()
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    initial_payload = json.dumps(
+        {
+            "type": "job_updated",
+            "project_id": int(project_id),
+            "job_id": str(job_id),
+            "job": _job_to_out_payload(job),
+        }
+    )
+
+    async def event_gen():
+        heartbeat_sec = 5
+        last_heartbeat = asyncio.get_event_loop().time()
+
+        if not cache_service.enabled:
+            yield b"event: connected\ndata: {}\n\n"
+            yield f"event: job_updated\ndata: {initial_payload}\n\n".encode("utf-8")
+            while not await request.is_disconnected():
+                now = asyncio.get_event_loop().time()
+                if now - last_heartbeat >= heartbeat_sec:
+                    last_heartbeat = now
+                    yield b": heartbeat\n\n"
+                await asyncio.sleep(1)
+            return
+
+        channel = release_gate_job_events_channel(project_id, job_id)
+        pubsub = cache_service.redis_client.pubsub(ignore_subscribe_messages=True)
+        pubsub.subscribe(channel)
+
+        queue: asyncio.Queue[str] = asyncio.Queue(maxsize=200)
+        stop_flag = threading.Event()
+
+        def _worker():
+            try:
+                for msg in pubsub.listen():
+                    if stop_flag.is_set():
+                        break
+                    if not msg or msg.get("type") != "message":
+                        continue
+                    data = msg.get("data")
+                    if not data:
+                        continue
+                    try:
+                        queue.put_nowait(str(data))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        t = threading.Thread(target=_worker, daemon=True)
+        t.start()
+
+        try:
+            yield b"event: connected\ndata: {}\n\n"
+            yield f"event: job_updated\ndata: {initial_payload}\n\n".encode("utf-8")
+
+            while not await request.is_disconnected():
+                now = asyncio.get_event_loop().time()
+                if now - last_heartbeat >= heartbeat_sec:
+                    last_heartbeat = now
+                    yield b": heartbeat\n\n"
+                    if cache_service.enabled and user_id:
+                        try:
+                            now_ts = time.time()
+                            expire_at = now_ts + PRESENCE_TTL_SEC
+                            pipe = cache_service.redis_client.pipeline()
+                            pipe.zadd(job_zkey, {conn_id: expire_at}, xx=True)
+                            pipe.zadd(user_zkey, {conn_id: expire_at}, xx=True)
+                            pipe.expire(job_zkey, PRESENCE_TTL_SEC * 2)
+                            pipe.expire(user_zkey, PRESENCE_TTL_SEC * 2)
+                            pipe.execute()
+                        except Exception:
+                            pass
+
+                try:
+                    raw = await asyncio.wait_for(queue.get(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    continue
+
+                yield f"event: job_updated\ndata: {raw}\n\n".encode("utf-8")
+        finally:
+            stop_flag.set()
+            if cache_service.enabled and user_id:
+                try:
+                    pipe = cache_service.redis_client.pipeline()
+                    pipe.zrem(job_zkey, conn_id)
+                    pipe.zrem(user_zkey, conn_id)
+                    pipe.execute()
+                except Exception:
+                    pass
+            try:
+                pubsub.unsubscribe(channel)
+                pubsub.close()
+            except Exception:
+                pass
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.post(
     "/projects/{project_id}/release-gate/jobs/{job_id}/cancel",
     status_code=status.HTTP_202_ACCEPTED,
@@ -3315,7 +3505,7 @@ async def cancel_release_gate_job(
         db.add(job)
         db.commit()
         db.refresh(job)
-        _invalidate_release_gate_job_poll_cache(project_id, job_id)
+        publish_release_gate_job_updated(project_id, job_id, _job_to_out_payload(job))
     return ReleaseGateJobCreateResponse(job=_job_to_out(job))
 
 
