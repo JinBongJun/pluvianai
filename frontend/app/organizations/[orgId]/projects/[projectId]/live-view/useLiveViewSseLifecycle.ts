@@ -9,6 +9,7 @@ import {
   LIVE_VIEW_MAX_POLL_MS,
   LIVE_VIEW_SSE_MUTATE_DEBOUNCE_MS,
   LIVE_VIEW_SSE_POLL_BACKOFF_MS,
+  withLiveViewPollJitter,
 } from "./liveViewPolling.constants";
 
 type MutateAgents = () => void | Promise<unknown>;
@@ -64,7 +65,7 @@ export function useLiveViewSseLifecycle(options: {
 
       es.addEventListener("connected", () => {
         setSseConnected(true);
-        setAgentsPollIntervalMs(LIVE_VIEW_BASE_POLL_MS);
+        setAgentsPollIntervalMs(withLiveViewPollJitter(LIVE_VIEW_BASE_POLL_MS));
       });
 
       es.addEventListener("agents_changed", () => {

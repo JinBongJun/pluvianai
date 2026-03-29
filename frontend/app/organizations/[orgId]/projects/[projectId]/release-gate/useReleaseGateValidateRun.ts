@@ -30,6 +30,12 @@ const CANCEL_BURST_INTERVAL_MS = 1500;
 const BASE_POLL_INTERVAL_MS = 3500;
 const FAST_POLL_INTERVAL_MS = 2800;
 const FAST_POLL_WINDOW_MS = 2500;
+/** Spread concurrent tabs / clients so polls do not align on the same second. */
+const POLL_JITTER_MS_MAX = 450;
+
+function pollDelayMs(baseMs: number): number {
+  return baseMs + Math.floor(Math.random() * POLL_JITTER_MS_MAX);
+}
 
 export type ReleaseGateValidateRunDeps = ReleaseGateValidateAsyncPayloadInput & {
   canValidate: boolean;
@@ -173,6 +179,9 @@ export function useReleaseGateValidateRun(options: {
       const maxBackoffMs = 12000;
       let consecutiveErrors = 0;
       const pollStartedAtMs = Date.now();
+      /** After a 429, do not use the fast-poll window (it would ignore Retry-After backoff). */
+      let suppressFastPollUntilMs = 0;
+      let shown429Notice = false;
       let wakeRequested = false;
       let wakeFn: (() => void) | null = null;
       const waitForWake = () =>
@@ -191,7 +200,11 @@ export function useReleaseGateValidateRun(options: {
         if (cancelRequestedRef.current && cancelBurstRemainingRef.current > 0) {
           return CANCEL_BURST_INTERVAL_MS;
         }
-        if (Date.now() - pollStartedAtMs <= FAST_POLL_WINDOW_MS) {
+        const now = Date.now();
+        if (now < suppressFastPollUntilMs) {
+          return Math.max(backoffMs, BASE_POLL_INTERVAL_MS);
+        }
+        if (now - pollStartedAtMs <= FAST_POLL_WINDOW_MS) {
           return FAST_POLL_INTERVAL_MS;
         }
         return backoffMs;
@@ -224,21 +237,22 @@ export function useReleaseGateValidateRun(options: {
           }
           consecutiveErrors = 0;
           backoffMs = BASE_POLL_INTERVAL_MS;
+          shown429Notice = false;
           if (wakeRequested) {
             wakeRequested = false;
             continue;
           }
           const delay = nextDelayMs();
           consumeDelayBudget();
-          await Promise.race([sleep(delay), waitForWake()]);
+          await Promise.race([sleep(pollDelayMs(delay)), waitForWake()]);
         } catch (e: any) {
           if (cancelled) return;
-          consecutiveErrors += 1;
           const statusCode = e?.response?.status;
           if (statusCode === 429) {
             const rateInfo = getRateLimitInfo(e);
             const retryAfterSec = Math.max(1, rateInfo.retryAfterSec ?? 2);
-            if (consecutiveErrors === 1 && !cancelRequestedRef.current) {
+            if (!shown429Notice && !cancelRequestedRef.current) {
+              shown429Notice = true;
               if (rateInfo.bucket === "release_gate_job_poll") {
                 setError(`Status polling slowed by server rate limits. Retrying in about ${retryAfterSec}s...`);
               } else {
@@ -249,15 +263,17 @@ export function useReleaseGateValidateRun(options: {
               maxBackoffMs,
               Math.max(BASE_POLL_INTERVAL_MS, retryAfterSec * 1000)
             );
+            suppressFastPollUntilMs = Date.now() + Math.max(retryAfterSec * 1000, BASE_POLL_INTERVAL_MS);
             if (wakeRequested) {
               wakeRequested = false;
               continue;
             }
             const delay = nextDelayMs();
             consumeDelayBudget();
-            await Promise.race([sleep(delay), waitForWake()]);
+            await Promise.race([sleep(pollDelayMs(delay)), waitForWake()]);
             continue;
           }
+          consecutiveErrors += 1;
           if (statusCode === 401) {
             redirectToLogin({
               code: getApiErrorCode(e),
@@ -291,7 +307,7 @@ export function useReleaseGateValidateRun(options: {
           }
           const delay = nextDelayMs();
           consumeDelayBudget();
-          await Promise.race([sleep(delay), waitForWake()]);
+          await Promise.race([sleep(pollDelayMs(delay)), waitForWake()]);
         }
       }
     };

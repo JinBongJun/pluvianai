@@ -111,6 +111,20 @@ def _ensure_project_admin(project_id: int, current_user: User, db: Session) -> P
     return check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
 
 
+def _invalidate_live_view_hot_path_cache(project_id: int) -> None:
+    if not cache_service.enabled:
+        return
+    cache_service.delete_pattern(f"project:{project_id}:live_view:agents:*")
+    cache_service.delete_pattern(f"project:{project_id}:release_gate:agents:*")
+
+
+def _publish_agents_changed_with_cache_invalidation(
+    project_id: int, agent_ids: Optional[List[str]] = None
+) -> None:
+    _invalidate_live_view_hot_path_cache(project_id)
+    publish_agents_changed(project_id, agent_ids or [])
+
+
 def _as_object(value: Any) -> Optional[Dict[str, Any]]:
     return value if isinstance(value, dict) else None
 
@@ -421,7 +435,7 @@ def list_agents(
     """
     logger.info(f"LIST_AGENTS: Project={project_id}, User={current_user.id} ({current_user.email})")
     try:
-        _ensure_project(project_id, current_user, db)
+        project = _ensure_project(project_id, current_user, db)
 
         # Hot-path cache: dashboard polls this endpoint frequently.
         # Short TTL prevents stale UX while dramatically reducing DB load and 429 risk.
@@ -436,52 +450,20 @@ def list_agents(
             db.query(
                 Snapshot.agent_id,
                 Snapshot.model,
-                Snapshot.system_prompt,
                 func.count(Snapshot.id).label("total"),
                 func.max(Snapshot.created_at).label("last_seen"),
-                # Aggregate 12 extreme diagnostic signals
-                func.json_agg(func.cast(Snapshot.signal_result, JSON)).label("all_signals"),
                 # Explicitly count worst snapshots using robust SQLAlchemy 2.0 syntax
                 func.count(case((Snapshot.is_worst.is_(True), 1), else_=None)).label("worst_count")
             )
             .filter(Snapshot.project_id == project_id, Snapshot.is_deleted.is_(False))
-            .group_by(Snapshot.agent_id, Snapshot.model, Snapshot.system_prompt)
+            .group_by(Snapshot.agent_id, Snapshot.model)
             # Use label for ordering to avoid PostgreSQL grouping ambiguity on some versions
             .order_by(desc("last_seen"))
             .limit(limit)
             .all()
         )
 
-        def _aggregate_signals(json_signals_list):
-            """Helper to calculate average scores for the 12 factors"""
-            if not json_signals_list:
-                return {}
-            
-            agg = {}
-            count = 0
-            try:
-                # json_agg returns a list of dictionaries in PostgreSQL
-                signals_list = json_signals_list if isinstance(json_signals_list, list) else []
-                if not signals_list and json_signals_list:
-                    try:
-                        signals_list = json.loads(json_signals_list)
-                    except Exception as e:
-                        logger.debug("_aggregate_signals: json.loads failed for signals_list", extra={"error": str(e)})
-                
-                for sig in signals_list:
-                    if not sig: continue
-                    count += 1
-                    for k, v in sig.items():
-                        agg[k] = agg.get(k, 0) + float(v)
-                
-                if count > 0:
-                    return {k: round(v / count, 4) for k, v in agg.items()}
-            except Exception as e:
-                logger.debug("_aggregate_signals: aggregation failed", extra={"error": str(e)})
-            return {}
-
         # Build shared visibility context used across Live View and Release Gate.
-        project = _ensure_project(project_id, current_user, db)
         agent_ids = [r.agent_id or "unknown" for r in rows]
         visibility = build_agent_visibility_context(
             project_id=project_id,
@@ -493,6 +475,13 @@ def list_agents(
         sentinel_agents = visibility.sentinel_agents
         has_drift = visibility.has_drift
         settings_map = visibility.settings_map
+        rows_by_agent_id = {(r.agent_id or "unknown"): r for r in rows}
+        sentinel_by_id = {
+            str(node.get("id") or "").strip(): node
+            for node in sentinel_agents
+            if isinstance(node, dict) and str(node.get("id") or "").strip()
+        }
+        now_iso = _iso(datetime.now(timezone.utc))
 
         def serialize(row):
             agent_id = row.agent_id or "unknown"
@@ -502,11 +491,11 @@ def list_agents(
                 "agent_id": agent_id,
                 "display_name": setting.display_name if setting and setting.display_name else (agent_id or "Agent"),
                 "model": row.model,
-                "system_prompt": row.system_prompt,
+                "system_prompt": "",
                 "total": row.total,
                 "worst_count": int(row.worst_count or 0),
                 "last_seen": _iso(row.last_seen),
-                "signals": _aggregate_signals(row.all_signals),
+                "signals": {},
                 "node_type": setting.node_type if setting else "agentCard",
                 "is_deleted": soft_deleted,
                 "deleted_at": _iso(setting.deleted_at) if setting and soft_deleted else None,
@@ -525,20 +514,20 @@ def list_agents(
                 continue
 
             # Match snapshots
-            stat = next((r for r in rows if r.agent_id == node_id), None)
+            stat = rows_by_agent_id.get(node_id)
             
             # Match sentinel drift info
-            sentinel_node = next((n for n in sentinel_agents if n.get("id") == node_id), None)
+            sentinel_node = sentinel_by_id.get(node_id)
             
             final_agents.append({
                 "agent_id": node_id,
                 "display_name": node.get('data', {}).get('label') or "Official Agent",
                 "model": node.get('data', {}).get('model') or (stat.model if stat else "NEURAL_UNIT"),
-                "system_prompt": node.get('data', {}).get('system_prompt') or (stat.system_prompt if stat else ""),
+                "system_prompt": node.get('data', {}).get('system_prompt') or "",
                 "total": stat.total if stat else 0,
                 "worst_count": int(stat.worst_count or 0) if stat else 0,
-                "last_seen": _iso(stat.last_seen) if stat else _iso(datetime.now()),
-                "signals": _aggregate_signals(stat.all_signals) if stat else {},
+                "last_seen": _iso(stat.last_seen) if stat else now_iso,
+                "signals": {},
                 "node_type": "agentCard",
                 "is_official": True,
                 "drift_status": "official",
@@ -560,7 +549,7 @@ def list_agents(
             if hard_deleted or (soft_deleted and not include_deleted):
                 continue
 
-            stat = next((r for r in rows if r.agent_id == s_id), None)
+            stat = rows_by_agent_id.get(s_id)
             
             final_agents.append({
                 "agent_id": s_id,
@@ -568,8 +557,8 @@ def list_agents(
                 "model": s_node.get("model") or (stat.model if stat else "UNKNOWN"),
                 "total": stat.total if stat else 0,
                 "worst_count": int(stat.worst_count or 0) if stat else 0,
-                "last_seen": _iso(stat.last_seen) if stat else _iso(datetime.now()),
-                "signals": _aggregate_signals(stat.all_signals) if stat else {},
+                "last_seen": _iso(stat.last_seen) if stat else now_iso,
+                "signals": {},
                 "node_type": "agentCard",
                 "is_official": False,
                 "drift_status": "ghost",
@@ -624,7 +613,7 @@ def list_agents(
             "sentinel_online": len(sentinel_agents) > 0
         }
         if cache_service.enabled:
-            cache_service.set(cache_key, payload, ttl=5)
+            cache_service.set(cache_key, payload, ttl=20)
         return payload
     except HTTPException:
         raise
@@ -980,7 +969,7 @@ def update_agent_settings(
             
     db.commit()
     db.refresh(setting)
-    publish_agents_changed(project_id, [agent_id])
+    _publish_agents_changed_with_cache_invalidation(project_id, [agent_id])
     return {
         "agent_id": agent_id, 
         "display_name": setting.display_name, 
@@ -1016,7 +1005,7 @@ def delete_agent(
         )
         db.add(setting)
     db.commit()
-    publish_agents_changed(project_id, [agent_id])
+    _publish_agents_changed_with_cache_invalidation(project_id, [agent_id])
     return None
 
 
@@ -1147,7 +1136,7 @@ def hard_delete_agents(
         setting.deleted_at = hard_deleted_at
 
     db.commit()
-    publish_agents_changed(project_id, target_agent_ids)
+    _publish_agents_changed_with_cache_invalidation(project_id, target_agent_ids)
 
     return {
         "ok": True,
@@ -1190,7 +1179,7 @@ def restore_agent(
         .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash == agent_id)
         .first()
     )
-    publish_agents_changed(project_id, [agent_id])
+    _publish_agents_changed_with_cache_invalidation(project_id, [agent_id])
     return {
         "agent_id": agent_id,
         "display_name": setting.display_name if setting else None,
@@ -1466,7 +1455,7 @@ async def create_snapshot(
         snapshot.agent_id = agent_id
         restore_agent_if_soft_deleted(db, project_id, agent_id, now=datetime.now(timezone.utc))
         db.commit()
-        publish_agents_changed(project_id, [agent_id])
+        _publish_agents_changed_with_cache_invalidation(project_id, [agent_id])
 
     # Run policy (tool use) validation asynchronously so Clinical Log shows result without Run check
     if trace_id:
@@ -1720,7 +1709,7 @@ def delete_snapshot(
     ).delete(synchronize_session=False)
     db.commit()
     if snapshot.agent_id:
-        publish_agents_changed(project_id, [snapshot.agent_id])
+        _publish_agents_changed_with_cache_invalidation(project_id, [snapshot.agent_id])
     return {"ok": True, "deleted": 1}
 
 
@@ -1772,7 +1761,7 @@ def batch_delete_snapshots(
     )
     db.commit()
     if affected_agent_ids:
-        publish_agents_changed(project_id, affected_agent_ids)
+        _publish_agents_changed_with_cache_invalidation(project_id, affected_agent_ids)
     return {"ok": True, "deleted": len(matched_ids)}
 
 
@@ -1800,7 +1789,7 @@ def restore_snapshot(
     snapshot.deleted_at = None
     db.commit()
     if snapshot.agent_id:
-        publish_agents_changed(project_id, [snapshot.agent_id])
+        _publish_agents_changed_with_cache_invalidation(project_id, [snapshot.agent_id])
     return {"ok": True, "restored": 1}
 
 
@@ -1842,7 +1831,7 @@ def restore_snapshots_batch(
     )
     db.commit()
     if affected_agent_ids:
-        publish_agents_changed(project_id, affected_agent_ids)
+        _publish_agents_changed_with_cache_invalidation(project_id, affected_agent_ids)
     return {"ok": True, "restored": int(restored or 0)}
 
 
@@ -1884,7 +1873,7 @@ def permanently_delete_snapshots(
     )
     db.commit()
     if affected_agent_ids:
-        publish_agents_changed(project_id, affected_agent_ids)
+        _publish_agents_changed_with_cache_invalidation(project_id, affected_agent_ids)
     return {"ok": True, "deleted": int(deleted or 0)}
 
 
