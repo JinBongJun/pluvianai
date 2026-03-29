@@ -65,9 +65,14 @@ export type LiveViewSnapshotDetail = {
 };
 
 export const liveViewAPI = {
-  getAgents: async (projectId: number, limit: number = 30, includeDeleted: boolean = false) => {
+  getAgents: async (
+    projectId: number,
+    limit: number = 30,
+    includeDeleted: boolean = false,
+    compact: boolean = false
+  ) => {
     const response = await apiClient.get(`/projects/${projectId}/live-view/agents`, {
-      params: { limit, include_deleted: includeDeleted },
+      params: { limit, include_deleted: includeDeleted, compact },
     });
     return unwrapResponse(response);
   },
