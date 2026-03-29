@@ -273,14 +273,13 @@ def check_endpoint_rate_limit(
     """
     heavy_key = f"rate_limit:heavy:{path_key}:{client_ip}"
     if cache_service.enabled:
-        current = cache_service.get(heavy_key)
-        if current is None:
-            cache_service.set(heavy_key, 1, ttl=window_sec)
-            return True
-        if current >= limit_per_minute:
-            return False
-        cache_service.set(heavy_key, current + 1, ttl=window_sec)
-        return True
+        try:
+            current = int(cache_service.redis_client.incr(heavy_key))
+            if current == 1:
+                cache_service.redis_client.expire(heavy_key, window_sec)
+            return current <= limit_per_minute
+        except Exception:
+            return _check_rate_limit_memory_heavy(heavy_key, limit_per_minute)
     return _check_rate_limit_memory_heavy(heavy_key, limit_per_minute)
 
 
@@ -351,14 +350,13 @@ def check_user_rate_limit(
     """
     user_key = f"rate_limit:user:{bucket_key}:{user_id}"
     if cache_service.enabled:
-        current = cache_service.get(user_key)
-        if current is None:
-            cache_service.set(user_key, 1, ttl=window_sec)
-            return True
-        if current >= limit_per_minute:
-            return False
-        cache_service.set(user_key, current + 1, ttl=window_sec)
-        return True
+        try:
+            current = int(cache_service.redis_client.incr(user_key))
+            if current == 1:
+                cache_service.redis_client.expire(user_key, window_sec)
+            return current <= limit_per_minute
+        except Exception:
+            return _check_rate_limit_memory_user(user_key, limit_per_minute)
     return _check_rate_limit_memory_user(user_key, limit_per_minute)
 
 
@@ -420,12 +418,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def _check_rate_limit(self, client_id: str) -> bool:
         """Check if client has exceeded rate limit. Uses Redis when enabled; in-memory fallback otherwise."""
         if cache_service.enabled:
-            current_count = cache_service.get(client_id)
-            if current_count is None:
-                cache_service.set(client_id, 1, ttl=60)
-                return True
-            if current_count >= self.requests_per_minute:
-                return False
-            cache_service.set(client_id, current_count + 1, ttl=60)
-            return True
+            try:
+                current_count = int(cache_service.redis_client.incr(client_id))
+                if current_count == 1:
+                    cache_service.redis_client.expire(client_id, 60)
+                return current_count <= self.requests_per_minute
+            except Exception:
+                return _check_rate_limit_memory(client_id)
         return _check_rate_limit_memory(client_id, self.requests_per_minute)
