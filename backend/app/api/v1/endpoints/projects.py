@@ -17,10 +17,12 @@ from app.core.dependencies import get_project_service, get_evaluation_rubric_rep
 from app.infrastructure.repositories.evaluation_rubric_repository import EvaluationRubricRepository
 from app.services.cache_service import cache_service
 from app.services.firewall_service import firewall_service
+from app.services.live_view_events import publish_agents_changed
 from app.middleware.usage_middleware import check_project_limit
 from app.core.usage_limits import get_limit_status
 from app.services.activity_logger import activity_logger
 from app.core.analytics import analytics_service
+from app.domain.live_view_release_gate import invalidate_agent_visibility_cache
 from app.models.user import User
 from app.models.project import Project
 from app.models.project_member import ProjectMember
@@ -634,6 +636,8 @@ async def apply_project_patch(
     project.canvas_edges = patch_data.edges
     db.commit()
     db.refresh(project)
+    invalidate_agent_visibility_cache(project_id)
+    publish_agents_changed(project_id)
     
     role = get_user_project_role(project_id, current_user.id, db)
     
