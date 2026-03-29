@@ -49,6 +49,7 @@ from app.services.live_eval_service import (
 )
 
 router = APIRouter()
+LIVE_VIEW_AGENTS_CACHE_TTL_SEC = 60
 
 EXTENDED_CONTEXT_KEYS = (
     "context",
@@ -437,12 +438,12 @@ def list_agents(
     """
     Return detected agents (boxes) for Live View by grouping snapshots.
     """
-    logger.info(f"LIST_AGENTS: Project={project_id}, User={current_user.id} ({current_user.email})")
     try:
         project = _ensure_project(project_id, current_user, db)
 
         # Hot-path cache: dashboard polls this endpoint frequently.
-        # Short TTL prevents stale UX while dramatically reducing DB load and 429 risk.
+        # SSE invalidation already clears this cache on agent changes, so we can keep
+        # a longer TTL here to reduce repeated recomputation under sustained dashboard load.
         cache_key = f"project:{project_id}:live_view:agents:v2:limit={int(limit)}:include_deleted={int(bool(include_deleted))}"
         if cache_service.enabled:
             cached = cache_service.get(cache_key)
@@ -617,7 +618,7 @@ def list_agents(
             "sentinel_online": len(sentinel_agents) > 0
         }
         if cache_service.enabled:
-            cache_service.set(cache_key, payload, ttl=20)
+            cache_service.set(cache_key, payload, ttl=LIVE_VIEW_AGENTS_CACHE_TTL_SEC)
         return payload
     except HTTPException:
         raise
