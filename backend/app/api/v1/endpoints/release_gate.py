@@ -1039,6 +1039,8 @@ class ReleaseGateValidateRequest(BaseModel):
 
 
 ReleaseGateJobStatus = Literal["queued", "running", "succeeded", "failed", "canceled"]
+RELEASE_GATE_JOB_POLL_CACHE_TTL_RUNNING_SEC = 1
+RELEASE_GATE_JOB_POLL_CACHE_TTL_TERMINAL_SEC = 10
 
 
 class ReleaseGateJobProgressOut(BaseModel):
@@ -1084,6 +1086,23 @@ def _job_to_out(job: ReleaseGateJob) -> ReleaseGateJobOut:
         report_id=str(job.report_id) if getattr(job, "report_id", None) else None,
         error_detail=job.error_detail if isinstance(job.error_detail, dict) else None,
     )
+
+
+def _release_gate_job_poll_cache_key(project_id: int, job_id: str, include_result: int = 0) -> str:
+    return f"project:{project_id}:release_gate:job:{job_id}:include_result:{1 if include_result else 0}"
+
+
+def _invalidate_release_gate_job_poll_cache(project_id: int, job_id: str) -> None:
+    if not cache_service.enabled:
+        return
+    cache_service.delete_pattern(f"project:{project_id}:release_gate:job:{job_id}:include_result:*")
+
+
+def _release_gate_job_poll_cache_ttl(status_value: Any) -> int:
+    status_text = str(status_value or "").strip().lower()
+    if status_text in {"succeeded", "failed", "canceled"}:
+        return RELEASE_GATE_JOB_POLL_CACHE_TTL_TERMINAL_SEC
+    return RELEASE_GATE_JOB_POLL_CACHE_TTL_RUNNING_SEC
 
 
 def _get_active_release_gate_job(
@@ -3234,6 +3253,12 @@ async def get_release_gate_job(
     current_user: User = Depends(get_current_user),
 ):
     check_project_access(project_id, current_user, db)
+    should_cache = include_result == 0 and cache_service.enabled
+    cache_key = _release_gate_job_poll_cache_key(project_id, job_id, include_result)
+    if should_cache:
+        cached = cache_service.get(cache_key)
+        if isinstance(cached, dict) and isinstance(cached.get("job"), dict):
+            return ReleaseGateJobGetResponse(**cached)
     job = (
         db.query(ReleaseGateJob)
         .filter(ReleaseGateJob.project_id == project_id, ReleaseGateJob.id == job_id)
@@ -3241,8 +3266,17 @@ async def get_release_gate_job(
     )
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release Gate job not found")
-    result = job.result_json if include_result and isinstance(job.result_json, dict) else None
-    return ReleaseGateJobGetResponse(job=_job_to_out(job), result=result)
+    payload = ReleaseGateJobGetResponse(
+        job=_job_to_out(job),
+        result=job.result_json if include_result and isinstance(job.result_json, dict) else None,
+    )
+    if should_cache:
+        cache_service.set(
+            cache_key,
+            payload.model_dump(),
+            ttl=_release_gate_job_poll_cache_ttl(getattr(job, "status", None)),
+        )
+    return payload
 
 
 @router.post(
@@ -3281,6 +3315,7 @@ async def cancel_release_gate_job(
         db.add(job)
         db.commit()
         db.refresh(job)
+        _invalidate_release_gate_job_poll_cache(project_id, job_id)
     return ReleaseGateJobCreateResponse(job=_job_to_out(job))
 
 

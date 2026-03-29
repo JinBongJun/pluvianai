@@ -107,6 +107,7 @@ class ReleaseGateJobRunner:
             _run_release_gate,
             ReleaseGateCancelled,
             _tool_evidence_stats_from_gate_result,
+            _invalidate_release_gate_job_poll_cache,
         )
 
         db: Session = SessionLocal()
@@ -210,6 +211,7 @@ class ReleaseGateJobRunner:
                 job.progress_phase = "canceled"
                 db.add(job)
                 db.commit()
+                _invalidate_release_gate_job_poll_cache(int(job.project_id), str(job.id))
                 return
 
             # CAS: never let succeeded overwrite an in-flight cancel request.
@@ -266,6 +268,7 @@ class ReleaseGateJobRunner:
                 )
             )
             db.commit()
+            _invalidate_release_gate_job_poll_cache(int(job.project_id), str(job.id))
             if not updated:
                 # If cancel was requested during execution, honor cancel as the terminal state.
                 job2 = db.query(ReleaseGateJob).filter(ReleaseGateJob.id == job_id).first()
@@ -282,6 +285,7 @@ class ReleaseGateJobRunner:
                     job2.report_id = None
                     db.add(job2)
                     db.commit()
+                    _invalidate_release_gate_job_poll_cache(int(job2.project_id), str(job2.id))
         except Exception as e:
             project_id = int(getattr(job, "project_id", 0) or 0)
             if project_id > 0:
@@ -307,6 +311,7 @@ class ReleaseGateJobRunner:
                     job.progress_phase = "failed"
                     db.add(job)
                     db.commit()
+                    _invalidate_release_gate_job_poll_cache(int(job.project_id), str(job.id))
             except Exception:
                 db.rollback()
             raise
