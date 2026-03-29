@@ -49,7 +49,14 @@ from app.core.logging_config import logger
 from app.core.permissions import check_project_access
 from app.core.config import settings as app_settings
 from app.core.usage_limits import check_guard_credits_limit, get_limit_status
-from app.core.security import get_current_user, get_user_from_api_key
+from app.core.security import (
+    TokenValidationError,
+    auth_error_detail,
+    decode_token_or_raise,
+    get_current_user,
+    get_user_from_api_key,
+    oauth2_scheme,
+)
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.behavior_report import BehaviorReport
 from app.models.behavior_rule import BehaviorRule
@@ -1119,14 +1126,71 @@ def _release_gate_hot_access_cache_key(project_id: int, user_id: int) -> str:
     return f"user:{int(user_id)}:project:{int(project_id)}:release_gate_hot_access"
 
 
-def _ensure_release_gate_hot_path_access(project_id: int, user: User, db: Session) -> None:
+def _release_gate_hot_auth_cache_key(user_id: int) -> str:
+    return f"user:{int(user_id)}:release_gate_hot_auth"
+
+
+async def _get_release_gate_hot_user_id(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> int:
+    final_token = token or request.cookies.get("access_token")
+    if not final_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=auth_error_detail("no_token", "You need to sign in to access this page."),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    try:
+        payload = decode_token_or_raise(final_token, expected_type="access")
+    except TokenValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=auth_error_detail(exc.code, exc.message),
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+    user_id = payload.get("sub")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=auth_error_detail(
+                "access_token_invalid",
+                "Your login session is no longer valid. Please sign in again.",
+            ),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user_id_int = int(user_id)
+
+    if hasattr(request, "state"):
+        request.state.auth_method = "jwt"
+        request.state.api_key_scope = None
+
+    if cache_service.enabled:
+        cached = cache_service.get(_release_gate_hot_auth_cache_key(user_id_int))
+        if isinstance(cached, dict) and cached.get("active") is True:
+            return user_id_int
+
+    user_row = db.query(User.id, User.is_active).filter(User.id == user_id_int).first()
+    if not user_row or not bool(user_row.is_active):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Inactive user account",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if cache_service.enabled:
+        cache_service.set(_release_gate_hot_auth_cache_key(user_id_int), {"active": True}, ttl=30)
+    return user_id_int
+
+
+def _ensure_release_gate_hot_path_access(project_id: int, user_id: int, db: Session) -> None:
     """
     Hot-path permission check for Release Gate status/stream endpoints.
 
     Uses a short Redis cache so repeated status reads do not re-run the same
     project/member queries on every request.
     """
-    user_id = int(getattr(user, "id"))
     if cache_service.enabled:
         cached = cache_service.get(_release_gate_hot_access_cache_key(project_id, user_id))
         if isinstance(cached, dict):
@@ -3317,9 +3381,9 @@ async def get_release_gate_job(
     job_id: str,
     include_result: int = Query(0, ge=0, le=1),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user_id: int = Depends(_get_release_gate_hot_user_id),
 ):
-    _ensure_release_gate_hot_path_access(project_id, current_user, db)
+    _ensure_release_gate_hot_path_access(project_id, current_user_id, db)
     should_cache = include_result == 0 and cache_service.enabled
     if should_cache:
         cached_status = cache_service.get(release_gate_job_status_cache_key(project_id, job_id))
@@ -3356,9 +3420,9 @@ async def stream_release_gate_job(
     job_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user_id: int = Depends(_get_release_gate_hot_user_id),
 ):
-    _ensure_release_gate_hot_path_access(project_id, current_user, db)
+    _ensure_release_gate_hot_path_access(project_id, current_user_id, db)
     cached_status = cache_service.get(release_gate_job_status_cache_key(project_id, job_id)) if cache_service.enabled else None
     if isinstance(cached_status, dict) and isinstance(cached_status.get("id"), str):
         initial_job_payload = cached_status
@@ -3378,7 +3442,7 @@ async def stream_release_gate_job(
     RETRY_AFTER_SEC = 30
 
     conn_id = str(uuid.uuid4())
-    user_id = str(getattr(current_user, "id", "") or "")
+    user_id = str(current_user_id)
 
     def _zset_key_job(pid: int, jid: str) -> str:
         return f"sse:release_gate:project:{int(pid)}:job:{str(jid)}"
