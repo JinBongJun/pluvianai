@@ -37,6 +37,7 @@ from app.services.cache_service import cache_service
 from app.services.live_view_events import publish_agents_changed
 from app.domain.live_view_release_gate import (
     build_agent_visibility_context,
+    invalidate_agent_visibility_cache,
     is_agent_hard_deleted,
     is_agent_soft_deleted,
     restore_agent_if_soft_deleted,
@@ -1001,6 +1002,7 @@ def update_agent_settings(
             
     db.commit()
     db.refresh(setting)
+    invalidate_agent_visibility_cache(project_id)
     _publish_agents_changed_with_cache_invalidation(project_id, [agent_id])
     return {
         "agent_id": agent_id, 
@@ -1037,6 +1039,7 @@ def delete_agent(
         )
         db.add(setting)
     db.commit()
+    invalidate_agent_visibility_cache(project_id)
     _publish_agents_changed_with_cache_invalidation(project_id, [agent_id])
     return None
 
@@ -1168,6 +1171,7 @@ def hard_delete_agents(
         setting.deleted_at = hard_deleted_at
 
     db.commit()
+    invalidate_agent_visibility_cache(project_id)
     _publish_agents_changed_with_cache_invalidation(project_id, target_agent_ids)
 
     return {
@@ -1211,6 +1215,7 @@ def restore_agent(
         .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash == agent_id)
         .first()
     )
+    invalidate_agent_visibility_cache(project_id)
     _publish_agents_changed_with_cache_invalidation(project_id, [agent_id])
     return {
         "agent_id": agent_id,

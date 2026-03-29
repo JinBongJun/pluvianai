@@ -2,7 +2,9 @@
 
 from .agent_visibility import (
     AgentVisibilityContext,
+    AgentVisibilitySetting,
     build_agent_visibility_context,
+    invalidate_agent_visibility_cache,
     is_agent_hard_deleted,
     is_agent_deleted,
     is_agent_hidden,
@@ -12,7 +14,9 @@ from .agent_visibility import (
 
 __all__ = [
     "AgentVisibilityContext",
+    "AgentVisibilitySetting",
     "build_agent_visibility_context",
+    "invalidate_agent_visibility_cache",
     "is_agent_hard_deleted",
     "is_agent_deleted",
     "is_agent_hidden",
