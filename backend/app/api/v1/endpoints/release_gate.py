@@ -30,7 +30,7 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import String, cast, desc, func
+from sqlalchemy import String, and_, cast, desc, func
 from sqlalchemy.orm import Session
 
 from app.api.v1.endpoints.behavior import (
@@ -53,6 +53,8 @@ from app.core.security import get_current_user, get_user_from_api_key
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.behavior_report import BehaviorReport
 from app.models.behavior_rule import BehaviorRule
+from app.models.project import Project
+from app.models.project_member import ProjectMember
 from app.models.release_gate_job import ReleaseGateJob
 from app.models.snapshot import Snapshot
 from app.models.user import User
@@ -69,6 +71,7 @@ from app.services.release_gate_events import (
     invalidate_release_gate_job_poll_cache,
     publish_release_gate_job_updated,
     release_gate_job_events_channel,
+    release_gate_job_status_cache_key,
 )
 from app.services.behavior_rules_service import (
     resolve_effective_rules,
@@ -1110,6 +1113,62 @@ def _release_gate_job_poll_cache_ttl(status_value: Any) -> int:
     if status_text in {"succeeded", "failed", "canceled"}:
         return RELEASE_GATE_JOB_POLL_CACHE_TTL_TERMINAL_SEC
     return RELEASE_GATE_JOB_POLL_CACHE_TTL_RUNNING_SEC
+
+
+def _release_gate_hot_access_cache_key(project_id: int, user_id: int) -> str:
+    return f"user:{int(user_id)}:project:{int(project_id)}:release_gate_hot_access"
+
+
+def _ensure_release_gate_hot_path_access(project_id: int, user: User, db: Session) -> None:
+    """
+    Hot-path permission check for Release Gate status/stream endpoints.
+
+    Uses a short Redis cache so repeated status reads do not re-run the same
+    project/member queries on every request.
+    """
+    user_id = int(getattr(user, "id"))
+    if cache_service.enabled:
+        cached = cache_service.get(_release_gate_hot_access_cache_key(project_id, user_id))
+        if isinstance(cached, dict):
+            if cached.get("not_found"):
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+            if cached.get("allowed"):
+                return
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this project")
+
+    row = (
+        db.query(
+            Project.id.label("project_id"),
+            Project.owner_id.label("owner_id"),
+            Project.is_active.label("is_active"),
+            Project.is_deleted.label("is_deleted"),
+            ProjectMember.role.label("member_role"),
+        )
+        .outerjoin(
+            ProjectMember,
+            and_(ProjectMember.project_id == Project.id, ProjectMember.user_id == user_id),
+        )
+        .filter(Project.id == project_id)
+        .first()
+    )
+    if not row or not row.is_active or row.is_deleted:
+        if cache_service.enabled:
+            cache_service.set(
+                _release_gate_hot_access_cache_key(project_id, user_id),
+                {"not_found": True, "allowed": False},
+                ttl=15,
+            )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    allowed = int(row.owner_id or 0) == user_id or bool(row.member_role)
+    if cache_service.enabled:
+        cache_service.set(
+            _release_gate_hot_access_cache_key(project_id, user_id),
+            {"not_found": False, "allowed": allowed},
+            ttl=15,
+        )
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this project")
 
 
 def _get_active_release_gate_job(
@@ -3260,8 +3319,12 @@ async def get_release_gate_job(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    check_project_access(project_id, current_user, db)
+    _ensure_release_gate_hot_path_access(project_id, current_user, db)
     should_cache = include_result == 0 and cache_service.enabled
+    if should_cache:
+        cached_status = cache_service.get(release_gate_job_status_cache_key(project_id, job_id))
+        if isinstance(cached_status, dict) and isinstance(cached_status.get("id"), str):
+            return ReleaseGateJobGetResponse(job=ReleaseGateJobOut(**cached_status), result=None)
     cache_key = _release_gate_job_poll_cache_key(project_id, job_id, include_result)
     if should_cache:
         cached = cache_service.get(cache_key)
@@ -3295,14 +3358,19 @@ async def stream_release_gate_job(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    check_project_access(project_id, current_user, db)
-    job = (
-        db.query(ReleaseGateJob)
-        .filter(ReleaseGateJob.project_id == project_id, ReleaseGateJob.id == job_id)
-        .first()
-    )
-    if not job:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release Gate job not found")
+    _ensure_release_gate_hot_path_access(project_id, current_user, db)
+    cached_status = cache_service.get(release_gate_job_status_cache_key(project_id, job_id)) if cache_service.enabled else None
+    if isinstance(cached_status, dict) and isinstance(cached_status.get("id"), str):
+        initial_job_payload = cached_status
+    else:
+        job = (
+            db.query(ReleaseGateJob)
+            .filter(ReleaseGateJob.project_id == project_id, ReleaseGateJob.id == job_id)
+            .first()
+        )
+        if not job:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release Gate job not found")
+        initial_job_payload = _job_to_out_payload(job)
 
     MAX_SSE_PER_USER = 5
     MAX_SSE_PER_JOB = 200
@@ -3368,7 +3436,7 @@ async def stream_release_gate_job(
             "type": "job_updated",
             "project_id": int(project_id),
             "job_id": str(job_id),
-            "job": _job_to_out_payload(job),
+            "job": initial_job_payload,
         }
     )
 
