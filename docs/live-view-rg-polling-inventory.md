@@ -8,8 +8,8 @@
 
 | 상수 | 값 (ms) | 파일 | 용도 |
 |------|---------|------|------|
-| `LIVE_VIEW_BASE_POLL_MS` | 10_000 | `live-view/liveViewPolling.constants.ts` | 에이전트 목록 폴링 기본 주기 |
-| `LIVE_VIEW_MAX_POLL_MS` | 60_000 | 동일 | SSE 실패/백오프·429 시 상한 |
+| `LIVE_VIEW_BASE_POLL_MS` | 15_000 | `live-view/liveViewPolling.constants.ts` | 에이전트 목록 폴링 기본 주기 |
+| `LIVE_VIEW_MAX_POLL_MS` | 90_000 | 동일 | SSE 실패/백오프·429 시 상한 |
 | `LIVE_VIEW_FOCUSED_POLL_MS` | 5_000 | 동일 | 노드 선택 시 더 촘촘한 폴링(상한은 `min`으로 캡) |
 | `LIVE_VIEW_SWRS_DEDUPE_MS` | 5_000 | 동일 | `useSWR` `dedupingInterval` |
 | `LIVE_VIEW_SSE_MUTATE_DEBOUNCE_MS` | 1_000 | 동일 | SSE 이벤트 → `mutateAgents` 디바운스 |

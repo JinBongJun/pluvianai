@@ -12,6 +12,10 @@ import threading
 from pydantic import BaseModel, Field
 from sqlalchemy.types import JSON
 from app.core.logging_config import logger
+from app.core.metrics import (
+    realtime_stream_connections_active,
+    realtime_stream_connections_opened_total,
+)
 
 from app.core.database import get_db, SessionLocal
 from app.core.security import get_current_user
@@ -710,78 +714,99 @@ async def live_view_stream(
         # Heartbeat keeps proxies from buffering/closing idle connections.
         heartbeat_sec = 5
         last_heartbeat = asyncio.get_event_loop().time()
-
-        # If Redis is unavailable, fall back to heartbeat-only stream.
-        if not cache_service.enabled:
-            while not await request.is_disconnected():
-                now = asyncio.get_event_loop().time()
-                if now - last_heartbeat >= heartbeat_sec:
-                    last_heartbeat = now
-                    yield b": heartbeat\n\n"
-                await asyncio.sleep(1)
-            return
-
-        channel = f"project:{int(project_id)}:live_view:events"
-        pubsub = cache_service.redis_client.pubsub(ignore_subscribe_messages=True)
-        pubsub.subscribe(channel)
-
-        queue: asyncio.Queue[str] = asyncio.Queue(maxsize=200)
+        realtime_stream_connections_opened_total.labels(surface="live_view").inc()
+        realtime_stream_connections_active.labels(surface="live_view").inc()
+        pubsub = None
         stop_flag = threading.Event()
-
-        def _worker():
-            try:
-                for msg in pubsub.listen():
-                    if stop_flag.is_set():
-                        break
-                    if not msg or msg.get("type") != "message":
-                        continue
-                    data = msg.get("data")
-                    if not data:
-                        continue
-                    try:
-                        # Non-blocking put; drop if queue is full.
-                        queue.put_nowait(str(data))
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-        t = threading.Thread(target=_worker, daemon=True)
-        t.start()
+        channel = f"project:{int(project_id)}:live_view:events"
 
         try:
-            # Kick a tiny event so client can mark "connected".
-            yield b"event: connected\ndata: {}\n\n"
+            # If Redis is unavailable, fall back to heartbeat-only stream.
+            if not cache_service.enabled:
+                while not await request.is_disconnected():
+                    now = asyncio.get_event_loop().time()
+                    if now - last_heartbeat >= heartbeat_sec:
+                        last_heartbeat = now
+                        yield b": heartbeat\n\n"
+                    await asyncio.sleep(1)
+                return
 
-            while not await request.is_disconnected():
-                now = asyncio.get_event_loop().time()
-                if now - last_heartbeat >= heartbeat_sec:
-                    last_heartbeat = now
-                    yield b": heartbeat\n\n"
-                    # Refresh presence TTL (best-effort).
-                    if cache_service.enabled and user_id:
+            pubsub = cache_service.redis_client.pubsub(ignore_subscribe_messages=True)
+            pubsub.subscribe(channel)
+
+            queue: asyncio.Queue[str] = asyncio.Queue(maxsize=200)
+
+            def _worker():
+                try:
+                    for msg in pubsub.listen():
+                        if stop_flag.is_set():
+                            break
+                        if not msg or msg.get("type") != "message":
+                            continue
+                        data = msg.get("data")
+                        if not data:
+                            continue
                         try:
-                            now_ts = time.time()
-                            expire_at = now_ts + PRESENCE_TTL_SEC
-                            pipe = cache_service.redis_client.pipeline()
-                            pipe.zadd(project_zkey, {conn_id: expire_at}, xx=True)
-                            pipe.zadd(user_zkey, {conn_id: expire_at}, xx=True)
-                            pipe.expire(project_zkey, PRESENCE_TTL_SEC * 2)
-                            pipe.expire(user_zkey, PRESENCE_TTL_SEC * 2)
-                            pipe.execute()
+                            # Non-blocking put; drop if queue is full.
+                            queue.put_nowait(str(data))
                         except Exception:
                             pass
+                except Exception:
+                    pass
 
-                try:
-                    raw = await asyncio.wait_for(queue.get(), timeout=1.0)
-                except asyncio.TimeoutError:
-                    continue
+            t = threading.Thread(target=_worker, daemon=True)
+            t.start()
 
-                # SSE framing
-                yield f"event: agents_changed\ndata: {raw}\n\n".encode("utf-8")
+            try:
+                # Kick a tiny event so client can mark "connected".
+                yield b"event: connected\ndata: {}\n\n"
+
+                while not await request.is_disconnected():
+                    now = asyncio.get_event_loop().time()
+                    if now - last_heartbeat >= heartbeat_sec:
+                        last_heartbeat = now
+                        yield b": heartbeat\n\n"
+                        # Refresh presence TTL (best-effort).
+                        if cache_service.enabled and user_id:
+                            try:
+                                now_ts = time.time()
+                                expire_at = now_ts + PRESENCE_TTL_SEC
+                                pipe = cache_service.redis_client.pipeline()
+                                pipe.zadd(project_zkey, {conn_id: expire_at}, xx=True)
+                                pipe.zadd(user_zkey, {conn_id: expire_at}, xx=True)
+                                pipe.expire(project_zkey, PRESENCE_TTL_SEC * 2)
+                                pipe.expire(user_zkey, PRESENCE_TTL_SEC * 2)
+                                pipe.execute()
+                            except Exception:
+                                pass
+
+                    try:
+                        raw = await asyncio.wait_for(queue.get(), timeout=1.0)
+                    except asyncio.TimeoutError:
+                        continue
+
+                    # SSE framing
+                    yield f"event: agents_changed\ndata: {raw}\n\n".encode("utf-8")
+            finally:
+                stop_flag.set()
+                # Best-effort remove presence entries.
+                if cache_service.enabled and user_id:
+                    try:
+                        pipe = cache_service.redis_client.pipeline()
+                        pipe.zrem(project_zkey, conn_id)
+                        pipe.zrem(user_zkey, conn_id)
+                        pipe.execute()
+                    except Exception:
+                        pass
+                if pubsub is not None:
+                    try:
+                        pubsub.unsubscribe(channel)
+                        pubsub.close()
+                    except Exception:
+                        pass
         finally:
             stop_flag.set()
-            # Best-effort remove presence entries.
+            realtime_stream_connections_active.labels(surface="live_view").dec()
             if cache_service.enabled and user_id:
                 try:
                     pipe = cache_service.redis_client.pipeline()
@@ -790,11 +815,6 @@ async def live_view_stream(
                     pipe.execute()
                 except Exception:
                     pass
-            try:
-                pubsub.unsubscribe(channel)
-                pubsub.close()
-            except Exception:
-                pass
 
     return StreamingResponse(
         event_gen(),

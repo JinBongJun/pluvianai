@@ -17,7 +17,7 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.logging_config import logger
-from app.core.metrics import rate_limit_exceeded_total
+from app.core.metrics import rate_limit_exceeded_total, rate_limit_global_bypass_total
 from app.services.cache_service import cache_service
 from app.core.responses import error_response
 
@@ -43,6 +43,7 @@ BUCKET_LIMITS_PER_MINUTE: Dict[str, int] = {
 }
 
 BUCKET_WINDOW_SEC = 60
+AUTHENTICATED_GLOBAL_IP_BYPASS_BUCKETS = {"dashboard_read", "release_gate_job_poll"}
 
 # Heavy endpoints: (path_substring, method, limit_per_min, path_key). Longest path first.
 HEAVY_ENDPOINTS: Tuple[Tuple[str, str, int, str], ...] = (
@@ -158,6 +159,16 @@ def _rate_limit_response(bucket: str, limit: int, scope: str) -> JSONResponse:
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         headers=_rate_limit_headers(bucket, limit, retry_after_sec),
     )
+
+
+def _should_skip_global_ip_limit(request: Request, user_id: Optional[str], bucket: str) -> bool:
+    """
+    Normal authenticated dashboard/status reads should be controlled by per-user buckets,
+    not by the coarse fallback IP limiter that is mainly for abuse protection.
+    """
+    if not user_id or request.method.upper() != "GET":
+        return False
+    return bucket in AUTHENTICATED_GLOBAL_IP_BYPASS_BUCKETS
 
 
 def _observe_rate_limit_exceeded(bucket: str, scope: str, path: str, method: str) -> None:
@@ -368,16 +379,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         bucket = classify_rate_limit_bucket(request)
         bucket_limit = BUCKET_LIMITS_PER_MINUTE.get(bucket, BUCKET_LIMITS_PER_MINUTE["default"])
 
-        # Global rate limit (all endpoints)
-        if not self._check_rate_limit(client_id):
-            _observe_rate_limit_exceeded("global_ip", "ip", request_path, request_method)
-            return _rate_limit_response("global_ip", self.requests_per_minute, "ip")
-
         # Per-user rate limit (when JWT present; avoids NAT/shared-IP throttling)
         user_id = _extract_user_id_from_request(request)
         if user_id and not check_user_rate_limit(user_id, bucket_limit, bucket_key=bucket):
             _observe_rate_limit_exceeded(bucket, "user", request_path, request_method)
             return _rate_limit_response(bucket, bucket_limit, "user")
+
+        # Global rate limit (coarse IP fallback for anonymous or non-dashboard flows)
+        if _should_skip_global_ip_limit(request, user_id, bucket):
+            try:
+                rate_limit_global_bypass_total.labels(
+                    bucket=bucket,
+                    reason="authenticated_read",
+                ).inc()
+            except Exception:
+                logger.debug("rate_limit_global_bypass_metric_emit_failed", exc_info=True)
+        elif not self._check_rate_limit(client_id):
+            _observe_rate_limit_exceeded("global_ip", "ip", request_path, request_method)
+            return _rate_limit_response("global_ip", self.requests_per_minute, "ip")
 
         # Heavy-endpoint rate limit (stricter per-endpoint limit)
         heavy = _get_heavy_limit(request.url.path, request.method)
