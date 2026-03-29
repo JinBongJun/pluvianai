@@ -72,6 +72,19 @@ def _is_light_snapshot_read(path: str, method: str, request: Request) -> bool:
     return light_value in {"1", "true", "yes"}
 
 
+def _is_release_gate_job_status_read(path: str, method: str, request: Request) -> bool:
+    """
+    Thin Release Gate status reads are now SSE-first with poll fallback.
+    Treat `include_result=0` (or omitted) as a dashboard-style read instead of a heavy poll path.
+    """
+    if method != "GET" or "/release-gate/jobs/" not in path:
+        return False
+    if path.rstrip("/").endswith("/stream"):
+        return False
+    include_result = str(request.query_params.get("include_result", "0")).strip().lower()
+    return include_result in {"", "0", "false", "no"}
+
+
 def classify_rate_limit_bucket(request: Request) -> str:
     method = request.method.upper()
     path = _normalize_path(request.url.path)
@@ -91,6 +104,9 @@ def classify_rate_limit_bucket(request: Request) -> str:
 
     if method == "GET":
         if "/release-gate/jobs/" in path and path.rstrip("/").endswith("/stream"):
+            return "dashboard_read"
+
+        if _is_release_gate_job_status_read(path, method, request):
             return "dashboard_read"
 
         if "/release-gate/jobs/" in path:
