@@ -25,13 +25,13 @@ import {
 
 /** Fewer, slightly slower polls during cancel to reduce job_poll 429s. */
 const CANCEL_BURST_POLLS = 3;
-const CANCEL_BURST_INTERVAL_MS = 1500;
+const CANCEL_BURST_INTERVAL_MS = 2000;
 /** Slower baseline polling to stay under release_gate_job_poll limits. */
-const BASE_POLL_INTERVAL_MS = 3500;
-const FAST_POLL_INTERVAL_MS = 2800;
+const BASE_POLL_INTERVAL_MS = 4000;
+const FAST_POLL_INTERVAL_MS = 3200;
 const FAST_POLL_WINDOW_MS = 2500;
 /** Spread concurrent tabs / clients so polls do not align on the same second. */
-const POLL_JITTER_MS_MAX = 450;
+const POLL_JITTER_MS_MAX = 900;
 
 function pollDelayMs(baseMs: number): number {
   return baseMs + Math.floor(Math.random() * POLL_JITTER_MS_MAX);
