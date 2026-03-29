@@ -24,6 +24,7 @@ from app.core.logging_config import logger
 from app.models.release_gate_job import ReleaseGateJob
 from app.models.user import User
 from app.services.ops_alerting import ops_alerting
+from app.services.release_gate_events import publish_release_gate_job_updated
 
 
 def _utcnow() -> datetime:
@@ -107,7 +108,7 @@ class ReleaseGateJobRunner:
             _run_release_gate,
             ReleaseGateCancelled,
             _tool_evidence_stats_from_gate_result,
-            _invalidate_release_gate_job_poll_cache,
+            _job_to_out_payload,
         )
 
         db: Session = SessionLocal()
@@ -180,6 +181,7 @@ class ReleaseGateJobRunner:
                     j.lease_expires_at = now2 + timedelta(seconds=self.lease_seconds)
                     s.add(j)
                     s.commit()
+                    publish_release_gate_job_updated(int(j.project_id), str(j.id), _job_to_out_payload(j))
                 except Exception:
                     s.rollback()
                 finally:
@@ -191,6 +193,8 @@ class ReleaseGateJobRunner:
             job.lease_expires_at = now + timedelta(seconds=self.lease_seconds)
             db.add(job)
             db.commit()
+            db.refresh(job)
+            publish_release_gate_job_updated(int(job.project_id), str(job.id), _job_to_out_payload(job))
 
             try:
                 result = await _run_release_gate(
@@ -211,7 +215,8 @@ class ReleaseGateJobRunner:
                 job.progress_phase = "canceled"
                 db.add(job)
                 db.commit()
-                _invalidate_release_gate_job_poll_cache(int(job.project_id), str(job.id))
+                db.refresh(job)
+                publish_release_gate_job_updated(int(job.project_id), str(job.id), _job_to_out_payload(job))
                 return
 
             # CAS: never let succeeded overwrite an in-flight cancel request.
@@ -268,7 +273,11 @@ class ReleaseGateJobRunner:
                 )
             )
             db.commit()
-            _invalidate_release_gate_job_poll_cache(int(job.project_id), str(job.id))
+            job_after = db.query(ReleaseGateJob).filter(ReleaseGateJob.id == job_id).first()
+            if job_after:
+                publish_release_gate_job_updated(
+                    int(job_after.project_id), str(job_after.id), _job_to_out_payload(job_after)
+                )
             if not updated:
                 # If cancel was requested during execution, honor cancel as the terminal state.
                 job2 = db.query(ReleaseGateJob).filter(ReleaseGateJob.id == job_id).first()
@@ -285,7 +294,9 @@ class ReleaseGateJobRunner:
                     job2.report_id = None
                     db.add(job2)
                     db.commit()
-                    _invalidate_release_gate_job_poll_cache(int(job2.project_id), str(job2.id))
+                    publish_release_gate_job_updated(
+                        int(job2.project_id), str(job2.id), _job_to_out_payload(job2)
+                    )
         except Exception as e:
             project_id = int(getattr(job, "project_id", 0) or 0)
             if project_id > 0:
@@ -311,7 +322,7 @@ class ReleaseGateJobRunner:
                     job.progress_phase = "failed"
                     db.add(job)
                     db.commit()
-                    _invalidate_release_gate_job_poll_cache(int(job.project_id), str(job.id))
+                    publish_release_gate_job_updated(int(job.project_id), str(job.id), _job_to_out_payload(job))
             except Exception:
                 db.rollback()
             raise
