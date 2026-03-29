@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     EXPOSE_DETAILED_HEALTH_ENDPOINT: Optional[bool] = None
 
     # Database
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 40
+    DB_POOL_TIMEOUT: int = 30
     # Standard local dev URL - ensures we don't accidentally use Railway internal URLs
     DATABASE_URL: str = "postgresql://pluvianai:pluvianai@localhost:5432/pluvianai"
 
