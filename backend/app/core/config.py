@@ -2,6 +2,8 @@
 Application configuration management
 """
 
+import os
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
@@ -35,10 +37,13 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL", mode="after")
     @classmethod
     def force_local_db_if_internal(cls, v: str) -> str:
-        # If running locally but environment has Railway internal URL, override it
-        if "railway.internal" in v:
-            return "postgresql://pluvianai:pluvianai@localhost:5432/pluvianai"
-        return v
+        if "railway.internal" not in v:
+            return v
+        # Railway sets RAILWAY_ENVIRONMENT in deployed containers — keep internal DB URL.
+        if os.getenv("RAILWAY_ENVIRONMENT"):
+            return v
+        # Local dev: *.railway.internal does not resolve; use local Postgres default.
+        return "postgresql://pluvianai:pluvianai@localhost:5432/pluvianai"
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
