@@ -103,6 +103,27 @@ rate_limit_exceeded_total = Counter(
     registry=registry,
 )
 
+rate_limit_global_bypass_total = Counter(
+    "rate_limit_global_bypass_total",
+    "Total number of requests that intentionally skipped the coarse global IP limiter",
+    ["bucket", "reason"],
+    registry=registry,
+)
+
+realtime_stream_connections_opened_total = Counter(
+    "realtime_stream_connections_opened_total",
+    "Total number of realtime SSE stream connections opened",
+    ["surface"],
+    registry=registry,
+)
+
+realtime_stream_connections_active = Gauge(
+    "realtime_stream_connections_active",
+    "Current number of active realtime SSE stream connections",
+    ["surface"],
+    registry=registry,
+)
+
 # Billing/Webhook Metrics
 billing_webhook_events_total = Counter(
     "billing_webhook_events_total",

@@ -46,6 +46,10 @@ from app.core.canonical import (
 )
 from app.core.database import get_db
 from app.core.logging_config import logger
+from app.core.metrics import (
+    realtime_stream_connections_active,
+    realtime_stream_connections_opened_total,
+)
 from app.core.permissions import check_project_access
 from app.core.config import settings as app_settings
 from app.core.usage_limits import check_guard_credits_limit, get_limit_status
@@ -3507,75 +3511,96 @@ async def stream_release_gate_job(
     async def event_gen():
         heartbeat_sec = 5
         last_heartbeat = asyncio.get_event_loop().time()
-
-        if not cache_service.enabled:
-            yield b"event: connected\ndata: {}\n\n"
-            yield f"event: job_updated\ndata: {initial_payload}\n\n".encode("utf-8")
-            while not await request.is_disconnected():
-                now = asyncio.get_event_loop().time()
-                if now - last_heartbeat >= heartbeat_sec:
-                    last_heartbeat = now
-                    yield b": heartbeat\n\n"
-                await asyncio.sleep(1)
-            return
-
-        channel = release_gate_job_events_channel(project_id, job_id)
-        pubsub = cache_service.redis_client.pubsub(ignore_subscribe_messages=True)
-        pubsub.subscribe(channel)
-
-        queue: asyncio.Queue[str] = asyncio.Queue(maxsize=200)
+        realtime_stream_connections_opened_total.labels(surface="release_gate").inc()
+        realtime_stream_connections_active.labels(surface="release_gate").inc()
         stop_flag = threading.Event()
-
-        def _worker():
-            try:
-                for msg in pubsub.listen():
-                    if stop_flag.is_set():
-                        break
-                    if not msg or msg.get("type") != "message":
-                        continue
-                    data = msg.get("data")
-                    if not data:
-                        continue
-                    try:
-                        queue.put_nowait(str(data))
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-        t = threading.Thread(target=_worker, daemon=True)
-        t.start()
+        pubsub = None
+        channel = release_gate_job_events_channel(project_id, job_id)
 
         try:
-            yield b"event: connected\ndata: {}\n\n"
-            yield f"event: job_updated\ndata: {initial_payload}\n\n".encode("utf-8")
+            if not cache_service.enabled:
+                yield b"event: connected\ndata: {}\n\n"
+                yield f"event: job_updated\ndata: {initial_payload}\n\n".encode("utf-8")
+                while not await request.is_disconnected():
+                    now = asyncio.get_event_loop().time()
+                    if now - last_heartbeat >= heartbeat_sec:
+                        last_heartbeat = now
+                        yield b": heartbeat\n\n"
+                    await asyncio.sleep(1)
+                return
 
-            while not await request.is_disconnected():
-                now = asyncio.get_event_loop().time()
-                if now - last_heartbeat >= heartbeat_sec:
-                    last_heartbeat = now
-                    yield b": heartbeat\n\n"
-                    if cache_service.enabled and user_id:
+            pubsub = cache_service.redis_client.pubsub(ignore_subscribe_messages=True)
+            pubsub.subscribe(channel)
+
+            queue: asyncio.Queue[str] = asyncio.Queue(maxsize=200)
+
+            def _worker():
+                try:
+                    for msg in pubsub.listen():
+                        if stop_flag.is_set():
+                            break
+                        if not msg or msg.get("type") != "message":
+                            continue
+                        data = msg.get("data")
+                        if not data:
+                            continue
                         try:
-                            now_ts = time.time()
-                            expire_at = now_ts + PRESENCE_TTL_SEC
-                            pipe = cache_service.redis_client.pipeline()
-                            pipe.zadd(job_zkey, {conn_id: expire_at}, xx=True)
-                            pipe.zadd(user_zkey, {conn_id: expire_at}, xx=True)
-                            pipe.expire(job_zkey, PRESENCE_TTL_SEC * 2)
-                            pipe.expire(user_zkey, PRESENCE_TTL_SEC * 2)
-                            pipe.execute()
+                            queue.put_nowait(str(data))
                         except Exception:
                             pass
+                except Exception:
+                    pass
 
-                try:
-                    raw = await asyncio.wait_for(queue.get(), timeout=1.0)
-                except asyncio.TimeoutError:
-                    continue
+            t = threading.Thread(target=_worker, daemon=True)
+            t.start()
 
-                yield f"event: job_updated\ndata: {raw}\n\n".encode("utf-8")
+            try:
+                yield b"event: connected\ndata: {}\n\n"
+                yield f"event: job_updated\ndata: {initial_payload}\n\n".encode("utf-8")
+
+                while not await request.is_disconnected():
+                    now = asyncio.get_event_loop().time()
+                    if now - last_heartbeat >= heartbeat_sec:
+                        last_heartbeat = now
+                        yield b": heartbeat\n\n"
+                        if cache_service.enabled and user_id:
+                            try:
+                                now_ts = time.time()
+                                expire_at = now_ts + PRESENCE_TTL_SEC
+                                pipe = cache_service.redis_client.pipeline()
+                                pipe.zadd(job_zkey, {conn_id: expire_at}, xx=True)
+                                pipe.zadd(user_zkey, {conn_id: expire_at}, xx=True)
+                                pipe.expire(job_zkey, PRESENCE_TTL_SEC * 2)
+                                pipe.expire(user_zkey, PRESENCE_TTL_SEC * 2)
+                                pipe.execute()
+                            except Exception:
+                                pass
+
+                    try:
+                        raw = await asyncio.wait_for(queue.get(), timeout=1.0)
+                    except asyncio.TimeoutError:
+                        continue
+
+                    yield f"event: job_updated\ndata: {raw}\n\n".encode("utf-8")
+            finally:
+                stop_flag.set()
+                if cache_service.enabled and user_id:
+                    try:
+                        pipe = cache_service.redis_client.pipeline()
+                        pipe.zrem(job_zkey, conn_id)
+                        pipe.zrem(user_zkey, conn_id)
+                        pipe.execute()
+                    except Exception:
+                        pass
+                if pubsub is not None:
+                    try:
+                        pubsub.unsubscribe(channel)
+                        pubsub.close()
+                    except Exception:
+                        pass
         finally:
             stop_flag.set()
+            realtime_stream_connections_active.labels(surface="release_gate").dec()
             if cache_service.enabled and user_id:
                 try:
                     pipe = cache_service.redis_client.pipeline()
@@ -3584,11 +3609,6 @@ async def stream_release_gate_job(
                     pipe.execute()
                 except Exception:
                     pass
-            try:
-                pubsub.unsubscribe(channel)
-                pubsub.close()
-            except Exception:
-                pass
 
     return StreamingResponse(
         event_gen(),
