@@ -40,6 +40,7 @@ import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import {
   LIVE_VIEW_BASE_POLL_MS,
   LIVE_VIEW_MAX_POLL_MS,
+  withLiveViewPollJitter,
 } from "./liveViewPolling.constants";
 import {
   useLiveViewSseCloseWhenHidden,
@@ -68,7 +69,9 @@ export function LiveViewContent() {
   const projectIdStr = Array.isArray(rawProjectId) ? rawProjectId[0] : rawProjectId;
   const projectId = projectIdStr ? Number(projectIdStr) : 0;
   const toast = useToast();
-  const [agentsPollIntervalMs, setAgentsPollIntervalMs] = useState(LIVE_VIEW_BASE_POLL_MS);
+  const [agentsPollIntervalMs, setAgentsPollIntervalMs] = useState(() =>
+    withLiveViewPollJitter(LIVE_VIEW_BASE_POLL_MS)
+  );
   const [agentsPlanError, setAgentsPlanError] = useState<PlanLimitError | null>(null);
   const isPageVisible = usePageVisibility();
   const wasPageVisibleRef = useRef(isPageVisible);
@@ -317,7 +320,7 @@ export function LiveViewContent() {
   useEffect(() => {
     if (!projectId || Number.isNaN(projectId) || projectId <= 0) return;
     if (!agentsError) {
-      setAgentsPollIntervalMs(LIVE_VIEW_BASE_POLL_MS);
+      setAgentsPollIntervalMs(withLiveViewPollJitter(LIVE_VIEW_BASE_POLL_MS));
       return;
     }
 
