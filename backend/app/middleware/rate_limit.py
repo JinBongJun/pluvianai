@@ -33,7 +33,8 @@ GLOBAL_RATE_LIMIT_PER_MINUTE = 600
 # Per-user bucket limits
 BUCKET_LIMITS_PER_MINUTE: Dict[str, int] = {
     "dashboard_read": 1200,
-    "release_gate_job_poll": 240,
+    # Job status polling; keep above worst-case UI poll frequency × tabs + jitter headroom
+    "release_gate_job_poll": 400,
     "expensive_read": 90,
     "mutations": 45,
     "ingest": 1200,

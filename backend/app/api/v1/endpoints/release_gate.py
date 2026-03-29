@@ -60,6 +60,7 @@ from app.services.ops_alerting import ops_alerting
 from app.services.replay_service import replay_service, resolve_tool_context_injection_text
 from app.services.data_normalizer import DataNormalizer
 from app.services.user_api_key_service import UserApiKeyService
+from app.services.cache_service import cache_service
 from app.services.behavior_rules_service import (
     resolve_effective_rules,
     run_behavior_validation,
@@ -2984,6 +2985,11 @@ def list_release_gate_agents(
 ):
     """List agents (nodes) for Release Gate dropdown: agent_id and display_name."""
     project = check_project_access(project_id, current_user, db)
+    cache_key = f"project:{project_id}:release_gate:agents:v1:limit={int(limit)}"
+    if cache_service.enabled:
+        cached = cache_service.get(cache_key)
+        if isinstance(cached, dict) and isinstance(cached.get("items"), list):
+            return cached
     rows = (
         db.query(Snapshot.agent_id, func.max(Snapshot.created_at).label("last_seen"))
         .filter(
@@ -3042,7 +3048,10 @@ def list_release_gate_agents(
         items.append({"agent_id": aid, "display_name": display_name})
         if len(items) >= limit:
             break
-    return {"items": items}
+    payload = {"items": items}
+    if cache_service.enabled:
+        cache_service.set(cache_key, payload, ttl=20)
+    return payload
 
 
 @router.get("/projects/{project_id}/release-gate/core-models")
