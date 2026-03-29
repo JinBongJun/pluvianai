@@ -1048,7 +1048,7 @@ class ReleaseGateValidateRequest(BaseModel):
 
 
 ReleaseGateJobStatus = Literal["queued", "running", "succeeded", "failed", "canceled"]
-RELEASE_GATE_JOB_POLL_CACHE_TTL_RUNNING_SEC = 1
+RELEASE_GATE_JOB_POLL_CACHE_TTL_RUNNING_SEC = 2
 RELEASE_GATE_JOB_POLL_CACHE_TTL_TERMINAL_SEC = 10
 
 
