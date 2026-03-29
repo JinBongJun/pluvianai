@@ -1,7 +1,8 @@
+from dataclasses import dataclass
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, BackgroundTasks, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case, desc, or_
+from sqlalchemy import func, case, desc, or_, and_
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 import time
@@ -18,7 +19,13 @@ from app.core.metrics import (
 )
 
 from app.core.database import get_db, SessionLocal
-from app.core.security import get_current_user
+from app.core.security import (
+    auth_error_detail,
+    decode_token_or_raise,
+    get_current_user,
+    oauth2_scheme,
+    TokenValidationError,
+)
 from app.core.dependencies import get_snapshot_service
 from app.core.permissions import check_project_access, ProjectRole
 from app.core.usage_limits import check_snapshot_limit, get_limit_status
@@ -32,6 +39,7 @@ from app.utils.secret_redaction import redact_secrets
 from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.agent_eval_config_history import AgentEvalConfigHistory
 from app.models.project import Project
+from app.models.project_member import ProjectMember
 from app.models.user_api_key import UserApiKey
 from app.services.cache_service import cache_service
 from app.services.live_view_events import publish_agents_changed
@@ -52,6 +60,8 @@ from app.services.live_eval_service import (
 router = APIRouter()
 LIVE_VIEW_AGENTS_CACHE_TTL_SEC = 60
 LIVE_VIEW_AGENTS_CACHE_VERSION = 3
+LIVE_VIEW_HOT_AUTH_CACHE_TTL_SEC = 30
+LIVE_VIEW_HOT_ACCESS_CACHE_TTL_SEC = 15
 
 EXTENDED_CONTEXT_KEYS = (
     "context",
@@ -116,6 +126,154 @@ def _ensure_project(project_id: int, current_user: User, db: Session) -> Project
 
 def _ensure_project_admin(project_id: int, current_user: User, db: Session) -> Project:
     return check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
+
+
+@dataclass(frozen=True)
+class _LiveViewProjectRef:
+    id: int
+    owner_id: int
+    canvas_nodes: Any
+
+
+def _live_view_hot_auth_cache_key(user_id: int) -> str:
+    return f"user:{int(user_id)}:live_view_hot_auth"
+
+
+def _live_view_hot_access_cache_key(project_id: int, user_id: int) -> str:
+    return f"user:{int(user_id)}:project:{int(project_id)}:live_view_hot_access"
+
+
+async def _get_live_view_hot_user_id(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> int:
+    final_token = token or request.cookies.get("access_token")
+    if not final_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=auth_error_detail("no_token", "You need to sign in to access this page."),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    try:
+        payload = decode_token_or_raise(final_token, expected_type="access")
+    except TokenValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=auth_error_detail(exc.code, exc.message),
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+    user_id = payload.get("sub")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=auth_error_detail(
+                "access_token_invalid",
+                "Your login session is no longer valid. Please sign in again.",
+            ),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user_id_int = int(user_id)
+    if hasattr(request, "state"):
+        request.state.auth_method = "jwt"
+        request.state.api_key_scope = None
+
+    if cache_service.enabled:
+        cached = cache_service.get(_live_view_hot_auth_cache_key(user_id_int))
+        if isinstance(cached, dict) and cached.get("active") is True:
+            return user_id_int
+
+    user_row = db.query(User.id, User.is_active).filter(User.id == user_id_int).first()
+    if not user_row or not bool(user_row.is_active):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Inactive user account",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if cache_service.enabled:
+        cache_service.set(
+            _live_view_hot_auth_cache_key(user_id_int),
+            {"active": True},
+            ttl=LIVE_VIEW_HOT_AUTH_CACHE_TTL_SEC,
+        )
+    return user_id_int
+
+
+def _load_live_view_project_ref(project_id: int, db: Session) -> _LiveViewProjectRef:
+    row = (
+        db.query(
+            Project.id.label("project_id"),
+            Project.owner_id.label("owner_id"),
+            Project.canvas_nodes.label("canvas_nodes"),
+            Project.is_active.label("is_active"),
+            Project.is_deleted.label("is_deleted"),
+        )
+        .filter(Project.id == project_id)
+        .first()
+    )
+    if not row or not row.is_active or row.is_deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    return _LiveViewProjectRef(
+        id=int(row.project_id),
+        owner_id=int(row.owner_id),
+        canvas_nodes=row.canvas_nodes,
+    )
+
+
+def _ensure_live_view_hot_path_access(project_id: int, user_id: int, db: Session) -> _LiveViewProjectRef:
+    if cache_service.enabled:
+        cached = cache_service.get(_live_view_hot_access_cache_key(project_id, user_id))
+        if isinstance(cached, dict):
+            if cached.get("not_found"):
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+            if cached.get("allowed"):
+                return _load_live_view_project_ref(project_id, db)
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this project")
+
+    row = (
+        db.query(
+            Project.id.label("project_id"),
+            Project.owner_id.label("owner_id"),
+            Project.canvas_nodes.label("canvas_nodes"),
+            Project.is_active.label("is_active"),
+            Project.is_deleted.label("is_deleted"),
+            ProjectMember.role.label("member_role"),
+        )
+        .outerjoin(
+            ProjectMember,
+            and_(ProjectMember.project_id == Project.id, ProjectMember.user_id == user_id),
+        )
+        .filter(Project.id == project_id)
+        .first()
+    )
+    if not row or not row.is_active or row.is_deleted:
+        if cache_service.enabled:
+            cache_service.set(
+                _live_view_hot_access_cache_key(project_id, user_id),
+                {"not_found": True, "allowed": False},
+                ttl=LIVE_VIEW_HOT_ACCESS_CACHE_TTL_SEC,
+            )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    allowed = int(row.owner_id or 0) == user_id or bool(row.member_role)
+    if cache_service.enabled:
+        cache_service.set(
+            _live_view_hot_access_cache_key(project_id, user_id),
+            {"not_found": False, "allowed": allowed},
+            ttl=LIVE_VIEW_HOT_ACCESS_CACHE_TTL_SEC,
+        )
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this project")
+
+    return _LiveViewProjectRef(
+        id=int(row.project_id),
+        owner_id=int(row.owner_id),
+        canvas_nodes=row.canvas_nodes,
+    )
 
 
 def _invalidate_live_view_hot_path_cache(project_id: int) -> None:
@@ -439,13 +597,13 @@ def list_agents(
         description="If true, omit fields not needed by the main Live View graph.",
     ),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user_id: int = Depends(_get_live_view_hot_user_id),
 ):
     """
     Return detected agents (boxes) for Live View by grouping snapshots.
     """
     try:
-        project = _ensure_project(project_id, current_user, db)
+        project = _ensure_live_view_hot_path_access(project_id, current_user_id, db)
 
         # Hot-path cache: dashboard polls this endpoint frequently.
         # SSE invalidation already clears this cache on agent changes, so we can keep

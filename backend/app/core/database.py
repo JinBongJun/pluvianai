@@ -33,10 +33,10 @@ try:
     engine = create_engine(
         settings.DATABASE_URL,
         pool_pre_ping=True,  # Verify connections before using
-        pool_size=10,  # Base pool size
-        max_overflow=20,  # Additional connections when needed
+        pool_size=settings.DB_POOL_SIZE,
+        max_overflow=settings.DB_MAX_OVERFLOW,
         pool_recycle=3600,  # Recycle connections after 1 hour
-        pool_timeout=30,  # Timeout for getting connection
+        pool_timeout=settings.DB_POOL_TIMEOUT,
         echo=settings.DEBUG,  # Log SQL queries in debug mode
         connect_args=connect_args,
     )
