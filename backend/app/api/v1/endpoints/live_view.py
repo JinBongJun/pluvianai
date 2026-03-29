@@ -50,6 +50,7 @@ from app.services.live_eval_service import (
 
 router = APIRouter()
 LIVE_VIEW_AGENTS_CACHE_TTL_SEC = 60
+LIVE_VIEW_AGENTS_CACHE_VERSION = 3
 
 EXTENDED_CONTEXT_KEYS = (
     "context",
@@ -432,6 +433,10 @@ def list_agents(
     project_id: int,
     limit: int = Query(30, ge=1, le=100),
     include_deleted: bool = Query(False, description="Include soft-deleted agents in the response."),
+    compact: bool = Query(
+        False,
+        description="If true, omit fields not needed by the main Live View graph.",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -444,7 +449,10 @@ def list_agents(
         # Hot-path cache: dashboard polls this endpoint frequently.
         # SSE invalidation already clears this cache on agent changes, so we can keep
         # a longer TTL here to reduce repeated recomputation under sustained dashboard load.
-        cache_key = f"project:{project_id}:live_view:agents:v2:limit={int(limit)}:include_deleted={int(bool(include_deleted))}"
+        cache_key = (
+            f"project:{project_id}:live_view:agents:v{LIVE_VIEW_AGENTS_CACHE_VERSION}:"
+            f"limit={int(limit)}:include_deleted={int(bool(include_deleted))}:compact={int(bool(compact))}"
+        )
         if cache_service.enabled:
             cached = cache_service.get(cache_key)
             if isinstance(cached, dict) and "agents" in cached:
@@ -492,19 +500,20 @@ def list_agents(
             agent_id = row.agent_id or "unknown"
             setting = settings_map.get(agent_id)
             soft_deleted = is_agent_soft_deleted(settings_map, agent_id)
-            return {
+            payload = {
                 "agent_id": agent_id,
                 "display_name": setting.display_name if setting and setting.display_name else (agent_id or "Agent"),
                 "model": row.model,
-                "system_prompt": "",
                 "total": row.total,
                 "worst_count": int(row.worst_count or 0),
-                "last_seen": _iso(row.last_seen),
-                "signals": {},
                 "node_type": setting.node_type if setting else "agentCard",
                 "is_deleted": soft_deleted,
                 "deleted_at": _iso(setting.deleted_at) if setting and soft_deleted else None,
             }
+            if not compact:
+                payload["last_seen"] = _iso(row.last_seen)
+                payload["signals"] = {}
+            return payload
 
         final_agents = []
         processed_ids = set()
@@ -523,16 +532,13 @@ def list_agents(
             
             # Match sentinel drift info
             sentinel_node = sentinel_by_id.get(node_id)
-            
-            final_agents.append({
+
+            payload = {
                 "agent_id": node_id,
                 "display_name": node.get('data', {}).get('label') or "Official Agent",
                 "model": node.get('data', {}).get('model') or (stat.model if stat else "NEURAL_UNIT"),
-                "system_prompt": node.get('data', {}).get('system_prompt') or "",
                 "total": stat.total if stat else 0,
                 "worst_count": int(stat.worst_count or 0) if stat else 0,
-                "last_seen": _iso(stat.last_seen) if stat else now_iso,
-                "signals": {},
                 "node_type": "agentCard",
                 "is_official": True,
                 "drift_status": "official",
@@ -540,8 +546,11 @@ def list_agents(
                 "deleted_at": _iso(settings_map.get(node_id).deleted_at)
                 if settings_map.get(node_id) and soft_deleted
                 else None,
-                "position": node.get('position'),
-            })
+            }
+            if not compact:
+                payload["last_seen"] = _iso(stat.last_seen) if stat else now_iso
+                payload["signals"] = {}
+            final_agents.append(payload)
             processed_ids.add(node_id)
 
         # 2. Add Ghost Nodes (Detected by Sentinel but not in Blueprint)
@@ -555,15 +564,13 @@ def list_agents(
                 continue
 
             stat = rows_by_agent_id.get(s_id)
-            
-            final_agents.append({
+
+            payload = {
                 "agent_id": s_id,
                 "display_name": f"Ghost: {s_id}",
                 "model": s_node.get("model") or (stat.model if stat else "UNKNOWN"),
                 "total": stat.total if stat else 0,
                 "worst_count": int(stat.worst_count or 0) if stat else 0,
-                "last_seen": _iso(stat.last_seen) if stat else now_iso,
-                "signals": {},
                 "node_type": "agentCard",
                 "is_official": False,
                 "drift_status": "ghost",
@@ -572,7 +579,11 @@ def list_agents(
                 "deleted_at": _iso(settings_map.get(s_id).deleted_at)
                 if settings_map.get(s_id) and soft_deleted
                 else None,
-            })
+            }
+            if not compact:
+                payload["last_seen"] = _iso(stat.last_seen) if stat else now_iso
+                payload["signals"] = {}
+            final_agents.append(payload)
             processed_ids.add(s_id)
 
         # 3. Add any other detected snapshots (Probabilistic fallback)
@@ -598,11 +609,8 @@ def list_agents(
                     "agent_id": setting_agent_id,
                     "display_name": setting.display_name or setting_agent_id,
                     "model": "UNKNOWN",
-                    "system_prompt": "",
                     "total": 0,
                     "worst_count": 0,
-                    "last_seen": None,
-                    "signals": {},
                     "node_type": setting.node_type or "agentCard",
                     "is_official": False,
                     "drift_status": "custom",
@@ -610,6 +618,9 @@ def list_agents(
                     "deleted_at": _iso(setting.deleted_at),
                 }
             )
+            if not compact:
+                final_agents[-1]["last_seen"] = None
+                final_agents[-1]["signals"] = {}
             processed_ids.add(setting_agent_id)
 
         payload = {

@@ -79,7 +79,7 @@ export function useLiveViewCoreData(options: {
     error: agentsError,
   } = useSWR(
     projectId && !isNaN(projectId) && projectId > 0 ? ["live-view-agents", projectId] : null,
-    () => liveViewAPI.getAgents(projectId, 30, true),
+    () => liveViewAPI.getAgents(projectId, 30, true, true),
     {
       refreshInterval: (() => {
         if (!isPageVisible) return 0;
