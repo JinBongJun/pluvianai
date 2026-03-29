@@ -33,6 +33,8 @@ GLOBAL_RATE_LIMIT_PER_MINUTE = 600
 # Per-user bucket limits
 BUCKET_LIMITS_PER_MINUTE: Dict[str, int] = {
     "dashboard_read": 1200,
+    "live_view_read": 1200,
+    "release_gate_status_read": 1200,
     # Job status polling; keep above normal multi-tab usage and short bursts.
     # This path is also protected by client backoff and a short-lived server cache.
     "release_gate_job_poll": 900,
@@ -43,7 +45,12 @@ BUCKET_LIMITS_PER_MINUTE: Dict[str, int] = {
 }
 
 BUCKET_WINDOW_SEC = 60
-AUTHENTICATED_GLOBAL_IP_BYPASS_BUCKETS = {"dashboard_read", "release_gate_job_poll"}
+AUTHENTICATED_GLOBAL_IP_BYPASS_BUCKETS = {
+    "dashboard_read",
+    "live_view_read",
+    "release_gate_status_read",
+    "release_gate_job_poll",
+}
 
 # Heavy endpoints: (path_substring, method, limit_per_min, path_key). Longest path first.
 HEAVY_ENDPOINTS: Tuple[Tuple[str, str, int, str], ...] = (
@@ -108,7 +115,7 @@ def classify_rate_limit_bucket(request: Request) -> str:
             return "dashboard_read"
 
         if _is_release_gate_job_status_read(path, method, request):
-            return "dashboard_read"
+            return "release_gate_status_read"
 
         if "/release-gate/jobs/" in path:
             return "release_gate_job_poll"
@@ -116,12 +123,14 @@ def classify_rate_limit_bucket(request: Request) -> str:
         if (
             path == "/organizations"
             or path == "/projects"
-            or "/live-view/agents" in path
             or path.endswith("/evaluation")
             or path.endswith("/settings")
             or _is_light_snapshot_read(path, method, request)
         ):
             return "dashboard_read"
+
+        if "/live-view/agents" in path:
+            return "live_view_read"
 
         if (
             "/release-gate" in path
