@@ -28,13 +28,13 @@ _memory_user: Dict[str, Tuple[int, float]] = {}
 _MEMORY_WINDOW_SEC = 60
 
 # Global IP fallback limit (coarse abuse protection)
-GLOBAL_RATE_LIMIT_PER_MINUTE = 600
+GLOBAL_RATE_LIMIT_PER_MINUTE = 1800
 
 # Per-user bucket limits
 BUCKET_LIMITS_PER_MINUTE: Dict[str, int] = {
     "dashboard_read": 1200,
-    "live_view_read": 1200,
-    "release_gate_status_read": 1200,
+    "live_view_read": 1800,
+    "release_gate_status_read": 1800,
     # Job status polling; keep above normal multi-tab usage and short bursts.
     # This path is also protected by client backoff and a short-lived server cache.
     "release_gate_job_poll": 900,
@@ -45,13 +45,6 @@ BUCKET_LIMITS_PER_MINUTE: Dict[str, int] = {
 }
 
 BUCKET_WINDOW_SEC = 60
-AUTHENTICATED_GLOBAL_IP_BYPASS_BUCKETS = {
-    "dashboard_read",
-    "live_view_read",
-    "release_gate_status_read",
-    "release_gate_job_poll",
-}
-
 # Heavy endpoints: (path_substring, method, limit_per_min, path_key). Longest path first.
 HEAVY_ENDPOINTS: Tuple[Tuple[str, str, int, str], ...] = (
     ("release-gate/validate-async", "POST", 30, "release_gate_validate"),
@@ -172,12 +165,12 @@ def _rate_limit_response(bucket: str, limit: int, scope: str) -> JSONResponse:
 
 def _should_skip_global_ip_limit(request: Request, user_id: Optional[str], bucket: str) -> bool:
     """
-    Normal authenticated dashboard/status reads should be controlled by per-user buckets,
+    Normal authenticated reads should be controlled by per-user / per-endpoint guards,
     not by the coarse fallback IP limiter that is mainly for abuse protection.
     """
     if not user_id or request.method.upper() != "GET":
         return False
-    return bucket in AUTHENTICATED_GLOBAL_IP_BYPASS_BUCKETS
+    return bucket != "default"
 
 
 def _observe_rate_limit_exceeded(bucket: str, scope: str, path: str, method: str) -> None:
