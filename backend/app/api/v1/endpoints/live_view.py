@@ -276,18 +276,10 @@ def _ensure_live_view_hot_path_access(project_id: int, user_id: int, db: Session
     )
 
 
-def _invalidate_live_view_hot_path_cache(project_id: int) -> None:
-    if not cache_service.enabled:
-        return
-    cache_service.delete_pattern(f"project:{project_id}:live_view:agents:*")
-    cache_service.delete_pattern(f"project:{project_id}:release_gate:agents:*")
-
-
 def _publish_agents_changed_with_cache_invalidation(
     project_id: int, agent_ids: Optional[List[str]] = None
 ) -> None:
-    _invalidate_live_view_hot_path_cache(project_id)
-    publish_agents_changed(project_id, agent_ids or [])
+    publish_agents_changed(project_id, agent_ids or [], force_refresh=True)
 
 
 def _as_object(value: Any) -> Optional[Dict[str, Any]]:

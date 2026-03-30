@@ -637,7 +637,7 @@ async def apply_project_patch(
     db.commit()
     db.refresh(project)
     invalidate_agent_visibility_cache(project_id)
-    publish_agents_changed(project_id)
+    publish_agents_changed(project_id, force_refresh=True)
     
     role = get_user_project_role(project_id, current_user.id, db)
     
