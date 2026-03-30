@@ -26,11 +26,15 @@ def upgrade() -> None:
     existing = {i["name"] for i in insp.get_indexes("snapshots")}
     if INDEX_NAME in existing:
         return
-    op.execute(
-        sa.text(
-            f"CREATE INDEX {INDEX_NAME} ON snapshots "
-            "(project_id, agent_id, model) WHERE is_deleted IS FALSE"
-        )
+    snapshots = sa.table(
+        "snapshots",
+        sa.column("is_deleted", sa.Boolean),
+    )
+    op.create_index(
+        INDEX_NAME,
+        "snapshots",
+        ["project_id", "agent_id", "model"],
+        postgresql_where=snapshots.c.is_deleted.is_(False),
     )
 
 

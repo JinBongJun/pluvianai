@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     Text,
     Numeric,
+    Index,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -68,6 +69,17 @@ class Snapshot(Base):
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    __table_args__ = (
+        Index(
+            "ix_snapshots_live_view_active_group",
+            "project_id",
+            "agent_id",
+            "model",
+            postgresql_where=is_deleted.is_(False),
+            sqlite_where=is_deleted.is_(False),
+        ),
+    )
 
     # Relationships
     trace = relationship("Trace", back_populates="snapshots")
