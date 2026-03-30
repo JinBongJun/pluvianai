@@ -62,6 +62,7 @@ LIVE_VIEW_AGENTS_CACHE_TTL_SEC = 90
 LIVE_VIEW_AGENTS_CACHE_VERSION = 3
 LIVE_VIEW_HOT_AUTH_CACHE_TTL_SEC = 30
 LIVE_VIEW_HOT_ACCESS_CACHE_TTL_SEC = 30
+LIVE_VIEW_HOT_PROJECT_CACHE_TTL_SEC = 30
 
 EXTENDED_CONTEXT_KEYS = (
     "context",
@@ -143,6 +144,46 @@ def _live_view_hot_access_cache_key(project_id: int, user_id: int) -> str:
     return f"user:{int(user_id)}:project:{int(project_id)}:live_view_hot_access"
 
 
+def _live_view_hot_project_cache_key(project_id: int) -> str:
+    return f"project:{int(project_id)}:live_view_hot_project_ref"
+
+
+def _cache_live_view_project_ref(project_ref: _LiveViewProjectRef) -> None:
+    if not cache_service.enabled:
+        return
+    cache_service.set(
+        _live_view_hot_project_cache_key(project_ref.id),
+        {
+            "id": int(project_ref.id),
+            "owner_id": int(project_ref.owner_id),
+            "canvas_nodes": project_ref.canvas_nodes,
+        },
+        ttl=LIVE_VIEW_HOT_PROJECT_CACHE_TTL_SEC,
+    )
+
+
+def _cached_live_view_project_ref(project_id: int) -> Optional[_LiveViewProjectRef]:
+    if not cache_service.enabled:
+        return None
+    cached = cache_service.get(_live_view_hot_project_cache_key(project_id))
+    if not isinstance(cached, dict):
+        return None
+    try:
+        return _LiveViewProjectRef(
+            id=int(cached["id"]),
+            owner_id=int(cached["owner_id"]),
+            canvas_nodes=cached.get("canvas_nodes"),
+        )
+    except Exception:
+        return None
+
+
+def _invalidate_live_view_project_ref_cache(project_id: int) -> None:
+    if not cache_service.enabled:
+        return
+    cache_service.delete(_live_view_hot_project_cache_key(project_id))
+
+
 async def _get_live_view_hot_user_id(
     request: Request,
     token: Optional[str] = Depends(oauth2_scheme),
@@ -203,6 +244,10 @@ async def _get_live_view_hot_user_id(
 
 
 def _load_live_view_project_ref(project_id: int, db: Session) -> _LiveViewProjectRef:
+    cached = _cached_live_view_project_ref(project_id)
+    if cached is not None:
+        return cached
+
     row = (
         db.query(
             Project.id.label("project_id"),
@@ -217,11 +262,13 @@ def _load_live_view_project_ref(project_id: int, db: Session) -> _LiveViewProjec
     if not row or not row.is_active or row.is_deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
-    return _LiveViewProjectRef(
+    project_ref = _LiveViewProjectRef(
         id=int(row.project_id),
         owner_id=int(row.owner_id),
         canvas_nodes=row.canvas_nodes,
     )
+    _cache_live_view_project_ref(project_ref)
+    return project_ref
 
 
 def _ensure_live_view_hot_path_access(project_id: int, user_id: int, db: Session) -> _LiveViewProjectRef:
@@ -269,11 +316,13 @@ def _ensure_live_view_hot_path_access(project_id: int, user_id: int, db: Session
     if not allowed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this project")
 
-    return _LiveViewProjectRef(
+    project_ref = _LiveViewProjectRef(
         id=int(row.project_id),
         owner_id=int(row.owner_id),
         canvas_nodes=row.canvas_nodes,
     )
+    _cache_live_view_project_ref(project_ref)
+    return project_ref
 
 
 def _publish_agents_changed_with_cache_invalidation(

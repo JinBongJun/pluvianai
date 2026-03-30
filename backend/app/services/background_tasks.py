@@ -122,6 +122,7 @@ class BackgroundTaskService:
             )
             db.add(api_call)
             db.flush()  # Flush to get api_call.id if needed
+            api_call_id = api_call.id
 
             # Create Snapshot so Live View boxes appear (SDK traffic -> snapshots per design)
             trace_id = chain_id or str(uuid.uuid4())
@@ -144,6 +145,8 @@ class BackgroundTaskService:
             if te_norm is not None:
                 payload_for_snapshot["tool_events"] = te_norm
             tool_calls_summary = extract_tool_calls_summary(payload_for_snapshot)
+            project_obj = None
+            project_owner_id = None
             try:
                 from app.models.project import Project as ProjectModel
                 from app.core.usage_limits import check_snapshot_limit
@@ -155,6 +158,8 @@ class BackgroundTaskService:
                 )
 
                 project_obj = db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
+                if project_obj:
+                    project_owner_id = project_obj.owner_id
                 snapshot_allowed = True
                 if project_obj:
                     snapshot_allowed, _ = check_snapshot_limit(db, project_obj.owner_id, is_superuser=False)
@@ -244,27 +249,24 @@ class BackgroundTaskService:
 
             # Track usage for subscription limits
             try:
-                from app.models.project import Project
                 from app.services.subscription_service import SubscriptionService
 
-                project = db.query(Project).filter(Project.id == project_id).first()
-                if project:
+                if project_owner_id is not None:
                     subscription_service = SubscriptionService(db)
                     subscription_service.increment_usage(
-                        user_id=project.owner_id, metric_type="api_calls", amount=1, project_id=project_id
+                        user_id=project_owner_id, metric_type="api_calls", amount=1, project_id=project_id
                     )
             except Exception as e:
                 # Log error but don't fail the API call save
                 logger.warning(f"Error tracking usage: {e}")
 
             db.commit()
-            db.refresh(api_call)
             # Notify Live View dashboards (SSE) that this agent updated.
             try:
                 publish_agents_changed(project_id, [agent_id])
             except Exception:
                 pass
-            return api_call.id
+            return api_call_id
         except Exception as e:
             db.rollback()
             # Log error but don't fail

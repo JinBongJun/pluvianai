@@ -636,6 +636,8 @@ async def apply_project_patch(
     project.canvas_edges = patch_data.edges
     db.commit()
     db.refresh(project)
+    if cache_service.enabled:
+        cache_service.delete(f"project:{project_id}:live_view_hot_project_ref")
     invalidate_agent_visibility_cache(project_id)
     publish_agents_changed(project_id, force_refresh=True)
     
