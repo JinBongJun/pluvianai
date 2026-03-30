@@ -19,7 +19,7 @@ class TestRateLimitMiddleware:
             }
         )
 
-        assert classify_rate_limit_bucket(request) == "release_gate_job_poll"
+        assert classify_rate_limit_bucket(request) == "release_gate_status_read"
 
     async def test_dashboard_read_bucket_returns_structured_429(
         self, async_client, auth_headers, monkeypatch
@@ -47,11 +47,11 @@ class TestRateLimitMiddleware:
         data = response.json()
         assert data["error"]["code"] == "RATE_LIMIT_EXCEEDED"
         assert data["error"]["message"] == "Too many requests. Please wait a moment and try again."
-        assert data["error"]["details"]["bucket"] == "dashboard_read"
+        assert data["error"]["details"]["bucket"] == "live_view_read"
         assert data["error"]["details"]["scope"] == "user"
-        assert data["error"]["details"]["limit"] == 1200
+        assert data["error"]["details"]["limit"] == 3600
         assert response.headers["Retry-After"] == "60"
-        assert response.headers["X-RateLimit-Bucket"] == "dashboard_read"
+        assert response.headers["X-RateLimit-Bucket"] == "live_view_read"
 
     async def test_release_gate_validate_endpoint_returns_updated_limit(
         self, async_client, auth_headers, test_project, monkeypatch
