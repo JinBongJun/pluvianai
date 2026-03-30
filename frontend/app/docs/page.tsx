@@ -218,7 +218,7 @@ export default function DocsPage() {
                   },
                   {
                     title: "Latency Spikes",
-                    desc: "In Evaluation settings, a single latency threshold (fail at or above this many ms). Snapshot Details may show extra tiers for display.",
+                    desc: "A single latency threshold (fail at or above this many ms), shown consistently in Evaluation and snapshot details.",
                     value: "fail_ms",
                   },
                   {

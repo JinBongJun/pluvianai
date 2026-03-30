@@ -291,45 +291,7 @@ export function summarizeRunToolGroundingFromCases(resultCases: any[]): {
   return { withTools, pass, fail, semanticOk, semanticOff };
 }
 
-export function getEvalCheckParams(id: string, config: Record<string, unknown> | undefined): string {
-  if (!config || typeof config !== "object") return "";
-  const c = config as Record<string, unknown>;
-  switch (id) {
-    case "latency": {
-      const w = c.warn_ms;
-      const v = c.crit_ms;
-      const parts: string[] = [];
-      if (typeof w === "number") parts.push(`warn_ms: ${w}`);
-      if (typeof v === "number") parts.push(`crit_ms: ${v}`);
-      return parts.join(", ");
-    }
-    case "json":
-      return typeof c.mode === "string" ? `mode: ${c.mode}` : "";
-    case "status_code": {
-      const w = c.warn_from;
-      const v = c.crit_from;
-      const parts: string[] = [];
-      if (typeof w === "number") parts.push(`warn_from: ${w}`);
-      if (typeof v === "number") parts.push(`crit_from: ${v}`);
-      return parts.join(", ");
-    }
-    case "empty":
-      return typeof c.min_chars === "number" ? `min_chars: ${c.min_chars}` : "";
-    case "length":
-      return (
-        [c.warn_ratio, c.crit_ratio]
-          .filter(Number.isFinite)
-          .map((r, i) => `${i ? "crit" : "warn"}_ratio: ${r}`)
-          .join(", ") || ""
-      );
-    case "repetition":
-      return [c.warn_line_repeats, c.crit_line_repeats].filter(Number.isFinite).length
-        ? `warn_line_repeats: ${c.warn_line_repeats ?? "—"}, crit_line_repeats: ${c.crit_line_repeats ?? "—"}`
-        : "";
-    default:
-      return "";
-  }
-}
+export { getEvalCheckParams } from "@/lib/evalConfigDisplay";
 
 export function formatDateTime(value: unknown): string {
   if (!value) return "—";
