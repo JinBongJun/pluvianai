@@ -1062,7 +1062,8 @@ class ReleaseGateValidateRequest(BaseModel):
 
 
 ReleaseGateJobStatus = Literal["queued", "running", "succeeded", "failed", "canceled"]
-RELEASE_GATE_JOB_POLL_CACHE_TTL_RUNNING_SEC = 2
+# Running jobs: workers publish status to a long-lived key; this TTL only bounds poll-cache DB misses.
+RELEASE_GATE_JOB_POLL_CACHE_TTL_RUNNING_SEC = 4
 RELEASE_GATE_JOB_POLL_CACHE_TTL_TERMINAL_SEC = 10
 
 

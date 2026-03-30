@@ -13,7 +13,8 @@ from app.models.agent_display_setting import AgentDisplaySetting
 from app.models.project import Project
 from app.services.cache_service import cache_service
 
-AGENT_VISIBILITY_CACHE_TTL_SEC = 15
+# Invalidated on settings/canvas changes; longer TTL cuts herd rebuilds under sustained load.
+AGENT_VISIBILITY_CACHE_TTL_SEC = 45
 
 
 @dataclass
