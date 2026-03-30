@@ -33,7 +33,10 @@ GLOBAL_RATE_LIMIT_PER_MINUTE = 1800
 # Per-user bucket limits
 BUCKET_LIMITS_PER_MINUTE: Dict[str, int] = {
     "dashboard_read": 1200,
-    "live_view_read": 1800,
+    # Compact Live View graph polling is the primary hot path and now has much
+    # lower backend cost; keep the per-user cap high enough for multi-tab use
+    # and synthetic ceiling tests without tripping 429s before the backend saturates.
+    "live_view_read": 3600,
     "release_gate_status_read": 1800,
     # Job status polling; keep above normal multi-tab usage and short bursts.
     # This path is also protected by client backoff and a short-lived server cache.
