@@ -16,7 +16,11 @@ class EmailService(NotificationChannel):
         self.from_email = settings.EMAIL_FROM or "onboarding@resend.dev"
         self.from_name = settings.EMAIL_FROM_NAME or "PluvianAI"
         self.api_key = settings.RESEND_API_KEY
-        self.enabled = bool(self.api_key)
+        self._enabled = bool(self.api_key)
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
 
     async def send_alert(
         self,

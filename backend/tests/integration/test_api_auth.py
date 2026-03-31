@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 import pytest
 from fastapi import status
+from app.models.email_verification_token import EmailVerificationToken
 from app.models.subscription import Subscription
 from app.models.usage import Usage
 
@@ -34,7 +35,10 @@ class TestAuthAPI:
         data = response.json()
         assert "email" in data
         assert data["email"] == "newuser@example.com"
+        assert data["is_email_verified"] is False
         assert "password" not in data  # Password should not be in response
+        token = db.query(EmailVerificationToken).filter(EmailVerificationToken.email == "newuser@example.com").first()
+        assert token is not None
     
     async def test_register_duplicate_email(self, async_client, test_user):
         """Test registering with duplicate email"""
@@ -118,6 +122,63 @@ class TestAuthAPI:
         assert "access_token" in data
         assert "refresh_token" in data
         assert data["token_type"] == "bearer"
+
+    async def test_login_rejects_unverified_email(self, async_client):
+        register = await async_client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": "verifyme@example.com",
+                "password": "SecurePassword123!",
+                "full_name": "Verify Me",
+                "liability_agreement_accepted": True,
+            },
+        )
+        assert register.status_code == status.HTTP_201_CREATED
+
+        response = await async_client.post(
+            "/api/v1/auth/login",
+            data={
+                "username": "verifyme@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        error = self._extract_error(response.json())
+        assert error["code"] == "email_not_verified"
+
+    async def test_verify_email_allows_login_after_confirmation(self, async_client, db):
+        register = await async_client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": "verifyafter@example.com",
+                "password": "SecurePassword123!",
+                "full_name": "Verify After",
+                "liability_agreement_accepted": True,
+            },
+        )
+        assert register.status_code == status.HTTP_201_CREATED
+
+        token = (
+            db.query(EmailVerificationToken)
+            .filter(EmailVerificationToken.email == "verifyafter@example.com")
+            .order_by(EmailVerificationToken.id.desc())
+            .first()
+        )
+        assert token is not None
+
+        verify_res = await async_client.get(f"/api/v1/auth/verify-email?token={token.token}")
+        assert verify_res.status_code == status.HTTP_200_OK
+        assert verify_res.json()["verified"] is True
+
+        login_res = await async_client.post(
+            "/api/v1/auth/login",
+            data={
+                "username": "verifyafter@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+        assert login_res.status_code == status.HTTP_200_OK
     
     async def test_login_invalid_credentials(self, async_client, test_user):
         """Test login with invalid credentials"""

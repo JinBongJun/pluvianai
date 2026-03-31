@@ -11,6 +11,14 @@ export const settingsAPI = {
     return response.data;
   },
 
+  requestEmailChange: async (newEmail: string, currentPassword: string) => {
+    const response = await apiClient.post("/settings/email/change-request", {
+      new_email: newEmail,
+      current_password: currentPassword,
+    });
+    return response.data;
+  },
+
   deleteAccount: async (password: string) => {
     await apiClient.delete("/settings/profile", {
       data: { password },

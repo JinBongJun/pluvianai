@@ -53,7 +53,8 @@ class UserService:
             email=email,
             hashed_password=hashed_password,
             full_name=full_name,
-            is_active=True
+            is_active=True,
+            is_email_verified=False,
         )
         user = self.user_repo.save(user)
         

@@ -89,6 +89,9 @@ export function getLoginErrorMessage(source: AuthErrorSource): string {
   if (status === 403 && parsed?.toLowerCase().includes("inactive")) {
     return "This account has been deactivated. Contact support if you need access.";
   }
+  if (status === 403 && code === "email_not_verified") {
+    return "Verify your email before signing in. You can resend the verification email from this screen.";
+  }
   if (parsed && parsed.length > 0 && parsed.length < 200) {
     return blockNonLatinMessage(parsed, "Login failed. Please check your credentials and try again.");
   }

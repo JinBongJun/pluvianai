@@ -1,5 +1,6 @@
 import pytest
 from fastapi import status
+from app.models.email_verification_token import EmailVerificationToken
 
 
 def _extract_data(payload: dict):
@@ -111,3 +112,38 @@ class TestSettingsProfileAndApiKeys:
             data={"username": test_user.email, "password": "BetterPassword123!"},
         )
         assert login_ok.status_code == status.HTTP_200_OK
+
+    async def test_h6_change_email_request_and_verify(
+        self, async_client, auth_headers, test_user, db
+    ):
+        change_req = await async_client.post(
+            "/api/v1/settings/email/change-request",
+            json={
+                "new_email": "updated-email@example.com",
+                "current_password": "testpassword123",
+            },
+            headers=auth_headers,
+        )
+        assert change_req.status_code == status.HTTP_200_OK
+
+        token = (
+            db.query(EmailVerificationToken)
+            .filter(
+                EmailVerificationToken.user_id == test_user.id,
+                EmailVerificationToken.purpose == "change_email",
+            )
+            .order_by(EmailVerificationToken.id.desc())
+            .first()
+        )
+        assert token is not None
+        assert token.email == "updated-email@example.com"
+
+        verify_res = await async_client.get(f"/api/v1/auth/verify-email?token={token.token}")
+        assert verify_res.status_code == status.HTTP_200_OK
+        body = _extract_data(verify_res.json()) or verify_res.json()
+        assert body.get("email") == "updated-email@example.com"
+
+        profile_res = await async_client.get("/api/v1/settings/profile", headers=auth_headers)
+        assert profile_res.status_code == status.HTTP_200_OK
+        profile = _extract_data(profile_res.json())
+        assert profile.get("email") == "updated-email@example.com"

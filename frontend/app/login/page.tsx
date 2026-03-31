@@ -53,8 +53,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [reauthMessageShown, setReauthMessageShown] = useState(false);
   const [registeredMessageShown, setRegisteredMessageShown] = useState(false);
+  const [verifiedMessageShown, setVerifiedMessageShown] = useState(false);
   const [reauthBannerMessage, setReauthBannerMessage] = useState("Please log in again.");
   const [formError, setFormError] = useState<string | null>(null);
+  const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
+  const [registeredEmail, setRegisteredEmail] = useState<string>("");
+  const [resendBusy, setResendBusy] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [postAuthRedirect, setPostAuthRedirect] = useState("/organizations");
@@ -105,6 +109,8 @@ export default function LoginPage() {
     const reauthCode = params.get("code");
     const sessionExpired = params.get("session_expired");
     const registered = params.get("registered");
+    const registeredEmailParam = params.get("email");
+    const verified = params.get("verified");
     const nextPath = params.get("next");
 
     if (mode === "signup") {
@@ -141,9 +147,18 @@ export default function LoginPage() {
     if (registered === "1") {
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.delete("registered");
+      newUrl.searchParams.delete("email");
       window.history.replaceState({}, "", newUrl.toString());
+      setRegisteredEmail(registeredEmailParam || "");
       setRegisteredMessageShown(true);
-      setTimeout(() => setRegisteredMessageShown(false), 5000);
+    }
+
+    if (verified === "1") {
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete("verified");
+      window.history.replaceState({}, "", newUrl.toString());
+      setVerifiedMessageShown(true);
+      setTimeout(() => setVerifiedMessageShown(false), 5000);
     }
   }, [mounted]);
 
@@ -218,24 +233,28 @@ export default function LoginPage() {
 
     try {
       await authAPI.register(email, rawPassword, fullName, accepted);
-
-      try {
-        await authAPI.login(email, rawPassword);
-        start();
-        analytics.capture("user_register", { method: "password" });
-        setTimeout(() => {
-          window.location.href = postAuthRedirect;
-        }, 1000);
-      } catch {
-        start();
-        analytics.capture("user_register", { method: "password" });
-        setTimeout(() => {
-          router.push("/login?registered=1");
-        }, 800);
-      }
+      analytics.capture("user_register", { method: "password" });
+      start();
+      setTimeout(() => {
+        router.push(`/login?registered=1&email=${encodeURIComponent(email)}`);
+      }, 800);
     } catch (error) {
       setFormError(getAuthErrorMessage(error, "register"));
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!registeredEmail.trim()) return;
+    setResendBusy(true);
+    setVerificationNotice(null);
+    try {
+      await authAPI.resendVerification(registeredEmail.trim());
+      setVerificationNotice("Verification email sent again. Please check your inbox.");
+    } catch {
+      setVerificationNotice("Could not resend the verification email right now.");
+    } finally {
+      setResendBusy(false);
     }
   };
 
@@ -355,7 +374,16 @@ export default function LoginPage() {
 
                 {registeredMessageShown && !errorMessage && (
                   <div className="bg-emerald-500/5 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-2xl text-xs font-bold">
-                    Registration completed. Please sign in to continue.
+                    Registration completed. Verify your email before signing in.
+                    {registeredEmail ? (
+                      <span className="block mt-1 text-emerald-500/80">{registeredEmail}</span>
+                    ) : null}
+                  </div>
+                )}
+
+                {verifiedMessageShown && !errorMessage && (
+                  <div className="bg-emerald-500/5 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-2xl text-xs font-bold">
+                    Email verified successfully. You can sign in now.
                   </div>
                 )}
 
@@ -521,6 +549,21 @@ export default function LoginPage() {
                     isLoadingOverride={isLoading || isSubmitting}
                   />
                 </div>
+
+                {isLogin && registeredMessageShown && registeredEmail ? (
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-xs text-slate-300 space-y-3">
+                    <p>Didn't get the verification email?</p>
+                    {verificationNotice ? <p className="text-emerald-400">{verificationNotice}</p> : null}
+                    <button
+                      type="button"
+                      onClick={() => void handleResendVerification()}
+                      disabled={resendBusy}
+                      className="text-emerald-400 hover:text-emerald-300 font-black uppercase tracking-[0.2em] disabled:opacity-50"
+                    >
+                      {resendBusy ? "Sending..." : "Resend verification"}
+                    </button>
+                  </div>
+                ) : null}
 
                 {/* Toggle Login/Register */}
                 <div className="text-center pt-2">
