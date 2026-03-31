@@ -1277,7 +1277,7 @@ export function AttemptDetailOverlay({
                       <section className="rounded-3xl bg-white/[0.02] p-5 ring-1 ring-white/6">
                         <div className="mb-4 flex items-center justify-between gap-2">
                           <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
-                            <div className="h-1.5 w-1.5 rounded-full bg-blue-400/80" />
+                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/80" />
                             Output Quality (Eval)
                           </h3>
                           <div className="text-[11px] text-slate-500">

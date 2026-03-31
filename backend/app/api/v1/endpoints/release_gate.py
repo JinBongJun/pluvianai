@@ -681,11 +681,16 @@ def _merge_tool_grounding_with_semantic(
 
 
 def _configured_eval_check_ids(eval_config: Any) -> List[str]:
-    cfg = normalize_eval_config(eval_config or {})
+    raw = eval_config if isinstance(eval_config, dict) else {}
     configured: List[str] = []
     for key in CHECK_KEYS:
-        value = cfg.get(key)
-        if isinstance(value, dict) and bool(value.get("enabled")):
+        if key == "tool":
+            value = raw.get("tool")
+            if not isinstance(value, dict):
+                value = raw.get("tool_use_policy")
+        else:
+            value = raw.get(key)
+        if isinstance(value, dict) and value.get("enabled") is True:
             configured.append(key)
     return configured
 

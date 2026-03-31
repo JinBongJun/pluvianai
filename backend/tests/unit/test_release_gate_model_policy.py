@@ -101,6 +101,21 @@ class TestReleaseGateSignalsPayload:
 
         assert ids == ["empty", "latency", "tool"]
 
+    def test_configured_eval_check_ids_does_not_auto_enable_missing_keys(self):
+        from app.api.v1.endpoints import release_gate as rg
+
+        ids = rg._configured_eval_check_ids(
+            {
+                "empty": {"enabled": True},
+                "latency": {"enabled": True},
+                # intentionally missing json/refusal/length/repetition/status_code
+                "required": {"enabled": False},
+                "tool_use_policy": {"enabled": False},
+            }
+        )
+
+        assert ids == ["empty", "latency"]
+
     def test_build_release_gate_signals_payload_splits_runtime_diagnostics(self):
         from app.api.v1.endpoints import release_gate as rg
 
