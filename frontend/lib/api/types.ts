@@ -150,7 +150,10 @@ export interface ReleaseGateAttempt {
     checks: Record<string, string>;
     failed: string[];
     config_version?: string | null;
+    config_check_ids?: string[];
     details?: Record<string, any>;
+    runtime_checks?: Record<string, string>;
+    runtime_details?: Record<string, any>;
   };
   replay?: {
     attempted: number;

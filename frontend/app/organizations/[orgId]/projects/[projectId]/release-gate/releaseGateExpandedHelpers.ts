@@ -224,7 +224,7 @@ export function summarizeGroundingForCase(run: any): {
   const semanticStatuses: string[] = [];
 
   for (const attempt of attempts) {
-    const checks = attempt?.signals?.checks;
+    const checks = attempt?.signals?.runtime_checks ?? attempt?.signals?.checks;
     const g =
       checks && typeof checks === "object" && !Array.isArray(checks)
         ? String((checks as Record<string, unknown>).tool_grounding ?? "")
@@ -233,7 +233,7 @@ export function summarizeGroundingForCase(run: any): {
         : "";
     if (g) groundingStatuses.push(g);
 
-    const detail = attempt?.signals?.details?.tool_grounding;
+    const detail = attempt?.signals?.runtime_details?.tool_grounding ?? attempt?.signals?.details?.tool_grounding;
     if (detail && typeof detail === "object" && !Array.isArray(detail)) {
       const s = String((detail as Record<string, unknown>).semantic_status ?? "")
         .trim()

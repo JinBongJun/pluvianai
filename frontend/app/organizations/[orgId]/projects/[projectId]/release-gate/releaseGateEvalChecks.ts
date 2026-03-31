@@ -13,6 +13,15 @@ export const LIVE_VIEW_CHECK_ORDER = [
   "tool",
 ] as const;
 
+export const RUNTIME_ONLY_EVAL_CHECK_IDS = [
+  "tool_grounding",
+  "required_keywords",
+  "required_json_fields",
+] as const;
+
+const CANONICAL_EVAL_CHECK_ID_SET = new Set<string>(LIVE_VIEW_CHECK_ORDER);
+const RUNTIME_ONLY_EVAL_CHECK_ID_SET = new Set<string>(RUNTIME_ONLY_EVAL_CHECK_IDS);
+
 /** Defaults for each check so missing keys in old saved config still appear. */
 export const DEFAULT_EVAL_CHECK_VALUE: Record<string, { enabled: boolean }> = {
   empty: { enabled: true },
@@ -34,6 +43,21 @@ export function shouldShowEvalSetting(value: unknown): boolean {
   const obj = value as Record<string, unknown>;
   if (typeof obj.enabled === "boolean") return obj.enabled;
   return true;
+}
+
+export function isCanonicalEvalCheckId(id: string): boolean {
+  return CANONICAL_EVAL_CHECK_ID_SET.has(String(id || "").trim());
+}
+
+export function isRuntimeOnlyEvalCheckId(id: string): boolean {
+  return RUNTIME_ONLY_EVAL_CHECK_ID_SET.has(String(id || "").trim());
+}
+
+export function getConfiguredEvalCheckIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(id => String(id ?? "").trim())
+    .filter(id => isCanonicalEvalCheckId(id));
 }
 
 /** Rows for Release Gate eval settings UI from `liveViewAPI.getAgentEvaluation` (or equivalent) data. */

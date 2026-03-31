@@ -13,10 +13,14 @@ import { formatDurationMs, percentFromRate } from "@/app/organizations/[orgId]/p
 import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel";
 import type { LiveViewToolTimelineRow } from "@/lib/api/live-view";
 import {
-  formatReplayCredits,
   formatSnapshotCost,
   formatSnapshotTokens,
 } from "@/lib/snapshotMetrics";
+import {
+  getConfiguredEvalCheckIds,
+  isCanonicalEvalCheckId,
+  isRuntimeOnlyEvalCheckId,
+} from "@/app/organizations/[orgId]/projects/[projectId]/release-gate/releaseGateEvalChecks";
 
 export type AttemptDetailMainTab = "summary" | "comparison" | "debug";
 
@@ -121,6 +125,13 @@ export function AttemptDetailOverlay({
   const signalsChecksRaw = (attempt?.signals && typeof attempt.signals === "object"
     ? (attempt.signals as Record<string, unknown>).checks
     : undefined) as Record<string, unknown> | undefined;
+  const configuredEvalCheckIds = getConfiguredEvalCheckIds(
+    attempt?.signals && typeof attempt.signals === "object"
+      ? (attempt.signals as Record<string, unknown>).config_check_ids
+      : undefined
+  );
+  const configuredEvalCheckIdSet =
+    configuredEvalCheckIds.length > 0 ? new Set(configuredEvalCheckIds) : null;
   const signalsRows = signalsChecksRaw
     ? Object.entries(signalsChecksRaw).map(([id, status]) => {
         const normalizedId = normalizeViolationRuleId(id);
@@ -139,8 +150,32 @@ export function AttemptDetailOverlay({
     attempt?.signals && typeof attempt.signals === "object"
       ? ((attempt.signals as any).details as Record<string, unknown> | undefined)
       : undefined;
-  const signalsApplicable = signalsRows.filter(r => r.applicable);
-  const signalsPassed = signalsApplicable.filter(r => r.pass);
+  const runtimeChecksRaw =
+    attempt?.signals && typeof attempt.signals === "object"
+      ? ((attempt.signals as any).runtime_checks as Record<string, unknown> | undefined)
+      : undefined;
+  const runtimeDetailsRaw =
+    attempt?.signals && typeof attempt.signals === "object"
+      ? ((attempt.signals as any).runtime_details as Record<string, unknown> | undefined)
+      : undefined;
+  const canonicalSignalRows = signalsRows.filter(row =>
+    configuredEvalCheckIdSet ? configuredEvalCheckIdSet.has(row.id) : isCanonicalEvalCheckId(row.id)
+  );
+  const runtimeSignalRows = runtimeChecksRaw
+    ? Object.entries(runtimeChecksRaw).map(([id, status]) => {
+        const normalizedId = normalizeViolationRuleId(id);
+        const label = toHumanRuleLabel(normalizedId, id);
+        const s = String(status ?? "").trim().toLowerCase();
+        return {
+          id: normalizedId || id,
+          label,
+          status: s,
+          pass: s === "pass",
+          applicable: s === "pass" || s === "fail",
+        };
+      })
+    : signalsRows.filter(row => isRuntimeOnlyEvalCheckId(row.id) || !isCanonicalEvalCheckId(row.id));
+  const signalsPassed = canonicalSignalRows.filter(r => r.pass);
 
   const formatSignalValue = (id: string, raw: unknown, pass: boolean): React.ReactNode => {
     const d = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
@@ -408,9 +443,13 @@ export function AttemptDetailOverlay({
     !Array.isArray(attempt.tool_execution_summary)
       ? (attempt.tool_execution_summary as Record<string, unknown>)
       : null;
-  const toolEvidenceRows = Array.isArray(attempt?.tool_evidence)
-    ? (attempt.tool_evidence as Array<Record<string, unknown>>)
-    : [];
+  const toolEvidenceRows = useMemo(
+    () =>
+      Array.isArray(attempt?.tool_evidence)
+        ? (attempt.tool_evidence as Array<Record<string, unknown>>)
+        : [],
+    [attempt?.tool_evidence]
+  );
   /**
    * Maps Gate `tool_evidence` (replay service) into `LiveViewToolTimelineRow` for shared `ToolTimelinePanel`.
    * Live View snapshot GET applies `redact_secrets` in the API; Gate rows use server-built previews here.
@@ -519,10 +558,14 @@ export function AttemptDetailOverlay({
         ? toolResultCountFromSummary
         : flattenedToolLoopRows.length;
   const toolGroundingDetail =
-    signalsDetailsRaw &&
-    typeof signalsDetailsRaw.tool_grounding === "object" &&
-    !Array.isArray(signalsDetailsRaw.tool_grounding)
-      ? (signalsDetailsRaw.tool_grounding as Record<string, unknown>)
+    runtimeDetailsRaw &&
+    typeof runtimeDetailsRaw.tool_grounding === "object" &&
+    !Array.isArray(runtimeDetailsRaw.tool_grounding)
+      ? (runtimeDetailsRaw.tool_grounding as Record<string, unknown>)
+      : signalsDetailsRaw &&
+          typeof signalsDetailsRaw.tool_grounding === "object" &&
+          !Array.isArray(signalsDetailsRaw.tool_grounding)
+        ? (signalsDetailsRaw.tool_grounding as Record<string, unknown>)
       : null;
   const toolGroundingStatus = String(toolGroundingDetail?.status ?? "").trim().toLowerCase();
   const toolGroundingReason = String(toolGroundingDetail?.reason ?? "").trim();
@@ -535,14 +578,14 @@ export function AttemptDetailOverlay({
   const decisionReasons: string[] = Array.isArray(attempt?.failure_reasons)
     ? (attempt.failure_reasons as string[])
     : [];
-  const failedSignals = signalsRows.filter(r => r.status === "fail");
+  const failedSignals = canonicalSignalRows.filter(r => r.status === "fail");
   const diffTabEnabled = Boolean(baselineResponse && candidateResponse);
   const replayLatencyLabel = formatDurationMs((attempt?.replay ?? {}).avg_latency_ms);
   const sequenceEdits = Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0);
   const toolDivergencePct = Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0);
   const toolDivergenceLabel = percentFromRate(toolDivergencePct / 100);
   const evalPassCount = signalsPassed.length;
-  const evalTotalCount = signalsApplicable.length;
+  const evalTotalCount = canonicalSignalRows.length;
   const providerErrorPreview = String((attempt?.replay?.provider_error as any)?.response_preview ?? "").trim();
   const providerErrorMessage = String((attempt?.replay?.provider_error as any)?.message ?? "").trim();
   const responseDataKeys = Array.isArray((candidateSnapshot as any)?.response_data_keys)
@@ -736,133 +779,6 @@ export function AttemptDetailOverlay({
     if (top?.message) return toHeadline(top.message);
     return toHeadline("Blocking issues detected.");
   })();
-  type WhyDecisionItem = {
-    key: string;
-    label: string;
-    detail: string;
-    severity: DecisionSeverity;
-    source: "policy" | "gate" | "eval" | "summary";
-  };
-  const whyDecisionItems = useMemo<WhyDecisionItem[]>(() => {
-    if (pass) {
-      const passItems: WhyDecisionItem[] = [];
-      passItems.push({
-        key: "summary-pass",
-        label: "No blocking regressions",
-        detail: "This attempt did not trigger any blocking gate or policy conditions.",
-        severity: "low",
-        source: "summary",
-      });
-      if (policyRows.length === 0) {
-        passItems.push({
-          key: "policy-clean",
-          label: "Policy remained clean",
-          detail: "No policy violations were detected in the replayed attempt.",
-          severity: "low",
-          source: "policy",
-        });
-      }
-      if (evalTotalCount > 0) {
-        passItems.push({
-          key: "eval-coverage",
-          label: `${evalPassCount}/${evalTotalCount} eval checks passed`,
-          detail:
-            failedSignals.length > 0
-              ? `${failedSignals.length} signal(s) still need review.`
-              : "All captured user-facing eval checks passed for this attempt.",
-          severity: failedSignals.length > 0 ? "medium" : "low",
-          source: "eval",
-        });
-      }
-      passItems.push({
-        key: "evidence-quality",
-        label: `Evidence quality: ${gateConfidence.label}`,
-        detail: gateConfidence.detail,
-        severity:
-          gateConfidence.label === "High"
-            ? "low"
-            : gateConfidence.label === "Medium"
-              ? "medium"
-              : "high",
-        source: "summary",
-      });
-      return passItems.slice(0, 3);
-    }
-
-    const items: WhyDecisionItem[] = [];
-    policyRows.forEach((row, idx) => {
-      items.push({
-        key: `policy-${row.key}-${idx}`,
-        label: row.label,
-        detail: row.message || "Policy violation detected.",
-        severity: normalizeSeverity(row.severity, "high"),
-        source: "policy",
-      });
-    });
-    failedGates.forEach(gate => {
-      items.push({
-        key: `gate-${gate.id}`,
-        label: gate.label,
-        detail: gate.reason || `${gate.label} failed.`,
-        severity: gate.id === "tool_integrity" ? "critical" : "high",
-        source: "gate",
-      });
-    });
-    failedSignals.forEach(row => {
-      const signalDetail =
-        signalsDetailsRaw && typeof signalsDetailsRaw === "object"
-          ? formatSignalWhy(row.id, (signalsDetailsRaw as any)?.[row.id])
-          : "";
-      items.push({
-        key: `eval-${row.id}`,
-        label: row.label,
-        detail: signalDetail || "This eval check failed without additional evidence text.",
-        severity: "medium",
-        source: "eval",
-      });
-    });
-    if (items.length === 0) {
-      items.push({
-        key: "summary-fallback",
-        label: "Blocking issue detected",
-        detail: decisionHeadline.replace(/^Reason:\s*/i, ""),
-        severity: "high",
-        source: "summary",
-      });
-    }
-    return items
-      .filter(item => item.detail.trim())
-      .sort((a, b) => severityRank(b.severity) - severityRank(a.severity))
-      .slice(0, 3);
-  }, [
-    pass,
-    policyRows,
-    evalTotalCount,
-    evalPassCount,
-    failedSignals,
-    gateConfidence,
-    failedGates,
-    signalsDetailsRaw,
-    decisionHeadline,
-  ]);
-  const whyDecisionToneClass = (severity: DecisionSeverity): string => {
-    if (severity === "critical" || severity === "high") {
-      return "border-rose-500/20 bg-rose-500/[0.05]";
-    }
-    if (severity === "medium") {
-      return "border-amber-500/20 bg-amber-500/[0.05]";
-    }
-    return "border-emerald-500/20 bg-emerald-500/[0.05]";
-  };
-  const whyDecisionBadgeClass = (severity: DecisionSeverity): string => {
-    if (severity === "critical" || severity === "high") {
-      return "border-rose-500/30 bg-rose-500/10 text-rose-200";
-    }
-    if (severity === "medium") {
-      return "border-amber-500/30 bg-amber-500/10 text-amber-100";
-    }
-    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
-  };
   const comparisonPrimaryChanges = useMemo(() => {
     const items: string[] = [];
     if (candidateLineCount > baselineLineCount) {
@@ -924,7 +840,7 @@ export function AttemptDetailOverlay({
             .filter(Boolean)
             .join(" · ") || "—";
 
-    const { tokens_total, input_tokens, output_tokens, used_credits } = replayUsage;
+    const { tokens_total, input_tokens, output_tokens } = replayUsage;
     let replayValue = "—";
     if (tokens_total != null) {
       replayValue = `${formatSnapshotTokens(tokens_total)} tokens`;
@@ -948,32 +864,19 @@ export function AttemptDetailOverlay({
         detail: candidateProvider || undefined,
       },
       {
-        label: "Latency",
-        value: replayLatencyLabel,
-        detail: attempt?.trace_id ? `Trace ${String(attempt.trace_id)}` : "Trace not captured",
-      },
-      {
-        label: "Baseline (capture)",
+        label: "Baseline snapshot",
         value: baselineValue,
         detail: "Original Live View snapshot",
       },
       {
-        label: "Replay (this attempt)",
+        label: "Replay tokens",
         value: replayValue,
         detail: replayDetail,
       },
       {
-        label: "Replay credits",
-        value: formatReplayCredits(used_credits ?? undefined),
-        detail: "Internal hosted cost tracking for platform models",
-      },
-      {
-        label: "Eval Coverage",
-        value: evalTotalCount > 0 ? `${evalPassCount}/${evalTotalCount}` : "—",
-        detail:
-          failedSignals.length > 0
-            ? `${failedSignals.length} failing signal${failedSignals.length === 1 ? "" : "s"}`
-            : "No failing eval signals",
+        label: "Trace",
+        value: attempt?.trace_id ? String(attempt.trace_id) : "Not captured",
+        detail: "Replay trace identifier",
       },
     ];
     return items;
@@ -981,50 +884,41 @@ export function AttemptDetailOverlay({
     baselineModel,
     candidateModel,
     candidateProvider,
-    replayLatencyLabel,
     attempt,
-    evalTotalCount,
-    evalPassCount,
-    failedSignals.length,
     baselineCapture,
     replayUsage,
   ]);
-  const riskItems = useMemo(() => {
+  const attentionItems = useMemo(() => {
     const items: Array<{
       key: string;
       label: string;
       detail: string;
       tone: "neutral" | "warning" | "danger";
     }> = [];
-    items.push({
-      key: "policy",
-      label: "Policy",
-      detail:
-        policyRows.length > 0
-          ? `${policyRows.length} violation${policyRows.length === 1 ? "" : "s"} require review.`
-          : "No policy violations were attached to this attempt.",
-      tone: policyRows.length > 0 ? "danger" : "neutral",
-    });
-    items.push({
-      key: "tool-divergence",
-      label: "Tool Divergence",
-      detail:
-        sequenceEdits > 0 || toolDivergencePct > 0
-          ? `${sequenceEdits} sequence edit${sequenceEdits === 1 ? "" : "s"} and ${toolDivergenceLabel} tool divergence.`
-          : "Tool behavior stayed aligned with the baseline.",
-      tone: sequenceEdits > 0 || toolDivergencePct > 0 ? "warning" : "neutral",
-    });
-    items.push({
-      key: "evidence",
-      label: "Evidence Quality",
-      detail: gateConfidence.detail,
-      tone:
-        gateConfidence.label === "High"
-          ? "neutral"
-          : gateConfidence.label === "Medium"
-            ? "warning"
-            : "danger",
-    });
+    if (policyRows.length > 0) {
+      items.push({
+        key: "policy",
+        label: "Policy",
+        detail: `${policyRows.length} violation${policyRows.length === 1 ? "" : "s"} require review.`,
+        tone: "danger",
+      });
+    }
+    if (sequenceEdits > 0 || toolDivergencePct > 0) {
+      items.push({
+        key: "tool-divergence",
+        label: "Behavior difference",
+        detail: `${sequenceEdits} sequence edit${sequenceEdits === 1 ? "" : "s"} and ${toolDivergenceLabel} tool divergence.`,
+        tone: "warning",
+      });
+    }
+    if (gateConfidence.label !== "High") {
+      items.push({
+        key: "evidence",
+        label: "Evidence quality",
+        detail: gateConfidence.detail,
+        tone: gateConfidence.label === "Medium" ? "warning" : "danger",
+      });
+    }
     if (providerErrorMessage) {
       items.push({
         key: "provider-warning",
@@ -1054,7 +948,7 @@ export function AttemptDetailOverlay({
   const detailTabs = [
     { id: "summary" as const, label: "Summary" },
     { id: "comparison" as const, label: "Comparison" },
-    { id: "debug" as const, label: "Debug Trace" },
+    { id: "debug" as const, label: "Diagnostics" },
   ];
   const decisionLabel = pass ? "Gate passed" : "Gate failed";
   const attemptLabel = `Attempt ${navIndex + 1}${attemptCount > 1 ? ` of ${attemptCount}` : ""}`;
@@ -1312,16 +1206,16 @@ export function AttemptDetailOverlay({
                         <p className="mt-2 text-xs leading-relaxed text-slate-300">{gateConfidence.detail}</p>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                       <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
-                        <div className="text-[11px] font-medium text-slate-400">Eval checks</div>
+                        <div className="text-[11px] font-medium text-slate-400">Configured eval checks</div>
                         <div className="mt-2 text-lg font-semibold text-white tabular-nums">
                           {evalTotalCount > 0 ? `${evalPassCount}/${evalTotalCount}` : "—"}
                         </div>
                         <div className="mt-1 text-xs text-slate-400">
                           {failedSignals.length > 0
-                            ? `${failedSignals.length} failing signal${failedSignals.length === 1 ? "" : "s"}`
-                            : "No failing eval signals"}
+                            ? `${failedSignals.length} configured check${failedSignals.length === 1 ? "" : "s"} failed`
+                            : "Only checks configured for this run are counted"}
                         </div>
                       </div>
                       <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
@@ -1334,7 +1228,7 @@ export function AttemptDetailOverlay({
                         </div>
                       </div>
                       <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
-                        <div className="text-[11px] font-medium text-slate-400">Replay</div>
+                        <div className="text-[11px] font-medium text-slate-400">Replay latency</div>
                         <div className="mt-2 text-lg font-semibold text-white tabular-nums">
                           {replayLatencyLabel}
                         </div>
@@ -1342,37 +1236,6 @@ export function AttemptDetailOverlay({
                           {baselineModel} → {candidateModel}
                         </div>
                       </div>
-                      <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
-                        <div className="text-[11px] font-medium text-slate-400">Tool divergence</div>
-                        <div className="mt-2 text-lg font-semibold text-white tabular-nums">
-                          {sequenceEdits} edit{sequenceEdits === 1 ? "" : "s"}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-400">{toolDivergenceLabel} divergence</div>
-                      </div>
-                    </div>
-                    <div className="grid gap-3 xl:grid-cols-3">
-                      {whyDecisionItems.map(item => (
-                        <div
-                          key={item.key}
-                          className={clsx("rounded-2xl border p-4", whyDecisionToneClass(item.severity))}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold text-slate-100">{item.label}</div>
-                              <div className="mt-1 text-[11px] text-slate-500">{item.source}</div>
-                            </div>
-                            <span
-                              className={clsx(
-                                "inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                                whyDecisionBadgeClass(item.severity)
-                              )}
-                            >
-                              {item.severity}
-                            </span>
-                          </div>
-                          <p className="mt-3 text-sm leading-6 text-slate-300">{item.detail}</p>
-                        </div>
-                      ))}
                     </div>
                     <div className="rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
                       <div className="flex flex-wrap items-center gap-2">
@@ -1424,9 +1287,16 @@ export function AttemptDetailOverlay({
                             Output Quality (Eval)
                           </h3>
                           <div className="text-[11px] text-slate-500">
-                            User-facing checks with clear pass/fail evidence.
+                            Only checks configured for this run are included below.
                           </div>
                         </div>
+                        {runtimeSignalRows.length > 0 ? (
+                          <div className="mb-4 rounded-2xl border border-white/5 bg-black/20 px-4 py-3 text-[11px] leading-relaxed text-slate-400">
+                            {runtimeSignalRows.length} runtime diagnostic
+                            {runtimeSignalRows.length === 1 ? "" : "s"} were captured separately and excluded from
+                            eval coverage.
+                          </div>
+                        ) : null}
                         <div className="grid gap-3 xl:grid-cols-2">
                           {!signalsChecksRaw ? (
                             <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-sm text-slate-500">
@@ -1436,16 +1306,16 @@ export function AttemptDetailOverlay({
                                 Decision derived from {decisionSourceLabels.join(" / ")}.
                               </p>
                             </div>
-                          ) : signalsRows.length === 0 ? (
+                          ) : canonicalSignalRows.length === 0 ? (
                             <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-sm text-slate-500">
-                              <p>No signal rows.</p>
+                              <p>No configured eval checks were returned for this attempt.</p>
                               <p className="mt-2 text-xs text-slate-400">Eval coverage: 0</p>
                               <p className="mt-1 text-xs text-slate-400">
                                 Decision derived from {decisionSourceLabels.join(" / ")}.
                               </p>
                             </div>
                           ) : (
-                            signalsRows.map(row => {
+                            canonicalSignalRows.map(row => {
                               const barNode =
                                 signalsDetailsRaw
                                   ? formatSignalValue(row.id, (signalsDetailsRaw as any)?.[row.id], row.pass)
@@ -1545,13 +1415,14 @@ export function AttemptDetailOverlay({
                         ) : null}
                       </div>
 
+                      {attentionItems.length > 0 || policyRows.length > 0 ? (
                       <section className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
                         <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
                           <div className="h-1.5 w-1.5 rounded-full bg-amber-400/80" />
-                          Risks
+                          Attention needed
                         </h3>
                         <div className="space-y-3">
-                          {riskItems.map(item => (
+                          {attentionItems.map(item => (
                             <div
                               key={item.key}
                               className={clsx(
@@ -1612,6 +1483,7 @@ export function AttemptDetailOverlay({
                           ) : null}
                         </div>
                       </section>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -1627,8 +1499,8 @@ export function AttemptDetailOverlay({
                           Review what changed before checking the raw trace
                         </h3>
                         <p className="mt-2 text-sm leading-6 text-slate-300">
-                          Start with the summary cards below, then inspect the side-by-side response diff. Use
-                          Debug Trace only when you need provider payload details or capture diagnostics.
+                          Start with the plain-language summaries, then inspect the side-by-side response diff. Use
+                          Diagnostics only when you need provider payload details or capture diagnostics.
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
@@ -1668,28 +1540,6 @@ export function AttemptDetailOverlay({
                         ))}
                       </div>
                     </section>
-                  </div>
-                  <div className="grid gap-3 xl:grid-cols-4">
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
-                      <div className="text-[11px] font-medium text-slate-400">Baseline</div>
-                      <div className="mt-1.5 text-sm font-medium text-slate-100 break-words">{baselineModel}</div>
-                      <div className="mt-1 text-xs text-slate-400 tabular-nums">{baselineLineCount} lines</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
-                      <div className="text-[11px] font-medium text-slate-400">Candidate</div>
-                      <div className="mt-1.5 text-sm font-medium text-slate-100 break-words">{candidateModel}</div>
-                      <div className="mt-1 text-xs text-slate-400 tabular-nums">{candidateLineCount} lines</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
-                      <div className="text-[11px] font-medium text-slate-400">Added or changed</div>
-                      <div className="mt-1.5 text-sm font-medium text-emerald-300 tabular-nums">+{diffAddedCount}</div>
-                      <div className="mt-1 text-xs text-slate-400">Highlighted on the candidate side.</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
-                      <div className="text-[11px] font-medium text-slate-400">Removed</div>
-                      <div className="mt-1.5 text-sm font-medium text-rose-300 tabular-nums">-{diffRemovedCount}</div>
-                      <div className="mt-1 text-xs text-slate-400">Track lines missing from the candidate output.</div>
-                    </div>
                   </div>
                   <div className="flex items-center justify-between px-1">
                     <p className="text-sm font-semibold text-slate-300">
@@ -1791,7 +1641,7 @@ export function AttemptDetailOverlay({
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="max-w-3xl">
                         <div className="text-[11px] font-medium text-slate-400">Support and diagnostics</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">Debug trace payload</h3>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Diagnostics payload</h3>
                         <p className="mt-2 text-sm leading-6 text-slate-300">
                           Use this only when Summary and Comparison are not enough. This view exposes the raw replay
                           payload, provider metadata, extraction details, and tool evidence so you can diagnose capture

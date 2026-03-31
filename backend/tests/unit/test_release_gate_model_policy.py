@@ -79,6 +79,58 @@ class TestReleaseGateProviderModelMismatch:
 
 
 @pytest.mark.unit
+class TestReleaseGateSignalsPayload:
+    def test_configured_eval_check_ids_only_include_enabled_canonical_checks(self):
+        from app.api.v1.endpoints import release_gate as rg
+
+        ids = rg._configured_eval_check_ids(
+            {
+                "empty": {"enabled": True},
+                "latency": {"enabled": True},
+                "status_code": {"enabled": False},
+                "refusal": {"enabled": False},
+                "json": {"enabled": False},
+                "length": {"enabled": False},
+                "repetition": {"enabled": False},
+                "required": {"enabled": False},
+                "format": {"enabled": False},
+                "leakage": {"enabled": False},
+                "tool": {"enabled": True},
+            }
+        )
+
+        assert ids == ["empty", "latency", "tool"]
+
+    def test_build_release_gate_signals_payload_splits_runtime_diagnostics(self):
+        from app.api.v1.endpoints import release_gate as rg
+
+        payload = rg._build_release_gate_signals_payload(
+            signals_checks={
+                "empty": "pass",
+                "required": "fail",
+                "tool_grounding": "fail",
+                "required_keywords": "fail",
+            },
+            signals_details={
+                "empty": {"status": "pass"},
+                "required": {"status": "fail"},
+                "tool_grounding": {"status": "fail", "reason": "missing evidence"},
+            },
+            eval_config_version="cfg-1",
+            config_check_ids=["empty", "required"],
+        )
+
+        assert payload["checks"] == {"empty": "pass", "required": "fail"}
+        assert payload["failed"] == ["required"]
+        assert payload["config_check_ids"] == ["empty", "required"]
+        assert payload["runtime_checks"] == {
+            "tool_grounding": "fail",
+            "required_keywords": "fail",
+        }
+        assert payload["runtime_details"]["tool_grounding"]["reason"] == "missing evidence"
+
+
+@pytest.mark.unit
 class TestReleaseGateOverrideSanitizer:
     def test_sanitize_replay_overrides_removes_disallowed_content_keys(self):
         from app.api.v1.endpoints import release_gate as rg
