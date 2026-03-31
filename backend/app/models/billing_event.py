@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -9,8 +9,18 @@ class BillingEvent(Base):
     """Append-only billing event log for webhook and reconciliation visibility."""
 
     __tablename__ = "billing_events"
+    __table_args__ = (
+        Index("ux_billing_events_idempotency_key", "idempotency_key", unique=True),
+        Index(
+            "ux_billing_events_provider_event",
+            "provider",
+            "provider_environment",
+            "provider_event_id",
+            unique=True,
+        ),
+    )
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     provider = Column(String(32), nullable=False, default="paddle")
     provider_environment = Column(String(16), nullable=False, default="unknown")
     provider_event_id = Column(String(255), nullable=False, index=True)
@@ -31,7 +41,7 @@ class BillingEvent(Base):
     )
     provider_customer_id = Column(String(255), nullable=True, index=True)
     provider_subscription_id = Column(String(255), nullable=True, index=True)
-    idempotency_key = Column(String(255), nullable=False, unique=True)
+    idempotency_key = Column(String(255), nullable=False)
     replay_count = Column(Integer, nullable=False, default=0)
 
     user = relationship("User")

@@ -10,7 +10,7 @@ class EntitlementSnapshot(Base):
 
     __tablename__ = "entitlement_snapshots"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True, index=True)
     effective_plan_id = Column(String(64), nullable=False, index=True)
