@@ -1157,6 +1157,31 @@ def update_agent_settings(
             status_code=status.HTTP_410_GONE,
             detail="Agent was permanently deleted and can no longer be modified.",
         )
+    def _merge_agent_diagnostic_config(
+        current_config: Any, incoming_config: Any
+    ) -> dict:
+        current_obj = current_config if isinstance(current_config, dict) else {}
+        incoming_obj = incoming_config if isinstance(incoming_config, dict) else {}
+        merged = _deep_merge_dict(current_obj, incoming_obj)
+
+        current_eval = current_obj.get("eval") if isinstance(current_obj.get("eval"), dict) else {}
+        incoming_eval = incoming_obj.get("eval")
+
+        # Clinical Log persists only the eval window size; preserve the rest of
+        # the already-saved eval config for that narrow patch.
+        if isinstance(incoming_eval, dict) and set(incoming_eval.keys()) == {"window"}:
+            merged = dict(merged) if isinstance(merged, dict) else {}
+            merged["eval"] = _deep_merge_dict(current_eval, incoming_eval)
+            return merged
+
+        # Treat full eval saves as authoritative snapshots, not partial patches,
+        # so disabled keys from older saves do not survive via deep-merge.
+        if "eval" in incoming_obj:
+            merged = dict(merged) if isinstance(merged, dict) else {}
+            merged["eval"] = incoming_eval
+
+        return merged
+
     if not setting:
         deleted_at = datetime.now(timezone.utc) if is_deleted else None
         setting = AgentDisplaySetting(
@@ -1179,9 +1204,8 @@ def update_agent_settings(
             setting.is_deleted = is_deleted
             setting.deleted_at = datetime.now(timezone.utc) if is_deleted else None
         if diagnostic_config is not None:
-            # Deep-merge with existing config to avoid partial updates wiping nested objects.
             current_config = setting.diagnostic_config or {}
-            setting.diagnostic_config = _deep_merge_dict(current_config, diagnostic_config)
+            setting.diagnostic_config = _merge_agent_diagnostic_config(current_config, diagnostic_config)
 
     # Record eval config in history for both create + update flows.
     # This enables config-at-time evaluation in Clinical Log.

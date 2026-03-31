@@ -1274,10 +1274,10 @@ export function AttemptDetailOverlay({
                   {/* Main Content Grid */}
                   <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
                     <div className="space-y-5">
-                      <section className="rounded-3xl bg-white/[0.02] p-5 ring-1 ring-white/6">
+                      <section className="rounded-3xl bg-white/[0.02] p-5 ring-1 ring-fuchsia-500/20">
                         <div className="mb-4 flex items-center justify-between gap-2">
-                          <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
-                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/80" />
+                          <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-fuchsia-200/90">
+                            <div className="h-1.5 w-1.5 rounded-full bg-fuchsia-400/90" />
                             Output Quality (Eval)
                           </h3>
                           <div className="text-[11px] text-slate-500">
@@ -1285,7 +1285,7 @@ export function AttemptDetailOverlay({
                           </div>
                         </div>
                         {runtimeSignalRows.length > 0 ? (
-                          <div className="mb-4 rounded-2xl bg-black/20 px-4 py-3 text-[11px] leading-relaxed text-slate-400 ring-1 ring-white/5">
+                          <div className="mb-4 rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] px-4 py-3 text-[11px] leading-relaxed text-fuchsia-100/85">
                             {runtimeSignalRows.length} runtime diagnostic
                             {runtimeSignalRows.length === 1 ? "" : "s"} were captured separately and excluded from
                             eval coverage. Open Diagnostics if you need the raw detail.
@@ -1293,7 +1293,7 @@ export function AttemptDetailOverlay({
                         ) : null}
                         <div className="grid gap-3 xl:grid-cols-2">
                           {!signalsChecksRaw ? (
-                            <div className="rounded-2xl bg-black/20 px-4 py-5 text-sm text-slate-500 ring-1 ring-white/5">
+                            <div className="rounded-2xl bg-black/20 px-4 py-5 text-sm text-slate-500 ring-1 ring-fuchsia-500/15">
                               <p>No eval signals returned.</p>
                               <p className="mt-2 text-xs text-slate-400">Eval coverage: 0</p>
                               <p className="mt-1 text-xs text-slate-400">
@@ -1301,7 +1301,7 @@ export function AttemptDetailOverlay({
                               </p>
                             </div>
                           ) : canonicalSignalRows.length === 0 ? (
-                            <div className="rounded-2xl bg-black/20 px-4 py-5 text-sm text-slate-500 ring-1 ring-white/5">
+                            <div className="rounded-2xl bg-black/20 px-4 py-5 text-sm text-slate-500 ring-1 ring-fuchsia-500/15">
                               <p>No configured eval checks were returned for this attempt.</p>
                               <p className="mt-2 text-xs text-slate-400">Eval coverage: 0</p>
                               <p className="mt-1 text-xs text-slate-400">
@@ -1321,7 +1321,7 @@ export function AttemptDetailOverlay({
                               return (
                                 <div
                                   key={row.id}
-                                  className="flex flex-col justify-between rounded-2xl bg-black/20 p-4 ring-1 ring-white/5"
+                                  className="flex flex-col justify-between rounded-2xl bg-black/20 p-4 ring-1 ring-fuchsia-500/15"
                                 >
                                   <div className="flex items-center justify-between gap-4">
                                     <span className="text-sm font-medium text-slate-200">{row.label}</span>
