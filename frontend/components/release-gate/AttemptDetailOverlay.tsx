@@ -18,6 +18,7 @@ import {
 } from "@/lib/snapshotMetrics";
 import {
   getConfiguredEvalCheckIds,
+  getConfiguredPolicyCheckIds,
   isCanonicalEvalCheckId,
   isRuntimeOnlyEvalCheckId,
 } from "@/app/organizations/[orgId]/projects/[projectId]/release-gate/releaseGateEvalChecks";
@@ -130,8 +131,14 @@ export function AttemptDetailOverlay({
       ? (attempt.signals as Record<string, unknown>).config_check_ids
       : undefined
   );
+  const configuredPolicyCheckIds = getConfiguredPolicyCheckIds(
+    attempt?.signals && typeof attempt.signals === "object"
+      ? (attempt.signals as Record<string, unknown>).config_check_ids
+      : undefined
+  );
   const configuredEvalCheckIdSet =
     configuredEvalCheckIds.length > 0 ? new Set(configuredEvalCheckIds) : null;
+  const toolPolicyEnabled = configuredPolicyCheckIds.includes("tool");
   const signalsRows = signalsChecksRaw
     ? Object.entries(signalsChecksRaw).map(([id, status]) => {
         const normalizedId = normalizeViolationRuleId(id);
@@ -579,6 +586,15 @@ export function AttemptDetailOverlay({
     ? (attempt.failure_reasons as string[])
     : [];
   const failedSignals = canonicalSignalRows.filter(r => r.status === "fail");
+  const behaviorPolicyStatus = policyRows.length > 0 ? "fail" : toolPolicyEnabled ? "pass" : "off";
+  const behaviorPolicyLabel =
+    behaviorPolicyStatus === "fail" ? "Failed" : behaviorPolicyStatus === "pass" ? "Passed" : "Off";
+  const behaviorPolicyDetail =
+    behaviorPolicyStatus === "fail"
+      ? `${policyRows.length} violation${policyRows.length === 1 ? "" : "s"} require review.`
+      : behaviorPolicyStatus === "pass"
+        ? "Tool Use Policy passed and is tracked separately from eval checks."
+        : "Tool Use Policy was not enabled for this run.";
   const diffTabEnabled = Boolean(baselineResponse && candidateResponse);
   const replayLatencyLabel = formatDurationMs((attempt?.replay ?? {}).avg_latency_ms);
   const sequenceEdits = Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0);
@@ -1212,12 +1228,12 @@ export function AttemptDetailOverlay({
                         </div>
                       </div>
                       <div className="rounded-2xl bg-black/20 px-4 py-3 ring-1 ring-white/6">
-                        <div className="text-[11px] font-medium text-slate-400">Policy</div>
+                        <div className="text-[11px] font-medium text-slate-400">Behavior policy</div>
                         <div className="mt-2 text-lg font-semibold text-white tabular-nums">
-                          {policyRows.length === 0 ? "Clean" : `${policyRows.length} found`}
+                          {behaviorPolicyLabel}
                         </div>
                         <div className="mt-1 text-xs text-slate-400">
-                          {policyRows.length === 0 ? "No blocking issues" : "Review policy details"}
+                          {behaviorPolicyDetail}
                         </div>
                       </div>
                       <div className="rounded-2xl bg-black/20 px-4 py-3 ring-1 ring-white/6">
@@ -1451,7 +1467,7 @@ export function AttemptDetailOverlay({
                           {policyRows.length > 0 ? (
                             <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.04] p-4">
                               <div className="mb-3 flex items-center justify-between gap-4">
-                                <span className="text-sm font-medium text-rose-200">Policy Details</span>
+                                <span className="text-sm font-medium text-rose-200">Behavior Policy Details</span>
                                 <span className="text-xs font-bold text-rose-400">{policyRows.length} found</span>
                               </div>
                               <div className="space-y-2">

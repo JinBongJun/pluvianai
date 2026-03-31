@@ -612,6 +612,14 @@ export function AgentEvaluationPanel({
         )}
       >
         <div className="max-w-4xl mx-auto rounded-xl border border-white/10 bg-black/20 overflow-hidden shadow-2xl">
+          <div className="px-6 py-3 border-b border-white/5 bg-white/[0.015]">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Eval checks</p>
+              <p className="text-[11px] text-slate-500">
+                Output-quality checks used in Release Gate eval coverage and result totals.
+              </p>
+            </div>
+          </div>
           {/* 1. Empty Answers */}
           <SignalCard
             id="empty"
@@ -769,129 +777,14 @@ export function AgentEvaluationPanel({
             )}
           />
 
-          {/* 6. Tool use policy (behavior rules) */}
-          <div className="border-b border-white/5 last:border-0 overflow-hidden transition-opacity duration-200">
-            <div
-              className="px-6 py-4 flex items-center justify-between bg-white/[0.01] cursor-pointer hover:bg-white/[0.02] transition-colors"
-              onClick={() => setShowToolPolicyDetails(prev => !prev)}
-            >
-              <div className="flex items-center gap-4 flex-1 min-w-0">
-                <div
-                  className={clsx(
-                    "p-2 rounded-lg bg-black/40 border border-white/5 shadow-sm shrink-0",
-                    safeDraft.tool_use_policy?.enabled !== false
-                      ? "text-emerald-400"
-                      : "text-slate-500"
-                  )}
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <span
-                    className={clsx(
-                      "text-sm font-medium tracking-wide",
-                      safeDraft.tool_use_policy?.enabled !== false
-                        ? "text-slate-200"
-                        : "text-slate-400"
-                    )}
-                  >
-                    Tool use policy
-                  </span>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-[11px] text-slate-500 font-mono">
-                      {safeDraft.tool_use_policy?.enabled !== false
-                        ? `Project: ${projectRules.length} · Agent: ${agentRules.length}`
-                        : "Disabled"}
-                    </p>
-                    {safeDraft.tool_use_policy?.enabled !== false && (
-                      <span className="text-[10px] text-slate-500 font-medium px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors">
-                        {showToolPolicyDetails ? "Hide details" : "Show details"}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div
-                role="button"
-                onClick={e => {
-                  e.stopPropagation();
-                  updateConfig("tool_use_policy", {
-                    ...safeDraft.tool_use_policy,
-                    enabled: safeDraft.tool_use_policy?.enabled === false,
-                  });
-                }}
-                className={clsx(
-                  "w-9 h-5 rounded-full transition-colors relative flex items-center shrink-0 ml-4 cursor-pointer",
-                  safeDraft.tool_use_policy?.enabled !== false ? "bg-emerald-500" : "bg-white/10"
-                )}
-              >
-                <div
-                  className={clsx(
-                    "w-4 h-4 rounded-full bg-white shadow-sm absolute transition-transform",
-                    safeDraft.tool_use_policy?.enabled !== false
-                      ? "translate-x-4"
-                      : "translate-x-0.5"
-                  )}
-                />
-              </div>
-            </div>
-            {showToolPolicyDetails && (
-              <div
-                className={clsx(
-                  "transition-opacity duration-200",
-                  safeDraft.tool_use_policy?.enabled === false && "opacity-60"
-                )}
-              >
-                <div
-                  className={clsx(
-                    "px-6 pb-6 pt-0 grid grid-cols-1 lg:grid-cols-2 gap-4",
-                    safeDraft.tool_use_policy?.enabled === false && "pointer-events-none"
-                  )}
-                >
-                  <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
-                    <div className="flex items-center justify-between gap-2 p-3 border-b border-white/5">
-                      <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-                        Project defaults
-                      </span>
-                      <button
-                        onClick={() => setPolicyModalScope("project")}
-                        className="px-2 py-1 rounded-lg border border-white/10 bg-white/[0.03] text-[11px] font-black uppercase text-slate-300 hover:bg-white/10 inline-flex items-center gap-1"
-                      >
-                        <Plus className="w-3 h-3" /> New
-                      </button>
-                    </div>
-                    <PolicyRuleList rules={projectRules} emptyMessage="No project rules yet." />
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
-                    <div className="flex items-center justify-between gap-2 p-3 border-b border-white/5">
-                      <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-                        Agent overrides
-                      </span>
-                      <button
-                        onClick={() => setPolicyModalScope("agent")}
-                        className="px-2 py-1 rounded-lg border border-white/10 bg-white/[0.03] text-[11px] font-black uppercase text-slate-300 hover:bg-white/10 inline-flex items-center gap-1"
-                      >
-                        <Plus className="w-3 h-3" /> New
-                      </button>
-                    </div>
-                    <PolicyRuleList rules={agentRules} emptyMessage="No agent overrides yet." />
-                  </div>
-                </div>
-                {policyActionStatus && (
-                  <div className="px-6 pb-4 text-xs text-emerald-400">{policyActionStatus}</div>
-                )}
-              </div>
-            )}
-          </div>
-
           <div className="px-6 py-3 border-y border-white/5 bg-white/[0.015]">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">
-                  Advanced checks
+                  More eval checks
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  Optional checks for stricter monitoring. Keep collapsed for simpler setup.
+                  Optional eval checks for stricter monitoring. Keep collapsed for simpler setup.
                 </p>
               </div>
               <button
@@ -1046,6 +939,130 @@ export function AgentEvaluationPanel({
               />
             </>
           )}
+
+          <div className="px-6 py-3 border-y border-white/5 bg-white/[0.015]">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Policy checks</p>
+              <p className="text-[11px] text-slate-500">
+                Tracked separately from eval coverage in Release Gate. Tool Use Policy is evaluated as behavior
+                policy, not an eval signal.
+              </p>
+            </div>
+          </div>
+
+          <div className="border-b border-white/5 last:border-0 overflow-hidden transition-opacity duration-200">
+            <div
+              className="px-6 py-4 flex items-center justify-between bg-white/[0.01] cursor-pointer hover:bg-white/[0.02] transition-colors"
+              onClick={() => setShowToolPolicyDetails(prev => !prev)}
+            >
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div
+                  className={clsx(
+                    "p-2 rounded-lg bg-black/40 border border-white/5 shadow-sm shrink-0",
+                    safeDraft.tool_use_policy?.enabled !== false
+                      ? "text-emerald-400"
+                      : "text-slate-500"
+                  )}
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span
+                    className={clsx(
+                      "text-sm font-medium tracking-wide",
+                      safeDraft.tool_use_policy?.enabled !== false
+                        ? "text-slate-200"
+                        : "text-slate-400"
+                    )}
+                  >
+                    Tool use policy
+                  </span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-[11px] text-slate-500 font-mono">
+                      {safeDraft.tool_use_policy?.enabled !== false
+                        ? `Project: ${projectRules.length} · Agent: ${agentRules.length}`
+                        : "Disabled"}
+                    </p>
+                    {safeDraft.tool_use_policy?.enabled !== false && (
+                      <span className="text-[10px] text-slate-500 font-medium px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors">
+                        {showToolPolicyDetails ? "Hide details" : "Show details"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div
+                role="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  updateConfig("tool_use_policy", {
+                    ...safeDraft.tool_use_policy,
+                    enabled: safeDraft.tool_use_policy?.enabled === false,
+                  });
+                }}
+                className={clsx(
+                  "w-9 h-5 rounded-full transition-colors relative flex items-center shrink-0 ml-4 cursor-pointer",
+                  safeDraft.tool_use_policy?.enabled !== false ? "bg-emerald-500" : "bg-white/10"
+                )}
+              >
+                <div
+                  className={clsx(
+                    "w-4 h-4 rounded-full bg-white shadow-sm absolute transition-transform",
+                    safeDraft.tool_use_policy?.enabled !== false
+                      ? "translate-x-4"
+                      : "translate-x-0.5"
+                  )}
+                />
+              </div>
+            </div>
+            {showToolPolicyDetails && (
+              <div
+                className={clsx(
+                  "transition-opacity duration-200",
+                  safeDraft.tool_use_policy?.enabled === false && "opacity-60"
+                )}
+              >
+                <div
+                  className={clsx(
+                    "px-6 pb-6 pt-0 grid grid-cols-1 lg:grid-cols-2 gap-4",
+                    safeDraft.tool_use_policy?.enabled === false && "pointer-events-none"
+                  )}
+                >
+                  <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+                    <div className="flex items-center justify-between gap-2 p-3 border-b border-white/5">
+                      <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                        Project defaults
+                      </span>
+                      <button
+                        onClick={() => setPolicyModalScope("project")}
+                        className="px-2 py-1 rounded-lg border border-white/10 bg-white/[0.03] text-[11px] font-black uppercase text-slate-300 hover:bg-white/10 inline-flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" /> New
+                      </button>
+                    </div>
+                    <PolicyRuleList rules={projectRules} emptyMessage="No project rules yet." />
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+                    <div className="flex items-center justify-between gap-2 p-3 border-b border-white/5">
+                      <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                        Agent overrides
+                      </span>
+                      <button
+                        onClick={() => setPolicyModalScope("agent")}
+                        className="px-2 py-1 rounded-lg border border-white/10 bg-white/[0.03] text-[11px] font-black uppercase text-slate-300 hover:bg-white/10 inline-flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" /> New
+                      </button>
+                    </div>
+                    <PolicyRuleList rules={agentRules} emptyMessage="No agent overrides yet." />
+                  </div>
+                </div>
+                {policyActionStatus && (
+                  <div className="px-6 pb-4 text-xs text-emerald-400">{policyActionStatus}</div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

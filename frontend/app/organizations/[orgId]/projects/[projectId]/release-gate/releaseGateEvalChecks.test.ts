@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildRunEvalElementsFromAgentEval,
   getConfiguredEvalCheckIds,
+  getConfiguredPolicyCheckIds,
   isCanonicalEvalCheckId,
+  isPolicyCheckId,
   isRuntimeOnlyEvalCheckId,
 } from "./releaseGateEvalChecks";
 
@@ -21,7 +23,7 @@ describe("releaseGateEvalChecks", () => {
         required: { enabled: false },
         format: { enabled: false },
         leakage: { enabled: false },
-        tool: { enabled: false },
+        tool: { enabled: true },
       },
     });
 
@@ -30,6 +32,8 @@ describe("releaseGateEvalChecks", () => {
 
   it("marks runtime-only checks outside canonical eval coverage", () => {
     expect(isCanonicalEvalCheckId("empty")).toBe(true);
+    expect(isCanonicalEvalCheckId("tool")).toBe(false);
+    expect(isPolicyCheckId("tool")).toBe(true);
     expect(isCanonicalEvalCheckId("tool_grounding")).toBe(false);
     expect(isRuntimeOnlyEvalCheckId("tool_grounding")).toBe(true);
     expect(isRuntimeOnlyEvalCheckId("required_keywords")).toBe(true);
@@ -37,9 +41,15 @@ describe("releaseGateEvalChecks", () => {
   });
 
   it("filters configured eval ids down to canonical checks", () => {
-    expect(getConfiguredEvalCheckIds(["empty", "tool_grounding", "required", "", null])).toEqual([
+    expect(getConfiguredEvalCheckIds(["empty", "tool", "tool_grounding", "required", "", null])).toEqual([
       "empty",
       "required",
+    ]);
+  });
+
+  it("filters configured policy ids separately from eval ids", () => {
+    expect(getConfiguredPolicyCheckIds(["empty", "tool", "tool_grounding", "", null])).toEqual([
+      "tool",
     ]);
   });
 });
