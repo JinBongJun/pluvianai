@@ -552,7 +552,7 @@ export default function LoginPage() {
 
                 {isLogin && registeredMessageShown && registeredEmail ? (
                   <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-xs text-slate-300 space-y-3">
-                    <p>Didn't get the verification email?</p>
+                    <p>Didn&apos;t get the verification email?</p>
                     {verificationNotice ? <p className="text-emerald-400">{verificationNotice}</p> : null}
                     <button
                       type="button"
