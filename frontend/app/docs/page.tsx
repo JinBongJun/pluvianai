@@ -218,7 +218,7 @@ export default function DocsPage() {
                   },
                   {
                     title: "Latency Spikes",
-                    desc: "A single latency threshold (fail at or above this many ms), shown consistently in Evaluation and snapshot details.",
+                    desc: "In Evaluation settings, a single latency threshold (fail at or above this many ms). Snapshot Details may show extra tiers for display.",
                     value: "fail_ms",
                   },
                   {
@@ -1270,11 +1270,11 @@ Content-Type: application/json
                   </tr>
                   <tr className="border-b border-white/5">
                     <td className="px-4 py-3 font-medium text-slate-200">
-                      Platform replay credits exhausted (when using PluvianAI-hosted model)
+                      Release Gate usage exhausted
                     </td>
                     <td className="px-4 py-3">
-                      Use your own provider key (BYOK) for the agent so the run does not use platform
-                      credits, or upgrade your plan.
+                      Reduce the selected logs or repeat count, wait for the next billing cycle, or
+                      upgrade your plan.
                     </td>
                   </tr>
                   <tr className="border-b border-white/5">

@@ -1,21 +1,16 @@
 "use client";
 
-import { useContext } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 
-import { ReleaseGatePageContext } from "@/app/organizations/[orgId]/projects/[projectId]/release-gate/ReleaseGatePageContext";
 import { computeAccountUsageMetrics, formatUsageLimit } from "@/lib/accountUsage";
 import { useAccountUsage } from "@/hooks/useAccountUsage";
 
-/** Hosted replay credits next to the modal title — only when candidate uses Pluvian hosted models. */
+/** Compact Release Gate usage summary next to the modal title. */
 export function ReleaseGateConfigHostedReplayUsage() {
-  const ctx = useContext(ReleaseGatePageContext);
-  const modelSource = ctx?.modelSource;
-  const { data, isLoading } = useAccountUsage(modelSource === "hosted");
+  const { data, isLoading } = useAccountUsage(true);
   const metrics = computeAccountUsageMetrics(data);
 
-  if (modelSource !== "hosted") return null;
   if (isLoading && !metrics) {
     return <div className="h-7 w-36 animate-pulse rounded-lg bg-white/10" />;
   }
@@ -33,7 +28,7 @@ export function ReleaseGateConfigHostedReplayUsage() {
       )}
     >
       <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-        Hosted replays (this month)
+        Release Gate usage (this month)
       </div>
       <div className="mt-0.5 font-mono text-xs text-slate-200">
         {metrics.replayUsed}/{formatUsageLimit(metrics.replayLimit)}

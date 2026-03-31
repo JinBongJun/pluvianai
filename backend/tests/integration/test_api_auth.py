@@ -180,7 +180,7 @@ class TestAuthAPI:
         assert error["code"] == "refresh_token_invalid"
         assert error["message"] == "Your login session is no longer valid. Please sign in again."
 
-    async def test_get_my_usage_includes_platform_replay_credit_fields(
+    async def test_get_my_usage_includes_release_gate_attempt_fields(
         self, async_client, auth_headers, db, test_user, test_project
     ):
         db.add(Subscription(user_id=test_user.id, plan_type="free", status="active"))
@@ -193,6 +193,15 @@ class TestAuthAPI:
                 unit="credits",
             )
         )
+        db.add(
+            Usage(
+                user_id=test_user.id,
+                project_id=test_project.id,
+                metric_name="release_gate_attempts",
+                quantity=17,
+                unit="count",
+            )
+        )
         db.commit()
 
         response = await async_client.get("/api/v1/auth/me/usage", headers=auth_headers)
@@ -200,8 +209,10 @@ class TestAuthAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["plan_type"] == "free"
+        assert data["limits"]["release_gate_attempts_per_month"] == 60
         assert data["limits"]["platform_replay_credits_per_month"] == 60
         assert data["limits"]["guard_credits_per_month"] == 10000
+        assert data["usage_this_month"]["release_gate_attempts"] == 17
         assert data["usage_this_month"]["platform_replay_credits"] == 125
         assert data["usage_this_month"]["guard_credits"] == 125
         assert "organizations_used" in data["usage_this_month"]

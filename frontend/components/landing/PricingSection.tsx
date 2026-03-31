@@ -13,7 +13,7 @@ const tiers = [
       "1 organization",
       "2 active projects",
       "10,000 snapshots per month",
-      "60 hosted replay credits per month",
+      "60 replay attempts per month",
     ],
     icon: Zap,
     color: "text-slate-400",
@@ -21,12 +21,12 @@ const tiers = [
   {
     name: "Starter",
     priceLabel: "$49/month",
-    description: "For teams that need higher hosted replay budgets and multi-project scale.",
+    description: "For teams that need more replay volume and multi-project scale.",
     features: [
       "3 organizations",
       "8 active projects",
       "50,000 snapshots per month",
-      "600 hosted replay credits per month",
+      "600 replay attempts per month",
     ],
     icon: Shield,
     color: "text-emerald-400",
@@ -39,7 +39,7 @@ const tiers = [
       "10 organizations",
       "30 active projects",
       "200,000 snapshots per month",
-      "3,000 hosted replay credits per month",
+      "3,000 replay attempts per month",
     ],
     icon: Shield,
     color: "text-emerald-400",
@@ -80,7 +80,7 @@ export default function PricingSection({ isLoggedIn }: PricingSectionProps) {
             Transparent plan pricing and limits.
           </p>
           <p className="text-sm text-slate-500 leading-relaxed font-medium mt-4 max-w-2xl mx-auto">
-            BYOK runs do not consume hosted replay credits.
+            Release Gate usage is counted by replay attempt: selected logs x repeats.
           </p>
         </div>
 

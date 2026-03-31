@@ -24,11 +24,13 @@ type UsageResponse = {
   plan_type: string;
   limits?: {
     snapshots_per_month?: number;
+    release_gate_attempts_per_month?: number;
     guard_credits_per_month?: number;
     platform_replay_credits_per_month?: number;
   };
   usage_this_month?: {
     snapshots?: number;
+    release_gate_attempts?: number;
     guard_credits?: number;
     platform_replay_credits?: number;
   };
@@ -63,10 +65,16 @@ export default function AccountBillingPage() {
   const snapshotsUsed = Number(data?.usage_this_month?.snapshots ?? 0);
   const snapshotsLimit = Number(data?.limits?.snapshots_per_month ?? -1);
   const replayUsed = Number(
-    data?.usage_this_month?.platform_replay_credits ?? data?.usage_this_month?.guard_credits ?? 0
+    data?.usage_this_month?.release_gate_attempts ??
+      data?.usage_this_month?.platform_replay_credits ??
+      data?.usage_this_month?.guard_credits ??
+      0
   );
   const replayLimit = Number(
-    data?.limits?.platform_replay_credits_per_month ?? data?.limits?.guard_credits_per_month ?? -1
+    data?.limits?.release_gate_attempts_per_month ??
+      data?.limits?.platform_replay_credits_per_month ??
+      data?.limits?.guard_credits_per_month ??
+      -1
   );
   const snapshotsExhausted = snapshotsLimit > 0 && snapshotsUsed >= snapshotsLimit;
   const replayExhausted = replayLimit > 0 && replayUsed >= replayLimit;
@@ -156,7 +164,7 @@ export default function AccountBillingPage() {
         "1 organization",
         "2 active projects",
         "10,000 snapshots per month",
-        "60 hosted replay credits per month",
+        "60 replay attempts per month",
       ],
     },
     {
@@ -169,7 +177,7 @@ export default function AccountBillingPage() {
         "3 organizations",
         "8 active projects",
         "50,000 snapshots per month",
-        "600 hosted replay credits per month",
+        "600 replay attempts per month",
       ],
     },
     {
@@ -182,7 +190,7 @@ export default function AccountBillingPage() {
         "10 organizations",
         "30 active projects",
         "200,000 snapshots per month",
-        "3,000 hosted replay credits per month",
+        "3,000 replay attempts per month",
       ],
     },
     {
@@ -192,7 +200,7 @@ export default function AccountBillingPage() {
       period: "",
       desc: "For teams that need custom limits, procurement, and deployment controls.",
       features: [
-        "Custom hosted replay budget",
+        "Custom replay attempt budget",
         "Custom limits, SLAs, and retention",
         "Dedicated support",
         "Security review and deployment options",
@@ -212,7 +220,7 @@ export default function AccountBillingPage() {
     >
       <div className="pb-24 relative">
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 leading-relaxed">
-          BYOK runs do not consume hosted replay credits.
+          Release Gate usage is counted by replay attempt: selected logs x repeats.
           <br />
           Subscriptions auto-renew unless canceled before the next billing cycle.
         </p>
@@ -235,17 +243,17 @@ export default function AccountBillingPage() {
             </p>
             <p className="mt-1 text-xs text-white/90">
               {snapshotsExhausted || replayExhausted
-                ? snapshotsExhausted && replayExhausted
-                  ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and hosted replay credits (${replayUsed}/${replayLimit}) are exhausted.`
+                  ? snapshotsExhausted && replayExhausted
+                  ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and replay attempts (${replayUsed}/${replayLimit}) are exhausted.`
                   : snapshotsExhausted
                     ? `Snapshots are exhausted (${snapshotsUsed}/${snapshotsLimit}).`
-                    : `Hosted replay credits are exhausted (${replayUsed}/${replayLimit}).`
+                    : `Replay attempts are exhausted (${replayUsed}/${replayLimit}).`
                 : snapshotsNearLimit && replayNearLimit
-                  ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and hosted replay credits (${replayUsed}/${replayLimit}) are above 80%.`
+                  ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and replay attempts (${replayUsed}/${replayLimit}) are above 80%.`
                   : snapshotsNearLimit
                     ? `Snapshots are above 80% (${snapshotsUsed}/${snapshotsLimit}).`
-                    : `Hosted replay credits are above 80% (${replayUsed}/${replayLimit}).`}{" "}
-              BYOK is still available where supported.
+                    : `Replay attempts are above 80% (${replayUsed}/${replayLimit}).`}{" "}
+              Reduce selected logs or repeats, or upgrade your plan.
             </p>
           </div>
         )}

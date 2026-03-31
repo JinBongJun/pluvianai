@@ -21,7 +21,7 @@ class ProjectUsageItem(BaseModel):
     project_id: int | None
     project_name: str | None
     owner_email: str | None
-    total_credits: int
+    total_attempts: int
     runs: int
 
 
@@ -52,38 +52,43 @@ def _parse_month(month: str) -> tuple[datetime, datetime]:
 
 
 @router.get(
+    "/attempts/by-project",
+    response_model=ProjectUsageResponse,
+    summary="Get Release Gate replay attempt usage by project for a given month (admin only).",
+)
+@router.get(
     "/credits/by-project",
     response_model=ProjectUsageResponse,
-    summary="Get platform replay credit usage by project for a given month (admin only).",
+    include_in_schema=False,
 )
-def get_guard_credits_by_project(
+def get_release_gate_attempts_by_project(
     month: str = Query(..., description="Billing month in YYYY-MM format, e.g. 2026-03"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ProjectUsageResponse:
     """
-    Aggregate hosted replay credit usage per project for the given month.
+    Aggregate Release Gate replay attempts per project for the given month.
 
-    This is an internal/admin-only endpoint intended for monitoring platform
-    cost exposure during MVP / beta.
+    Each usage row represents one Release Gate execution event, while the summed
+    quantity reflects selected logs x repeat count for that execution.
     """
     require_admin(current_user)
 
     start, end = _parse_month(month)
 
-    # Aggregate hosted replay credit usage.
+    # Aggregate Release Gate replay attempts.
     query = (
         db.query(
             Usage.project_id,
             func.coalesce(Project.name, "").label("project_name"),
             func.coalesce(User.email, "").label("owner_email"),
-            func.coalesce(func.sum(Usage.quantity), 0).label("total_credits"),
+            func.coalesce(func.sum(Usage.quantity), 0).label("total_attempts"),
             func.count(Usage.id).label("runs"),
         )
         .outerjoin(Project, Usage.project_id == Project.id)
         .outerjoin(User, Project.owner_id == User.id)
         .filter(
-            Usage.metric_name == "guard_credits_replay",
+            Usage.metric_name == "release_gate_attempts",
             Usage.timestamp >= start,
             Usage.timestamp < end,
         )
@@ -98,7 +103,7 @@ def get_guard_credits_by_project(
                 project_id=row.project_id,
                 project_name=row.project_name or None,
                 owner_email=row.owner_email or None,
-                total_credits=int(row.total_credits or 0),
+                total_attempts=int(row.total_attempts or 0),
                 runs=int(row.runs or 0),
             )
         )
