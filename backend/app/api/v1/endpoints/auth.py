@@ -11,7 +11,7 @@ Security: bcrypt passwords, JWT (HS256), brute-force protection, login attempts 
 
 import time
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, Query
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -25,6 +25,7 @@ from app.core.usage_limits import (
 )
 from app.services.subscription_service import SubscriptionService
 from app.services.entitlement_service import EntitlementService
+from app.services.email_verification_service import EmailVerificationService
 from app.core.security import (
     verify_password,
     get_password_hash,
@@ -147,6 +148,7 @@ class UserResponse(BaseModel):
     email: str
     full_name: str | None
     is_active: bool
+    is_email_verified: bool
 
 class TokenResponse(BaseModel):
     """Token response schema"""
@@ -160,6 +162,16 @@ class TokenRefresh(BaseModel):
     """Token refresh schema"""
 
     refresh_token: str | None = None
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
+class VerifyEmailResponse(BaseModel):
+    verified: bool
+    purpose: str
+    email: str
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -238,13 +250,23 @@ async def register(
             )
         except Exception as e:
             logger.warning(f"Failed to log audit event: {e}")
+
+        try:
+            _token, email_result = await EmailVerificationService(db).send_signup_verification(user)
+            if email_result.get("status") != "sent":
+                logger.warning(
+                    "Signup verification email was not sent",
+                    extra={"user_id": user.id, "email_status": email_result.get("status")},
+                )
+        except Exception as e:
+            logger.warning(f"Failed to send signup verification email: {e}", exc_info=True)
         
         return user
     except EntityAlreadyExistsError as e:
         logger.warning(f"Registration failed: Email already exists - {mask_email(user_data.email)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email already exists.",
+            detail="Email already registered",
         )
 
 
@@ -393,6 +415,26 @@ async def login(
                 )
             )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive")
+
+        if not bool(getattr(user, "is_email_verified", True)):
+            login_attempts_total.labels(outcome="failure", reason="email_not_verified").inc()
+            db.add(
+                LoginAttempt(
+                    user_id=user.id,
+                    email=user.email,
+                    ip_address=ip,
+                    user_agent=user_agent,
+                    is_success=False,
+                    failure_reason="email_not_verified",
+                )
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=auth_error_detail(
+                    "email_not_verified",
+                    "Verify your email before signing in.",
+                ),
+            )
 
         # Success path
         brute_force_service.register_success(user.email, ip)
@@ -577,6 +619,40 @@ async def logout(
     _clear_auth_cookies(response)
     response.status_code = status.HTTP_204_NO_CONTENT
     return None
+
+
+@router.get("/verify-email", response_model=VerifyEmailResponse)
+async def verify_email(
+    token: str = Query(..., min_length=8),
+    db: Session = Depends(get_db),
+):
+    result, err = EmailVerificationService(db).consume_token(token)
+    if err == "invalid_token":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Verification link is invalid.")
+    if err == "token_already_used":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Verification link was already used.")
+    if err == "token_expired":
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Verification link has expired.")
+    if err == "email_taken":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="That email is already in use.")
+    raise_if = {"user_not_found", "invalid_purpose"}
+    if err in raise_if or not result:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Could not verify email.")
+    return VerifyEmailResponse(**result)
+
+
+@router.post("/verify-email/resend")
+async def resend_verification_email(
+    body: ResendVerificationRequest,
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.email == body.email).first()
+    if user and not bool(getattr(user, "is_email_verified", True)):
+        try:
+            await EmailVerificationService(db).send_signup_verification(user)
+        except Exception:
+            logger.warning("Failed to resend verification email", exc_info=True)
+    return {"message": "If this account exists, a verification email has been sent."}
 
 
 @router.get("/me", response_model=UserResponse)

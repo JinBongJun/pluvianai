@@ -31,6 +31,7 @@ from .project_notification_settings import ProjectNotificationSettings
 from .rule_market import RuleMarket
 from .public_benchmark import PublicBenchmark
 from .refresh_token import RefreshToken
+from .email_verification_token import EmailVerificationToken
 from .test_run import TestRun
 from .test_result import TestResult
 from .live_view_connection import LiveViewConnection
@@ -84,6 +85,7 @@ __all__ = [
     "RuleMarket",
     "PublicBenchmark",
     "RefreshToken",
+    "EmailVerificationToken",
     "TestRun",
     "TestResult",
     "LiveViewConnection",

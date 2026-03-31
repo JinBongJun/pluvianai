@@ -94,6 +94,7 @@ class Settings(BaseSettings):
     RESEND_API_KEY: Optional[str] = None
     EMAIL_FROM: Optional[str] = None  # e.g., "onboarding@resend.dev" or verified domain
     EMAIL_FROM_NAME: str = "PluvianAI"
+    APP_BASE_URL: str = "http://localhost:3000"
     FEEDBACK_TO_EMAIL: Optional[str] = None  # If unset, defaults to EMAIL_FROM
     FEEDBACK_SLACK_WEBHOOK_URL: Optional[str] = None  # If set, feedback is sent to Slack instead of Resend
     # For uploading feedback attachments to Slack (optional; requires Bot Token with files:write)

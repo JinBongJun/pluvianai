@@ -13,6 +13,7 @@ type UserProfile = {
   email: string;
   full_name?: string | null;
   is_active: boolean;
+  is_email_verified: boolean;
   created_at: string;
 };
 
@@ -38,6 +39,9 @@ export default function ProfileSettingsPage() {
   const [apiKeys, setApiKeys] = useState<UserApiKey[]>([]);
   const [fullName, setFullName] = useState("");
   const [saveBusy, setSaveBusy] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
@@ -145,6 +149,26 @@ export default function ProfileSettingsPage() {
     }
   };
 
+  const handleRequestEmailChange = async () => {
+    if (!newEmail.trim() || !emailPassword.trim()) {
+      setNotice("Enter your new email and current password.");
+      return;
+    }
+    setEmailBusy(true);
+    setNotice("");
+    try {
+      await settingsAPI.requestEmailChange(newEmail.trim(), emailPassword);
+      setEmailPassword("");
+      setNewEmail("");
+      setNotice("Confirmation email sent. Open the link in that inbox to finish the change.");
+    } catch (err) {
+      logger.error("Failed to request email change", err);
+      setNotice("Failed to send email change confirmation. Check your password and try again.");
+    } finally {
+      setEmailBusy(false);
+    }
+  };
+
   const handleDeleteApiKey = async (keyId: number) => {
     setDeleteBusyId(keyId);
     setNotice("");
@@ -243,6 +267,9 @@ export default function ProfileSettingsPage() {
               <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-slate-200">
                 {profile?.email || "-"}
               </div>
+              <p className="mt-2 text-xs text-slate-500">
+                {profile?.is_email_verified ? "Verified" : "Verification pending"}
+              </p>
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-1">Full name</label>
@@ -256,6 +283,30 @@ export default function ProfileSettingsPage() {
           </div>
           <Button onClick={handleSaveProfile} disabled={!canSaveName || saveBusy}>
             {saveBusy ? "Saving..." : "Save profile"}
+          </Button>
+          <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-white/10">
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">New email</label>
+              <input
+                value={newEmail}
+                onChange={e => setNewEmail(e.target.value)}
+                className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                placeholder="new-email@company.com"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">Current password</label>
+              <input
+                type="password"
+                value={emailPassword}
+                onChange={e => setEmailPassword(e.target.value)}
+                className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                placeholder="Current password"
+              />
+            </div>
+          </div>
+          <Button onClick={handleRequestEmailChange} disabled={emailBusy}>
+            {emailBusy ? "Sending..." : "Change email"}
           </Button>
         </section>
 

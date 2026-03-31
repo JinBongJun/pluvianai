@@ -32,6 +32,16 @@ export const authAPI = {
     return response.data;
   },
 
+  verifyEmail: async (token: string) => {
+    const response = await apiClient.get("/auth/verify-email", { params: { token } });
+    return response.data;
+  },
+
+  resendVerification: async (email: string) => {
+    const response = await apiClient.post("/auth/verify-email/resend", { email });
+    return response.data;
+  },
+
   logout: async () => {
     await axios
       .post(

@@ -22,6 +22,7 @@ from app.core.responses import success_response
 from app.models.user import User
 from app.models.notification_settings import NotificationSettings
 from app.models.api_key import APIKey
+from app.services.email_verification_service import EmailVerificationService
 
 router = APIRouter()
 
@@ -34,6 +35,7 @@ class ProfileResponse(BaseModel):
     email: str
     full_name: Optional[str]
     is_active: bool
+    is_email_verified: bool
     created_at: str
 
 class UpdateProfileRequest(BaseModel):
@@ -50,6 +52,11 @@ class ChangePasswordRequest(BaseModel):
     """Change password request"""
     current_password: str
     new_password: str
+
+
+class ChangeEmailRequest(BaseModel):
+    new_email: EmailStr
+    current_password: str
 
 
 class NotificationSettingsResponse(BaseModel):
@@ -130,6 +137,7 @@ async def get_profile(
         email=current_user.email,
         full_name=current_user.full_name,
         is_active=bool(current_user.is_active),
+        is_email_verified=bool(getattr(current_user, "is_email_verified", True)),
         created_at=current_user.created_at.isoformat() if current_user.created_at else "",
     )
 
@@ -158,6 +166,7 @@ async def update_profile(
         email=current_user.email,
         full_name=current_user.full_name,
         is_active=bool(current_user.is_active),
+        is_email_verified=bool(getattr(current_user, "is_email_verified", True)),
         created_at=current_user.created_at.isoformat() if current_user.created_at else "",
     )
 
@@ -219,6 +228,52 @@ async def change_password(
     
     logger.info(f"Password changed for user {current_user.id}")
     return success_response(data={"message": "Password changed successfully"})
+
+
+@router.post("/email/change-request")
+@handle_errors
+async def request_email_change(
+    request: ChangeEmailRequest,
+    current_user: User = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
+    db: Session = Depends(get_db),
+):
+    """Send a verification email to confirm a new email address."""
+    logger.info(f"User {current_user.id} requested email change")
+
+    if not verify_password(request.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid current password",
+        )
+
+    next_email = str(request.new_email).strip().lower()
+    if next_email == str(current_user.email or "").strip().lower():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New email must be different from your current email",
+        )
+
+    existing = db.query(User).filter(User.email == next_email, User.id != current_user.id).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists",
+        )
+
+    _token, email_result = await EmailVerificationService(db).send_email_change_verification(
+        user=current_user,
+        new_email=next_email,
+    )
+    if email_result.get("status") != "sent":
+        logger.warning(
+            "Email change verification email was not sent",
+            extra={"user_id": current_user.id, "email_status": email_result.get("status")},
+        )
+
+    return success_response(
+        data={"message": "Confirmation email sent. Verify the new address to complete the change."}
+    )
 
 
 @router.get("/api-keys")
