@@ -344,7 +344,6 @@ function getRequestShapeBadges(snapshot: ClinicalSnapshot): Array<{ label: strin
   return badges;
 }
 
-<<<<<<< HEAD
 /** Build "actual vs config" line for an eval check from snapshot + saved eval config. */
 function getEvalDetail(
   s: ClinicalSnapshot,
@@ -432,8 +431,6 @@ function getEvalDetail(
   }
 }
 
-=======
->>>>>>> origin/main
 export const ClinicalLog: React.FC<ClinicalLogProps> = ({
   projectId,
   agentId,

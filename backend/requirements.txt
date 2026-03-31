@@ -9,11 +9,7 @@ pydantic[email]>=2.7.0,<3
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
-<<<<<<< HEAD
 python-multipart==0.0.6
-=======
-python-multipart==0.0.22
->>>>>>> origin/main
 redis==7.3.0
 httpx==0.28.1
 reportlab==4.0.7

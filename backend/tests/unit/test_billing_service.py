@@ -4,20 +4,14 @@ Unit tests for BillingService
 import hashlib
 import hmac
 import json
-<<<<<<< HEAD
 from datetime import datetime
-=======
->>>>>>> origin/main
 
 import pytest
 from unittest.mock import patch, MagicMock
 from app.services.billing_service import BillingService, verify_paddle_webhook_signature
 from app.utils.idempotency import idempotency_service
-<<<<<<< HEAD
 from app.models.billing_event import BillingEvent
 from app.models.entitlement_snapshot import EntitlementSnapshot
-=======
->>>>>>> origin/main
 from app.models.user import User
 from app.models.subscription import Subscription
 from app.services.cache_service import cache_service
@@ -393,7 +387,6 @@ class TestBillingService:
             mock_settings.PADDLE_API_KEY = "pdl_test"
             mock_settings.PADDLE_WEBHOOK_SECRET = secret
             service = BillingService(db)
-<<<<<<< HEAD
             with patch.object(idempotency_service, "get", return_value=None):
                 with patch.object(idempotency_service, "set"):
                     with patch("app.services.subscription_service.SubscriptionService") as mock_sub:
@@ -434,14 +427,6 @@ class TestBillingService:
         assert event.provider_subscription_id == "sub_store_1"
         assert event.user_id == test_user.id
 
-=======
-            with patch("app.services.subscription_service.SubscriptionService") as mock_sub:
-                mock_sub.return_value.create_or_update_subscription = MagicMock()
-                result = service.handle_paddle_webhook(raw, sig)
-        assert result["status"] == "success"
-        assert mock_sub.return_value.create_or_update_subscription.called
-
->>>>>>> origin/main
     def test_handle_paddle_webhook_missing_custom_data(self, db):
         secret = "whsec_paddle_test"
         payload_obj = {
@@ -454,13 +439,9 @@ class TestBillingService:
             mock_settings.PADDLE_API_KEY = "pdl_test"
             mock_settings.PADDLE_WEBHOOK_SECRET = secret
             service = BillingService(db)
-<<<<<<< HEAD
             with patch.object(idempotency_service, "get", return_value=None):
                 with patch.object(idempotency_service, "set"):
                     result = service.handle_paddle_webhook(raw, sig)
-=======
-            result = service.handle_paddle_webhook(raw, sig)
->>>>>>> origin/main
         assert result.get("status") == "error"
         assert "custom_data" in result.get("message", "").lower()
 
@@ -492,13 +473,9 @@ class TestBillingService:
             mock_settings.PADDLE_API_KEY = "pdl_test"
             mock_settings.PADDLE_WEBHOOK_SECRET = secret
             service = BillingService(db)
-<<<<<<< HEAD
             with patch.object(idempotency_service, "get", return_value=None):
                 with patch.object(idempotency_service, "set"):
                     result = service.handle_paddle_webhook(raw, sig)
-=======
-            result = service.handle_paddle_webhook(raw, sig)
->>>>>>> origin/main
         assert result["status"] == "ignored"
         assert "not handled" in result["message"]
 
@@ -540,11 +517,7 @@ class TestBillingService:
         assert "error" in result
         assert "not configured" in result["error"].lower()
 
-<<<<<<< HEAD
     def test_handle_paddle_webhook_without_event_id_uses_payload_hash_for_idempotency(self, db):
-=======
-    def test_handle_paddle_webhook_without_event_id_skips_idempotency(self, db):
->>>>>>> origin/main
         secret = "whsec_paddle_test"
         payload_obj = {"event_type": "transaction.created", "data": {"id": "txn_1"}}
         raw = json.dumps(payload_obj).encode("utf-8")
@@ -560,7 +533,6 @@ class TestBillingService:
                     second = service.handle_paddle_webhook(raw, sig)
 
         assert first["status"] == "ignored"
-<<<<<<< HEAD
         assert second["status"] == "duplicate"
         assert mock_get.call_count == 2
         assert mock_set.call_count == 1
@@ -663,11 +635,6 @@ class TestBillingService:
         assert sub.status == "cancelled"
         assert sub.cancel_effective_at is not None
 
-=======
-        assert second["status"] == "ignored"
-        assert mock_get.call_count == 0
-        assert mock_set.call_count == 0
->>>>>>> origin/main
 
     def test_handle_paddle_webhook_error_records_dlq(self, db):
         secret = "whsec_paddle_test"
@@ -752,7 +719,6 @@ class TestBillingService:
         assert result["status"] == "success"
         assert result["fixed"] == 1
 
-<<<<<<< HEAD
     def test_get_billing_timeline_for_user_returns_subscription_entitlement_and_events(self, db, test_user):
         subscription = Subscription(
             user_id=test_user.id,
@@ -804,8 +770,6 @@ class TestBillingService:
         assert len(result["events"]) == 1
         assert result["events"][0]["event_type"] == "subscription.canceled"
 
-=======
->>>>>>> origin/main
     def test_change_paddle_subscription_plan_upgrade_uses_prorated_immediately(self, db, test_user):
         sub = Subscription(
             user_id=test_user.id,

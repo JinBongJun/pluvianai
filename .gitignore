@@ -66,10 +66,7 @@ frontend/tsc_output.txt
 
 # Local tool/runtime files
 anthropic.json
-<<<<<<< HEAD
 load-tests/k6/bin/
-=======
->>>>>>> origin/main
 
 # Third-party / reference template pack (do not re-add)
 vive-md-main/

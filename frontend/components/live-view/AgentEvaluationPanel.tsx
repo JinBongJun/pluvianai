@@ -50,23 +50,14 @@ const DEFAULT_EVAL: Required<EvalConfig> = {
   empty: { enabled: true, min_chars: 16 },
   latency: { enabled: true, fail_ms: 5000 },
   status_code: { enabled: true, fail_from: 500 },
-<<<<<<< HEAD
   json: { enabled: true, mode: "if_json" },
   refusal: { enabled: true },
-=======
-  json: { enabled: false, mode: "if_json" },
-  refusal: { enabled: false },
->>>>>>> origin/main
   length: { enabled: false, fail_ratio: 0.75 },
   repetition: { enabled: false, fail_line_repeats: 6 },
   required: { enabled: false, keywords_csv: "", json_fields_csv: "" },
   format: { enabled: false, sections_csv: "" },
   leakage: { enabled: false },
-<<<<<<< HEAD
   tool_use_policy: { enabled: true },
-=======
-  tool_use_policy: { enabled: false },
->>>>>>> origin/main
 };
 
 // --- Helpers ---

@@ -342,7 +342,6 @@ def reconcile_billing_subscriptions(
     _ = current_user
     result = BillingService(db).reconcile_paddle_subscriptions(limit=limit)
     return success_response(data=result)
-<<<<<<< HEAD
 
 
 @router.post("/reconcile/users/{user_id}")
@@ -379,5 +378,3 @@ def get_billing_timeline_for_user(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
     return success_response(data=result)
-=======
->>>>>>> origin/main

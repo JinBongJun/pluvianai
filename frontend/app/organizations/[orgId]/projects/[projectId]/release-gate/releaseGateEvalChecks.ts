@@ -18,7 +18,6 @@ export const DEFAULT_EVAL_CHECK_VALUE: Record<string, { enabled: boolean }> = {
   empty: { enabled: true },
   latency: { enabled: true },
   status_code: { enabled: true },
-<<<<<<< HEAD
   refusal: { enabled: true },
   json: { enabled: true },
   length: { enabled: true },
@@ -27,16 +26,6 @@ export const DEFAULT_EVAL_CHECK_VALUE: Record<string, { enabled: boolean }> = {
   format: { enabled: false },
   leakage: { enabled: false },
   tool: { enabled: true },
-=======
-  refusal: { enabled: false },
-  json: { enabled: false },
-  length: { enabled: false },
-  repetition: { enabled: false },
-  required: { enabled: false },
-  format: { enabled: false },
-  leakage: { enabled: false },
-  tool: { enabled: false },
->>>>>>> origin/main
 };
 
 export function shouldShowEvalSetting(value: unknown): boolean {

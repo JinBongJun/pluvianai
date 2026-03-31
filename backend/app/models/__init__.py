@@ -44,11 +44,8 @@ from .behavior_report import BehaviorReport
 from .trajectory_step import TrajectoryStep
 from .validation_dataset import ValidationDataset
 from .saved_log import SavedLog
-<<<<<<< HEAD
 from .billing_event import BillingEvent
 from .entitlement_snapshot import EntitlementSnapshot
-=======
->>>>>>> origin/main
 
 # Note: SignalDetection, WorstPrompt, Review models are imported directly in services
 # to avoid circular imports. Import them directly from their files when needed:
@@ -101,9 +98,6 @@ __all__ = [
     "TrajectoryStep",
     "ValidationDataset",
     "SavedLog",
-<<<<<<< HEAD
     "BillingEvent",
     "EntitlementSnapshot",
-=======
->>>>>>> origin/main
 ]
