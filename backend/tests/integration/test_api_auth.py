@@ -2,7 +2,10 @@
 Integration tests for Authentication API
 """
 import json
+<<<<<<< HEAD
 from datetime import datetime
+=======
+>>>>>>> origin/main
 import pytest
 from fastapi import status
 from app.models.subscription import Subscription
@@ -210,10 +213,13 @@ class TestAuthAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["plan_type"] == "free"
+<<<<<<< HEAD
         assert data["display_plan_type"] == "free"
         assert data["subscription_status"] == "active"
         assert data["entitlement_status"] == "active"
         assert data["entitlement_effective_from"] is not None
+=======
+>>>>>>> origin/main
         assert data["limits"]["release_gate_attempts_per_month"] == 60
         assert data["limits"]["platform_replay_credits_per_month"] == 60
         assert data["limits"]["guard_credits_per_month"] == 10000
@@ -222,6 +228,7 @@ class TestAuthAPI:
         assert data["usage_this_month"]["guard_credits"] == 125
         assert "organizations_used" in data["usage_this_month"]
         assert isinstance(data["usage_this_month"]["organizations_used"], int)
+<<<<<<< HEAD
 
     async def test_get_my_usage_returns_active_until_period_end_for_cancelled_paid_subscription(
         self, async_client, auth_headers, db, test_user
@@ -246,3 +253,5 @@ class TestAuthAPI:
         assert data["subscription_status"] == "cancelled"
         assert data["entitlement_status"] == "active_until_period_end"
         assert data["current_period_end"] is not None
+=======
+>>>>>>> origin/main

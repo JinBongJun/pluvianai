@@ -16,6 +16,7 @@ class Subscription(Base):
     stripe_subscription_id = Column(String(255), nullable=True, index=True)
     paddle_subscription_id = Column(String(255), nullable=True, index=True)
     paddle_customer_id = Column(String(255), nullable=True, index=True)
+<<<<<<< HEAD
     provider = Column(String(32), nullable=False, server_default="paddle")
     provider_environment = Column(String(16), nullable=False, server_default="unknown")
     current_period_start = Column(DateTime(timezone=True), nullable=True)
@@ -24,6 +25,10 @@ class Subscription(Base):
     cancel_effective_at = Column(DateTime(timezone=True), nullable=True)
     last_provider_event_at = Column(DateTime(timezone=True), nullable=True)
     last_reconciled_at = Column(DateTime(timezone=True), nullable=True)
+=======
+    current_period_start = Column(DateTime(timezone=True), nullable=True)
+    current_period_end = Column(DateTime(timezone=True), nullable=True)
+>>>>>>> origin/main
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

@@ -38,6 +38,10 @@ import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel"
 import { RequestContextPanel } from "@/components/live-view/RequestContextPanel";
 import { buildNodeRequestOverview } from "@/lib/requestOverview";
 import { formatSnapshotCost, formatSnapshotTokens } from "@/lib/snapshotMetrics";
+<<<<<<< HEAD
+=======
+import { getEvalDetailFromConfig } from "@/lib/evalConfigDisplay";
+>>>>>>> origin/main
 
 export interface SnapshotForDetail {
   id: string | number;
@@ -164,11 +168,14 @@ function safeStringify(val: unknown): string {
   return String(val);
 }
 
+<<<<<<< HEAD
 function toFiniteNumber(value: unknown, fallback: number): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
 
+=======
+>>>>>>> origin/main
 function formatEvalStatus(status: string): string {
   if (status === "na") return "NA";
   if (status === "not_applicable") return "N/A";
@@ -221,6 +228,7 @@ function extractStepLogs(
   });
 }
 
+<<<<<<< HEAD
 function getEvalDetail(
   s: SnapshotForDetail,
   checkId: string,
@@ -310,6 +318,8 @@ function getEvalDetail(
   }
 }
 
+=======
+>>>>>>> origin/main
 function buildToolSummaryEmptyLines(s: SnapshotForDetail): string[] {
   const hasSummary = Array.isArray(s.tool_calls_summary) && s.tool_calls_summary.length > 0;
   if (hasSummary) return [];
@@ -895,7 +905,11 @@ export function SnapshotDetailModal({
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {effectiveEvalEnabled &&
                     displayEvalRows.map(row => {
+<<<<<<< HEAD
                       const detail = getEvalDetail(s, row.id, savedEvalConfig);
+=======
+                      const detail = getEvalDetailFromConfig(s, row.id, savedEvalConfig);
+>>>>>>> origin/main
                       const EvalIcon = EVAL_CHECK_ICONS[row.id] ?? Scale;
                       return (
                         <div

@@ -35,7 +35,11 @@
     "lucide-react": "^0.562.0",
     "next": "14.0.3",
     "playwright": "^1.58.2",
+<<<<<<< HEAD
     "postcss": "^8.4.32",
+=======
+    "postcss": "^8.5.8",
+>>>>>>> origin/main
     "posthog-js": "^1.328.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -49,7 +53,11 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+<<<<<<< HEAD
     "@types/node": "^20.10.0",
+=======
+    "@types/node": "^25.5.0",
+>>>>>>> origin/main
     "@types/react": "^18.2.42",
     "@types/react-dom": "^18.2.17",
     "eslint": "^8.54.0",

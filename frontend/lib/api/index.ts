@@ -39,7 +39,10 @@ export { organizationsAPI } from "./organizations";
 export { projectsAPI, projectMembersAPI } from "./projects";
 export { apiCallsAPI } from "./api-calls";
 export { internalUsageAPI } from "./internal-usage";
+<<<<<<< HEAD
 export { internalBillingAPI } from "./internal-billing";
+=======
+>>>>>>> origin/main
 export { qualityAPI } from "./quality";
 export { driftAPI } from "./drift";
 export { alertsAPI } from "./alerts";

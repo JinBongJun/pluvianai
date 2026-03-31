@@ -38,6 +38,7 @@ class SubscriptionService:
         subscription = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
 
         # Default to free plan if no subscription exists
+<<<<<<< HEAD
         now = datetime.now(timezone.utc)
         status = str(subscription.status if subscription else "active").strip().lower()
         if status == "canceled":
@@ -50,6 +51,9 @@ class SubscriptionService:
                 period_end = period_end.replace(tzinfo=timezone.utc)
             if status == "free" or (period_end is not None and period_end <= now):
                 plan_type = "free"
+=======
+        plan_type = normalize_plan_type(subscription.plan_type if subscription else "free")
+>>>>>>> origin/main
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
         return {
@@ -263,7 +267,11 @@ class SubscriptionService:
         normalized_status = "cancelled" if str(status).strip().lower() == "canceled" else str(status).strip().lower()
 
         now = datetime.now(timezone.utc)
+<<<<<<< HEAD
         # Use provided period dates or default to current month only for new subscriptions.
+=======
+        # Use provided period dates or default to current month
+>>>>>>> origin/main
         if current_period_start is not None:
             period_start = current_period_start
         elif subscription and subscription.current_period_start is not None:

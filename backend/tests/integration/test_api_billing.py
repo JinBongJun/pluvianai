@@ -169,6 +169,7 @@ class TestBillingAPI:
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
+<<<<<<< HEAD
     async def test_reconcile_user_forbidden_non_superuser(self, async_client, auth_headers):
         response = await async_client.post(
             "/api/v1/billing/reconcile/users/1",
@@ -183,6 +184,8 @@ class TestBillingAPI:
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
+=======
+>>>>>>> origin/main
     @patch(
         "app.services.billing_service.BillingService.handle_paddle_webhook",
         return_value={"status": "success", "message": "ok"},
@@ -273,6 +276,7 @@ class TestBillingAPI:
         data = response.json()["data"]
         assert data["status"] == "success"
         assert data["fixed"] == 1
+<<<<<<< HEAD
 
     @patch(
         "app.services.billing_service.BillingService.reconcile_paddle_subscription_for_user",
@@ -332,3 +336,5 @@ class TestBillingAPI:
         )
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.json()["error"]["code"] == "BILLING_TIMELINE_USER_NOT_FOUND"
+=======
+>>>>>>> origin/main

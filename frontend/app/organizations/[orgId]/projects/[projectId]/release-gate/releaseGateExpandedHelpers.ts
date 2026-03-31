@@ -291,6 +291,7 @@ export function summarizeRunToolGroundingFromCases(resultCases: any[]): {
   return { withTools, pass, fail, semanticOk, semanticOff };
 }
 
+<<<<<<< HEAD
 export function getEvalCheckParams(id: string, config: Record<string, unknown> | undefined): string {
   if (!config || typeof config !== "object") return "";
   const c = config as Record<string, unknown>;
@@ -330,6 +331,9 @@ export function getEvalCheckParams(id: string, config: Record<string, unknown> |
       return "";
   }
 }
+=======
+export { getEvalCheckParams } from "@/lib/evalConfigDisplay";
+>>>>>>> origin/main
 
 export function formatDateTime(value: unknown): string {
   if (!value) return "—";

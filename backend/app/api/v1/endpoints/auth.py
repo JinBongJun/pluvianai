@@ -24,7 +24,10 @@ from app.core.usage_limits import (
     get_platform_replay_credits_this_month,
 )
 from app.services.subscription_service import SubscriptionService
+<<<<<<< HEAD
 from app.services.entitlement_service import EntitlementService
+=======
+>>>>>>> origin/main
 from app.core.security import (
     verify_password,
     get_password_hash,
@@ -596,12 +599,19 @@ async def get_my_usage(
     """
     service = SubscriptionService(db)
     plan_info = service.get_user_plan(current_user.id)
+<<<<<<< HEAD
     entitlement = EntitlementService(db).get_or_create_current_entitlement(current_user.id, source="usage_read")
+=======
+>>>>>>> origin/main
     snapshots = get_snapshots_count_this_month(db, current_user.id)
     release_gate_attempts = get_release_gate_attempts_this_month(db, current_user.id)
     guard_credits = get_guard_credits_this_month(db, current_user.id)
     platform_replay_credits = get_platform_replay_credits_this_month(db, current_user.id)
+<<<<<<< HEAD
     limits = entitlement.limits_json or plan_info.get("limits", {})
+=======
+    limits = plan_info.get("limits", {})
+>>>>>>> origin/main
     # Aggregate usage metrics from Usage table (e.g., api_calls_per_month)
     summary = service.get_usage_summary(current_user.id)
     metrics = summary.get("metrics", {})
@@ -628,6 +638,7 @@ async def get_my_usage(
         .count()
     )
     return {
+<<<<<<< HEAD
         "plan_type": entitlement.effective_plan_id,
         "display_plan_type": entitlement.effective_plan_id,
         "subscription_status": plan_info.get("status", "active"),
@@ -636,6 +647,9 @@ async def get_my_usage(
         "current_period_end": plan_info.get("current_period_end"),
         "entitlement_effective_from": entitlement.effective_from.isoformat(),
         "entitlement_effective_to": entitlement.effective_to.isoformat() if entitlement.effective_to else None,
+=======
+        "plan_type": plan_info.get("plan_type", "free"),
+>>>>>>> origin/main
         "limits": limits,
         "usage_this_month": {
             "snapshots": snapshots,

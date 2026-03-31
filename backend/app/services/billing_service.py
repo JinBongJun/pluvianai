@@ -18,8 +18,11 @@ from app.core.logging_config import logger
 from app.core.metrics import billing_webhook_events_total
 from app.core.subscription_limits import PLAN_LIMITS, normalize_plan_type
 from app.core.usage_limits import get_usage_period_bounds_utc
+<<<<<<< HEAD
 from app.models.billing_event import BillingEvent
 from app.models.entitlement_snapshot import EntitlementSnapshot
+=======
+>>>>>>> origin/main
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.cache_service import cache_service
@@ -136,6 +139,7 @@ class BillingService:
     def _failed_webhook_key(self, event_id: str) -> str:
         return f"billing:webhook:failed:{event_id}"
 
+<<<<<<< HEAD
     def _provider_environment(self) -> str:
         return "sandbox" if settings.PADDLE_USE_SANDBOX else "live"
 
@@ -297,6 +301,8 @@ class BillingService:
             EntitlementService(self.db).sync_current_entitlement(user_id, subscription=subscription, source="billing")
         return subscription, False
 
+=======
+>>>>>>> origin/main
     def _record_failed_webhook_event(
         self,
         event_id: str,
@@ -347,6 +353,11 @@ class BillingService:
         if not self.paddle_available:
             return {"status": "skipped", "reason": "paddle_not_configured"}
 
+<<<<<<< HEAD
+=======
+        from app.services.subscription_service import SubscriptionService
+
+>>>>>>> origin/main
         q = (
             self.db.query(Subscription)
             .filter(Subscription.paddle_subscription_id.isnot(None))
@@ -354,6 +365,10 @@ class BillingService:
             .limit(max(1, min(limit, 1000)))
         )
         subs: List[Subscription] = q.all()
+<<<<<<< HEAD
+=======
+        service = SubscriptionService(self.db)
+>>>>>>> origin/main
 
         checked = 0
         fixed = 0
@@ -384,7 +399,11 @@ class BillingService:
             if sub.plan_type != mapped_plan or (sub.status or "").lower() != normalized_status:
                 try:
                     cbp = data.get("current_billing_period") or {}
+<<<<<<< HEAD
                     self._upsert_local_subscription_from_provider(
+=======
+                    service.create_or_update_subscription(
+>>>>>>> origin/main
                         user_id=sub.user_id,
                         plan_type=mapped_plan,
                         status=normalized_status,
@@ -392,8 +411,11 @@ class BillingService:
                         paddle_customer_id=data.get("customer_id"),
                         current_period_start=self._parse_paddle_datetime(cbp.get("starts_at")),
                         current_period_end=self._parse_paddle_datetime(cbp.get("ends_at")),
+<<<<<<< HEAD
                         event_created_at=self._extract_event_created_at(data, data),
                         last_reconciled_at=datetime.now(timezone.utc),
+=======
+>>>>>>> origin/main
                     )
                     fixed += 1
                     logger.info(
@@ -413,6 +435,7 @@ class BillingService:
                         extra={"subscription_id": sub_id, "user_id": sub.user_id},
                         exc_info=True,
                     )
+<<<<<<< HEAD
             else:
                 sub.last_reconciled_at = datetime.now(timezone.utc)
                 self.db.commit()
@@ -607,6 +630,10 @@ class BillingService:
         }
         return payload, None
 
+=======
+        return {"status": "success", "checked": checked, "fixed": fixed, "failed": failed}
+
+>>>>>>> origin/main
     def _usage_period_redis_suffix(self, user_id: int) -> str:
         """Stable Redis key segment aligned with DB usage window (billing period or calendar month)."""
         start, end = get_usage_period_bounds_utc(self.db, user_id)
@@ -637,9 +664,14 @@ class BillingService:
         judge_calls = int(cache_service.redis_client.get(judge_calls_key) or 0) if cache_service.enabled else 0
         snapshots = int(cache_service.redis_client.get(snapshots_key) or 0) if cache_service.enabled else 0
 
+<<<<<<< HEAD
         from app.services.subscription_service import SubscriptionService
 
         plan_type = SubscriptionService(self.db).get_user_plan(user_id).get("plan_type", "free")
+=======
+        subscription = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
+        plan_type = subscription.plan_type if subscription else "free"
+>>>>>>> origin/main
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
         soft_caps = self._get_soft_caps(plan_type)
@@ -677,9 +709,14 @@ class BillingService:
         period_tag = self._usage_period_redis_suffix(user_id)
         ttl = self._redis_ttl_for_usage_period(user_id)
 
+<<<<<<< HEAD
         from app.services.subscription_service import SubscriptionService
 
         plan_type = SubscriptionService(self.db).get_user_plan(user_id).get("plan_type", "free")
+=======
+        subscription = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
+        plan_type = subscription.plan_type if subscription else "free"
+>>>>>>> origin/main
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
         soft_caps = self._get_soft_caps(plan_type)
 
@@ -830,6 +867,11 @@ class BillingService:
 
     def _sync_local_subscription_from_paddle_subscription_data(self, user_id: int, data: Dict[str, Any]) -> None:
         """Apply Paddle subscription entity fields to the local Subscription row (after API update)."""
+<<<<<<< HEAD
+=======
+        from app.services.subscription_service import SubscriptionService
+
+>>>>>>> origin/main
         price_id = self._paddle_subscription_price_id(data)
         if not price_id:
             logger.warning(
@@ -848,7 +890,12 @@ class BillingService:
         period_start = self._parse_paddle_datetime(cbp.get("starts_at"))
         period_end = self._parse_paddle_datetime(cbp.get("ends_at"))
         status = self._normalize_paddle_status(str(data.get("status") or "active"))
+<<<<<<< HEAD
         self._upsert_local_subscription_from_provider(
+=======
+        subscription_service = SubscriptionService(self.db)
+        subscription_service.create_or_update_subscription(
+>>>>>>> origin/main
             user_id=user_id,
             plan_type=plan_type,
             status=status,
@@ -856,7 +903,10 @@ class BillingService:
             paddle_customer_id=data.get("customer_id"),
             current_period_start=period_start,
             current_period_end=period_end,
+<<<<<<< HEAD
             event_created_at=self._extract_event_created_at(data, data),
+=======
+>>>>>>> origin/main
         )
 
     def change_paddle_subscription_plan(self, user_id: int, target_plan: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
@@ -1235,6 +1285,7 @@ class BillingService:
                 if total <= 0:
                     return
                 ratio = float(part) / float(total)
+<<<<<<< HEAD
                 error_threshold = float(settings.BILLING_WEBHOOK_ERROR_RATIO_THRESHOLD)
                 duplicate_threshold = float(settings.BILLING_WEBHOOK_DUPLICATE_RATIO_THRESHOLD)
                 if result == "error" and ratio >= error_threshold:
@@ -1246,6 +1297,17 @@ class BillingService:
                     logger.warning(
                         "Billing webhook duplicate ratio exceeded threshold",
                         extra={"ratio": ratio, "threshold": duplicate_threshold},
+=======
+                if result == "error" and ratio >= float(settings.BILLING_WEBHOOK_ERROR_RATIO_THRESHOLD):
+                    logger.error(
+                        "Billing webhook error ratio exceeded threshold",
+                        extra={"ratio": ratio, "threshold": settings.BILLING_WEBHOOK_ERROR_RATIO_THRESHOLD},
+                    )
+                if result == "duplicate" and ratio >= float(settings.BILLING_WEBHOOK_DUPLICATE_RATIO_THRESHOLD):
+                    logger.warning(
+                        "Billing webhook duplicate ratio exceeded threshold",
+                        extra={"ratio": ratio, "threshold": settings.BILLING_WEBHOOK_DUPLICATE_RATIO_THRESHOLD},
+>>>>>>> origin/main
                     )
             except Exception:
                 logger.warning("Failed to update webhook ratio counters", exc_info=True)
@@ -1276,7 +1338,11 @@ class BillingService:
         data = event.get("data") or {}
         event_id = event.get("event_id") or event.get("id") or hashlib.sha256(payload).hexdigest()
         raw_event_id = event.get("event_id") or event.get("id")
+<<<<<<< HEAD
         idem_key = f"paddle:webhook:{self._provider_environment()}:{event_id}"
+=======
+        idem_key = f"paddle:webhook:{raw_event_id}" if raw_event_id else None
+>>>>>>> origin/main
         if idem_key:
             cached = idempotency_service.get(idem_key)
             if isinstance(cached, dict):
@@ -1292,6 +1358,7 @@ class BillingService:
                     "event_id": event_id,
                     "result": cached,
                 }
+<<<<<<< HEAD
         event_created_at = self._extract_event_created_at(event, data)
         event_record = self._create_billing_event_record(
             event=event,
@@ -1317,6 +1384,17 @@ class BillingService:
             result = self._handle_subscription_updated(data, event_type, event_created_at=event_created_at)
         elif event_type in ("subscription.canceled", "subscription.cancelled"):
             result = self._handle_subscription_canceled(data, event_type, event_created_at=event_created_at)
+=======
+                
+
+        result: Dict[str, Any]
+        if event_type == "transaction.completed":
+            result = self._handle_transaction_completed(data, event_type)
+        elif event_type == "subscription.updated":
+            result = self._handle_subscription_updated(data, event_type)
+        elif event_type in ("subscription.canceled", "subscription.cancelled"):
+            result = self._handle_subscription_canceled(data, event_type)
+>>>>>>> origin/main
         else:
             logger.info(f"Unhandled Paddle webhook event type: {event_type}")
             result = {
@@ -1328,6 +1406,7 @@ class BillingService:
         if idem_key and result.get("status") in {"success", "ignored"}:
             idempotency_service.set(idem_key, result)
         result["event_id"] = event_id
+<<<<<<< HEAD
         if event_record is not None:
             self._mark_billing_event_processed(
                 event_record,
@@ -1335,6 +1414,8 @@ class BillingService:
                 user_id=result.get("user_id"),
                 subscription_id=result.get("subscription_id"),
             )
+=======
+>>>>>>> origin/main
         if str(result.get("status")) == "error":
             self._record_failed_webhook_event(
                 event_id=event_id,
@@ -1350,6 +1431,7 @@ class BillingService:
         )
         return result
 
+<<<<<<< HEAD
     def _handle_transaction_completed(
         self,
         data: Dict[str, Any],
@@ -1357,6 +1439,9 @@ class BillingService:
         *,
         event_created_at: Optional[datetime] = None,
     ) -> Dict[str, Any]:
+=======
+    def _handle_transaction_completed(self, data: Dict[str, Any], event_type: str) -> Dict[str, Any]:
+>>>>>>> origin/main
         custom = data.get("custom_data") or {}
         user_id_raw = custom.get("user_id")
         plan_type = custom.get("plan_type")
@@ -1393,6 +1478,12 @@ class BillingService:
                 "event_type": event_type,
             }
 
+<<<<<<< HEAD
+=======
+        from app.services.subscription_service import SubscriptionService
+
+        subscription_service = SubscriptionService(self.db)
+>>>>>>> origin/main
         sub_id = data.get("subscription_id")
         cust_id = data.get("customer_id")
         cbp = data.get("billing_period") or {}
@@ -1403,7 +1494,11 @@ class BillingService:
         period_start = self._parse_paddle_datetime(cbp.get("starts_at")) if cbp else None
         period_end = self._parse_paddle_datetime(cbp.get("ends_at")) if cbp else None
 
+<<<<<<< HEAD
         subscription, stale = self._upsert_local_subscription_from_provider(
+=======
+        subscription_service.create_or_update_subscription(
+>>>>>>> origin/main
             user_id=user_id,
             plan_type=plan_str,
             status="active",
@@ -1411,6 +1506,7 @@ class BillingService:
             paddle_customer_id=cust_id if cust_id else None,
             current_period_start=period_start,
             current_period_end=period_end,
+<<<<<<< HEAD
             event_created_at=event_created_at,
         )
         if stale:
@@ -1421,11 +1517,15 @@ class BillingService:
                 "user_id": user_id,
                 "subscription_id": subscription.id,
             }
+=======
+        )
+>>>>>>> origin/main
 
         logger.info(
             f"Subscription updated via Paddle webhook for user {user_id}: {plan_str}",
             extra={"user_id": user_id, "plan_type": plan_str, "event_type": event_type},
         )
+<<<<<<< HEAD
         return {
             "status": "success",
             "message": "Subscription updated",
@@ -1433,6 +1533,9 @@ class BillingService:
             "user_id": user_id,
             "subscription_id": subscription.id,
         }
+=======
+        return {"status": "success", "message": "Subscription updated", "event_type": event_type}
+>>>>>>> origin/main
 
     def _paddle_subscription_price_id(self, data: Dict[str, Any]) -> Optional[str]:
         items = data.get("items") or []
@@ -1448,6 +1551,7 @@ class BillingService:
         return s
 
     def _parse_paddle_datetime(self, value: Any) -> Optional[datetime]:
+<<<<<<< HEAD
         if value is None:
             return None
         if isinstance(value, datetime):
@@ -1455,12 +1559,16 @@ class BillingService:
         if isinstance(value, (int, float)):
             return datetime.fromtimestamp(value, tz=timezone.utc)
         if not isinstance(value, str):
+=======
+        if not value or not isinstance(value, str):
+>>>>>>> origin/main
             return None
         try:
             return datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
             return None
 
+<<<<<<< HEAD
     def _handle_subscription_updated(
         self,
         data: Dict[str, Any],
@@ -1479,6 +1587,16 @@ class BillingService:
                 "User not found for Paddle subscription update",
                 extra={"customer_id": customer_id, "subscription_id": subscription_id},
             )
+=======
+    def _handle_subscription_updated(self, data: Dict[str, Any], event_type: str) -> Dict[str, Any]:
+        customer_id = data.get("customer_id")
+        if not customer_id:
+            return {"status": "error", "message": "Missing customer ID", "event_type": event_type}
+
+        user = self._get_user_by_paddle_customer_id(customer_id)
+        if not user:
+            logger.warning(f"User not found for Paddle customer {customer_id}")
+>>>>>>> origin/main
             return {"status": "error", "message": "User not found", "event_type": event_type}
 
         price_id = self._paddle_subscription_price_id(data)
@@ -1496,6 +1614,7 @@ class BillingService:
         period_end = self._parse_paddle_datetime(cbp.get("ends_at"))
         status = self._normalize_paddle_status(str(data.get("status") or "active"))
 
+<<<<<<< HEAD
         try:
             subscription, stale = self._upsert_local_subscription_from_provider(
                 user_id=user.id,
@@ -1506,10 +1625,25 @@ class BillingService:
                 current_period_start=period_start,
                 current_period_end=period_end,
                 event_created_at=event_created_at,
+=======
+        from app.services.subscription_service import SubscriptionService
+
+        subscription_service = SubscriptionService(self.db)
+        try:
+            subscription_service.create_or_update_subscription(
+                user_id=user.id,
+                plan_type=plan_type,
+                status=status,
+                paddle_subscription_id=data.get("id"),
+                paddle_customer_id=customer_id,
+                current_period_start=period_start,
+                current_period_end=period_end,
+>>>>>>> origin/main
             )
         except Exception as e:
             logger.error(f"Error processing subscription update: {str(e)}", exc_info=True)
             return {"status": "error", "message": str(e), "event_type": event_type}
+<<<<<<< HEAD
         if stale:
             return {
                 "status": "ignored",
@@ -1518,6 +1652,8 @@ class BillingService:
                 "user_id": user.id,
                 "subscription_id": subscription.id,
             }
+=======
+>>>>>>> origin/main
 
         logger.info(
             f"Subscription updated via Paddle for user {user.id}: {plan_type} ({status})",
@@ -1526,6 +1662,7 @@ class BillingService:
                 "plan_type": plan_type,
                 "status": status,
                 "event_type": event_type,
+<<<<<<< HEAD
                 "subscription_id": subscription_id,
                 "resolution": resolution,
                 "existing_subscription_id": existing_subscription.id if existing_subscription else None,
@@ -1606,6 +1743,44 @@ class BillingService:
             "subscription_id": subscription.id,
         }
 
+=======
+                "subscription_id": data.get("id"),
+            },
+        )
+        return {"status": "success", "message": "Subscription updated", "event_type": event_type}
+
+    def _handle_subscription_canceled(self, data: Dict[str, Any], event_type: str) -> Dict[str, Any]:
+        customer_id = data.get("customer_id")
+        if not customer_id:
+            return {"status": "error", "message": "Missing customer ID", "event_type": event_type}
+
+        user = self._get_user_by_paddle_customer_id(customer_id)
+        if not user:
+            logger.warning(f"User not found for Paddle customer {customer_id}")
+            return {"status": "error", "message": "User not found", "event_type": event_type}
+
+        from app.services.subscription_service import SubscriptionService
+
+        subscription_service = SubscriptionService(self.db)
+        try:
+            subscription_service.create_or_update_subscription(
+                user_id=user.id,
+                plan_type="free",
+                status="cancelled",
+                paddle_subscription_id=data.get("id"),
+                paddle_customer_id=customer_id,
+            )
+        except Exception as e:
+            logger.error(f"Error processing subscription cancellation: {str(e)}", exc_info=True)
+            return {"status": "error", "message": str(e), "event_type": event_type}
+
+        logger.info(
+            f"Subscription cancelled via Paddle for user {user.id}",
+            extra={"user_id": user.id, "event_type": event_type, "subscription_id": data.get("id")},
+        )
+        return {"status": "success", "message": "Subscription cancelled", "event_type": event_type}
+
+>>>>>>> origin/main
     def _get_paddle_price_id(self, plan_type: str) -> Optional[str]:
         price_ids = {
             "starter": getattr(settings, "PADDLE_PRICE_ID_STARTER", None),

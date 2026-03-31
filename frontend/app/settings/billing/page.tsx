@@ -22,6 +22,7 @@ import { SUPPORT_EMAIL, supportMailtoHref } from "@/lib/supportContact";
 
 type UsageResponse = {
   plan_type: string;
+<<<<<<< HEAD
   display_plan_type?: string;
   subscription_status?: string;
   entitlement_status?: string;
@@ -29,6 +30,8 @@ type UsageResponse = {
   current_period_end?: string | null;
   entitlement_effective_from?: string | null;
   entitlement_effective_to?: string | null;
+=======
+>>>>>>> origin/main
   limits?: {
     snapshots_per_month?: number;
     release_gate_attempts_per_month?: number;
@@ -60,12 +63,18 @@ export default function AccountBillingPage() {
     }
   );
 
+<<<<<<< HEAD
   const currentPlanId = (data?.display_plan_type || data?.plan_type || "free").toLowerCase();
   const subscriptionStatus = String(data?.subscription_status || "active").toLowerCase();
   const entitlementStatus = String(data?.entitlement_status || "active").toLowerCase();
   const currentPeriodEnd = data?.current_period_end || data?.entitlement_effective_to || null;
   const showManageSubscription =
     currentPlanId === "starter" || currentPlanId === "pro" || subscriptionStatus === "cancelled";
+=======
+  const currentPlanId = (data?.plan_type || "free").toLowerCase();
+  const showManageSubscription =
+    currentPlanId === "starter" || currentPlanId === "pro";
+>>>>>>> origin/main
 
   const paidPlanRank = (id: string): number => {
     if (id === "starter") return 1;
@@ -234,6 +243,7 @@ export default function AccountBillingPage() {
           <br />
           Subscriptions auto-renew unless canceled before the next billing cycle.
         </p>
+<<<<<<< HEAD
         {(entitlementStatus === "active_until_period_end" || subscriptionStatus === "cancelled") && currentPeriodEnd && (
           <div className="mb-6 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-sky-200">
@@ -245,6 +255,8 @@ export default function AccountBillingPage() {
             </p>
           </div>
         )}
+=======
+>>>>>>> origin/main
         {(snapshotsExhausted || replayExhausted || snapshotsNearLimit || replayNearLimit) && (
           <div
             className={clsx(
@@ -297,10 +309,14 @@ export default function AccountBillingPage() {
           <p>
             {showManageSubscription ? (
               <>
+<<<<<<< HEAD
                 {subscriptionStatus === "cancelled"
                   ? "To reactivate, update payment details, or review cancellation timing, use "
                   : "To cancel or update payment details, use "}
                 <strong className="text-slate-200">Cancel</strong>{" "}
+=======
+                To cancel or update payment details, use <strong className="text-slate-200">Cancel</strong>{" "}
+>>>>>>> origin/main
                 below (Paddle billing portal). For other billing help, email{" "}
                 <a
                   href={supportMailtoHref("PluvianAI — Billing support")}
@@ -369,7 +385,11 @@ export default function AccountBillingPage() {
                     </div>
                     {isCurrent && (
                       <span className="px-2.5 py-1 rounded-full bg-emerald-500 text-[9px] font-black uppercase tracking-[0.15em] text-black shadow-[0_0_15px_rgba(16,185,129,0.4)]">
+<<<<<<< HEAD
                         {entitlementStatus === "active_until_period_end" ? "Ending" : "Current"}
+=======
+                        Current
+>>>>>>> origin/main
                       </span>
                     )}
                   </div>
@@ -403,7 +423,11 @@ export default function AccountBillingPage() {
                       disabled
                       className="w-full py-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-[11px] font-bold uppercase tracking-widest text-emerald-300 cursor-default"
                     >
+<<<<<<< HEAD
                       {entitlementStatus === "active_until_period_end" ? "Active Until Period End" : "Current Plan"}
+=======
+                      Current Plan
+>>>>>>> origin/main
                     </button>
                   ) : canCheckout ? (
                     <button

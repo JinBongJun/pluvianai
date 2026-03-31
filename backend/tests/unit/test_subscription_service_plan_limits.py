@@ -3,7 +3,10 @@ from app.models.organization import Organization
 from app.models.project import Project
 from app.core.usage_limits import get_limit_status
 from app.services.subscription_service import SubscriptionService
+<<<<<<< HEAD
 from datetime import datetime, timezone
+=======
+>>>>>>> origin/main
 
 
 def test_get_user_plan_includes_organizations_limit(db, test_user):
@@ -80,6 +83,7 @@ def test_get_limit_status_supports_org_and_project_metrics(db, test_user):
     assert project_status["limit"] == 8
     assert project_status["current"] == 1
     assert project_status["remaining"] == 7
+<<<<<<< HEAD
 
 
 def test_get_user_plan_returns_free_for_cancelled_expired_subscription(db, test_user):
@@ -97,3 +101,5 @@ def test_get_user_plan_returns_free_for_cancelled_expired_subscription(db, test_
 
     assert plan_info["plan_type"] == "free"
     assert plan_info["status"] == "cancelled"
+=======
+>>>>>>> origin/main

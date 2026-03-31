@@ -23,10 +23,14 @@ export default function AccountUsagePage() {
     () => authAPI.getMyUsage()
   );
 
+<<<<<<< HEAD
   const planType = (data?.display_plan_type || data?.plan_type || "free").toLowerCase();
   const subscriptionStatus = String(data?.subscription_status || "active").toLowerCase();
   const entitlementStatus = String(data?.entitlement_status || "active").toLowerCase();
   const currentPeriodEnd = data?.current_period_end || data?.entitlement_effective_to || null;
+=======
+  const planType = (data?.plan_type || "free").toLowerCase();
+>>>>>>> origin/main
   const limits = data?.limits || {};
   const usage = (data?.usage_this_month || {}) as Record<string, unknown>;
   const fb = ACCOUNT_USAGE_FALLBACK_BY_PLAN[planType] ?? ACCOUNT_USAGE_FALLBACK_BY_PLAN.free;
@@ -69,6 +73,7 @@ export default function AccountUsagePage() {
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed relative z-10">
           Release Gate usage is counted by replay attempt: selected logs x repeats.
         </p>
+<<<<<<< HEAD
         {(entitlementStatus === "active_until_period_end" || subscriptionStatus === "cancelled") && currentPeriodEnd && (
           <div className="mb-8 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-sky-200">
@@ -80,6 +85,8 @@ export default function AccountUsagePage() {
             </p>
           </div>
         )}
+=======
+>>>>>>> origin/main
         {(snapshotsExhausted || replayExhausted || snapshotsNearLimit || replayNearLimit) && (
           <div
             className={clsx(
@@ -296,11 +303,14 @@ export default function AccountUsagePage() {
               <div className="text-3xl font-bold text-white capitalize">
                 {planType}
               </div>
+<<<<<<< HEAD
               {(entitlementStatus === "active_until_period_end" || subscriptionStatus === "cancelled") && (
                 <div className="mt-2 text-[10px] font-bold uppercase tracking-widest text-sky-300">
                   Active until period end
                 </div>
               )}
+=======
+>>>>>>> origin/main
             </div>
           </div>
         </div>

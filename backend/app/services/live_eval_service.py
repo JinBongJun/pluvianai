@@ -148,6 +148,7 @@ def normalize_eval_config(raw_eval: Any) -> Dict[str, Any]:
             "fail_from": _clamp_int(status_fail_from, 500, 100, 599),
         },
         "json": {
+<<<<<<< HEAD
             "enabled": bool((cfg.get("json") or {}).get("enabled", True)),
             "mode": (cfg.get("json") or {}).get("mode") or "if_json",
         },
@@ -158,6 +159,18 @@ def normalize_eval_config(raw_eval: Any) -> Dict[str, Any]:
         },
         "repetition": {
             "enabled": bool((cfg.get("repetition") or {}).get("enabled", True)),
+=======
+            "enabled": bool((cfg.get("json") or {}).get("enabled", False)),
+            "mode": (cfg.get("json") or {}).get("mode") or "if_json",
+        },
+        "refusal": {"enabled": bool((cfg.get("refusal") or {}).get("enabled", False))},
+        "length": {
+            "enabled": bool((cfg.get("length") or {}).get("enabled", False)),
+            "fail_ratio": _clamp_float(length_fail_ratio, 0.75, 0.0, 3.0),
+        },
+        "repetition": {
+            "enabled": bool((cfg.get("repetition") or {}).get("enabled", False)),
+>>>>>>> origin/main
             "fail_line_repeats": _clamp_int(repetition_fail_repeats, 6, 1, 150),
         },
         "required": {
@@ -170,7 +183,11 @@ def normalize_eval_config(raw_eval: Any) -> Dict[str, Any]:
             "sections_csv": str((cfg.get("format") or {}).get("sections_csv", "")),
         },
         "leakage": {"enabled": bool((cfg.get("leakage") or {}).get("enabled", False))},
+<<<<<<< HEAD
         "tool": {"enabled": bool(tool_cfg.get("enabled", True))},
+=======
+        "tool": {"enabled": bool(tool_cfg.get("enabled", False))},
+>>>>>>> origin/main
     }
     if normalized["json"]["mode"] not in ("if_json", "always", "off"):
         normalized["json"]["mode"] = "if_json"
