@@ -468,11 +468,11 @@ export function useReleaseGateValidateRun(options: {
       }
     } catch (e: any) {
       const parsedPlanError = parsePlanLimitError(e);
-      if (parsedPlanError && parsedPlanError.code === "LIMIT_PLATFORM_REPLAY_CREDITS") {
+      if (parsedPlanError && parsedPlanError.code === "LIMIT_RELEASE_GATE_ATTEMPTS") {
         setPlanError(parsedPlanError);
         setError(
           parsedPlanError.message ||
-            "You have used all hosted replay credits for this billing period. Use your own provider key or upgrade your plan for more hosted runs."
+            "You have used all included Release Gate usage for this billing period. Usage is counted by replay attempt (selected logs x repeats). Upgrade your plan to keep running Release Gate."
         );
         setResult(null);
         return;

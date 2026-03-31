@@ -55,11 +55,11 @@ export function PlanLimitBanner({
         body ||
         "New logs are not being recorded because you have reached the monthly snapshot limit for your current plan. Upgrade your plan to keep logging new runs.";
       break;
-    case "LIMIT_PLATFORM_REPLAY_CREDITS":
-      title = "Hosted replay credits exhausted";
+    case "LIMIT_RELEASE_GATE_ATTEMPTS":
+      title = "Release Gate usage exhausted";
       body =
         body ||
-        "You have used all hosted replay credits for this billing period. Use your own provider key or upgrade your plan for more hosted runs.";
+        "You have reached your included Release Gate usage for this billing period. Usage is counted by replay attempt (selected logs x repeats). Upgrade your plan to keep running Release Gate.";
       break;
     default:
       title = "Plan limit reached";

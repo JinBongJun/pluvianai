@@ -54,12 +54,14 @@ export const authAPI = {
     plan_type: string;
     limits: {
       snapshots_per_month?: number;
+      release_gate_attempts_per_month?: number;
       guard_credits_per_month?: number;
       platform_replay_credits_per_month?: number;
       [k: string]: unknown;
     };
     usage_this_month: {
       snapshots: number;
+      release_gate_attempts?: number;
       guard_credits: number;
       platform_replay_credits?: number;
       api_calls?: number;

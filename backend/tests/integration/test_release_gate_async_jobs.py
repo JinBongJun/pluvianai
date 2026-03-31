@@ -3,6 +3,8 @@ from fastapi import status
 
 from app.api.v1.endpoints import release_gate as release_gate_module
 from app.models.release_gate_job import ReleaseGateJob
+from app.models.snapshot import Snapshot
+from app.models.trace import Trace
 
 
 @pytest.mark.integration
@@ -50,11 +52,6 @@ class TestReleaseGateAsyncJobs:
     ):
         """Platform mode must use hosted quick-pick models unless superuser / RELEASE_GATE_ALLOW_CUSTOM_MODELS."""
         monkeypatch.setattr(
-            release_gate_module,
-            "check_guard_credits_limit",
-            lambda _db, _uid, _is_super: (True, None),
-        )
-        monkeypatch.setattr(
             release_gate_module.app_settings,
             "RELEASE_GATE_ALLOW_CUSTOM_MODELS",
             False,
@@ -81,13 +78,8 @@ class TestReleaseGateAsyncJobs:
         assert details.get("error_code") == "HOSTED_MODEL_NOT_ALLOWED"
 
     async def test_validate_async_superuser_bypasses_hosted_model_allowlist(
-        self, async_client, auth_headers, test_user, test_project, monkeypatch
+        self, async_client, auth_headers, test_user, test_project, db, monkeypatch
     ):
-        monkeypatch.setattr(
-            release_gate_module,
-            "check_guard_credits_limit",
-            lambda _db, _uid, _is_super: (True, None),
-        )
         monkeypatch.setattr(
             release_gate_module.app_settings,
             "RELEASE_GATE_ALLOW_CUSTOM_MODELS",
@@ -95,10 +87,26 @@ class TestReleaseGateAsyncJobs:
             raising=False,
         )
         test_user.is_superuser = True
+        trace = Trace(id="rg-async-superuser-trace", project_id=test_project.id)
+        db.add(trace)
+        db.add(
+            Snapshot(
+                project_id=test_project.id,
+                trace_id=trace.id,
+                agent_id="agent-A",
+                provider="openai",
+                model="gpt-4.1-mini",
+                payload={},
+                user_message="hello",
+                response="world",
+            )
+        )
+        db.commit()
 
         response = await async_client.post(
             f"/api/v1/projects/{test_project.id}/release-gate/validate-async",
             json={
+                "trace_id": trace.id,
                 "model_source": "platform",
                 "replay_provider": "openai",
                 "new_model": "gpt-4o",

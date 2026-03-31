@@ -269,7 +269,6 @@ class TestReleaseGateOverridesAndExport:
         monkeypatch.setattr(rg.app_settings, "SELF_HOSTED_MODE", True, raising=False)
         monkeypatch.setattr(rg.app_settings, "OPENAI_API_KEY", "sk-openai", raising=False)
         monkeypatch.setattr(rg.app_settings, "GOOGLE_API_KEY", "sk-google", raising=False)
-        monkeypatch.setattr(rg, "check_guard_credits_limit", lambda *args, **kwargs: (True, None), raising=True)
 
         async def _fake_run_batch_replay(**kwargs):
             replay_model = str(kwargs.get("new_model") or snapshot.model)

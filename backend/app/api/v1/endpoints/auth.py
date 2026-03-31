@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.usage_limits import (
+    get_release_gate_attempts_this_month,
     get_snapshots_count_this_month,
     get_guard_credits_this_month,
     get_platform_replay_credits_this_month,
@@ -595,6 +596,7 @@ async def get_my_usage(
     service = SubscriptionService(db)
     plan_info = service.get_user_plan(current_user.id)
     snapshots = get_snapshots_count_this_month(db, current_user.id)
+    release_gate_attempts = get_release_gate_attempts_this_month(db, current_user.id)
     guard_credits = get_guard_credits_this_month(db, current_user.id)
     platform_replay_credits = get_platform_replay_credits_this_month(db, current_user.id)
     limits = plan_info.get("limits", {})
@@ -628,6 +630,7 @@ async def get_my_usage(
         "limits": limits,
         "usage_this_month": {
             "snapshots": snapshots,
+            "release_gate_attempts": release_gate_attempts,
             "guard_credits": guard_credits,
             "platform_replay_credits": platform_replay_credits,
             "api_calls": api_calls_current,

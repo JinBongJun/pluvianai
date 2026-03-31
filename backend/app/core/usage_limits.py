@@ -127,6 +127,24 @@ def get_platform_replay_credits_this_month(db: Session, user_id: int) -> int:
     return get_guard_credits_this_month(db, user_id)
 
 
+def get_release_gate_attempts_this_month(db: Session, user_id: int) -> int:
+    """
+    Sum replay attempts (selected snapshots x repeats) in the current usage window.
+    """
+    start, end = get_usage_period_bounds_utc(db, user_id)
+    row = (
+        db.query(func.coalesce(func.sum(Usage.quantity), 0))
+        .filter(
+            Usage.user_id == user_id,
+            Usage.metric_name == "release_gate_attempts",
+            Usage.timestamp >= start,
+            Usage.timestamp <= end,
+        )
+        .first()
+    )
+    return int(row[0]) if row and row[0] is not None else 0
+
+
 def _resolve_user_plan_type(db: Session | None, user_id: int) -> str:
     """Resolve canonical plan type for a user from subscription row."""
     if db is None:
@@ -149,7 +167,7 @@ def _get_user_plan_limits(db: Session | None, user_id: int) -> dict:
 def get_limit_status(db: Session | None, user_id: int, metric: str) -> Dict[str, Any]:
     """
     Return a normalized limit status payload for limit-aware APIs/UI.
-    Metrics: organizations | projects | snapshots | platform_replay_credits
+    Metrics: organizations | projects | snapshots | platform_replay_credits | release_gate_attempts
     """
     plan_type = _resolve_user_plan_type(db, user_id)
     limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
@@ -195,6 +213,10 @@ def get_limit_status(db: Session | None, user_id: int, metric: str) -> Dict[str,
         cap = limits.get("platform_replay_credits_per_month", limits.get("guard_credits_per_month"))
         limit = int(cap) if cap is not None else -1
         current = int(get_platform_replay_credits_this_month(db, user_id)) if db is not None else 0
+    elif metric == "release_gate_attempts":
+        cap = limits.get("release_gate_attempts_per_month")
+        limit = int(cap) if cap is not None else -1
+        current = int(get_release_gate_attempts_this_month(db, user_id)) if db is not None else 0
     else:
         raise ValueError(f"Unsupported metric for limit status: {metric}")
 
@@ -252,3 +274,26 @@ def check_platform_replay_credits_limit(
 ) -> Tuple[bool, str | None]:
     """Explicit alias for hosted replay credit checks."""
     return check_guard_credits_limit(db, user_id, is_superuser)
+
+
+def check_release_gate_attempts_limit(
+    db: Session, user_id: int, amount: int, is_superuser: bool = False
+) -> Tuple[bool, str | None]:
+    """
+    Returns (allowed, error_message). Usage is counted by replay attempt:
+    selected snapshots multiplied by repeat count.
+    """
+    if is_superuser:
+        return (True, None)
+    limits = _get_user_plan_limits(db, user_id)
+    cap = limits.get("release_gate_attempts_per_month")
+    if cap is None or cap == -1:
+        return (True, None)
+    current = get_release_gate_attempts_this_month(db, user_id)
+    if current + amount > cap:
+        return (
+            False,
+            "You have used all included Release Gate usage for this billing period. "
+            "Usage is counted by replay attempt (selected logs x repeats). Upgrade your plan to keep running Release Gate.",
+        )
+    return (True, None)

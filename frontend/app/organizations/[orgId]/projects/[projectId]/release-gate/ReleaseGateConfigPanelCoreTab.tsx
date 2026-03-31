@@ -372,7 +372,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
               )}
               title={
                 hostedReplayCreditsExhausted
-                  ? "Monthly hosted replay credits are exhausted. Use Custom (BYOK) or wait for the next billing period."
+                  ? "Monthly Release Gate usage is exhausted. Reduce selected logs or repeats, or wait for the next billing period."
                   : undefined
               }
             >

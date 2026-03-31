@@ -158,11 +158,11 @@ export default function ReplayPage() {
       const parsed = parsePlanLimitError(err);
       const detail = err?.response?.data?.detail;
       const errorCode = typeof detail === "object" ? detail?.code : undefined;
-      if (parsed && parsed.code === "LIMIT_PLATFORM_REPLAY_CREDITS") {
+      if (parsed && parsed.code === "LIMIT_RELEASE_GATE_ATTEMPTS") {
         setPlanError(parsed);
         toast.showToast(
           parsed.message ||
-            "You have used all hosted replay credits for this billing period. Use your own provider key or upgrade your plan.",
+            "You have used all included Release Gate usage for this billing period. Usage is counted by replay attempt (selected logs x repeats). Upgrade your plan to continue.",
           "warning"
         );
       } else if (err?.response?.status === 403 && errorCode === "CONCURRENT_TEST_NOT_ALLOWED") {

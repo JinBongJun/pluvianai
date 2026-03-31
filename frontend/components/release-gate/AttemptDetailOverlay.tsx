@@ -965,7 +965,7 @@ export function AttemptDetailOverlay({
       {
         label: "Replay credits",
         value: formatReplayCredits(used_credits ?? undefined),
-        detail: "Hosted replay credits when using platform models",
+        detail: "Internal hosted cost tracking for platform models",
       },
       {
         label: "Eval Coverage",

@@ -109,10 +109,12 @@ export default function BillingPage() {
     (effectiveUsage?.limits?.api_calls_per_month as number | undefined) ?? limitData.calls;
   const projectsUsed = org?.projects || 0;
   const platformReplayCreditsUsed =
+    effectiveUsage?.usage_this_month?.release_gate_attempts ??
     effectiveUsage?.usage_this_month?.platform_replay_credits ??
     effectiveUsage?.usage_this_month?.guard_credits ??
     0;
   const platformReplayCreditsLimit =
+    (effectiveUsage?.limits?.release_gate_attempts_per_month as number | undefined) ??
     (effectiveUsage?.limits?.platform_replay_credits_per_month as number | undefined) ??
     (effectiveUsage?.limits?.guard_credits_per_month as number | undefined) ??
     limitData.platformReplayCredits;
@@ -153,7 +155,7 @@ export default function BillingPage() {
         "1 organization",
         "2 active projects",
         "10,000 snapshots per month",
-        "60 hosted replay credits per month",
+        "60 replay attempts per month",
       ],
       current: currentPlanId === "free",
     },
@@ -167,7 +169,7 @@ export default function BillingPage() {
         "3 organizations",
         "8 active projects",
         "50,000 snapshots per month",
-        "600 hosted replay credits per month",
+        "600 replay attempts per month",
       ],
       current: currentPlanId === "starter",
     },
@@ -181,7 +183,7 @@ export default function BillingPage() {
         "10 organizations",
         "30 active projects",
         "200,000 snapshots per month",
-        "3,000 hosted replay credits per month",
+        "3,000 replay attempts per month",
       ],
       current: currentPlanId === "pro",
     },
@@ -192,7 +194,7 @@ export default function BillingPage() {
       period: "",
       desc: "For teams that need custom limits, procurement, and deployment controls.",
       features: [
-        "Custom hosted replay budget",
+        "Custom replay attempt budget",
         "Custom limits, SLAs, and retention",
         "Dedicated support",
         "Security review and deployment options",
@@ -230,7 +232,7 @@ export default function BillingPage() {
               View usage for this organization&apos;s projects. For account-wide quotas and billing, use the Account Usage and Billing pages.
             </p>
           <p className="text-slate-500 text-xs font-semibold uppercase tracking-widest mt-4 max-w-2xl leading-relaxed">
-            BYOK runs do not consume hosted replay credits.
+            Release Gate usage is counted by replay attempt: selected logs x repeats.
           </p>
           {(snapshotsExhausted || replayExhausted || snapshotsNearLimit || replayNearLimit) && (
             <div
@@ -252,16 +254,16 @@ export default function BillingPage() {
               <p className="mt-1 text-xs text-white/90">
                 {snapshotsExhausted || replayExhausted
                   ? snapshotsExhausted && replayExhausted
-                    ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and hosted replay credits (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}) are exhausted.`
+                    ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and replay attempts (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}) are exhausted.`
                     : snapshotsExhausted
                       ? `Snapshots are exhausted (${snapshotsUsed}/${snapshotsLimit}).`
-                      : `Hosted replay credits are exhausted (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}).`
+                      : `Replay attempts are exhausted (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}).`
                   : snapshotsNearLimit && replayNearLimit
-                    ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and hosted replay credits (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}) are above 80%.`
+                    ? `Snapshots (${snapshotsUsed}/${snapshotsLimit}) and replay attempts (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}) are above 80%.`
                     : snapshotsNearLimit
                       ? `Snapshots are above 80% (${snapshotsUsed}/${snapshotsLimit}).`
-                      : `Hosted replay credits are above 80% (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}).`}{" "}
-                Upgrade in account billing or run BYOK where supported.
+                      : `Replay attempts are above 80% (${platformReplayCreditsUsed}/${platformReplayCreditsLimit}).`}{" "}
+                Reduce selected logs or repeats, or upgrade in account billing.
               </p>
               <Link
                 href="/settings/billing"
@@ -417,7 +419,7 @@ export default function BillingPage() {
             <div className="rounded-xl border border-white/10 bg-white/5 p-6">
               <div className="flex items-center gap-2 mb-2">
                 <Zap className="h-5 w-5 text-cyan-400" />
-                <span className="text-sm text-slate-400">Platform Replay Credits</span>
+                <span className="text-sm text-slate-400">Release Gate Usage</span>
               </div>
               <div className="text-3xl font-bold text-white">
                 {platformReplayCreditsUsed.toLocaleString()}
@@ -490,7 +492,7 @@ export default function BillingPage() {
                   />
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  Hosted PluvianAI model usage spends these credits. BYOK runs do not.
+                  Usage is counted by replay attempt: selected logs x repeats.
                 </p>
               </div>
             )}

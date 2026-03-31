@@ -27,6 +27,7 @@ class SubscriptionService:
             "api_calls": "api_calls",
             "snapshots": "snapshots",
             "judge_calls": "judge_calls",
+            "release_gate_attempts": "release_gate_attempts",
             "guard_credits": "guard_credits_replay",
             "platform_replay_credits": "guard_credits_replay",
         }
@@ -51,6 +52,7 @@ class SubscriptionService:
                 "team_members_per_project": limits["team_members_per_project"],
                 "data_retention_days": limits["data_retention_days"],
                 "snapshots_per_month": limits.get("snapshots_per_month"),
+                "release_gate_attempts_per_month": limits.get("release_gate_attempts_per_month"),
                 "guard_credits_per_month": limits.get("guard_credits_per_month"),
                 "platform_replay_credits_per_month": limits.get(
                     "platform_replay_credits_per_month", limits.get("guard_credits_per_month")

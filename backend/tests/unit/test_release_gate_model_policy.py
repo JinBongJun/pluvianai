@@ -186,7 +186,7 @@ class TestReleaseGateOverrideSanitizer:
 
 
 @pytest.mark.unit
-class TestReleaseGatePlatformCreditGate:
+class TestReleaseGateAttemptGate:
     def _make_user(self, user_id: int = 1, is_superuser: bool = False):
         class DummyUser:
             def __init__(self):
@@ -195,58 +195,82 @@ class TestReleaseGatePlatformCreditGate:
 
         return DummyUser()
 
-    def test_enforce_platform_credit_limit_allows_when_not_platform_mode(self, monkeypatch):
+    def test_calculate_release_gate_attempts_uses_snapshot_count_times_repeats(self):
         from app.api.v1.endpoints import release_gate as rg
 
-        payload = rg.ReleaseGateValidateRequest(model_source="detected")
-        user = self._make_user()
+        payload = rg.ReleaseGateValidateRequest(repeat_runs=10)
+        assert rg._calculate_release_gate_attempts([object(), object()], payload) == 20
 
-        # Should not even consult guard credit checker when not in platform mode.
-        called = {"v": False}
-
-        def _fake_check(*args, **kwargs):
-            called["v"] = True
-            return (False, "blocked")
-
-        monkeypatch.setattr(rg, "check_guard_credits_limit", _fake_check, raising=True)
-        rg._enforce_platform_replay_credit_limit(payload, db=None, current_user=user)
-        assert called["v"] is False
-
-    def test_enforce_platform_credit_limit_allows_when_quota_available(self, monkeypatch):
+    def test_enforce_release_gate_attempt_limit_allows_when_quota_available(self, monkeypatch):
         from app.api.v1.endpoints import release_gate as rg
 
-        payload = rg.ReleaseGateValidateRequest(model_source="platform", replay_provider="openai")
+        payload = rg.ReleaseGateValidateRequest(repeat_runs=3)
         user = self._make_user()
+        resolved = rg._ResolvedReleaseGateInputs(
+            trace_id="trace-1",
+            baseline_trace_id="trace-1",
+            snapshots=[object(), object()],
+        )
 
         monkeypatch.setattr(
             rg,
-            "check_guard_credits_limit",
-            lambda db, uid, is_super: (True, None),
+            "check_release_gate_attempts_limit",
+            lambda db, uid, amount, is_superuser: (True, None),
             raising=True,
         )
-        # No exception when allowed
-        rg._enforce_platform_replay_credit_limit(payload, db=None, current_user=user)
+        attempts = rg._enforce_release_gate_attempt_limit(
+            payload,
+            db=None,
+            current_user=user,
+            project_id=1,
+            resolved_inputs=resolved,
+        )
+        assert attempts == 6
 
-    def test_enforce_platform_credit_limit_blocks_with_expected_error_code(self, monkeypatch):
+    def test_enforce_release_gate_attempt_limit_blocks_with_expected_error_code(self, monkeypatch):
         from app.api.v1.endpoints import release_gate as rg
         from fastapi import HTTPException
 
-        payload = rg.ReleaseGateValidateRequest(model_source="platform", replay_provider="openai")
+        payload = rg.ReleaseGateValidateRequest(repeat_runs=5)
         user = self._make_user()
+        resolved = rg._ResolvedReleaseGateInputs(
+            trace_id="trace-1",
+            baseline_trace_id="trace-1",
+            snapshots=[object(), object()],
+        )
 
         monkeypatch.setattr(
             rg,
-            "check_guard_credits_limit",
-            lambda db, uid, is_super: (False, "Hosted replay credit limit reached."),
+            "check_release_gate_attempts_limit",
+            lambda db, uid, amount, is_superuser: (False, "Release Gate usage exhausted."),
+            raising=True,
+        )
+        monkeypatch.setattr(
+            rg,
+            "get_limit_status",
+            lambda db, uid, metric: {
+                "plan_type": "free",
+                "metric": metric,
+                "current": 60,
+                "limit": 60,
+                "remaining": 0,
+                "reset_at": "2026-04-01T00:00:00+00:00",
+            },
             raising=True,
         )
 
         with pytest.raises(HTTPException) as e:
-            rg._enforce_platform_replay_credit_limit(payload, db=None, current_user=user)
+            rg._enforce_release_gate_attempt_limit(
+                payload,
+                db=None,
+                current_user=user,
+                project_id=1,
+                resolved_inputs=resolved,
+            )
 
         assert e.value.status_code == 403
         assert isinstance(e.value.detail, dict)
-        assert e.value.detail.get("code") == "LIMIT_PLATFORM_REPLAY_CREDITS"
+        assert e.value.detail.get("code") == "LIMIT_RELEASE_GATE_ATTEMPTS"
 
 
 @pytest.mark.unit
