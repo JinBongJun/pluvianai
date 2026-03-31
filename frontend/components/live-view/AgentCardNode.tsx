@@ -340,6 +340,40 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
                     </p>
                   )}
                 </div>
+
+                <div className="mt-6 shrink-0">
+                  <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 mb-3">
+                    <ShieldCheck className="w-3.5 h-3.5 text-amber-400/70" />
+                    Policy Checks
+                  </div>
+                  {Array.isArray(rgDetails.policyCheckCards) && rgDetails.policyCheckCards.length > 0 ? (
+                    <ul className="space-y-3">
+                      {rgDetails.policyCheckCards.map(
+                        (card: { id: string; label: string; detail: string }) => (
+                          <li key={card.id} className="flex flex-col gap-1.5">
+                            <div className="flex items-center gap-2.5">
+                              <CheckCircle2 className="w-4 h-4 text-amber-300 shrink-0" />
+                              <span className="text-[13px] font-semibold text-slate-200 tracking-wide truncate">
+                                {card.label}
+                              </span>
+                            </div>
+                            {card.detail ? (
+                              <div className="pl-[26px]">
+                                <span className="text-xs text-slate-500 bg-white/[0.03] px-2 py-1 rounded-md line-clamp-2">
+                                  {card.detail}
+                                </span>
+                              </div>
+                            ) : null}
+                          </li>
+                        )
+                      )}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-slate-500 bg-white/[0.02] px-3 py-2 rounded-xl border border-white/5 border-dashed">
+                      No policy checks enabled.
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* Right Column: Config summary */}

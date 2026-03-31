@@ -11,6 +11,12 @@ export type ExpandedMapActiveCheckCard = {
   params: string;
 };
 
+export type ExpandedMapPolicyCheckCard = {
+  id: string;
+  label: string;
+  detail: string;
+};
+
 export function buildExpandedMapActiveChecksCards(
   runEvalElements: { name: string }[],
   agentEvalConfig: Record<string, unknown> | undefined
@@ -150,6 +156,8 @@ export type ReleaseGateMapRgDetails = {
   toolsCount: number;
   activeChecks: string[];
   activeChecksCards: ExpandedMapActiveCheckCard[];
+  policyChecks: string[];
+  policyCheckCards: ExpandedMapPolicyCheckCard[];
   strictnessLabel: string;
   failRateMax: number;
   flakyRateMax: number;
@@ -194,6 +202,17 @@ export function buildReleaseGateMapRgDetails(
   const toolsCount = requestTools.length;
   const agentEvalConfig = p.agentEvalData?.config as Record<string, unknown> | undefined;
   const activeChecksCards = buildExpandedMapActiveChecksCards(p.runEvalElements, agentEvalConfig);
+  const toolPolicyConfig = agentEvalConfig?.tool as Record<string, unknown> | undefined;
+  const toolPolicyEnabled = toolPolicyConfig?.enabled !== false;
+  const policyCheckCards = toolPolicyEnabled
+    ? [
+        {
+          id: "tool_use_policy",
+          label: "Tool Use Policy",
+          detail: "Tracked separately from eval coverage as a behavior policy check.",
+        },
+      ]
+    : [];
   const samplingSummary = buildExpandedMapSamplingSummary(p.requestBody);
   const toolsSummary = buildExpandedMapToolsSummary(toolsCount);
   const overrideSummary = buildExpandedMapOverrideSummary(
@@ -220,6 +239,8 @@ export function buildReleaseGateMapRgDetails(
     toolsCount,
     activeChecks: p.runEvalElements.map((e: { name: string }) => e.name),
     activeChecksCards,
+    policyChecks: policyCheckCards.map(card => card.label),
+    policyCheckCards,
     strictnessLabel: p.REPLAY_THRESHOLD_PRESETS[p.thresholdPreset]?.label ?? p.thresholdPreset,
     failRateMax: p.failRateMax,
     flakyRateMax: p.flakyRateMax,
