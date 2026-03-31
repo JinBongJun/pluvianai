@@ -18,6 +18,10 @@ export default function BillingPage() {
   const router = useRouter();
   const [fallbackUsage, setFallbackUsage] = useState<{
     plan_type?: string;
+    display_plan_type?: string;
+    subscription_status?: string;
+    entitlement_status?: string;
+    current_period_end?: string | null;
     limits?: Record<string, number>;
     usage_this_month?: Record<string, number>;
   } | null>(null);
@@ -65,7 +69,12 @@ export default function BillingPage() {
 
   const effectiveUsage = myUsage || fallbackUsage;
 
-  const currentPlanId = String(effectiveUsage?.plan_type || org?.plan || "free").toLowerCase();
+  const currentPlanId = String(
+    effectiveUsage?.display_plan_type || effectiveUsage?.plan_type || org?.plan || "free"
+  ).toLowerCase();
+  const subscriptionStatus = String(effectiveUsage?.subscription_status || "active").toLowerCase();
+  const entitlementStatus = String(effectiveUsage?.entitlement_status || "active").toLowerCase();
+  const currentPeriodEnd = effectiveUsage?.current_period_end || null;
 
   // Org-scoped usage view – limits come from account-level plan;
   // we only need light defaults here for visualization.
@@ -234,6 +243,18 @@ export default function BillingPage() {
           <p className="text-slate-500 text-xs font-semibold uppercase tracking-widest mt-4 max-w-2xl leading-relaxed">
             Release Gate usage is counted by replay attempt: selected logs x repeats.
           </p>
+          {(entitlementStatus === "active_until_period_end" || subscriptionStatus === "cancelled") &&
+            currentPeriodEnd && (
+              <div className="mt-4 max-w-3xl rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-sky-200">
+                  Account subscription ending
+                </p>
+                <p className="mt-1 text-xs text-white/90">
+                  Account-level {currentPlanId} access remains active until{" "}
+                  {new Date(currentPeriodEnd).toLocaleDateString()}.
+                </p>
+              </div>
+            )}
           {(snapshotsExhausted || replayExhausted || snapshotsNearLimit || replayNearLimit) && (
             <div
               className={clsx(
@@ -432,7 +453,7 @@ export default function BillingPage() {
         <div className="mb-16 rounded-xl border border-white/10 bg-white/5 p-6">
           <div className="flex items-center gap-3 mb-6">
             <h2 className="text-lg font-semibold text-white">Plan Limits</h2>
-            {effectiveUsage?.plan_type === "free" && (
+            {currentPlanId === "free" && (
               <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-full">
                 Free plan
               </span>

@@ -38,12 +38,23 @@ class SubscriptionService:
         subscription = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
 
         # Default to free plan if no subscription exists
+        now = datetime.now(timezone.utc)
+        status = str(subscription.status if subscription else "active").strip().lower()
+        if status == "canceled":
+            status = "cancelled"
+
         plan_type = normalize_plan_type(subscription.plan_type if subscription else "free")
+        if subscription and status in {"cancelled", "free"}:
+            period_end = subscription.current_period_end
+            if period_end is not None and period_end.tzinfo is None:
+                period_end = period_end.replace(tzinfo=timezone.utc)
+            if status == "free" or (period_end is not None and period_end <= now):
+                plan_type = "free"
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
         return {
             "plan_type": plan_type,
-            "status": subscription.status if subscription else "active",
+            "status": status,
             "price_per_month": PLAN_PRICING.get(plan_type, 0),
             "limits": {
                 "organizations": limits["organizations"],
@@ -240,19 +251,30 @@ class SubscriptionService:
         price_per_month: Optional[float] = None,
         current_period_start: Optional[datetime] = None,
         current_period_end: Optional[datetime] = None,
+        provider: Optional[str] = None,
+        provider_environment: Optional[str] = None,
+        canceled_at: Optional[datetime] = None,
+        cancel_effective_at: Optional[datetime] = None,
+        last_provider_event_at: Optional[datetime] = None,
+        last_reconciled_at: Optional[datetime] = None,
     ) -> Subscription:
         """Create or update user subscription"""
         subscription = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
+        normalized_status = "cancelled" if str(status).strip().lower() == "canceled" else str(status).strip().lower()
 
         now = datetime.now(timezone.utc)
-        # Use provided period dates or default to current month
+        # Use provided period dates or default to current month only for new subscriptions.
         if current_period_start is not None:
             period_start = current_period_start
+        elif subscription and subscription.current_period_start is not None:
+            period_start = subscription.current_period_start
         else:
             period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        
+
         if current_period_end is not None:
             period_end = current_period_end
+        elif subscription and subscription.current_period_end is not None:
+            period_end = subscription.current_period_end
         else:
             if now.month == 12:
                 period_end = period_start.replace(year=now.year + 1, month=1)
@@ -261,13 +283,25 @@ class SubscriptionService:
 
         if subscription:
             subscription.plan_type = plan_type
-            subscription.status = status
+            subscription.status = normalized_status
             subscription.current_period_start = period_start
             subscription.current_period_end = period_end
+            if provider:
+                subscription.provider = provider
+            if provider_environment:
+                subscription.provider_environment = provider_environment
             if paddle_subscription_id:
                 subscription.paddle_subscription_id = paddle_subscription_id
             if paddle_customer_id:
                 subscription.paddle_customer_id = paddle_customer_id
+            if canceled_at is not None:
+                subscription.canceled_at = canceled_at
+            if cancel_effective_at is not None:
+                subscription.cancel_effective_at = cancel_effective_at
+            if last_provider_event_at is not None:
+                subscription.last_provider_event_at = last_provider_event_at
+            if last_reconciled_at is not None:
+                subscription.last_reconciled_at = last_reconciled_at
             if price_per_month is not None:
                 subscription.price_per_month = price_per_month
             subscription.updated_at = now
@@ -275,11 +309,17 @@ class SubscriptionService:
             subscription = Subscription(
                 user_id=user_id,
                 plan_type=plan_type,
-                status=status,
+                status=normalized_status,
                 current_period_start=period_start,
                 current_period_end=period_end,
                 paddle_subscription_id=paddle_subscription_id,
                 paddle_customer_id=paddle_customer_id,
+                provider=provider or "paddle",
+                provider_environment=provider_environment or "unknown",
+                canceled_at=canceled_at,
+                cancel_effective_at=cancel_effective_at,
+                last_provider_event_at=last_provider_event_at,
+                last_reconciled_at=last_reconciled_at,
                 price_per_month=price_per_month or PLAN_PRICING.get(plan_type, 0),
             )
             self.db.add(subscription)

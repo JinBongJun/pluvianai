@@ -4,11 +4,14 @@ Unit tests for BillingService
 import hashlib
 import hmac
 import json
+from datetime import datetime
 
 import pytest
 from unittest.mock import patch, MagicMock
 from app.services.billing_service import BillingService, verify_paddle_webhook_signature
 from app.utils.idempotency import idempotency_service
+from app.models.billing_event import BillingEvent
+from app.models.entitlement_snapshot import EntitlementSnapshot
 from app.models.user import User
 from app.models.subscription import Subscription
 from app.services.cache_service import cache_service
@@ -384,11 +387,45 @@ class TestBillingService:
             mock_settings.PADDLE_API_KEY = "pdl_test"
             mock_settings.PADDLE_WEBHOOK_SECRET = secret
             service = BillingService(db)
-            with patch("app.services.subscription_service.SubscriptionService") as mock_sub:
-                mock_sub.return_value.create_or_update_subscription = MagicMock()
-                result = service.handle_paddle_webhook(raw, sig)
+            with patch.object(idempotency_service, "get", return_value=None):
+                with patch.object(idempotency_service, "set"):
+                    with patch("app.services.subscription_service.SubscriptionService") as mock_sub:
+                        mock_sub.return_value.create_or_update_subscription = MagicMock()
+                        result = service.handle_paddle_webhook(raw, sig)
         assert result["status"] == "success"
         assert mock_sub.return_value.create_or_update_subscription.called
+
+    def test_handle_paddle_webhook_persists_billing_event(self, db, test_user):
+        secret = "whsec_paddle_test"
+        payload_obj = {
+            "event_id": "evt_store_1",
+            "event_type": "transaction.completed",
+            "created_at": "2026-03-31T10:00:00Z",
+            "data": {
+                "id": "txn_store_1",
+                "custom_data": {"user_id": str(test_user.id), "plan_type": "starter"},
+                "subscription_id": "sub_store_1",
+                "customer_id": "ctm_store_1",
+            },
+        }
+        raw = json.dumps(payload_obj).encode("utf-8")
+        sig = self._paddle_sig(raw, secret)
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_WEBHOOK_SECRET = secret
+            mock_settings.PADDLE_USE_SANDBOX = True
+            service = BillingService(db)
+            with patch.object(idempotency_service, "get", return_value=None):
+                with patch.object(idempotency_service, "set"):
+                    result = service.handle_paddle_webhook(raw, sig)
+
+        assert result["status"] == "success"
+        event = db.query(BillingEvent).filter(BillingEvent.provider_event_id == "evt_store_1").first()
+        assert event is not None
+        assert event.processing_status == "success"
+        assert event.provider_environment == "sandbox"
+        assert event.provider_subscription_id == "sub_store_1"
+        assert event.user_id == test_user.id
 
     def test_handle_paddle_webhook_missing_custom_data(self, db):
         secret = "whsec_paddle_test"
@@ -402,7 +439,9 @@ class TestBillingService:
             mock_settings.PADDLE_API_KEY = "pdl_test"
             mock_settings.PADDLE_WEBHOOK_SECRET = secret
             service = BillingService(db)
-            result = service.handle_paddle_webhook(raw, sig)
+            with patch.object(idempotency_service, "get", return_value=None):
+                with patch.object(idempotency_service, "set"):
+                    result = service.handle_paddle_webhook(raw, sig)
         assert result.get("status") == "error"
         assert "custom_data" in result.get("message", "").lower()
 
@@ -434,7 +473,9 @@ class TestBillingService:
             mock_settings.PADDLE_API_KEY = "pdl_test"
             mock_settings.PADDLE_WEBHOOK_SECRET = secret
             service = BillingService(db)
-            result = service.handle_paddle_webhook(raw, sig)
+            with patch.object(idempotency_service, "get", return_value=None):
+                with patch.object(idempotency_service, "set"):
+                    result = service.handle_paddle_webhook(raw, sig)
         assert result["status"] == "ignored"
         assert "not handled" in result["message"]
 
@@ -476,7 +517,7 @@ class TestBillingService:
         assert "error" in result
         assert "not configured" in result["error"].lower()
 
-    def test_handle_paddle_webhook_without_event_id_skips_idempotency(self, db):
+    def test_handle_paddle_webhook_without_event_id_uses_payload_hash_for_idempotency(self, db):
         secret = "whsec_paddle_test"
         payload_obj = {"event_type": "transaction.created", "data": {"id": "txn_1"}}
         raw = json.dumps(payload_obj).encode("utf-8")
@@ -492,9 +533,108 @@ class TestBillingService:
                     second = service.handle_paddle_webhook(raw, sig)
 
         assert first["status"] == "ignored"
-        assert second["status"] == "ignored"
-        assert mock_get.call_count == 0
-        assert mock_set.call_count == 0
+        assert second["status"] == "duplicate"
+        assert mock_get.call_count == 2
+        assert mock_set.call_count == 1
+
+    def test_handle_paddle_webhook_subscription_updated_resolves_by_subscription_id(self, db, test_user):
+        db.add(
+            Subscription(
+                user_id=test_user.id,
+                plan_id="starter",
+                status="active",
+                paddle_subscription_id="sub_resolve_1",
+                paddle_customer_id="ctm_old",
+            )
+        )
+        test_user.paddle_customer_id = None
+        db.commit()
+
+        secret = "whsec_paddle_test"
+        payload_obj = {
+            "event_id": "evt_update_1",
+            "event_type": "subscription.updated",
+            "created_at": "2026-03-31T11:00:00Z",
+            "data": {
+                "id": "sub_resolve_1",
+                "customer_id": "ctm_new",
+                "status": "active",
+                "items": [{"price": {"id": "pri_pro"}}],
+                "current_billing_period": {
+                    "starts_at": "2026-03-01T00:00:00Z",
+                    "ends_at": "2026-04-01T00:00:00Z",
+                },
+            },
+        }
+        raw = json.dumps(payload_obj).encode("utf-8")
+        sig = self._paddle_sig(raw, secret)
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_WEBHOOK_SECRET = secret
+            mock_settings.PADDLE_USE_SANDBOX = True
+            mock_settings.PADDLE_PRICE_ID_PRO = "pri_pro"
+            mock_settings.PADDLE_PRICE_ID_STARTER = "pri_st"
+            mock_settings.PADDLE_PRICE_ID_INDIE = None
+            mock_settings.PADDLE_PRICE_ID_STARTUP = None
+            mock_settings.PADDLE_PRICE_ID_ENTERPRISE = None
+            service = BillingService(db)
+            with patch.object(idempotency_service, "get", return_value=None):
+                with patch.object(idempotency_service, "set"):
+                    result = service.handle_paddle_webhook(raw, sig)
+
+        db.refresh(test_user)
+        sub = db.query(Subscription).filter(Subscription.user_id == test_user.id).first()
+        assert result["status"] == "success"
+        assert sub is not None
+        assert sub.plan_type == "pro"
+        assert sub.paddle_subscription_id == "sub_resolve_1"
+        assert sub.paddle_customer_id == "ctm_new"
+
+    def test_handle_paddle_webhook_subscription_canceled_preserves_paid_plan_until_period_end(self, db, test_user):
+        db.add(
+            Subscription(
+                user_id=test_user.id,
+                plan_id="pro",
+                status="active",
+                paddle_subscription_id="sub_cancel_1",
+                paddle_customer_id="ctm_cancel_1",
+                current_period_end=datetime.fromisoformat("2026-04-01T00:00:00+00:00"),
+            )
+        )
+        db.commit()
+
+        secret = "whsec_paddle_test"
+        payload_obj = {
+            "event_id": "evt_cancel_1",
+            "event_type": "subscription.canceled",
+            "created_at": "2026-03-31T12:00:00Z",
+            "data": {
+                "id": "sub_cancel_1",
+                "customer_id": "ctm_cancel_1",
+                "current_billing_period": {
+                    "starts_at": "2026-03-01T00:00:00Z",
+                    "ends_at": "2026-04-01T00:00:00Z",
+                },
+            },
+        }
+        raw = json.dumps(payload_obj).encode("utf-8")
+        sig = self._paddle_sig(raw, secret)
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test"
+            mock_settings.PADDLE_WEBHOOK_SECRET = secret
+            mock_settings.PADDLE_USE_SANDBOX = True
+            service = BillingService(db)
+            with patch.object(idempotency_service, "get", return_value=None):
+                with patch.object(idempotency_service, "set"):
+                    result = service.handle_paddle_webhook(raw, sig)
+
+        sub = db.query(Subscription).filter(Subscription.user_id == test_user.id).first()
+        assert result["status"] == "success"
+        assert sub is not None
+        assert sub.plan_type == "pro"
+        assert sub.status == "cancelled"
+        assert sub.cancel_effective_at is not None
+
 
     def test_handle_paddle_webhook_error_records_dlq(self, db):
         secret = "whsec_paddle_test"
@@ -578,6 +718,57 @@ class TestBillingService:
                 result = service.reconcile_paddle_subscriptions(limit=10)
         assert result["status"] == "success"
         assert result["fixed"] == 1
+
+    def test_get_billing_timeline_for_user_returns_subscription_entitlement_and_events(self, db, test_user):
+        subscription = Subscription(
+            user_id=test_user.id,
+            plan_id="pro",
+            status="cancelled",
+            paddle_subscription_id="sub_timeline_1",
+            paddle_customer_id="ctm_timeline_1",
+        )
+        db.add(subscription)
+        db.commit()
+
+        entitlement = EntitlementSnapshot(
+            user_id=test_user.id,
+            subscription_id=subscription.id,
+            effective_plan_id="pro",
+            entitlement_status="active_until_period_end",
+            effective_from=datetime.fromisoformat("2026-03-01T00:00:00+00:00"),
+            effective_to=datetime.fromisoformat("2099-04-01T00:00:00+00:00"),
+            limits_json={"snapshots_per_month": 200000},
+            features_json={"alerts": "full"},
+            source="billing",
+        )
+        db.add(entitlement)
+        db.add(
+            BillingEvent(
+                provider="paddle",
+                provider_environment="sandbox",
+                provider_event_id="evt_timeline_1",
+                event_type="subscription.canceled",
+                payload_json={"event_type": "subscription.canceled"},
+                payload_hash="abc123",
+                user_id=test_user.id,
+                subscription_id=subscription.id,
+                provider_customer_id="ctm_timeline_1",
+                provider_subscription_id="sub_timeline_1",
+                idempotency_key="test:timeline:1",
+                processing_status="success",
+            )
+        )
+        db.commit()
+
+        result, err = BillingService(db).get_billing_timeline_for_user(test_user.id, event_limit=10)
+
+        assert err is None
+        assert result is not None
+        assert result["user"]["id"] == test_user.id
+        assert result["subscription"]["plan_type"] == "pro"
+        assert result["current_entitlement"]["entitlement_status"] == "active_until_period_end"
+        assert len(result["events"]) == 1
+        assert result["events"][0]["event_type"] == "subscription.canceled"
 
     def test_change_paddle_subscription_plan_upgrade_uses_prorated_immediately(self, db, test_user):
         sub = Subscription(

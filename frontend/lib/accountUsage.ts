@@ -28,6 +28,9 @@ export function accountUsageAsNumber(v: unknown, fallback = 0): number {
 
 export type AccountUsageMetrics = {
   planType: string;
+  displayPlanType: string;
+  subscriptionStatus: string;
+  entitlementStatus: string;
   snapshotsUsed: number;
   /** 0 or negative means unlimited for display bar purposes */
   snapshotsLimit: number;
@@ -45,9 +48,12 @@ export function computeAccountUsageMetrics(
   if (!data) return null;
 
   const planType = (data.plan_type || "free").toLowerCase();
+  const displayPlanType = (data.display_plan_type || data.plan_type || "free").toLowerCase();
+  const subscriptionStatus = String(data.subscription_status || "active").toLowerCase();
+  const entitlementStatus = String(data.entitlement_status || "active").toLowerCase();
   const limits = data.limits || {};
   const usage = data.usage_this_month || {};
-  const fb = ACCOUNT_USAGE_FALLBACK_BY_PLAN[planType] ?? ACCOUNT_USAGE_FALLBACK_BY_PLAN.free;
+  const fb = ACCOUNT_USAGE_FALLBACK_BY_PLAN[displayPlanType] ?? ACCOUNT_USAGE_FALLBACK_BY_PLAN.free;
 
   const snapshotsUsed = usage.snapshots ?? 0;
   const snapshotsLimit = accountUsageAsNumber(
@@ -77,6 +83,9 @@ export function computeAccountUsageMetrics(
 
   return {
     planType,
+    displayPlanType,
+    subscriptionStatus,
+    entitlementStatus,
     snapshotsUsed,
     snapshotsLimit,
     replayUsed,

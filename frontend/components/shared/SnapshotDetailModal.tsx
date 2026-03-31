@@ -38,7 +38,6 @@ import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel"
 import { RequestContextPanel } from "@/components/live-view/RequestContextPanel";
 import { buildNodeRequestOverview } from "@/lib/requestOverview";
 import { formatSnapshotCost, formatSnapshotTokens } from "@/lib/snapshotMetrics";
-import { getEvalDetailFromConfig } from "@/lib/evalConfigDisplay";
 
 export interface SnapshotForDetail {
   id: string | number;
@@ -165,6 +164,11 @@ function safeStringify(val: unknown): string {
   return String(val);
 }
 
+function toFiniteNumber(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function formatEvalStatus(status: string): string {
   if (status === "na") return "NA";
   if (status === "not_applicable") return "N/A";
@@ -215,6 +219,95 @@ function extractStepLogs(
           : undefined;
     return { name, status, runtimeMs, detail };
   });
+}
+
+function getEvalDetail(
+  s: SnapshotForDetail,
+  checkId: string,
+  savedEvalConfig: Record<string, unknown>
+): { actualStr: string; configStr: string } {
+  const cfg = (savedEvalConfig[checkId] || {}) as Record<string, unknown>;
+  const res = String((s.response_text ?? s.response ?? "") || "").trim();
+  const len = res.length;
+  let actualStr = "—";
+  let configStr = "—";
+  switch (checkId) {
+    case "empty": {
+      const minChars = toFiniteNumber(cfg?.min_chars, 16);
+      configStr = `min ${minChars} chars`;
+      actualStr = `${len} chars`;
+      return { actualStr, configStr };
+    }
+    case "latency": {
+      const warn = toFiniteNumber(cfg?.warn_ms, 2000);
+      const crit = toFiniteNumber(cfg?.crit_ms, 5000);
+      configStr = `warn > ${warn}ms, crit > ${crit}ms`;
+      const ms = s.latency_ms ?? 0;
+      actualStr = `${ms}ms`;
+      return { actualStr, configStr };
+    }
+    case "status_code": {
+      const warnFrom = toFiniteNumber(cfg?.warn_from, 400);
+      const critFrom = toFiniteNumber(cfg?.crit_from, 500);
+      configStr = `warn ≥ ${warnFrom}, crit ≥ ${critFrom}`;
+      const code = s.status_code ?? 200;
+      actualStr = String(code);
+      return { actualStr, configStr };
+    }
+    case "length": {
+      const warnR = toFiniteNumber(cfg?.warn_ratio, 0.35);
+      const critR = toFiniteNumber(cfg?.crit_ratio, 0.75);
+      configStr = `warn ±${Math.round(warnR * 100)}%, crit ±${Math.round(critR * 100)}% vs baseline`;
+      actualStr = `${len} chars (vs baseline window)`;
+      return { actualStr, configStr };
+    }
+    case "repetition": {
+      const warnR = toFiniteNumber(cfg?.warn_line_repeats, 3);
+      const critR = toFiniteNumber(cfg?.crit_line_repeats, 6);
+      configStr = `warn ${warnR}, crit ${critR} repeats`;
+      const lines = res
+        .split("\n")
+        .map(l => l.trim())
+        .filter(l => l.length >= 4);
+      const counts: Record<string, number> = {};
+      let maxRep = 0;
+      for (const line of lines) {
+        counts[line] = (counts[line] || 0) + 1;
+        if (counts[line] > maxRep) maxRep = counts[line];
+      }
+      actualStr = maxRep ? `${maxRep} max repeats` : "—";
+      return { actualStr, configStr };
+    }
+    case "json": {
+      const mode = String(cfg?.mode || "if_json");
+      configStr = mode === "if_json" ? "if_json" : mode === "always" ? "always" : "if_json";
+      return { actualStr, configStr };
+    }
+    case "refusal": {
+      configStr = "auto-detect refusal / non-answer patterns";
+      return { actualStr, configStr };
+    }
+    case "required": {
+      const keywordsCsv = String(cfg?.keywords_csv || "");
+      const jsonFieldsCsv = String(cfg?.json_fields_csv || "");
+      const keywordCount = keywordsCsv.split(",").filter(part => part.trim().length > 0).length;
+      const fieldCount = jsonFieldsCsv.split(",").filter(part => part.trim().length > 0).length;
+      configStr = `keywords: ${keywordCount}, json fields: ${fieldCount}`;
+      return { actualStr, configStr };
+    }
+    case "format": {
+      const sectionsCsv = String(cfg?.sections_csv || "");
+      const sectionCount = sectionsCsv.split(",").filter(part => part.trim().length > 0).length;
+      configStr = `required sections: ${sectionCount}`;
+      return { actualStr, configStr };
+    }
+    case "leakage": {
+      configStr = "scan for PII (email, phone) & API keys";
+      return { actualStr, configStr };
+    }
+    default:
+      return { actualStr, configStr };
+  }
 }
 
 function buildToolSummaryEmptyLines(s: SnapshotForDetail): string[] {
@@ -802,7 +895,7 @@ export function SnapshotDetailModal({
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {effectiveEvalEnabled &&
                     displayEvalRows.map(row => {
-                      const detail = getEvalDetailFromConfig(s, row.id, savedEvalConfig);
+                      const detail = getEvalDetail(s, row.id, savedEvalConfig);
                       const EvalIcon = EVAL_CHECK_ICONS[row.id] ?? Scale;
                       return (
                         <div

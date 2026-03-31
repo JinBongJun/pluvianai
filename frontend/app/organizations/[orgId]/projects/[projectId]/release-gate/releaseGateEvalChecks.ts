@@ -18,14 +18,14 @@ export const DEFAULT_EVAL_CHECK_VALUE: Record<string, { enabled: boolean }> = {
   empty: { enabled: true },
   latency: { enabled: true },
   status_code: { enabled: true },
-  refusal: { enabled: false },
-  json: { enabled: false },
-  length: { enabled: false },
-  repetition: { enabled: false },
+  refusal: { enabled: true },
+  json: { enabled: true },
+  length: { enabled: true },
+  repetition: { enabled: true },
   required: { enabled: false },
   format: { enabled: false },
   leakage: { enabled: false },
-  tool: { enabled: false },
+  tool: { enabled: true },
 };
 
 export function shouldShowEvalSetting(value: unknown): boolean {

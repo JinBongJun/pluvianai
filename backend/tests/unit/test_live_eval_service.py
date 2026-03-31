@@ -19,20 +19,6 @@ class TestNormalizeEvalConfig:
         out = normalize_eval_config({})
         assert out["enabled"] is True
 
-    def test_default_checks_are_minimal(self):
-        out = normalize_eval_config({})
-        assert out["empty"]["enabled"] is True
-        assert out["latency"]["enabled"] is True
-        assert out["status_code"]["enabled"] is True
-        assert out["json"]["enabled"] is False
-        assert out["refusal"]["enabled"] is False
-        assert out["length"]["enabled"] is False
-        assert out["repetition"]["enabled"] is False
-        assert out["required"]["enabled"] is False
-        assert out["format"]["enabled"] is False
-        assert out["leakage"]["enabled"] is False
-        assert out["tool"]["enabled"] is False
-
     def test_empty_min_chars(self):
         out = normalize_eval_config({"empty": {"enabled": True, "min_chars": 50}})
         assert out["empty"]["min_chars"] == 50

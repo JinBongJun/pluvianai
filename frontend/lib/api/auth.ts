@@ -52,6 +52,13 @@ export const authAPI = {
 
   getMyUsage: async (): Promise<{
     plan_type: string;
+    display_plan_type?: string;
+    subscription_status?: string;
+    entitlement_status?: string;
+    current_period_start?: string | null;
+    current_period_end?: string | null;
+    entitlement_effective_from?: string | null;
+    entitlement_effective_to?: string | null;
     limits: {
       snapshots_per_month?: number;
       release_gate_attempts_per_month?: number;
