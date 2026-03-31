@@ -68,6 +68,15 @@ export default function InternalUsagePage() {
   }, [isAuthenticated, month]);
 
   const items = data?.items ?? [];
+  const totalAttempts = useMemo(
+    () => items.reduce((sum, item) => sum + Number(item.total_attempts || 0), 0),
+    [items]
+  );
+  const totalRunJobs = useMemo(
+    () => items.reduce((sum, item) => sum + Number(item.runs || 0), 0),
+    [items]
+  );
+  const activeProjects = items.length;
 
   return (
     <main className="min-h-screen p-6 text-white">
@@ -95,6 +104,27 @@ export default function InternalUsagePage() {
             />
           </div>
         </header>
+
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4">
+            <p className="text-[11px] uppercase tracking-wider text-slate-400">Total Replay Attempts</p>
+            <p className="mt-1 text-2xl font-semibold text-sky-300">
+              {loading ? "..." : totalAttempts.toLocaleString()}
+            </p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4">
+            <p className="text-[11px] uppercase tracking-wider text-slate-400">Total Run Jobs</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-100">
+              {loading ? "..." : totalRunJobs.toLocaleString()}
+            </p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4">
+            <p className="text-[11px] uppercase tracking-wider text-slate-400">Active Projects</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-100">
+              {loading ? "..." : activeProjects.toLocaleString()}
+            </p>
+          </div>
+        </section>
 
         {error && (
           <div className="rounded-md border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-200">
