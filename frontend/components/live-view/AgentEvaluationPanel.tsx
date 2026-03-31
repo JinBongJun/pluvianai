@@ -41,12 +41,10 @@ type EvalConfig = {
   format?: { enabled?: boolean; sections_csv?: string };
   leakage?: { enabled?: boolean };
   tool_use_policy?: { enabled?: boolean }; // behavior rules (tool order/allowlist/forbidden)
-  window?: { limit?: number };
 };
 
 const DEFAULT_EVAL: Required<EvalConfig> = {
   enabled: true,
-  window: { limit: 50 },
   empty: { enabled: true, min_chars: 16 },
   latency: { enabled: true, fail_ms: 5000 },
   status_code: { enabled: true, fail_from: 500 },
@@ -66,7 +64,6 @@ function normalizeEvalConfig(input?: Partial<EvalConfig> | null): Required<EvalC
   const cfg = (input || {}) as Partial<EvalConfig>;
   return {
     enabled: cfg.enabled ?? DEFAULT_EVAL.enabled,
-    window: { ...DEFAULT_EVAL.window, ...(cfg.window || {}) },
     empty: { ...DEFAULT_EVAL.empty, ...(cfg.empty || {}) },
     latency: { ...DEFAULT_EVAL.latency, ...(cfg.latency || {}) },
     status_code: { ...DEFAULT_EVAL.status_code, ...(cfg.status_code || {}) },

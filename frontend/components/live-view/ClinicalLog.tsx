@@ -474,7 +474,10 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
     { revalidateOnFocus: false }
   );
   React.useEffect(() => {
-    const persisted = Number(settingsData?.diagnostic_config?.eval?.window?.limit);
+    const persisted = Number(
+      settingsData?.diagnostic_config?.clinical_log?.window_limit ??
+        settingsData?.diagnostic_config?.eval?.window?.limit
+    );
     if (Number.isFinite(persisted)) {
       const clamped = clampRuns(persisted);
       setRecentTraceLimit(clamped);
@@ -547,9 +550,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
     try {
       await liveViewAPI.updateAgentSettings(projectId, agentId, {
         diagnostic_config: {
-          eval: {
-            window: { limit },
-          },
+          clinical_log: { window_limit: limit },
         },
       });
       await mutateSettings();

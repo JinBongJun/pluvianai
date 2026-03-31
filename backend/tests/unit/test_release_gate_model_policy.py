@@ -80,6 +80,22 @@ class TestReleaseGateProviderModelMismatch:
 
 @pytest.mark.unit
 class TestReleaseGateSignalsPayload:
+    def test_configured_eval_check_ids_accepts_nested_agent_diagnostic_config(self):
+        from app.api.v1.endpoints import release_gate as rg
+
+        ids = rg._configured_eval_check_ids(
+            {
+                "eval": {
+                    "empty": {"enabled": True},
+                    "latency": {"enabled": True},
+                    "tool_use_policy": {"enabled": False},
+                },
+                "clinical_log": {"window_limit": 200},
+            }
+        )
+
+        assert ids == ["empty", "latency"]
+
     def test_configured_eval_check_ids_only_include_enabled_canonical_checks(self):
         from app.api.v1.endpoints import release_gate as rg
 
