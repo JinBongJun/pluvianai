@@ -545,11 +545,9 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
     const limit = clampRuns(nextLimit);
     setRecentTraceLimit(limit);
     try {
-      const existingEval = (settingsData?.diagnostic_config?.eval || {}) as Record<string, unknown>;
       await liveViewAPI.updateAgentSettings(projectId, agentId, {
         diagnostic_config: {
           eval: {
-            ...existingEval,
             window: { limit },
           },
         },

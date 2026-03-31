@@ -68,6 +68,83 @@ def test_update_agent_settings_update_records_eval_history():
 
 
 @pytest.mark.unit
+def test_update_agent_settings_replaces_eval_config_instead_of_merging_stale_keys():
+    existing = AgentDisplaySetting(
+        id="s2",
+        project_id=1,
+        system_prompt_hash="agent-replace",
+        diagnostic_config={
+            "eval": {
+                "enabled": True,
+                "empty": {"enabled": True, "min_chars": 8},
+                "json": {"enabled": True, "mode": "always"},
+                "repetition": {"enabled": True, "fail_line_repeats": 4},
+            },
+            "other": {"keep": True},
+        },
+    )
+    db = _mock_db_with_setting(existing)
+    current_user = MagicMock()
+
+    with patch.object(live_view, "_ensure_project_admin", return_value=MagicMock()):
+        live_view.update_agent_settings(
+            project_id=1,
+            agent_id="agent-replace",
+            diagnostic_config={
+                "eval": {
+                    "enabled": True,
+                    "empty": {"enabled": True, "min_chars": 12},
+                    "latency": {"enabled": True, "fail_ms": 2500},
+                }
+            },
+            db=db,
+            current_user=current_user,
+        )
+
+    assert existing.diagnostic_config["other"] == {"keep": True}
+    assert existing.diagnostic_config["eval"] == {
+        "enabled": True,
+        "empty": {"enabled": True, "min_chars": 12},
+        "latency": {"enabled": True, "fail_ms": 2500},
+    }
+
+
+@pytest.mark.unit
+def test_update_agent_settings_window_only_patch_preserves_existing_eval_rules():
+    existing = AgentDisplaySetting(
+        id="s3",
+        project_id=1,
+        system_prompt_hash="agent-window",
+        diagnostic_config={
+            "eval": {
+                "enabled": True,
+                "window": {"limit": 50},
+                "empty": {"enabled": True, "min_chars": 8},
+                "latency": {"enabled": True, "fail_ms": 2500},
+            }
+        },
+    )
+    db = _mock_db_with_setting(existing)
+    current_user = MagicMock()
+
+    with patch.object(live_view, "_ensure_project_admin", return_value=MagicMock()):
+        live_view.update_agent_settings(
+            project_id=1,
+            agent_id="agent-window",
+            diagnostic_config={"eval": {"window": {"limit": 120}}},
+            db=db,
+            current_user=current_user,
+        )
+
+    assert existing.diagnostic_config["eval"] == {
+        "enabled": True,
+        "window": {"limit": 120},
+        "empty": {"enabled": True, "min_chars": 8},
+        "latency": {"enabled": True, "fail_ms": 2500},
+    }
+
+
+@pytest.mark.unit
 def test_update_agent_settings_rejects_non_object_diagnostic_config():
     db = _mock_db_with_setting(None)
     current_user = MagicMock()
