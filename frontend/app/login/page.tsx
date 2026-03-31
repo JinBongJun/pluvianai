@@ -35,13 +35,36 @@ function SubmitButton({
         {isSubmitting
           ? isLogin
             ? "Verifying..."
-            : "Initializing..."
+            : "Creating..."
           : isLogin
-            ? "Commence Session"
-            : "Port Protocol"}
+            ? "Sign in"
+            : "Create account"}
       </span>
       {!isSubmitting && <ArrowRight className="w-5 h-5 stroke-[2.5px]" />}
     </button>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 18 18" className="h-[18px] w-[18px]">
+      <path
+        fill="#4285F4"
+        d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.56 2.7-3.86 2.7-6.62Z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.83.86-3.06.86-2.35 0-4.33-1.58-5.04-3.7H.96v2.33A9 9 0 0 0 9 18Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.96 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.28-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.05l3-2.33Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.58c1.32 0 2.5.45 3.44 1.33l2.58-2.58C13.46.9 11.42 0 9 0A9 9 0 0 0 .96 4.95l3 2.33c.7-2.12 2.69-3.7 5.04-3.7Z"
+      />
+    </svg>
   );
 }
 
@@ -360,10 +383,10 @@ export default function LoginPage() {
           <div className="w-full max-w-[440px] space-y-10 relative z-10">
             <div className="text-center">
               <h2 className="text-4xl md:text-5xl font-black tracking-tighter text-white uppercase mb-3 leading-none">
-                {isLogin ? "Verify Credentials" : "Initialize Account"}
+                {isLogin ? "Welcome back" : "Create your account"}
               </h2>
               <p className="text-[10px] text-emerald-400 font-black uppercase tracking-[0.4em]">
-                {isLogin ? "IDENTITY VERIFICATION REQUIRED" : "ACCESS PROTOCOL INITIATION"}
+                {isLogin ? "SIGN IN TO CONTINUE" : "START WITH EMAIL OR GOOGLE"}
               </p>
             </div>
 
@@ -436,7 +459,7 @@ export default function LoginPage() {
                           type="text"
                           required={!isLogin}
                           className="w-full pl-14 pr-6 py-4 bg-[#0a0a0c]/80 border border-white/20 rounded-2xl text-lg text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/60 focus:ring-4 focus:ring-emerald-500/10 transition-all font-black shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]"
-                          placeholder="Dr. John Doe"
+                          placeholder="Jane Doe"
                           onInvalid={e =>
                             (e.target as HTMLInputElement).setCustomValidity(
                               "Please enter your full name"
@@ -454,7 +477,7 @@ export default function LoginPage() {
                       htmlFor="email-address"
                       className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1"
                     >
-                      Professional Email
+                      Email
                     </label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-emerald-400 transition-colors">
@@ -484,7 +507,7 @@ export default function LoginPage() {
                       htmlFor="password"
                       className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1"
                     >
-                      Security Code
+                      Password
                     </label>
                     <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-emerald-400 transition-colors">
@@ -526,7 +549,7 @@ export default function LoginPage() {
                 {!isLogin && (
                   <div className="space-y-5 pt-2">
                     <div className="flex items-center justify-between text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">
-                      <span>Signal Strength</span>
+                      <span>Password strength</span>
                       <div className="flex gap-1.5">
                         {[1, 2, 3, 4, 5].map(lvl => (
                           <div
@@ -560,7 +583,7 @@ export default function LoginPage() {
                           className="text-[11px] text-slate-400 cursor-pointer leading-relaxed font-bold"
                         >
                           <span className="font-black text-emerald-400 uppercase tracking-widest block mb-1 underline decoration-emerald-500/30">
-                            Terms accepted
+                            Terms required
                           </span>
                           I understand that AI outputs are non-deterministic and I use PluvianAI at
                           my own responsibility.
@@ -581,17 +604,28 @@ export default function LoginPage() {
 
                 <div className="space-y-3">
                   <div className="relative text-center text-[10px] font-black uppercase tracking-[0.25em] text-slate-600">
-                    <span className="bg-[#1a1a1e] px-3 relative z-10">or continue with</span>
+                    <span className="bg-[#1a1a1e] px-3 relative z-10">
+                      {isLogin ? "or use Google" : "or create an account with Google"}
+                    </span>
                     <div className="absolute inset-x-0 top-1/2 border-t border-white/10 -translate-y-1/2" />
                   </div>
                   <button
                     type="button"
                     onClick={handleGoogleContinue}
                     disabled={!isLogin && !liabilityAgreementAccepted}
-                    className="w-full h-14 rounded-2xl border border-white/15 bg-white/[0.03] text-white font-black uppercase tracking-[0.2em] hover:border-emerald-500/40 hover:bg-white/[0.05] transition-all disabled:opacity-50"
+                    className="relative flex h-14 w-full items-center justify-center rounded-2xl border border-[#DADCE0] bg-white px-5 text-[15px] font-semibold tracking-[0.01em] text-[#1F1F1F] transition-colors hover:bg-[#F8F9FA] disabled:cursor-not-allowed disabled:opacity-60"
+                    aria-label={isLogin ? "Sign in with Google" : "Sign up with Google"}
                   >
-                    Continue with Google
+                    <span className="absolute left-5 flex items-center justify-center">
+                      <GoogleIcon />
+                    </span>
+                    {isLogin ? "Sign in with Google" : "Sign up with Google"}
                   </button>
+                  <p className="text-center text-[11px] font-medium leading-relaxed text-slate-500">
+                    {isLogin
+                      ? "Use your Google account to sign in without entering a password."
+                      : "Create your PluvianAI account with your Google profile after accepting the terms above."}
+                  </p>
                 </div>
 
                 {isLogin && registeredMessageShown && registeredEmail ? (
@@ -622,7 +656,7 @@ export default function LoginPage() {
                     }}
                     className="text-xs font-black text-slate-500 hover:text-emerald-400 transition-colors uppercase tracking-[0.2em]"
                   >
-                    {isLogin ? "Create credentials" : "Return to sign in"}
+                    {isLogin ? "Create an account" : "Back to sign in"}
                   </button>
                 </div>
               </form>
