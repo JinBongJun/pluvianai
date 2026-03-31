@@ -1,4 +1,4 @@
-/** Full list so Release Gate shows all check types from saved config (matches backend CHECK_KEYS order). */
+/** Release Gate eval signal checks. Tool Use Policy is tracked separately as a policy check. */
 export const LIVE_VIEW_CHECK_ORDER = [
   "empty",
   "latency",
@@ -10,8 +10,9 @@ export const LIVE_VIEW_CHECK_ORDER = [
   "required",
   "format",
   "leakage",
-  "tool",
 ] as const;
+
+export const POLICY_CHECK_IDS = ["tool"] as const;
 
 export const RUNTIME_ONLY_EVAL_CHECK_IDS = [
   "tool_grounding",
@@ -20,6 +21,7 @@ export const RUNTIME_ONLY_EVAL_CHECK_IDS = [
 ] as const;
 
 const CANONICAL_EVAL_CHECK_ID_SET = new Set<string>(LIVE_VIEW_CHECK_ORDER);
+const POLICY_CHECK_ID_SET = new Set<string>(POLICY_CHECK_IDS);
 const RUNTIME_ONLY_EVAL_CHECK_ID_SET = new Set<string>(RUNTIME_ONLY_EVAL_CHECK_IDS);
 
 /** Defaults for each check so missing keys in old saved config still appear. */
@@ -34,7 +36,6 @@ export const DEFAULT_EVAL_CHECK_VALUE: Record<string, { enabled: boolean }> = {
   required: { enabled: false },
   format: { enabled: false },
   leakage: { enabled: false },
-  tool: { enabled: true },
 };
 
 export function shouldShowEvalSetting(value: unknown): boolean {
@@ -53,11 +54,22 @@ export function isRuntimeOnlyEvalCheckId(id: string): boolean {
   return RUNTIME_ONLY_EVAL_CHECK_ID_SET.has(String(id || "").trim());
 }
 
+export function isPolicyCheckId(id: string): boolean {
+  return POLICY_CHECK_ID_SET.has(String(id || "").trim());
+}
+
 export function getConfiguredEvalCheckIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
     .map(id => String(id ?? "").trim())
     .filter(id => isCanonicalEvalCheckId(id));
+}
+
+export function getConfiguredPolicyCheckIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(id => String(id ?? "").trim())
+    .filter(id => isPolicyCheckId(id));
 }
 
 /** Rows for Release Gate eval settings UI from `liveViewAPI.getAgentEvaluation` (or equivalent) data. */
