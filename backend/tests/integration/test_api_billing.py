@@ -169,6 +169,20 @@ class TestBillingAPI:
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
+    async def test_reconcile_user_forbidden_non_superuser(self, async_client, auth_headers):
+        response = await async_client.post(
+            "/api/v1/billing/reconcile/users/1",
+            headers=auth_headers,
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    async def test_timeline_user_forbidden_non_superuser(self, async_client, auth_headers):
+        response = await async_client.get(
+            "/api/v1/billing/timeline/users/1",
+            headers=auth_headers,
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
     @patch(
         "app.services.billing_service.BillingService.handle_paddle_webhook",
         return_value={"status": "success", "message": "ok"},
@@ -259,3 +273,62 @@ class TestBillingAPI:
         data = response.json()["data"]
         assert data["status"] == "success"
         assert data["fixed"] == 1
+
+    @patch(
+        "app.services.billing_service.BillingService.reconcile_paddle_subscription_for_user",
+        return_value={
+            "status": "success",
+            "user_id": 1,
+            "before": {"plan_type": "pro", "status": "active"},
+            "after": {"plan_type": "pro", "status": "cancelled"},
+            "drift_fixed": True,
+        },
+    )
+    async def test_reconcile_single_user_success(self, _mock_reconcile, async_client, superuser_auth_headers):
+        response = await async_client.post(
+            "/api/v1/billing/reconcile/users/1",
+            headers=superuser_auth_headers,
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()["data"]
+        assert data["status"] == "success"
+        assert data["user_id"] == 1
+        assert data["drift_fixed"] is True
+
+    @patch(
+        "app.services.billing_service.BillingService.get_billing_timeline_for_user",
+        return_value=(
+            {
+                "user": {"id": 1, "email": "test@example.com"},
+                "subscription": {"plan_type": "pro", "status": "cancelled"},
+                "current_entitlement": {
+                    "effective_plan_id": "pro",
+                    "entitlement_status": "active_until_period_end",
+                },
+                "recent_entitlements": [],
+                "events": [],
+            },
+            None,
+        ),
+    )
+    async def test_get_billing_timeline_success(self, _mock_timeline, async_client, superuser_auth_headers):
+        response = await async_client.get(
+            "/api/v1/billing/timeline/users/1?limit=10",
+            headers=superuser_auth_headers,
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()["data"]
+        assert data["user"]["id"] == 1
+        assert data["subscription"]["plan_type"] == "pro"
+
+    @patch(
+        "app.services.billing_service.BillingService.get_billing_timeline_for_user",
+        return_value=(None, "user_not_found"),
+    )
+    async def test_get_billing_timeline_user_not_found(self, _mock_timeline, async_client, superuser_auth_headers):
+        response = await async_client.get(
+            "/api/v1/billing/timeline/users/999",
+            headers=superuser_auth_headers,
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json()["error"]["code"] == "BILLING_TIMELINE_USER_NOT_FOUND"

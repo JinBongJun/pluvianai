@@ -342,3 +342,39 @@ def reconcile_billing_subscriptions(
     _ = current_user
     result = BillingService(db).reconcile_paddle_subscriptions(limit=limit)
     return success_response(data=result)
+
+
+@router.post("/reconcile/users/{user_id}")
+def reconcile_billing_subscription_for_user(
+    user_id: int,
+    current_user: User = Depends(get_current_superuser),
+    _csrf: None = Depends(require_csrf_for_cookie_auth),
+    db: Session = Depends(get_db),
+):
+    _ = current_user
+    result = BillingService(db).reconcile_paddle_subscription_for_user(user_id)
+    return success_response(data=result)
+
+
+@router.get("/timeline/users/{user_id}")
+def get_billing_timeline_for_user(
+    user_id: int,
+    limit: int = 20,
+    current_user: User = Depends(get_current_superuser),
+    db: Session = Depends(get_db),
+):
+    _ = current_user
+    result, err = BillingService(db).get_billing_timeline_for_user(user_id, event_limit=limit)
+    if err == "user_not_found":
+        return error_response(
+            code="BILLING_TIMELINE_USER_NOT_FOUND",
+            message="User not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    if not result:
+        return error_response(
+            code="BILLING_TIMELINE_UNAVAILABLE",
+            message="Could not load billing timeline.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return success_response(data=result)
