@@ -141,6 +141,7 @@ export function ReleaseGateExpandedView() {
               attempts={m.detailAttemptView.attempts}
               initialAttemptIndex={m.detailAttemptView.initialAttemptIndex}
               baselineSnapshot={m.detailAttemptView.baselineSnapshot}
+              replayRequestMeta={m.detailAttemptView.replayRequestMeta ?? null}
             />
           </ClientPortal>
         )}

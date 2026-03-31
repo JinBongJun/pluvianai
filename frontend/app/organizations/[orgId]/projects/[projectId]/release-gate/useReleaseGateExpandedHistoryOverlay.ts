@@ -11,6 +11,7 @@ export type ExpandedDetailAttemptView = {
   caseIndex: number;
   initialAttemptIndex: number;
   baselineSnapshot: Record<string, unknown> | null;
+  replayRequestMeta?: Record<string, unknown> | null;
 } | null;
 
 export type UseReleaseGateExpandedHistoryOverlayParams = {
@@ -91,6 +92,12 @@ export function useReleaseGateExpandedHistoryOverlay(p: UseReleaseGateExpandedHi
       caseIndex,
       initialAttemptIndex: 0,
       baselineSnapshot: baselineSnapshotForRun,
+      replayRequestMeta:
+        reportObj.replay_request_meta &&
+        typeof reportObj.replay_request_meta === "object" &&
+        !Array.isArray(reportObj.replay_request_meta)
+          ? (reportObj.replay_request_meta as Record<string, unknown>)
+          : null,
     });
     p.setSelectedRunId(null);
   }, [
