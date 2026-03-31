@@ -3,11 +3,13 @@ Integration tests for Authentication API
 """
 import json
 from datetime import datetime
+from urllib.parse import parse_qs, urlparse
 import pytest
 from fastapi import status
 from app.models.email_verification_token import EmailVerificationToken
 from app.models.subscription import Subscription
 from app.models.usage import Usage
+from app.models.user import User
 
 
 @pytest.mark.integration
@@ -18,6 +20,24 @@ class TestAuthAPI:
     @staticmethod
     def _extract_error(data: dict) -> dict:
         return data.get("error") or {}
+
+    @staticmethod
+    def _mock_google_settings(monkeypatch):
+        import app.api.v1.endpoints.auth as auth_endpoint
+
+        monkeypatch.setattr(auth_endpoint.settings, "GOOGLE_OAUTH_CLIENT_ID", "google-client-id")
+        monkeypatch.setattr(auth_endpoint.settings, "GOOGLE_OAUTH_CLIENT_SECRET", "google-client-secret")
+        monkeypatch.setattr(auth_endpoint.settings, "API_BASE_URL", "http://test")
+        monkeypatch.setattr(auth_endpoint.settings, "APP_BASE_URL", "http://frontend.test")
+
+    @staticmethod
+    def _extract_oauth_state(start_response) -> tuple[str, str]:
+        redirect_url = start_response.headers["location"]
+        parsed = urlparse(redirect_url)
+        state = parse_qs(parsed.query)["state"][0]
+        set_cookie = start_response.headers.get("set-cookie", "")
+        cookie_value = set_cookie.split("oauth_google_state=", 1)[1].split(";", 1)[0]
+        return state, cookie_value
     
     async def test_register_success(self, async_client, db):
         """Test user registration"""
@@ -146,6 +166,111 @@ class TestAuthAPI:
         assert response.status_code == status.HTTP_403_FORBIDDEN
         error = self._extract_error(response.json())
         assert error["code"] == "email_not_verified"
+
+    async def test_login_google_only_account_requires_google_sign_in(self, async_client, db):
+        user = User(
+            email="google-only@example.com",
+            hashed_password="not-used",
+            full_name="Google User",
+            is_active=True,
+            is_email_verified=True,
+            primary_auth_provider="google",
+            password_login_enabled=False,
+            google_login_enabled=True,
+            google_id="google-sub-1",
+        )
+        db.add(user)
+        db.commit()
+
+        response = await async_client.post(
+            "/api/v1/auth/login",
+            data={
+                "username": "google-only@example.com",
+                "password": "whatever",
+            },
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        error = self._extract_error(response.json())
+        assert error["code"] == "google_sign_in_required"
+
+    async def test_google_oauth_callback_creates_new_user(self, async_client, db, monkeypatch):
+        import app.api.v1.endpoints.auth as auth_endpoint
+        from app.services.google_oauth_service import GoogleIdentity
+
+        self._mock_google_settings(monkeypatch)
+
+        async def _fake_identity(self, code: str):
+            return GoogleIdentity(
+                email="new-google@example.com",
+                email_verified=True,
+                google_id="google-sub-new",
+                full_name="New Google User",
+                avatar_url="https://example.com/avatar.png",
+            )
+
+        monkeypatch.setattr(auth_endpoint.GoogleOAuthService, "get_identity_from_code", _fake_identity)
+
+        start_res = await async_client.get(
+            "/api/v1/auth/oauth/google/start?intent=signup&terms_accepted=true",
+        )
+        assert start_res.status_code == status.HTTP_302_FOUND
+        state, cookie_state = self._extract_oauth_state(start_res)
+
+        callback_res = await async_client.get(
+            f"/api/v1/auth/oauth/google/callback?code=test-code&state={state}",
+            headers={"Cookie": f"oauth_google_state={cookie_state}"},
+        )
+        assert callback_res.status_code == status.HTTP_302_FOUND
+        assert callback_res.headers["location"] == "http://frontend.test/organizations"
+
+        user = db.query(User).filter(User.email == "new-google@example.com").first()
+        assert user is not None
+        assert user.google_id == "google-sub-new"
+        assert user.google_login_enabled is True
+        assert user.password_login_enabled is False
+        assert user.is_email_verified is True
+
+    async def test_google_oauth_callback_merges_existing_password_user(
+        self, async_client, db, test_user, monkeypatch
+    ):
+        import app.api.v1.endpoints.auth as auth_endpoint
+        from app.services.google_oauth_service import GoogleIdentity
+
+        self._mock_google_settings(monkeypatch)
+
+        test_user.is_email_verified = False
+        db.add(test_user)
+        db.commit()
+
+        async def _fake_identity(self, code: str):
+            return GoogleIdentity(
+                email=test_user.email,
+                email_verified=True,
+                google_id="google-sub-merge",
+                full_name="Merged User",
+                avatar_url="https://example.com/avatar2.png",
+            )
+
+        monkeypatch.setattr(auth_endpoint.GoogleOAuthService, "get_identity_from_code", _fake_identity)
+
+        start_res = await async_client.get("/api/v1/auth/oauth/google/start?intent=login")
+        assert start_res.status_code == status.HTTP_302_FOUND
+        state, cookie_state = self._extract_oauth_state(start_res)
+
+        callback_res = await async_client.get(
+            f"/api/v1/auth/oauth/google/callback?code=test-code&state={state}",
+            headers={"Cookie": f"oauth_google_state={cookie_state}"},
+        )
+        assert callback_res.status_code == status.HTTP_302_FOUND
+
+        user = db.query(User).filter(User.id == test_user.id).first()
+        assert user is not None
+        assert user.email == test_user.email
+        assert user.google_id == "google-sub-merge"
+        assert user.google_login_enabled is True
+        assert user.password_login_enabled is True
+        assert user.is_email_verified is True
 
     async def test_verify_email_allows_login_after_confirmation(self, async_client, db):
         register = await async_client.post(

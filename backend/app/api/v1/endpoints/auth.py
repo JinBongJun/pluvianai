@@ -9,9 +9,12 @@ Authentication endpoints — standard login/register/JWT flow.
 Security: bcrypt passwords, JWT (HS256), brute-force protection, login attempts + audit.
 """
 
+import hashlib
 import time
 from datetime import datetime, timezone
+from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, Query
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -26,6 +29,7 @@ from app.core.usage_limits import (
 from app.services.subscription_service import SubscriptionService
 from app.services.entitlement_service import EntitlementService
 from app.services.email_verification_service import EmailVerificationService
+from app.services.google_oauth_service import GoogleOAuthService, OAUTH_STATE_COOKIE_NAME
 from app.core.security import (
     verify_password,
     get_password_hash,
@@ -45,6 +49,7 @@ from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.models.user import User
 from app.models.login_attempt import LoginAttempt
 from app.models.organization import Organization
+from app.models.refresh_token import RefreshToken
 from app.services.brute_force_protection import brute_force_service
 from app.services.risk_based_auth import risk_based_auth_service
 from app.services.password_policy import password_policy_service
@@ -131,6 +136,82 @@ def _clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(CSRF_COOKIE_NAME, path="/", domain=cookie_domain)
 
 
+def _set_oauth_state_cookie(response: Response, state_token: str) -> None:
+    secure = settings.ENVIRONMENT == "production"
+    cookie_domain = settings.AUTH_COOKIE_DOMAIN or None
+    response.set_cookie(
+        key=OAUTH_STATE_COOKIE_NAME,
+        value=state_token,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        path="/",
+        domain=cookie_domain,
+        max_age=10 * 60,
+    )
+
+
+def _clear_oauth_state_cookie(response: Response) -> None:
+    cookie_domain = settings.AUTH_COOKIE_DOMAIN or None
+    response.delete_cookie(OAUTH_STATE_COOKIE_NAME, path="/", domain=cookie_domain)
+
+
+def _safe_next_path(next_path: str | None) -> str:
+    if next_path and next_path.startswith("/"):
+        return next_path
+    return "/organizations"
+
+
+def _build_frontend_url(path: str) -> str:
+    return f"{settings.APP_BASE_URL.rstrip('/')}{path}"
+
+
+def _redirect_to_frontend(path: str) -> RedirectResponse:
+    return RedirectResponse(url=_build_frontend_url(path), status_code=status.HTTP_302_FOUND)
+
+
+def _issue_session_for_user(response: Response, user: User, db: Session) -> tuple[str, str]:
+    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
+    refresh_token = create_refresh_token(data={"sub": str(user.id), "email": user.email})
+
+    token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+    payload = decode_token(refresh_token)
+    exp_ts = payload.get("exp", 0) if payload else 0
+    expires_at = datetime.fromtimestamp(exp_ts, tz=timezone.utc)
+
+    db.add(
+        RefreshToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+            is_revoked=False,
+        )
+    )
+    _set_auth_cookies(response, access_token, refresh_token)
+    return access_token, refresh_token
+
+
+def _ensure_user_agreement(user: User, db: Session) -> None:
+    from app.models.user_agreement import UserAgreement
+
+    existing = db.query(UserAgreement).filter(UserAgreement.user_id == user.id).first()
+    if existing:
+        return
+
+    now = datetime.now(timezone.utc)
+    db.add(
+        UserAgreement(
+            user_id=user.id,
+            liability_agreement_accepted=True,
+            liability_agreement_accepted_at=now,
+            terms_of_service_accepted=True,
+            terms_of_service_accepted_at=now,
+            privacy_policy_accepted=True,
+            privacy_policy_accepted_at=now,
+        )
+    )
+
+
 class UserCreate(BaseModel):
     """User registration schema"""
 
@@ -147,8 +228,12 @@ class UserResponse(BaseModel):
     id: int
     email: str
     full_name: str | None
+    avatar_url: str | None = None
     is_active: bool
     is_email_verified: bool
+    primary_auth_provider: str = "password"
+    password_login_enabled: bool = True
+    google_login_enabled: bool = False
 
 class TokenResponse(BaseModel):
     """Token response schema"""
@@ -270,6 +355,175 @@ async def register(
         )
 
 
+@router.get("/oauth/google/start")
+async def google_oauth_start(
+    response: Response,
+    intent: str = Query("login"),
+    next: str | None = Query(None),
+    terms_accepted: bool = Query(False),
+):
+    service = GoogleOAuthService()
+    if not service.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google sign-in is not configured.",
+        )
+
+    normalized_intent = intent if intent in {"login", "signup"} else "login"
+    state_token = service.create_state_token(
+        intent=normalized_intent,
+        next_path=_safe_next_path(next),
+        terms_accepted=terms_accepted,
+    )
+    redirect = RedirectResponse(
+        url=service.build_authorization_url(state_token=state_token),
+        status_code=status.HTTP_302_FOUND,
+    )
+    _set_oauth_state_cookie(redirect, state_token)
+    return redirect
+
+
+@router.get("/oauth/google/callback")
+async def google_oauth_callback(
+    request: Request,
+    code: str | None = Query(None),
+    state: str | None = Query(None),
+    error: str | None = Query(None),
+    db: Session = Depends(get_db),
+    user_service = Depends(get_user_service),
+    audit_service = Depends(get_audit_service),
+):
+    service = GoogleOAuthService()
+
+    def _error_redirect(message: str, *, signup: bool = False) -> RedirectResponse:
+        params = {"oauth_error": "1", "oauth_error_message": message}
+        if signup:
+            params["mode"] = "signup"
+        redirect = _redirect_to_frontend(f"/login?{urlencode(params)}")
+        _clear_oauth_state_cookie(redirect)
+        return redirect
+
+    if not service.enabled:
+        return _error_redirect("Google sign-in is not configured.")
+    if error:
+        return _error_redirect("Google sign-in was cancelled or denied.")
+    if not code or not state:
+        return _error_redirect("Google sign-in could not be completed.")
+
+    state_payload, state_error = service.validate_state_token(
+        state_token=state,
+        cookie_state_token=request.cookies.get(OAUTH_STATE_COOKIE_NAME),
+    )
+    if state_error or not state_payload:
+        return _error_redirect("Google sign-in state is invalid. Please try again.")
+
+    signup_intent = state_payload.get("intent") == "signup"
+    next_path = _safe_next_path(state_payload.get("next_path"))
+    terms_accepted = bool(state_payload.get("terms_accepted"))
+
+    try:
+        identity = await service.get_identity_from_code(code)
+    except Exception as exc:
+        logger.warning("Google OAuth callback failed", exc_info=True)
+        return _error_redirect("Google sign-in could not be completed.")
+
+    user = db.query(User).filter(User.google_id == identity.google_id).first()
+    created = False
+    linked = False
+
+    if not user:
+        user = db.query(User).filter(User.email == identity.email).first()
+        if user:
+            existing_google_owner = (
+                db.query(User)
+                .filter(User.google_id == identity.google_id, User.id != user.id)
+                .first()
+            )
+            if existing_google_owner:
+                return _error_redirect("This Google account is already linked to another user.")
+            user.google_id = identity.google_id
+            user.google_login_enabled = True
+            user.is_email_verified = True
+            if not user.avatar_url and identity.avatar_url:
+                user.avatar_url = identity.avatar_url
+            if not user.full_name and identity.full_name:
+                user.full_name = identity.full_name
+            linked = True
+        else:
+            if not terms_accepted:
+                return _error_redirect(
+                    "To create a new account with Google, accept the terms first.",
+                    signup=True,
+                )
+            user = user_service.create_google_user(
+                email=identity.email,
+                full_name=identity.full_name,
+                google_id=identity.google_id,
+                avatar_url=identity.avatar_url,
+            )
+            _ensure_user_agreement(user, db)
+            created = True
+
+    if not user.is_active:
+        return _error_redirect("This account is inactive. Contact support if you need access.")
+
+    user.is_email_verified = True
+    if not user.full_name and identity.full_name:
+        user.full_name = identity.full_name
+    if not user.avatar_url and identity.avatar_url:
+        user.avatar_url = identity.avatar_url
+    if not bool(getattr(user, "password_login_enabled", True)):
+        user.primary_auth_provider = "google"
+    elif user.primary_auth_provider not in {"password", "google"}:
+        user.primary_auth_provider = "password"
+
+    redirect = _redirect_to_frontend(next_path)
+    _clear_oauth_state_cookie(redirect)
+    _issue_session_for_user(redirect, user, db)
+
+    try:
+        if created:
+            analytics_service.track_user_registration(user_id=user.id, plan="free")
+        analytics_service.track_user_login(user_id=user.id, method="google")
+    except Exception:
+        logger.warning("Failed to track Google auth analytics", exc_info=True)
+
+    try:
+        if created:
+            audit_service.log_action(
+                user_id=user.id,
+                action="user_registered_google",
+                resource_type="user",
+                resource_id=user.id,
+                new_value={"email": user.email, "full_name": user.full_name},
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+            )
+        elif linked:
+            audit_service.log_action(
+                user_id=user.id,
+                action="google_account_linked",
+                resource_type="user",
+                resource_id=user.id,
+                new_value={"email": user.email},
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+            )
+        audit_service.log_action(
+            user_id=user.id,
+            action="user_login_google",
+            resource_type="user",
+            resource_id=user.id,
+            new_value={"email": user.email},
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+    except Exception:
+        logger.warning("Failed to write Google auth audit logs", exc_info=True)
+
+    return redirect
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(
     request: Request,
@@ -364,6 +618,14 @@ async def login(
         else:
             logger.info(f"✅ User found: id={user.id}, is_active={user.is_active}")
             print(f"✅ User found: id={user.id}, is_active={user.is_active}", file=sys.stderr)
+            if not bool(getattr(user, "password_login_enabled", True)):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=auth_error_detail(
+                        "google_sign_in_required",
+                        "Use Google sign-in for this account.",
+                    ),
+                )
             # Check password
             password_valid = verify_password(form_data.password, user.hashed_password)
             logger.info(f"🔐 Password verification completed for user_id={user.id}")
@@ -459,35 +721,8 @@ async def login(
                 extra={"user_id": user.id, "ip": ip, "reasons": risk.reasons},
             )
 
-        # Create tokens
-        access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
-        refresh_token = create_refresh_token(data={"sub": str(user.id), "email": user.email})
-
-        # Save refresh token to database (optional - if table doesn't exist, skip)
-        try:
-            import hashlib
-            from datetime import datetime, timezone
-            from app.models.refresh_token import RefreshToken
-
-            token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-            payload = decode_token(refresh_token)
-            exp_ts = payload.get("exp", 0) if payload else 0
-            expires_at = datetime.fromtimestamp(exp_ts, tz=timezone.utc)
-
-            refresh_token_record = RefreshToken(
-                user_id=user.id,
-                token_hash=token_hash,
-                expires_at=expires_at,
-                is_revoked=False,
-            )
-            db.add(refresh_token_record)
-            # Commit handled automatically by get_db() dependency
-        except Exception as refresh_token_error:
-            # If refresh token table doesn't exist or other error, log but don't fail login
-            logger.warning(
-                f"Failed to save refresh token (non-critical): {refresh_token_error}",
-                exc_info=True,
-            )
+        # Create tokens and persist refresh token
+        access_token, refresh_token = _issue_session_for_user(response, user, db)
 
         # Log audit event for successful login (non-critical)
         try:
@@ -514,7 +749,6 @@ async def login(
 
         # Always return tokens even if auxiliary operations fail
         logger.info(f"✅ LOGIN SUCCESS: user_id={user.id}")
-        _set_auth_cookies(response, access_token, refresh_token)
         return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
     
     except HTTPException:

@@ -92,6 +92,9 @@ export function getLoginErrorMessage(source: AuthErrorSource): string {
   if (status === 403 && code === "email_not_verified") {
     return "Verify your email before signing in. You can resend the verification email from this screen.";
   }
+  if (status === 403 && code === "google_sign_in_required") {
+    return "This account uses Google sign-in. Continue with Google to access it.";
+  }
   if (parsed && parsed.length > 0 && parsed.length < 200) {
     return blockNonLatinMessage(parsed, "Login failed. Please check your credentials and try again.");
   }

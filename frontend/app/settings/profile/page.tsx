@@ -12,8 +12,12 @@ type UserProfile = {
   id: number;
   email: string;
   full_name?: string | null;
+  avatar_url?: string | null;
   is_active: boolean;
   is_email_verified: boolean;
+  primary_auth_provider: string;
+  password_login_enabled: boolean;
+  google_login_enabled: boolean;
   created_at: string;
 };
 
@@ -80,6 +84,14 @@ export default function ProfileSettingsPage() {
     const current = (profile?.full_name || "").trim();
     return fullName.trim() !== current;
   }, [fullName, profile?.full_name]);
+
+  const canChangePassword = !!profile?.password_login_enabled;
+  const canChangeEmail = !!profile?.password_login_enabled && !profile?.google_login_enabled;
+  const signInMethodLabel = useMemo(() => {
+    if (profile?.password_login_enabled && profile?.google_login_enabled) return "Email/password + Google";
+    if (profile?.google_login_enabled) return "Google";
+    return "Email/password";
+  }, [profile?.google_login_enabled, profile?.password_login_enabled]);
 
   const handleSaveProfile = async () => {
     if (!canSaveName) return;
@@ -270,6 +282,7 @@ export default function ProfileSettingsPage() {
               <p className="mt-2 text-xs text-slate-500">
                 {profile?.is_email_verified ? "Verified" : "Verification pending"}
               </p>
+              <p className="mt-1 text-xs text-slate-500">Sign-in method: {signInMethodLabel}</p>
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-1">Full name</label>
@@ -284,38 +297,50 @@ export default function ProfileSettingsPage() {
           <Button onClick={handleSaveProfile} disabled={!canSaveName || saveBusy}>
             {saveBusy ? "Saving..." : "Save profile"}
           </Button>
-          <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-white/10">
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">New email</label>
-              <input
-                value={newEmail}
-                onChange={e => setNewEmail(e.target.value)}
-                className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
-                placeholder="new-email@company.com"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">Current password</label>
-              <input
-                type="password"
-                value={emailPassword}
-                onChange={e => setEmailPassword(e.target.value)}
-                className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
-                placeholder="Current password"
-              />
-            </div>
-          </div>
-          <Button onClick={handleRequestEmailChange} disabled={emailBusy}>
-            {emailBusy ? "Sending..." : "Change email"}
-          </Button>
+          {canChangeEmail ? (
+            <>
+              <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-white/10">
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">New email</label>
+                  <input
+                    value={newEmail}
+                    onChange={e => setNewEmail(e.target.value)}
+                    className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                    placeholder="new-email@company.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Current password</label>
+                  <input
+                    type="password"
+                    value={emailPassword}
+                    onChange={e => setEmailPassword(e.target.value)}
+                    className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                    placeholder="Current password"
+                  />
+                </div>
+              </div>
+              <Button onClick={handleRequestEmailChange} disabled={emailBusy}>
+                {emailBusy ? "Sending..." : "Change email"}
+              </Button>
+            </>
+          ) : (
+            <p className="text-sm text-slate-400">
+              {profile?.google_login_enabled
+                ? "Your email is managed through your Google sign-in and can't be changed here."
+                : "Email changes are unavailable for this account."}
+            </p>
+          )}
         </section>
 
         <section className="rounded-xl border border-white/10 bg-white/[0.03] p-6 space-y-4">
           <h2 className="text-lg font-bold text-white">Security</h2>
           <p className="text-sm text-slate-400">
-            Update your account password. For security, use at least 12 characters.
+            {canChangePassword
+              ? "Update your account password. For security, use at least 12 characters."
+              : "Password sign-in is not enabled for this account yet."}
           </p>
-          <div className="grid md:grid-cols-3 gap-3">
+          {canChangePassword ? <div className="grid md:grid-cols-3 gap-3">
             <div>
               <label className="block text-sm text-slate-400 mb-1">Current password</label>
               <input
@@ -346,9 +371,9 @@ export default function ProfileSettingsPage() {
                 placeholder="Re-enter new password"
               />
             </div>
-          </div>
-          <Button onClick={handleChangePassword} disabled={passwordBusy}>
-            {passwordBusy ? "Changing..." : "Change password"}
+          </div> : null}
+          <Button onClick={handleChangePassword} disabled={passwordBusy || !canChangePassword}>
+            {passwordBusy ? "Changing..." : canChangePassword ? "Change password" : "Password unavailable"}
           </Button>
         </section>
 

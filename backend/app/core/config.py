@@ -95,6 +95,7 @@ class Settings(BaseSettings):
     EMAIL_FROM: Optional[str] = None  # e.g., "onboarding@resend.dev" or verified domain
     EMAIL_FROM_NAME: str = "PluvianAI"
     APP_BASE_URL: str = "http://localhost:3000"
+    API_BASE_URL: str = "http://localhost:8000"
     FEEDBACK_TO_EMAIL: Optional[str] = None  # If unset, defaults to EMAIL_FROM
     FEEDBACK_SLACK_WEBHOOK_URL: Optional[str] = None  # If set, feedback is sent to Slack instead of Resend
     # For uploading feedback attachments to Slack (optional; requires Bot Token with files:write)
@@ -150,6 +151,10 @@ class Settings(BaseSettings):
     BILLING_WEBHOOK_ALERT_WINDOW_SECONDS: int = 3600
     BILLING_WEBHOOK_ERROR_RATIO_THRESHOLD: float = 0.10
     BILLING_WEBHOOK_DUPLICATE_RATIO_THRESHOLD: float = 0.20
+
+    # Google OAuth
+    GOOGLE_OAUTH_CLIENT_ID: Optional[str] = None
+    GOOGLE_OAUTH_CLIENT_SECRET: Optional[str] = None
 
     # Free Plan Limits
     ENABLE_FREE_PLAN_HARD_LIMIT: bool = False  # If True, Free plan users are blocked when limits are exceeded

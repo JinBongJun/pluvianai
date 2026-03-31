@@ -31,6 +31,8 @@ class TestSettingsProfileAndApiKeys:
         assert get_after.status_code == status.HTTP_200_OK
         after = _extract_data(get_after.json())
         assert after.get("full_name") == "Round4 Profile Name"
+        assert after.get("primary_auth_provider") == "password"
+        assert after.get("password_login_enabled") is True
 
     async def test_h2_h3_h4_service_api_key_lifecycle(
         self, async_client, auth_headers
@@ -147,3 +149,37 @@ class TestSettingsProfileAndApiKeys:
         assert profile_res.status_code == status.HTTP_200_OK
         profile = _extract_data(profile_res.json())
         assert profile.get("email") == "updated-email@example.com"
+
+    async def test_h7_google_only_profile_blocks_password_and_email_change(
+        self, async_client, auth_headers, test_user, db
+    ):
+        test_user.primary_auth_provider = "google"
+        test_user.password_login_enabled = False
+        test_user.google_login_enabled = True
+        test_user.google_id = "google-sub-profile"
+        db.add(test_user)
+        db.commit()
+
+        profile_res = await async_client.get("/api/v1/settings/profile", headers=auth_headers)
+        assert profile_res.status_code == status.HTTP_200_OK
+        profile = _extract_data(profile_res.json())
+        assert profile.get("primary_auth_provider") == "google"
+        assert profile.get("password_login_enabled") is False
+        assert profile.get("google_login_enabled") is True
+
+        password_res = await async_client.patch(
+            "/api/v1/settings/password",
+            json={"current_password": "testpassword123", "new_password": "BetterPassword123!"},
+            headers=auth_headers,
+        )
+        assert password_res.status_code == status.HTTP_400_BAD_REQUEST
+
+        email_res = await async_client.post(
+            "/api/v1/settings/email/change-request",
+            json={
+                "new_email": "blocked@example.com",
+                "current_password": "testpassword123",
+            },
+            headers=auth_headers,
+        )
+        assert email_res.status_code == status.HTTP_400_BAD_REQUEST
