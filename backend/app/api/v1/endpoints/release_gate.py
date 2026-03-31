@@ -2810,14 +2810,17 @@ async def _run_release_gate(
                     for r in candidate_rules
                 ]
 
+                failed_signal_ids = signals_obj.get("failed") if isinstance(signals_obj, dict) else []
+                if not isinstance(failed_signal_ids, list):
+                    failed_signal_ids = []
                 policy_failed = len(candidate_violations) > 0
-                signals_failed = len(failed_signals_local) > 0
+                signals_failed = len(failed_signal_ids) > 0
                 run_pass = (not policy_failed) and (not signals_failed)
                 reasons: List[str] = []
                 if policy_failed:
                     reasons.append(f"{len(candidate_violations)} policy rule(s) failed")
                 if signals_failed:
-                    reasons.append(f"{len(failed_signals_local)} signal check(s) failed")
+                    reasons.append(f"{len(failed_signal_ids)} signal check(s) failed")
                 if reasons:
                     all_reasons.extend(reasons)
 
