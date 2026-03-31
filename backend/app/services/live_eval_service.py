@@ -177,9 +177,27 @@ def normalize_eval_config(raw_eval: Any) -> Dict[str, Any]:
     return normalized
 
 
+def get_eval_window_limit(raw_eval: Any) -> int:
+    cfg = raw_eval if isinstance(raw_eval, dict) else {}
+    return _clamp_int((cfg.get("window") or {}).get("limit"), 50, 10, 200)
+
+
+def strip_eval_window(raw_eval: Any) -> Dict[str, Any]:
+    cfg = raw_eval if isinstance(raw_eval, dict) else {}
+    sanitized = dict(cfg)
+    sanitized.pop("window", None)
+    return sanitized
+
+
+def normalize_eval_rule_config(raw_eval: Any) -> Dict[str, Any]:
+    normalized = normalize_eval_config(strip_eval_window(raw_eval))
+    normalized.pop("window", None)
+    return normalized
+
+
 def eval_config_version_hash(eval_config: Any) -> str:
     """Return a stable hash of the normalized eval config for change detection."""
-    cfg = normalize_eval_config(eval_config) if eval_config else {}
+    cfg = normalize_eval_rule_config(eval_config) if eval_config else normalize_eval_rule_config({})
     blob = json.dumps(cfg, sort_keys=True)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -398,6 +416,7 @@ def evaluate_recent_snapshots(
     project_id: int,
     agent_id: str,
     eval_config: Any,
+    window_limit: Optional[int] = None,
     get_config_at: Optional[Callable[[Any], Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
@@ -405,8 +424,12 @@ def evaluate_recent_snapshots(
     with the eval config that was active at that snapshot's created_at (so logs before a config
     change use the old config, logs after use the new one).
     """
-    current_cfg = normalize_eval_config(eval_config)
-    window_limit = current_cfg["window"]["limit"]
+    current_cfg = normalize_eval_rule_config(eval_config)
+    effective_window_limit = (
+        _clamp_int(window_limit, get_eval_window_limit(eval_config), 10, 200)
+        if window_limit is not None
+        else get_eval_window_limit(eval_config)
+    )
 
     rows: List[Snapshot] = (
         db.query(Snapshot)
@@ -416,7 +439,7 @@ def evaluate_recent_snapshots(
             Snapshot.is_deleted.is_(False),
         )
         .order_by(Snapshot.created_at.desc())
-        .limit(window_limit)
+        .limit(effective_window_limit)
         .all()
     )
     rows.reverse()
@@ -446,7 +469,7 @@ def evaluate_recent_snapshots(
     per_snapshot = []
     for s in snapshots:
         if get_config_at is not None:
-            cfg = normalize_eval_config(get_config_at(s["created_at"]))
+            cfg = normalize_eval_rule_config(get_config_at(s["created_at"]))
         else:
             cfg = current_cfg
 
@@ -504,7 +527,7 @@ def evaluate_recent_snapshots(
     return {
         "agent_id": agent_id,
         "config": current_cfg,
-        "window_limit": window_limit,
+        "window_limit": effective_window_limit,
         "total_snapshots": total,
         "overall": overall,
         "checks": checks,
@@ -556,14 +579,19 @@ def aggregate_stored_eval_checks(
     snapshots: List[Snapshot],
     agent_id: str,
     eval_config: Any,
+    window_limit: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Build the same response shape as evaluate_recent_snapshots from stored
     eval_checks_result on each snapshot. Used when all snapshots have
     eval_checks_result so we don't recompute with current config.
     """
-    current_cfg = normalize_eval_config(eval_config or {})
-    window_limit = current_cfg["window"]["limit"]
+    current_cfg = normalize_eval_rule_config(eval_config or {})
+    effective_window_limit = (
+        _clamp_int(window_limit, get_eval_window_limit(eval_config), 10, 200)
+        if window_limit is not None
+        else get_eval_window_limit(eval_config)
+    )
     total = len(snapshots)
 
     stats: Dict[str, Dict[str, Any]] = {k: {"enabled": False, "failed": 0, "applicable": 0} for k in CHECK_KEYS}
@@ -624,7 +652,7 @@ def aggregate_stored_eval_checks(
     return {
         "agent_id": agent_id,
         "config": current_cfg,
-        "window_limit": window_limit,
+        "window_limit": effective_window_limit,
         "total_snapshots": total,
         "overall": overall,
         "checks": checks,

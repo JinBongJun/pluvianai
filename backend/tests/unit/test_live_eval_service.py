@@ -7,9 +7,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.services.live_eval_service import (
-    normalize_eval_config,
     _evaluate_one_snapshot,
+    eval_config_version_hash,
     evaluate_recent_snapshots,
+    normalize_eval_config,
 )
 
 
@@ -22,6 +23,16 @@ class TestNormalizeEvalConfig:
     def test_empty_min_chars(self):
         out = normalize_eval_config({"empty": {"enabled": True, "min_chars": 50}})
         assert out["empty"]["min_chars"] == 50
+
+    def test_eval_config_version_hash_ignores_window_limit(self):
+        base = {
+            "enabled": True,
+            "empty": {"enabled": True, "min_chars": 16},
+            "latency": {"enabled": True, "fail_ms": 5000},
+        }
+        assert eval_config_version_hash({**base, "window": {"limit": 50}}) == eval_config_version_hash(
+            {**base, "window": {"limit": 200}}
+        )
 
 
 @pytest.mark.unit

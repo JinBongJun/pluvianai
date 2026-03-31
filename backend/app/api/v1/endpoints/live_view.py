@@ -52,9 +52,11 @@ from app.domain.live_view_release_gate import (
 )
 from app.services.live_eval_service import (
     evaluate_recent_snapshots,
+    get_eval_window_limit,
     normalize_eval_config,
     aggregate_stored_eval_checks,
     eval_config_version_hash,
+    strip_eval_window,
 )
 
 router = APIRouter()
@@ -1129,6 +1131,48 @@ def _validate_eval_config_for_save(eval_part: Dict[str, Any]) -> None:
     # Length and repetition use single fail thresholds in MVP (pass/fail contract).
 
 
+def _normalize_agent_diagnostic_config(config: Any) -> Dict[str, Any]:
+    raw = config if isinstance(config, dict) else {}
+    normalized = dict(raw)
+
+    clinical_log_raw = raw.get("clinical_log") if isinstance(raw.get("clinical_log"), dict) else {}
+    clinical_log = dict(clinical_log_raw)
+
+    eval_raw = raw.get("eval") if isinstance(raw.get("eval"), dict) else None
+    if isinstance(eval_raw, dict):
+        legacy_window_limit = None
+        if isinstance(eval_raw.get("window"), dict):
+            legacy_window_limit = eval_raw.get("window", {}).get("limit")
+        if "window_limit" not in clinical_log and legacy_window_limit is not None:
+            clinical_log["window_limit"] = get_eval_window_limit({"window": {"limit": legacy_window_limit}})
+
+        eval_rules = strip_eval_window(eval_raw)
+        if eval_rules:
+            normalized["eval"] = eval_rules
+        else:
+            normalized.pop("eval", None)
+
+    if "window_limit" in clinical_log:
+        clinical_log["window_limit"] = get_eval_window_limit(
+            {"window": {"limit": clinical_log.get("window_limit")}}
+        )
+
+    if clinical_log:
+        normalized["clinical_log"] = clinical_log
+    else:
+        normalized.pop("clinical_log", None)
+
+    return normalized
+
+
+def _get_clinical_log_window_limit(config: Any) -> int:
+    normalized = _normalize_agent_diagnostic_config(config)
+    clinical_log = normalized.get("clinical_log") if isinstance(normalized, dict) else {}
+    if isinstance(clinical_log, dict) and "window_limit" in clinical_log:
+        return get_eval_window_limit({"window": {"limit": clinical_log.get("window_limit")}})
+    return get_eval_window_limit({})
+
+
 @router.patch("/projects/{project_id}/live-view/agents/{agent_id}/settings")
 def update_agent_settings(
     project_id: int,
@@ -1160,19 +1204,10 @@ def update_agent_settings(
     def _merge_agent_diagnostic_config(
         current_config: Any, incoming_config: Any
     ) -> dict:
-        current_obj = current_config if isinstance(current_config, dict) else {}
-        incoming_obj = incoming_config if isinstance(incoming_config, dict) else {}
+        current_obj = _normalize_agent_diagnostic_config(current_config)
+        incoming_obj = _normalize_agent_diagnostic_config(incoming_config)
         merged = _deep_merge_dict(current_obj, incoming_obj)
-
-        current_eval = current_obj.get("eval") if isinstance(current_obj.get("eval"), dict) else {}
         incoming_eval = incoming_obj.get("eval")
-
-        # Clinical Log persists only the eval window size; preserve the rest of
-        # the already-saved eval config for that narrow patch.
-        if isinstance(incoming_eval, dict) and set(incoming_eval.keys()) == {"window"}:
-            merged = dict(merged) if isinstance(merged, dict) else {}
-            merged["eval"] = _deep_merge_dict(current_eval, incoming_eval)
-            return merged
 
         # Treat full eval saves as authoritative snapshots, not partial patches,
         # so disabled keys from older saves do not survive via deep-merge.
@@ -1180,7 +1215,7 @@ def update_agent_settings(
             merged = dict(merged) if isinstance(merged, dict) else {}
             merged["eval"] = incoming_eval
 
-        return merged
+        return _normalize_agent_diagnostic_config(merged)
 
     if not setting:
         deleted_at = datetime.now(timezone.utc) if is_deleted else None
@@ -1192,7 +1227,7 @@ def update_agent_settings(
             node_type=node_type or "agentCard",
             is_deleted=is_deleted or False,
             deleted_at=deleted_at,
-            diagnostic_config=diagnostic_config or {},
+            diagnostic_config=_normalize_agent_diagnostic_config(diagnostic_config or {}),
         )
         db.add(setting)
     else:
@@ -2171,8 +2206,12 @@ def evaluate_agent_with_eval_config(
         .filter(AgentDisplaySetting.project_id == project_id, AgentDisplaySetting.system_prompt_hash == agent_id)
         .first()
     )
-    diagnostic_config = setting.diagnostic_config if setting and isinstance(setting.diagnostic_config, dict) else {}
-    current_eval = diagnostic_config.get("eval", {}) if isinstance(diagnostic_config, dict) else {}
+    diagnostic_config = (
+        _normalize_agent_diagnostic_config(setting.diagnostic_config)
+        if setting and isinstance(setting.diagnostic_config, dict)
+        else {}
+    )
+    current_eval = strip_eval_window(diagnostic_config.get("eval", {})) if isinstance(diagnostic_config, dict) else {}
 
     history_rows = (
         db.query(AgentEvalConfigHistory)
@@ -2199,7 +2238,7 @@ def evaluate_agent_with_eval_config(
         return current_eval
 
     # Load recent snapshots; if all have stored eval_checks_result, use them (stable display).
-    window_limit = normalize_eval_config(current_eval)["window"]["limit"]
+    window_limit = _get_clinical_log_window_limit(diagnostic_config)
     rows = (
         db.query(Snapshot)
         .filter(
@@ -2214,10 +2253,19 @@ def evaluate_agent_with_eval_config(
     rows.reverse()
     all_have_stored = all(getattr(s, "eval_checks_result", None) for s in rows)
     if rows and all_have_stored:
-        out = aggregate_stored_eval_checks(rows, agent_id, current_eval)
+        out = aggregate_stored_eval_checks(rows, agent_id, current_eval, window_limit=window_limit)
     elif not history_rows:
-        out = evaluate_recent_snapshots(db, project_id, agent_id, current_eval)
+        out = evaluate_recent_snapshots(
+            db, project_id, agent_id, current_eval, window_limit=window_limit
+        )
     else:
-        out = evaluate_recent_snapshots(db, project_id, agent_id, current_eval, get_config_at=get_config_at)
+        out = evaluate_recent_snapshots(
+            db,
+            project_id,
+            agent_id,
+            current_eval,
+            window_limit=window_limit,
+            get_config_at=get_config_at,
+        )
     out["current_eval_config_version"] = eval_config_version_hash(current_eval)
     return out

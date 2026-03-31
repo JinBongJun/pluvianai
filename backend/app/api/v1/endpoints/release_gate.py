@@ -95,6 +95,7 @@ from app.services.live_eval_service import (
     evaluate_one_snapshot_at_save,
     eval_config_version_hash,
     normalize_eval_config,
+    strip_eval_window,
 )
 from app.utils.tool_events import normalize_tool_events
 
@@ -680,8 +681,16 @@ def _merge_tool_grounding_with_semantic(
     return merged
 
 
+def _extract_release_gate_eval_config(value: Any) -> Dict[str, Any]:
+    raw = value if isinstance(value, dict) else {}
+    nested = raw.get("eval") if isinstance(raw.get("eval"), dict) else None
+    if isinstance(nested, dict):
+        return strip_eval_window(nested)
+    return strip_eval_window(raw)
+
+
 def _configured_eval_check_ids(eval_config: Any) -> List[str]:
-    raw = eval_config if isinstance(eval_config, dict) else {}
+    raw = _extract_release_gate_eval_config(eval_config)
     configured: List[str] = []
     for key in CHECK_KEYS:
         if key == "tool":
@@ -2228,7 +2237,7 @@ async def _run_release_gate(
                 .first()
             )
             if setting and isinstance(getattr(setting, "diagnostic_config", None), dict):
-                eval_config_raw = setting.diagnostic_config or {}
+                eval_config_raw = _extract_release_gate_eval_config(setting.diagnostic_config or {})
         except Exception:
             eval_config_raw = {}
 

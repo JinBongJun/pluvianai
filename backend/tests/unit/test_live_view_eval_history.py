@@ -107,10 +107,11 @@ def test_update_agent_settings_replaces_eval_config_instead_of_merging_stale_key
         "empty": {"enabled": True, "min_chars": 12},
         "latency": {"enabled": True, "fail_ms": 2500},
     }
+    assert "window" not in existing.diagnostic_config["eval"]
 
 
 @pytest.mark.unit
-def test_update_agent_settings_window_only_patch_preserves_existing_eval_rules():
+def test_update_agent_settings_clinical_log_patch_preserves_existing_eval_rules():
     existing = AgentDisplaySetting(
         id="s3",
         project_id=1,
@@ -118,10 +119,10 @@ def test_update_agent_settings_window_only_patch_preserves_existing_eval_rules()
         diagnostic_config={
             "eval": {
                 "enabled": True,
-                "window": {"limit": 50},
                 "empty": {"enabled": True, "min_chars": 8},
                 "latency": {"enabled": True, "fail_ms": 2500},
-            }
+            },
+            "clinical_log": {"window_limit": 50},
         },
     )
     db = _mock_db_with_setting(existing)
@@ -131,6 +132,40 @@ def test_update_agent_settings_window_only_patch_preserves_existing_eval_rules()
         live_view.update_agent_settings(
             project_id=1,
             agent_id="agent-window",
+            diagnostic_config={"clinical_log": {"window_limit": 120}},
+            db=db,
+            current_user=current_user,
+        )
+
+    assert existing.diagnostic_config["eval"] == {
+        "enabled": True,
+        "empty": {"enabled": True, "min_chars": 8},
+        "latency": {"enabled": True, "fail_ms": 2500},
+    }
+    assert existing.diagnostic_config["clinical_log"] == {"window_limit": 120}
+
+
+@pytest.mark.unit
+def test_update_agent_settings_migrates_legacy_eval_window_into_clinical_log():
+    existing = AgentDisplaySetting(
+        id="s4",
+        project_id=1,
+        system_prompt_hash="agent-legacy-window",
+        diagnostic_config={
+            "eval": {
+                "enabled": True,
+                "window": {"limit": 180},
+                "empty": {"enabled": True, "min_chars": 8},
+            }
+        },
+    )
+    db = _mock_db_with_setting(existing)
+    current_user = MagicMock()
+
+    with patch.object(live_view, "_ensure_project_admin", return_value=MagicMock()):
+        live_view.update_agent_settings(
+            project_id=1,
+            agent_id="agent-legacy-window",
             diagnostic_config={"eval": {"window": {"limit": 120}}},
             db=db,
             current_user=current_user,
@@ -138,10 +173,9 @@ def test_update_agent_settings_window_only_patch_preserves_existing_eval_rules()
 
     assert existing.diagnostic_config["eval"] == {
         "enabled": True,
-        "window": {"limit": 120},
         "empty": {"enabled": True, "min_chars": 8},
-        "latency": {"enabled": True, "fail_ms": 2500},
     }
+    assert existing.diagnostic_config["clinical_log"] == {"window_limit": 120}
 
 
 @pytest.mark.unit
