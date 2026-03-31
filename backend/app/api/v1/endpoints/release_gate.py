@@ -91,6 +91,7 @@ from app.services.behavior_rules_service import (
     run_behavior_validation,
 )
 from app.services.live_eval_service import (
+    CHECK_KEYS,
     evaluate_one_snapshot_at_save,
     eval_config_version_hash,
     normalize_eval_config,
@@ -677,6 +678,54 @@ def _merge_tool_grounding_with_semantic(
             merged["reason"] = semantic_reason
 
     return merged
+
+
+def _configured_eval_check_ids(eval_config: Any) -> List[str]:
+    cfg = normalize_eval_config(eval_config or {})
+    configured: List[str] = []
+    for key in CHECK_KEYS:
+        value = cfg.get(key)
+        if isinstance(value, dict) and bool(value.get("enabled")):
+            configured.append(key)
+    return configured
+
+
+def _build_release_gate_signals_payload(
+    *,
+    signals_checks: Optional[Dict[str, Any]],
+    signals_details: Optional[Dict[str, Any]],
+    eval_config_version: Optional[str],
+    config_check_ids: List[str],
+) -> Dict[str, Any]:
+    canonical_checks: Dict[str, Any] = {}
+    runtime_checks: Dict[str, Any] = {}
+    for key, value in (signals_checks or {}).items():
+        if key in CHECK_KEYS:
+            canonical_checks[key] = value
+        else:
+            runtime_checks[key] = value
+
+    canonical_details: Dict[str, Any] = {}
+    runtime_details: Dict[str, Any] = {}
+    for key, value in (signals_details or {}).items():
+        if key in CHECK_KEYS:
+            canonical_details[key] = value
+        else:
+            runtime_details[key] = value
+
+    canonical_failed = [
+        key for key, value in canonical_checks.items() if str(value).strip().lower() == "fail"
+    ]
+
+    return {
+        "checks": canonical_checks,
+        "failed": canonical_failed,
+        "config_version": eval_config_version,
+        "config_check_ids": config_check_ids,
+        "details": canonical_details,
+        "runtime_checks": runtime_checks,
+        "runtime_details": runtime_details,
+    }
 
 
 DISALLOWED_REPLAY_OVERRIDE_KEYS: Set[str] = {
@@ -2182,6 +2231,10 @@ async def _run_release_gate(
         eval_config_version = eval_config_version_hash(eval_config_raw or {})
     except Exception:
         eval_config_version = None
+    try:
+        config_check_ids = _configured_eval_check_ids(eval_config_raw or {})
+    except Exception:
+        config_check_ids = []
 
     # Signals-only config (do not run tool policy twice; policy is validated via BehaviorRules).
     try:
@@ -2512,17 +2565,12 @@ async def _run_release_gate(
                             signals_details[k] = {"status": signals_checks.get(k)}
                 except Exception:
                     signals_details = {}
-                failed_signals_local = [
-                    k
-                    for k, v in (signals_checks or {}).items()
-                    if str(v).strip().lower() == "fail"
-                ]
-                signals_obj = {
-                    "checks": signals_checks or {},
-                    "failed": failed_signals_local,
-                    "config_version": eval_config_version,
-                    "details": signals_details or {},
-                }
+                signals_obj = _build_release_gate_signals_payload(
+                    signals_checks=signals_checks or {},
+                    signals_details=signals_details or {},
+                    eval_config_version=eval_config_version,
+                    config_check_ids=config_check_ids,
+                )
 
                 run_tool_summary = response_to_canonical_tool_calls_summary(
                     res.get("response_data") or {}, res.get("replay_provider")
@@ -2549,10 +2597,8 @@ async def _run_release_gate(
                     tool_grounding_semantic,
                 )
                 tool_grounding_status = str(tool_grounding.get("status") or "").strip().lower()
-                signals_obj["checks"]["tool_grounding"] = tool_grounding_status
-                signals_obj["details"]["tool_grounding"] = tool_grounding
-                if tool_grounding_status == "fail" and "tool_grounding" not in signals_obj["failed"]:
-                    signals_obj["failed"].append("tool_grounding")
+                signals_obj["runtime_checks"]["tool_grounding"] = tool_grounding_status
+                signals_obj["runtime_details"]["tool_grounding"] = tool_grounding
                 baseline_seq = _baseline_sequence_for_snapshot(snapshot)
                 candidate_seq = tool_calls_summary_to_sequence(run_tool_summary)
                 behavior_diff = compute_behavior_diff(baseline_seq, candidate_seq).to_dict()
@@ -2764,14 +2810,17 @@ async def _run_release_gate(
                     for r in candidate_rules
                 ]
 
+                failed_signal_ids = signals_obj.get("failed") if isinstance(signals_obj, dict) else []
+                if not isinstance(failed_signal_ids, list):
+                    failed_signal_ids = []
                 policy_failed = len(candidate_violations) > 0
-                signals_failed = len(failed_signals_local) > 0
+                signals_failed = len(failed_signal_ids) > 0
                 run_pass = (not policy_failed) and (not signals_failed)
                 reasons: List[str] = []
                 if policy_failed:
                     reasons.append(f"{len(candidate_violations)} policy rule(s) failed")
                 if signals_failed:
-                    reasons.append(f"{len(failed_signals_local)} signal check(s) failed")
+                    reasons.append(f"{len(failed_signal_ids)} signal check(s) failed")
                 if reasons:
                     all_reasons.extend(reasons)
 
