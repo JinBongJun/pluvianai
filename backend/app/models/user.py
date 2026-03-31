@@ -2,7 +2,7 @@
 User model for authentication and authorization
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, true
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, true, false
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -17,8 +17,13 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=True)
+    avatar_url = Column(String(2048), nullable=True)
     is_active = Column(Boolean, default=True)
     is_email_verified = Column(Boolean, nullable=False, default=True, server_default=true())
+    primary_auth_provider = Column(String(32), nullable=False, default="password", server_default="password")
+    password_login_enabled = Column(Boolean, nullable=False, default=True, server_default=true())
+    google_login_enabled = Column(Boolean, nullable=False, default=False, server_default=false())
+    google_id = Column(String(255), unique=True, nullable=True, index=True)
     is_superuser = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

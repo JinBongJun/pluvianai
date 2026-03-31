@@ -42,6 +42,17 @@ export const authAPI = {
     return response.data;
   },
 
+  getGoogleOAuthStartUrl: (
+    intent: "login" | "signup" = "login",
+    options?: { next?: string; termsAccepted?: boolean }
+  ) => {
+    const params = new URLSearchParams();
+    params.set("intent", intent);
+    if (options?.next) params.set("next", options.next);
+    if (options?.termsAccepted) params.set("terms_accepted", "true");
+    return `${API_URL}/api/v1/auth/oauth/google/start?${params.toString()}`;
+  },
+
   logout: async () => {
     await axios
       .post(

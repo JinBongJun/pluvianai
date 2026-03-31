@@ -56,6 +56,7 @@ export default function LoginPage() {
   const [verifiedMessageShown, setVerifiedMessageShown] = useState(false);
   const [reauthBannerMessage, setReauthBannerMessage] = useState("Please log in again.");
   const [formError, setFormError] = useState<string | null>(null);
+  const [oauthMessage, setOauthMessage] = useState<string | null>(null);
   const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
   const [registeredEmail, setRegisteredEmail] = useState<string>("");
   const [resendBusy, setResendBusy] = useState(false);
@@ -111,6 +112,8 @@ export default function LoginPage() {
     const registered = params.get("registered");
     const registeredEmailParam = params.get("email");
     const verified = params.get("verified");
+    const oauthError = params.get("oauth_error");
+    const oauthErrorMessage = params.get("oauth_error_message");
     const nextPath = params.get("next");
 
     if (mode === "signup") {
@@ -159,6 +162,14 @@ export default function LoginPage() {
       window.history.replaceState({}, "", newUrl.toString());
       setVerifiedMessageShown(true);
       setTimeout(() => setVerifiedMessageShown(false), 5000);
+    }
+
+    if (oauthError === "1") {
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete("oauth_error");
+      newUrl.searchParams.delete("oauth_error_message");
+      window.history.replaceState({}, "", newUrl.toString());
+      setOauthMessage(oauthErrorMessage || "Google sign-in could not be completed.");
     }
   }, [mounted]);
 
@@ -256,6 +267,18 @@ export default function LoginPage() {
     } finally {
       setResendBusy(false);
     }
+  };
+
+  const handleGoogleContinue = () => {
+    if (!isLogin && !liabilityAgreementAccepted) {
+      setFormError("Please accept the terms to continue.");
+      return;
+    }
+    const next = typeof window !== "undefined" ? postAuthRedirect : "/organizations";
+    window.location.href = authAPI.getGoogleOAuthStartUrl(isLogin ? "login" : "signup", {
+      next,
+      termsAccepted: !isLogin && liabilityAgreementAccepted,
+    });
   };
 
   const errorMessage = formError;
@@ -358,6 +381,12 @@ export default function LoginPage() {
                 {errorMessage && (
                   <div className="bg-red-500/5 border border-red-500/20 text-red-400 px-4 py-3 rounded-2xl text-xs font-bold animate-in fade-in slide-in-from-top-2">
                     {errorMessage}
+                  </div>
+                )}
+
+                {oauthMessage && !errorMessage && (
+                  <div className="bg-red-500/5 border border-red-500/20 text-red-400 px-4 py-3 rounded-2xl text-xs font-bold">
+                    {oauthMessage}
                   </div>
                 )}
 
@@ -548,6 +577,21 @@ export default function LoginPage() {
                     liabilityAccepted={liabilityAgreementAccepted}
                     isLoadingOverride={isLoading || isSubmitting}
                   />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="relative text-center text-[10px] font-black uppercase tracking-[0.25em] text-slate-600">
+                    <span className="bg-[#1a1a1e] px-3 relative z-10">or continue with</span>
+                    <div className="absolute inset-x-0 top-1/2 border-t border-white/10 -translate-y-1/2" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGoogleContinue}
+                    disabled={!isLogin && !liabilityAgreementAccepted}
+                    className="w-full h-14 rounded-2xl border border-white/15 bg-white/[0.03] text-white font-black uppercase tracking-[0.2em] hover:border-emerald-500/40 hover:bg-white/[0.05] transition-all disabled:opacity-50"
+                  >
+                    Continue with Google
+                  </button>
                 </div>
 
                 {isLogin && registeredMessageShown && registeredEmail ? (

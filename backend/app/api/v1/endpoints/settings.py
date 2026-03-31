@@ -34,8 +34,12 @@ class ProfileResponse(BaseModel):
     id: int
     email: str
     full_name: Optional[str]
+    avatar_url: Optional[str] = None
     is_active: bool
     is_email_verified: bool
+    primary_auth_provider: str = "password"
+    password_login_enabled: bool = True
+    google_login_enabled: bool = False
     created_at: str
 
 class UpdateProfileRequest(BaseModel):
@@ -136,8 +140,12 @@ async def get_profile(
         id=current_user.id,
         email=current_user.email,
         full_name=current_user.full_name,
+        avatar_url=getattr(current_user, "avatar_url", None),
         is_active=bool(current_user.is_active),
         is_email_verified=bool(getattr(current_user, "is_email_verified", True)),
+        primary_auth_provider=str(getattr(current_user, "primary_auth_provider", "password")),
+        password_login_enabled=bool(getattr(current_user, "password_login_enabled", True)),
+        google_login_enabled=bool(getattr(current_user, "google_login_enabled", False)),
         created_at=current_user.created_at.isoformat() if current_user.created_at else "",
     )
 
@@ -165,8 +173,12 @@ async def update_profile(
         id=current_user.id,
         email=current_user.email,
         full_name=current_user.full_name,
+        avatar_url=getattr(current_user, "avatar_url", None),
         is_active=bool(current_user.is_active),
         is_email_verified=bool(getattr(current_user, "is_email_verified", True)),
+        primary_auth_provider=str(getattr(current_user, "primary_auth_provider", "password")),
+        password_login_enabled=bool(getattr(current_user, "password_login_enabled", True)),
+        google_login_enabled=bool(getattr(current_user, "google_login_enabled", False)),
         created_at=current_user.created_at.isoformat() if current_user.created_at else "",
     )
 
@@ -181,6 +193,12 @@ async def delete_account(
 ):
     """Delete user account (requires password confirmation)"""
     logger.info(f"User {current_user.id} requesting account deletion")
+
+    if not bool(getattr(current_user, "password_login_enabled", True)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password confirmation is unavailable for Google-only accounts",
+        )
     
     # Verify password
     if not verify_password(request.password, current_user.hashed_password):
@@ -207,6 +225,12 @@ async def change_password(
 ):
     """Change user password"""
     logger.info(f"User {current_user.id} changing password")
+
+    if not bool(getattr(current_user, "password_login_enabled", True)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password sign-in is not enabled for this account",
+        )
     
     # Verify current password
     if not verify_password(request.current_password, current_user.hashed_password):
@@ -240,6 +264,12 @@ async def request_email_change(
 ):
     """Send a verification email to confirm a new email address."""
     logger.info(f"User {current_user.id} requested email change")
+
+    if bool(getattr(current_user, "google_login_enabled", False)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is managed by your Google sign-in settings",
+        )
 
     if not verify_password(request.current_password, current_user.hashed_password):
         raise HTTPException(

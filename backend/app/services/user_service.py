@@ -1,3 +1,4 @@
+import secrets
 from typing import Optional
 from sqlalchemy.orm import Session
 from app.models.user import User
@@ -24,7 +25,14 @@ class UserService:
         self,
         email: str,
         password: str,
-        full_name: Optional[str] = None
+        full_name: Optional[str] = None,
+        *,
+        is_email_verified: bool = False,
+        primary_auth_provider: str = "password",
+        password_login_enabled: bool = True,
+        google_login_enabled: bool = False,
+        google_id: Optional[str] = None,
+        avatar_url: Optional[str] = None,
     ) -> User:
         """
         Create a new user with hashed password
@@ -53,8 +61,13 @@ class UserService:
             email=email,
             hashed_password=hashed_password,
             full_name=full_name,
+            avatar_url=avatar_url,
             is_active=True,
-            is_email_verified=False,
+            is_email_verified=is_email_verified,
+            primary_auth_provider=primary_auth_provider,
+            password_login_enabled=password_login_enabled,
+            google_login_enabled=google_login_enabled,
+            google_id=google_id,
         )
         user = self.user_repo.save(user)
         
@@ -77,6 +90,26 @@ class UserService:
         
         logger.info(f"User created successfully: user_id={user.id}")
         return user
+
+    def create_google_user(
+        self,
+        *,
+        email: str,
+        full_name: Optional[str],
+        google_id: str,
+        avatar_url: Optional[str] = None,
+    ) -> User:
+        return self.create_user(
+            email=email,
+            password=secrets.token_urlsafe(32),
+            full_name=full_name,
+            is_email_verified=True,
+            primary_auth_provider="google",
+            password_login_enabled=False,
+            google_login_enabled=True,
+            google_id=google_id,
+            avatar_url=avatar_url,
+        )
 
     def get_user_by_id(self, user_id: int) -> Optional[User]:
         """Get user by ID"""
