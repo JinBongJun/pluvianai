@@ -1166,31 +1166,24 @@ export function AttemptDetailOverlay({
                   {/* Global Status Banner + KPIs */}
                   <div
                     className={clsx(
-                      "flex flex-col gap-5 rounded-3xl border px-6 py-6",
+                      "flex flex-col gap-4 rounded-3xl border px-6 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]",
                       pass
                         ? "border-emerald-500/25 bg-emerald-500/[0.04]"
                         : "border-rose-500/25 bg-rose-500/[0.04]"
                     )}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div className="min-w-0 max-w-4xl space-y-3">
+                      <div className="min-w-0 max-w-4xl space-y-2">
                         <div className="text-[11px] font-medium text-slate-400">
-                          Key metrics and evidence sources for this attempt.
+                          Configured eval results and the main replay signals for this attempt.
                         </div>
-                        <div className="flex flex-wrap gap-2 text-xs text-slate-400">
-                          {decisionSourceLabels.map(label => (
-                            <span
-                              key={label}
-                              className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1"
-                            >
-                              {label}
-                            </span>
-                          ))}
-                        </div>
+                        <p className="text-sm leading-6 text-slate-300">
+                          Decision based on {decisionSourceLabels.join(", ")}.
+                        </p>
                       </div>
-                      <div className="min-w-[240px] rounded-2xl border border-white/8 bg-black/20 px-4 py-4">
+                      <div className="min-w-[240px] rounded-2xl bg-black/20 px-4 py-4 ring-1 ring-white/6">
                         <div className="text-[11px] font-medium text-slate-400">
-                          Confidence
+                          Evidence confidence
                         </div>
                         <div className="mt-2 flex items-center gap-2">
                           <span
@@ -1201,13 +1194,13 @@ export function AttemptDetailOverlay({
                           >
                             {gateConfidence.label}
                           </span>
-                          <span className="text-xs text-slate-400">Trace coverage</span>
+                          <span className="text-xs text-slate-400">Captured evidence</span>
                         </div>
                         <p className="mt-2 text-xs leading-relaxed text-slate-300">{gateConfidence.detail}</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                      <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
+                      <div className="rounded-2xl bg-black/20 px-4 py-3 ring-1 ring-white/6">
                         <div className="text-[11px] font-medium text-slate-400">Configured eval checks</div>
                         <div className="mt-2 text-lg font-semibold text-white tabular-nums">
                           {evalTotalCount > 0 ? `${evalPassCount}/${evalTotalCount}` : "—"}
@@ -1218,7 +1211,7 @@ export function AttemptDetailOverlay({
                             : "Only checks configured for this run are counted"}
                         </div>
                       </div>
-                      <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
+                      <div className="rounded-2xl bg-black/20 px-4 py-3 ring-1 ring-white/6">
                         <div className="text-[11px] font-medium text-slate-400">Policy</div>
                         <div className="mt-2 text-lg font-semibold text-white tabular-nums">
                           {policyRows.length === 0 ? "Clean" : `${policyRows.length} found`}
@@ -1227,7 +1220,7 @@ export function AttemptDetailOverlay({
                           {policyRows.length === 0 ? "No blocking issues" : "Review policy details"}
                         </div>
                       </div>
-                      <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
+                      <div className="rounded-2xl bg-black/20 px-4 py-3 ring-1 ring-white/6">
                         <div className="text-[11px] font-medium text-slate-400">Replay latency</div>
                         <div className="mt-2 text-lg font-semibold text-white tabular-nums">
                           {replayLatencyLabel}
@@ -1237,9 +1230,9 @@ export function AttemptDetailOverlay({
                         </div>
                       </div>
                     </div>
-                    <div className="rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
+                    <div className="rounded-2xl bg-black/20 px-4 py-3 ring-1 ring-white/6">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] font-medium text-slate-400">Tool evidence</span>
+                        <span className="text-[11px] font-medium text-slate-400">Tool activity</span>
                         <span
                           className={clsx(
                             "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold",
@@ -1255,20 +1248,21 @@ export function AttemptDetailOverlay({
                         <span>Calls {toolTotalCalls}</span>
                         <span>Executed {toolExecutedCount}</span>
                         <span>Recorded {toolRecordedCount}</span>
-                        <span>Simulated {toolSimulatedCount}</span>
-                        <span>Skipped {toolSkippedCount}</span>
-                        <span>Failed {toolFailedCount}</span>
+                        {toolFailedCount > 0 ? <span>Failed {toolFailedCount}</span> : null}
                       </div>
                       <p className="mt-2 text-xs leading-relaxed text-slate-400">{toolEvidenceDetail}</p>
                       <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                        Loop {toolLoopStatus} {toolLoopRounds > 0 ? `(rounds ${toolLoopRounds})` : ""}
+                        Loop {toolLoopStatus}
+                        {toolLoopRounds > 0 ? ` (${toolLoopRounds} rounds)` : ""}
+                        {toolSimulatedCount > 0 ? ` · ${toolSimulatedCount} simulated` : ""}
+                        {toolSkippedCount > 0 ? ` · ${toolSkippedCount} skipped` : ""}
                       </p>
                       {gateToolTimelineRows.length > 0 ? (
                         <div className="mt-4 border-t border-white/5 pt-4">
                           <ToolTimelinePanel
                             rows={gateToolTimelineRows}
                             title="Tool timeline"
-                            subtitle="Aligned with Live View snapshot detail (provenance badges)."
+                            subtitle="Recorded vs replayed tool activity."
                             icon={Wrench}
                             variant="compact"
                           />
@@ -1280,7 +1274,7 @@ export function AttemptDetailOverlay({
                   {/* Main Content Grid */}
                   <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
                     <div className="space-y-5">
-                      <section className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
+                      <section className="rounded-3xl bg-white/[0.02] p-5 ring-1 ring-white/6">
                         <div className="mb-4 flex items-center justify-between gap-2">
                           <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
                             <div className="h-1.5 w-1.5 rounded-full bg-blue-400/80" />
@@ -1291,15 +1285,15 @@ export function AttemptDetailOverlay({
                           </div>
                         </div>
                         {runtimeSignalRows.length > 0 ? (
-                          <div className="mb-4 rounded-2xl border border-white/5 bg-black/20 px-4 py-3 text-[11px] leading-relaxed text-slate-400">
+                          <div className="mb-4 rounded-2xl bg-black/20 px-4 py-3 text-[11px] leading-relaxed text-slate-400 ring-1 ring-white/5">
                             {runtimeSignalRows.length} runtime diagnostic
                             {runtimeSignalRows.length === 1 ? "" : "s"} were captured separately and excluded from
-                            eval coverage.
+                            eval coverage. Open Diagnostics if you need the raw detail.
                           </div>
                         ) : null}
                         <div className="grid gap-3 xl:grid-cols-2">
                           {!signalsChecksRaw ? (
-                            <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-sm text-slate-500">
+                            <div className="rounded-2xl bg-black/20 px-4 py-5 text-sm text-slate-500 ring-1 ring-white/5">
                               <p>No eval signals returned.</p>
                               <p className="mt-2 text-xs text-slate-400">Eval coverage: 0</p>
                               <p className="mt-1 text-xs text-slate-400">
@@ -1307,7 +1301,7 @@ export function AttemptDetailOverlay({
                               </p>
                             </div>
                           ) : canonicalSignalRows.length === 0 ? (
-                            <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-sm text-slate-500">
+                            <div className="rounded-2xl bg-black/20 px-4 py-5 text-sm text-slate-500 ring-1 ring-white/5">
                               <p>No configured eval checks were returned for this attempt.</p>
                               <p className="mt-2 text-xs text-slate-400">Eval coverage: 0</p>
                               <p className="mt-1 text-xs text-slate-400">
@@ -1327,7 +1321,7 @@ export function AttemptDetailOverlay({
                               return (
                                 <div
                                   key={row.id}
-                                  className="flex flex-col justify-between rounded-2xl border border-white/5 bg-black/20 p-4"
+                                  className="flex flex-col justify-between rounded-2xl bg-black/20 p-4 ring-1 ring-white/5"
                                 >
                                   <div className="flex items-center justify-between gap-4">
                                     <span className="text-sm font-medium text-slate-200">{row.label}</span>
@@ -1358,7 +1352,7 @@ export function AttemptDetailOverlay({
                         </div>
                       </section>
 
-                      <div className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
+                      <div className="rounded-3xl bg-white/[0.02] p-5 ring-1 ring-white/6">
                         <div className="flex items-center justify-between gap-2">
                           <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
                             User Input
@@ -1383,15 +1377,15 @@ export function AttemptDetailOverlay({
                     </div>
 
                     <div className="space-y-5">
-                      <div className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
+                      <div className="rounded-3xl bg-white/[0.02] p-5 ring-1 ring-white/6">
                         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                          Run Context
+                          Replay context
                         </div>
                         <div className="mt-3 grid gap-3">
                           {runContextItems.map(item => (
                             <div
                               key={item.label}
-                              className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3"
+                              className="rounded-2xl bg-black/20 px-4 py-3 ring-1 ring-white/5"
                             >
                               <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
                                 {item.label}
@@ -1416,7 +1410,7 @@ export function AttemptDetailOverlay({
                       </div>
 
                       {attentionItems.length > 0 || policyRows.length > 0 ? (
-                      <section className="rounded-3xl border border-white/8 bg-white/[0.02] p-5">
+                      <section className="rounded-3xl bg-white/[0.02] p-5 ring-1 ring-white/6">
                         <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
                           <div className="h-1.5 w-1.5 rounded-full bg-amber-400/80" />
                           Attention needed
@@ -1491,7 +1485,7 @@ export function AttemptDetailOverlay({
 
               {detailMainTab === "comparison" && (
                 <div className="mx-auto flex w-full max-w-[1200px] min-h-[calc(90vh-220px)] flex-col gap-4">
-                  <section className="rounded-3xl border border-white/8 bg-white/[0.02] px-5 py-5">
+                  <section className="rounded-3xl bg-white/[0.02] px-5 py-5 ring-1 ring-white/6">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="max-w-3xl">
                         <div className="text-[11px] font-medium text-slate-400">Diff review</div>
@@ -1505,35 +1499,32 @@ export function AttemptDetailOverlay({
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                         <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
-                          Diff confidence {diffConfidenceLabel}
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
                           {baselineLineCount} {"->"} {candidateLineCount} lines
                         </span>
                       </div>
                     </div>
                   </section>
                   <div className="grid gap-4 xl:grid-cols-2">
-                    <section className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4">
+                    <section className="rounded-2xl bg-white/[0.02] px-4 py-4 ring-1 ring-white/6">
                       <div className="text-[11px] font-medium text-slate-400">What changed</div>
                       <div className="mt-3 space-y-2">
                         {comparisonPrimaryChanges.map(item => (
                           <div
                             key={item}
-                            className="rounded-xl border border-white/6 bg-black/20 px-3 py-2 text-sm leading-relaxed text-slate-200"
+                            className="rounded-xl bg-black/20 px-3 py-2 text-sm leading-relaxed text-slate-200 ring-1 ring-white/5"
                           >
                             {item}
                           </div>
                         ))}
                       </div>
                     </section>
-                    <section className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4">
+                    <section className="rounded-2xl bg-white/[0.02] px-4 py-4 ring-1 ring-white/6">
                       <div className="text-[11px] font-medium text-slate-400">What it means</div>
                       <div className="mt-3 space-y-2">
                         {comparisonImpactItems.map(item => (
                           <div
                             key={item}
-                            className="rounded-xl border border-white/6 bg-black/20 px-3 py-2 text-sm leading-relaxed text-slate-200"
+                            className="rounded-xl bg-black/20 px-3 py-2 text-sm leading-relaxed text-slate-200 ring-1 ring-white/5"
                           >
                             {item}
                           </div>
@@ -1546,10 +1537,7 @@ export function AttemptDetailOverlay({
                       Response diff
                     </p>
                     <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                      <span>Green marks added or modified candidate output.</span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-semibold text-slate-300">
-                        Diff confidence {diffConfidenceLabel}
-                      </span>
+                      <span>Green marks changed candidate output.</span>
                       {diffRemovedCount > 0 ? (
                         <button
                           type="button"
@@ -1637,7 +1625,7 @@ export function AttemptDetailOverlay({
 
               {detailMainTab === "debug" && (
                 <div className="mx-auto flex w-full max-w-[1200px] min-h-[calc(90vh-220px)] flex-col gap-5">
-                  <section className="rounded-3xl border border-white/8 bg-white/[0.02] px-5 py-5">
+                  <section className="rounded-3xl bg-white/[0.02] px-5 py-5 ring-1 ring-white/6">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="max-w-3xl">
                         <div className="text-[11px] font-medium text-slate-400">Support and diagnostics</div>
@@ -1660,7 +1648,7 @@ export function AttemptDetailOverlay({
                   </section>
 
                   <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-10">
-                    <div className="flex min-h-[400px] flex-col overflow-hidden rounded-3xl border border-white/8 bg-[#0a0a0c] xl:col-span-7">
+                    <div className="flex min-h-[400px] flex-col overflow-hidden rounded-3xl bg-[#0a0a0c] ring-1 ring-white/6 xl:col-span-7">
                       <div className="flex items-center justify-between border-b border-white/5 bg-black/40 px-5 py-3">
                         <span className="text-[11px] font-medium text-slate-400">JSON payload</span>
                       </div>
@@ -1670,12 +1658,12 @@ export function AttemptDetailOverlay({
                     </div>
 
                     <div className="space-y-3 xl:col-span-3">
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                      <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
                         <div className="text-[11px] font-medium text-slate-400">Provider</div>
                         <div className="mt-2 text-sm font-medium text-slate-100 break-words">{candidateProvider}</div>
                         <div className="mt-1 text-xs text-slate-400">{candidateModel}</div>
                       </div>
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                      <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
                         <div className="text-[11px] font-medium text-slate-400">Payload health</div>
                         <div className="mt-2 text-sm font-medium text-slate-100 break-words">
                           {hasProviderError ? "Provider warning attached" : "Structured payload captured"}
@@ -1684,7 +1672,7 @@ export function AttemptDetailOverlay({
                           {responseDataKeys.length > 0 ? `${responseDataKeys.length} keys captured` : "No payload keys"}
                         </div>
                       </div>
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                      <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
                         <div className="text-[11px] font-medium text-slate-400">Tool evidence</div>
                         <div className="mt-2 text-sm font-medium text-slate-100 break-words">
                           {toolTotalCalls > 0
@@ -1705,7 +1693,7 @@ export function AttemptDetailOverlay({
                         {flattenedToolLoopRows.length > 0 ? (
                           <div className="mt-3 space-y-2">
                             {flattenedToolLoopRows.slice(0, 3).map((row, idx) => (
-                              <div key={`${row.round}-${row.name}-${idx}`} className="rounded-xl border border-white/8 bg-black/20 px-3 py-2">
+                              <div key={`${row.round}-${row.name}-${idx}`} className="rounded-xl bg-black/20 px-3 py-2 ring-1 ring-white/5">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-[11px] font-medium text-slate-200">
                                     Round {row.round || 1} · {row.name}
@@ -1749,7 +1737,7 @@ export function AttemptDetailOverlay({
                           </div>
                         ) : null}
                       </div>
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                      <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
                         <div className="text-[11px] font-medium text-slate-400">Extract path</div>
                         <div className="mt-2 text-sm font-medium text-slate-100 break-words">
                           {String((candidateSnapshot as any)?.response_extract_path ?? "Not captured")}
@@ -1758,7 +1746,7 @@ export function AttemptDetailOverlay({
                           {String((candidateSnapshot as any)?.response_extract_reason ?? "No extraction warning")}
                         </div>
                       </div>
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-4">
+                      <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
                         <div className="text-[11px] font-medium text-slate-400">Payload keys</div>
                         <div className="mt-2 text-sm font-medium text-slate-100 break-words">
                           {responseDataKeys.length > 0 ? responseDataKeys.slice(0, 10).join(", ") : "None captured"}
