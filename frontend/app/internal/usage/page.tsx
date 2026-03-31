@@ -9,7 +9,7 @@ type ProjectUsageItem = {
   project_id: number | null;
   project_name: string | null;
   owner_email: string | null;
-  total_credits: number;
+  total_attempts: number;
   runs: number;
 };
 
@@ -48,12 +48,12 @@ export default function InternalUsagePage() {
       setLoading(true);
       setError(null);
       try {
-        const result = (await internalUsageAPI.getGuardCreditsByProject(
+        const result = (await internalUsageAPI.getReleaseGateAttemptsByProject(
           month
         )) as ProjectUsageResponse;
         setData(result);
       } catch (err: any) {
-        logger.error("Failed to load platform replay credit usage", err);
+        logger.error("Failed to load Release Gate attempt usage", err);
         setError(
           err?.response?.data?.detail ||
             err?.message ||
@@ -74,9 +74,9 @@ export default function InternalUsagePage() {
       <div className="max-w-5xl mx-auto space-y-6">
         <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Platform replay credit usage</h1>
+            <h1 className="text-2xl font-bold">Release Gate usage</h1>
             <p className="text-sm text-slate-400 mt-1">
-              Internal dashboard to monitor hosted replay credit exposure per project.{" "}
+              Internal dashboard to monitor replay attempts and run volume per project.{" "}
               <span className="font-medium text-slate-300">
                 Month: <span className="text-sky-300">{monthLabel}</span>
               </span>
@@ -105,7 +105,7 @@ export default function InternalUsagePage() {
         <section className="rounded-xl border border-white/10 bg-slate-950/70 p-4 shadow-lg shadow-black/40">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-200">
-              Projects by platform replay credits used
+              Projects by replay attempts used
             </h2>
             <span className="text-xs text-slate-500">
               {loading
@@ -122,8 +122,8 @@ export default function InternalUsagePage() {
                 <tr className="border-b border-white/5 text-xs uppercase text-slate-400">
                   <th className="px-3 py-2">Project</th>
                   <th className="px-3 py-2">Owner</th>
-                  <th className="px-3 py-2 text-right">Replay credits</th>
-                  <th className="px-3 py-2 text-right">Replay runs</th>
+                  <th className="px-3 py-2 text-right">Replay attempts</th>
+                  <th className="px-3 py-2 text-right">Run jobs</th>
                 </tr>
               </thead>
               <tbody>
@@ -136,7 +136,7 @@ export default function InternalUsagePage() {
                 ) : items.length === 0 ? (
                   <tr>
                     <td className="px-3 py-4 text-center text-slate-500" colSpan={4}>
-                      No platform replay credit usage recorded for this month.
+                      No Release Gate usage recorded for this month.
                     </td>
                   </tr>
                 ) : (
@@ -159,7 +159,7 @@ export default function InternalUsagePage() {
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right font-mono">
-                        {item.total_credits.toLocaleString()}
+                        {item.total_attempts.toLocaleString()}
                       </td>
                       <td className="px-3 py-2 text-right text-slate-200">
                         {item.runs.toLocaleString()}

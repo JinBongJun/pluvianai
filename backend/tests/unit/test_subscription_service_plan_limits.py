@@ -22,6 +22,7 @@ def test_get_limit_status_uses_paid_plan_limits(db, test_user):
 
     snapshots_status = get_limit_status(db, test_user.id, "snapshots")
     replay_status = get_limit_status(db, test_user.id, "platform_replay_credits")
+    attempts_status = get_limit_status(db, test_user.id, "release_gate_attempts")
 
     assert snapshots_status["plan_type"] == "starter"
     assert snapshots_status["limit"] == 50_000
@@ -33,10 +34,16 @@ def test_get_limit_status_uses_paid_plan_limits(db, test_user):
     assert replay_status["current"] == 0
     assert replay_status["remaining"] == 600
 
+    assert attempts_status["plan_type"] == "starter"
+    assert attempts_status["limit"] == 600
+    assert attempts_status["current"] == 0
+    assert attempts_status["remaining"] == 600
+
 
 def test_get_limit_status_handles_missing_db_for_error_payload():
     snapshots_status = get_limit_status(None, user_id=999, metric="snapshots")
     replay_status = get_limit_status(None, user_id=999, metric="platform_replay_credits")
+    attempts_status = get_limit_status(None, user_id=999, metric="release_gate_attempts")
 
     assert snapshots_status["plan_type"] == "free"
     assert snapshots_status["current"] == 0
@@ -47,6 +54,11 @@ def test_get_limit_status_handles_missing_db_for_error_payload():
     assert replay_status["current"] == 0
     assert replay_status["limit"] == 60
     assert replay_status["remaining"] == 60
+
+    assert attempts_status["plan_type"] == "free"
+    assert attempts_status["current"] == 0
+    assert attempts_status["limit"] == 60
+    assert attempts_status["remaining"] == 60
 
 
 def test_get_limit_status_supports_org_and_project_metrics(db, test_user):

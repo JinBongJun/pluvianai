@@ -56,11 +56,14 @@ export function computeAccountUsageMetrics(
   );
 
   const replayUsed =
+    (usage as { release_gate_attempts?: number; platform_replay_credits?: number; guard_credits?: number })
+      .release_gate_attempts ??
     (usage as { platform_replay_credits?: number; guard_credits?: number }).platform_replay_credits ??
     (usage as { guard_credits?: number }).guard_credits ??
     0;
   const replayLimit = accountUsageAsNumber(
-    (limits as Record<string, unknown>).platform_replay_credits_per_month ??
+    (limits as Record<string, unknown>).release_gate_attempts_per_month ??
+      (limits as Record<string, unknown>).platform_replay_credits_per_month ??
       (limits as Record<string, unknown>).guard_credits_per_month,
     fb.replay
   );

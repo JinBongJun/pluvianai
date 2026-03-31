@@ -432,22 +432,27 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       agentId,
     });
 
-  const replayCreditsUsed = Number(
-    myUsage?.usage_this_month?.platform_replay_credits ?? myUsage?.usage_this_month?.guard_credits ?? 0
+  const replayUsageUsed = Number(
+    myUsage?.usage_this_month?.release_gate_attempts ??
+      myUsage?.usage_this_month?.platform_replay_credits ??
+      myUsage?.usage_this_month?.guard_credits ??
+      0
   );
-  const replayCreditsLimitRaw =
-    myUsage?.limits?.platform_replay_credits_per_month ?? myUsage?.limits?.guard_credits_per_month;
-  const replayCreditsLimit =
-    replayCreditsLimitRaw == null || Number.isNaN(Number(replayCreditsLimitRaw))
+  const replayUsageLimitRaw =
+    myUsage?.limits?.release_gate_attempts_per_month ??
+    myUsage?.limits?.platform_replay_credits_per_month ??
+    myUsage?.limits?.guard_credits_per_month;
+  const replayUsageLimit =
+    replayUsageLimitRaw == null || Number.isNaN(Number(replayUsageLimitRaw))
       ? null
-      : Number(replayCreditsLimitRaw);
-  const hostedReplayCreditsExhausted =
-    replayCreditsLimit != null && replayCreditsLimit !== -1 && replayCreditsUsed >= replayCreditsLimit;
-  const hostedReplayBlocked = modelSource === "hosted" && hostedReplayCreditsExhausted;
-  const keyBlocked = providerKeyBlocked || hostedReplayBlocked;
-  const keyIssueBlocked = providerKeyIssueBlocked || hostedReplayBlocked;
-  const keyRegistrationMessage = hostedReplayBlocked
-    ? `Hosted replay credits exhausted (${replayCreditsUsed}/${replayCreditsLimit}). Switch to Custom (BYOK) or upgrade your plan.`
+      : Number(replayUsageLimitRaw);
+  const replayUsageExhausted =
+    replayUsageLimit != null && replayUsageLimit !== -1 && replayUsageUsed >= replayUsageLimit;
+  const hostedReplayCreditsExhausted = replayUsageExhausted;
+  const keyBlocked = providerKeyBlocked || replayUsageExhausted;
+  const keyIssueBlocked = providerKeyIssueBlocked || replayUsageExhausted;
+  const keyRegistrationMessage = replayUsageExhausted
+    ? `Release Gate usage exhausted (${replayUsageUsed}/${replayUsageLimit}). Reduce selected logs or repeats, or upgrade your plan.`
     : providerKeyRegistrationMessage;
 
   const modelSourceInvalid =
@@ -455,13 +460,13 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
   const runValidateCooldownActive = runValidateCooldownUntilMs > Date.now();
   const canRunValidate =
     canValidate && !keyBlocked && !modelSourceInvalid && !runValidateCooldownActive;
-  const hostedReplayPlanError: PlanLimitError | null = hostedReplayBlocked
+  const hostedReplayPlanError: PlanLimitError | null = replayUsageExhausted
     ? {
-        code: "LIMIT_PLATFORM_REPLAY_CREDITS",
+        code: "LIMIT_RELEASE_GATE_ATTEMPTS",
         message: keyRegistrationMessage,
         planType: String(myUsage?.plan_type || "free"),
-        current: replayCreditsUsed,
-        limit: replayCreditsLimit ?? undefined,
+        current: replayUsageUsed,
+        limit: replayUsageLimit ?? undefined,
         upgradePath: "/settings/billing",
       }
     : null;

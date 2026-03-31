@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -52,7 +53,7 @@ from app.core.metrics import (
 )
 from app.core.permissions import check_project_access
 from app.core.config import settings as app_settings
-from app.core.usage_limits import check_guard_credits_limit, get_limit_status
+from app.core.usage_limits import check_release_gate_attempts_limit, get_limit_status
 from app.core.security import (
     TokenValidationError,
     auth_error_detail,
@@ -76,6 +77,7 @@ from app.domain.live_view_release_gate import build_agent_visibility_context, is
 from app.services.ops_alerting import ops_alerting
 from app.services.replay_service import replay_service, resolve_tool_context_injection_text
 from app.services.data_normalizer import DataNormalizer
+from app.services.subscription_service import SubscriptionService
 from app.services.user_api_key_service import UserApiKeyService
 from app.services.cache_service import cache_service
 from app.services.release_gate_events import (
@@ -776,27 +778,55 @@ def _build_replay_request_meta(
     }
 
 
-def _enforce_platform_replay_credit_limit(
-    payload: "ReleaseGateValidateRequest", db: Session | None, current_user: User
-) -> None:
-    """
-    Hosted replay credits only apply when Release Gate uses platform-hosted models.
-    BYOK runs remain subject to product limits, but do not spend hosted credits.
-    """
-    if payload.model_source != "platform":
-        return
+@dataclass(frozen=True)
+class _ResolvedReleaseGateInputs:
+    trace_id: Optional[str]
+    baseline_trace_id: Optional[str]
+    snapshots: List[Snapshot]
 
-    allowed, err_msg = check_guard_credits_limit(
-        db, current_user.id, getattr(current_user, "is_superuser", False)
+
+def _calculate_release_gate_attempts(
+    snapshots: List[Snapshot], payload: "ReleaseGateValidateRequest"
+) -> int:
+    repeat_runs = max(1, int(getattr(payload, "repeat_runs", 0) or 1))
+    return len(snapshots) * repeat_runs
+
+
+def _charge_release_gate_attempts(
+    db: Session, current_user: User, project_id: int, attempts: int
+) -> None:
+    if attempts <= 0:
+        return
+    SubscriptionService(db).increment_usage(
+        user_id=int(current_user.id),
+        metric_type="release_gate_attempts",
+        amount=int(attempts),
+        project_id=project_id,
+    )
+
+
+def _enforce_release_gate_attempt_limit(
+    payload: "ReleaseGateValidateRequest",
+    db: Session,
+    current_user: User,
+    project_id: int,
+    resolved_inputs: _ResolvedReleaseGateInputs,
+) -> int:
+    attempts = _calculate_release_gate_attempts(resolved_inputs.snapshots, payload)
+    allowed, err_msg = check_release_gate_attempts_limit(
+        db,
+        current_user.id,
+        amount=attempts,
+        is_superuser=getattr(current_user, "is_superuser", False),
     )
     if allowed:
-        return
-    limit_status = get_limit_status(db, current_user.id, "platform_replay_credits")
+        return attempts
+    limit_status = get_limit_status(db, current_user.id, "release_gate_attempts")
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail={
-            "code": "LIMIT_PLATFORM_REPLAY_CREDITS",
+            "code": "LIMIT_RELEASE_GATE_ATTEMPTS",
             "message": err_msg,
             "details": {
                 "plan_type": limit_status.get("plan_type"),
@@ -806,11 +836,12 @@ def _enforce_platform_replay_credit_limit(
                 "remaining": limit_status.get("remaining"),
                 "reset_at": limit_status.get("reset_at"),
                 "upgrade_path": "/settings/billing",
+                "attempts_requested": attempts,
             },
-            "model_source": payload.model_source,
+            "usage_formula": "selected_logs_x_repeats",
             "next_steps": [
-                "Use your own provider key for this run.",
-                "Upgrade your plan for more hosted replay credits.",
+                "Reduce selected logs or repeat count for this run.",
+                "Upgrade your plan for more Release Gate usage.",
             ],
         },
     )
@@ -1690,21 +1721,11 @@ def _early_platform_hosted_model_check(payload: ReleaseGateValidateRequest, curr
         )
 
 
-def _resolve_snapshot_provider(snapshot: Snapshot) -> Optional[str]:
-    provider = _normalize_provider(getattr(snapshot, "provider", None))
-    if provider:
-        return provider
-    return _infer_provider_from_model(getattr(snapshot, "model", None))
-
-
-async def _run_release_gate(
+def _resolve_release_gate_inputs(
     project_id: int,
     payload: ReleaseGateValidateRequest,
     db: Session,
-    current_user: User,
-    cancel_check: Optional[Callable[[], bool]] = None,
-    progress_hook: Optional[Callable[[int, Optional[int], Optional[str], Optional[Dict[str, Any]]], None]] = None,
-) -> Dict[str, Any]:
+) -> _ResolvedReleaseGateInputs:
     trace_id = payload.trace_id
     baseline_trace_id = payload.baseline_trace_id
     snapshot_ids_to_use: Optional[List[Any]] = None
@@ -1812,7 +1833,6 @@ async def _run_release_gate(
         for ds in datasets:
             if ds.snapshot_ids:
                 snapshot_ids_to_use.extend(ds.snapshot_ids)
-        # Keep order while removing duplicates.
         dedup_snapshot_ids: List[Any] = []
         seen_snapshot_ids = set()
         for sid in snapshot_ids_to_use:
@@ -1822,8 +1842,7 @@ async def _run_release_gate(
             seen_snapshot_ids.add(sid_key)
             dedup_snapshot_ids.append(sid)
         snapshot_ids_to_use = dedup_snapshot_ids
-        
-        # Determine fallback trace_id from the first dataset for reference
+
         if datasets and not trace_id:
             ds = datasets[0]
             if ds.trace_ids and len(ds.trace_ids) > 0:
@@ -1840,14 +1859,11 @@ async def _run_release_gate(
                 )
                 if first_snap:
                     trace_id = first_snap.trace_id
-        
+
         if not baseline_trace_id and trace_id:
             baseline_trace_id = trace_id
 
     if not trace_id and not snapshot_ids_to_use and not payload.use_recent_snapshots:
-        # If we have snapshots but no trace_id (e.g. dataset only had snapshots), we might still be okay for Drift
-        # provided Drift logic iterates snapshots/traces correctly.
-        # But existing logic requires trace_id often. Let's see if we can derive it.
         pass
 
     if (not snapshot_ids_to_use) and (not payload.trace_id) and (not payload.use_recent_snapshots):
@@ -1922,6 +1938,34 @@ async def _run_release_gate(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No snapshots found for trace_id={trace_id}",
         )
+
+    return _ResolvedReleaseGateInputs(
+        trace_id=trace_id,
+        baseline_trace_id=baseline_trace_id,
+        snapshots=snapshots,
+    )
+
+
+def _resolve_snapshot_provider(snapshot: Snapshot) -> Optional[str]:
+    provider = _normalize_provider(getattr(snapshot, "provider", None))
+    if provider:
+        return provider
+    return _infer_provider_from_model(getattr(snapshot, "model", None))
+
+
+async def _run_release_gate(
+    project_id: int,
+    payload: ReleaseGateValidateRequest,
+    db: Session,
+    current_user: User,
+    cancel_check: Optional[Callable[[], bool]] = None,
+    progress_hook: Optional[Callable[[int, Optional[int], Optional[str], Optional[Dict[str, Any]]], None]] = None,
+    resolved_inputs: Optional[_ResolvedReleaseGateInputs] = None,
+) -> Dict[str, Any]:
+    resolved = resolved_inputs or _resolve_release_gate_inputs(project_id, payload, db)
+    trace_id = resolved.trace_id
+    baseline_trace_id = resolved.baseline_trace_id
+    snapshots = resolved.snapshots
 
     use_platform_model = payload.model_source == "platform"
 
@@ -2146,6 +2190,9 @@ async def _run_release_gate(
             eval_config_signals["tool"]["enabled"] = False
     except Exception:
         eval_config_signals = {"enabled": True}
+
+    attempts = _calculate_release_gate_attempts(snapshots, payload)
+    _charge_release_gate_attempts(db, current_user, project_id, attempts)
 
     if payload.evaluation_mode == "replay_test":
         normalizer = DataNormalizer()
@@ -3300,9 +3347,18 @@ async def validate_release_gate(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="agent_id is required when use_recent_snapshots is True",
         )
-    _enforce_platform_replay_credit_limit(payload, db, current_user)
+    resolved_inputs = _resolve_release_gate_inputs(project_id, payload, db)
+    attempts = _enforce_release_gate_attempt_limit(
+        payload, db, current_user, project_id, resolved_inputs
+    )
     try:
-        result = await _run_release_gate(project_id, payload, db, current_user)
+        result = await _run_release_gate(
+            project_id,
+            payload,
+            db,
+            current_user,
+            resolved_inputs=resolved_inputs,
+        )
         passed = bool((result or {}).get("pass"))
         reason = ""
         if not passed:
@@ -3353,13 +3409,17 @@ async def validate_release_gate_async(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="agent_id is required when use_recent_snapshots is True",
         )
-    _enforce_platform_replay_credit_limit(payload, db, current_user)
     _early_platform_hosted_model_check(payload, current_user)
 
     user_id = int(getattr(current_user, "id"))
     active_job = _get_active_release_gate_job(db, project_id=project_id, user_id=user_id)
     if active_job is not None:
         return ReleaseGateJobCreateResponse(job=_job_to_out(active_job))
+
+    resolved_inputs = _resolve_release_gate_inputs(project_id, payload, db)
+    attempts = _enforce_release_gate_attempt_limit(
+        payload, db, current_user, project_id, resolved_inputs
+    )
 
     job = ReleaseGateJob(
         project_id=project_id,
@@ -3670,9 +3730,18 @@ async def release_gate_webhook(
     current_user: User = Depends(get_user_from_api_key),
 ):
     check_project_access(project_id, current_user, db)
-    _enforce_platform_replay_credit_limit(payload, db, current_user)
+    resolved_inputs = _resolve_release_gate_inputs(project_id, payload, db)
+    attempts = _enforce_release_gate_attempt_limit(
+        payload, db, current_user, project_id, resolved_inputs
+    )
     try:
-        result = await _run_release_gate(project_id, payload, db, current_user)
+        result = await _run_release_gate(
+            project_id,
+            payload,
+            db,
+            current_user,
+            resolved_inputs=resolved_inputs,
+        )
         passed = bool((result or {}).get("pass"))
         reason = ""
         if not passed:

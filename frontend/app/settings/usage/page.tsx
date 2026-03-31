@@ -64,7 +64,7 @@ export default function AccountUsagePage() {
         <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none" />
 
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed relative z-10">
-          BYOK runs do not consume hosted replay credits.
+          Release Gate usage is counted by replay attempt: selected logs x repeats.
         </p>
         {(snapshotsExhausted || replayExhausted || snapshotsNearLimit || replayNearLimit) && (
           <div
@@ -85,17 +85,17 @@ export default function AccountUsagePage() {
             </p>
             <p className="mt-1 text-xs text-white/90">
               {snapshotsExhausted || replayExhausted
-                ? snapshotsExhausted && replayExhausted
-                  ? "Snapshots and hosted replay credits are exhausted for this billing period."
+                  ? snapshotsExhausted && replayExhausted
+                  ? "Snapshots and Release Gate usage are exhausted for this billing period."
                   : snapshotsExhausted
                     ? "Snapshots are exhausted for this billing period."
-                    : "Hosted replay credits are exhausted for this billing period."
+                    : "Release Gate usage is exhausted for this billing period."
                 : snapshotsNearLimit && replayNearLimit
-                  ? "Snapshots and hosted replay credits are above 80% usage."
+                  ? "Snapshots and Release Gate usage are above 80% usage."
                   : snapshotsNearLimit
                     ? "Snapshots are above 80% usage."
-                    : "Hosted replay credits are above 80% usage."}
-              {" "}Switch to BYOK where possible or upgrade plan.
+                    : "Release Gate usage is above 80% usage."}
+              {" "}Reduce selected logs or repeats, or upgrade plan.
             </p>
             <Link
               href="/settings/billing"
@@ -161,7 +161,7 @@ export default function AccountUsagePage() {
             )}
           </div>
 
-          {/* Hosted Replay Credits */}
+          {/* Release Gate Usage */}
           <div className="rounded-[32px] border border-white/10 bg-white/[0.03] backdrop-blur-xl p-8 relative overflow-hidden">
             <div className="absolute inset-0 bg-flowing-lines opacity-[0.03] pointer-events-none" />
             <div className="flex items-start justify-between mb-8 relative z-10">
@@ -171,10 +171,10 @@ export default function AccountUsagePage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-white uppercase tracking-widest">
-                    Hosted replay credits
+                    Release Gate usage
                   </h3>
                   <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">
-                    Release Gate &amp; Replay hosted runs
+                    Replay attempts this billing period
                   </p>
                 </div>
               </div>

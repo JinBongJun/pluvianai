@@ -23,6 +23,7 @@ FREE_LIMITS: Dict[str, Any] = {
     "projects": 2,
     "api_calls_per_month": 10_000,
     "snapshots_per_month": 10_000,
+    "release_gate_attempts_per_month": 60,
     # Guard credits are kept higher as an internal accounting unit even if
     # UI-level "runs per month" is lower.
     "guard_credits_per_month": 10_000,
@@ -57,6 +58,7 @@ STARTER_LIMITS: Dict[str, Any] = {
     "projects": 8,
     "api_calls_per_month": 50_000,
     "snapshots_per_month": 50_000,
+    "release_gate_attempts_per_month": 600,
     "guard_credits_per_month": 50_000,
     "platform_replay_credits_per_month": 600,
     "judge_calls_per_month": 1_000,
@@ -89,6 +91,7 @@ PRO_LIMITS: Dict[str, Any] = {
     "projects": 30,
     "api_calls_per_month": 200_000,
     "snapshots_per_month": 200_000,
+    "release_gate_attempts_per_month": 3_000,
     "guard_credits_per_month": 200_000,
     "platform_replay_credits_per_month": 3_000,
     "judge_calls_per_month": 10_000,
@@ -125,6 +128,7 @@ ENTERPRISE_LIMITS: Dict[str, Any] = {
     "projects": -1,
     "api_calls_per_month": -1,
     "snapshots_per_month": -1,
+    "release_gate_attempts_per_month": -1,
     "guard_credits_per_month": -1,
     "platform_replay_credits_per_month": -1,
     "judge_calls_per_month": -1,
