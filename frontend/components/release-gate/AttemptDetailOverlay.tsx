@@ -767,7 +767,7 @@ export function AttemptDetailOverlay({
     return {
       label: "High",
       detail: "All core evidence channels are captured.",
-      toneClass: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+      toneClass: "border-cyan-500/30 bg-cyan-500/10 text-cyan-100",
     };
   })();
   const decisionSummary = (() => {
@@ -781,6 +781,9 @@ export function AttemptDetailOverlay({
     }
     return fragments.join(" ");
   })();
+  const resultToneClass = pass
+    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+    : "border-rose-500/30 bg-rose-500/10 text-rose-100";
   const attentionItems = useMemo(() => {
     const items: Array<{
       key: string;
@@ -1469,22 +1472,33 @@ export function AttemptDetailOverlay({
                         Review the exact replay input before reading eval results.
                       </div>
                     </div>
-                    <div
-                      className={clsx("mt-4 rounded-xl border px-4 py-4", gateConfidence.toneClass)}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm font-medium text-white">{decisionSummary}</div>
-                        <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                          <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-slate-100">
-                            Eval {evalTotalCount > 0 ? `${evalPassCount}/${evalTotalCount}` : "—"}
-                          </span>
-                          <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-slate-100">
-                            Output {baselineLineCount} {"->"} {candidateLineCount} lines
-                          </span>
+                    <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+                      <div className={clsx("rounded-xl border px-4 py-4", resultToneClass)}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
+                              Gate result
+                            </div>
+                            <div className="mt-1 text-sm font-medium text-white">{decisionSummary}</div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                            <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-slate-100">
+                              Eval {evalTotalCount > 0 ? `${evalPassCount}/${evalTotalCount}` : "—"}
+                            </span>
+                            <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-slate-100">
+                              Output {baselineLineCount} {"->"} {candidateLineCount} lines
+                            </span>
+                          </div>
                         </div>
                       </div>
-                      <div className="mt-2 text-[11px] leading-relaxed text-slate-200/80">
-                        {gateConfidence.detail}
+                      <div className={clsx("rounded-xl border px-4 py-4", gateConfidence.toneClass)}>
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
+                          Evidence quality
+                        </div>
+                        <div className="mt-1 text-sm font-medium text-white">{gateConfidence.label}</div>
+                        <div className="mt-2 text-[11px] leading-relaxed text-slate-200/80">
+                          {gateConfidence.detail}
+                        </div>
                       </div>
                     </div>
                     <div className="mt-4">
@@ -1650,14 +1664,14 @@ export function AttemptDetailOverlay({
                       </span>
                       {runtimeSignalRows.length > 0 ? (
                         <span className="inline-flex items-center gap-1 rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-2.5 py-1 text-fuchsia-100">
-                          Runtime only {runtimeSignalRows.length}
+                          Extra diagnostics {runtimeSignalRows.length}
                         </span>
                       ) : null}
                     </div>
                     {runtimeSignalRows.length > 0 ? (
                       <div className="mt-4 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] px-4 py-3 text-[11px] leading-relaxed text-fuchsia-100/85">
-                        {runtimeSignalRows.length} runtime-only diagnostic
-                        {runtimeSignalRows.length === 1 ? "" : "s"} excluded from eval coverage.
+                        {runtimeSignalRows.length} extra runtime diagnostic
+                        {runtimeSignalRows.length === 1 ? "" : "s"} are shown for debugging only and do not count toward gate coverage.
                       </div>
                     ) : null}
                     {!signalsChecksRaw ? (
