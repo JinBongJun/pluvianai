@@ -38,7 +38,7 @@ export function ReleaseGateSelectedAgentSurface({
   if (surfacePhase === "pending") {
     return (
       <div
-        className="pointer-events-auto fixed left-[344px] right-[344px] top-[148px] bottom-6 z-[10000] min-w-0"
+        className="pointer-events-auto fixed left-[372px] right-[372px] top-[128px] bottom-8 z-[10000] min-w-0"
         data-testid="rg-selected-agent-surface-pending"
       >
         <div className="flex h-full min-h-0 flex-col justify-center overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#12121a]/92 px-8 text-center shadow-[0_25px_80px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
@@ -49,8 +49,8 @@ export function ReleaseGateSelectedAgentSurface({
             Preparing selected agent
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            {agentLabel} is selected. We are still resolving the validate surface for this agent,
-            so the side panels are available first.
+            {agentLabel} is selected. We are still resolving the center panel for this agent, so
+            the side panels are available first.
           </p>
           <p className="mt-2 text-sm leading-6 text-slate-500">
             If this message stays visible, reopen the agent or return to map view and select it
@@ -127,7 +127,7 @@ export function ReleaseGateSelectedAgentSurface({
 
   return (
     <div
-      className="pointer-events-auto fixed left-[344px] right-[344px] top-[148px] bottom-6 z-[10000] min-w-0"
+      className="pointer-events-auto fixed left-[372px] right-[372px] top-[128px] bottom-8 z-[10000] min-w-0"
       data-testid="rg-selected-agent-surface"
     >
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#12121a]/92 shadow-[0_25px_80px_rgba(0,0,0,0.5)] backdrop-blur-2xl">

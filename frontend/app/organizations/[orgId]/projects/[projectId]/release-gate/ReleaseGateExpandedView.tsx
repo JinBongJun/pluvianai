@@ -10,14 +10,12 @@ import { ReleaseGateKeysContext } from "./ReleaseGateKeysContext";
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
 import { ReleaseGateValidateRunContext } from "./ReleaseGateValidateRunContext";
 import { ReleaseGateExpandedBaselineDetailPortal } from "./ReleaseGateExpandedBaselineDetailPortal";
-import { ReleaseGateExpandedMainTabs } from "./ReleaseGateExpandedMainTabs";
 import { ReleaseGateConfigPanel } from "./ReleaseGateConfigPanel";
 import { ReleaseGateSelectedAgentSurface } from "./ReleaseGateSelectedAgentSurface";
 import { useReleaseGateExpandedViewModel } from "./useReleaseGateExpandedViewModel";
 import { getReleaseGateMainViewState } from "./releaseGateMainViewState";
 import { ReleaseGateMap } from "@/components/release-gate/ReleaseGateMap";
 import { AttemptDetailOverlay } from "@/components/release-gate/AttemptDetailOverlay";
-import { ReleaseGateHistoryExplorer } from "@/components/release-gate/ReleaseGateHistoryExplorer";
 import { ReleaseGateRunDataSidePanel } from "@/components/release-gate/ReleaseGateRunDataSidePanel";
 import { ReleaseGateRunOutputSidePanel } from "@/components/release-gate/ReleaseGateRunOutputSidePanel";
 import { ClientPortal } from "@/components/shared/ClientPortal";
@@ -33,7 +31,7 @@ export function ReleaseGateExpandedView() {
   }
 
   const m = useReleaseGateExpandedViewModel({ ctx, vctx, keysCtx });
-  const viewState = getReleaseGateMainViewState({ agentId: m.agentId, tab: m.tab });
+  const viewState = getReleaseGateMainViewState({ agentId: m.agentId });
 
   return (
     <div className="relative flex-1 min-h-0 flex flex-col">
@@ -50,22 +48,17 @@ export function ReleaseGateExpandedView() {
       <div className="absolute inset-0 z-[9999] pointer-events-none overflow-y-auto">
         {viewState.hasSelectedAgent ? (
           <ClientPortal>
-            <>
-              <ReleaseGateExpandedMainTabs tab={m.tab} setTab={m.setTab} />
-              {viewState.showSelectedAgentSurface ? (
-                <ReleaseGateSelectedAgentSurface
-                  agentLabel={m.selectedAgent?.display_name || m.agentId}
-                  rgDetails={m.rgDetails}
-                />
-              ) : null}
-            </>
+            <ReleaseGateSelectedAgentSurface
+              agentLabel={m.selectedAgent?.display_name || m.agentId}
+              rgDetails={m.rgDetails}
+            />
           </ClientPortal>
         ) : null}
         {viewState.hasSelectedAgent && (
           <ClientPortal>
             <ReleaseGateRunDataSidePanel
               leftPanelTitle={m.selectedAgent?.display_name || m.agentId}
-              validatePanelOpen={m.tab === "validate"}
+              validatePanelOpen={true}
               onClose={m.handleBack}
               orgId={m.orgId}
               projectId={m.projectId}
@@ -164,29 +157,6 @@ export function ReleaseGateExpandedView() {
           isOpen={m.settingsPanelOpen && !!m.agentId}
           onClose={() => m.setSettingsPanelOpen(false)}
         />
-
-        {viewState.showHistoryExplorer && (
-          <ReleaseGateHistoryExplorer
-            historyStatus={m.historyStatus}
-            setHistoryStatus={m.setHistoryStatus}
-            historyDatePreset={m.historyDatePreset}
-            setHistoryDatePreset={m.setHistoryDatePreset}
-            historyTraceId={m.historyTraceId}
-            setHistoryTraceId={m.setHistoryTraceId}
-            historyRefreshing={m.historyRefreshing}
-            mutateHistory={m.mutateHistory}
-            historyDateSummary={m.historyDateSummary}
-            historyLoading={m.historyLoading}
-            historyItems={m.historyItems}
-            historyTotal={m.historyTotal}
-            selectedRunId={m.selectedRunId}
-            selectedRunReportLoading={m.selectedRunReportLoading}
-            selectHistoryRun={m.selectHistoryRun}
-            historyOffset={m.historyOffset}
-            historyLimit={m.historyLimit}
-            setHistoryOffset={m.setHistoryOffset}
-          />
-        )}
 
         <ReleaseGateExpandedBaselineDetailPortal
           baselineDetailSnapshot={m.baselineDetailSnapshot}

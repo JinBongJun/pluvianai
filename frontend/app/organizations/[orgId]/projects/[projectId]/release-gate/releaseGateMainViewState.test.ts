@@ -7,19 +7,14 @@ import {
 } from "./releaseGateMainViewState";
 
 describe("releaseGateMainViewState", () => {
-  it("shows validate surface for selected agent in validate mode", () => {
-    expect(getReleaseGateMainViewState({ agentId: "agent-1", tab: "validate" })).toEqual({
+  it("shows the selected-agent surface whenever an agent is selected", () => {
+    expect(getReleaseGateMainViewState({ agentId: "agent-1" })).toEqual({
       hasSelectedAgent: true,
       showSelectedAgentSurface: true,
-      showHistoryExplorer: false,
     });
-  });
-
-  it("shows history explorer for selected agent in history mode", () => {
-    expect(getReleaseGateMainViewState({ agentId: "agent-1", tab: "history" })).toEqual({
-      hasSelectedAgent: true,
+    expect(getReleaseGateMainViewState({ agentId: "" })).toEqual({
+      hasSelectedAgent: false,
       showSelectedAgentSurface: false,
-      showHistoryExplorer: true,
     });
   });
 
