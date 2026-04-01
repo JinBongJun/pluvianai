@@ -10,6 +10,8 @@ import {
   Save,
   RotateCcw,
   CircleHelp,
+  Clock,
+  SlidersHorizontal,
 } from "lucide-react";
 import { liveViewAPI, behaviorAPI, type BehaviorRule } from "@/lib/api";
 import { PolicyRuleModal } from "@/components/live-view/PolicyRuleModal";

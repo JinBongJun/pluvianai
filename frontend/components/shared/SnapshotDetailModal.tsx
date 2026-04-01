@@ -16,6 +16,9 @@ import {
   Terminal,
   Wrench,
   Zap,
+  XCircle,
+  SlidersHorizontal,
+  Clock,
 } from "lucide-react";
 import clsx from "clsx";
 

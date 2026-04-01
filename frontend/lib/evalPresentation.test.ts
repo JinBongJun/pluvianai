@@ -19,7 +19,7 @@ describe("evalPresentation", () => {
 
   it("normalizes eval config with defaults", () => {
     const normalized = normalizeEvalConfig({
-      latency: { fail_ms: 9000 },
+      latency: { enabled: true, fail_ms: 9000 },
       tool_use_policy: { enabled: false },
     });
 
