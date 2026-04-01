@@ -31,6 +31,7 @@ export function AttemptDetailOverlay({
   initialAttemptIndex = 0,
   baselineSnapshot,
   replayRequestMeta = null,
+  toolContext = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -39,6 +40,7 @@ export function AttemptDetailOverlay({
   initialAttemptIndex?: number;
   baselineSnapshot: Record<string, unknown> | null;
   replayRequestMeta?: Record<string, unknown> | null;
+  toolContext?: Record<string, unknown> | null;
 }) {
   const [detailMainTab, setDetailMainTab] = useState<AttemptDetailMainTab>("review");
   const [attemptMenuOpen, setAttemptMenuOpen] = useState(false);
@@ -46,13 +48,14 @@ export function AttemptDetailOverlay({
   const [showRemovedDiffLines, setShowRemovedDiffLines] = useState(false);
   const [navIndex, setNavIndex] = useState(0);
   const diffSectionRef = useRef<HTMLDivElement | null>(null);
+  const detailsSectionRef = useRef<HTMLDivElement | null>(null);
+  const toolBehaviorSectionRef = useRef<HTMLDivElement | null>(null);
 
   const attemptCount = Array.isArray(attempts) ? attempts.length : 0;
   const maxNav = Math.max(0, attemptCount - 1);
   const safeInitial = Math.min(Math.max(0, initialAttemptIndex), maxNav);
 
   const [failedOnly, setFailedOnly] = useState(false);
-  const [showPassedChecks, setShowPassedChecks] = useState(false);
   const [showToolBehaviorDetails, setShowToolBehaviorDetails] = useState(false);
 
   useEffect(() => {
@@ -63,7 +66,6 @@ export function AttemptDetailOverlay({
       setShowRemovedDiffLines(false);
       setNavIndex(safeInitial);
       setFailedOnly(false);
-      setShowPassedChecks(false);
     }
   }, [open, inputIndex, safeInitial, attemptCount]);
 
@@ -730,21 +732,6 @@ export function AttemptDetailOverlay({
     },
   ];
   const failedGates = gateRows.filter(g => g.status === "fail");
-  const decisionSourceLabels = (() => {
-    const failedOrdered = [
-      policyRows.length > 0 ? "Policy" : null,
-      failedGates.some(g => g.id === "tool_integrity") ? "Tool Integrity" : null,
-      failedGates.some(g => g.id === "latency") ? "Latency" : null,
-      failedGates.some(g => g.id === "regression_diff") ? "Regression Diff" : null,
-    ].filter((v): v is string => Boolean(v));
-    if (failedOrdered.length > 0) return failedOrdered;
-    return [
-      policyRows.length > 0 ? "Policy" : null,
-      "Tool Integrity",
-      gateRows.some(g => g.id === "latency" && g.status !== "not_applicable") ? "Latency" : null,
-      "Regression Diff",
-    ].filter((v): v is string => Boolean(v));
-  })();
   const decisionHeadline = (() => {
     const toHeadline = (reason: string) => `Reason: ${reason}`;
     if (pass) return toHeadline("No blocking regressions detected.");
@@ -930,7 +917,6 @@ export function AttemptDetailOverlay({
     return "border-white/6 bg-black/20";
   };
   const fixFirstItems = attentionItems.slice(0, 3);
-  const failedSignalSummary = failedSignals.map(row => row.label).slice(0, 3);
   const toolBehaviorToneClass =
     policyRows.length > 0 || toolGroundingStatus === "fail"
       ? "border-rose-500/20 bg-rose-500/[0.05]"
@@ -943,21 +929,6 @@ export function AttemptDetailOverlay({
       : toolPolicyEnabled
         ? "Tool policy stayed aligned with the baseline for this attempt."
         : "Tool policy was not enabled for this run.";
-  const toolBehaviorDetail =
-    toolGroundingStatus === "fail"
-      ? toolGroundingReason || "Tool results were not grounded into the final response."
-      : toolEvidenceDetail;
-  const hasToolBehaviorIssues =
-    policyRows.length > 0 ||
-    toolGroundingStatus === "fail" ||
-    toolEvidenceStatus === "calls_detected_no_execution" ||
-    hasProviderError ||
-    toolFailedCount > 0;
-  const reviewIntro = pass
-    ? "No blocking regressions were detected. Compare the response against the baseline before opening diagnostics."
-    : failedSignalSummary.length > 0
-      ? `Focus on ${failedSignalSummary.join(", ")} first, then confirm the response diff below.`
-      : decisionHeadline.replace(/^Reason:\s*/i, "");
   const hasConfigurationChanges = useMemo(() => {
     if (!replayRequestMeta || typeof replayRequestMeta !== "object") return false;
     const overrides =
@@ -979,6 +950,255 @@ export function AttemptDetailOverlay({
     const hasNewPrompt = Boolean(replayRequestMeta.has_new_system_prompt);
     return overrides > 0 || perLogOverrides > 0 || samplingOverrides > 0 || hasNewPrompt;
   }, [replayRequestMeta]);
+  const replayOverrideCount =
+    replayRequestMeta?.replay_overrides_applied &&
+    typeof replayRequestMeta.replay_overrides_applied === "object"
+      ? Object.keys(replayRequestMeta.replay_overrides_applied as Record<string, unknown>).length
+      : 0;
+  const replayOverrideKeys =
+    replayRequestMeta?.replay_overrides_applied &&
+    typeof replayRequestMeta.replay_overrides_applied === "object"
+      ? Object.keys(replayRequestMeta.replay_overrides_applied as Record<string, unknown>).sort()
+      : [];
+  const replayPerLogOverrideEntries =
+    replayRequestMeta?.replay_overrides_by_snapshot_id_applied &&
+    typeof replayRequestMeta.replay_overrides_by_snapshot_id_applied === "object"
+      ? Object.entries(
+          replayRequestMeta.replay_overrides_by_snapshot_id_applied as Record<string, Record<string, unknown>>
+        ).filter(([, value]) => value && typeof value === "object" && Object.keys(value).length > 0)
+      : [];
+  const replayPerLogOverrideCount = replayPerLogOverrideEntries.length;
+  const replaySamplingKeys =
+    replayRequestMeta?.sampling_overrides && typeof replayRequestMeta.sampling_overrides === "object"
+      ? Object.keys(replayRequestMeta.sampling_overrides as Record<string, unknown>).sort()
+      : [];
+  const normalizedToolContext =
+    toolContext && typeof toolContext === "object" && !Array.isArray(toolContext)
+      ? (toolContext as Record<string, unknown>)
+      : attempt?.experiment &&
+            typeof attempt.experiment === "object" &&
+            !Array.isArray(attempt.experiment) &&
+            (attempt.experiment as Record<string, unknown>).tool_context &&
+            typeof (attempt.experiment as Record<string, unknown>).tool_context === "object" &&
+            !Array.isArray((attempt.experiment as Record<string, unknown>).tool_context)
+        ? ((attempt.experiment as Record<string, unknown>).tool_context as Record<string, unknown>)
+        : null;
+  const toolContextModeValue = String(normalizedToolContext?.mode ?? "recorded").trim().toLowerCase();
+  const toolContextInject =
+    normalizedToolContext?.inject &&
+    typeof normalizedToolContext.inject === "object" &&
+    !Array.isArray(normalizedToolContext.inject)
+      ? (normalizedToolContext.inject as Record<string, unknown>)
+      : null;
+  const toolContextScopeValue = String(toolContextInject?.scope ?? "per_snapshot").trim().toLowerCase();
+  const toolContextGlobalText = String(toolContextInject?.global_text ?? "").trim();
+  const toolContextBySnapshot =
+    toolContextInject?.by_snapshot_id &&
+    typeof toolContextInject.by_snapshot_id === "object" &&
+    !Array.isArray(toolContextInject.by_snapshot_id)
+      ? (toolContextInject.by_snapshot_id as Record<string, unknown>)
+      : {};
+  const toolContextCustomEntries = Object.entries(toolContextBySnapshot).filter(
+    ([, value]) => typeof value === "string" && value.trim().length > 0
+  );
+  const hasToolContextDetails =
+    toolContextModeValue === "inject" || toolContextGlobalText.length > 0 || toolContextCustomEntries.length > 0;
+  const toolContextSummary = (() => {
+    if (!hasToolContextDetails) return "Recorded only";
+    if (toolContextModeValue !== "inject") return "Recorded only";
+    if (toolContextScopeValue === "global") {
+      return toolContextGlobalText ? "Shared appended text present" : "Shared append configured";
+    }
+    const parts = [`Append enabled, ${toolContextCustomEntries.length} log${toolContextCustomEntries.length === 1 ? "" : "s"} customized`];
+    if (toolContextGlobalText) parts.push("fallback present");
+    return parts.join(", ");
+  })();
+  const toolContextScopeLabel =
+    toolContextModeValue !== "inject"
+      ? "recorded-only"
+      : toolContextScopeValue === "global"
+        ? "run-wide"
+        : "per-log";
+  const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>) => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const changeSummaryRows = useMemo(() => {
+    const rows: Array<{
+      id: string;
+      label: string;
+      summary: string;
+      meta?: string;
+      scope: string;
+      tone?: "default" | "changed";
+      action?: "diff" | "details" | "tools";
+    }> = [];
+
+    if (baselineModel !== candidateModel) {
+      rows.push({
+        id: "model",
+        label: "Model",
+        summary: `${baselineModel} -> ${candidateModel}`,
+        scope: "Run-wide",
+        tone: "changed",
+      });
+    }
+
+    rows.push({
+      id: "shape",
+      label: "Output shape",
+      summary: `${baselineLineCount} -> ${candidateLineCount} lines`,
+      meta:
+        baselineLineCount === candidateLineCount
+          ? "Line count matched"
+          : `${Math.abs(candidateLineCount - baselineLineCount)} line${Math.abs(candidateLineCount - baselineLineCount) === 1 ? "" : "s"} changed`,
+      scope: "Run-wide",
+      tone: baselineLineCount === candidateLineCount ? "default" : "changed",
+      action: "diff",
+    });
+
+    if (replayUsage.tokens_total != null || replayUsage.input_tokens != null || replayUsage.output_tokens != null) {
+      const totalTokens =
+        replayUsage.tokens_total ?? (replayUsage.input_tokens ?? 0) + (replayUsage.output_tokens ?? 0);
+      const tokenMeta = [
+        replayUsage.input_tokens != null ? `in ${formatSnapshotTokens(replayUsage.input_tokens)}` : null,
+        replayUsage.output_tokens != null ? `out ${formatSnapshotTokens(replayUsage.output_tokens)}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      rows.push({
+        id: "tokens",
+        label: "Replay tokens",
+        summary: `${formatSnapshotTokens(totalTokens)} total`,
+        meta: tokenMeta || undefined,
+        scope: "Run-wide",
+      });
+    }
+
+    if (replayLatencyLabel && replayLatencyLabel !== "—") {
+      rows.push({
+        id: "latency",
+        label: "Latency",
+        summary: replayLatencyLabel,
+        meta: hasProviderError ? "Provider warning attached" : undefined,
+        scope: "Run-wide",
+      });
+    }
+
+    rows.push({
+      id: "tool-calls",
+      label: "Tool calls",
+      summary: `${toolRecordedCount} -> ${toolTotalCalls}`,
+      meta:
+        toolFailedCount > 0
+          ? `${toolFailedCount} failed`
+          : toolSimulatedCount > 0
+            ? `${toolSimulatedCount} simulated`
+            : "Recorded vs replayed",
+      scope: toolRecordedCount !== toolTotalCalls ? "Mixed" : "Run-wide",
+      tone: toolRecordedCount !== toolTotalCalls || toolFailedCount > 0 ? "changed" : "default",
+      action: "tools",
+    });
+
+    if (replayOverrideCount > 0 || replayPerLogOverrideCount > 0) {
+      rows.push({
+        id: "extra-request",
+        label: "Extra request JSON",
+        summary:
+          replayOverrideCount > 0 && replayPerLogOverrideCount > 0
+            ? `Shared changed, ${replayPerLogOverrideCount} logs customized`
+            : replayOverrideCount > 0
+              ? `Shared changed (${replayOverrideCount} key${replayOverrideCount === 1 ? "" : "s"})`
+              : `${replayPerLogOverrideCount} logs customized`,
+        meta:
+          replayOverrideKeys.length > 0
+            ? replayOverrideKeys.slice(0, 3).join(", ")
+            : replayPerLogOverrideEntries
+                .slice(0, 2)
+                .map(([sid, value]) => `log ${sid} (${Object.keys(value).length})`)
+                .join(" · "),
+        scope:
+          replayOverrideCount > 0 && replayPerLogOverrideCount > 0
+            ? "Mixed"
+            : replayPerLogOverrideCount > 0
+              ? "Per-log"
+              : "Run-wide",
+        tone: "changed",
+        action: "details",
+      });
+    }
+
+    if (hasToolContextDetails) {
+      rows.push({
+        id: "extra-context",
+        label: "Extra system context",
+        summary: toolContextSummary,
+        meta:
+          toolContextModeValue === "inject"
+            ? toolContextScopeValue === "global"
+              ? "Shared append"
+              : toolContextGlobalText
+                ? "Per-log with fallback"
+                : "Per-log only"
+            : "Recorded only",
+        scope:
+          toolContextScopeValue === "global"
+            ? "Run-wide"
+            : toolContextModeValue === "inject"
+              ? "Per-log"
+              : "Recorded-only",
+        tone: toolContextModeValue === "inject" ? "changed" : "default",
+        action: "details",
+      });
+    }
+
+    if (Boolean(replayRequestMeta?.has_new_system_prompt)) {
+      rows.push({
+        id: "system-prompt",
+        label: "System prompt",
+        summary: "Override applied",
+        meta: String(replayRequestMeta?.new_system_prompt_preview ?? "").trim() || undefined,
+        scope: "Run-wide",
+        tone: "changed",
+        action: "details",
+      });
+    }
+
+    if (replaySamplingKeys.length > 0) {
+      rows.push({
+        id: "sampling",
+        label: "Sampling",
+        summary: replaySamplingKeys.join(", "),
+        scope: "Run-wide",
+        tone: "changed",
+        action: "details",
+      });
+    }
+
+    return rows;
+  }, [
+    baselineModel,
+    candidateModel,
+    baselineLineCount,
+    candidateLineCount,
+    replayUsage,
+    replayLatencyLabel,
+    hasProviderError,
+    toolRecordedCount,
+    toolTotalCalls,
+    toolFailedCount,
+    toolSimulatedCount,
+    replayOverrideCount,
+    replayPerLogOverrideCount,
+    replayOverrideKeys,
+    replayPerLogOverrideEntries,
+    hasToolContextDetails,
+    toolContextSummary,
+    toolContextModeValue,
+    toolContextScopeValue,
+    toolContextGlobalText,
+    replayRequestMeta,
+    replaySamplingKeys,
+  ]);
   const diffFocusBySignal = useMemo(() => {
     const preview = (lines: string[]): string | null => (lines.length > 0 ? lines.slice(0, 2).join(" / ") : null);
 
@@ -1119,8 +1339,8 @@ export function AttemptDetailOverlay({
 
   useEffect(() => {
     if (!open) return;
-    setShowToolBehaviorDetails(hasToolBehaviorIssues);
-  }, [open, navIndex, hasToolBehaviorIssues]);
+    setShowToolBehaviorDetails(false);
+  }, [open, navIndex]);
 
   if (!open) return null;
 
@@ -1346,10 +1566,7 @@ export function AttemptDetailOverlay({
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="max-w-4xl">
                         <div className="text-xs font-medium text-slate-400">Review</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">
-                          Compare the failed attempt against the baseline
-                        </h3>
-                        <p className="mt-2 text-sm leading-6 text-slate-300">{reviewIntro}</p>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Base vs replay comparison</h3>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                         <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
@@ -1358,94 +1575,179 @@ export function AttemptDetailOverlay({
                         <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
                           {baselineLineCount} {"->"} {candidateLineCount} lines
                         </span>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
-                          Evidence {gateConfidence.label}
-                        </span>
                       </div>
                     </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {(failedSignalSummary.length > 0 ? failedSignalSummary : ["No configured eval failures"]).map(
-                        item => (
-                          <span
-                            key={item}
-                            className={clsx(
-                              "inline-flex rounded-full border px-3 py-1 text-xs",
-                              failedSignalSummary.length > 0
-                                ? "border-rose-500/30 bg-rose-500/10 text-rose-100"
-                                : "border-white/10 bg-white/[0.03] text-slate-400"
-                            )}
-                          >
-                            {item}
-                          </span>
-                        )
-                      )}
-                    </div>
-                    <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
-                      Decision inputs: {decisionSourceLabels.join(", ")}.
-                    </p>
                   </section>
 
-                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-                    <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
-                      <div className="mb-4 flex items-center justify-between gap-2">
-                        <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-                          <div className="h-1.5 w-1.5 rounded-full bg-rose-400/90" />
-                          What failed
-                        </h3>
-                        <div className="text-[11px] text-slate-500">
-                          Only configured eval checks are counted here.
-                        </div>
+                  <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-medium text-slate-400">What changed from base</div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Change summary</h3>
                       </div>
-                      {runtimeSignalRows.length > 0 ? (
-                        <div className="mb-4 rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] px-4 py-3 text-[11px] leading-relaxed text-fuchsia-100/85">
-                          {runtimeSignalRows.length} runtime diagnostic
-                          {runtimeSignalRows.length === 1 ? "" : "s"} were captured separately and excluded from eval
-                          coverage. Open Diagnostics if you need the raw trace detail.
-                        </div>
-                      ) : null}
-                      {!signalsChecksRaw ? (
-                        <div className="rounded-2xl bg-black/20 px-4 py-5 text-sm text-slate-500 ring-1 ring-fuchsia-500/15">
-                          <p>No eval signals returned.</p>
-                          <p className="mt-2 text-xs text-slate-400">
-                            Decision derived from {decisionSourceLabels.join(" / ")}.
-                          </p>
-                        </div>
-                      ) : canonicalSignalRows.length === 0 ? (
-                        <div className="rounded-2xl bg-black/20 px-4 py-5 text-sm text-slate-500 ring-1 ring-fuchsia-500/15">
-                          <p>No configured eval checks were returned for this attempt.</p>
-                          <p className="mt-2 text-xs text-slate-400">
-                            Decision derived from {decisionSourceLabels.join(" / ")}.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {failedSignals.length > 0 ? (
-                            failedSignals.map(row => {
-                              const barNode =
-                                signalsDetailsRaw
-                                  ? formatSignalValue(row.id, (signalsDetailsRaw as any)?.[row.id], row.pass)
-                                  : null;
-                              const evidenceText =
-                                signalsDetailsRaw
-                                  ? formatSignalWhy(row.id, (signalsDetailsRaw as any)?.[row.id])
-                                  : "Evidence unavailable for this check.";
-                              return (
-                                <div
-                                  key={row.id}
-                                  className="rounded-xl border border-rose-500/15 bg-rose-500/[0.03] p-4"
+                      <div className="text-[11px] text-slate-500">Inputs and settings only.</div>
+                    </div>
+                    <div className="mt-4 overflow-hidden rounded-xl border border-white/5">
+                      {changeSummaryRows.length > 0 ? (
+                        changeSummaryRows.map((row, idx) => {
+                          const actionLabel =
+                            row.action === "diff" ? "Diff" : row.action === "tools" ? "Tool" : "Detail";
+                          const Container = row.action ? "button" : "div";
+                          return (
+                            <Container
+                              key={row.id}
+                              type={row.action ? "button" : undefined}
+                              onClick={
+                                row.action
+                                  ? () => {
+                                      if (row.action === "diff") {
+                                        scrollToSection(diffSectionRef);
+                                      } else if (row.action === "tools") {
+                                        scrollToSection(toolBehaviorSectionRef);
+                                      } else {
+                                        scrollToSection(detailsSectionRef);
+                                      }
+                                    }
+                                  : undefined
+                              }
+                              className={clsx(
+                                "grid w-full gap-3 px-4 py-3 text-left sm:grid-cols-[180px_minmax(0,1fr)_auto]",
+                                idx > 0 && "border-t border-white/5",
+                                row.action && "transition hover:bg-white/[0.02]",
+                                row.tone === "changed" ? "bg-white/[0.01]" : "bg-transparent"
+                              )}
+                            >
+                              <div className="text-sm font-medium text-slate-200">{row.label}</div>
+                              <div className="min-w-0">
+                                <div className="text-sm text-slate-100">{row.summary}</div>
+                                {row.meta ? (
+                                  <div className="mt-1 line-clamp-2 text-xs text-slate-500">{row.meta}</div>
+                                ) : null}
+                              </div>
+                              <div className="flex items-center justify-between gap-3 sm:justify-end">
+                                <span
+                                  className={clsx(
+                                    "inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold",
+                                    row.tone === "changed"
+                                      ? "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-100"
+                                      : "border-white/10 bg-black/20 text-slate-400"
+                                  )}
                                 >
-                                  <div className="flex items-center justify-between gap-4">
-                                    <span className="text-sm font-medium text-rose-50">{row.label}</span>
-                                    <span className="flex items-center gap-1.5">
-                                      <span className="text-xs font-semibold text-rose-300">Fail</span>
-                                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-400" />
+                                  {row.scope}
+                                </span>
+                                {row.action ? (
+                                  <span className="text-[11px] font-medium text-slate-400">{actionLabel}</span>
+                                ) : null}
+                              </div>
+                            </Container>
+                          );
+                        })
+                      ) : (
+                        <div className="px-4 py-6 text-sm text-slate-500">No meaningful base vs replay changes were captured.</div>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-medium text-slate-400">Evaluation results</div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Eval scoreboard</h3>
+                      </div>
+                      <div className="text-[11px] text-slate-500">All configured eval checks are shown below.</div>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-slate-400">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 text-rose-200">
+                        Failed {failedSignals.length}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-emerald-200">
+                        Passed {signalsPassed.length}
+                      </span>
+                      {runtimeSignalRows.length > 0 ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-2.5 py-1 text-fuchsia-100">
+                          Runtime only {runtimeSignalRows.length}
+                        </span>
+                      ) : null}
+                    </div>
+                    {runtimeSignalRows.length > 0 ? (
+                      <div className="mt-4 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] px-4 py-3 text-[11px] leading-relaxed text-fuchsia-100/85">
+                        {runtimeSignalRows.length} runtime-only diagnostic{runtimeSignalRows.length === 1 ? "" : "s"} excluded from eval coverage.
+                      </div>
+                    ) : null}
+                    {!signalsChecksRaw ? (
+                      <div className="mt-4 rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-5 text-sm text-slate-500">
+                        No eval signals returned for this attempt.
+                      </div>
+                    ) : canonicalSignalRows.length === 0 ? (
+                      <div className="mt-4 rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-5 text-sm text-slate-500">
+                        No configured eval checks were returned for this attempt.
+                      </div>
+                    ) : (
+                      <div className="mt-4 space-y-2">
+                        {canonicalSignalRows.map(row => {
+                          const failed = row.status === "fail";
+                          const barNode =
+                            signalsDetailsRaw
+                              ? formatSignalValue(row.id, (signalsDetailsRaw as any)?.[row.id], row.pass)
+                              : null;
+                          const evidenceText =
+                            signalsDetailsRaw
+                              ? formatSignalWhy(row.id, (signalsDetailsRaw as any)?.[row.id])
+                              : "Evidence unavailable for this check.";
+                          const diffFocus = diffFocusBySignal[row.id];
+                          const diffExamples = diffExamplesBySignal[row.id] ?? [];
+                          if (!failed) {
+                            return (
+                              <div
+                                key={row.id}
+                                className="grid gap-3 rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3 md:grid-cols-[minmax(0,180px)_80px_minmax(0,1fr)] md:items-center"
+                              >
+                                <div className="text-sm font-medium text-slate-100">{row.label}</div>
+                                <div>
+                                  <span className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-200">
+                                    Pass
+                                  </span>
+                                </div>
+                                <div className="min-w-0 text-sm text-slate-500">Passed on this attempt.</div>
+                              </div>
+                            );
+                          }
+                          return (
+                            <details
+                              key={row.id}
+                              className="rounded-xl border border-rose-500/20 bg-[#0a0a0c]"
+                            >
+                              <summary className="list-none cursor-pointer px-4 py-3 [&::-webkit-details-marker]:hidden">
+                                <div className="grid gap-3 md:grid-cols-[minmax(0,180px)_80px_minmax(0,1fr)_auto] md:items-center">
+                                  <div className="text-sm font-medium text-slate-100">{row.label}</div>
+                                  <div>
+                                    <span
+                                      className={clsx(
+                                        "inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold",
+                                        failed
+                                          ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
+                                          : "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
+                                      )}
+                                    >
+                                      {failed ? "Fail" : "Pass"}
                                     </span>
                                   </div>
-                                  <div className="mt-3">{barNode}</div>
-                                  <p className="mt-3 text-[12px] leading-relaxed text-rose-100/85">{evidenceText}</p>
-                                  {diffExamplesBySignal[row.id]?.length ? (
-                                    <div className="mt-3 grid gap-2 md:grid-cols-2">
-                                      {diffExamplesBySignal[row.id].map((example, idx) => (
+                                  <div className="min-w-0 line-clamp-2 text-sm text-slate-300">{evidenceText}</div>
+                                  <div className="text-[11px] font-medium text-slate-500">Open</div>
+                                </div>
+                              </summary>
+                              <div className="border-t border-white/5 px-4 py-4">
+                                {barNode ? <div>{barNode}</div> : null}
+                                <div className="space-y-3">
+                                  {diffFocus ? (
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
+                                      <div className="text-xs font-semibold text-slate-400">Diff focus</div>
+                                      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">{diffFocus}</p>
+                                    </div>
+                                  ) : null}
+                                  {diffExamples.length > 0 ? (
+                                    <div className="grid gap-2 md:grid-cols-2">
+                                      {diffExamples.map((example, idx) => (
                                         <div
                                           key={`${row.id}-${example.tone}-${idx}`}
                                           className={clsx(
@@ -1470,136 +1772,21 @@ export function AttemptDetailOverlay({
                                       ))}
                                     </div>
                                   ) : null}
-                                  <div className="mt-3 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
-                                    <div className="text-xs font-semibold text-slate-400">
-                                      Diff focus
-                                    </div>
-                                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">
-                                      {diffFocusBySignal[row.id] ||
-                                        "Use the response diff below to inspect the changed output for this check."}
-                                    </p>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        diffSectionRef.current?.scrollIntoView({
-                                          behavior: "smooth",
-                                          block: "start",
-                                        })
-                                      }
-                                      className="mt-3 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
-                                    >
-                                      Jump to diff
-                                    </button>
-                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => scrollToSection(diffSectionRef)}
+                                    className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                                  >
+                                    Jump to diff
+                                  </button>
                                 </div>
-                              );
-                            })
-                          ) : (
-                            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-slate-500">
-                              <ShieldCheck className="mb-2 h-6 w-6 text-emerald-500/50" />
-                              <p>No configured eval checks failed for this attempt.</p>
-                            </div>
-                          )}
-
-                          {signalsPassed.length > 0 ? (
-                            <div className="rounded-2xl bg-black/20 p-4 ring-1 ring-white/5">
-                              <div className="flex items-center justify-between gap-3">
-                                <div>
-                                  <div className="text-sm font-medium text-slate-200">
-                                    Passed checks
-                                  </div>
-                                  <div className="mt-1 text-xs text-slate-500">
-                                    Keep these collapsed unless you need to confirm a green check.
-                                  </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => setShowPassedChecks(v => !v)}
-                                  className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-semibold text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
-                                >
-                                  {showPassedChecks
-                                    ? `Hide passed checks (${signalsPassed.length})`
-                                    : `Show passed checks (${signalsPassed.length})`}
-                                </button>
                               </div>
-                              {showPassedChecks ? (
-                                <div className="mt-3 grid gap-2 md:grid-cols-2">
-                                  {signalsPassed.map(row => (
-                                    <div
-                                      key={row.id}
-                                      className="rounded-xl border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-slate-300"
-                                    >
-                                      {row.label}
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </div>
-                      )}
-                    </section>
-
-                    <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
-                      <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-300">
-                        <div className="h-1.5 w-1.5 rounded-full bg-amber-400/80" />
-                        Fix first
-                      </h3>
-                      {fixFirstItems.length > 0 ? (
-                        <div className="space-y-3">
-                          {fixFirstItems.map(item => (
-                            <div key={item.key} className={clsx("rounded-2xl border p-4", riskToneClass(item.tone))}>
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-sm font-medium text-slate-200">{item.label}</span>
-                                <span
-                                  className={clsx(
-                                    "text-xs font-semibold",
-                                    item.tone === "danger"
-                                      ? "text-rose-400"
-                                      : item.tone === "warning"
-                                        ? "text-amber-400"
-                                        : "text-emerald-400"
-                                  )}
-                                >
-                                  {item.tone === "danger"
-                                    ? "Review"
-                                    : item.tone === "warning"
-                                      ? "Watch"
-                                      : "Stable"}
-                                </span>
-                              </div>
-                              <p className="mt-2 text-[11px] leading-relaxed text-slate-300">{item.detail}</p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-slate-500">
-                          <ShieldCheck className="mb-2 h-6 w-6 text-emerald-500/50" />
-                          <p>No blocking follow-up items were detected for this attempt.</p>
-                        </div>
-                      )}
-                    </section>
-                  </div>
-
-                  {hasConfigurationChanges ? (
-                    <section className="rounded-2xl border border-white/5 bg-white/[0.02] px-5 py-5">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="max-w-3xl">
-                          <div className="text-xs font-medium text-slate-400">Configuration changes</div>
-                          <h3 className="mt-2 text-lg font-semibold text-white">
-                            Compare request-level changes applied to this replay
-                          </h3>
-                          <p className="mt-2 text-sm leading-6 text-slate-300">
-                            Review extra request fields, per-log overrides, sampling changes, and system prompt
-                            overrides before assuming the response diff came from the model alone.
-                          </p>
-                        </div>
+                            </details>
+                          );
+                        })}
                       </div>
-                      <div className="mt-4">
-                        <ReleaseGateReplayRequestMetaPanel meta={replayRequestMeta as any} />
-                      </div>
-                    </section>
-                  ) : null}
+                    )}
+                  </section>
 
                   <section
                     ref={diffSectionRef}
@@ -1607,50 +1794,13 @@ export function AttemptDetailOverlay({
                   >
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="max-w-3xl">
-                        <div className="text-xs font-medium text-slate-400">Comparison</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">
-                          Review what changed before checking the raw trace
-                        </h3>
-                        <p className="mt-2 text-sm leading-6 text-slate-300">
-                          Start with the plain-language summaries, then inspect the side-by-side response diff.
-                          Diagnostics are only needed when payload capture or provider behavior is in doubt.
-                        </p>
+                        <div className="text-xs font-medium text-slate-400">Response diff</div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Output changed like this</h3>
                       </div>
                     </div>
-                    <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                      <section className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-4">
-                        <div className="text-[11px] font-medium text-slate-400">What changed</div>
-                        <div className="mt-3 space-y-2">
-                          {effectiveComparisonPrimaryChanges.map(item => (
-                            <div
-                              key={item}
-                              className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-sm leading-relaxed text-slate-200"
-                            >
-                              {item}
-                            </div>
-                          ))}
-                        </div>
-                      </section>
-                      <section className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-4">
-                        <div className="text-[11px] font-medium text-slate-400">What it means</div>
-                        <div className="mt-3 space-y-2">
-                          {effectiveComparisonImpactItems.map(item => (
-                            <div
-                              key={item}
-                              className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-sm leading-relaxed text-slate-200"
-                            >
-                              {item}
-                            </div>
-                          ))}
-                        </div>
-                      </section>
-                    </div>
-                  </section>
-
-                  <section className="rounded-2xl border border-white/5 bg-white/[0.02] px-5 py-5">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="mt-4 flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-slate-200">Response diff</p>
+                        <p className="text-sm font-semibold text-slate-200">Compare baseline vs candidate</p>
                         <p className="mt-1 text-[11px] text-slate-500">{diffConfidenceMessage}</p>
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-slate-400">
@@ -1740,16 +1890,208 @@ export function AttemptDetailOverlay({
                     </div>
                   </section>
 
-                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-                    <section className={clsx("rounded-2xl border p-5", toolBehaviorToneClass)}>
+                  <div ref={detailsSectionRef} className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+                    <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
+                      <div>
+                        <div className="text-xs font-medium text-slate-400">Details</div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Expanded comparison detail</h3>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {hasConfigurationChanges ? (
+                          <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
+                            <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
+                              Extra request JSON details
+                              <span className="ml-2 text-[11px] font-normal text-slate-500">
+                                {replayOverrideCount > 0
+                                  ? `${replayOverrideCount} shared key${replayOverrideCount === 1 ? "" : "s"}`
+                                  : "No shared keys"}
+                                {replayPerLogOverrideCount > 0 ? ` · ${replayPerLogOverrideCount} per-log override(s)` : ""}
+                              </span>
+                            </summary>
+                            <div className="mt-3">
+                              <ReleaseGateReplayRequestMetaPanel meta={replayRequestMeta as any} />
+                            </div>
+                          </details>
+                        ) : null}
+
+                        {hasToolContextDetails ? (
+                          <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
+                            <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
+                              Extra system context details
+                              <span className="ml-2 text-[11px] font-normal text-slate-500">{toolContextSummary}</span>
+                            </summary>
+                            <div className="mt-3 space-y-3">
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+                                  <div className="text-[11px] font-medium text-slate-500">Mode</div>
+                                  <div className="mt-1 text-sm text-slate-100">
+                                    {toolContextModeValue === "inject" ? "Append to system prompt" : "Recorded only"}
+                                  </div>
+                                </div>
+                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+                                  <div className="text-[11px] font-medium text-slate-500">Scope</div>
+                                  <div className="mt-1 text-sm text-slate-100">{toolContextScopeLabel}</div>
+                                </div>
+                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+                                  <div className="text-[11px] font-medium text-slate-500">Customized logs</div>
+                                  <div className="mt-1 text-sm text-slate-100">{toolContextCustomEntries.length}</div>
+                                </div>
+                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+                                  <div className="text-[11px] font-medium text-slate-500">Fallback</div>
+                                  <div className="mt-1 text-sm text-slate-100">
+                                    {toolContextGlobalText ? "Present" : "Not set"}
+                                  </div>
+                                </div>
+                              </div>
+                              {toolContextGlobalText ? (
+                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+                                  <div className="text-[11px] font-medium text-slate-500">Shared / fallback preview</div>
+                                  <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-300 custom-scrollbar">
+                                    {toolContextGlobalText}
+                                  </pre>
+                                </div>
+                              ) : null}
+                              {toolContextCustomEntries.length > 0 ? (
+                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+                                  <div className="text-[11px] font-medium text-slate-500">Per-log context</div>
+                                  <div className="mt-3 space-y-2">
+                                    {toolContextCustomEntries.map(([sid, value]) => (
+                                      <details key={sid} className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">
+                                        <summary className="cursor-pointer list-none text-[11px] font-medium text-slate-200 [&::-webkit-details-marker]:hidden">
+                                          Log {sid}
+                                        </summary>
+                                        <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-400 custom-scrollbar">
+                                          {String(value)}
+                                        </pre>
+                                      </details>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          </details>
+                        ) : null}
+
+                        {(fixFirstItems.length > 0 ||
+                          effectiveComparisonPrimaryChanges.length > 0 ||
+                          effectiveComparisonImpactItems.length > 0) && (
+                          <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
+                            <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
+                              Review notes
+                              <span className="ml-2 text-[11px] font-normal text-slate-500">
+                                {fixFirstItems.length > 0 ? `${fixFirstItems.length} note(s)` : "Summary"}
+                              </span>
+                            </summary>
+                            <div className="mt-3 space-y-3">
+                              {fixFirstItems.length > 0 ? (
+                                <div className="space-y-2">
+                                  {fixFirstItems.map(item => (
+                                    <div key={item.key} className={clsx("rounded-lg border px-3 py-3", riskToneClass(item.tone))}>
+                                      <div className="flex items-center justify-between gap-3">
+                                        <span className="text-sm font-medium text-slate-200">{item.label}</span>
+                                        <span
+                                          className={clsx(
+                                            "text-xs font-semibold",
+                                            item.tone === "danger"
+                                              ? "text-rose-400"
+                                              : item.tone === "warning"
+                                                ? "text-amber-400"
+                                                : "text-emerald-400"
+                                          )}
+                                        >
+                                          {item.tone === "danger" ? "Review" : item.tone === "warning" ? "Watch" : "Stable"}
+                                        </span>
+                                      </div>
+                                      <p className="mt-2 text-[11px] leading-relaxed text-slate-300">{item.detail}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {effectiveComparisonPrimaryChanges.length > 0 ? (
+                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+                                  <div className="text-[11px] font-medium text-slate-500">What changed</div>
+                                  <div className="mt-2 space-y-1.5">
+                                    {effectiveComparisonPrimaryChanges.map(item => (
+                                      <div key={item} className="text-sm leading-relaxed text-slate-300">
+                                        {item}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                              {effectiveComparisonImpactItems.length > 0 ? (
+                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+                                  <div className="text-[11px] font-medium text-slate-500">What it means</div>
+                                  <div className="mt-2 space-y-1.5">
+                                    {effectiveComparisonImpactItems.map(item => (
+                                      <div key={item} className="text-sm leading-relaxed text-slate-300">
+                                        {item}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          </details>
+                        )}
+
+                        <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
+                          <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
+                            Replay context
+                          </summary>
+                          <div className="mt-3 grid gap-3">
+                            {runContextItems.map(item => (
+                              <div
+                                key={item.label}
+                                className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3"
+                              >
+                                <div className="text-[11px] font-medium text-slate-500">{item.label}</div>
+                                <div className="mt-1 text-sm font-medium text-slate-100 break-words">{item.value}</div>
+                                {item.detail ? (
+                                  <div className="mt-1 text-xs text-slate-400 break-words">{item.detail}</div>
+                                ) : null}
+                              </div>
+                            ))}
+                            {providerErrorMessage ? (
+                              <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-3 text-sm text-amber-100">
+                                <div className="text-[11px] font-semibold text-amber-400">Replay warning</div>
+                                <p className="mt-1 leading-relaxed text-amber-100/85">{providerErrorMessage}</p>
+                              </div>
+                            ) : null}
+                          </div>
+                        </details>
+
+                        <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
+                          <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
+                            User input
+                          </summary>
+                          <p
+                            className={clsx(
+                              "mt-3 text-sm leading-relaxed text-slate-300 whitespace-pre-wrap break-words",
+                              !userInputExpanded && "line-clamp-5"
+                            )}
+                          >
+                            {inputPreview}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setUserInputExpanded(v => !v)}
+                            className="mt-3 text-[11px] font-medium text-fuchsia-400/80 transition-colors hover:text-fuchsia-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                          >
+                            {userInputExpanded ? "Collapse" : "Expand"}
+                          </button>
+                        </details>
+                      </div>
+                    </section>
+
+                    <section ref={toolBehaviorSectionRef} className={clsx("rounded-2xl border p-5", toolBehaviorToneClass)}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-300">
                             <div className="h-1.5 w-1.5 rounded-full bg-amber-300/80" />
                             Tool behavior
                           </h3>
-                          <p className="mt-3 text-sm font-medium text-slate-100">{toolBehaviorSummary}</p>
-                          <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{toolBehaviorDetail}</p>
+                          <p className="mt-2 text-sm font-medium text-slate-100">{toolBehaviorSummary}</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
                           <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
@@ -1817,66 +2159,6 @@ export function AttemptDetailOverlay({
                         </>
                       ) : null}
                     </section>
-
-                    <div className="space-y-5">
-                      <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
-                        <div className="text-[11px] font-semibold text-slate-400">
-                          Replay context
-                        </div>
-                        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
-                          Keep this compact. Trace ids and deeper payload metadata live in Diagnostics.
-                        </p>
-                        <div className="mt-3 grid gap-3">
-                          {runContextItems.map(item => (
-                            <div
-                              key={item.label}
-                              className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3"
-                            >
-                              <div className="text-[10px] font-medium text-slate-500">
-                                {item.label}
-                              </div>
-                              <div className="mt-1 text-sm font-medium text-slate-100 break-words">
-                                {item.value}
-                              </div>
-                              {item.detail ? (
-                                <div className="mt-1 text-xs text-slate-400 break-words">{item.detail}</div>
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
-                        {providerErrorMessage ? (
-                          <div className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-100">
-                            <div className="text-[11px] font-semibold text-amber-400">
-                              Replay warning
-                            </div>
-                            <p className="mt-1 leading-relaxed text-amber-100/85">{providerErrorMessage}</p>
-                          </div>
-                        ) : null}
-                      </section>
-
-                      <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-[11px] font-semibold text-slate-400">
-                            User input
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setUserInputExpanded(v => !v)}
-                            className="text-[11px] font-medium text-fuchsia-400/80 transition-colors hover:text-fuchsia-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
-                          >
-                            {userInputExpanded ? "Collapse" : "Expand"}
-                          </button>
-                        </div>
-                        <p
-                          className={clsx(
-                            "mt-3 text-sm leading-relaxed text-slate-300 whitespace-pre-wrap break-words",
-                            !userInputExpanded && "line-clamp-5"
-                          )}
-                        >
-                          {inputPreview}
-                        </p>
-                      </section>
-                    </div>
                   </div>
                 </div>
               ) : null}
