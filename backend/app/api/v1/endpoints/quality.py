@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.core.permissions import check_project_access
+from app.core.permissions import check_project_access, check_project_write_access
 from app.models.user import User
 from app.services.quality_evaluator import QualityEvaluator
 from app.models.api_call import APICall
@@ -28,7 +28,7 @@ def evaluate_quality(
     current_user: User = Depends(get_current_user),
 ):
     """Evaluate the quality of a specific API call."""
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Running quality evaluation")
     api_call = db.query(APICall).filter(APICall.id == payload.api_call_id).first()
     if not api_call:
         raise HTTPException(status_code=404, detail="API call not found")

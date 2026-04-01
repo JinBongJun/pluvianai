@@ -29,6 +29,28 @@ def _as_member_user(db, test_project) -> User:
     return member
 
 
+def _as_viewer_user(db, test_project) -> User:
+    viewer = User(
+        email="viewer-role-boundary@example.com",
+        hashed_password=get_password_hash("testpassword123"),
+        full_name="Viewer Role Boundary",
+        is_active=True,
+    )
+    db.add(viewer)
+    db.commit()
+    db.refresh(viewer)
+
+    db.add(
+        ProjectMember(
+            project_id=test_project.id,
+            user_id=viewer.id,
+            role="viewer",
+        )
+    )
+    db.commit()
+    return viewer
+
+
 def _override_current_user(user: User) -> None:
     def _override():
         return user
@@ -39,6 +61,47 @@ def _override_current_user(user: User) -> None:
 @pytest.mark.integration
 @pytest.mark.asyncio
 class TestProjectRoleBoundary:
+    async def test_member_can_run_test_lab(self, async_client, auth_headers, db, test_project):
+        member = _as_member_user(db, test_project)
+        _override_current_user(member)
+
+        response = await async_client.post(
+            f"/api/v1/test-runs/runs?project_id={test_project.id}",
+            json={"nodes": [{"id": "node-1"}], "edges": []},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body["project_id"] == test_project.id
+        assert body["status"] == "queued"
+
+    @pytest.mark.parametrize(
+        ("path", "json_body"),
+        [
+            ("/api/v1/test-runs/runs?project_id={project_id}", {"nodes": [{"id": "node-1"}], "edges": []}),
+            ("/api/v1/projects/{project_id}/release-gate/jobs/job-123/cancel", None),
+        ],
+    )
+    async def test_viewer_cannot_run_member_level_project_actions(
+        self, async_client, auth_headers, db, test_project, path, json_body
+    ):
+        viewer = _as_viewer_user(db, test_project)
+        _override_current_user(viewer)
+
+        response = await async_client.post(
+            path.format(project_id=test_project.id),
+            json=json_body,
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        payload = response.json()["error"]
+        assert payload["code"] == "PROJECT_ROLE_READ_ONLY"
+        assert "outside your project permissions" in payload["message"].lower()
+        assert "read-only" in payload["message"].lower()
+        assert payload["details"]["details"]["current_role"] == "viewer"
+
     async def test_member_cannot_update_or_delete_project(
         self, async_client, auth_headers, db, test_project
     ):

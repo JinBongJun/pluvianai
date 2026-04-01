@@ -51,7 +51,11 @@ from app.core.metrics import (
     realtime_stream_connections_active,
     realtime_stream_connections_opened_total,
 )
-from app.core.permissions import check_project_access, get_user_organization_role
+from app.core.permissions import (
+    check_project_access,
+    check_project_write_access,
+    get_user_organization_role,
+)
 from app.core.config import settings as app_settings
 from app.core.usage_limits import check_release_gate_attempts_limit, get_limit_status
 from app.core.security import (
@@ -3406,7 +3410,7 @@ async def validate_release_gate(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Running Release Gate")
     if payload.use_recent_snapshots and not payload.agent_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -3468,7 +3472,7 @@ async def validate_release_gate_async(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Running Release Gate")
     if payload.use_recent_snapshots and not payload.agent_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -3758,7 +3762,7 @@ async def cancel_release_gate_job(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Canceling Release Gate")
     job = (
         db.query(ReleaseGateJob)
         .filter(ReleaseGateJob.project_id == project_id, ReleaseGateJob.id == job_id)

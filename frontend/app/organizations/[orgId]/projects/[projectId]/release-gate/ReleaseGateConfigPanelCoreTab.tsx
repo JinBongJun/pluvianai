@@ -5,6 +5,8 @@ import clsx from "clsx";
 import { RefreshCcw } from "lucide-react";
 
 import { projectUserApiKeysAPI } from "@/lib/api";
+import { useToast } from "@/components/ToastContainer";
+import { getProjectPermissionToast } from "@/lib/projectAccess";
 import type { ReplayProvider } from "./releaseGatePageContent.lib";
 import { isHostedPlatformModel } from "./releaseGateReplayConstants";
 import { formatProviderLabel } from "./releaseGateConfigPanelHelpers";
@@ -16,6 +18,7 @@ import type { ReleaseGateConfigThresholdPreset } from "./releaseGateConfigPanelT
 import type { ReleaseGateConfigPanelCoreTabProps } from "./releaseGateConfigPanelModel.types";
 
 export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanelCoreTabProps }) {
+  const toast = useToast();
   const {
     modelSource,
     repeatRuns,
@@ -149,6 +152,15 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
       setReplayApiKey?.("");
       setRgSaveLabel("");
       if (typeof created?.id === "number") setReplayUserApiKeyId?.(created.id);
+    } catch (error) {
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Saving project API keys",
+        error,
+      });
+      toast.showToast(
+        permissionToast?.message ?? "Failed to save the pasted key.",
+        permissionToast?.tone ?? "error"
+      );
     } finally {
       setRgSaveBusy(false);
     }
@@ -162,6 +174,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
     mutateProjectUserApiKeys,
     setReplayApiKey,
     setReplayUserApiKeyId,
+    toast,
   ]);
 
   const deleteRgSavedKey = useCallback(
@@ -172,6 +185,15 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
         await projectUserApiKeysAPI.delete(projectId, keyId);
         await mutateProjectUserApiKeys?.();
         if (replayUserApiKeyId === keyId) setReplayUserApiKeyId?.(null);
+      } catch (error) {
+        const permissionToast = getProjectPermissionToast({
+          featureLabel: "Removing project API keys",
+          error,
+        });
+        toast.showToast(
+          permissionToast?.message ?? "Failed to delete the saved key.",
+          permissionToast?.tone ?? "error"
+        );
       } finally {
         setRgDeleteBusyId(null);
       }
@@ -183,6 +205,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
       mutateProjectUserApiKeys,
       replayUserApiKeyId,
       setReplayUserApiKeyId,
+      toast,
     ]
   );
 

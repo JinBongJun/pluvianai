@@ -21,6 +21,7 @@ import {
   type SnapshotForDetail,
 } from "@/components/shared/SnapshotDetailModal";
 import { useToast } from "@/components/ToastContainer";
+import { getProjectPermissionToast } from "@/lib/projectAccess";
 
 interface ClinicalLogDataSectionProps {
   projectId: number;
@@ -322,14 +323,19 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
       }
       toast.showToast("Saved log deleted.", "success");
     } catch (e: unknown) {
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Removing saved logs",
+        error: e,
+      });
       mutateThisDataset();
       if (removingEntireDataset) mutate();
       const msg =
+        permissionToast?.message ??
         (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
         "Failed to remove log";
       const message = typeof msg === "string" ? msg : "Failed to remove log";
       setDeleteError(message);
-      toast.showToast(message, "error");
+      toast.showToast(message, permissionToast?.tone ?? "error");
     } finally {
       setRemovingKey(prev => (prev === key ? null : prev));
     }
@@ -369,10 +375,18 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
       );
       cancelRenameDataset();
     } catch (e: unknown) {
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Renaming datasets",
+        error: e,
+      });
       const msg =
+        permissionToast?.message ??
         (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
         "Failed to rename dataset";
-      toast.showToast(typeof msg === "string" ? msg : "Failed to rename dataset", "error");
+      toast.showToast(
+        typeof msg === "string" ? msg : "Failed to rename dataset",
+        permissionToast?.tone ?? "error"
+      );
       setIsRenamingDataset(false);
     }
   };
@@ -399,12 +413,17 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
         "success"
       );
     } catch (e: unknown) {
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Deleting datasets",
+        error: e,
+      });
       await mutate();
       const msg =
+        permissionToast?.message ??
         (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
         "Failed to clear saved datasets";
       const message = typeof msg === "string" ? msg : "Failed to clear saved datasets";
-      toast.showToast(message, "error");
+      toast.showToast(message, permissionToast?.tone ?? "error");
     }
   };
 

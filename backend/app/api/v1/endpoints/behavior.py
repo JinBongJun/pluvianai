@@ -26,7 +26,12 @@ from app.utils.tool_calls import normalize_tool_name, parse_tool_args
 from app.utils.tool_events import normalize_tool_events
 from app.core.database import get_db
 from app.core.logging_config import logger
-from app.core.permissions import ProjectRole, check_project_access, get_user_project_role
+from app.core.permissions import (
+    ProjectRole,
+    check_project_access,
+    check_project_write_access,
+    get_user_project_role,
+)
 from app.core.security import get_current_user
 from app.models.behavior_report import BehaviorReport
 from app.models.behavior_rule import BehaviorRule
@@ -904,7 +909,7 @@ async def batch_create_validation_datasets(
     current_user: User = Depends(get_current_user),
 ):
     """Create multiple validation datasets in one request (one item per snapshot or group)."""
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Saving datasets")
     created: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
     for idx, payload in enumerate(body.items):
@@ -959,7 +964,7 @@ async def create_validation_dataset(
     current_user: User = Depends(get_current_user),
 ):
     """Create a validation dataset from current run/selection (trace_ids or snapshot_ids + config snapshots)."""
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Saving datasets")
     if not payload.trace_ids and not payload.snapshot_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1088,7 +1093,7 @@ async def update_validation_dataset(
     current_user: User = Depends(get_current_user),
 ):
     """Update a validation dataset (e.g. snapshot_ids to remove a single log)."""
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Updating datasets")
     ds = (
         db.query(ValidationDataset)
         .filter(ValidationDataset.project_id == project_id, ValidationDataset.id == dataset_id)
@@ -1224,7 +1229,7 @@ async def batch_delete_validation_datasets(
     current_user: User = Depends(get_current_user),
 ):
     """Delete multiple validation datasets in one request (faster than N single deletes)."""
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Deleting datasets")
     deleted = 0
     for dataset_id in body.dataset_ids:
         try:
@@ -1244,7 +1249,7 @@ async def delete_validation_dataset(
     current_user: User = Depends(get_current_user),
 ):
     """Delete a validation dataset by ID."""
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Deleting datasets")
     _delete_validation_dataset_impl(project_id, dataset_id, db)
     return {"ok": True}
 
@@ -1257,7 +1262,7 @@ async def post_delete_validation_dataset(
     current_user: User = Depends(get_current_user),
 ):
     """Delete a validation dataset by ID (POST fallback for environments that block DELETE)."""
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Deleting datasets")
     _delete_validation_dataset_impl(project_id, dataset_id, db)
     return {"ok": True}
 
@@ -1466,7 +1471,7 @@ async def validate_behavior(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Running Behavior Validation")
     if not payload.trace_id and not payload.test_run_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="trace_id or test_run_id is required")
 
@@ -1584,7 +1589,7 @@ async def compare_behavior(
     """
     Compare two test runs and return violations delta, severity delta, and top regressed rules.
     """
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Comparing behavior runs")
 
     # Validate both runs exist
     baseline_run = (
@@ -1712,7 +1717,7 @@ async def ci_gate_behavior(
     CI/CD gate endpoint that validates a test run against thresholds.
     Returns pass/fail status and exit_code suitable for CI pipelines.
     """
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Running the CI gate")
 
     # Validate candidate run exists
     candidate_run = (

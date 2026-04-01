@@ -24,6 +24,7 @@ import {
   buildReleaseGateValidateAsyncPayload,
   type ReleaseGateValidateAsyncPayloadInput,
 } from "./releaseGateValidateAsyncPayload";
+import { getProjectAccessErrorCopy, isProjectPermissionError } from "@/lib/projectAccess";
 
 /** Fewer, slightly slower polls during cancel to reduce job_poll 429s. */
 const CANCEL_BURST_POLLS = 3;
@@ -536,6 +537,12 @@ export function useReleaseGateValidateRun(options: {
         setError(
           "Run blocked: required API key is not registered. Open Live View, click the node, then register the key in the Settings tab."
         );
+      } else if (isProjectPermissionError(e)) {
+        const accessCopy = getProjectAccessErrorCopy({
+          featureLabel: "Running Release Gate",
+          error: e,
+        });
+        setError(accessCopy.description);
       } else {
         setError(detailMessage);
       }

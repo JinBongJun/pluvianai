@@ -29,6 +29,7 @@ import { clsx } from "clsx";
 import ProjectTabs from "@/components/ProjectTabs";
 import useSWR from "swr";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { getProjectPermissionToast } from "@/lib/projectAccess";
 
 type SortField = "created_at" | "severity" | "alert_type";
 type SortDirection = "asc" | "desc";
@@ -248,7 +249,15 @@ export default function AlertsPage() {
       loadAlerts();
     } catch (error: any) {
       logger.error("Failed to resolve alert", error);
-      toast.showToast(error.response?.data?.detail || "Failed to resolve alert", "error");
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Resolving alerts",
+        error,
+      });
+      const message = permissionToast?.message ?? error.response?.data?.detail ?? "Failed to resolve alert";
+      toast.showToast(
+        message,
+        permissionToast?.tone ?? "error"
+      );
     }
   };
 
@@ -259,7 +268,15 @@ export default function AlertsPage() {
       loadAlerts();
     } catch (error: any) {
       logger.error("Failed to send alert", error);
-      toast.showToast(error.response?.data?.detail || "Failed to send alert", "error");
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Sending alerts",
+        error,
+      });
+      const message = permissionToast?.message ?? error.response?.data?.detail ?? "Failed to send alert";
+      toast.showToast(
+        message,
+        permissionToast?.tone ?? "error"
+      );
     }
   };
 

@@ -28,6 +28,10 @@ import {
   isRateLimitError,
   redirectToLogin,
 } from "@/lib/api/client";
+import {
+  getProjectAccessErrorCopy,
+  getProjectPermissionToast,
+} from "@/lib/projectAccess";
 import RailwaySidePanel from "@/components/shared/RailwaySidePanel";
 import { NodeFocusHandler } from "@/components/shared/NodeFocusHandler";
 import { ClinicalLog } from "@/components/live-view/ClinicalLog";
@@ -38,7 +42,6 @@ import { useToast } from "@/components/ToastContainer";
 import { ProjectAccessInlineStrip } from "@/components/project-access/ProjectAccessInlineStrip";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
-import { getProjectAccessErrorCopy } from "@/lib/projectAccess";
 import {
   LIVE_VIEW_BASE_POLL_MS,
   LIVE_VIEW_MAX_POLL_MS,
@@ -184,10 +187,14 @@ export function LiveViewContent() {
         "success"
       );
     } catch (error: any) {
-      const msg =
-        error?.response?.data?.detail ||
-        "Failed to permanently delete nodes. Please try again.";
-      toast.showToast(msg, "error");
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Permanently deleting nodes",
+        error,
+      });
+      const msg = permissionToast?.message
+        ?? error?.response?.data?.detail
+        ?? "Failed to permanently delete nodes. Please try again.";
+      toast.showToast(msg, permissionToast?.tone ?? "error");
     } finally {
       setHardDeletingAgents(false);
     }
@@ -359,8 +366,15 @@ export function LiveViewContent() {
         setPanelTab("logs");
         toast.showToast("Node restored to Live View.", "success");
       } catch (err: unknown) {
+        const permissionToast = getProjectPermissionToast({
+          featureLabel: "Restoring nodes",
+          error: err,
+        });
         const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-        toast.showToast(typeof msg === "string" ? msg : "Failed to restore node.", "error");
+        toast.showToast(
+          permissionToast?.message ?? (typeof msg === "string" ? msg : "Failed to restore node."),
+          permissionToast?.tone ?? "error"
+        );
       } finally {
         setRestoringAgentId(null);
       }
