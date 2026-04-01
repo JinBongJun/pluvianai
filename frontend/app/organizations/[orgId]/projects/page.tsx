@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
@@ -21,11 +21,9 @@ import {
   LayoutGrid,
   List,
   Plus,
-  Filter,
   Info,
   AlertTriangle,
   Settings,
-  Check,
 } from "lucide-react";
 import {
   getEntitlementScopeLabel,
@@ -37,27 +35,12 @@ import {
 } from "@/components/project-access/AccessBadges";
 import { canManageOrganization } from "@/lib/organizationAccess";
 
-export type AlertFilter = "all" | "with_alerts" | "no_alerts";
-
 export default function OrgProjectsPage() {
   const router = useRouter();
   const { orgId } = useOrgProjectParams();
   const [projectQuery, setProjectQuery] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [filterAlerts, setFilterAlerts] = useState<AlertFilter>("all");
-  const [filterOpen, setFilterOpen] = useState(false);
-  const filterRef = useRef<HTMLDivElement>(null);
   const debouncedProjectQuery = useDebouncedValue(projectQuery, 300);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
-        setFilterOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const {
     data: org,
@@ -110,13 +93,8 @@ export default function OrgProjectsPage() {
           project.name.toLowerCase().includes(q) || project.description?.toLowerCase().includes(q)
       );
     }
-    if (filterAlerts === "with_alerts") {
-      list = list.filter(p => (p.alerts ?? 0) > 0);
-    } else if (filterAlerts === "no_alerts") {
-      list = list.filter(p => (p.alerts ?? 0) === 0);
-    }
     return list;
-  }, [debouncedProjectQuery, projects, filterAlerts]);
+  }, [debouncedProjectQuery, projects]);
 
   const loading = (!org && orgLoading) || (!projects && projectsLoading);
   const firstProjectId = filteredProjects[0]?.id ?? projects?.[0]?.id;
@@ -156,77 +134,6 @@ export default function OrgProjectsPage() {
                   className="w-full h-12 rounded-full border border-white/[0.15] bg-[#131316]/90 backdrop-blur-2xl px-6 py-2 pl-12 text-base text-white placeholder:text-slate-600 focus:border-emerald-500/50 focus:outline-none transition-all shadow-[0_20px_50px_rgba(0,0,0,0.5)] hover:border-white/30"
                 />
                 <div className="absolute inset-x-8 -bottom-px h-px bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent opacity-0 group-focus-within:opacity-100 transition-opacity" />
-              </div>
-              <div className="relative" ref={filterRef}>
-                <button
-                  type="button"
-                  onClick={() => setFilterOpen(open => !open)}
-                  aria-expanded={filterOpen}
-                  aria-haspopup="true"
-                  aria-label="Filter projects by alerts"
-                  className={clsx(
-                    "h-12 w-12 flex items-center justify-center rounded-full border bg-[#121215]/90 backdrop-blur-xl transition-all shadow-xl",
-                    filterAlerts !== "all"
-                      ? "border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
-                      : "border-white/10 text-slate-500 hover:bg-white/5 hover:text-emerald-400"
-                  )}
-                >
-                  <Filter className="h-4 w-4" />
-                </button>
-                {filterOpen && (
-                  <div
-                    role="menu"
-                    className="absolute left-0 top-full mt-2 min-w-[200px] rounded-xl border border-white/10 bg-[#121215]/98 backdrop-blur-xl shadow-xl z-50 py-2"
-                  >
-                    <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 border-b border-white/5">
-                      Filter by alerts
-                    </div>
-                    {(
-                      [
-                        { value: "all" as const, label: "All projects" },
-                        { value: "with_alerts" as const, label: "With alerts" },
-                        { value: "no_alerts" as const, label: "No alerts" },
-                      ] as const
-                    ).map(({ value, label }) => (
-                      <button
-                        key={value}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={filterAlerts === value}
-                        onClick={() => {
-                          setFilterAlerts(value);
-                          setFilterOpen(false);
-                        }}
-                        className={clsx(
-                          "w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors",
-                          filterAlerts === value
-                            ? "bg-emerald-500/15 text-emerald-400 font-semibold"
-                            : "text-slate-300 hover:bg-white/5 hover:text-white"
-                        )}
-                      >
-                        {filterAlerts === value ? (
-                          <Check className="h-4 w-4 flex-shrink-0" />
-                        ) : (
-                          <span className="w-4" />
-                        )}
-                        {label}
-                      </button>
-                    ))}
-                    {filterAlerts !== "all" && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setFilterAlerts("all");
-                          setFilterOpen(false);
-                        }}
-                        className="w-full px-4 py-2.5 text-left text-xs font-medium text-slate-500 hover:bg-white/5 hover:text-slate-300 border-t border-white/5"
-                      >
-                        Clear filters
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
             <div className="flex items-center gap-6">
@@ -430,23 +337,6 @@ export default function OrgProjectsPage() {
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <div className="mb-1.5 flex items-center gap-2">
-                      {(p.alerts ?? 0) > 0 ? (
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500/15 border border-red-500/30 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.1)]">
-                          <div className="w-1.5 h-1.5 rounded-full bg-red-400 shadow-[0_0_10px_rgba(239,68,68,1)] animate-pulse" />
-                          <span className="text-[10px] font-black text-red-400 uppercase tracking-[0.16em]">
-                            {p.alerts} ALERTS
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/15 border border-emerald-500/30 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,1)]" />
-                          <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.16em]">
-                            0 ALERTS
-                          </span>
-                        </div>
-                      )}
-                    </div>
                     <h3 className="mb-1 text-[20px] font-semibold text-white tracking-tight truncate group-hover:text-emerald-50 transition-colors leading-tight">
                       {p.name}
                     </h3>
@@ -469,7 +359,6 @@ export default function OrgProjectsPage() {
               <thead className="bg-white/5 text-[11px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
                 <tr>
                   <th className="px-10 py-6 text-left">Project Name</th>
-                  <th className="px-10 py-6 text-left">Active Alerts</th>
                   <th className="px-10 py-6 text-right">Project</th>
                 </tr>
               </thead>
@@ -502,24 +391,6 @@ export default function OrgProjectsPage() {
                             {getProjectAccessSummary(p)}
                           </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-10 py-8">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={clsx(
-                            "w-2 h-2 rounded-full",
-                            (p.alerts ?? 0) > 0 ? "bg-red-500 animate-pulse" : "bg-emerald-500"
-                          )}
-                        />
-                        <span
-                          className={clsx(
-                            "font-black uppercase tracking-widest text-xs",
-                            (p.alerts ?? 0) > 0 ? "text-red-400" : "text-emerald-400"
-                          )}
-                        >
-                          {(p.alerts ?? 0) > 0 ? `${p.alerts} ALERTS` : "0 ALERTS"}
-                        </span>
                       </div>
                     </td>
                     <td className="px-10 py-8 text-right">
