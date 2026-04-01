@@ -45,12 +45,11 @@ def upgrade() -> None:
             sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
             sa.ForeignKeyConstraint(["report_id"], ["behavior_reports.id"], ondelete="CASCADE"),
             sa.PrimaryKeyConstraint("id"),
-            sa.UniqueConstraint("report_id"),
         )
 
     indexes = _index_names(bind, "release_gate_runs")
     for index_name, column_names, unique in (
-        ("ix_release_gate_runs_report_id", ["report_id"], False),
+        ("ix_release_gate_runs_report_id", ["report_id"], True),
         ("ix_release_gate_runs_project_id", ["project_id"], False),
         ("ix_release_gate_runs_trace_id", ["trace_id"], False),
         ("ix_release_gate_runs_agent_id", ["agent_id"], False),
