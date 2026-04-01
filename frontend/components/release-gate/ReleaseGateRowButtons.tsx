@@ -66,34 +66,45 @@ export function ResultCaseRowButton({
       }}
       data-testid={testId}
       className={clsx(
-        "group flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition",
+        "group flex w-full flex-col gap-2.5 rounded-xl border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg",
         caseIsPass
-          ? "border-emerald-500/10 bg-emerald-500/[0.02] hover:bg-emerald-500/[0.06]"
+          ? "border-emerald-500/20 bg-emerald-500/[0.03] hover:border-emerald-500/40 hover:bg-emerald-500/[0.08]"
           : caseIsFlaky
-            ? "border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10"
-            : "border-rose-500/15 bg-rose-500/[0.03] hover:bg-rose-500/10"
+            ? "border-amber-500/30 bg-amber-500/[0.05] hover:border-amber-500/50 hover:bg-amber-500/[0.1]"
+            : "border-rose-500/30 bg-rose-500/[0.05] hover:border-rose-500/50 hover:bg-rose-500/[0.1]"
       )}
     >
-      <span
-        className={clsx(
-          "mt-0.5 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-          caseIsPass
-            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-            : caseIsFlaky
-              ? "border-amber-500/20 bg-amber-500/15 text-amber-200"
-              : "border-rose-500/20 bg-rose-500/10 text-rose-300"
-        )}
-      >
-        {caseStatusLabel}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-2">
-          <span className="shrink-0 text-sm font-semibold text-slate-100">Input {idx + 1}</span>
-          {baselineInputPreview && (
-            <span className="truncate text-[12px] text-slate-400">{baselineInputPreview}</span>
-          )}
+      <div className="flex w-full items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span
+            className={clsx(
+              "shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+              caseIsPass
+                ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                : caseIsFlaky
+                  ? "border-amber-500/30 bg-amber-500/20 text-amber-200"
+                  : "border-rose-500/30 bg-rose-500/20 text-rose-300"
+            )}
+          >
+            {caseStatusLabel}
+          </span>
+          <span className="text-sm font-semibold text-slate-100">Input {idx + 1}</span>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <div className="flex shrink-0 items-center">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 opacity-60 transition-all group-hover:text-white group-hover:opacity-100">
+            <span>View details</span>
+            <span className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="min-w-0 flex-1 w-full space-y-2.5 mt-1">
+        {baselineInputPreview && (
+          <div className="truncate text-[12px] text-slate-400 bg-black/20 border border-white/5 rounded-lg px-2.5 py-1.5">
+            {baselineInputPreview}
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-1.5">
           <span
             className={clsx(
               "rounded-full border px-2 py-0.5 text-[10px] font-semibold",
@@ -131,12 +142,6 @@ export function ResultCaseRowButton({
           ) : null}
         </div>
       </div>
-      <div className="mt-0.5 flex shrink-0 flex-col items-end gap-1 text-right">
-        <span className="text-[10px] text-slate-500">Open attempt</span>
-        <span className="text-[11px] font-medium text-slate-400 opacity-60 transition-opacity group-hover:opacity-100">
-          View details &rarr;
-        </span>
-      </div>
     </button>
   );
 }
@@ -164,7 +169,9 @@ export function HistoryRunRowButton({
   onClick: () => void;
   testId: string;
 }) {
-  const rawStatus = String(item.status ?? "").trim().toLowerCase();
+  const rawStatus = String(item.status ?? "")
+    .trim()
+    .toLowerCase();
   const caseIsPass = rawStatus === "pass";
   const caseIsFlaky = rawStatus === "flaky";
   const caseStatusLabel = caseIsPass ? "Healthy" : caseIsFlaky ? "Flaky" : "Flagged";
@@ -184,65 +191,65 @@ export function HistoryRunRowButton({
       data-testid={testId}
       data-run-status={String(item.status || "").toLowerCase()}
       className={clsx(
-        "group w-full rounded-2xl border px-3 py-3 text-left transition",
+        "group w-full rounded-xl border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg flex flex-col gap-3",
         loading && "opacity-80",
         selected
-          ? "border-fuchsia-500/30 bg-fuchsia-500/10"
+          ? "border-fuchsia-500/50 bg-fuchsia-500/10 shadow-[0_0_15px_rgba(217,70,239,0.1)]"
           : caseIsPass
-            ? "border-emerald-500/10 bg-emerald-500/[0.02] hover:bg-emerald-500/[0.06]"
+            ? "border-emerald-500/20 bg-emerald-500/[0.03] hover:border-emerald-500/40 hover:bg-emerald-500/[0.08]"
             : caseIsFlaky
-              ? "border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10"
-              : "border-rose-500/15 bg-rose-500/[0.03] hover:bg-rose-500/10"
+              ? "border-amber-500/30 bg-amber-500/[0.05] hover:border-amber-500/50 hover:bg-amber-500/[0.1]"
+              : "border-rose-500/30 bg-rose-500/[0.05] hover:border-rose-500/50 hover:bg-rose-500/[0.1]"
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={clsx(
-                "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                caseIsPass
-                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-                  : caseIsFlaky
-                    ? "border-amber-500/20 bg-amber-500/15 text-amber-200"
-                    : "border-rose-500/20 bg-rose-500/10 text-rose-300"
-              )}
-            >
-              {caseStatusLabel}
-            </span>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            {repeatRuns > 0 ? (
-              <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
-                {repeatRuns}x each
-              </span>
-            ) : null}
-            {!hasExplicitPassSummary && inputTotal <= 0 ? (
-              <span className="text-[10px] text-slate-500">Legacy run: breakdown unavailable</span>
-            ) : null}
-          </div>
-          <div className="mt-2 flex min-w-0 items-center gap-2 text-[11px] text-slate-500">
-            <span className="shrink-0 whitespace-nowrap">{formatDateTime(item.created_at)}</span>
-            {preview ? (
-              <>
-                <span className="h-1 w-1 shrink-0 rounded-full bg-white/10" />
-                <span className="min-w-0 truncate">{preview}</span>
-              </>
-            ) : null}
-          </div>
+      <div className="flex items-start justify-between gap-3 w-full">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={clsx(
+              "shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+              caseIsPass
+                ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                : caseIsFlaky
+                  ? "border-amber-500/30 bg-amber-500/20 text-amber-200"
+                  : "border-rose-500/30 bg-rose-500/20 text-rose-300"
+            )}
+          >
+            {caseStatusLabel}
+          </span>
+          <span className="text-[12px] font-medium text-slate-300">
+            {formatDateTime(item.created_at)}
+          </span>
         </div>
-        <div className="mt-0.5 flex shrink-0 flex-col items-end gap-1 text-right">
+        <div className="flex shrink-0 items-center">
           {loading ? (
-            <Activity className="h-3.5 w-3.5 animate-spin text-slate-400" aria-hidden />
+            <Activity className="h-4 w-4 animate-spin text-slate-400" aria-hidden />
           ) : (
-            <>
-              <span className="text-[10px] text-slate-500">{selected ? "Opening run" : "Open run"}</span>
-              <span className="text-[11px] font-medium text-slate-400 opacity-60 transition-opacity group-hover:opacity-100">
-                View details &rarr;
-              </span>
-            </>
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 opacity-60 transition-all group-hover:text-white group-hover:opacity-100">
+              <span>{selected ? "Opening..." : "View details"}</span>
+              <span className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
+            </div>
           )}
         </div>
+      </div>
+
+      <div className="flex min-w-0 flex-col gap-2.5 w-full">
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          {repeatRuns > 0 ? (
+            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 font-medium text-slate-300">
+              <strong className="text-slate-100">{repeatRuns}x</strong> each
+            </span>
+          ) : null}
+          {!hasExplicitPassSummary && inputTotal <= 0 ? (
+            <span className="text-[11px] text-slate-500 italic">
+              Legacy run: breakdown unavailable
+            </span>
+          ) : null}
+        </div>
+        {preview ? (
+          <div className="truncate text-xs text-slate-400 font-mono bg-black/20 border border-white/5 rounded-lg px-2.5 py-1.5 self-start max-w-full">
+            {preview}
+          </div>
+        ) : null}
       </div>
     </button>
   );
