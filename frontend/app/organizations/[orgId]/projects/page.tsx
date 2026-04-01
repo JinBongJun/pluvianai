@@ -423,14 +423,14 @@ export default function OrgProjectsPage() {
                       router.push(`/organizations/${orgId}/projects/${p.id}`);
                     }
                   }}
-                  className="relative z-20 flex-1 px-5 py-4 pr-14 flex items-center gap-4 cursor-pointer"
+                  className="relative z-20 flex-1 px-5 py-5 pr-14 flex items-start gap-4 cursor-pointer"
                 >
-                  <div className="h-10 w-10 rounded-full flex items-center justify-center bg-white/[0.05] border border-white/10 group-hover:scale-105 group-hover:border-emerald-500/30 transition-all duration-500 text-emerald-400 flex-shrink-0 shadow-inner">
+                  <div className="mt-0.5 h-10 w-10 rounded-full flex items-center justify-center bg-white/[0.05] border border-white/10 group-hover:scale-105 group-hover:border-emerald-500/30 transition-all duration-500 text-emerald-400 flex-shrink-0 shadow-inner">
                     <Building2 className="w-4 h-4" />
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <div className="mb-2 flex items-center gap-2">
+                    <div className="mb-1.5 flex items-center gap-2">
                       {(p.alerts ?? 0) > 0 ? (
                         <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500/15 border border-red-500/30 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.1)]">
                           <div className="w-1.5 h-1.5 rounded-full bg-red-400 shadow-[0_0_10px_rgba(239,68,68,1)] animate-pulse" />
@@ -447,14 +447,14 @@ export default function OrgProjectsPage() {
                         </div>
                       )}
                     </div>
-                    <h3 className="mb-1.5 text-[20px] font-semibold text-white tracking-tight truncate group-hover:text-emerald-50 transition-colors leading-tight">
+                    <h3 className="mb-1 text-[20px] font-semibold text-white tracking-tight truncate group-hover:text-emerald-50 transition-colors leading-tight">
                       {p.name}
                     </h3>
                     <div className="flex flex-wrap items-center gap-2">
                       <ProjectRoleBadge role={p.role ?? p.org_role} className="px-2 py-0.5" />
                     </div>
                     {p.description ? (
-                      <p className="mt-2 line-clamp-1 text-[13px] text-slate-400/85">
+                      <p className="mt-1.5 line-clamp-1 text-[13px] text-slate-400/85">
                         {p.description}
                       </p>
                     ) : null}
