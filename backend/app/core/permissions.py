@@ -53,9 +53,8 @@ def get_project_access_context(project: Project, user_id: int, db: Session) -> d
     """
     Describe how a user can currently see/access a project.
 
-    - `owned`: project owner
-    - `project_member`: direct project membership
-    - `organization_member`: visible through org membership only (no project membership)
+    Organization projects inherit the user's organization role.
+    Direct project membership is only used for non-organization projects.
     """
     project_role = get_user_project_role(project.id, user_id, db)
     org_role = get_user_organization_role(getattr(project, "organization_id", None), user_id, db)
@@ -64,18 +63,18 @@ def get_project_access_context(project: Project, user_id: int, db: Session) -> d
     if created_by_me:
         access_source = "owned"
         has_project_access = True
+    elif org_role:
+        access_source = "organization_member"
+        has_project_access = True
     elif project_role:
         access_source = "project_member"
         has_project_access = True
-    elif org_role:
-        access_source = "organization_member"
-        has_project_access = False
     else:
         access_source = None
         has_project_access = False
 
     return {
-        "role": str(project_role) if project_role else None,
+        "role": str(project_role) if project_role else (str(org_role) if org_role else None),
         "org_role": str(org_role) if org_role else None,
         "access_source": access_source,
         "created_by_me": created_by_me,
@@ -100,6 +99,11 @@ def get_user_project_role(project_id: int, user_id: int, db: Session) -> Optiona
     project = db.query(Project).filter(Project.id == project_id).first()
     if project and project.is_active and (not project.is_deleted) and project.owner_id == user_id:
         return ProjectRole.OWNER.value
+
+    if project and getattr(project, "organization_id", None):
+        org_role = get_user_organization_role(project.organization_id, user_id, db)
+        if org_role:
+            return org_role
 
     # Check ProjectMember
     member = (
@@ -140,20 +144,10 @@ def check_project_access(
     if project.owner_id == user.id:
         return project
 
-    # Check if user is a member
-    member = (
-        db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == user.id).first()
-    )
+    current_role = access_context.get("role")
 
-    if not member:
-        if access_context.get("access_source") == "organization_member":
-            message = (
-                "This project is visible because you belong to the organization, "
-                "but you have not been added to the project itself. "
-                "Ask a project owner or admin to grant project access."
-            )
-        else:
-            message = "You don't have access to this project"
+    if not current_role:
+        message = "You don't have access to this project"
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
@@ -171,7 +165,7 @@ def check_project_access(
 
     # Check role permissions if required
     if required_roles:
-        if member.role not in required_roles:
+        if current_role not in required_roles:
             required_roles_text = ", ".join(sorted(set(required_roles)))
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -179,13 +173,13 @@ def check_project_access(
                     "code": "PROJECT_ROLE_INSUFFICIENT",
                     "message": (
                         f"This action requires one of: {required_roles_text}. "
-                        f"Your role is '{member.role}'. "
+                        f"Your role is '{current_role}'. "
                         "Ask a project owner or admin to update your role if needed."
                     ),
                     "details": {
                         "reason": "insufficient_role",
                         "project_id": project_id,
-                        "current_role": str(member.role),
+                        "current_role": str(current_role),
                         "required_roles": sorted(set(required_roles)),
                         **access_context,
                     },

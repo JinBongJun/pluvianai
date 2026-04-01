@@ -51,7 +51,7 @@ from app.core.metrics import (
     realtime_stream_connections_active,
     realtime_stream_connections_opened_total,
 )
-from app.core.permissions import check_project_access
+from app.core.permissions import check_project_access, get_user_organization_role
 from app.core.config import settings as app_settings
 from app.core.usage_limits import check_release_gate_attempts_limit, get_limit_status
 from app.core.security import (
@@ -1303,6 +1303,7 @@ def _ensure_release_gate_hot_path_access(project_id: int, user_id: int, db: Sess
         db.query(
             Project.id.label("project_id"),
             Project.owner_id.label("owner_id"),
+            Project.organization_id.label("organization_id"),
             Project.is_active.label("is_active"),
             Project.is_deleted.label("is_deleted"),
             ProjectMember.role.label("member_role"),
@@ -1323,7 +1324,8 @@ def _ensure_release_gate_hot_path_access(project_id: int, user_id: int, db: Sess
             )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
-    allowed = int(row.owner_id or 0) == user_id or bool(row.member_role)
+    org_role = get_user_organization_role(getattr(row, "organization_id", None), user_id, db)
+    allowed = int(row.owner_id or 0) == user_id or bool(row.member_role) or bool(org_role)
     if cache_service.enabled:
         cache_service.set(
             _release_gate_hot_access_cache_key(project_id, user_id),

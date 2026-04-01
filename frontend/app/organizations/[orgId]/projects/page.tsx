@@ -33,7 +33,6 @@ import {
 } from "@/lib/projectAccess";
 import {
   AccessSourceBadge,
-  OrganizationRoleBadge,
   ProjectRoleBadge,
 } from "@/components/project-access/AccessBadges";
 import { canManageOrganization } from "@/lib/organizationAccess";
@@ -386,9 +385,7 @@ export default function OrgProjectsPage() {
                 key={p.id}
                 className={clsx(
                   "group relative rounded-xl bg-[#1a1a1e]/95 backdrop-blur-3xl border border-white/[0.15] transition-all duration-500 overflow-hidden flex text-left active:scale-[0.99]",
-                  p.has_project_access === false
-                    ? "opacity-85"
-                    : "hover:border-emerald-500/40 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] hover:shadow-[0_0_60px_rgba(16,185,129,0.1)]"
+                  "hover:border-emerald-500/40 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] hover:shadow-[0_0_60px_rgba(16,185,129,0.1)]"
                 )}
               >
                 {/* Top Rim Highlight (Persistent) */}
@@ -406,16 +403,10 @@ export default function OrgProjectsPage() {
                   type="button"
                   onClick={e => {
                     e.stopPropagation();
-                    if (p.has_project_access === false) return;
                     router.push(`/organizations/${orgId}/projects/${p.id}/settings/general`);
                   }}
-                  disabled={p.has_project_access === false}
                   className="absolute top-4 right-4 z-30 w-10 h-10 rounded-full bg-[#05070c]/80 border border-white/15 flex items-center justify-center text-slate-400 hover:text-white hover:border-emerald-500/40 transition-all"
-                  title={
-                    p.has_project_access === false
-                      ? "Project settings require project-level access."
-                      : "Project settings"
-                  }
+                  title="Project settings"
                 >
                   <Settings className="w-4 h-4" />
                 </button>
@@ -424,21 +415,15 @@ export default function OrgProjectsPage() {
                   role="button"
                   tabIndex={0}
                   onClick={() => {
-                    if (p.has_project_access === false) return;
                     router.push(`/organizations/${orgId}/projects/${p.id}`);
                   }}
                   onKeyDown={e => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      if (p.has_project_access === false) return;
                       router.push(`/organizations/${orgId}/projects/${p.id}`);
                     }
                   }}
-                  aria-disabled={p.has_project_access === false}
-                  className={clsx(
-                    "relative z-20 flex-1 p-6 flex items-center gap-6",
-                    p.has_project_access === false ? "cursor-not-allowed" : "cursor-pointer"
-                  )}
+                  className="relative z-20 flex-1 p-6 flex items-center gap-6 cursor-pointer"
                 >
                   <div className="w-16 h-16 rounded-full flex items-center justify-center bg-white/[0.05] border border-white/10 group-hover:scale-110 group-hover:border-emerald-500/30 transition-all duration-500 text-emerald-400 flex-shrink-0 shadow-inner">
                     <Building2 className="w-7 h-7" />
@@ -470,10 +455,7 @@ export default function OrgProjectsPage() {
                     </h3>
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                       <AccessSourceBadge source={p.access_source} className="px-2.5 py-1" />
-                      <ProjectRoleBadge role={p.role} prefix="Project" className="px-2.5 py-1" />
-                      {p.org_role && (!p.role || p.org_role !== p.role) ? (
-                        <OrganizationRoleBadge role={p.org_role} className="px-2.5 py-1" />
-                      ) : null}
+                      <ProjectRoleBadge role={p.role ?? p.org_role} className="px-2.5 py-1" />
                     </div>
                     {p.description ? (
                       <p className="text-slate-400 text-sm font-medium line-clamp-1 opacity-60 group-hover:opacity-100 transition-opacity">
@@ -487,11 +469,6 @@ export default function OrgProjectsPage() {
                     <p className="mt-2 text-xs leading-relaxed text-slate-500">
                       {getProjectAccessSummary(p)}
                     </p>
-                    {p.has_project_access === false ? (
-                      <p className="mt-1 text-[11px] font-semibold text-amber-300">
-                        Project access required before opening Live View or settings.
-                      </p>
-                    ) : null}
                     <p className="mt-1 text-[11px] font-semibold text-slate-600">
                       {getEntitlementScopeLabel(p.entitlement_scope)}
                       {p.owner_name ? ` · Owner: ${p.owner_name}` : ""}
@@ -515,14 +492,8 @@ export default function OrgProjectsPage() {
                 {filteredProjects.map(p => (
                   <tr
                     key={p.id}
-                    className={clsx(
-                      "group transition-all",
-                      p.has_project_access === false
-                        ? "cursor-not-allowed bg-white/[0.02]"
-                        : "cursor-pointer hover:bg-emerald-500/5"
-                    )}
+                    className="group cursor-pointer transition-all hover:bg-emerald-500/5"
                     onClick={() => {
-                      if (p.has_project_access === false) return;
                       router.push(`/organizations/${orgId}/projects/${p.id}`);
                     }}
                   >
@@ -540,19 +511,11 @@ export default function OrgProjectsPage() {
                           </div>
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             <AccessSourceBadge source={p.access_source} className="px-2.5 py-1" />
-                            <ProjectRoleBadge role={p.role} prefix="Project" className="px-2.5 py-1" />
-                            {p.org_role && (!p.role || p.org_role !== p.role) ? (
-                              <OrganizationRoleBadge role={p.org_role} className="px-2.5 py-1" />
-                            ) : null}
+                            <ProjectRoleBadge role={p.role ?? p.org_role} className="px-2.5 py-1" />
                           </div>
                           <div className="mt-2 text-xs text-slate-500">
                             {getProjectAccessSummary(p)}
                           </div>
-                          {p.has_project_access === false ? (
-                            <div className="mt-1 text-[11px] font-semibold text-amber-300">
-                              Project access required before opening this workspace.
-                            </div>
-                          ) : null}
                         </div>
                       </div>
                     </td>

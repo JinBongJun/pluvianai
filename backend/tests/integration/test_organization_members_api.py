@@ -307,7 +307,7 @@ def test_get_organization_includes_membership_metadata(client, db, test_user):
     assert body["membership_source"] == "invited"
 
 
-def test_org_projects_list_exposes_access_context_for_org_only_visibility(client, db, test_user):
+def test_org_projects_list_exposes_inherited_org_role_access(client, db, test_user):
     owner = test_user
     viewer = User(
         email="org-project-list-viewer@example.com",
@@ -350,8 +350,8 @@ def test_org_projects_list_exposes_access_context_for_org_only_visibility(client
     items = response.json()
     match = next(item for item in items if item["id"] == project["id"])
     assert match["access_source"] == "organization_member"
-    assert match["role"] is None
+    assert match["role"] == "viewer"
     assert match["org_role"] == "viewer"
-    assert match["has_project_access"] is False
+    assert match["has_project_access"] is True
     assert match["created_by_me"] is False
     assert match["entitlement_scope"] == "account"

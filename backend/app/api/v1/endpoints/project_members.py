@@ -21,6 +21,7 @@ from app.services.subscription_service import SubscriptionService
 from app.models.user import User
 from app.models.project import Project
 from app.models.project_member import ProjectMember
+from app.models.organization import OrganizationMember
 
 router = APIRouter()
 
@@ -72,6 +73,20 @@ class ProjectMemberResponse(BaseModel):
     role: str
     created_at: str
 
+
+def _project_inherits_org_roles(project: Project) -> bool:
+    return bool(getattr(project, "organization_id", None))
+
+
+def _raise_org_role_inheritance_error() -> None:
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            "Organization projects inherit access from Team & Access. "
+            "Update the member's organization role instead of setting a project-specific role."
+        ),
+    )
+
 @router.post(
     "/projects/{project_id}/members", response_model=ProjectMemberResponse, status_code=status.HTTP_201_CREATED
 )
@@ -92,6 +107,8 @@ async def add_project_member(
 
     # Check access (owner or admin only)
     project = check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
+    if _project_inherits_org_roles(project):
+        _raise_org_role_inheritance_error()
 
     # Find user by email using service
     user = user_service.get_user_by_email(member_data.user_email)
@@ -194,6 +211,47 @@ async def list_project_members(
     """List all members of a project (all members can view)"""
     # Check access (any member can view)
     project = check_project_access(project_id, current_user, db)
+    if _project_inherits_org_roles(project):
+        org_memberships = (
+            db.query(OrganizationMember)
+            .filter(OrganizationMember.organization_id == project.organization_id)
+            .order_by(OrganizationMember.created_at.asc(), OrganizationMember.id.asc())
+            .all()
+        )
+
+        result = []
+        seen_user_ids = set()
+        for membership in org_memberships:
+            if not membership.user or membership.user_id in seen_user_ids:
+                continue
+            seen_user_ids.add(membership.user_id)
+            result.append(
+                ProjectMemberResponse(
+                    id=membership.id,
+                    project_id=project_id,
+                    user_id=membership.user_id,
+                    user_email=membership.user.email,
+                    user_name=membership.user.full_name,
+                    role=str(membership.role),
+                    created_at=membership.created_at.isoformat(),
+                )
+            )
+
+        if project.owner_id not in seen_user_ids and project.owner:
+            result.insert(
+                0,
+                ProjectMemberResponse(
+                    id=0,
+                    project_id=project_id,
+                    user_id=project.owner.id,
+                    user_email=project.owner.email,
+                    user_name=project.owner.full_name,
+                    role=ProjectRole.OWNER,
+                    created_at=project.created_at.isoformat(),
+                )
+            )
+
+        return result
 
     # Try to get from cache
     cache_key = cache_service.project_members_key(project_id)
@@ -264,6 +322,8 @@ async def update_project_member_role(
 
     # Check access (owner or admin only)
     project = check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
+    if _project_inherits_org_roles(project):
+        _raise_org_role_inheritance_error()
 
     # Check if trying to change owner
     if project.owner_id == user_id:
@@ -321,6 +381,8 @@ async def remove_project_member(
     """Remove a member from project (owner/admin only)"""
     # Check access (owner or admin only)
     project = check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
+    if _project_inherits_org_roles(project):
+        _raise_org_role_inheritance_error()
 
     # Check if trying to remove owner
     if project.owner_id == user_id:
