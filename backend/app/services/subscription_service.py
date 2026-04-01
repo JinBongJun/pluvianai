@@ -10,7 +10,11 @@ from app.models.user import User
 from app.models.subscription import Subscription
 from app.models.usage import Usage
 from app.core.subscription_limits import PLAN_LIMITS, PLAN_PRICING, normalize_plan_type
-from app.core.usage_limits import get_usage_period_bounds_utc
+from app.core.usage_limits import (
+    get_anniversary_monthly_bounds_utc,
+    get_usage_period_query_bounds,
+    get_usage_window,
+)
 from app.core.logging_config import logger
 
 
@@ -36,6 +40,7 @@ class SubscriptionService:
     def get_user_plan(self, user_id: int) -> Dict[str, Any]:
         """Get user's current plan details, limits, and enabled features"""
         subscription = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
+        usage_window = get_usage_window(self.db, user_id)
 
         # Default to free plan if no subscription exists
         now = datetime.now(timezone.utc)
@@ -70,16 +75,10 @@ class SubscriptionService:
                 ),
             },
             "features": limits["features"],
-            "current_period_start": (
-                subscription.current_period_start.isoformat()
-                if subscription and subscription.current_period_start
-                else None
-            ),
-            "current_period_end": (
-                subscription.current_period_end.isoformat()
-                if subscription and subscription.current_period_end
-                else None
-            ),
+            "current_period_start": usage_window.period_start.isoformat(),
+            "current_period_end": usage_window.period_end.isoformat(),
+            "usage_window_type": usage_window.window_type,
+            "next_reset_at": usage_window.next_reset_at.isoformat(),
             "trial_end": subscription.trial_end.isoformat() if subscription and subscription.trial_end else None,
         }
 
@@ -92,7 +91,7 @@ class SubscriptionService:
         plan_type = normalize_plan_type(plan_info["plan_type"])
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
-        period_start, period_end = get_usage_period_bounds_utc(self.db, user_id)
+        period_start, period_end = get_usage_period_query_bounds(self.db, user_id)
         metric_name = self._usage_metric_name(metric_type)
         current_usage = (
             self.db.query(func.coalesce(func.sum(Usage.quantity), 0))
@@ -158,16 +157,17 @@ class SubscriptionService:
         plan_type = plan_info["plan_type"]
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
-        period_start, period_end = get_usage_period_bounds_utc(self.db, user_id)
+        usage_window = get_usage_window(self.db, user_id)
+        query_period_start, query_period_end = get_usage_period_query_bounds(self.db, user_id)
 
-        # Aggregate usage by metric_name for the current billing window.
+        # Aggregate usage by metric_name for the current usage window.
         usage_by_metric: Dict[str, int] = {}
         usage_rows = (
             self.db.query(Usage.metric_name, func.coalesce(func.sum(Usage.quantity), 0).label("total"))
             .filter(
                 Usage.user_id == user_id,
-                Usage.timestamp >= period_start,
-                Usage.timestamp <= period_end,
+                Usage.timestamp >= query_period_start,
+                Usage.timestamp <= query_period_end,
             )
             .group_by(Usage.metric_name)
             .all()
@@ -176,7 +176,13 @@ class SubscriptionService:
             usage_by_metric[str(metric_name)] = int(total or 0)
 
         # Build summary
-        summary = {"period_start": period_start.isoformat(), "period_end": period_end.isoformat(), "metrics": {}}
+        summary = {
+            "period_start": usage_window.period_start.isoformat(),
+            "period_end": usage_window.period_end.isoformat(),
+            "next_reset_at": usage_window.next_reset_at.isoformat(),
+            "usage_window_type": usage_window.window_type,
+            "metrics": {},
+        }
 
         # Add metrics from plan limits
         for key, limit in limits.items():
@@ -216,7 +222,8 @@ class SubscriptionService:
             
             # Delete monthly usage keys for all users
             for user in users:
-                p_start, p_end = get_usage_period_bounds_utc(self.db, user.id)
+                usage_window = get_usage_window(self.db, user.id)
+                p_start, p_end = usage_window.period_start, usage_window.period_end
                 period_tag = f"{int(p_start.timestamp())}_{int(p_end.timestamp())}"
                 keys_to_delete = [
                     f"user:{user.id}:usage:monthly:{current_year_month}",
@@ -261,13 +268,21 @@ class SubscriptionService:
         """Create or update user subscription"""
         subscription = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
         normalized_status = "cancelled" if str(status).strip().lower() == "canceled" else str(status).strip().lower()
+        normalized_plan_type = normalize_plan_type(plan_type)
 
         now = datetime.now(timezone.utc)
-        # Use provided period dates or default to current month only for new subscriptions.
+        anchor_at = subscription.free_usage_anchor_at if subscription else None
+        if normalized_plan_type == "free":
+            if anchor_at is None or (subscription and normalize_plan_type(subscription.plan_type) != "free"):
+                anchor_at = current_period_start or now
+
+        # Use provided period dates or default to the active usage window.
         if current_period_start is not None:
             period_start = current_period_start
         elif subscription and subscription.current_period_start is not None:
             period_start = subscription.current_period_start
+        elif normalized_plan_type == "free" and anchor_at is not None:
+            period_start, _ = get_anniversary_monthly_bounds_utc(anchor_at, now=now)
         else:
             period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
@@ -275,6 +290,8 @@ class SubscriptionService:
             period_end = current_period_end
         elif subscription and subscription.current_period_end is not None:
             period_end = subscription.current_period_end
+        elif normalized_plan_type == "free" and anchor_at is not None:
+            _, period_end = get_anniversary_monthly_bounds_utc(anchor_at, now=now)
         else:
             if now.month == 12:
                 period_end = period_start.replace(year=now.year + 1, month=1)
@@ -284,6 +301,7 @@ class SubscriptionService:
         if subscription:
             subscription.plan_type = plan_type
             subscription.status = normalized_status
+            subscription.free_usage_anchor_at = anchor_at
             subscription.current_period_start = period_start
             subscription.current_period_end = period_end
             if provider:
@@ -310,6 +328,7 @@ class SubscriptionService:
                 user_id=user_id,
                 plan_type=plan_type,
                 status=normalized_status,
+                free_usage_anchor_at=anchor_at,
                 current_period_start=period_start,
                 current_period_end=period_end,
                 paddle_subscription_id=paddle_subscription_id,

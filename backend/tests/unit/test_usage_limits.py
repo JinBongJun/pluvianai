@@ -189,3 +189,40 @@ class TestUsageLimits:
         db.commit()
 
         assert get_platform_replay_credits_this_month(db, test_user.id) == 40
+
+    def test_free_usage_window_uses_anniversary_anchor(self, db, test_user, test_project):
+        now = datetime.now(timezone.utc)
+        anchor = now - timedelta(days=9)
+        db.add(
+            Subscription(
+                user_id=test_user.id,
+                plan_id="free",
+                status="active",
+                free_usage_anchor_at=anchor,
+            )
+        )
+        in_window = Usage(
+            user_id=test_user.id,
+            project_id=test_project.id,
+            metric_name="release_gate_attempts",
+            quantity=7,
+            unit="count",
+        )
+        in_window.timestamp = now - timedelta(days=2)
+        db.add(in_window)
+
+        stale = Usage(
+            user_id=test_user.id,
+            project_id=test_project.id,
+            metric_name="release_gate_attempts",
+            quantity=999,
+            unit="count",
+        )
+        stale.timestamp = anchor - timedelta(microseconds=1)
+        db.add(stale)
+        db.commit()
+
+        window_start, window_end = get_usage_period_bounds_utc(db, test_user.id)
+        assert window_start == anchor
+        assert window_end > now
+        assert get_release_gate_attempts_this_month(db, test_user.id) == 7

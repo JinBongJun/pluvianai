@@ -399,11 +399,16 @@ class TestAuthAPI:
         assert data["display_plan_type"] == "free"
         assert data["subscription_status"] == "active"
         assert data["entitlement_status"] == "active"
+        assert data["usage_window_type"] == "anniversary_monthly"
+        assert data["current_period_start"] is not None
+        assert data["current_period_end"] is not None
+        assert data["next_reset_at"] is not None
         assert data["entitlement_effective_from"] is not None
         assert data["limits"]["release_gate_attempts_per_month"] == 60
         assert data["limits"]["platform_replay_credits_per_month"] == 60
         assert data["limits"]["guard_credits_per_month"] == 10000
         assert data["usage_this_month"]["release_gate_attempts"] == 17
+        assert data["usage_current_period"]["release_gate_attempts"] == 17
         assert data["usage_this_month"]["platform_replay_credits"] == 125
         assert data["usage_this_month"]["guard_credits"] == 125
         assert "organizations_used" in data["usage_this_month"]

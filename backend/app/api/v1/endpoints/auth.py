@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.usage_limits import (
+    get_usage_window,
     get_release_gate_attempts_this_month,
     get_snapshots_count_this_month,
     get_guard_credits_this_month,
@@ -901,12 +902,13 @@ async def get_my_usage(
     db: Session = Depends(get_db),
 ):
     """
-    Return current user's plan, limits, and usage for the active quota window (billing period or calendar month).
+    Return current user's plan, limits, and usage for the active quota window.
     Billing/Usage uses this to show snapshot usage and hosted replay credit usage.
     """
     service = SubscriptionService(db)
     plan_info = service.get_user_plan(current_user.id)
     entitlement = EntitlementService(db).get_or_create_current_entitlement(current_user.id, source="usage_read")
+    usage_window = get_usage_window(db, current_user.id)
     snapshots = get_snapshots_count_this_month(db, current_user.id)
     release_gate_attempts = get_release_gate_attempts_this_month(db, current_user.id)
     guard_credits = get_guard_credits_this_month(db, current_user.id)
@@ -937,24 +939,29 @@ async def get_my_usage(
         )
         .count()
     )
+    usage_current_period = {
+        "snapshots": snapshots,
+        "release_gate_attempts": release_gate_attempts,
+        "guard_credits": guard_credits,
+        "platform_replay_credits": platform_replay_credits,
+        "api_calls": api_calls_current,
+        "projects_used": int(projects_used),
+        "organizations_used": int(organizations_used),
+        "api_calls_limit": api_calls_limit,
+    }
     return {
         "plan_type": entitlement.effective_plan_id,
         "display_plan_type": entitlement.effective_plan_id,
         "subscription_status": plan_info.get("status", "active"),
         "entitlement_status": entitlement.entitlement_status,
-        "current_period_start": plan_info.get("current_period_start"),
-        "current_period_end": plan_info.get("current_period_end"),
+        "current_period_start": usage_window.period_start.isoformat(),
+        "current_period_end": usage_window.period_end.isoformat(),
+        "next_reset_at": usage_window.next_reset_at.isoformat(),
+        "usage_window_type": usage_window.window_type,
+        "usage_anchor_source": usage_window.anchor_source,
         "entitlement_effective_from": entitlement.effective_from.isoformat(),
         "entitlement_effective_to": entitlement.effective_to.isoformat() if entitlement.effective_to else None,
         "limits": limits,
-        "usage_this_month": {
-            "snapshots": snapshots,
-            "release_gate_attempts": release_gate_attempts,
-            "guard_credits": guard_credits,
-            "platform_replay_credits": platform_replay_credits,
-            "api_calls": api_calls_current,
-            "projects_used": int(projects_used),
-            "organizations_used": int(organizations_used),
-            "api_calls_limit": api_calls_limit,
-        },
+        "usage_current_period": usage_current_period,
+        "usage_this_month": usage_current_period,
     }

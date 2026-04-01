@@ -1,12 +1,15 @@
 """
 Usage limits (DB-backed, no Redis dependency for enforcement).
 
-Paid plans: quota window follows Paddle/Stripe **current billing period** on `subscriptions`
-when `current_period_start` / `current_period_end` are set (plus roll-forward if webhook is late).
-Free / no subscription: **calendar month (UTC)**.
+Paid plans: quota window follows the active subscription billing period when
+`current_period_start` / `current_period_end` are set (plus roll-forward if
+provider sync is late).
+Free / no subscription: quota window follows a monthly anniversary anchor based
+on `subscriptions.free_usage_anchor_at` with `users.created_at` as fallback.
 """
 
 from calendar import monthrange
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Tuple
 
@@ -18,7 +21,17 @@ from app.models.organization import Organization
 from app.models.project import Project
 from app.models.snapshot import Snapshot
 from app.models.subscription import Subscription
+from app.models.user import User
 from app.models.usage import Usage
+
+
+@dataclass(frozen=True)
+class UsageWindow:
+    period_start: datetime
+    period_end: datetime
+    next_reset_at: datetime
+    window_type: str
+    anchor_source: str
 
 
 def _ensure_utc_aware(dt: datetime) -> datetime:
@@ -34,6 +47,35 @@ def _calendar_month_bounds_utc() -> Tuple[datetime, datetime]:
     start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     _, last_day = monthrange(now.year, now.month)
     end = start.replace(day=last_day, hour=23, minute=59, second=59, microsecond=999_999)
+    return start, end
+
+
+def _month_anchor_occurrence(anchor: datetime, month_offset: int) -> datetime:
+    total_months = (anchor.year * 12 + (anchor.month - 1)) + month_offset
+    year = total_months // 12
+    month = (total_months % 12) + 1
+    day = min(anchor.day, monthrange(year, month)[1])
+    return anchor.replace(year=year, month=month, day=day)
+
+
+def get_anniversary_monthly_bounds_utc(
+    anchor: datetime, *, now: datetime | None = None
+) -> Tuple[datetime, datetime]:
+    """
+    Return the inclusive current monthly window for an account anchor.
+
+    Example: an anchor of Mar 12 15:30 UTC yields windows such as
+    Mar 12 15:30 -> Apr 12 15:29:59.999999, then Apr 12 15:30 -> May 12 ...
+    """
+    anchor = _ensure_utc_aware(anchor)
+    current_time = _ensure_utc_aware(now or datetime.now(timezone.utc))
+    month_delta = (current_time.year - anchor.year) * 12 + (current_time.month - anchor.month)
+    start = _month_anchor_occurrence(anchor, month_delta)
+    if start > current_time:
+        month_delta -= 1
+        start = _month_anchor_occurrence(anchor, month_delta)
+    next_start = _month_anchor_occurrence(anchor, month_delta + 1)
+    end = next_start - timedelta(microseconds=1)
     return start, end
 
 
@@ -55,42 +97,89 @@ def _roll_forward_billing_window(
     return _calendar_month_bounds_utc()
 
 
-def get_usage_period_bounds_utc(db: Session, user_id: int) -> Tuple[datetime, datetime]:
-    """
-    Quota accounting window: subscription billing period when applicable, else calendar month (UTC).
-    """
+def get_usage_window(db: Session, user_id: int) -> UsageWindow:
+    """Resolve the current usage window for billing and quota enforcement."""
     now = datetime.now(timezone.utc)
     sub = db.query(Subscription).filter(Subscription.user_id == user_id).first()
     plan_type = normalize_plan_type(sub.plan_type if sub else "free")
-    if plan_type == "free" or not sub:
-        return _calendar_month_bounds_utc()
+    status = str(getattr(sub, "status", "active") or "active").strip().lower()
+    if status == "canceled":
+        status = "cancelled"
 
-    has_provider = bool(
-        (sub.paddle_subscription_id or "").strip() or (sub.stripe_subscription_id or "").strip()
+    ps = _ensure_utc_aware(sub.current_period_start) if sub and sub.current_period_start else None
+    pe = _ensure_utc_aware(sub.current_period_end) if sub and sub.current_period_end else None
+    is_expired_paid = plan_type != "free" and status == "cancelled" and pe is not None and pe <= now
+
+    if sub and plan_type != "free" and not is_expired_paid and ps is not None and pe is not None:
+        if ps <= now <= pe:
+            period_start, period_end = ps, pe
+        elif now > pe:
+            period_start, period_end = _roll_forward_billing_window(ps, pe, now)
+        else:
+            period_start, period_end = ps, pe
+        return UsageWindow(
+            period_start=period_start,
+            period_end=period_end,
+            next_reset_at=period_end + timedelta(microseconds=1),
+            window_type="billing_period",
+            anchor_source="subscription.current_period",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+    anchor = None
+    anchor_source = "calendar_month_fallback"
+    if sub and getattr(sub, "free_usage_anchor_at", None) is not None:
+        anchor = _ensure_utc_aware(sub.free_usage_anchor_at)
+        anchor_source = "subscription.free_usage_anchor_at"
+    elif user and getattr(user, "created_at", None) is not None:
+        anchor = _ensure_utc_aware(user.created_at)
+        anchor_source = "user.created_at"
+
+    if anchor is not None:
+        period_start, period_end = get_anniversary_monthly_bounds_utc(anchor, now=now)
+        return UsageWindow(
+            period_start=period_start,
+            period_end=period_end,
+            next_reset_at=period_end + timedelta(microseconds=1),
+            window_type="anniversary_monthly",
+            anchor_source=anchor_source,
+        )
+
+    period_start, period_end = _calendar_month_bounds_utc()
+    return UsageWindow(
+        period_start=period_start,
+        period_end=period_end,
+        next_reset_at=period_end + timedelta(microseconds=1),
+        window_type="calendar_month",
+        anchor_source=anchor_source,
     )
-    if not has_provider:
-        return _calendar_month_bounds_utc()
 
-    ps = sub.current_period_start
-    pe = sub.current_period_end
-    if ps is None or pe is None:
-        return _calendar_month_bounds_utc()
 
-    ps = _ensure_utc_aware(ps)
-    pe = _ensure_utc_aware(pe)
+def get_usage_period_bounds_utc(db: Session, user_id: int) -> Tuple[datetime, datetime]:
+    """Backward-compatible bounds accessor for the current usage window."""
+    window = get_usage_window(db, user_id)
+    return window.period_start, window.period_end
 
-    if ps <= now <= pe:
-        return ps, pe
-    if now > pe:
-        return _roll_forward_billing_window(ps, pe, now)
-    return _calendar_month_bounds_utc()
+
+def _coerce_bound_for_db(db: Session, dt: datetime) -> Any:
+    if getattr(getattr(db, "bind", None), "dialect", None) is not None:
+        if db.bind.dialect.name == "sqlite":
+            naive = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            return naive.isoformat(sep=" ", timespec="microseconds").rstrip("0").rstrip(".")
+    return dt
+
+
+def get_usage_period_query_bounds(db: Session, user_id: int) -> Tuple[datetime, datetime]:
+    """Return bounds normalized for the active database dialect."""
+    start, end = get_usage_period_bounds_utc(db, user_id)
+    return _coerce_bound_for_db(db, start), _coerce_bound_for_db(db, end)
 
 
 def get_snapshots_count_this_month(db: Session, user_id: int) -> int:
     """
-    Count snapshots in the current usage window (subscription period or calendar month).
+    Count snapshots in the current usage window.
     """
-    start, end = get_usage_period_bounds_utc(db, user_id)
+    start, end = get_usage_period_query_bounds(db, user_id)
     count = (
         db.query(Snapshot.id)
         .join(Project, Snapshot.project_id == Project.id)
@@ -108,7 +197,7 @@ def get_guard_credits_this_month(db: Session, user_id: int) -> int:
     """
     Sum hosted replay credits (guard_credits_replay) in the current usage window.
     """
-    start, end = get_usage_period_bounds_utc(db, user_id)
+    start, end = get_usage_period_query_bounds(db, user_id)
     row = (
         db.query(func.coalesce(func.sum(Usage.quantity), 0))
         .filter(
@@ -131,7 +220,7 @@ def get_release_gate_attempts_this_month(db: Session, user_id: int) -> int:
     """
     Sum replay attempts (selected snapshots x repeats) in the current usage window.
     """
-    start, end = get_usage_period_bounds_utc(db, user_id)
+    start, end = get_usage_period_query_bounds(db, user_id)
     row = (
         db.query(func.coalesce(func.sum(Usage.quantity), 0))
         .filter(
@@ -172,10 +261,15 @@ def get_limit_status(db: Session | None, user_id: int, metric: str) -> Dict[str,
     plan_type = _resolve_user_plan_type(db, user_id)
     limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
     if db is not None:
-        _, end = get_usage_period_bounds_utc(db, user_id)
+        window = get_usage_window(db, user_id)
+        end = window.period_end
+        next_reset_at = window.next_reset_at.isoformat()
+        window_type = window.window_type
     else:
         _, end = _calendar_month_bounds_utc()
-    reset_at = end.isoformat()
+        next_reset_at = end.isoformat()
+        window_type = "calendar_month"
+    reset_at = next_reset_at
 
     if metric == "snapshots":
         limit = int(limits.get("snapshots_per_month", 10_000))
@@ -228,6 +322,7 @@ def get_limit_status(db: Session | None, user_id: int, metric: str) -> Dict[str,
         "limit": limit,
         "remaining": remaining,
         "reset_at": reset_at,
+        "window_type": window_type,
     }
 
 

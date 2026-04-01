@@ -8,6 +8,7 @@ from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.core.security import get_password_hash
 from app.core.logging_config import logger
 from datetime import datetime, timezone
+from app.core.usage_limits import get_anniversary_monthly_bounds_utc
 
 
 class UserService:
@@ -71,18 +72,15 @@ class UserService:
         )
         user = self.user_repo.save(user)
         
-        # Create free plan subscription for new user
         now = datetime.now(timezone.utc)
-        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        if now.month == 12:
-            period_end = period_start.replace(year=now.year + 1, month=1)
-        else:
-            period_end = period_start.replace(month=now.month + 1)
+        period_start, period_end = get_anniversary_monthly_bounds_utc(now, now=now)
 
         subscription = Subscription(
             user_id=user.id,
             plan_id="free",
             status="active",
+            free_usage_anchor_at=now,
+            current_period_start=period_start,
             current_period_end=period_end,
         )
         self.db.add(subscription)

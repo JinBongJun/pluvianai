@@ -42,6 +42,22 @@ export type AccountUsageMetrics = {
   replayNearLimit: boolean;
 };
 
+export function getUsagePeriodPayload(
+  data: AccountUsageApiResponse | null | undefined
+): Record<string, unknown> {
+  if (!data) return {};
+  return (data.usage_current_period || data.usage_this_month || {}) as Record<string, unknown>;
+}
+
+export function getUsageWindowMeta(data: AccountUsageApiResponse | null | undefined) {
+  return {
+    currentPeriodStart: data?.current_period_start || null,
+    currentPeriodEnd: data?.current_period_end || null,
+    nextResetAt: data?.next_reset_at || data?.current_period_end || null,
+    usageWindowType: data?.usage_window_type || null,
+  };
+}
+
 export function computeAccountUsageMetrics(
   data: AccountUsageApiResponse | null | undefined
 ): AccountUsageMetrics | null {
@@ -52,21 +68,22 @@ export function computeAccountUsageMetrics(
   const subscriptionStatus = String(data.subscription_status || "active").toLowerCase();
   const entitlementStatus = String(data.entitlement_status || "active").toLowerCase();
   const limits = data.limits || {};
-  const usage = data.usage_this_month || {};
+  const usage = getUsagePeriodPayload(data);
   const fb = ACCOUNT_USAGE_FALLBACK_BY_PLAN[displayPlanType] ?? ACCOUNT_USAGE_FALLBACK_BY_PLAN.free;
 
-  const snapshotsUsed = usage.snapshots ?? 0;
+  const snapshotsUsed = accountUsageAsNumber(usage.snapshots, 0);
   const snapshotsLimit = accountUsageAsNumber(
     (limits as Record<string, unknown>).snapshots_per_month,
     accountUsageAsNumber((limits as Record<string, unknown>).api_calls_per_month, 10000)
   );
 
-  const replayUsed =
-    (usage as { release_gate_attempts?: number; platform_replay_credits?: number; guard_credits?: number })
+  const replayUsed = accountUsageAsNumber(
+    (usage as { release_gate_attempts?: unknown; platform_replay_credits?: unknown; guard_credits?: unknown })
       .release_gate_attempts ??
-    (usage as { platform_replay_credits?: number; guard_credits?: number }).platform_replay_credits ??
-    (usage as { guard_credits?: number }).guard_credits ??
-    0;
+      (usage as { platform_replay_credits?: unknown; guard_credits?: unknown }).platform_replay_credits ??
+      (usage as { guard_credits?: unknown }).guard_credits,
+    0
+  );
   const replayLimit = accountUsageAsNumber(
     (limits as Record<string, unknown>).release_gate_attempts_per_month ??
       (limits as Record<string, unknown>).platform_replay_credits_per_month ??
