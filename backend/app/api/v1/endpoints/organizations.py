@@ -123,6 +123,8 @@ class OrganizationSummary(BaseModel):
     cost_7d: float
     alerts_open: int
     drift_projects: int
+    current_user_role: Optional[str] = None
+    membership_source: Optional[str] = None
 
 class OrganizationUsage(BaseModel):
     calls: int = 0
@@ -147,6 +149,8 @@ class OrganizationDetail(BaseModel):
     type: Optional[str] = None  # Deprecated: use plan_type. Kept for backward compatibility.
     plan_type: str
     stats: Optional[dict] = None  # For backward compatibility
+    current_user_role: Optional[str] = None
+    membership_source: Optional[str] = None
 
 class OrgProjectSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -214,6 +218,10 @@ def _get_org_role(db: Session, org_id: int, current_user: User, org: Optional[Or
     if not membership:
         return None
     return str(membership.role)
+
+
+def _get_org_membership_source(current_user: User, org: Organization) -> str:
+    return "owned" if org.owner_id == current_user.id else "invited"
 
 
 def _require_org_access(
@@ -417,6 +425,7 @@ def list_organizations(
 
     summaries: List[OrganizationSummary] = []
     for org in orgs:
+        current_role = _get_org_role(db, org.id, current_user, org)
         summaries.append(
             OrganizationSummary(
                 id=org.id,
@@ -427,6 +436,8 @@ def list_organizations(
                 cost_7d=cost_map.get(org.id, 0.0),
                 alerts_open=alerts_map.get(org.id, 0),
                 drift_projects=drift_map.get(org.id, 0),
+                current_user_role=current_role,
+                membership_source=_get_org_membership_source(current_user, org),
             )
         )
 
@@ -474,6 +485,7 @@ def get_organization(
 
         if not include_stats:
             logger.info(f"✅ Returning organization without stats: org_id={org_id}")
+            current_role = _get_org_role(db, org_id, current_user, org)
             return OrganizationDetail(
                 id=org.id,
                 name=org.name,
@@ -481,6 +493,8 @@ def get_organization(
                 type=org.type,
                 plan_type=account_plan_type,
                 stats=None,
+                current_user_role=current_role,
+                membership_source=_get_org_membership_source(current_user, org),
             )
 
         # Get all projects for this org (include_stats=True)
@@ -591,6 +605,8 @@ def get_organization(
             "description": getattr(org, "description", None),
             "type": org.type,
             "plan_type": account_plan_type,
+            "current_user_role": _get_org_role(db, org_id, current_user, org),
+            "membership_source": _get_org_membership_source(current_user, org),
             "stats": {
                 "usage": {
                     "calls": calls_count,
@@ -617,8 +633,14 @@ def list_organization_members(
     current_user: User = Depends(get_current_user),
     org_service = Depends(get_organization_service),
 ):
-    """List organization members (any organization member can view)."""
-    org, _ = _require_org_access(db, org_id, current_user, org_service)
+    """List organization members (owner/admin only)."""
+    org, _ = _require_org_access(
+        db,
+        org_id,
+        current_user,
+        org_service,
+        required_roles=[OrganizationMemberRole.OWNER.value, OrganizationMemberRole.ADMIN.value],
+    )
 
     memberships = (
         db.query(OrganizationMember)

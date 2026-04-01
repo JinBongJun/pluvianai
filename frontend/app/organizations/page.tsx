@@ -12,6 +12,14 @@ import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { Plus, Search, Building2, Briefcase } from "lucide-react";
 import { clsx } from "clsx";
 import { logger } from "@/lib/logger";
+import { canManageOrganization } from "@/lib/organizationAccess";
+
+const ORG_ROLE_LABELS = {
+  owner: "Org: Owner",
+  admin: "Org: Admin",
+  member: "Org: Member",
+  viewer: "Org: Viewer",
+} as const;
 
 export default function OrganizationsPage() {
   const router = useRouter();
@@ -185,16 +193,44 @@ export default function OrganizationsPage() {
                 <h3 className="text-2xl font-semibold text-white mb-3 tracking-tight uppercase group-hover:text-emerald-50 transition-colors leading-none">
                   {org.name}
                 </h3>
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em]">
+                  <span
+                    className={clsx(
+                      "rounded-full border px-3 py-1",
+                      org.membershipSource === "owned"
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                        : "border-cyan-400/30 bg-cyan-400/10 text-cyan-200"
+                    )}
+                  >
+                    {org.membershipSource === "owned" ? "Owned" : "Invited"}
+                  </span>
+                  {org.currentUserRole ? (
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-300">
+                      {ORG_ROLE_LABELS[org.currentUserRole] ?? `Org: ${org.currentUserRole}`}
+                    </span>
+                  ) : null}
+                </div>
                 <div className="flex items-center gap-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
                   <button
                     type="button"
                     onClick={e => {
                       e.stopPropagation();
                       e.preventDefault();
+                      if (!canManageOrganization(org.currentUserRole)) return;
                       router.push(`/organizations/${org.id}/billing`);
                     }}
-                    className="bg-emerald-500/15 text-emerald-400 px-4 py-2 rounded-full border border-emerald-500/30 flex items-center gap-2.5 shadow-[0_0_15px_rgba(16,185,129,0.1)] hover:bg-emerald-500/25 hover:border-emerald-500/60 transition-colors"
-                    title="View usage & change plan"
+                    disabled={!canManageOrganization(org.currentUserRole)}
+                    className={clsx(
+                      "px-4 py-2 rounded-full border flex items-center gap-2.5 shadow-[0_0_15px_rgba(16,185,129,0.1)] transition-colors",
+                      canManageOrganization(org.currentUserRole)
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25 hover:border-emerald-500/60"
+                        : "bg-white/5 text-slate-500 border-white/10 cursor-not-allowed shadow-none"
+                    )}
+                    title={
+                      canManageOrganization(org.currentUserRole)
+                        ? "View usage & change plan"
+                        : "Organization billing requires owner or admin access."
+                    }
                   >
                     <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,1)]" />
                     {org.plan || "Free"} Plan

@@ -36,6 +36,7 @@ import {
   OrganizationRoleBadge,
   ProjectRoleBadge,
 } from "@/components/project-access/AccessBadges";
+import { canManageOrganization } from "@/lib/organizationAccess";
 
 export type AlertFilter = "all" | "with_alerts" | "no_alerts";
 
@@ -92,6 +93,13 @@ export default function OrgProjectsPage() {
     const projectsUsed = accountUsageAsNumber(usage.projects_used, 0);
     return projectLimit !== -1 && projectsUsed >= projectLimit;
   }, [myUsage]);
+  const canCreateProjects = canManageOrganization(org?.currentUserRole);
+  const createProjectDisabled = projectCreateBlocked || !canCreateProjects;
+  const createProjectTitle = !canCreateProjects
+    ? "Project creation requires organization owner or admin access."
+    : projectCreateBlocked
+      ? "You have reached the project limit for your current plan. Upgrade in Billing to add more."
+      : undefined;
 
   const filteredProjects = useMemo(() => {
     if (!projects) return [];
@@ -249,12 +257,8 @@ export default function OrgProjectsPage() {
               </div>
               <Button
                 onClick={() => router.push(`/organizations/${orgId}/projects/new`)}
-                disabled={projectCreateBlocked}
-                title={
-                  projectCreateBlocked
-                    ? "You have reached the project limit for your current plan. Upgrade in Billing to add more."
-                    : undefined
-                }
+                disabled={createProjectDisabled}
+                title={createProjectTitle}
                 className="h-12 px-6 bg-emerald-500 hover:bg-emerald-400 text-black font-bold flex items-center gap-2 shadow-[0_0_30px_-5px_rgba(16,185,129,0.4)] rounded-full transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
                 <Plus className="w-5 h-5" />
@@ -364,14 +368,11 @@ export default function OrgProjectsPage() {
                 type="button"
                 onClick={() => {
                   if (projectCreateBlocked) return;
+                  if (!canCreateProjects) return;
                   router.push(`/organizations/${orgId}/projects/new`);
                 }}
-                disabled={projectCreateBlocked}
-                title={
-                  projectCreateBlocked
-                    ? "You have reached the project limit for your current plan."
-                    : undefined
-                }
+                disabled={createProjectDisabled}
+                title={createProjectTitle}
                 className="mt-10 px-8 py-4 bg-white/5 hover:bg-white/10 text-white rounded-full border border-white/10 transition-all font-black uppercase tracking-widest text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Initialize First Project
@@ -383,7 +384,12 @@ export default function OrgProjectsPage() {
             {filteredProjects.map(p => (
               <div
                 key={p.id}
-                className="group relative rounded-xl bg-[#1a1a1e]/95 backdrop-blur-3xl border border-white/[0.15] transition-all duration-500 hover:border-emerald-500/40 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] hover:shadow-[0_0_60px_rgba(16,185,129,0.1)] overflow-hidden flex text-left active:scale-[0.99]"
+                className={clsx(
+                  "group relative rounded-xl bg-[#1a1a1e]/95 backdrop-blur-3xl border border-white/[0.15] transition-all duration-500 overflow-hidden flex text-left active:scale-[0.99]",
+                  p.has_project_access === false
+                    ? "opacity-85"
+                    : "hover:border-emerald-500/40 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] hover:shadow-[0_0_60px_rgba(16,185,129,0.1)]"
+                )}
               >
                 {/* Top Rim Highlight (Persistent) */}
                 <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-100 z-10" />
@@ -417,14 +423,22 @@ export default function OrgProjectsPage() {
                 <div
                   role="button"
                   tabIndex={0}
-                  onClick={() => router.push(`/organizations/${orgId}/projects/${p.id}`)}
+                  onClick={() => {
+                    if (p.has_project_access === false) return;
+                    router.push(`/organizations/${orgId}/projects/${p.id}`);
+                  }}
                   onKeyDown={e => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
+                      if (p.has_project_access === false) return;
                       router.push(`/organizations/${orgId}/projects/${p.id}`);
                     }
                   }}
-                  className="relative z-20 flex-1 p-6 flex items-center gap-6 cursor-pointer"
+                  aria-disabled={p.has_project_access === false}
+                  className={clsx(
+                    "relative z-20 flex-1 p-6 flex items-center gap-6",
+                    p.has_project_access === false ? "cursor-not-allowed" : "cursor-pointer"
+                  )}
                 >
                   <div className="w-16 h-16 rounded-full flex items-center justify-center bg-white/[0.05] border border-white/10 group-hover:scale-110 group-hover:border-emerald-500/30 transition-all duration-500 text-emerald-400 flex-shrink-0 shadow-inner">
                     <Building2 className="w-7 h-7" />
@@ -473,6 +487,11 @@ export default function OrgProjectsPage() {
                     <p className="mt-2 text-xs leading-relaxed text-slate-500">
                       {getProjectAccessSummary(p)}
                     </p>
+                    {p.has_project_access === false ? (
+                      <p className="mt-1 text-[11px] font-semibold text-amber-300">
+                        Project access required before opening Live View or settings.
+                      </p>
+                    ) : null}
                     <p className="mt-1 text-[11px] font-semibold text-slate-600">
                       {getEntitlementScopeLabel(p.entitlement_scope)}
                       {p.owner_name ? ` · Owner: ${p.owner_name}` : ""}
@@ -496,8 +515,16 @@ export default function OrgProjectsPage() {
                 {filteredProjects.map(p => (
                   <tr
                     key={p.id}
-                    className="group hover:bg-emerald-500/5 cursor-pointer transition-all"
-                    onClick={() => router.push(`/organizations/${orgId}/projects/${p.id}`)}
+                    className={clsx(
+                      "group transition-all",
+                      p.has_project_access === false
+                        ? "cursor-not-allowed bg-white/[0.02]"
+                        : "cursor-pointer hover:bg-emerald-500/5"
+                    )}
+                    onClick={() => {
+                      if (p.has_project_access === false) return;
+                      router.push(`/organizations/${orgId}/projects/${p.id}`);
+                    }}
                   >
                     <td className="px-10 py-8">
                       <div className="flex items-center gap-6">
@@ -521,6 +548,11 @@ export default function OrgProjectsPage() {
                           <div className="mt-2 text-xs text-slate-500">
                             {getProjectAccessSummary(p)}
                           </div>
+                          {p.has_project_access === false ? (
+                            <div className="mt-1 text-[11px] font-semibold text-amber-300">
+                              Project access required before opening this workspace.
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </td>

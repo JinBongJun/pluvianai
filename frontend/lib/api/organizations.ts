@@ -23,6 +23,8 @@ const normalizeOrganization = (org: any): OrganizationSummary => {
     cost7d: stats.cost_7d ?? org?.cost_7d,
     alertsOpen: stats.alerts_open ?? org?.alerts ?? org?.alerts_open,
     driftDetected: stats.drift_detected ?? org?.drift_detected ?? false,
+    currentUserRole: org?.current_user_role ?? null,
+    membershipSource: org?.membership_source ?? null,
   };
 };
 

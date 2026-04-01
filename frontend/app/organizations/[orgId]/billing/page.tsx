@@ -11,6 +11,8 @@ import { useRouter } from "next/navigation";
 import { Zap, Activity, Database, ShieldCheck, CheckCircle2, BarChart3 } from "lucide-react";
 import Link from "next/link";
 import clsx from "clsx";
+import { computeAccountUsageMetrics, getUsagePeriodPayload, getUsageWindowMeta } from "@/lib/accountUsage";
+import { canManageOrganization } from "@/lib/organizationAccess";
 
 export default function BillingPage() {
   const { orgId } = useOrgProjectParams();
@@ -34,7 +36,13 @@ export default function BillingPage() {
     orgId ? orgKeys.detail(orgId) : null,
     async () => {
       try {
-        return await organizationsAPI.get(orgId, { includeStats: true });
+        const data = await organizationsAPI.get(orgId, { includeStats: true });
+        if (!canManageOrganization(data.currentUserRole)) {
+          toast.showToast("Organization billing requires owner or admin access.", "warning");
+          router.replace(`/organizations/${orgId}/projects`);
+          return null;
+        }
+        return data;
       } catch (error: any) {
         const status = error?.response?.status;
         if (status === 404) {
@@ -78,11 +86,13 @@ export default function BillingPage() {
   ).toLowerCase();
   const subscriptionStatus = String(effectiveUsage?.subscription_status || "active").toLowerCase();
   const entitlementStatus = String(effectiveUsage?.entitlement_status || "active").toLowerCase();
-  const currentPeriodStart = effectiveUsage?.current_period_start || null;
-  const currentPeriodEnd = effectiveUsage?.current_period_end || null;
-  const nextResetAt = effectiveUsage?.next_reset_at || currentPeriodEnd || null;
-  const usageWindowType = effectiveUsage?.usage_window_type || null;
-  const usage = effectiveUsage?.usage_current_period || effectiveUsage?.usage_this_month || {};
+  const usageWindow = getUsageWindowMeta(effectiveUsage as any);
+  const currentPeriodStart = usageWindow.currentPeriodStart;
+  const currentPeriodEnd = usageWindow.currentPeriodEnd;
+  const nextResetAt = usageWindow.nextResetAt || currentPeriodEnd || null;
+  const usageWindowType = usageWindow.usageWindowType;
+  const usage = getUsagePeriodPayload(effectiveUsage as any);
+  const metrics = computeAccountUsageMetrics(effectiveUsage as any);
   const formatDate = (value: string | null | undefined) =>
     value ? new Date(value).toLocaleDateString() : "Unknown";
   const usagePeriodLabel =
@@ -138,16 +148,11 @@ export default function BillingPage() {
     (effectiveUsage?.limits?.api_calls_per_month as number | undefined) ?? limitData.calls;
   const projectsUsed = org?.projects || 0;
   const platformReplayCreditsUsed =
-    usage.release_gate_attempts ??
-    usage.platform_replay_credits ??
-    usage.guard_credits ??
-    0;
+    metrics?.replayUsed ?? 0;
   const platformReplayCreditsLimit =
-    (effectiveUsage?.limits?.release_gate_attempts_per_month as number | undefined) ??
-    (effectiveUsage?.limits?.platform_replay_credits_per_month as number | undefined) ??
-    (effectiveUsage?.limits?.guard_credits_per_month as number | undefined) ??
+    metrics?.replayLimit ??
     limitData.platformReplayCredits;
-  const snapshotsUsed = usage.snapshots ?? 0;
+  const snapshotsUsed = metrics?.snapshotsUsed ?? Number(usage.snapshots ?? 0);
   const snapshotsLimit =
     (effectiveUsage?.limits?.snapshots_per_month as number | undefined) ?? limitData.snapshots;
   const snapshotsExhausted = snapshotsLimit > 0 && snapshotsUsed >= snapshotsLimit;
@@ -172,6 +177,10 @@ export default function BillingPage() {
   const teamMembersUsedRaw =
     orgAny?.member_count ?? orgAny?.memberCount ?? orgAny?.members_count ?? orgAny?.membersCount;
   const teamMembersUsed = typeof teamMembersUsedRaw === "number" ? teamMembersUsedRaw : null;
+
+  if (!org) {
+    return null;
+  }
 
   const plans = [
     {

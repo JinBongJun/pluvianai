@@ -19,6 +19,7 @@ import { Users, Mail, Trash2, UserPlus } from "lucide-react";
 import { ProjectRoleBadge } from "@/components/project-access/AccessBadges";
 import { ProjectAccessPolicyPanel } from "@/components/project-access/ProjectAccessPolicyPanel";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from "@/lib/projectAccess";
+import { canManageOrganization } from "@/lib/organizationAccess";
 
 interface Member {
   id: number;
@@ -47,7 +48,13 @@ export default function TeamPage() {
     orgId ? orgKeys.detail(orgId) : null,
     async () => {
       try {
-        return await organizationsAPI.get(orgId, { includeStats: false });
+        const data = await organizationsAPI.get(orgId, { includeStats: false });
+        if (!canManageOrganization(data.currentUserRole)) {
+          toast.showToast("Team & Access requires owner or admin access.", "warning");
+          router.replace(`/organizations/${orgId}/projects`);
+          return null;
+        }
+        return data;
       } catch (error: any) {
         const status = error?.response?.status;
         if (status === 404) {
@@ -64,7 +71,7 @@ export default function TeamPage() {
     data: members,
     mutate: refetchMembers,
     isValidating: isMembersValidating,
-  } = useSWR<Member[]>(orgId ? orgKeys.members(orgId) : null, () =>
+  } = useSWR<Member[]>(orgId && org ? orgKeys.members(orgId) : null, () =>
     organizationsAPI.listMembers(orgId)
   );
 
@@ -118,6 +125,10 @@ export default function TeamPage() {
       setRemovingMemberId(null);
     }
   };
+
+  if (!org) {
+    return null;
+  }
 
   return (
     <OrgLayout

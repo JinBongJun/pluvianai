@@ -71,6 +71,10 @@ class ProjectService:
                 )
                 if not member:
                     raise ValueError("You don't have access to this organization")
+                if str(member.role) not in {"owner", "admin"}:
+                    raise ValueError(
+                        "This action requires organization owner or admin role."
+                    )
 
         mode = "full" if usage_mode not in ("full", "test_only") else usage_mode
         project = Project(
