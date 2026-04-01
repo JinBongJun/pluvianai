@@ -42,6 +42,11 @@ function truncateResponsePreview(
   return wasTrimmed ? charTrimmed.trimEnd() + "\n..." : charTrimmed;
 }
 
+function summarizeCompactPreview(text: string, maxChars = 220): string {
+  if (!text) return "";
+  return truncateResponsePreview(text, 6, maxChars).replace(/\n{3,}/g, "\n\n");
+}
+
 export function AttemptDetailOverlay({
   open,
   onClose,
@@ -769,6 +774,34 @@ export function AttemptDetailOverlay({
       : candidateResponseStatus === "empty"
         ? "This attempt finished without a final assistant reply."
         : "The replay response preview is unavailable.";
+  const finalReplyOutcome = (() => {
+    if (candidateResponse) {
+      return {
+        label: "Final reply captured",
+        detail: summarizeCompactPreview(candidateResponse, 240),
+        toneClass: "border-cyan-500/30 bg-cyan-500/10 text-cyan-100",
+      };
+    }
+    if (candidateResponseStatus === "tool_calls_only") {
+      return {
+        label: "No final reply after the tool call",
+        detail: "The tool action is the main outcome for this attempt.",
+        toneClass: "border-amber-500/30 bg-amber-500/10 text-amber-100",
+      };
+    }
+    if (candidateResponseStatus === "empty") {
+      return {
+        label: "Final reply was empty",
+        detail: "The attempt finished without a user-facing assistant message.",
+        toneClass: "border-amber-500/30 bg-amber-500/10 text-amber-100",
+      };
+    }
+    return {
+      label: "Final reply preview unavailable",
+      detail: "Review tool execution details if the main outcome happened through a tool.",
+      toneClass: "border-white/10 bg-white/[0.03] text-slate-100",
+    };
+  })();
   const visibleResponseDiffLines = useMemo(() => {
     const visibleLines = responseDiffLines.filter(
       line => showRemovedDiffLines || !line.startsWith("-")
@@ -922,6 +955,116 @@ export function AttemptDetailOverlay({
     toolFailedCount > 0 ||
     policyRows.length > 0 ||
     gateToolTimelineRows.length > 0;
+  const isToolDrivenAttempt =
+    toolTotalCalls > 0 ||
+    toolResultCount > 0 ||
+    toolFailedCount > 0 ||
+    toolSimulatedCount > 0 ||
+    toolSkippedCount > 0;
+  const primaryToolCallRow = useMemo(() => {
+    const loopRow = flattenedToolLoopRows.find(row => row.name || row.argumentsPreview);
+    if (loopRow) {
+      return {
+        name: loopRow.name,
+        argumentsPreview: loopRow.argumentsPreview,
+        resultPreview: loopRow.resultPreview,
+        executionSource: loopRow.executionSource,
+        toolResultSource: loopRow.toolResultSource,
+      };
+    }
+    const evidenceRow = toolEvidenceRows.find(
+      row => String(row.name ?? "").trim() || String(row.arguments_preview ?? "").trim()
+    );
+    if (!evidenceRow) return null;
+    return {
+      name: String(evidenceRow.name ?? "").trim(),
+      argumentsPreview: String(evidenceRow.arguments_preview ?? "").trim(),
+      resultPreview: String(evidenceRow.result_preview ?? "").trim(),
+      executionSource: String(evidenceRow.execution_source ?? evidenceRow.status ?? "").trim(),
+      toolResultSource: String(evidenceRow.tool_result_source ?? "").trim(),
+    };
+  }, [flattenedToolLoopRows, toolEvidenceRows]);
+  const primaryToolResultRow = useMemo(() => {
+    const loopRow = flattenedToolLoopRows.find(row => row.resultPreview || row.name);
+    if (loopRow) {
+      return {
+        name: loopRow.name,
+        resultPreview: loopRow.resultPreview,
+        executionSource: loopRow.executionSource,
+        toolResultSource: loopRow.toolResultSource,
+      };
+    }
+    const evidenceRow = toolEvidenceRows.find(
+      row => String(row.result_preview ?? "").trim() || String(row.name ?? "").trim()
+    );
+    if (!evidenceRow) return null;
+    return {
+      name: String(evidenceRow.name ?? "").trim(),
+      resultPreview: String(evidenceRow.result_preview ?? "").trim(),
+      executionSource: String(evidenceRow.execution_source ?? evidenceRow.status ?? "").trim(),
+      toolResultSource: String(evidenceRow.tool_result_source ?? "").trim(),
+    };
+  }, [flattenedToolLoopRows, toolEvidenceRows]);
+  const primaryActionLabel = primaryToolCallRow?.name
+    ? toolTotalCalls > 1
+      ? `${primaryToolCallRow.name} + ${toolTotalCalls - 1} more`
+      : primaryToolCallRow.name
+    : toolTotalCalls > 0
+      ? `${toolTotalCalls} tool call${toolTotalCalls === 1 ? "" : "s"}`
+      : "No tool action captured";
+  const primaryActionMeta = [
+    primaryToolCallRow?.executionSource
+      ? `Execution ${String(primaryToolCallRow.executionSource).replace(/_/g, " ")}`
+      : null,
+    primaryToolResultRow?.toolResultSource
+      ? `Result source ${String(primaryToolResultRow.toolResultSource).replace(/_/g, " ")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const actionRequestPreview = primaryToolCallRow?.argumentsPreview
+    ? summarizeCompactPreview(primaryToolCallRow.argumentsPreview, 260)
+    : "No tool input preview was captured for this attempt.";
+  const actionResultPreview = primaryToolResultRow?.resultPreview
+    ? summarizeCompactPreview(primaryToolResultRow.resultPreview, 260)
+    : toolResultCount > 0
+      ? "Tool results were counted, but no compact preview was stored for this row."
+      : "No tool result preview was captured for this attempt.";
+  const actionOutcome = (() => {
+    if (toolFailedCount > 0) {
+      return {
+        label: "Tool execution needs review",
+        detail: `${toolFailedCount} tool call${toolFailedCount === 1 ? "" : "s"} failed. ${toolEvidenceDetail}`,
+        toneClass: "border-rose-500/30 bg-rose-500/10 text-rose-100",
+      };
+    }
+    if (toolGroundingStatus === "fail") {
+      return {
+        label: "Tool output was not grounded into a stable reply",
+        detail: toolGroundingReason || toolEvidenceDetail,
+        toneClass: "border-amber-500/30 bg-amber-500/10 text-amber-100",
+      };
+    }
+    if (toolSimulatedCount > 0 && toolExecutedCount === 0 && toolRecordedCount === 0) {
+      return {
+        label: "Only simulated tool evidence was captured",
+        detail: toolEvidenceDetail,
+        toneClass: "border-amber-500/30 bg-amber-500/10 text-amber-100",
+      };
+    }
+    if (toolExecutedCount > 0 || toolRecordedCount > 0 || toolResultCount > 0) {
+      return {
+        label: "Tool outcome captured",
+        detail: toolEvidenceDetail,
+        toneClass: "border-cyan-500/30 bg-cyan-500/10 text-cyan-100",
+      };
+    }
+    return {
+      label: "Tool calls detected",
+      detail: toolEvidenceDetail,
+      toneClass: "border-white/10 bg-white/[0.03] text-slate-100",
+    };
+  })();
   const hasConfigurationChanges = useMemo(() => {
     if (!replayRequestMeta || typeof replayRequestMeta !== "object") return false;
     const overrides =
@@ -1750,6 +1893,117 @@ export function AttemptDetailOverlay({
                     </div>
                   </section>
 
+                  {isToolDrivenAttempt ? (
+                    <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="max-w-3xl">
+                          <div className="text-xs font-medium text-slate-400">Tool outcome</div>
+                          <h3 className="mt-2 text-lg font-semibold text-white">Action summary</h3>
+                          <p className="mt-2 text-sm leading-6 text-slate-300">
+                            This attempt relied on tool execution, so review the action and outcome
+                            before the final reply.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-[11px] text-slate-400">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                            Calls {toolTotalCalls}
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                            Executed {toolExecutedCount}
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                            Results {toolResultCount}
+                          </span>
+                          {toolSimulatedCount > 0 ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                              Simulated {toolSimulatedCount}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+                        <div
+                          className={clsx("rounded-xl border px-4 py-4", actionOutcome.toneClass)}
+                        >
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
+                            Action status
+                          </div>
+                          <div className="mt-1 text-sm font-medium text-white">
+                            {actionOutcome.label}
+                          </div>
+                          <div className="mt-2 text-[11px] leading-relaxed text-slate-200/80">
+                            {actionOutcome.detail}
+                          </div>
+                        </div>
+                        <div
+                          className={clsx(
+                            "rounded-xl border px-4 py-4",
+                            finalReplyOutcome.toneClass
+                          )}
+                        >
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
+                            Final reply status
+                          </div>
+                          <div className="mt-1 text-sm font-medium text-white">
+                            {finalReplyOutcome.label}
+                          </div>
+                          <div className="mt-2 text-[11px] leading-relaxed text-slate-200/80">
+                            {finalReplyOutcome.detail}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        <div className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-4">
+                          <div className="text-[11px] font-medium text-slate-500">
+                            Primary action
+                          </div>
+                          <div className="mt-2 text-sm font-medium text-slate-100">
+                            {primaryActionLabel}
+                          </div>
+                          <div className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                            {primaryActionMeta ||
+                              "Execution metadata was not captured for the primary tool row."}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-4">
+                          <div className="text-[11px] font-medium text-slate-500">
+                            Requested content
+                          </div>
+                          <pre className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-300">
+                            {actionRequestPreview}
+                          </pre>
+                        </div>
+                        <div className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-4">
+                          <div className="text-[11px] font-medium text-slate-500">Tool result</div>
+                          <pre className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-300">
+                            {actionResultPreview}
+                          </pre>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => scrollToSection(diffSectionRef)}
+                          className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                        >
+                          Jump to final reply
+                        </button>
+                        {hasToolBehaviorDetails ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowToolBehaviorDetails(true);
+                              scrollToSection(toolBehaviorSectionRef);
+                            }}
+                            className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                          >
+                            Open tool details
+                          </button>
+                        ) : null}
+                      </div>
+                    </section>
+                  ) : null}
+
                   <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
@@ -1951,17 +2205,19 @@ export function AttemptDetailOverlay({
                   >
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="max-w-3xl">
-                        <div className="text-xs font-medium text-slate-400">Response changes</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">Response diff</h3>
+                        <div className="text-xs font-medium text-slate-400">Final reply</div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">
+                          Assistant reply changes
+                        </h3>
                         <p className="mt-2 text-sm leading-6 text-slate-300">
-                          Review how the final assistant reply changed from the baseline.
+                          Compare the user-facing assistant reply after the attempt finished.
                         </p>
                       </div>
                     </div>
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-slate-200">
-                          Compare baseline vs replay output
+                          Compare baseline vs replay replies
                         </p>
                         <p className="mt-1 text-[11px] text-slate-500">{diffConfidenceMessage}</p>
                       </div>
@@ -1998,6 +2254,12 @@ export function AttemptDetailOverlay({
                         ) : null}
                       </div>
                     </div>
+                    {isToolDrivenAttempt ? (
+                      <div className="mt-4 rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3 text-[11px] leading-relaxed text-slate-400">
+                        This section only compares the user-facing assistant reply. Review Action
+                        summary above if the main outcome happened through a tool call.
+                      </div>
+                    ) : null}
                     {isResponseDiffCollapsible && !showFullResponseDiff ? (
                       <div className="mt-4 rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3 text-[11px] leading-relaxed text-slate-400">
                         Showing a shortened preview so long responses do not take over the review.
