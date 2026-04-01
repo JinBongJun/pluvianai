@@ -116,6 +116,7 @@ export function useReleaseGateExpandedViewModel({
   const isValidating = vctx.isValidating;
   const activeJobId = vctx.activeJobId ?? null;
   const cancelRequested = vctx.cancelRequested;
+  const cancelLocked = vctx.cancelLocked;
   const handleValidate = vctx.handleValidate;
   const handleCancelActiveJob = vctx.handleCancelActiveJob ?? undefined;
   const runError = vctx.error || "";
@@ -350,6 +351,7 @@ export function useReleaseGateExpandedViewModel({
         result,
         isValidating,
         cancelRequested,
+        cancelLocked,
         runError,
         configSourceLabel,
         selectedBaselineCount,
@@ -392,6 +394,7 @@ export function useReleaseGateExpandedViewModel({
       result,
       isValidating,
       cancelRequested,
+      cancelLocked,
       runError,
       configSourceLabel,
       selectedBaselineCount,

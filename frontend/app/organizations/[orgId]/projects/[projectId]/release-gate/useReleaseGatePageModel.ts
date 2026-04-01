@@ -98,6 +98,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     isValidating,
     activeJobId,
     cancelRequested,
+    cancelLocked,
     result,
     error,
     planError,
@@ -813,6 +814,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
 
   const { validateRunContextValue, gateBodyProps, releaseGateKeysContextValue } =
     useReleaseGatePageModelReturn({
+      cancelLocked,
       orgId,
       projectId,
       project,

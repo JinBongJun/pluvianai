@@ -8,6 +8,7 @@ export type ReleaseGateValidateRunContextValue = {
   isValidating: boolean;
   activeJobId: string | null;
   cancelRequested: boolean;
+  cancelLocked: boolean;
   handleValidate: () => void;
   handleCancelActiveJob: (() => void) | undefined;
   error: string;

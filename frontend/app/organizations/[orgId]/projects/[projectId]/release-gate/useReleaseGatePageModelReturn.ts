@@ -15,6 +15,7 @@ export type UseReleaseGatePageModelReturnParams = {
   isValidating: boolean;
   activeJobId: string | null;
   cancelRequested: boolean;
+  cancelLocked: boolean;
   handleValidate: () => void;
   handleCancelActiveJob: (() => void) | undefined;
   error: string;
@@ -45,6 +46,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
     isValidating,
     activeJobId,
     cancelRequested,
+    cancelLocked,
     handleValidate,
     handleCancelActiveJob,
     error,
@@ -70,6 +72,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
       isValidating,
       activeJobId,
       cancelRequested,
+      cancelLocked,
       handleValidate,
       handleCancelActiveJob,
       error,
@@ -77,6 +80,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
     }),
     [
       activeJobId,
+      cancelLocked,
       cancelRequested,
       error,
       handleCancelActiveJob,

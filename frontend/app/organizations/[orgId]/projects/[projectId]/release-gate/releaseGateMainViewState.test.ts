@@ -64,6 +64,7 @@ describe("releaseGateMainViewState", () => {
           handleValidate: () => {},
           activeJobId: null,
           cancelRequested: false,
+          cancelLocked: false,
           handleCancel: undefined,
           handleRepeatSelect: () => {},
           modelSource: "detected",

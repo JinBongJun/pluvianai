@@ -10,6 +10,7 @@ function vctxBase(overrides: Partial<ReleaseGateValidateRunContextValue> = {}): 
     isValidating: false,
     activeJobId: null,
     cancelRequested: false,
+    cancelLocked: false,
     handleValidate: () => {},
     handleCancelActiveJob: undefined,
     error: "",

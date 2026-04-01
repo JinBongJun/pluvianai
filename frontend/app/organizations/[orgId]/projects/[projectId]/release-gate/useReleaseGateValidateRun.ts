@@ -47,6 +47,7 @@ type ReleaseGateJobUpdateEvent = {
   job?: {
     id?: string;
     status?: string | null;
+    started_at?: string | null;
     cancel_requested_at?: string | null;
   };
 };
@@ -107,6 +108,7 @@ export function useReleaseGateValidateRun(options: {
   const [isValidating, setIsValidating] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [cancelRequested, setCancelRequested] = useState(false);
+  const [cancelLocked, setCancelLocked] = useState(false);
   const [result, setResult] = useState<ReleaseGateResult | null>(null);
   const [error, setError] = useState("");
   const [planError, setPlanError] = useState<PlanLimitError | null>(null);
@@ -145,12 +147,14 @@ export function useReleaseGateValidateRun(options: {
     setError("");
     setActiveJobId(null);
     setCancelRequested(false);
+    setCancelLocked(false);
     setIsValidating(false);
     cancelRequestedRef.current = false;
   }, []);
 
   const handleCancelActiveJob = useCallback(async () => {
     if (!projectId || isNaN(projectId)) return;
+    if (cancelLocked) return;
     const jobId = String(activeJobId || "").trim();
     if (!cancelRequestedRef.current) {
       cancelRequestedRef.current = true;
@@ -169,7 +173,7 @@ export function useReleaseGateValidateRun(options: {
         "Failed to cancel run.";
       setError(String(msg));
     }
-  }, [projectId, activeJobId]);
+  }, [projectId, activeJobId, cancelLocked]);
 
   useEffect(() => {
     if (!activeJobId) return;
@@ -207,6 +211,9 @@ export function useReleaseGateValidateRun(options: {
           const payload = parseReleaseGateJobUpdateEvent(event.data);
           const job = payload?.job;
           if (!job || String(job.id || "").trim() !== activeJobId) return;
+          if (job.started_at) {
+            setCancelLocked(true);
+          }
           if (job.cancel_requested_at && !cancelRequestedRef.current) {
             cancelRequestedRef.current = true;
             setCancelRequested(true);
@@ -250,6 +257,7 @@ export function useReleaseGateValidateRun(options: {
       setActiveJobId(null);
       setIsValidating(false);
       setCancelRequested(false);
+      setCancelLocked(false);
     };
 
     const run = async () => {
@@ -300,6 +308,9 @@ export function useReleaseGateValidateRun(options: {
         try {
           if (terminalStatusHint) {
             const finalRes = await releaseGateAPI.getJob(projectId, activeJobId, 1);
+            if (finalRes?.job?.started_at) {
+              setCancelLocked(true);
+            }
             const finalStatus = String(finalRes?.job?.status || "").toLowerCase();
             const finalResult = (finalRes as any)?.result ?? null;
             if (TERMINAL_JOB_STATUSES.has(finalStatus)) {
@@ -309,6 +320,9 @@ export function useReleaseGateValidateRun(options: {
             terminalStatusHint = null;
           }
           const res = await releaseGateAPI.getJob(projectId, activeJobId, 0);
+          if (res?.job?.started_at) {
+            setCancelLocked(true);
+          }
           if (res?.job?.cancel_requested_at && !cancelRequestedRef.current) {
             cancelRequestedRef.current = true;
             setCancelRequested(true);
@@ -316,6 +330,9 @@ export function useReleaseGateValidateRun(options: {
           const status = String(res?.job?.status || "").toLowerCase();
           if (status === "succeeded" || status === "failed" || status === "canceled") {
             const finalRes = await releaseGateAPI.getJob(projectId, activeJobId, 1);
+            if (finalRes?.job?.started_at) {
+              setCancelLocked(true);
+            }
             const finalStatus = String(finalRes?.job?.status || "").toLowerCase();
             const finalResult = (finalRes as any)?.result ?? null;
             if (
@@ -439,6 +456,7 @@ export function useReleaseGateValidateRun(options: {
     }
     setIsValidating(true);
     setCancelRequested(false);
+    setCancelLocked(false);
     cancelRequestedRef.current = false;
     setPlanError(null);
     setError("");
@@ -457,6 +475,7 @@ export function useReleaseGateValidateRun(options: {
       }
       setResult(null);
       setActiveJobId(jobId);
+      setCancelLocked(Boolean(jobRes?.job?.started_at));
       startedAsyncJob = true;
       if (cancelRequestedRef.current) {
         try {
@@ -555,6 +574,7 @@ export function useReleaseGateValidateRun(options: {
   return {
     isValidating,
     activeJobId,
+    cancelLocked,
     cancelRequested,
     result,
     error,
