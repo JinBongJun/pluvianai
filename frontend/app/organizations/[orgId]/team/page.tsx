@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import OrgLayout from "@/components/layout/OrgLayout";
@@ -14,7 +15,10 @@ import { orgKeys } from "@/lib/queryKeys";
 import { inviteOrganizationMember, removeOrganizationMember } from "@/lib/orgProjectMutations";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { useToast } from "@/components/ToastContainer";
-import { Users, Mail, Trash2, UserPlus, Shield, Activity, Fingerprint, Lock } from "lucide-react";
+import { Users, Mail, Trash2, UserPlus } from "lucide-react";
+import { ProjectRoleBadge } from "@/components/project-access/AccessBadges";
+import { ProjectAccessPolicyPanel } from "@/components/project-access/ProjectAccessPolicyPanel";
+import { ROLE_DESCRIPTIONS, ROLE_LABELS } from "@/lib/projectAccess";
 
 interface Member {
   id: number;
@@ -24,25 +28,6 @@ interface Member {
   role: "owner" | "admin" | "member" | "viewer";
   joined_at: string;
 }
-
-const ROLE_EXPLAINER: Record<Member["role"], { title: string; description: string }> = {
-  owner: {
-    title: "Owner",
-    description: "Full control over organization settings, billing, and member access.",
-  },
-  admin: {
-    title: "Admin",
-    description: "Can manage members and day-to-day project operations.",
-  },
-  member: {
-    title: "Member",
-    description: "Can work with project flows and collaborate with the team.",
-  },
-  viewer: {
-    title: "Viewer",
-    description: "Read-only access for monitoring and review.",
-  },
-};
 
 export default function TeamPage() {
   const router = useRouter();
@@ -124,62 +109,13 @@ export default function TeamPage() {
     setRemovingMemberId(confirmRemoveMemberId);
     try {
       await removeOrganizationMember(orgId, confirmRemoveMemberId, { mutate });
-      toast.showToast("Operator clearance revoked.", "success");
+      toast.showToast("Member access removed.", "success");
       setConfirmRemoveMemberId(null);
     } catch (error: unknown) {
       const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.showToast(msg || "Failed to revoke clearance.", "error");
+      toast.showToast(msg || "Failed to remove member access.", "error");
     } finally {
       setRemovingMemberId(null);
-    }
-  };
-
-  const getRoleBadge = (role: string) => {
-    switch (role) {
-      case "owner":
-        return (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30">
-            <Lock className="w-3 h-3 text-emerald-400" />
-            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">
-              Director
-            </span>
-          </div>
-        );
-      case "admin":
-        return (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30">
-            <Shield className="w-3 h-3 text-indigo-400" />
-            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">
-              Admin
-            </span>
-          </div>
-        );
-      case "member":
-        return (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-500/10 border border-slate-500/30">
-            <Fingerprint className="w-3 h-3 text-slate-400" />
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              Operator
-            </span>
-          </div>
-        );
-      case "viewer":
-        return (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30">
-            <Activity className="w-3 h-3 text-amber-400" />
-            <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
-              Observer
-            </span>
-          </div>
-        );
-      default:
-        return (
-          <div className="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              {role}
-            </span>
-          </div>
-        );
     }
   };
 
@@ -208,8 +144,8 @@ export default function TeamPage() {
             Team & Access
           </h1>
           <p className="text-slate-400 font-bold uppercase tracking-widest text-sm max-w-2xl leading-relaxed">
-            Manage organization members, assign security clearance levels, and oversee operational
-            access to team resources.
+            Manage workspace members, assign roles, and keep shared-project access consistent across
+            the product.
           </p>
         </div>
 
@@ -219,18 +155,22 @@ export default function TeamPage() {
           </div>
         )}
 
+        <div className="mb-8">
+          <ProjectAccessPolicyPanel accountBillingHref="/settings/billing" />
+        </div>
+
         <div className="mb-10 rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-4">
           <div className="mb-3 text-[10px] font-black text-slate-500 uppercase tracking-[0.22em]">
             Role Access Guide
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {(Object.keys(ROLE_EXPLAINER) as Member["role"][]).map(role => (
+            {(Object.keys(ROLE_LABELS) as Member["role"][]).map(role => (
               <div key={role} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
                 <div className="mb-1 flex items-center gap-2">
-                  {getRoleBadge(role)}
+                  <ProjectRoleBadge role={role} />
                 </div>
                 <p className="text-[11px] font-semibold text-slate-400 leading-relaxed">
-                  {ROLE_EXPLAINER[role].description}
+                  {ROLE_DESCRIPTIONS[role]}
                 </p>
               </div>
             ))}
@@ -246,13 +186,13 @@ export default function TeamPage() {
               <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
                 <UserPlus className="w-4 h-4" />
               </div>
-              Authorize New Clearance
+              Invite Member
             </h2>
 
             <div className="flex flex-col sm:flex-row gap-4 items-end">
               <div className="flex-1 w-full relative">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
-                  Operator Signal (Email)
+                  Email
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -268,16 +208,16 @@ export default function TeamPage() {
 
               <div className="w-full sm:w-48 relative">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
-                  Clearance Level
+                  Role
                 </label>
                 <select
                   value={inviteRole}
                   onChange={e => setInviteRole(e.target.value as "admin" | "member" | "viewer")}
                   className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 h-14 text-white focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 focus:outline-none transition-all duration-300 appearance-none cursor-pointer"
                 >
-                  <option value="member">Operator (Member)</option>
+                  <option value="member">Member</option>
                   <option value="admin">Admin</option>
-                  <option value="viewer">Observer (Viewer)</option>
+                  <option value="viewer">Viewer</option>
                 </select>
                 <div className="absolute right-4 top-[38px] pointer-events-none text-slate-500">
                   <svg
@@ -294,7 +234,7 @@ export default function TeamPage() {
                   </svg>
                 </div>
                 <p className="mt-2 ml-1 text-[10px] font-bold uppercase tracking-widest text-slate-600">
-                  Tip: Use Viewer for monitoring-only access.
+                  Tip: Use Viewer for read-only monitoring and review.
                 </p>
               </div>
 
@@ -308,9 +248,22 @@ export default function TeamPage() {
                       : "bg-emerald-500 text-black shadow-[0_0_20px_-5px_rgba(16,185,129,0.5)] hover:bg-emerald-400 hover:scale-[1.02] active:scale-[0.98]"
                   }`}
               >
-                {inviting ? "Dispatching..." : "Dispatch Invite"}
+                {inviting ? "Inviting..." : "Send Invite"}
               </button>
             </div>
+            <p className="mt-4 text-xs leading-relaxed text-slate-500">
+              Organization membership can make projects visible in the project list. Project roles
+              still control whether a member can actually use Live View, Release Gate, and other
+              project actions.
+            </p>
+            <p className="mt-2 text-xs leading-relaxed text-slate-500">
+              Shared projects currently follow each member&apos;s account plan limits. Members can
+              review their active limits in{" "}
+              <Link href="/settings/billing" className="text-emerald-300 hover:text-emerald-200">
+                Billing
+              </Link>
+              .
+            </p>
           </div>
         </div>
 
@@ -319,11 +272,11 @@ export default function TeamPage() {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-3">
               <Users className="w-5 h-5 text-emerald-400" />
-              Active Roster
+              Members
             </h2>
             <div className="px-3 py-1 rounded-full bg-white/5 border border-white/10">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {isMembersValidating ? "Scanning..." : `${members?.length || 0} Operators`}
+                {isMembersValidating ? "Refreshing..." : `${members?.length || 0} Members`}
               </span>
             </div>
           </div>
@@ -367,12 +320,12 @@ export default function TeamPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <div className="text-white font-black tracking-tight text-lg">
-                          {member.full_name || "Unidentified Operator"}
+                          {member.full_name || "Unnamed Member"}
                         </div>
                         {member.role === "owner" && (
                           <div
                             className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,1)]"
-                            title="Director Online"
+                            title="Workspace owner"
                           />
                         )}
                       </div>
@@ -385,13 +338,13 @@ export default function TeamPage() {
                   </div>
 
                   <div className="flex items-center gap-6">
-                    {getRoleBadge(member.role)}
+                    <ProjectRoleBadge role={member.role} />
 
                     {member.role !== "owner" ? (
                       <button
                         onClick={() => handleRemoveMember(member.id)}
                         className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-500 border border-transparent hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-400 transition-all duration-300 opacity-50 group-hover:opacity-100"
-                        title="Revoke Clearance"
+                        title="Remove member"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -404,12 +357,12 @@ export default function TeamPage() {
 
               {(!members || members.length === 0) && !isMembersValidating && (
                 <div className="p-16 text-center">
-                  <Fingerprint className="w-12 h-12 text-slate-700 mx-auto mb-4 opacity-50" />
+                  <Users className="w-12 h-12 text-slate-700 mx-auto mb-4 opacity-50" />
                   <h3 className="text-white font-black uppercase tracking-widest mb-2">
-                    No Active Operators
+                    No Members Yet
                   </h3>
                   <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">
-                    Dispatch an invitation to construct your roster.
+                    Send an invite to start collaborating in this workspace.
                   </p>
                 </div>
               )}
@@ -422,9 +375,9 @@ export default function TeamPage() {
         open={confirmRemoveMemberId != null}
         onClose={() => !removingMemberId && setConfirmRemoveMemberId(null)}
         onConfirm={executeRemoveMember}
-        title="Revoke operator access"
-        description="Are you sure you want to revoke this member's access? They will no longer be able to access organization resources."
-        confirmLabel="Revoke access"
+        title="Remove member access"
+        description="Are you sure you want to remove this member? They will lose workspace access, and any shared projects may remain visible only until project-level access is removed."
+        confirmLabel="Remove member"
         cancelLabel="Cancel"
         variant="danger"
         loading={removingMemberId != null}

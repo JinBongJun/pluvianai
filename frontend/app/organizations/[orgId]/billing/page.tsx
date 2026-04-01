@@ -273,6 +273,23 @@ export default function BillingPage() {
               </p>
             ) : null}
           </div>
+          <div className="mt-4 max-w-3xl rounded-2xl border border-white/10 bg-black/20 p-4 text-xs leading-relaxed text-slate-300">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-white">
+              Shared project policy
+            </p>
+            <p className="mt-2">
+              Projects shared through Team & Access may appear in this organization view, but actual
+              product access still depends on each member&apos;s project role.
+            </p>
+            <p className="mt-2 text-slate-400">
+              Shared projects currently follow each member&apos;s account plan limits. Upgrades are
+              managed in{" "}
+              <Link href="/settings/billing" className="text-emerald-300 hover:text-emerald-200">
+                Account Billing
+              </Link>
+              .
+            </p>
+          </div>
           {(entitlementStatus === "active_until_period_end" || subscriptionStatus === "cancelled") &&
             currentPeriodEnd && (
               <div className="mt-4 max-w-3xl rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4">

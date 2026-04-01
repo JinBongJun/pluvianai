@@ -2,9 +2,9 @@
 
 import { extractApiErrorPayload } from "@/lib/api/client";
 
-type ProjectRole = "owner" | "admin" | "member" | "viewer";
-type AccessSource = "owned" | "project_member" | "organization_member";
-type EntitlementScope = "account" | "organization";
+export type ProjectRole = "owner" | "admin" | "member" | "viewer";
+export type AccessSource = "owned" | "project_member" | "organization_member";
+export type EntitlementScope = "account" | "organization";
 
 export type AccessAwareProject = {
   name?: string | null;
@@ -26,14 +26,21 @@ type PermissionErrorDetails = {
   orgRole: ProjectRole | null;
 };
 
-const ROLE_LABELS: Record<ProjectRole, string> = {
+export const ROLE_LABELS: Record<ProjectRole, string> = {
   owner: "Owner",
   admin: "Admin",
   member: "Member",
   viewer: "Viewer",
 };
 
-const SOURCE_LABELS: Record<AccessSource, string> = {
+export const ROLE_DESCRIPTIONS: Record<ProjectRole, string> = {
+  owner: "Full control over organization settings, billing, member access, and shared project policy.",
+  admin: "Can manage members and most day-to-day project operations without owning the workspace.",
+  member: "Can work inside assigned projects and collaborate on validation and release workflows.",
+  viewer: "Read-only access for monitoring, review, and audit use cases.",
+};
+
+export const SOURCE_LABELS: Record<AccessSource, string> = {
   owned: "Created by you",
   project_member: "Shared directly with you",
   organization_member: "Visible through Team & Access",
@@ -53,6 +60,12 @@ export function getAccessSourceLabel(source?: string | null): string {
 
 export function getEntitlementScopeLabel(scope?: string | null): string {
   return scope === "organization" ? "Uses workspace plan limits" : "Uses your account plan limits";
+}
+
+export function getEntitlementScopeHelpText(scope?: string | null): string {
+  return scope === "organization"
+    ? "Limits for this shared project follow the workspace plan."
+    : "Limits for this shared project currently follow the signed-in member's account plan.";
 }
 
 export function getProjectAccessSummary(project?: AccessAwareProject | null): string {

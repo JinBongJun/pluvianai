@@ -28,11 +28,13 @@ import {
   Check,
 } from "lucide-react";
 import {
-  getAccessSourceLabel,
   getEntitlementScopeLabel,
-  getProjectRoleLabel,
   getProjectAccessSummary,
 } from "@/lib/projectAccess";
+import {
+  AccessSourceBadge,
+  ProjectRoleBadge,
+} from "@/components/project-access/AccessBadges";
 
 export type AlertFilter = "all" | "with_alerts" | "no_alerts";
 
@@ -452,14 +454,8 @@ export default function OrgProjectsPage() {
                       {p.name}
                     </h3>
                     <div className="mb-3 flex flex-wrap items-center gap-2">
-                      {p.access_source ? (
-                        <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-200">
-                          {getAccessSourceLabel(p.access_source)}
-                        </span>
-                      ) : null}
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-200">
-                        {p.role ? `Role: ${getProjectRoleLabel(p.role)}` : "No project role"}
-                      </span>
+                      <AccessSourceBadge source={p.access_source} className="px-2.5 py-1" />
+                      <ProjectRoleBadge role={p.role} className="px-2.5 py-1" />
                     </div>
                     {p.description ? (
                       <p className="text-slate-400 text-sm font-medium line-clamp-1 opacity-60 group-hover:opacity-100 transition-opacity">
@@ -512,14 +508,8 @@ export default function OrgProjectsPage() {
                             ID: P-{String(p.id).padStart(4, "0")}
                           </div>
                           <div className="mt-2 flex flex-wrap items-center gap-2">
-                            {p.access_source ? (
-                              <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-200">
-                                {getAccessSourceLabel(p.access_source)}
-                              </span>
-                            ) : null}
-                            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-200">
-                              {p.role ? `Role: ${getProjectRoleLabel(p.role)}` : "No project role"}
-                            </span>
+                            <AccessSourceBadge source={p.access_source} className="px-2.5 py-1" />
+                            <ProjectRoleBadge role={p.role} className="px-2.5 py-1" />
                           </div>
                           <div className="mt-2 text-xs text-slate-500">
                             {getProjectAccessSummary(p)}
