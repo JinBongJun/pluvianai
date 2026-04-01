@@ -29,7 +29,6 @@ import {
 } from "lucide-react";
 import {
   getEntitlementScopeLabel,
-  getProjectAccessSummary,
 } from "@/lib/projectAccess";
 import {
   AccessSourceBadge,
@@ -297,7 +296,7 @@ export default function OrgProjectsPage() {
             {Array.from({ length: 4 }).map((_, idx) => (
               <div
                 key={idx}
-                className="h-64 animate-pulse rounded-xl bg-white/5 border border-white/10"
+                className="h-48 animate-pulse rounded-xl bg-white/5 border border-white/10"
               />
             ))}
           </div>
@@ -405,10 +404,10 @@ export default function OrgProjectsPage() {
                     e.stopPropagation();
                     router.push(`/organizations/${orgId}/projects/${p.id}/settings/general`);
                   }}
-                  className="absolute top-4 right-4 z-30 w-10 h-10 rounded-full bg-[#05070c]/80 border border-white/15 flex items-center justify-center text-slate-400 hover:text-white hover:border-emerald-500/40 transition-all"
+                  className="absolute top-3 right-3 z-30 h-8 w-8 rounded-full bg-[#05070c]/80 border border-white/15 flex items-center justify-center text-slate-400 hover:text-white hover:border-emerald-500/40 transition-all"
                   title="Project settings"
                 >
-                  <Settings className="w-4 h-4" />
+                  <Settings className="w-3.5 h-3.5" />
                 </button>
 
                 <div
@@ -423,56 +422,41 @@ export default function OrgProjectsPage() {
                       router.push(`/organizations/${orgId}/projects/${p.id}`);
                     }
                   }}
-                  className="relative z-20 flex-1 p-6 flex items-center gap-6 cursor-pointer"
+                  className="relative z-20 flex-1 p-4.5 flex items-center gap-3.5 cursor-pointer"
                 >
-                  <div className="w-16 h-16 rounded-full flex items-center justify-center bg-white/[0.05] border border-white/10 group-hover:scale-110 group-hover:border-emerald-500/30 transition-all duration-500 text-emerald-400 flex-shrink-0 shadow-inner">
-                    <Building2 className="w-7 h-7" />
+                  <div className="h-10 w-10 rounded-full flex items-center justify-center bg-white/[0.05] border border-white/10 group-hover:scale-105 group-hover:border-emerald-500/30 transition-all duration-500 text-emerald-400 flex-shrink-0 shadow-inner">
+                    <Building2 className="w-4.5 h-4.5" />
                   </div>
 
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-4">
-                      <span className="text-[12px] font-black tracking-[0.3em] text-slate-500 uppercase">
-                        Project #{p.id}
-                      </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-2 flex items-center gap-2">
                       {(p.alerts ?? 0) > 0 ? (
-                        <div className="flex items-center gap-2.5 px-3 py-1.5 bg-red-500/15 border border-red-500/30 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.1)]">
-                          <div className="w-2 h-2 rounded-full bg-red-400 shadow-[0_0_10px_rgba(239,68,68,1)] animate-pulse" />
-                          <span className="text-[10px] font-black text-red-400 uppercase tracking-[0.2em]">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500/15 border border-red-500/30 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.1)]">
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-400 shadow-[0_0_10px_rgba(239,68,68,1)] animate-pulse" />
+                          <span className="text-[10px] font-black text-red-400 uppercase tracking-[0.16em]">
                             {p.alerts} ALERTS
                           </span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2.5 px-3 py-1.5 bg-emerald-500/15 border border-emerald-500/30 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-                          <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,1)]" />
-                          <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em]">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/15 border border-emerald-500/30 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,1)]" />
+                          <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.16em]">
                             0 ALERTS
                           </span>
                         </div>
                       )}
                     </div>
-                    <h3 className="text-2xl font-semibold text-white mb-3 tracking-tight uppercase group-hover:text-emerald-50 transition-colors leading-none">
+                    <h3 className="mb-1.5 text-[22px] font-semibold text-white tracking-tight truncate group-hover:text-emerald-50 transition-colors leading-tight">
                       {p.name}
                     </h3>
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <AccessSourceBadge source={p.access_source} className="px-2.5 py-1" />
-                      <ProjectRoleBadge role={p.role ?? p.org_role} className="px-2.5 py-1" />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ProjectRoleBadge role={p.role ?? p.org_role} className="px-2 py-0.5" />
                     </div>
                     {p.description ? (
-                      <p className="text-slate-400 text-sm font-medium line-clamp-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                      <p className="mt-2 line-clamp-1 text-[13px] text-slate-400/85">
                         {p.description}
                       </p>
-                    ) : (
-                      <p className="text-slate-600 text-xs font-black uppercase tracking-widest opacity-40">
-                        No description
-                      </p>
-                    )}
-                    <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                      {getProjectAccessSummary(p)}
-                    </p>
-                    <p className="mt-1 text-[11px] font-semibold text-slate-600">
-                      {getEntitlementScopeLabel(p.entitlement_scope)}
-                      {p.owner_name ? ` · Owner: ${p.owner_name}` : ""}
-                    </p>
+                    ) : null}
                   </div>
                 </div>
               </div>
