@@ -121,7 +121,12 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
   const rgSavedKeysForProvider = useMemo(
     () =>
       (projectUserApiKeysForUi || []).filter(k =>
-        isReleaseGateSavedProjectKey(k, String(replayProvider || "").trim().toLowerCase())
+        isReleaseGateSavedProjectKey(
+          k,
+          String(replayProvider || "")
+            .trim()
+            .toLowerCase()
+        )
       ),
     [projectUserApiKeysForUi, replayProvider]
   );
@@ -196,14 +201,14 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
           Candidate run (all selected logs)
         </div>
         <p className="text-xs text-slate-400 leading-relaxed">
-          One candidate per run: the same model, system prompt, sampling, thresholds, and config JSON apply to
-          every selected log. Use Environment parity when specific logs need different attachments, metadata, or
-          injected context.
+          One candidate per run: the same model, system prompt, sampling, thresholds, and config
+          JSON apply to every selected log. Use Environment parity only when some logs need
+          different attachments, metadata, or extra system text.
         </p>
         {repeatRuns > 0 ? (
           <p className="mt-2 text-[11px] text-slate-500">
-            Repeat runs: <span className="font-mono text-slate-300">{repeatRuns}×</span> (from the run controls
-            on the main screen)
+            Repeat runs: <span className="font-mono text-slate-300">{repeatRuns}×</span> (from the
+            run controls on the main screen)
           </p>
         ) : null}
       </div>
@@ -229,7 +234,9 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
         </div>
 
         <div className="flex flex-wrap gap-2.5">
-          {(Object.keys(REPLAY_THRESHOLD_PRESETS) as Array<keyof typeof REPLAY_THRESHOLD_PRESETS>).map(key => {
+          {(
+            Object.keys(REPLAY_THRESHOLD_PRESETS) as Array<keyof typeof REPLAY_THRESHOLD_PRESETS>
+          ).map(key => {
             const preset = REPLAY_THRESHOLD_PRESETS[key];
             return (
               <button
@@ -239,7 +246,10 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                 onClick={() => {
                   setThresholdPreset?.(key as ReleaseGateConfigThresholdPreset);
                   if (key !== "custom" && normalizeGateThresholds) {
-                    const normalized = normalizeGateThresholds(preset.failRateMax, preset.flakyRateMax);
+                    const normalized = normalizeGateThresholds(
+                      preset.failRateMax,
+                      preset.flakyRateMax
+                    );
                     setFailRateMax?.(normalized.failRateMax);
                     setFlakyRateMax?.(normalized.flakyRateMax);
                   }
@@ -341,7 +351,11 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
             </div>
             <div className="mt-0.5">
               <span className={detectedMode ? "text-slate-400" : "text-fuchsia-300"}>
-                {detectedMode ? "Using detected baseline model" : hostedMode ? "Using hosted model" : "Using custom BYOK model"}
+                {detectedMode
+                  ? "Using detected baseline model"
+                  : hostedMode
+                    ? "Using hosted model"
+                    : "Using custom BYOK model"}
               </span>
             </div>
           </div>
@@ -428,11 +442,13 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
               }}
               className="w-full max-w-md rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50"
             >
-              {(Object.keys(REPLAY_PROVIDER_MODEL_LIBRARY || {}) as ReplayProvider[]).map(provider => (
-                <option key={provider} value={provider}>
-                  {formatProviderLabel(provider)}
-                </option>
-              ))}
+              {(Object.keys(REPLAY_PROVIDER_MODEL_LIBRARY || {}) as ReplayProvider[]).map(
+                provider => (
+                  <option key={provider} value={provider}>
+                    {formatProviderLabel(provider)}
+                  </option>
+                )
+              )}
             </select>
           </label>
         )}
@@ -450,7 +466,9 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                 <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
                   Detected model id
                 </div>
-                <div className="mt-1 font-mono text-slate-100">{runDataModel || "Not detected"}</div>
+                <div className="mt-1 font-mono text-slate-100">
+                  {runDataModel || "Not detected"}
+                </div>
               </div>
               <div>
                 <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
@@ -470,7 +488,12 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                 </div>
               </div>
             </div>
-            <div className={clsx("rounded-xl border px-4 py-3 text-xs leading-relaxed", keyStatusToneClasses)}>
+            <div
+              className={clsx(
+                "rounded-xl border px-4 py-3 text-xs leading-relaxed",
+                keyStatusToneClasses
+              )}
+            >
               {keyStatusText}
               {missingProviderKeyDetails.length > 0 ? (
                 <ul className="mt-2 list-disc pl-5">
@@ -521,14 +544,17 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
             <div className="mb-2.5 flex items-center justify-between">
               <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 block">
                 Custom model ID{" "}
-                <span className="text-slate-500 font-normal lowercase tracking-normal ml-1">(BYOK)</span>
+                <span className="text-slate-500 font-normal lowercase tracking-normal ml-1">
+                  (BYOK)
+                </span>
               </div>
             </div>
             <p className="text-xs text-slate-500 mb-3 leading-relaxed">
-              Custom models require BYOK. Supported providers: OpenAI, Anthropic, Google. Premium models (e.g. GPT-4o,
-              Claude Sonnet, Gemini Pro) are not available as hosted quick picks — enter the provider model id here
-              (for example <span className="font-mono text-slate-400">gpt-4o-mini</span>), then paste a key or use a
-              key you saved from this screen.
+              Custom models require BYOK. Supported providers: OpenAI, Anthropic, Google. Premium
+              models (e.g. GPT-4o, Claude Sonnet, Gemini Pro) are not available as hosted quick
+              picks — enter the provider model id here (for example{" "}
+              <span className="font-mono text-slate-400">gpt-4o-mini</span>), then paste a key or
+              use a key you saved from this screen.
             </p>
             <input
               name="release-gate-custom-model-id"
@@ -568,8 +594,9 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                 Save key for Release Gate (optional)
               </div>
               <p className="text-xs text-slate-500 mb-3 leading-relaxed">
-                Keys registered in Live View apply to Detected mode. To reuse a key in Custom without pasting each
-                time, save it here (project-wide, not tied to a node). Optional label helps you tell keys apart.
+                Keys registered in Live View apply to Detected mode. To reuse a key in Custom
+                without pasting each time, save it here (project-wide, not tied to a node). Optional
+                label helps you tell keys apart.
               </p>
               <input
                 type="text"
@@ -631,7 +658,12 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                 </ul>
               ) : null}
             </div>
-            <div className={clsx("rounded-xl border px-4 py-3 text-xs leading-relaxed", keyStatusToneClasses)}>
+            <div
+              className={clsx(
+                "rounded-xl border px-4 py-3 text-xs leading-relaxed",
+                keyStatusToneClasses
+              )}
+            >
               {keyStatusText}
               {missingProviderKeyDetails.length > 0 ? (
                 <ul className="mt-2 list-disc pl-5">
@@ -645,7 +677,9 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
               <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-200/90 leading-relaxed">
                 For stable Release Gate results, prefer a pinned Anthropic model id ending in{" "}
                 <span className="font-mono bg-black/20 px-1 py-0.5 rounded">YYYYMMDD</span>.
-                <span className="block mt-1 text-amber-400/80">Custom/latest ids can change behavior over time.</span>
+                <span className="block mt-1 text-amber-400/80">
+                  Custom/latest ids can change behavior over time.
+                </span>
               </div>
             )}
           </div>
@@ -709,7 +743,9 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
 
       <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm">
         <div className="mb-5">
-          <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">Sampling</div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
+            Sampling
+          </div>
           <div className="text-sm text-slate-400">
             Adjust candidate generation knobs without changing snapshot content.
           </div>
@@ -745,7 +781,9 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
             />
           </label>
           <label className="space-y-2">
-            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">Top p</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
+              Top p
+            </span>
             <input
               type="number"
               min={0}
@@ -774,10 +812,10 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
               )}
             </div>
             <div className="text-sm text-slate-400">
-              Run-wide JSON merged for every log. Excludes tools (Environment parity tab), system prompt (field
-              above), and per-snapshot restoration fields. Prefer{" "}
-              <span className="font-mono text-slate-500">replay_overrides</span> in Environment parity for
-              attachments and other non-message fields that vary by snapshot.
+              Run-wide JSON merged for every log. Keep tools in Environment parity, edit the main
+              system prompt in the field above, and use Environment parity for attachments or other
+              extra request fields that can differ by log. Technical API name:{" "}
+              <span className="font-mono text-slate-500">replay_overrides</span>.
             </div>
           </div>
           <button

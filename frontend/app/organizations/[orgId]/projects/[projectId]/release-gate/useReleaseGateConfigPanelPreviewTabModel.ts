@@ -75,7 +75,7 @@ export function useReleaseGateConfigPanelPreviewTabModel(
     );
     if (missingExtended.length > 0) {
       notes.push(
-        `Baseline included extended context keys that are not present in the candidate replay payload: ${missingExtended.join(", ")}. Add them in Core (config JSON) or Environment parity (extra request fields) if needed.`
+        `Baseline included extended context keys that are not present in the candidate replay payload: ${missingExtended.join(", ")}. Add them in Core setup or Environment parity if replay still needs them.`
       );
     }
 
@@ -84,7 +84,7 @@ export function useReleaseGateConfigPanelPreviewTabModel(
     );
     if (missingAdditional.length > 0) {
       notes.push(
-        `Baseline included additional request keys that are not present in the candidate replay payload: ${missingAdditional.join(", ")}. Restore with extra request fields (replay_overrides) when appropriate.`
+        `Baseline included extra request fields that are not present in the candidate replay payload: ${missingAdditional.join(", ")}. Add them in Environment parity when they matter for a faithful replay.`
       );
     }
 

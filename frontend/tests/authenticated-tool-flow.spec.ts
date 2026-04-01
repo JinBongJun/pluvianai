@@ -46,7 +46,9 @@ async function waitForSnapshotMeta(
     if (listResponse.ok()) {
       const data = await listResponse.json();
       const items = Array.isArray(data?.items) ? data.items : [];
-      const match = items.find((item: { trace_id?: string }) => String(item.trace_id || "") === traceId);
+      const match = items.find(
+        (item: { trace_id?: string }) => String(item.trace_id || "") === traceId
+      );
       if (match?.id) {
         return { snapshotId: Number(match.id), agentId: String(match.agent_id || "") };
       }
@@ -73,7 +75,9 @@ async function waitForTrajectoryDetail(
       const detail = await detailResponse.json();
       const provenance = Array.isArray(detail.tool_timeline)
         ? Array.from(
-            new Set(detail.tool_timeline.map((row: { provenance?: string }) => row.provenance || ""))
+            new Set(
+              detail.tool_timeline.map((row: { provenance?: string }) => row.provenance || "")
+            )
           ).join(",")
         : "";
       const agentId = String(detail.agent_id || "");
@@ -99,7 +103,10 @@ function formatPrettyTime(value?: string): string {
 }
 
 function requireCredentials() {
-  test.skip(!LOGIN_EMAIL || !LOGIN_PASSWORD, "PLAYWRIGHT_E2E_EMAIL and PLAYWRIGHT_E2E_PASSWORD are required.");
+  test.skip(
+    !LOGIN_EMAIL || !LOGIN_PASSWORD,
+    "PLAYWRIGHT_E2E_EMAIL and PLAYWRIGHT_E2E_PASSWORD are required."
+  );
 }
 
 function requireRunOnlyApiKey() {
@@ -177,7 +184,10 @@ async function authedJson(
   return response;
 }
 
-async function ensureOrgAndProject(api: APIRequestContext, token: string): Promise<{ orgId: number; projectId: number }> {
+async function ensureOrgAndProject(
+  api: APIRequestContext,
+  token: string
+): Promise<{ orgId: number; projectId: number }> {
   const orgsResponse = await expectOkWithRetry(
     "list organizations",
     () => authedJson(api, "GET", "/api/v1/organizations?include_stats=false", token),
@@ -203,14 +213,16 @@ async function ensureOrgAndProject(api: APIRequestContext, token: string): Promi
 
   const projectsResponse = await expectOkWithRetry(
     "list projects",
-    () => authedJson(api, "GET", `/api/v1/organizations/${orgId}/projects?include_stats=false`, token),
+    () =>
+      authedJson(api, "GET", `/api/v1/organizations/${orgId}/projects?include_stats=false`, token),
     4
   );
   const projects = (await projectsResponse.json()) as Array<{ id: number; name?: string }>;
 
   let projectId =
-    Number(projects.find(project => String(project.name || "").trim() === E2E_PROJECT_NAME)?.id || 0) ||
-    Number(projects?.[0]?.id || 0);
+    Number(
+      projects.find(project => String(project.name || "").trim() === E2E_PROJECT_NAME)?.id || 0
+    ) || Number(projects?.[0]?.id || 0);
 
   if (!projectId) {
     const createProjectResponse = await expectOkWithRetry(
@@ -379,23 +391,18 @@ async function loginWithSessionCookies(
   ];
   const cookieUrls = Array.from(
     new Set(
-      [
-        PLAYWRIGHT_BASE_URL,
-        "http://localhost:3000",
-        "http://localhost:8000",
-        API_BASE_URL,
-      ].map(value => {
-        try {
-          return `${new URL(value).origin}/`;
-        } catch {
-          return value;
+      [PLAYWRIGHT_BASE_URL, "http://localhost:3000", "http://localhost:8000", API_BASE_URL].map(
+        value => {
+          try {
+            return `${new URL(value).origin}/`;
+          } catch {
+            return value;
+          }
         }
-      })
+      )
     )
   );
-  await page
-    .context()
-    .addCookies(cookieUrls.flatMap(buildCookiesForUrl));
+  await page.context().addCookies(cookieUrls.flatMap(buildCookiesForUrl));
   await page.goto("/organizations", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/organizations/, { timeout: 20000 });
 }
@@ -528,8 +535,12 @@ test.describe("Authenticated tool browser flow", () => {
     await page.getByRole("tab", { name: "Saved Data" }).click();
     await expect(page.getByTestId("rg-datasets-state-list")).toBeVisible({ timeout: 45000 });
 
-    const datasetACard = page.locator("div").filter({ has: page.getByText(datasetALabel, { exact: false }) });
-    const datasetBCard = page.locator("div").filter({ has: page.getByText(datasetBLabel, { exact: false }) });
+    const datasetACard = page
+      .locator("div")
+      .filter({ has: page.getByText(datasetALabel, { exact: false }) });
+    const datasetBCard = page
+      .locator("div")
+      .filter({ has: page.getByText(datasetBLabel, { exact: false }) });
     await datasetACard.locator('input[type="checkbox"]').first().check();
     await datasetBCard.locator('input[type="checkbox"]').first().check();
 
@@ -594,7 +605,9 @@ test.describe("Authenticated tool browser flow", () => {
     await page.locator('input[name="release-gate-custom-model-id"]').fill("gpt-4o-mini");
     await page.locator('input[type="password"]').fill("sk-test-run-only");
     await expect(page.getByRole("button", { name: "Save pasted key to project" })).toBeEnabled();
-    await expect(page.getByText(savedKeyName.replace(/^\[RG\]\s*/, ""), { exact: false })).toBeVisible();
+    await expect(
+      page.getByText(savedKeyName.replace(/^\[RG\]\s*/, ""), { exact: false })
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "Use for run" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Delete" })).toBeVisible();
 
@@ -638,8 +651,12 @@ test.describe("Authenticated tool browser flow", () => {
       `/organizations/${orgId}/projects/${projectId}/release-gate?agent_id=${encodeURIComponent(seededA.snapshotAgentId)}`,
       { waitUntil: "domcontentloaded" }
     );
-    await expect(page.getByTestId(`rg-live-log-row-${seededA.snapshotId}`)).toBeVisible({ timeout: 45000 });
-    await expect(page.getByTestId(`rg-live-log-row-${seededB.snapshotId}`)).toBeVisible({ timeout: 45000 });
+    await expect(page.getByTestId(`rg-live-log-row-${seededA.snapshotId}`)).toBeVisible({
+      timeout: 45000,
+    });
+    await expect(page.getByTestId(`rg-live-log-row-${seededB.snapshotId}`)).toBeVisible({
+      timeout: 45000,
+    });
     await page.getByTestId(`rg-live-log-checkbox-${seededA.snapshotId}`).check();
     await page.getByTestId(`rg-live-log-checkbox-${seededB.snapshotId}`).check();
 
@@ -651,20 +668,27 @@ test.describe("Authenticated tool browser flow", () => {
     await expect(page.getByRole("button", { name: "Add tool" })).toBeVisible();
     await expect(page.getByText("Recorded tool calls")).toBeVisible();
 
-    await page.getByRole("button", { name: "Extra request JSON (replay overrides)" }).click();
+    await page.getByRole("button", { name: "Extra request fields" }).click();
     await expect(page.getByRole("button", { name: "Reset shared" })).toBeVisible();
-    await expect(page.getByText("Shared extras (all selected logs)")).toBeVisible();
-    await expect(page.locator('textarea[placeholder*="attachments"]').filter({ visible: true })).toHaveCount(3);
+    await expect(page.getByText("Shared fields (all selected logs)")).toBeVisible();
+    await expect(
+      page.locator('textarea[placeholder*="metadata"]').filter({ visible: true })
+    ).toHaveCount(1);
+    await expect(
+      page.locator('textarea[placeholder*="attachments"]').filter({ visible: true })
+    ).toHaveCount(2);
 
-    await page.getByRole("button", { name: "Extra system context (append to system prompt)" }).click();
+    await page.getByRole("button", { name: "Extra system text (optional)" }).click();
     await expect(page.getByRole("button", { name: "Reset context from snapshots" })).toBeVisible();
-    await page.getByLabel("Append to system prompt").check();
+    await page.getByLabel("Add extra system text").check();
     await page.getByLabel("Per log").check();
-    await expect(page.getByText("Fallback (optional)")).toBeVisible();
-    await expect(page.getByPlaceholder("Additional system context for this log…")).toHaveCount(2);
+    await expect(page.getByText("Fallback text (optional)")).toBeVisible();
+    await expect(page.getByPlaceholder("Extra system text for this log…")).toHaveCount(2);
   });
 
-  test("release gate parity multi-log full config preview and run returns result rows", async ({ page }) => {
+  test("release gate parity multi-log full config preview and run returns result rows", async ({
+    page,
+  }) => {
     test.setTimeout(600000);
     requireCredentials();
     requireRunOnlyApiKey();
@@ -705,8 +729,12 @@ test.describe("Authenticated tool browser flow", () => {
         { waitUntil: "domcontentloaded" }
       );
 
-      await expect(page.getByTestId(`rg-live-log-row-${seededA.snapshotId}`)).toBeVisible({ timeout: 45000 });
-      await expect(page.getByTestId(`rg-live-log-row-${seededB.snapshotId}`)).toBeVisible({ timeout: 45000 });
+      await expect(page.getByTestId(`rg-live-log-row-${seededA.snapshotId}`)).toBeVisible({
+        timeout: 45000,
+      });
+      await expect(page.getByTestId(`rg-live-log-row-${seededB.snapshotId}`)).toBeVisible({
+        timeout: 45000,
+      });
 
       await page.getByTestId(`rg-live-log-checkbox-${seededA.snapshotId}`).check();
       await page.getByTestId(`rg-live-log-checkbox-${seededB.snapshotId}`).check();
@@ -722,7 +750,9 @@ test.describe("Authenticated tool browser flow", () => {
         .locator("div")
         .filter({ has: page.getByText(savedKeyName.replace(/^\[RG\]\s*/, ""), { exact: false }) })
         .first();
-      await expect(savedKeyRow.getByRole("button", { name: "Use for run" })).toBeVisible({ timeout: 15000 });
+      await expect(savedKeyRow.getByRole("button", { name: "Use for run" })).toBeVisible({
+        timeout: 15000,
+      });
       await savedKeyRow.getByRole("button", { name: "Use for run" }).click();
 
       await page.getByRole("tab", { name: "Environment parity" }).click();
@@ -750,11 +780,11 @@ test.describe("Authenticated tool browser flow", () => {
 }`);
 
       await ensurePanelOpen(
-        page.getByRole("button", { name: "Extra request JSON (replay overrides)" }),
+        page.getByRole("button", { name: "Extra request fields" }),
         page.getByRole("button", { name: "Reset shared" })
       );
-      const replayOverrideAreas = page.locator('textarea[placeholder*="attachments"]:visible');
-      await replayOverrideAreas.first().fill(`{
+      const sharedReplayOverrideArea = page.locator('textarea[placeholder*="metadata"]:visible');
+      await sharedReplayOverrideArea.fill(`{
   "channel": "web_chat",
   "locale": "en-US",
   "tenant": "support-bot-a1",
@@ -764,13 +794,14 @@ test.describe("Authenticated tool browser flow", () => {
     "policy_mode": "default"
   }
 }`);
-      await replayOverrideAreas.nth(1).fill(`{
+      const replayOverrideAreas = page.locator('textarea[placeholder*="attachments"]:visible');
+      await replayOverrideAreas.first().fill(`{
   "metadata": {
     "test_case": "first_time_user_onboarding",
     "user_segment": "new_user"
   }
 }`);
-      await replayOverrideAreas.nth(2).fill(`{
+      await replayOverrideAreas.nth(1).fill(`{
   "metadata": {
     "test_case": "provider_override_question",
     "user_segment": "existing_customer"
@@ -778,32 +809,42 @@ test.describe("Authenticated tool browser flow", () => {
 }`);
 
       await ensurePanelOpen(
-        page.getByRole("button", { name: "Extra system context (append to system prompt)" }),
+        page.getByRole("button", { name: "Extra system text (optional)" }),
         page.getByRole("button", { name: "Reset context from snapshots" })
       );
-      await page.getByLabel("Append to system prompt").check();
+      await page.getByLabel("Add extra system text").check();
       await page.getByLabel("Per log").check();
       await page
-        .locator('xpath=//span[normalize-space()="Fallback (optional)"]/ancestor::label[1]//textarea')
+        .locator(
+          'xpath=//span[normalize-space()="Fallback text (optional)"]/ancestor::label[1]//textarea'
+        )
         .fill("Use docs and tool outcomes to give concise, policy-safe support answers.");
-      const perLogContextAreas = page.getByPlaceholder("Additional system context for this log…");
-      await perLogContextAreas.first().fill(
-        "This log is from a first-time user. Prefer onboarding-style guidance and simple explanations."
-      );
+      const perLogContextAreas = page.getByPlaceholder("Extra system text for this log…");
+      await perLogContextAreas
+        .first()
+        .fill(
+          "This log is from a first-time user. Prefer onboarding-style guidance and simple explanations."
+        );
       await perLogContextAreas
         .nth(1)
-        .fill("This log is about provider behavior or limits. Be explicit about practical next steps.");
+        .fill(
+          "This log is about provider behavior or limits. Be explicit about practical next steps."
+        );
 
       await page.getByRole("tab", { name: "Preview" }).click();
       await expect(page.getByText("Final override payload")).toBeVisible();
       await expect(page.getByText("Set (shared + 2 logs)")).toBeVisible();
-      await expect(page.getByText("Appending on replay")).toBeVisible();
+      await expect(page.getByText("Adding extra system text")).toBeVisible();
       await expect(page.getByText(/1 defined/)).toBeVisible();
 
       await page.getByRole("button", { name: "Expand full JSON" }).click();
       await expect(page.getByText("Final candidate payload (full)")).toBeVisible();
-      await expect(page.locator("pre").filter({ hasText: '"channel": "web_chat"' }).first()).toBeVisible();
-      await expect(page.locator("pre").filter({ hasText: '"tenant": "support-bot-a1"' }).first()).toBeVisible();
+      await expect(
+        page.locator("pre").filter({ hasText: '"channel": "web_chat"' }).first()
+      ).toBeVisible();
+      await expect(
+        page.locator("pre").filter({ hasText: '"tenant": "support-bot-a1"' }).first()
+      ).toBeVisible();
       await page.getByLabel("Close full candidate payload").click();
 
       await page.getByLabel("Close Release Gate settings").click();

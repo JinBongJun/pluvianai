@@ -39,7 +39,8 @@ export function useReleaseGateConfigPanelParityTabModel(
     setToolContextBySnapshotId,
   } = c;
 
-  const { snapshotIdForBaselineTimeline, baselineTimelineLoading, baselineToolTimelineRows } = timeline;
+  const { snapshotIdForBaselineTimeline, baselineTimelineLoading, baselineToolTimelineRows } =
+    timeline;
 
   const [parityOpenTools, setParityOpenTools] = useState(false);
   const [parityOpenOverrides, setParityOpenOverrides] = useState(false);
@@ -174,7 +175,7 @@ export function useReleaseGateConfigPanelParityTabModel(
                 : "None",
       },
       {
-        label: "Extra request JSON",
+        label: "Extra request fields",
         value: hasAnyBodyOverridesContent
           ? perLogOverridesCount > 0
             ? `Set (shared + ${perLogOverridesCount} log${perLogOverridesCount === 1 ? "" : "s"})`
@@ -182,8 +183,9 @@ export function useReleaseGateConfigPanelParityTabModel(
           : "None",
       },
       {
-        label: "Extra system context",
-        value: toolContextMode === "inject" ? "Appending on replay" : "Recorded only",
+        label: "Extra system text",
+        value:
+          toolContextMode === "inject" ? "Adding extra system text" : "Using recorded request only",
       },
     ],
     [
@@ -208,15 +210,15 @@ export function useReleaseGateConfigPanelParityTabModel(
           : `${toolsList.length} tool definition(s)`;
   const overridesSummarySubtitle = hasAnyBodyOverridesContent
     ? perLogOverridesCount > 0
-      ? `Shared and/or per-log overrides (${perLogOverridesCount} log${perLogOverridesCount === 1 ? "" : "s"})`
-      : "Shared overrides active"
+      ? `Shared and/or per-log fields (${perLogOverridesCount} log${perLogOverridesCount === 1 ? "" : "s"})`
+      : "Shared fields active"
     : "No extra request fields";
   const contextSummarySubtitle =
     toolContextMode === "inject"
       ? c.toolContextScope === "global"
-        ? "Shared append to system prompt"
-        : "Per-log append (with optional fallback)"
-      : "Replay uses captured request data only";
+        ? "Shared extra text"
+        : "Per-log extra text (with optional fallback)"
+      : "Using recorded request data only";
   const timelineSummarySubtitle = !snapshotIdForBaselineTimeline
     ? "Select a baseline snapshot on the main screen"
     : baselineTimelineLoading

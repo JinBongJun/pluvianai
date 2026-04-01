@@ -87,7 +87,9 @@ export function AttemptDetailOverlay({
       const ruleId = String(v?.rule_id ?? "").trim();
       const ruleName = String(v?.rule_name ?? "").trim();
       const message = String(v?.message ?? "").trim();
-      const severity = String(v?.severity ?? "").trim().toLowerCase();
+      const severity = String(v?.severity ?? "")
+        .trim()
+        .toLowerCase();
       return {
         key: `${ruleId || "violation"}-${idx}`,
         label: ruleName || ruleId || `Violation ${idx + 1}`,
@@ -97,9 +99,11 @@ export function AttemptDetailOverlay({
     })
     .filter((r: PolicyRow) => Boolean(r.label));
 
-  const signalsChecksRaw = (attempt?.signals && typeof attempt.signals === "object"
-    ? (attempt.signals as Record<string, unknown>).checks
-    : undefined) as Record<string, unknown> | undefined;
+  const signalsChecksRaw = (
+    attempt?.signals && typeof attempt.signals === "object"
+      ? (attempt.signals as Record<string, unknown>).checks
+      : undefined
+  ) as Record<string, unknown> | undefined;
   const configuredEvalCheckIds = getConfiguredEvalCheckIds(
     attempt?.signals && typeof attempt.signals === "object"
       ? (attempt.signals as Record<string, unknown>).config_check_ids
@@ -117,7 +121,9 @@ export function AttemptDetailOverlay({
     ? Object.entries(signalsChecksRaw).map(([id, status]) => {
         const normalizedId = normalizeViolationRuleId(id);
         const label = toHumanRuleLabel(normalizedId, id);
-        const s = String(status ?? "").trim().toLowerCase();
+        const s = String(status ?? "")
+          .trim()
+          .toLowerCase();
         return {
           id: normalizedId || id,
           label,
@@ -146,7 +152,9 @@ export function AttemptDetailOverlay({
     ? Object.entries(runtimeChecksRaw).map(([id, status]) => {
         const normalizedId = normalizeViolationRuleId(id);
         const label = toHumanRuleLabel(normalizedId, id);
-        const s = String(status ?? "").trim().toLowerCase();
+        const s = String(status ?? "")
+          .trim()
+          .toLowerCase();
         return {
           id: normalizedId || id,
           label,
@@ -155,12 +163,16 @@ export function AttemptDetailOverlay({
           applicable: s === "pass" || s === "fail",
         };
       })
-    : signalsRows.filter(row => isRuntimeOnlyEvalCheckId(row.id) || !isCanonicalEvalCheckId(row.id));
+    : signalsRows.filter(
+        row => isRuntimeOnlyEvalCheckId(row.id) || !isCanonicalEvalCheckId(row.id)
+      );
   const signalsPassed = canonicalSignalRows.filter(r => r.pass);
 
   const formatSignalValue = (id: string, raw: unknown, pass: boolean): React.ReactNode => {
     const d = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-    const status = String(d.status ?? "").trim().toLowerCase();
+    const status = String(d.status ?? "")
+      .trim()
+      .toLowerCase();
     if (!status) return null;
 
     if (id === "length") {
@@ -168,19 +180,26 @@ export function AttemptDetailOverlay({
       const actualChars = Number(d.actual_chars);
       const baselineLen = Number(d.baseline_len);
       if (!Number.isFinite(baselineLen) || !Number.isFinite(actualChars)) return null;
-      
-      const maxAllowed = Math.round(baselineLen * (1 + (Number.isFinite(failRatio) ? failRatio : 0.5)));
+
+      const maxAllowed = Math.round(
+        baselineLen * (1 + (Number.isFinite(failRatio) ? failRatio : 0.5))
+      );
       const pct = Math.min(100, Math.max(0, (actualChars / maxAllowed) * 100));
-      
+
       return (
         <div className="mt-2 space-y-1.5 w-full max-w-md">
           <div className="flex justify-between text-[10px] uppercase tracking-wider font-semibold text-slate-400">
             <span>Base {baselineLen} chars</span>
-            <span className={pass ? "text-emerald-400" : "text-rose-400"}>Actual {actualChars} chars</span>
+            <span className={pass ? "text-emerald-400" : "text-rose-400"}>
+              Actual {actualChars} chars
+            </span>
             <span>Max {maxAllowed}</span>
           </div>
           <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden flex">
-            <div className={clsx("h-full transition-all", pass ? "bg-emerald-500" : "bg-rose-500")} style={{ width: `${pct}%` }} />
+            <div
+              className={clsx("h-full transition-all", pass ? "bg-emerald-500" : "bg-rose-500")}
+              style={{ width: `${pct}%` }}
+            />
           </div>
         </div>
       );
@@ -190,7 +209,7 @@ export function AttemptDetailOverlay({
       const failMs = Number(d.fail_ms);
       const actualMs = Number(d.actual_ms);
       if (!Number.isFinite(failMs) || !Number.isFinite(actualMs)) return null;
-      
+
       const pct = Math.min(100, Math.max(0, (actualMs / failMs) * 100));
       return (
         <div className="mt-2 space-y-1.5 w-full max-w-md">
@@ -199,19 +218,24 @@ export function AttemptDetailOverlay({
             <span className={pass ? "text-slate-400" : "text-rose-400"}>Limit {failMs}ms</span>
           </div>
           <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden flex">
-            <div className={clsx("h-full transition-all", pass ? "bg-emerald-500" : "bg-rose-500")} style={{ width: `${pct}%` }} />
+            <div
+              className={clsx("h-full transition-all", pass ? "bg-emerald-500" : "bg-rose-500")}
+              style={{ width: `${pct}%` }}
+            />
           </div>
         </div>
       );
     }
-    
+
     return null;
   };
 
   const formatSignalWhy = (id: string, raw: unknown): string => {
     const d = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
     if (!d) return "Evidence unavailable for this check.";
-    const status = String(d.status ?? "").trim().toLowerCase();
+    const status = String(d.status ?? "")
+      .trim()
+      .toLowerCase();
     const statusLead =
       status === "fail"
         ? "Check failed."
@@ -262,8 +286,7 @@ export function AttemptDetailOverlay({
     if (id === "json") {
       const mode = String(d.mode ?? "default").trim() || "default";
       const checked = typeof d.checked === "boolean" ? (d.checked ? "yes" : "no") : "unknown";
-      const parsed =
-        typeof d.parsed_ok === "boolean" ? (d.parsed_ok ? "ok" : "failed") : "unknown";
+      const parsed = typeof d.parsed_ok === "boolean" ? (d.parsed_ok ? "ok" : "failed") : "unknown";
       return `JSON validity: mode ${mode}, checked ${checked}, parsed ${parsed}.`;
     }
 
@@ -298,18 +321,16 @@ export function AttemptDetailOverlay({
       const coverageRatio = toNum(d.coverage_ratio);
       const loopStatus = String(d.loop_status ?? "").trim() || "unknown";
       const responsePresent =
-        typeof d.response_present === "boolean"
-          ? d.response_present
-            ? "yes"
-            : "no"
-          : "unknown";
+        typeof d.response_present === "boolean" ? (d.response_present ? "yes" : "no") : "unknown";
       const matchedTokens = Array.isArray(d.matched_tokens)
         ? (d.matched_tokens as unknown[]).map(v => String(v ?? "").trim()).filter(Boolean)
         : [];
       const matchedFacts = Array.isArray(d.matched_facts)
         ? (d.matched_facts as unknown[]).map(v => String(v ?? "").trim()).filter(Boolean)
         : [];
-      const semanticStatus = String(d.semantic_status ?? "").trim().toLowerCase();
+      const semanticStatus = String(d.semantic_status ?? "")
+        .trim()
+        .toLowerCase();
       const semanticReason = String(d.semantic_reason ?? "").trim();
       const semanticConfidence = String(d.semantic_confidence ?? "").trim();
       const semanticModel = String(d.semantic_model ?? "").trim();
@@ -387,7 +408,11 @@ export function AttemptDetailOverlay({
     if (id === "json") {
       const mode = String(d.mode ?? "default").trim() || "default";
       const parsed =
-        typeof d.parsed_ok === "boolean" ? (d.parsed_ok ? "parsed" : "parse failed") : "parse unknown";
+        typeof d.parsed_ok === "boolean"
+          ? d.parsed_ok
+            ? "parsed"
+            : "parse failed"
+          : "parse unknown";
       return `${mode} mode · ${parsed}`;
     }
 
@@ -396,9 +421,7 @@ export function AttemptDetailOverlay({
       const actualChars = toNum(d.actual_chars);
       const failRatio = toNum(d.fail_ratio);
       if (baselineLen !== null && actualChars !== null) {
-        const maxAllowed = Math.round(
-          baselineLen * (1 + (failRatio !== null ? failRatio : 0.5))
-        );
+        const maxAllowed = Math.round(baselineLen * (1 + (failRatio !== null ? failRatio : 0.5)));
         const deltaPct =
           baselineLen > 0 ? (((actualChars - baselineLen) / baselineLen) * 100).toFixed(1) : null;
         return `${Math.round(actualChars)} / max ${maxAllowed}${deltaPct ? ` (${Number(deltaPct) >= 0 ? "+" : ""}${deltaPct}%)` : ""}`;
@@ -472,19 +495,19 @@ export function AttemptDetailOverlay({
       return "{}";
     }
   })();
-  const candidateModel = String(
-    candidateSnapshot?.model ??
-      (attempt?.summary?.target && typeof attempt.summary.target === "object"
-        ? (attempt.summary.target as Record<string, unknown>).model
-        : undefined) ??
-      "—"
-  ).trim() || "—";
+  const candidateModel =
+    String(
+      candidateSnapshot?.model ??
+        (attempt?.summary?.target && typeof attempt.summary.target === "object"
+          ? (attempt.summary.target as Record<string, unknown>).model
+          : undefined) ??
+        "—"
+    ).trim() || "—";
   const candidateProvider = String(candidateSnapshot?.provider ?? "—").trim() || "—";
-  const candidateInput = String(candidateSnapshot?.input_text ?? baselineInput ?? "—").trim() || "—";
+  const candidateInput =
+    String(candidateSnapshot?.input_text ?? baselineInput ?? "—").trim() || "—";
   const candidateResponse = String(
-    candidateSnapshot?.response_preview ??
-      attempt?.replay?.provider_error?.response_preview ??
-      ""
+    candidateSnapshot?.response_preview ?? attempt?.replay?.provider_error?.response_preview ?? ""
   ).trim();
   const baselineResponseFromAttempt = String(
     (attempt?.baseline_snapshot && typeof attempt.baseline_snapshot === "object"
@@ -500,7 +523,9 @@ export function AttemptDetailOverlay({
   )
     .trim()
     .toLowerCase();
-  const baselineCaptureReason = String((attempt as any)?.baseline_snapshot?.capture_reason ?? "").trim();
+  const baselineCaptureReason = String(
+    (attempt as any)?.baseline_snapshot?.capture_reason ?? ""
+  ).trim();
   const candidateResponseStatus = String((candidateSnapshot as any)?.response_preview_status ?? "")
     .trim()
     .toLowerCase();
@@ -565,32 +590,39 @@ export function AttemptDetailOverlay({
     (toolTotalCalls > 0
       ? "Tool calls were detected during replay."
       : "No tool calls were detected for this attempt.");
-  const toolEvidenceStatus = String(toolExecutionSummary?.status ?? "").trim().toLowerCase();
+  const toolEvidenceStatus = String(toolExecutionSummary?.status ?? "")
+    .trim()
+    .toLowerCase();
   const replayObj =
     attempt?.replay && typeof attempt.replay === "object" && !Array.isArray(attempt.replay)
       ? (attempt.replay as Record<string, unknown>)
       : {};
   const toolLoopStatus =
     String(
-      replayObj.tool_loop_status ??
-        (candidateSnapshot as any)?.tool_loop_status ??
-        "not_needed"
+      replayObj.tool_loop_status ?? (candidateSnapshot as any)?.tool_loop_status ?? "not_needed"
     ).trim() || "not_needed";
   const toolLoopRounds =
     Number(replayObj.tool_loop_rounds ?? (candidateSnapshot as any)?.tool_loop_rounds ?? 0) || 0;
   const toolLoopEvents = Array.isArray(
     replayObj.tool_loop_events ?? (candidateSnapshot as any)?.tool_loop_events
   )
-    ? ((replayObj.tool_loop_events ??
-        (candidateSnapshot as any)?.tool_loop_events) as Array<Record<string, unknown>>)
+    ? ((replayObj.tool_loop_events ?? (candidateSnapshot as any)?.tool_loop_events) as Array<
+        Record<string, unknown>
+      >)
     : [];
   const flattenedToolLoopRows = toolLoopEvents
     .flatMap(ev =>
       Array.isArray(ev?.tool_rows)
         ? (ev.tool_rows as Array<Record<string, unknown>>).map(row => {
-            const st = String(row?.status ?? "").trim().toLowerCase();
-            const exec = String(row?.execution_source ?? "").trim().toLowerCase();
-            const trSrc = String(row?.tool_result_source ?? "").trim().toLowerCase();
+            const st = String(row?.status ?? "")
+              .trim()
+              .toLowerCase();
+            const exec = String(row?.execution_source ?? "")
+              .trim()
+              .toLowerCase();
+            const trSrc = String(row?.tool_result_source ?? "")
+              .trim()
+              .toLowerCase();
             const provenance =
               exec === "recorded" || st === "recorded"
                 ? "recorded"
@@ -603,7 +635,9 @@ export function AttemptDetailOverlay({
               name: String(row?.name ?? "").trim(),
               status: st,
               callId: String(row?.call_id ?? "").trim(),
-              matchTier: String(row?.match_tier ?? "").trim().toLowerCase(),
+              matchTier: String(row?.match_tier ?? "")
+                .trim()
+                .toLowerCase(),
               executionSource: exec || (st === "recorded" ? "recorded" : "simulated"),
               toolResultSource: trSrc || (st === "recorded" ? "baseline_snapshot" : "dry_run"),
               provenance,
@@ -633,8 +667,10 @@ export function AttemptDetailOverlay({
           typeof signalsDetailsRaw.tool_grounding === "object" &&
           !Array.isArray(signalsDetailsRaw.tool_grounding)
         ? (signalsDetailsRaw.tool_grounding as Record<string, unknown>)
-      : null;
-  const toolGroundingStatus = String(toolGroundingDetail?.status ?? "").trim().toLowerCase();
+        : null;
+  const toolGroundingStatus = String(toolGroundingDetail?.status ?? "")
+    .trim()
+    .toLowerCase();
   const toolGroundingReason = String(toolGroundingDetail?.reason ?? "").trim();
   const responseDiffLines = useMemo(() => {
     if (!baselineResponse || !candidateResponse) return [];
@@ -664,8 +700,12 @@ export function AttemptDetailOverlay({
   const toolDivergenceLabel = percentFromRate(toolDivergencePct / 100);
   const evalPassCount = signalsPassed.length;
   const evalTotalCount = canonicalSignalRows.length;
-  const providerErrorPreview = String((attempt?.replay?.provider_error as any)?.response_preview ?? "").trim();
-  const providerErrorMessage = String((attempt?.replay?.provider_error as any)?.message ?? "").trim();
+  const providerErrorPreview = String(
+    (attempt?.replay?.provider_error as any)?.response_preview ?? ""
+  ).trim();
+  const providerErrorMessage = String(
+    (attempt?.replay?.provider_error as any)?.message ?? ""
+  ).trim();
   const responseDataKeys = Array.isArray((candidateSnapshot as any)?.response_data_keys)
     ? ((candidateSnapshot as any)?.response_data_keys as unknown[]).map(key => String(key))
     : [];
@@ -685,7 +725,8 @@ export function AttemptDetailOverlay({
     if (toolGroundingStatus === "fail") {
       return {
         label: "Low",
-        detail: toolGroundingReason || "Tool results were not grounded into a stable final response.",
+        detail:
+          toolGroundingReason || "Tool results were not grounded into a stable final response.",
         toneClass: "border-rose-500/30 bg-rose-500/10 text-rose-200",
       };
     }
@@ -734,7 +775,9 @@ export function AttemptDetailOverlay({
     if (pass) return `All ${evalTotalCount} configured eval checks passed.`;
     const fragments = [`${failedSignals.length} of ${evalTotalCount} eval checks failed.`];
     if (policyRows.length > 0) {
-      fragments.push(`${policyRows.length} tool policy issue${policyRows.length === 1 ? "" : "s"} also need review.`);
+      fragments.push(
+        `${policyRows.length} tool policy issue${policyRows.length === 1 ? "" : "s"} also need review.`
+      );
     }
     return fragments.join(" ");
   })();
@@ -814,11 +857,15 @@ export function AttemptDetailOverlay({
       replayRequestMeta.replay_overrides_by_snapshot_id_applied &&
       typeof replayRequestMeta.replay_overrides_by_snapshot_id_applied === "object"
         ? Object.keys(
-            replayRequestMeta.replay_overrides_by_snapshot_id_applied as Record<string, Record<string, unknown>>
+            replayRequestMeta.replay_overrides_by_snapshot_id_applied as Record<
+              string,
+              Record<string, unknown>
+            >
           ).length
         : 0;
     const samplingOverrides =
-      replayRequestMeta.sampling_overrides && typeof replayRequestMeta.sampling_overrides === "object"
+      replayRequestMeta.sampling_overrides &&
+      typeof replayRequestMeta.sampling_overrides === "object"
         ? Object.keys(replayRequestMeta.sampling_overrides as Record<string, unknown>).length
         : 0;
     const hasNewPrompt = Boolean(replayRequestMeta.has_new_system_prompt);
@@ -838,33 +885,41 @@ export function AttemptDetailOverlay({
     replayRequestMeta?.replay_overrides_by_snapshot_id_applied &&
     typeof replayRequestMeta.replay_overrides_by_snapshot_id_applied === "object"
       ? Object.entries(
-          replayRequestMeta.replay_overrides_by_snapshot_id_applied as Record<string, Record<string, unknown>>
+          replayRequestMeta.replay_overrides_by_snapshot_id_applied as Record<
+            string,
+            Record<string, unknown>
+          >
         ).filter(([, value]) => value && typeof value === "object" && Object.keys(value).length > 0)
       : [];
   const replayPerLogOverrideCount = replayPerLogOverrideEntries.length;
   const replaySamplingKeys =
-    replayRequestMeta?.sampling_overrides && typeof replayRequestMeta.sampling_overrides === "object"
+    replayRequestMeta?.sampling_overrides &&
+    typeof replayRequestMeta.sampling_overrides === "object"
       ? Object.keys(replayRequestMeta.sampling_overrides as Record<string, unknown>).sort()
       : [];
   const normalizedToolContext =
     toolContext && typeof toolContext === "object" && !Array.isArray(toolContext)
       ? (toolContext as Record<string, unknown>)
       : attempt?.experiment &&
-            typeof attempt.experiment === "object" &&
-            !Array.isArray(attempt.experiment) &&
-            (attempt.experiment as Record<string, unknown>).tool_context &&
-            typeof (attempt.experiment as Record<string, unknown>).tool_context === "object" &&
-            !Array.isArray((attempt.experiment as Record<string, unknown>).tool_context)
+          typeof attempt.experiment === "object" &&
+          !Array.isArray(attempt.experiment) &&
+          (attempt.experiment as Record<string, unknown>).tool_context &&
+          typeof (attempt.experiment as Record<string, unknown>).tool_context === "object" &&
+          !Array.isArray((attempt.experiment as Record<string, unknown>).tool_context)
         ? ((attempt.experiment as Record<string, unknown>).tool_context as Record<string, unknown>)
         : null;
-  const toolContextModeValue = String(normalizedToolContext?.mode ?? "recorded").trim().toLowerCase();
+  const toolContextModeValue = String(normalizedToolContext?.mode ?? "recorded")
+    .trim()
+    .toLowerCase();
   const toolContextInject =
     normalizedToolContext?.inject &&
     typeof normalizedToolContext.inject === "object" &&
     !Array.isArray(normalizedToolContext.inject)
       ? (normalizedToolContext.inject as Record<string, unknown>)
       : null;
-  const toolContextScopeValue = String(toolContextInject?.scope ?? "per_snapshot").trim().toLowerCase();
+  const toolContextScopeValue = String(toolContextInject?.scope ?? "per_snapshot")
+    .trim()
+    .toLowerCase();
   const toolContextGlobalText = String(toolContextInject?.global_text ?? "").trim();
   const toolContextBySnapshot =
     toolContextInject?.by_snapshot_id &&
@@ -876,20 +931,26 @@ export function AttemptDetailOverlay({
     ([, value]) => typeof value === "string" && value.trim().length > 0
   );
   const hasToolContextDetails =
-    toolContextModeValue === "inject" || toolContextGlobalText.length > 0 || toolContextCustomEntries.length > 0;
+    toolContextModeValue === "inject" ||
+    toolContextGlobalText.length > 0 ||
+    toolContextCustomEntries.length > 0;
   const toolContextSummary = (() => {
-    if (!hasToolContextDetails) return "Recorded only";
-    if (toolContextModeValue !== "inject") return "Recorded only";
+    if (!hasToolContextDetails) return "Using recorded request only";
+    if (toolContextModeValue !== "inject") return "Using recorded request only";
     if (toolContextScopeValue === "global") {
-      return toolContextGlobalText ? "Shared appended text present" : "Shared append configured";
+      return toolContextGlobalText
+        ? "Shared extra system text added"
+        : "Shared extra system text configured";
     }
-    const parts = [`Append enabled, ${toolContextCustomEntries.length} log${toolContextCustomEntries.length === 1 ? "" : "s"} customized`];
-    if (toolContextGlobalText) parts.push("fallback present");
+    const parts = [
+      `Extra text added for ${toolContextCustomEntries.length} log${toolContextCustomEntries.length === 1 ? "" : "s"}`,
+    ];
+    if (toolContextGlobalText) parts.push("shared fallback present");
     return parts.join(", ");
   })();
   const toolContextScopeLabel =
     toolContextModeValue !== "inject"
-      ? "recorded-only"
+      ? "not applicable"
       : toolContextScopeValue === "global"
         ? "run-wide"
         : "per-log";
@@ -946,19 +1007,19 @@ export function AttemptDetailOverlay({
     if (replayOverrideCount > 0 || replayPerLogOverrideCount > 0) {
       rows.push({
         id: "extra-request",
-        label: "Added request data",
+        label: "Extra request fields",
         summary:
           replayOverrideCount > 0 && replayPerLogOverrideCount > 0
-            ? `Shared changed, ${replayPerLogOverrideCount} snapshots customized`
+            ? `Shared fields changed, ${replayPerLogOverrideCount} logs customized`
             : replayOverrideCount > 0
-              ? `Shared changed (${replayOverrideCount} key${replayOverrideCount === 1 ? "" : "s"})`
-              : `${replayPerLogOverrideCount} snapshots customized`,
+              ? `Shared fields changed (${replayOverrideCount} key${replayOverrideCount === 1 ? "" : "s"})`
+              : `${replayPerLogOverrideCount} logs customized`,
         meta:
           replayOverrideKeys.length > 0
             ? replayOverrideKeys.slice(0, 3).join(", ")
             : replayPerLogOverrideEntries
                 .slice(0, 2)
-                .map(([sid, value]) => `snapshot ${sid} (${Object.keys(value).length})`)
+                .map(([sid, value]) => `log ${sid} (${Object.keys(value).length})`)
                 .join(" · "),
         scope:
           replayOverrideCount > 0 && replayPerLogOverrideCount > 0
@@ -974,22 +1035,22 @@ export function AttemptDetailOverlay({
     if (hasToolContextDetails) {
       rows.push({
         id: "extra-context",
-        label: "System context",
+        label: "Extra system text",
         summary: toolContextSummary,
         meta:
           toolContextModeValue === "inject"
             ? toolContextScopeValue === "global"
-              ? "Shared append"
+              ? "Shared extra text"
               : toolContextGlobalText
                 ? "Per-log with fallback"
                 : "Per-log only"
-            : "Recorded only",
+            : "Using recorded request only",
         scope:
           toolContextScopeValue === "global"
             ? "Run-wide"
             : toolContextModeValue === "inject"
               ? "Per-log"
-              : "Recorded-only",
+              : "Run-wide",
         tone: toolContextModeValue === "inject" ? "changed" : "default",
         action: "details",
       });
@@ -1042,7 +1103,8 @@ export function AttemptDetailOverlay({
     replaySamplingKeys,
   ]);
   const diffFocusBySignal = useMemo(() => {
-    const preview = (lines: string[]): string | null => (lines.length > 0 ? lines.slice(0, 2).join(" / ") : null);
+    const preview = (lines: string[]): string | null =>
+      lines.length > 0 ? lines.slice(0, 2).join(" / ") : null;
 
     return Object.fromEntries(
       failedSignals.map(row => {
@@ -1094,7 +1156,9 @@ export function AttemptDetailOverlay({
   const diffExamplesBySignal = useMemo(() => {
     type DiffExample = { tone: "added" | "removed"; label: string; text: string };
     const repeatCandidateLine =
-      addedDiffPreviewLines.find((line, idx, arr) => arr.findIndex(other => other === line) !== idx) ?? null;
+      addedDiffPreviewLines.find(
+        (line, idx, arr) => arr.findIndex(other => other === line) !== idx
+      ) ?? null;
 
     return Object.fromEntries(
       failedSignals.map(row => {
@@ -1105,23 +1169,39 @@ export function AttemptDetailOverlay({
         const secondRemoved = removedDiffPreviewLines[1];
 
         if (row.id === "required") {
-          if (firstRemoved) examples.push({ tone: "removed", label: "Missing from candidate", text: firstRemoved });
-          if (firstAdded) examples.push({ tone: "added", label: "Candidate changed to", text: firstAdded });
+          if (firstRemoved)
+            examples.push({ tone: "removed", label: "Missing from candidate", text: firstRemoved });
+          if (firstAdded)
+            examples.push({ tone: "added", label: "Candidate changed to", text: firstAdded });
         } else if (row.id === "format" || row.id === "json") {
-          if (firstRemoved) examples.push({ tone: "removed", label: "Baseline structure", text: firstRemoved });
-          if (firstAdded) examples.push({ tone: "added", label: "Candidate structure", text: firstAdded });
+          if (firstRemoved)
+            examples.push({ tone: "removed", label: "Baseline structure", text: firstRemoved });
+          if (firstAdded)
+            examples.push({ tone: "added", label: "Candidate structure", text: firstAdded });
         } else if (row.id === "length") {
-          if (firstAdded) examples.push({ tone: "added", label: "Extra candidate line", text: firstAdded });
-          if (firstRemoved) examples.push({ tone: "removed", label: "Missing baseline line", text: firstRemoved });
+          if (firstAdded)
+            examples.push({ tone: "added", label: "Extra candidate line", text: firstAdded });
+          if (firstRemoved)
+            examples.push({ tone: "removed", label: "Missing baseline line", text: firstRemoved });
         } else if (row.id === "repetition") {
           if (repeatCandidateLine) {
-            examples.push({ tone: "added", label: "Repeated candidate line", text: repeatCandidateLine });
+            examples.push({
+              tone: "added",
+              label: "Repeated candidate line",
+              text: repeatCandidateLine,
+            });
           } else if (firstAdded) {
             examples.push({ tone: "added", label: "Candidate repeated content", text: firstAdded });
           }
-          if (secondAdded) examples.push({ tone: "added", label: "Nearby changed line", text: secondAdded });
+          if (secondAdded)
+            examples.push({ tone: "added", label: "Nearby changed line", text: secondAdded });
         } else if (row.id === "empty") {
-          if (firstRemoved) examples.push({ tone: "removed", label: "Expected baseline content", text: firstRemoved });
+          if (firstRemoved)
+            examples.push({
+              tone: "removed",
+              label: "Expected baseline content",
+              text: firstRemoved,
+            });
         }
 
         return [row.id, examples.slice(0, 2)];
@@ -1223,7 +1303,9 @@ export function AttemptDetailOverlay({
               <div className="min-w-0">
                 <div className="text-[11px] font-medium text-slate-200">{attemptLabel}</div>
                 <div className="mt-1 text-xs text-slate-500">
-                  {failedOnly ? "Showing failed attempts only." : "Browsing all attempts for this input."}
+                  {failedOnly
+                    ? "Showing failed attempts only."
+                    : "Browsing all attempts for this input."}
                 </div>
               </div>
 
@@ -1354,12 +1436,20 @@ export function AttemptDetailOverlay({
                   <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <div className="text-xs font-medium text-slate-400">What changed from base</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">Input &amp; setup diff</h3>
+                        <div className="text-xs font-medium text-slate-400">
+                          What changed from base
+                        </div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">
+                          Input &amp; setup diff
+                        </h3>
                       </div>
-                      <div className="text-[11px] text-slate-500">Review the exact replay input before reading eval results.</div>
+                      <div className="text-[11px] text-slate-500">
+                        Review the exact replay input before reading eval results.
+                      </div>
                     </div>
-                    <div className={clsx("mt-4 rounded-xl border px-4 py-4", gateConfidence.toneClass)}>
+                    <div
+                      className={clsx("mt-4 rounded-xl border px-4 py-4", gateConfidence.toneClass)}
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="text-sm font-medium text-white">{decisionSummary}</div>
                         <div className="flex flex-wrap items-center gap-2 text-[11px]">
@@ -1371,15 +1461,21 @@ export function AttemptDetailOverlay({
                           </span>
                         </div>
                       </div>
-                      <div className="mt-2 text-[11px] leading-relaxed text-slate-200/80">{gateConfidence.detail}</div>
+                      <div className="mt-2 text-[11px] leading-relaxed text-slate-200/80">
+                        {gateConfidence.detail}
+                      </div>
                     </div>
                     <div className="mt-4">
                       {inputChanged ? (
                         <div className="grid gap-4 xl:grid-cols-2">
                           <div className="rounded-xl border border-white/5 bg-[#0a0a0c]">
                             <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
-                              <span className="text-[11px] font-semibold text-slate-400">Baseline input</span>
-                              <span className="text-[10px] text-slate-500">{baselineInputLineCount} lines</span>
+                              <span className="text-[11px] font-semibold text-slate-400">
+                                Baseline input
+                              </span>
+                              <span className="text-[10px] text-slate-500">
+                                {baselineInputLineCount} lines
+                              </span>
                             </div>
                             <pre
                               className={clsx(
@@ -1392,7 +1488,9 @@ export function AttemptDetailOverlay({
                           </div>
                           <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05]">
                             <div className="flex items-center justify-between border-b border-fuchsia-500/10 px-4 py-3">
-                              <span className="text-[11px] font-semibold text-fuchsia-100">Replay input</span>
+                              <span className="text-[11px] font-semibold text-fuchsia-100">
+                                Replay input
+                              </span>
                               <span className="rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-semibold text-fuchsia-100">
                                 Changed
                               </span>
@@ -1411,7 +1509,9 @@ export function AttemptDetailOverlay({
                         <div className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-4">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div>
-                              <div className="text-sm font-medium text-white">User input matched the baseline.</div>
+                              <div className="text-sm font-medium text-white">
+                                User input matched the baseline.
+                              </div>
                               <div className="mt-1 text-[11px] text-slate-500">
                                 Same prompt text was replayed for this attempt.
                               </div>
@@ -1476,7 +1576,9 @@ export function AttemptDetailOverlay({
                               <div className="min-w-0">
                                 <div className="text-sm text-slate-100">{row.summary}</div>
                                 {row.meta ? (
-                                  <div className="mt-1 line-clamp-2 text-xs text-slate-500">{row.meta}</div>
+                                  <div className="mt-1 line-clamp-2 text-xs text-slate-500">
+                                    {row.meta}
+                                  </div>
                                 ) : null}
                               </div>
                               <div className="flex items-center justify-between gap-3 sm:justify-end">
@@ -1491,14 +1593,18 @@ export function AttemptDetailOverlay({
                                   {row.scope}
                                 </span>
                                 {actionLabel ? (
-                                  <span className="text-[11px] font-medium text-slate-400">{actionLabel}</span>
+                                  <span className="text-[11px] font-medium text-slate-400">
+                                    {actionLabel}
+                                  </span>
                                 ) : null}
                               </div>
                             </Container>
                           );
                         })
                       ) : (
-                        <div className="px-4 py-6 text-sm text-slate-500">No meaningful base vs replay changes were captured.</div>
+                        <div className="px-4 py-6 text-sm text-slate-500">
+                          No meaningful base vs replay changes were captured.
+                        </div>
                       )}
                     </div>
                   </section>
@@ -1509,7 +1615,9 @@ export function AttemptDetailOverlay({
                         <div className="text-xs font-medium text-slate-400">Evaluation results</div>
                         <h3 className="mt-2 text-lg font-semibold text-white">Eval scoreboard</h3>
                       </div>
-                      <div className="text-[11px] text-slate-500">All configured eval checks are shown below.</div>
+                      <div className="text-[11px] text-slate-500">
+                        All configured eval checks are shown below.
+                      </div>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-slate-400">
                       <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 text-rose-200">
@@ -1526,7 +1634,8 @@ export function AttemptDetailOverlay({
                     </div>
                     {runtimeSignalRows.length > 0 ? (
                       <div className="mt-4 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] px-4 py-3 text-[11px] leading-relaxed text-fuchsia-100/85">
-                        {runtimeSignalRows.length} runtime-only diagnostic{runtimeSignalRows.length === 1 ? "" : "s"} excluded from eval coverage.
+                        {runtimeSignalRows.length} runtime-only diagnostic
+                        {runtimeSignalRows.length === 1 ? "" : "s"} excluded from eval coverage.
                       </div>
                     ) : null}
                     {!signalsChecksRaw ? (
@@ -1541,37 +1650,47 @@ export function AttemptDetailOverlay({
                       <div className="mt-4 space-y-2">
                         {canonicalSignalRows.map(row => {
                           const failed = row.status === "fail";
-                          const barNode =
-                            signalsDetailsRaw
-                              ? formatSignalValue(row.id, (signalsDetailsRaw as any)?.[row.id], row.pass)
-                              : null;
-                          const evidenceText =
-                            signalsDetailsRaw
-                              ? formatSignalWhy(row.id, (signalsDetailsRaw as any)?.[row.id])
-                              : "Evidence unavailable for this check.";
-                          const metricText =
-                            signalsDetailsRaw
-                              ? formatSignalMetric(row.id, (signalsDetailsRaw as any)?.[row.id])
-                              : null;
+                          const barNode = signalsDetailsRaw
+                            ? formatSignalValue(
+                                row.id,
+                                (signalsDetailsRaw as any)?.[row.id],
+                                row.pass
+                              )
+                            : null;
+                          const evidenceText = signalsDetailsRaw
+                            ? formatSignalWhy(row.id, (signalsDetailsRaw as any)?.[row.id])
+                            : "Evidence unavailable for this check.";
+                          const metricText = signalsDetailsRaw
+                            ? formatSignalMetric(row.id, (signalsDetailsRaw as any)?.[row.id])
+                            : null;
                           const diffFocus = diffFocusBySignal[row.id];
                           const diffExamples = diffExamplesBySignal[row.id] ?? [];
-                          const showsDiffEvidence = ["required", "format", "json", "length", "repetition", "empty"].includes(
-                            row.id
-                          );
+                          const showsDiffEvidence = [
+                            "required",
+                            "format",
+                            "json",
+                            "length",
+                            "repetition",
+                            "empty",
+                          ].includes(row.id);
                           if (!failed) {
                             return (
                               <div
                                 key={row.id}
                                 className="grid gap-3 rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3 md:grid-cols-[minmax(0,180px)_80px_minmax(0,1fr)_minmax(0,220px)] md:items-center"
                               >
-                                <div className="text-sm font-medium text-slate-100">{row.label}</div>
+                                <div className="text-sm font-medium text-slate-100">
+                                  {row.label}
+                                </div>
                                 <div>
                                   <span className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-200">
                                     Pass
                                   </span>
                                 </div>
                                 <div className="min-w-0 text-sm text-slate-400">{evidenceText}</div>
-                                <div className="text-xs text-slate-500">{metricText || "Within threshold"}</div>
+                                <div className="text-xs text-slate-500">
+                                  {metricText || "Within threshold"}
+                                </div>
                               </div>
                             );
                           }
@@ -1582,7 +1701,9 @@ export function AttemptDetailOverlay({
                             >
                               <summary className="list-none cursor-pointer px-4 py-3 [&::-webkit-details-marker]:hidden">
                                 <div className="grid gap-3 md:grid-cols-[minmax(0,180px)_80px_minmax(0,1fr)_minmax(0,220px)_auto] md:items-center">
-                                  <div className="text-sm font-medium text-slate-100">{row.label}</div>
+                                  <div className="text-sm font-medium text-slate-100">
+                                    {row.label}
+                                  </div>
                                   <div>
                                     <span
                                       className={clsx(
@@ -1595,8 +1716,12 @@ export function AttemptDetailOverlay({
                                       {failed ? "Fail" : "Pass"}
                                     </span>
                                   </div>
-                                  <div className="min-w-0 line-clamp-2 text-sm text-slate-300">{evidenceText}</div>
-                                  <div className="text-xs text-slate-500">{metricText || "See evidence"}</div>
+                                  <div className="min-w-0 line-clamp-2 text-sm text-slate-300">
+                                    {evidenceText}
+                                  </div>
+                                  <div className="text-xs text-slate-500">
+                                    {metricText || "See evidence"}
+                                  </div>
                                   <div className="text-[11px] font-medium text-slate-500">
                                     {showsDiffEvidence ? "Review" : "Details"}
                                   </div>
@@ -1606,21 +1731,32 @@ export function AttemptDetailOverlay({
                                 <div className="space-y-3">
                                   <div className="grid gap-3 md:grid-cols-2">
                                     <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
-                                      <div className="text-xs font-semibold text-slate-400">Evidence</div>
-                                      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">{evidenceText}</p>
+                                      <div className="text-xs font-semibold text-slate-400">
+                                        Evidence
+                                      </div>
+                                      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">
+                                        {evidenceText}
+                                      </p>
                                     </div>
                                     <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
-                                      <div className="text-xs font-semibold text-slate-400">Metric</div>
+                                      <div className="text-xs font-semibold text-slate-400">
+                                        Metric
+                                      </div>
                                       <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">
-                                        {metricText || "Structured metric unavailable for this check."}
+                                        {metricText ||
+                                          "Structured metric unavailable for this check."}
                                       </p>
                                     </div>
                                   </div>
                                   {barNode ? <div>{barNode}</div> : null}
                                   {showsDiffEvidence && diffFocus ? (
                                     <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
-                                      <div className="text-xs font-semibold text-slate-400">Diff focus</div>
-                                      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">{diffFocus}</p>
+                                      <div className="text-xs font-semibold text-slate-400">
+                                        Diff focus
+                                      </div>
+                                      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">
+                                        {diffFocus}
+                                      </p>
                                     </div>
                                   ) : null}
                                   {showsDiffEvidence && diffExamples.length > 0 ? (
@@ -1638,7 +1774,9 @@ export function AttemptDetailOverlay({
                                           <div
                                             className={clsx(
                                               "text-xs font-semibold",
-                                              example.tone === "added" ? "text-emerald-400" : "text-rose-400"
+                                              example.tone === "added"
+                                                ? "text-emerald-400"
+                                                : "text-rose-400"
                                             )}
                                           >
                                             {example.label}
@@ -1675,12 +1813,16 @@ export function AttemptDetailOverlay({
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="max-w-3xl">
                         <div className="text-xs font-medium text-slate-400">Response diff</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">Output changed like this</h3>
+                        <h3 className="mt-2 text-lg font-semibold text-white">
+                          Output changed like this
+                        </h3>
                       </div>
                     </div>
                     <div className="mt-4 flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-slate-200">Compare baseline vs candidate</p>
+                        <p className="text-sm font-semibold text-slate-200">
+                          Compare baseline vs candidate
+                        </p>
                         <p className="mt-1 text-[11px] text-slate-500">{diffConfidenceMessage}</p>
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-slate-400">
@@ -1697,7 +1839,9 @@ export function AttemptDetailOverlay({
                                 : "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-100 hover:bg-fuchsia-500/18"
                             )}
                           >
-                            <span>{showRemovedDiffLines ? "Hide removed lines" : "Show removed lines"}</span>
+                            <span>
+                              {showRemovedDiffLines ? "Hide removed lines" : "Show removed lines"}
+                            </span>
                             <span className="rounded-full bg-black/25 px-1.5 py-0.5 text-[9px] font-bold tracking-normal text-white/85">
                               {diffRemovedCount}
                             </span>
@@ -1708,9 +1852,7 @@ export function AttemptDetailOverlay({
                     <div className="mt-4 grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
                       <div className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0c]">
                         <div className="flex items-center justify-between border-b border-white/5 bg-black/40 px-4 py-3">
-                          <span className="text-[11px] font-semibold text-slate-400">
-                            Baseline
-                          </span>
+                          <span className="text-[11px] font-semibold text-slate-400">Baseline</span>
                           <span className="text-[10px] text-slate-500">{baselineModel}</span>
                         </div>
                         <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-5 font-mono text-[13px] leading-[1.75] text-slate-300 whitespace-pre-wrap break-words">
@@ -1753,7 +1895,8 @@ export function AttemptDetailOverlay({
                                     key={idx}
                                     className={clsx(
                                       "block w-full px-4 py-0.5",
-                                      isAdded && "border-l-2 border-emerald-500/50 bg-emerald-500/10 font-medium text-emerald-200",
+                                      isAdded &&
+                                        "border-l-2 border-emerald-500/50 bg-emerald-500/10 font-medium text-emerald-200",
                                       isRemoved &&
                                         "border-l-2 border-rose-500/50 bg-rose-500/10 text-rose-200 line-through decoration-rose-300/70",
                                       !isAdded && !isRemoved && "pl-[18px]"
@@ -1770,7 +1913,10 @@ export function AttemptDetailOverlay({
                     </div>
                   </section>
 
-                  <div ref={detailsSectionRef} className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+                  <div
+                    ref={detailsSectionRef}
+                    className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]"
+                  >
                     <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
                       <div>
                         <div className="text-xs font-medium text-slate-400">Details</div>
@@ -1787,9 +1933,17 @@ export function AttemptDetailOverlay({
                             </summary>
                             <div className="mt-3 space-y-2">
                               {attentionItems.map(item => (
-                                <div key={item.key} className={clsx("rounded-lg border px-3 py-3", riskToneClass(item.tone))}>
+                                <div
+                                  key={item.key}
+                                  className={clsx(
+                                    "rounded-lg border px-3 py-3",
+                                    riskToneClass(item.tone)
+                                  )}
+                                >
                                   <div className="flex items-center justify-between gap-3">
-                                    <span className="text-sm font-medium text-slate-200">{item.label}</span>
+                                    <span className="text-sm font-medium text-slate-200">
+                                      {item.label}
+                                    </span>
                                     <span
                                       className={clsx(
                                         "text-xs font-semibold",
@@ -1800,10 +1954,16 @@ export function AttemptDetailOverlay({
                                             : "text-emerald-400"
                                       )}
                                     >
-                                      {item.tone === "danger" ? "Review" : item.tone === "warning" ? "Watch" : "Stable"}
+                                      {item.tone === "danger"
+                                        ? "Review"
+                                        : item.tone === "warning"
+                                          ? "Watch"
+                                          : "Stable"}
                                     </span>
                                   </div>
-                                  <p className="mt-2 text-[11px] leading-relaxed text-slate-300">{item.detail}</p>
+                                  <p className="mt-2 text-[11px] leading-relaxed text-slate-300">
+                                    {item.detail}
+                                  </p>
                                 </div>
                               ))}
                             </div>
@@ -1812,12 +1972,14 @@ export function AttemptDetailOverlay({
                         {hasConfigurationChanges ? (
                           <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
                             <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
-                              Added request data details
+                              Extra request fields details
                               <span className="ml-2 text-[11px] font-normal text-slate-500">
                                 {replayOverrideCount > 0
-                                  ? `${replayOverrideCount} shared key${replayOverrideCount === 1 ? "" : "s"}`
-                                  : "No shared keys"}
-                                {replayPerLogOverrideCount > 0 ? ` · ${replayPerLogOverrideCount} per-log override(s)` : ""}
+                                  ? `${replayOverrideCount} shared field${replayOverrideCount === 1 ? "" : "s"}`
+                                  : "No shared fields"}
+                                {replayPerLogOverrideCount > 0
+                                  ? ` · ${replayPerLogOverrideCount} customized log(s)`
+                                  : ""}
                               </span>
                             </summary>
                             <div className="mt-3">
@@ -1829,27 +1991,41 @@ export function AttemptDetailOverlay({
                         {hasToolContextDetails ? (
                           <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
                             <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
-                              System context details
-                              <span className="ml-2 text-[11px] font-normal text-slate-500">{toolContextSummary}</span>
+                              Extra system text details
+                              <span className="ml-2 text-[11px] font-normal text-slate-500">
+                                {toolContextSummary}
+                              </span>
                             </summary>
                             <div className="mt-3 space-y-3">
                               <div className="grid gap-3 sm:grid-cols-2">
                                 <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
                                   <div className="text-[11px] font-medium text-slate-500">Mode</div>
                                   <div className="mt-1 text-sm text-slate-100">
-                                    {toolContextModeValue === "inject" ? "Append to system prompt" : "Recorded only"}
+                                    {toolContextModeValue === "inject"
+                                      ? "Add extra system text"
+                                      : "Use recorded request only"}
                                   </div>
                                 </div>
                                 <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                  <div className="text-[11px] font-medium text-slate-500">Scope</div>
-                                  <div className="mt-1 text-sm text-slate-100">{toolContextScopeLabel}</div>
+                                  <div className="text-[11px] font-medium text-slate-500">
+                                    Scope
+                                  </div>
+                                  <div className="mt-1 text-sm text-slate-100">
+                                    {toolContextScopeLabel}
+                                  </div>
                                 </div>
                                 <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                  <div className="text-[11px] font-medium text-slate-500">Customized logs</div>
-                                  <div className="mt-1 text-sm text-slate-100">{toolContextCustomEntries.length}</div>
+                                  <div className="text-[11px] font-medium text-slate-500">
+                                    Customized logs
+                                  </div>
+                                  <div className="mt-1 text-sm text-slate-100">
+                                    {toolContextCustomEntries.length}
+                                  </div>
                                 </div>
                                 <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                  <div className="text-[11px] font-medium text-slate-500">Fallback</div>
+                                  <div className="text-[11px] font-medium text-slate-500">
+                                    Shared fallback text
+                                  </div>
                                   <div className="mt-1 text-sm text-slate-100">
                                     {toolContextGlobalText ? "Present" : "Not set"}
                                   </div>
@@ -1857,7 +2033,9 @@ export function AttemptDetailOverlay({
                               </div>
                               {toolContextGlobalText ? (
                                 <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                  <div className="text-[11px] font-medium text-slate-500">Shared / fallback preview</div>
+                                  <div className="text-[11px] font-medium text-slate-500">
+                                    Shared text / fallback preview
+                                  </div>
                                   <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-300 custom-scrollbar">
                                     {toolContextGlobalText}
                                   </pre>
@@ -1865,10 +2043,15 @@ export function AttemptDetailOverlay({
                               ) : null}
                               {toolContextCustomEntries.length > 0 ? (
                                 <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                  <div className="text-[11px] font-medium text-slate-500">Per-log context</div>
+                                  <div className="text-[11px] font-medium text-slate-500">
+                                    Per-log text
+                                  </div>
                                   <div className="mt-3 space-y-2">
                                     {toolContextCustomEntries.map(([sid, value]) => (
-                                      <details key={sid} className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">
+                                      <details
+                                        key={sid}
+                                        className="rounded-lg border border-white/5 bg-black/20 px-3 py-2"
+                                      >
                                         <summary className="cursor-pointer list-none text-[11px] font-medium text-slate-200 [&::-webkit-details-marker]:hidden">
                                           Log {sid}
                                         </summary>
@@ -1886,18 +2069,28 @@ export function AttemptDetailOverlay({
                       </div>
                     </section>
 
-                    <section ref={toolBehaviorSectionRef} className={clsx("rounded-2xl border p-5", toolBehaviorToneClass)}>
+                    <section
+                      ref={toolBehaviorSectionRef}
+                      className={clsx("rounded-2xl border p-5", toolBehaviorToneClass)}
+                    >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-300">
                             <div className="h-1.5 w-1.5 rounded-full bg-amber-300/80" />
                             Tool behavior
                           </h3>
-                          <p className="mt-2 text-sm font-medium text-slate-100">{toolBehaviorSummary}</p>
+                          <p className="mt-2 text-sm font-medium text-slate-100">
+                            {toolBehaviorSummary}
+                          </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
                           <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
-                            Policy {toolPolicyEnabled ? (policyRows.length > 0 ? "failed" : "passed") : "off"}
+                            Policy{" "}
+                            {toolPolicyEnabled
+                              ? policyRows.length > 0
+                                ? "failed"
+                                : "passed"
+                              : "off"}
                           </span>
                           <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
                             Calls {toolTotalCalls}
@@ -1912,17 +2105,22 @@ export function AttemptDetailOverlay({
                       </div>
                       <div className="mt-4 flex items-center justify-between gap-3">
                         <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
-                          <span>Loop {toolLoopStatus}{toolLoopRounds > 0 ? ` (${toolLoopRounds} rounds)` : ""}</span>
+                          <span>
+                            Loop {toolLoopStatus}
+                            {toolLoopRounds > 0 ? ` (${toolLoopRounds} rounds)` : ""}
+                          </span>
                           <span>Results {toolResultCount}</span>
-                          {toolSimulatedCount > 0 ? <span>Simulated {toolSimulatedCount}</span> : null}
+                          {toolSimulatedCount > 0 ? (
+                            <span>Simulated {toolSimulatedCount}</span>
+                          ) : null}
                           {toolSkippedCount > 0 ? <span>Skipped {toolSkippedCount}</span> : null}
                           {toolFailedCount > 0 ? <span>Failed {toolFailedCount}</span> : null}
                         </div>
-                          <button
-                            type="button"
-                            onClick={() => setShowToolBehaviorDetails(v => !v)}
-                            className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
-                          >
+                        <button
+                          type="button"
+                          onClick={() => setShowToolBehaviorDetails(v => !v)}
+                          className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                        >
                           {showToolBehaviorDetails ? "Hide tool details" : "Show tool details"}
                         </button>
                       </div>
@@ -1931,9 +2129,14 @@ export function AttemptDetailOverlay({
                           {policyRows.length > 0 ? (
                             <div className="mt-4 space-y-2">
                               {policyRows.map(row => (
-                                <div key={row.key} className="rounded-xl bg-black/25 px-3 py-3 ring-1 ring-white/5">
+                                <div
+                                  key={row.key}
+                                  className="rounded-xl bg-black/25 px-3 py-3 ring-1 ring-white/5"
+                                >
                                   <div className="flex items-center justify-between gap-2">
-                                    <span className="text-xs font-semibold text-rose-100">{row.label}</span>
+                                    <span className="text-xs font-semibold text-rose-100">
+                                      {row.label}
+                                    </span>
                                     {row.severity ? (
                                       <span className="text-[10px] font-semibold text-rose-300">
                                         {row.severity}
@@ -1941,7 +2144,9 @@ export function AttemptDetailOverlay({
                                     ) : null}
                                   </div>
                                   {row.message ? (
-                                    <p className="mt-1 text-[11px] leading-relaxed text-rose-100/75">{row.message}</p>
+                                    <p className="mt-1 text-[11px] leading-relaxed text-rose-100/75">
+                                      {row.message}
+                                    </p>
                                   ) : null}
                                 </div>
                               ))}
@@ -1970,12 +2175,16 @@ export function AttemptDetailOverlay({
                   <section className="rounded-2xl border border-white/5 bg-white/[0.02] px-5 py-5">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="max-w-3xl">
-                        <div className="text-xs font-medium text-slate-400">Support and diagnostics</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">Diagnostics payload</h3>
+                        <div className="text-xs font-medium text-slate-400">
+                          Support and diagnostics
+                        </div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">
+                          Diagnostics payload
+                        </h3>
                         <p className="mt-2 text-sm leading-6 text-slate-300">
-                          Use this only when the Review tab is not enough. This view exposes the raw replay payload,
-                          provider metadata, extraction details, and tool evidence so you can diagnose capture issues or
-                          provider-specific behavior.
+                          Use this only when the Review tab is not enough. This view exposes the raw
+                          replay payload, provider metadata, extraction details, and tool evidence
+                          so you can diagnose capture issues or provider-specific behavior.
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
@@ -1983,7 +2192,9 @@ export function AttemptDetailOverlay({
                           Provider {candidateProvider || "Unknown"}
                         </span>
                         <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
-                          {responseDataKeys.length > 0 ? `${responseDataKeys.length} payload keys` : "No payload keys"}
+                          {responseDataKeys.length > 0
+                            ? `${responseDataKeys.length} payload keys`
+                            : "No payload keys"}
                         </span>
                       </div>
                     </div>
@@ -2002,16 +2213,22 @@ export function AttemptDetailOverlay({
                     <div className="space-y-3 xl:col-span-3">
                       <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
                         <div className="text-[11px] font-medium text-slate-400">Provider</div>
-                        <div className="mt-2 text-sm font-medium text-slate-100 break-words">{candidateProvider}</div>
+                        <div className="mt-2 text-sm font-medium text-slate-100 break-words">
+                          {candidateProvider}
+                        </div>
                         <div className="mt-1 text-xs text-slate-400">{candidateModel}</div>
                       </div>
                       <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
                         <div className="text-[11px] font-medium text-slate-400">Payload health</div>
                         <div className="mt-2 text-sm font-medium text-slate-100 break-words">
-                          {hasProviderError ? "Provider warning attached" : "Structured payload captured"}
+                          {hasProviderError
+                            ? "Provider warning attached"
+                            : "Structured payload captured"}
                         </div>
                         <div className="mt-1 text-xs text-slate-400">
-                          {responseDataKeys.length > 0 ? `${responseDataKeys.length} keys captured` : "No payload keys"}
+                          {responseDataKeys.length > 0
+                            ? `${responseDataKeys.length} keys captured`
+                            : "No payload keys"}
                         </div>
                       </div>
                       <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
@@ -2035,7 +2252,10 @@ export function AttemptDetailOverlay({
                         {flattenedToolLoopRows.length > 0 ? (
                           <div className="mt-3 space-y-2">
                             {flattenedToolLoopRows.slice(0, 3).map((row, idx) => (
-                              <div key={`${row.round}-${row.name}-${idx}`} className="rounded-xl bg-black/20 px-3 py-2 ring-1 ring-white/5">
+                              <div
+                                key={`${row.round}-${row.name}-${idx}`}
+                                className="rounded-xl bg-black/20 px-3 py-2 ring-1 ring-white/5"
+                              >
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-[11px] font-medium text-slate-200">
                                     Round {row.round || 1} · {row.name}
@@ -2063,16 +2283,23 @@ export function AttemptDetailOverlay({
                                   </span>
                                 </div>
                                 {row.matchTier === "name_order" ? (
-                                  <p className="mt-1 text-[10px] text-amber-200/90" title="call_id mismatch">
-                                    Weak match: baseline result matched by tool name order (cross-provider or missing
-                                    id).
+                                  <p
+                                    className="mt-1 text-[10px] text-amber-200/90"
+                                    title="call_id mismatch"
+                                  >
+                                    Weak match: baseline result matched by tool name order
+                                    (cross-provider or missing id).
                                   </p>
                                 ) : null}
                                 {row.mode ? (
-                                  <p className="mt-1 text-[10px] text-slate-500">Mode: {row.mode}</p>
+                                  <p className="mt-1 text-[10px] text-slate-500">
+                                    Mode: {row.mode}
+                                  </p>
                                 ) : null}
                                 {row.argumentsPreview ? (
-                                  <p className="mt-1 line-clamp-2 text-[10px] text-slate-500">{row.argumentsPreview}</p>
+                                  <p className="mt-1 line-clamp-2 text-[10px] text-slate-500">
+                                    {row.argumentsPreview}
+                                  </p>
                                 ) : null}
                               </div>
                             ))}
@@ -2082,19 +2309,28 @@ export function AttemptDetailOverlay({
                       <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
                         <div className="text-[11px] font-medium text-slate-400">Extract path</div>
                         <div className="mt-2 text-sm font-medium text-slate-100 break-words">
-                          {String((candidateSnapshot as any)?.response_extract_path ?? "Not captured")}
+                          {String(
+                            (candidateSnapshot as any)?.response_extract_path ?? "Not captured"
+                          )}
                         </div>
                         <div className="mt-1 text-xs text-slate-400 break-words">
-                          {String((candidateSnapshot as any)?.response_extract_reason ?? "No extraction warning")}
+                          {String(
+                            (candidateSnapshot as any)?.response_extract_reason ??
+                              "No extraction warning"
+                          )}
                         </div>
                       </div>
                       <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
                         <div className="text-[11px] font-medium text-slate-400">Payload keys</div>
                         <div className="mt-2 text-sm font-medium text-slate-100 break-words">
-                          {responseDataKeys.length > 0 ? responseDataKeys.slice(0, 10).join(", ") : "None captured"}
+                          {responseDataKeys.length > 0
+                            ? responseDataKeys.slice(0, 10).join(", ")
+                            : "None captured"}
                         </div>
                         <div className="mt-1 text-xs text-slate-400">
-                          {providerErrorPreview ? "Provider preview included" : "Structured response payload"}
+                          {providerErrorPreview
+                            ? "Provider preview included"
+                            : "Structured response payload"}
                         </div>
                       </div>
                     </div>
