@@ -12,6 +12,7 @@ export type ExpandedDetailAttemptView = {
   initialAttemptIndex: number;
   baselineSnapshot: Record<string, unknown> | null;
   replayRequestMeta?: Record<string, unknown> | null;
+  toolContext?: Record<string, unknown> | null;
 } | null;
 
 export type UseReleaseGateExpandedHistoryOverlayParams = {
@@ -97,6 +98,15 @@ export function useReleaseGateExpandedHistoryOverlay(p: UseReleaseGateExpandedHi
         typeof reportObj.replay_request_meta === "object" &&
         !Array.isArray(reportObj.replay_request_meta)
           ? (reportObj.replay_request_meta as Record<string, unknown>)
+          : null,
+      toolContext:
+        reportObj.experiment &&
+        typeof reportObj.experiment === "object" &&
+        !Array.isArray(reportObj.experiment) &&
+        (reportObj.experiment as Record<string, unknown>).tool_context &&
+        typeof (reportObj.experiment as Record<string, unknown>).tool_context === "object" &&
+        !Array.isArray((reportObj.experiment as Record<string, unknown>).tool_context)
+          ? ((reportObj.experiment as Record<string, unknown>).tool_context as Record<string, unknown>)
           : null,
     });
     p.setSelectedRunId(null);
