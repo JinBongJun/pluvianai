@@ -8,6 +8,7 @@ type Props = {
   projectId: number;
   projectName?: string;
   orgName?: string;
+  topRailMeta?: React.ReactNode;
   onAction?: (actionId: string) => void;
   children?: React.ReactNode;
 };
@@ -17,6 +18,7 @@ export function ReleaseGateLayoutWrapper({
   projectId,
   projectName,
   orgName,
+  topRailMeta,
   onAction,
   children,
 }: Props) {
@@ -26,6 +28,7 @@ export function ReleaseGateLayoutWrapper({
       projectId={projectId}
       projectName={projectName}
       orgName={orgName}
+      topRailMeta={topRailMeta}
       navigationVariant="side"
       showTelemetry={false}
       onAction={onAction ?? (() => {})}

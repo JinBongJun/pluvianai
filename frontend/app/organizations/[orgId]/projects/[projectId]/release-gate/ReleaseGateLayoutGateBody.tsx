@@ -3,7 +3,6 @@
 import React, { memo, useMemo } from "react";
 import type { AgentForPicker } from "@/components/release-gate/AgentPickerCard";
 import { ReleaseGateMap } from "@/components/release-gate/ReleaseGateMap";
-import { ProjectAccessContextBanner } from "@/components/project-access/ProjectAccessContextBanner";
 import { ReleaseGateExpandedView } from "./ReleaseGateExpandedView";
 import { ReleaseGateStatusPanel } from "./ReleaseGateStatusPanel";
 import { getProjectAccessErrorCopy, type AccessAwareProject } from "@/lib/projectAccess";
@@ -104,11 +103,6 @@ function ReleaseGateLayoutGateBodyInner({
   if (viewMode === "map") {
     return (
       <div className="relative h-full">
-        {projectAccess ? (
-          <div className="absolute left-6 top-[92px] z-30 max-w-[430px]">
-            <ProjectAccessContextBanner project={projectAccess} variant="compact" />
-          </div>
-        ) : null}
         <ReleaseGateMap
           agents={agents}
           agentsLoaded={agentsLoaded}
@@ -121,11 +115,6 @@ function ReleaseGateLayoutGateBodyInner({
   }
   return (
     <div className="relative h-full">
-      {projectAccess ? (
-        <div className="absolute left-6 top-[92px] z-30 max-w-[430px]">
-          <ProjectAccessContextBanner project={projectAccess} variant="compact" />
-        </div>
-      ) : null}
       <ReleaseGateExpandedView />
     </div>
   );

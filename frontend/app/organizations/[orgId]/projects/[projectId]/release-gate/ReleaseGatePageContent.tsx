@@ -3,6 +3,7 @@
 import { ReleaseGateProviders } from "./ReleaseGateProviders";
 import { ReleaseGatePlanLimitedLayout } from "./releaseGatePlanLimitedLayout";
 import { useReleaseGatePageModel } from "./useReleaseGatePageModel";
+import { ProjectAccessInlineStrip } from "@/components/project-access/ProjectAccessInlineStrip";
 
 export { sanitizePayloadForPreview } from "./releaseGatePageContent.lib";
 
@@ -17,7 +18,12 @@ export default function ReleaseGatePageContent() {
       validateRun={m.validateRunContextValue}
       keys={m.releaseGateKeysContextValue}
       page={m.contextValue}
-      layout={m.layout}
+      layout={{
+        ...m.layout,
+        topRailMeta: m.gateBodyProps.projectAccess ? (
+          <ProjectAccessInlineStrip project={m.gateBodyProps.projectAccess} />
+        ) : null,
+      }}
     >
       <ReleaseGatePlanLimitedLayout gateBodyProps={m.gateBodyProps} />
     </ReleaseGateProviders>

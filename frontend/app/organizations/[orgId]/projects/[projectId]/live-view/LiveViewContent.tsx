@@ -35,7 +35,7 @@ import { AgentEvaluationPanel } from "@/components/live-view/AgentEvaluationPane
 import { ClinicalLogDataSection } from "@/components/live-view/ClinicalLogDataSection";
 import { AgentSettingsPanel } from "@/components/live-view/AgentSettingsPanel";
 import { useToast } from "@/components/ToastContainer";
-import { ProjectAccessContextBanner } from "@/components/project-access/ProjectAccessContextBanner";
+import { ProjectAccessInlineStrip } from "@/components/project-access/ProjectAccessInlineStrip";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { getProjectAccessErrorCopy } from "@/lib/projectAccess";
@@ -390,6 +390,11 @@ export function LiveViewContent() {
       projectId={projectId}
       projectName={project?.name}
       orgName={org?.name}
+      topRailMeta={
+        !showLoadingOverlay && !showAccessDeniedOverlay && resolvedProjectAccess ? (
+          <ProjectAccessInlineStrip project={resolvedProjectAccess} />
+        ) : null
+      }
       rightPanel={
         <RailwaySidePanel
           title={selectedAgentId || "Agent Diagnostics"}
@@ -474,12 +479,6 @@ export function LiveViewContent() {
             hardDeleting={hardDeletingAgents}
           />
         )}
-        {!showLoadingOverlay && !showAccessDeniedOverlay && resolvedProjectAccess ? (
-          <div className="absolute left-6 top-[92px] z-20 max-w-[430px]">
-            <ProjectAccessContextBanner project={resolvedProjectAccess} variant="compact" />
-          </div>
-        ) : null}
-
         <div className="absolute bottom-10 left-10 z-0 pointer-events-none select-none opacity-20">
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] italic">
