@@ -366,7 +366,7 @@ export function ReleaseGateSelectedAgentSurface({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-4 border-t border-white/[0.08] bg-black/20 px-6 py-5 shadow-[0_-14px_30px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+        <div className="flex shrink-0 items-center justify-between gap-4 border-t border-white/[0.08] bg-black/20 px-6 pb-6 pt-5 shadow-[0_-14px_30px_rgba(0,0,0,0.18)] backdrop-blur-xl">
           <div className="flex min-w-0 flex-1 items-center gap-4">
             <span className="shrink-0 text-sm font-medium text-white/60">{baselineSummaryText}</span>
             {lastRunStatusLabel ? (
@@ -391,15 +391,22 @@ export function ReleaseGateSelectedAgentSurface({
               </span>
             ) : null}
             {startBlockedReason ? (
-              <span className="truncate border-l-2 border-amber-500/50 bg-amber-500/5 px-3 py-1.5 text-[13px] font-medium text-amber-100/90">
-                {startBlockedReason}
-              </span>
+              <div className="min-w-0 flex-1">
+                <div
+                  className="truncate border-l-2 border-amber-500/50 bg-amber-500/5 px-3 py-2 text-[13px] font-medium text-amber-100/90"
+                  title={startBlockedReason}
+                >
+                  {startBlockedReason}
+                </div>
+              </div>
             ) : runError ? (
-              <div
-                className="truncate border-l-2 border-rose-500/50 bg-rose-500/5 px-3 py-1.5 text-[13px] font-medium text-rose-100"
-                title={runError}
-              >
-                {runError}
+              <div className="min-w-0 flex-1">
+                <div
+                  className="truncate border-l-2 border-rose-500/50 bg-rose-500/5 px-3 py-2 text-[13px] font-medium text-rose-100"
+                  title={runError}
+                >
+                  {runError}
+                </div>
               </div>
             ) : null}
           </div>
@@ -422,7 +429,7 @@ export function ReleaseGateSelectedAgentSurface({
                 disabled={rgConfig.isValidating}
                 data-testid="rg-repeat-trigger"
                 className={clsx(
-                  "inline-flex min-h-[52px] items-center gap-2 rounded-xl border px-4 py-3 text-sm font-black uppercase transition",
+                  "inline-flex min-h-[56px] items-center gap-2 rounded-xl border px-4 py-3 text-sm font-black uppercase transition",
                   rgConfig.isHeavyRepeat
                     ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
                     : "border-white/10 bg-white/[0.02] text-white/90 hover:bg-white/[0.08]",
@@ -478,7 +485,7 @@ export function ReleaseGateSelectedAgentSurface({
                 title={cancelTitle}
                 data-testid="rg-run-cancel-btn"
                 className={clsx(
-                  "inline-flex min-h-[52px] items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-bold uppercase tracking-wider text-white transition",
+                  "inline-flex min-h-[56px] items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-bold uppercase tracking-wider text-white transition",
                   cancelDisabled
                     ? "cursor-not-allowed opacity-50"
                     : "hover:bg-white/20"
@@ -489,15 +496,15 @@ export function ReleaseGateSelectedAgentSurface({
               </button>
             ) : null}
 
-            <div className="flex flex-col items-end gap-1.5">
+            <div className="relative flex flex-col items-end">
               <button
                 type="button"
                 onClick={handleStartClick}
                 data-testid="rg-run-start-btn"
                 disabled={startDisabled}
                 className={clsx(
-                  "inline-flex min-h-[56px] min-w-[152px] items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 px-8 py-3.5 text-base font-black uppercase tracking-[0.18em] text-white transition-all shadow-[0_0_24px_rgba(217,70,239,0.34)] hover:from-indigo-500 hover:via-violet-500 hover:to-fuchsia-500 hover:shadow-[0_0_30px_rgba(217,70,239,0.48)]",
-                  startDisabled && "cursor-not-allowed opacity-50 shadow-none"
+                  "inline-flex h-[56px] min-w-[160px] items-center justify-center gap-2 rounded-xl bg-fuchsia-600 px-8 text-[15px] font-black uppercase tracking-[0.15em] text-white transition-all shadow-[0_0_24px_rgba(192,38,211,0.4)] hover:bg-fuchsia-500 hover:shadow-[0_0_32px_rgba(192,38,211,0.6)]",
+                  startDisabled && "cursor-not-allowed opacity-50 shadow-none hover:bg-fuchsia-600 hover:shadow-none"
                 )}
               >
                 {rgConfig.isValidating ? (
@@ -513,7 +520,7 @@ export function ReleaseGateSelectedAgentSurface({
                 )}
               </button>
               {rgConfig.cancelLocked ? (
-                <span className="text-[11px] font-medium text-amber-200/85">
+                <span className="absolute top-full mt-2 whitespace-nowrap text-[11px] font-medium text-amber-200/85">
                   Usage already counted for this run.
                 </span>
               ) : null}
