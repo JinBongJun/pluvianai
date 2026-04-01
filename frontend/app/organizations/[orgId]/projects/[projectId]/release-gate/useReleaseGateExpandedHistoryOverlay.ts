@@ -30,6 +30,19 @@ export type UseReleaseGateExpandedHistoryOverlayParams = {
 };
 
 export function useReleaseGateExpandedHistoryOverlay(p: UseReleaseGateExpandedHistoryOverlayParams) {
+  const {
+    rightPanelTab,
+    tab,
+    selectedRunId,
+    setSelectedRunId,
+    selectedRunReport,
+    selectedRunReportLoading,
+    selectedRunReportError,
+    baselineSnapshotsById,
+    recentSnapshots,
+    setExpandedHistoryId,
+    setDetailAttemptView,
+  } = p;
   const pendingRunIdRef = useRef<string | null>(null);
 
   const clearHistoryOverlayPending = useCallback(() => {
@@ -39,56 +52,56 @@ export function useReleaseGateExpandedHistoryOverlay(p: UseReleaseGateExpandedHi
   const selectHistoryRun = useCallback(
     (id: string) => {
       pendingRunIdRef.current = id;
-      p.setSelectedRunId(id);
-      p.setExpandedHistoryId(id);
+      setSelectedRunId(id);
+      setExpandedHistoryId(id);
     },
-    [p.setSelectedRunId, p.setExpandedHistoryId]
+    [setSelectedRunId, setExpandedHistoryId]
   );
 
   useEffect(() => {
-    if (p.rightPanelTab !== "history" && p.tab !== "history") {
+    if (rightPanelTab !== "history" && tab !== "history") {
       pendingRunIdRef.current = null;
     }
-  }, [p.rightPanelTab, p.tab]);
+  }, [rightPanelTab, tab]);
 
   useEffect(() => {
-    if (!pendingRunIdRef.current || p.selectedRunReportLoading) return;
-    if (p.selectedRunReportError) {
+    if (!pendingRunIdRef.current || selectedRunReportLoading) return;
+    if (selectedRunReportError) {
       pendingRunIdRef.current = null;
-      p.setSelectedRunId(null);
+      setSelectedRunId(null);
     }
-  }, [p.selectedRunReportLoading, p.selectedRunReportError, p.setSelectedRunId]);
+  }, [selectedRunReportLoading, selectedRunReportError, setSelectedRunId]);
 
   useEffect(() => {
     const pending = pendingRunIdRef.current;
-    if (!pending || String(pending) !== String(p.selectedRunId ?? "")) return;
-    if (p.selectedRunReportLoading || !p.selectedRunReport) return;
-    const reportObj = p.selectedRunReport as Record<string, unknown>;
-    if (String(reportObj.id) !== String(p.selectedRunId)) return;
-    const historyUiActive = p.rightPanelTab === "history" || p.tab === "history";
+    if (!pending || String(pending) !== String(selectedRunId ?? "")) return;
+    if (selectedRunReportLoading || !selectedRunReport) return;
+    const reportObj = selectedRunReport as Record<string, unknown>;
+    if (String(reportObj.id) !== String(selectedRunId)) return;
+    const historyUiActive = rightPanelTab === "history" || tab === "history";
     if (!historyUiActive) return;
 
-    const cases = getCasesFromReport(p.selectedRunReport);
+    const cases = getCasesFromReport(selectedRunReport);
     const picked = findFirstCaseWithAttempts(cases);
     pendingRunIdRef.current = null;
 
     if (!picked || !Array.isArray(picked.run?.attempts) || picked.run.attempts.length === 0) {
-      p.setSelectedRunId(null);
+      setSelectedRunId(null);
       return;
     }
 
     const { run, caseIndex } = picked;
     const baselineSnapshotForRun =
-      (p.baselineSnapshotsById.get(String(run?.snapshot_id ?? "")) as
+      (baselineSnapshotsById.get(String(run?.snapshot_id ?? "")) as
         | Record<string, unknown>
         | undefined) ??
-      (p.recentSnapshots.find(
+      (recentSnapshots.find(
         s =>
           String((s as Record<string, unknown>)?.id ?? "") === String(run?.snapshot_id ?? "")
       ) as Record<string, unknown> | undefined) ??
       null;
 
-    p.setDetailAttemptView({
+    setDetailAttemptView({
       attempts: run.attempts,
       caseIndex,
       initialAttemptIndex: 0,
@@ -109,17 +122,17 @@ export function useReleaseGateExpandedHistoryOverlay(p: UseReleaseGateExpandedHi
           ? ((reportObj.experiment as Record<string, unknown>).tool_context as Record<string, unknown>)
           : null,
     });
-    p.setSelectedRunId(null);
+    setSelectedRunId(null);
   }, [
-    p.selectedRunReport,
-    p.selectedRunId,
-    p.selectedRunReportLoading,
-    p.rightPanelTab,
-    p.tab,
-    p.baselineSnapshotsById,
-    p.recentSnapshots,
-    p.setSelectedRunId,
-    p.setDetailAttemptView,
+    selectedRunReport,
+    selectedRunId,
+    selectedRunReportLoading,
+    rightPanelTab,
+    tab,
+    baselineSnapshotsById,
+    recentSnapshots,
+    setSelectedRunId,
+    setDetailAttemptView,
   ]);
 
   return { clearHistoryOverlayPending, selectHistoryRun };

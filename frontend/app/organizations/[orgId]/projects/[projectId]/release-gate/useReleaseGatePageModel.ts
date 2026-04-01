@@ -732,8 +732,6 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       mutateProjectUserApiKeys,
     }),
     [
-      lv,
-      rd,
       orgId,
       projectId,
       project,

@@ -256,6 +256,7 @@ export function LiveViewContent() {
     setHistory,
     setHistoryIndex,
     setNodes,
+    isDraggingRef,
   ]);
 
   useEffect(() => {
@@ -281,7 +282,7 @@ export function LiveViewContent() {
         },
       }))
     );
-  }, [selectedAgentId, setNodes, dragEndCounter]);
+  }, [selectedAgentId, setNodes, dragEndCounter, isDraggingRef]);
 
   const agentsErrorStatus = Number((agentsError as any)?.response?.status ?? 0);
   const agentsErrorCode = getApiErrorCode(agentsError);

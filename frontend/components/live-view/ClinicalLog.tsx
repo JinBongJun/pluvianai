@@ -446,15 +446,20 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
     }
   };
 
-  const snapshots = (data?.items || []) as ClinicalSnapshot[];
+  const snapshots = React.useMemo(
+    () => ((data?.items || []) as ClinicalSnapshot[]),
+    [data?.items]
+  );
 
   React.useEffect(() => {
     // Collapse expanded card when filters/window change to avoid stale selection confusion.
     setExpandedId(null);
   }, [riskFilter, recentTraceLimit, agentId]);
 
-  const activeSnapshots = React.useMemo(() => snapshots, [snapshots]);
-  const totalSnapshotsCount = Number(data?.total_count ?? data?.count ?? snapshots.length);
+  const totalSnapshotsCount = React.useMemo(
+    () => Number(data?.total_count ?? data?.count ?? snapshots.length),
+    [data?.total_count, data?.count, snapshots.length]
+  );
 
   // List uses light mode (no payload/long text); detail modal always needs full snapshot. Cache by (projectId, snapshotId).
   const snapshotDetailCacheRef = React.useRef<Map<string, ClinicalSnapshot>>(new Map());
@@ -505,7 +510,10 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
   );
 
   const evalRuntime = React.useMemo(() => (evalData || {}) as EvalResponse, [evalData]);
-  const savedEvalConfig = (settingsData?.diagnostic_config?.eval || {}) as Record<string, any>;
+  const savedEvalConfig = React.useMemo(
+    () => ((settingsData?.diagnostic_config?.eval || {}) as Record<string, any>),
+    [settingsData?.diagnostic_config?.eval]
+  );
   const runtimeEnabledCheckIds = React.useMemo(() => {
     const checks = Array.isArray(evalRuntime?.checks) ? evalRuntime.checks : [];
     const enabled = checks
@@ -522,8 +530,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
   );
   // Use stored eval_checks_result only (single source of truth; matches DATA tab detail).
   const hasAnyEvalContext = React.useMemo(
-    () => activeSnapshots.some(s => toEvalRows(s as unknown as Record<string, unknown>).length > 0),
-    [activeSnapshots]
+    () => snapshots.some(s => toEvalRows(s as unknown as Record<string, unknown>).length > 0),
+    [snapshots]
   );
   const evalEnabled = hasAnyEvalContext || enabledEvalChecks.length > 0;
   const getSnapshotEvalRows = React.useCallback((snapshot: ClinicalSnapshot) => {
@@ -547,14 +555,14 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
     const hasEvalContext = hasAnyEvalContext;
     const isEvalFlagged = (s: ClinicalSnapshot) => getSnapshotFailedCount(s) > 0;
 
-    if (riskFilter === "all") return activeSnapshots;
+    if (riskFilter === "all") return snapshots;
     if (riskFilter === "worst") {
       // FLAGGED: prefer eval-based failure signal; fallback to backend critical flag.
-      return activeSnapshots.filter(s => (hasEvalContext ? isEvalFlagged(s) : Boolean(s.is_worst)));
+      return snapshots.filter(s => (hasEvalContext ? isEvalFlagged(s) : Boolean(s.is_worst)));
     }
     // HEALTHY: no eval failures (or no backend critical flag when eval context is unavailable)
-    return activeSnapshots.filter(s => (hasEvalContext ? !isEvalFlagged(s) : !s.is_worst));
-  }, [activeSnapshots, riskFilter, hasAnyEvalContext, getSnapshotFailedCount]);
+    return snapshots.filter(s => (hasEvalContext ? !isEvalFlagged(s) : !s.is_worst));
+  }, [snapshots, riskFilter, hasAnyEvalContext, getSnapshotFailedCount]);
   const visibleSnapshots = React.useMemo(() => {
     const out = [...filteredSnapshots];
     if (sortMode === "oldest") {

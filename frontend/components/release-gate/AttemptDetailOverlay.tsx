@@ -1095,21 +1095,29 @@ export function AttemptDetailOverlay({
     typeof replayRequestMeta.replay_overrides_applied === "object"
       ? Object.keys(replayRequestMeta.replay_overrides_applied as Record<string, unknown>).length
       : 0;
-  const replayOverrideKeys =
-    replayRequestMeta?.replay_overrides_applied &&
-    typeof replayRequestMeta.replay_overrides_applied === "object"
-      ? Object.keys(replayRequestMeta.replay_overrides_applied as Record<string, unknown>).sort()
-      : [];
-  const replayPerLogOverrideEntries =
-    replayRequestMeta?.replay_overrides_by_snapshot_id_applied &&
-    typeof replayRequestMeta.replay_overrides_by_snapshot_id_applied === "object"
-      ? Object.entries(
-          replayRequestMeta.replay_overrides_by_snapshot_id_applied as Record<
-            string,
-            Record<string, unknown>
-          >
-        ).filter(([, value]) => value && typeof value === "object" && Object.keys(value).length > 0)
-      : [];
+  const replayOverrideKeys = useMemo(() => {
+    if (
+      !replayRequestMeta?.replay_overrides_applied ||
+      typeof replayRequestMeta.replay_overrides_applied !== "object"
+    ) {
+      return [];
+    }
+    return Object.keys(replayRequestMeta.replay_overrides_applied as Record<string, unknown>).sort();
+  }, [replayRequestMeta?.replay_overrides_applied]);
+  const replayPerLogOverrideEntries = useMemo(() => {
+    if (
+      !replayRequestMeta?.replay_overrides_by_snapshot_id_applied ||
+      typeof replayRequestMeta.replay_overrides_by_snapshot_id_applied !== "object"
+    ) {
+      return [];
+    }
+    return Object.entries(
+      replayRequestMeta.replay_overrides_by_snapshot_id_applied as Record<
+        string,
+        Record<string, unknown>
+      >
+    ).filter(([, value]) => value && typeof value === "object" && Object.keys(value).length > 0);
+  }, [replayRequestMeta?.replay_overrides_by_snapshot_id_applied]);
   const replayPerLogOverrideCount = replayPerLogOverrideEntries.length;
   const replaySamplingSummary = useMemo(() => {
     const overrides =

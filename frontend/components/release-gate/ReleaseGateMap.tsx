@@ -237,7 +237,7 @@ export function ReleaseGateMapContent({
 
       return updatedNodes;
     });
-  }, [agentsKey, agents, selectedNodeId, setNodes, projectName]);
+  }, [agentsKey, agents, agentsLoaded, selectedNodeId, rgDetails, setNodes, projectName]);
 
   // Keep node.selected, rgDetails, and blur in sync when selectedNodeId changes (skip during drag to avoid node jump)
   useEffect(() => {
@@ -253,7 +253,7 @@ export function ReleaseGateMapContent({
         },
       }))
     );
-  }, [selectedNodeId, rgDetails, setNodes, dragEndCounter]);
+  }, [selectedNodeId, rgDetails, setNodes, dragEndCounter, isDraggingRef]);
 
   // Camera zoom & pan to selected node
   useEffect(() => {
@@ -282,7 +282,7 @@ export function ReleaseGateMapContent({
       fitView({ duration: 800, padding: 0.2 });
     }, 150);
     return () => clearTimeout(t);
-  }, [nodes.length, selectedNodeId, fitView]);
+  }, [nodes, selectedNodeId, fitView]);
 
   useEffect(() => {
     if (!projectId || Number.isNaN(projectId) || projectId <= 0) return;
@@ -300,7 +300,7 @@ export function ReleaseGateMapContent({
       setHistory([nodes.map(n => ({ ...n, position: { ...n.position } }))]);
       setHistoryIndex(0);
     }
-  }, [nodes.length, history.length]);
+  }, [nodes, history.length]);
 
   const handleNodesChange = (changes: Parameters<typeof onNodesChange>[0]) => {
     const isDragging = changes.some(c => c.type === "position" && (c as any).dragging);

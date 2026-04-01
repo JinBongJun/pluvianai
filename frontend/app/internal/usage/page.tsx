@@ -67,7 +67,7 @@ export default function InternalUsagePage() {
     void load();
   }, [isAuthenticated, month]);
 
-  const items = data?.items ?? [];
+  const items = useMemo(() => data?.items ?? [], [data?.items]);
   const totalAttempts = useMemo(
     () => items.reduce((sum, item) => sum + Number(item.total_attempts || 0), 0),
     [items]
