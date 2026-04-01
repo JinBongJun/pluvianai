@@ -6,6 +6,7 @@ import {
   Box,
   CheckCircle2,
   ChevronDown,
+  Hourglass,
   Loader2,
   Play,
   Settings,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 
 import type { ReleaseGateMapRgDetails } from "./releaseGateExpandedMapRgDetails";
+import { getReleaseGateSelectedAgentSurfacePhase } from "./releaseGateMainViewState";
 
 export function ReleaseGateSelectedAgentSurface({
   agentLabel,
@@ -24,6 +26,7 @@ export function ReleaseGateSelectedAgentSurface({
   rgDetails: ReleaseGateMapRgDetails | null;
 }) {
   const evalListScrollRef = useRef<HTMLUListElement | null>(null);
+  const surfacePhase = getReleaseGateSelectedAgentSurfacePhase(rgDetails);
   const handleEvalListWheel = useCallback((e: React.WheelEvent) => {
     const el = evalListScrollRef.current;
     if (!el) return;
@@ -32,11 +35,36 @@ export function ReleaseGateSelectedAgentSurface({
     el.scrollTop += e.deltaY;
   }, []);
 
-  if (!rgDetails?.config) return null;
+  if (surfacePhase === "pending") {
+    return (
+      <div
+        className="pointer-events-auto fixed left-[344px] right-[344px] top-[148px] bottom-6 z-[10000] min-w-0"
+        data-testid="rg-selected-agent-surface-pending"
+      >
+        <div className="flex h-full min-h-0 flex-col justify-center overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#12121a]/92 px-8 text-center shadow-[0_25px_80px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-fuchsia-500/20 bg-fuchsia-500/[0.08]">
+            <Hourglass className="h-6 w-6 text-fuchsia-300/80" />
+          </div>
+          <h2 className="mt-5 text-xl font-semibold tracking-tight text-white">
+            Preparing selected agent
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            {agentLabel} is selected. We are still resolving the validate surface for this agent,
+            so the side panels are available first.
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            If this message stays visible, reopen the agent or return to map view and select it
+            again.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-  const rgConfig = rgDetails.config;
+  const resolvedDetails = rgDetails as ReleaseGateMapRgDetails;
+  const rgConfig = resolvedDetails.config;
   const runLocked = !!(rgConfig.isValidating || Boolean(rgConfig.activeJobId));
-  const toolsCount = typeof rgDetails.toolsCount === "number" ? rgDetails.toolsCount : 0;
+  const toolsCount = typeof resolvedDetails.toolsCount === "number" ? resolvedDetails.toolsCount : 0;
   const runError = typeof rgConfig.runError === "string" ? rgConfig.runError.trim() : "";
   const configSourceLabel =
     typeof rgConfig.configSourceLabel === "string" ? rgConfig.configSourceLabel.trim() : "";
@@ -71,11 +99,12 @@ export function ReleaseGateSelectedAgentSurface({
     }
     return "";
   })();
-  const promptPreview = String(rgDetails.prompt || "")
+  const promptPreview = String(resolvedDetails.prompt || "")
     .trim()
     .replace(/\s+/g, " ");
-  const modelLabel = String(rgDetails.model || "").trim().toLowerCase() || "—";
-  const providerLabel = String(rgDetails.provider || "").trim().toLowerCase() || "release-gate";
+  const modelLabel = String(resolvedDetails.model || "").trim().toLowerCase() || "—";
+  const providerLabel =
+    String(resolvedDetails.provider || "").trim().toLowerCase() || "release-gate";
   const samplingSummaryText =
     typeof rgConfig.samplingSummary === "string" ? rgConfig.samplingSummary.trim() : "";
   const toolsSummaryText =
@@ -97,7 +126,10 @@ export function ReleaseGateSelectedAgentSurface({
   };
 
   return (
-    <div className="pointer-events-auto absolute left-[344px] right-[344px] top-[110px] bottom-6 z-[60] min-w-0">
+    <div
+      className="pointer-events-auto fixed left-[344px] right-[344px] top-[148px] bottom-6 z-[10000] min-w-0"
+      data-testid="rg-selected-agent-surface"
+    >
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#12121a]/92 shadow-[0_25px_80px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] px-5 py-5">
           <div className="min-w-0 flex-1">
@@ -131,7 +163,7 @@ export function ReleaseGateSelectedAgentSurface({
               <div className="flex items-center gap-1 rounded-md border border-white/[0.07] bg-white/[0.04] px-1.5 py-0.5">
                 <Box className="h-2.5 w-2.5 text-slate-500" />
                 <span className="max-w-[120px] truncate text-[10px] font-medium text-slate-300">
-                  {rgDetails.model || "—"}
+                  {resolvedDetails.model || "—"}
                 </span>
               </div>
               <div className="flex items-center gap-1 rounded-md border border-white/[0.07] bg-white/[0.04] px-1.5 py-0.5">
@@ -177,9 +209,10 @@ export function ReleaseGateSelectedAgentSurface({
               Eval Checks
             </div>
             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar" onWheel={handleEvalListWheel}>
-              {Array.isArray(rgDetails.activeChecksCards) && rgDetails.activeChecksCards.length > 0 ? (
+              {Array.isArray(resolvedDetails.activeChecksCards) &&
+              resolvedDetails.activeChecksCards.length > 0 ? (
                 <ul ref={evalListScrollRef} className="space-y-4">
-                  {rgDetails.activeChecksCards.map(card => (
+                  {resolvedDetails.activeChecksCards.map(card => (
                     <li key={card.id} className="flex flex-col gap-1.5">
                       <div className="flex items-center gap-2.5">
                         <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
@@ -197,9 +230,10 @@ export function ReleaseGateSelectedAgentSurface({
                     </li>
                   ))}
                 </ul>
-              ) : Array.isArray(rgDetails.activeChecks) && rgDetails.activeChecks.length > 0 ? (
+              ) : Array.isArray(resolvedDetails.activeChecks) &&
+                resolvedDetails.activeChecks.length > 0 ? (
                 <ul ref={evalListScrollRef} className="space-y-3">
-                  {rgDetails.activeChecks.map((name, i) => (
+                  {resolvedDetails.activeChecks.map((name, i) => (
                     <li key={`${name}-${i}`} className="flex items-center gap-2.5">
                       <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
                       <span className="truncate text-[13px] font-semibold tracking-wide text-white/90">
@@ -220,9 +254,10 @@ export function ReleaseGateSelectedAgentSurface({
                 <ShieldCheck className="h-3.5 w-3.5 text-amber-400/70" />
                 Policy Checks
               </div>
-              {Array.isArray(rgDetails.policyCheckCards) && rgDetails.policyCheckCards.length > 0 ? (
+              {Array.isArray(resolvedDetails.policyCheckCards) &&
+              resolvedDetails.policyCheckCards.length > 0 ? (
                 <ul className="space-y-3">
-                  {rgDetails.policyCheckCards.map(card => (
+                  {resolvedDetails.policyCheckCards.map(card => (
                     <li key={card.id} className="flex flex-col gap-1.5">
                       <div className="flex items-center gap-2.5">
                         <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-300" />

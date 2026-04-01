@@ -48,14 +48,19 @@ export function ReleaseGateExpandedView() {
         />
       </div>
       <div className="absolute inset-0 z-[9999] pointer-events-none overflow-y-auto">
-        <ReleaseGateExpandedMainTabs tab={m.tab} setTab={m.setTab} />
-        {viewState.showSelectedAgentSurface ? (
-          <ReleaseGateSelectedAgentSurface
-            agentLabel={m.selectedAgent?.display_name || m.agentId}
-            rgDetails={m.rgDetails}
-          />
+        {viewState.hasSelectedAgent ? (
+          <ClientPortal>
+            <>
+              <ReleaseGateExpandedMainTabs tab={m.tab} setTab={m.setTab} />
+              {viewState.showSelectedAgentSurface ? (
+                <ReleaseGateSelectedAgentSurface
+                  agentLabel={m.selectedAgent?.display_name || m.agentId}
+                  rgDetails={m.rgDetails}
+                />
+              ) : null}
+            </>
+          </ClientPortal>
         ) : null}
-
         {viewState.hasSelectedAgent && (
           <ClientPortal>
             <ReleaseGateRunDataSidePanel
