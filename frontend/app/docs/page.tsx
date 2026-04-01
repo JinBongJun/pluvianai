@@ -218,13 +218,13 @@ export default function DocsPage() {
                   },
                   {
                     title: "Latency Spikes",
-                    desc: "In Evaluation settings, a single latency threshold (fail at or above this many ms). Snapshot Details may show extra tiers for display.",
+                    desc: "Uses a single latency threshold. Evaluation settings and Snapshot Details both describe it as a fail-at-or-above threshold.",
                     value: "fail_ms",
                   },
                   {
                     title: "HTTP Error Codes",
                     desc: "Treats non-success HTTP status on the LLM call as a failure when enabled.",
-                    value: "fail_from status code",
+                    value: "fail_from",
                   },
                   {
                     title: "Refusal / Non-Answer",
@@ -244,7 +244,7 @@ export default function DocsPage() {
                   {
                     title: "Repetition / Loops",
                     desc: "Detects repeated lines or looping text in the assistant output.",
-                    value: "max line repeats",
+                    value: "fail_line_repeats",
                   },
                   {
                     title: "Required Keywords / Fields",

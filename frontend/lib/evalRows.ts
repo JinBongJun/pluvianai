@@ -3,11 +3,9 @@
  * Use this everywhere so list and detail show the same evaluation (single source of truth).
  */
 
-export type EvalRow = { id: string; status: string };
+import { normalizeEvalDisplayId } from "@/lib/evalPresentation";
 
-function normalizeEvalCheckId(rawId: string): string {
-  return rawId === "tool_use_policy" ? "tool" : rawId;
-}
+export type EvalRow = { id: string; status: string };
 
 /**
  * Build eval rows from a snapshot's stored eval_checks_result (DB).
@@ -20,7 +18,7 @@ export function toEvalRows(snapshot: Record<string, unknown> | null | undefined)
   return Object.entries(checks as Record<string, unknown>)
     .filter(([, status]) => typeof status === "string")
     .map(([id, status]) => ({
-      id: normalizeEvalCheckId(id),
+      id: normalizeEvalDisplayId(id),
       status: String(status),
     }));
 }

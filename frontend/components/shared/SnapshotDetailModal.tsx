@@ -7,25 +7,18 @@ import {
   Activity,
   AlignLeft,
   AlertCircle,
-  AlertTriangle,
   CheckCircle2,
   CircleDollarSign,
-  Clock,
-  Code2,
   Coins,
-  FileCheck,
-  FileText,
-  Lock,
-  Repeat,
   Scale,
   Send,
-  ShieldAlert,
   ShieldCheck,
-  SlidersHorizontal,
   Terminal,
   Wrench,
-  XCircle,
   Zap,
+  XCircle,
+  SlidersHorizontal,
+  Clock,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -38,6 +31,13 @@ import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel"
 import { RequestContextPanel } from "@/components/live-view/RequestContextPanel";
 import { buildNodeRequestOverview } from "@/lib/requestOverview";
 import { formatSnapshotCost, formatSnapshotTokens } from "@/lib/snapshotMetrics";
+import {
+  EVAL_CHECK_ICONS,
+  formatEvalStatus,
+  getEnabledCheckIdsFromConfig,
+  getEvalCheckLabel,
+  getEvalDetail,
+} from "@/lib/evalPresentation";
 
 export interface SnapshotForDetail {
   id: string | number;
@@ -83,67 +83,6 @@ export interface EvalResultOverride {
   evalRows?: EvalRow[];
 }
 
-const EVAL_CHECK_LABELS: Record<string, string> = {
-  empty: "Empty / Short Answers",
-  latency: "Latency Spikes",
-  status_code: "HTTP Error Codes",
-  refusal: "Refusal / Non-Answer",
-  json: "JSON Validity",
-  length: "Output Length Drift",
-  repetition: "Repetition / Loops",
-  required: "Required Keywords / Fields",
-  format: "Format Contract",
-  leakage: "PII Leakage Shield",
-  tool: "Tool Use Policy",
-};
-
-/** Match icons to AgentEvaluationPanel (Evaluation tab) so detail view is consistent. */
-const EVAL_CHECK_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  empty: AlertTriangle,
-  latency: Clock,
-  status_code: XCircle,
-  refusal: ShieldAlert,
-  json: Code2,
-  length: SlidersHorizontal,
-  repetition: Repeat,
-  required: FileCheck,
-  format: FileText,
-  leakage: Lock,
-  tool: ShieldCheck,
-};
-
-/**
- * Derive the list of eval check IDs that are "enabled" based on saved eval config.
- * This uses the same normalization semantics as Live View (e.g. tool_use_policy -> tool).
- */
-function getEnabledCheckIdsFromConfig(savedEvalConfig: Record<string, unknown>): string[] {
-  const enabled: string[] = [];
-  const entries = Object.entries(savedEvalConfig || {});
-  if (entries.length === 0) return [];
-
-  for (const [rawKey, value] of entries) {
-    const key = rawKey === "tool_use_policy" ? "tool" : rawKey;
-    if (!(key in EVAL_CHECK_LABELS)) continue;
-
-    const v = value as { enabled?: unknown } | boolean;
-    let isEnabled = true;
-    if (typeof v === "boolean") {
-      isEnabled = v;
-    } else if (typeof v === "object" && v !== null && "enabled" in v) {
-      const flag = (v as { enabled?: unknown }).enabled;
-      if (typeof flag === "boolean") isEnabled = flag;
-    }
-
-    if (isEnabled) enabled.push(key);
-  }
-
-  if (!enabled.length) return [];
-
-  // Preserve user-facing order defined by EVAL_CHECK_LABELS.
-  const order = Object.keys(EVAL_CHECK_LABELS);
-  return Array.from(new Set(enabled)).sort((a, b) => order.indexOf(a) - order.indexOf(b));
-}
-
 function formatPrettyTime(value?: string): string {
   if (!value) return "-";
   const date = new Date(value);
@@ -162,18 +101,6 @@ function safeStringify(val: unknown): string {
     }
   }
   return String(val);
-}
-
-function toFiniteNumber(value: unknown, fallback: number): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function formatEvalStatus(status: string): string {
-  if (status === "na") return "NA";
-  if (status === "not_applicable") return "N/A";
-  if (status === "not_implemented") return "NOT IMPLEMENTED";
-  return status;
 }
 
 function extractStepLogs(
@@ -219,95 +146,6 @@ function extractStepLogs(
           : undefined;
     return { name, status, runtimeMs, detail };
   });
-}
-
-function getEvalDetail(
-  s: SnapshotForDetail,
-  checkId: string,
-  savedEvalConfig: Record<string, unknown>
-): { actualStr: string; configStr: string } {
-  const cfg = (savedEvalConfig[checkId] || {}) as Record<string, unknown>;
-  const res = String((s.response_text ?? s.response ?? "") || "").trim();
-  const len = res.length;
-  let actualStr = "—";
-  let configStr = "—";
-  switch (checkId) {
-    case "empty": {
-      const minChars = toFiniteNumber(cfg?.min_chars, 16);
-      configStr = `min ${minChars} chars`;
-      actualStr = `${len} chars`;
-      return { actualStr, configStr };
-    }
-    case "latency": {
-      const warn = toFiniteNumber(cfg?.warn_ms, 2000);
-      const crit = toFiniteNumber(cfg?.crit_ms, 5000);
-      configStr = `warn > ${warn}ms, crit > ${crit}ms`;
-      const ms = s.latency_ms ?? 0;
-      actualStr = `${ms}ms`;
-      return { actualStr, configStr };
-    }
-    case "status_code": {
-      const warnFrom = toFiniteNumber(cfg?.warn_from, 400);
-      const critFrom = toFiniteNumber(cfg?.crit_from, 500);
-      configStr = `warn ≥ ${warnFrom}, crit ≥ ${critFrom}`;
-      const code = s.status_code ?? 200;
-      actualStr = String(code);
-      return { actualStr, configStr };
-    }
-    case "length": {
-      const warnR = toFiniteNumber(cfg?.warn_ratio, 0.35);
-      const critR = toFiniteNumber(cfg?.crit_ratio, 0.75);
-      configStr = `warn ±${Math.round(warnR * 100)}%, crit ±${Math.round(critR * 100)}% vs baseline`;
-      actualStr = `${len} chars (vs baseline window)`;
-      return { actualStr, configStr };
-    }
-    case "repetition": {
-      const warnR = toFiniteNumber(cfg?.warn_line_repeats, 3);
-      const critR = toFiniteNumber(cfg?.crit_line_repeats, 6);
-      configStr = `warn ${warnR}, crit ${critR} repeats`;
-      const lines = res
-        .split("\n")
-        .map(l => l.trim())
-        .filter(l => l.length >= 4);
-      const counts: Record<string, number> = {};
-      let maxRep = 0;
-      for (const line of lines) {
-        counts[line] = (counts[line] || 0) + 1;
-        if (counts[line] > maxRep) maxRep = counts[line];
-      }
-      actualStr = maxRep ? `${maxRep} max repeats` : "—";
-      return { actualStr, configStr };
-    }
-    case "json": {
-      const mode = String(cfg?.mode || "if_json");
-      configStr = mode === "if_json" ? "if_json" : mode === "always" ? "always" : "if_json";
-      return { actualStr, configStr };
-    }
-    case "refusal": {
-      configStr = "auto-detect refusal / non-answer patterns";
-      return { actualStr, configStr };
-    }
-    case "required": {
-      const keywordsCsv = String(cfg?.keywords_csv || "");
-      const jsonFieldsCsv = String(cfg?.json_fields_csv || "");
-      const keywordCount = keywordsCsv.split(",").filter(part => part.trim().length > 0).length;
-      const fieldCount = jsonFieldsCsv.split(",").filter(part => part.trim().length > 0).length;
-      configStr = `keywords: ${keywordCount}, json fields: ${fieldCount}`;
-      return { actualStr, configStr };
-    }
-    case "format": {
-      const sectionsCsv = String(cfg?.sections_csv || "");
-      const sectionCount = sectionsCsv.split(",").filter(part => part.trim().length > 0).length;
-      configStr = `required sections: ${sectionCount}`;
-      return { actualStr, configStr };
-    }
-    case "leakage": {
-      configStr = "scan for PII (email, phone) & API keys";
-      return { actualStr, configStr };
-    }
-    default:
-      return { actualStr, configStr };
-  }
 }
 
 function buildToolSummaryEmptyLines(s: SnapshotForDetail): string[] {
@@ -892,6 +730,16 @@ export function SnapshotDetailModal({
                     {evalContextLabel}
                   </p>
                 )}
+                {displayEvalRows.length > 0 ? (
+                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70">
+                      {useOverride ? "Results from replay or override" : "Results from captured snapshot"}
+                    </span>
+                    <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-100/90">
+                      Thresholds from current saved settings
+                    </span>
+                  </div>
+                ) : null}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {effectiveEvalEnabled &&
                     displayEvalRows.map(row => {
@@ -927,35 +775,41 @@ export function SnapshotDetailModal({
                               "text-sm font-medium mt-1 line-clamp-1",
                               isSavedAppearance ? "text-slate-400" : "text-slate-200"
                             )}
-                            title={EVAL_CHECK_LABELS[row.id]}
+                            title={getEvalCheckLabel(row.id)}
                           >
-                            {EVAL_CHECK_LABELS[row.id] || row.id}
+                            {getEvalCheckLabel(row.id, row.id)}
                           </span>
                           <div className="flex-1" />
                           {(detail.actualStr !== "—" || detail.configStr !== "—") && (
                             <div className="flex flex-col items-center gap-1 text-xs font-mono mb-2">
-                              <span
-                                className={clsx(
-                                  row.status === "fail" && "font-bold",
-                                  row.status === "fail"
-                                    ? isSavedAppearance
-                                      ? "text-rose-300"
-                                      : "text-rose-400"
-                                    : isSavedAppearance
-                                      ? "text-slate-400"
-                                      : "text-slate-300"
-                                )}
-                              >
-                                {detail.actualStr}
-                              </span>
-                              <span
-                                className={clsx(
-                                  "text-[10px]",
-                                  isSavedAppearance ? "text-slate-500" : "text-slate-500"
-                                )}
-                              >
-                                ({detail.configStr})
-                              </span>
+                              {detail.actualStr !== "—" ? (
+                                <span
+                                  className={clsx(
+                                    row.status === "fail" && "font-bold",
+                                    row.status === "fail"
+                                      ? isSavedAppearance
+                                        ? "text-rose-300"
+                                        : "text-rose-400"
+                                      : isSavedAppearance
+                                        ? "text-slate-400"
+                                        : "text-slate-300"
+                                  )}
+                                >
+                                  {detail.actualStr}
+                                </span>
+                              ) : null}
+                              {detail.configStr !== "—" ? (
+                                <span
+                                  className={clsx(
+                                    "text-[10px]",
+                                    isSavedAppearance ? "text-slate-500" : "text-slate-500"
+                                  )}
+                                >
+                                  {detail.actualStr !== "—"
+                                    ? `Threshold: ${detail.configStr}`
+                                    : detail.configStr}
+                                </span>
+                              ) : null}
                             </div>
                           )}
                           <span
@@ -992,14 +846,14 @@ export function SnapshotDetailModal({
                 )}
                 {!evalContextLabel && displayEvalRows.length > 0 && !useOverride ? (
                   <p className="text-[11px] text-slate-500 text-center leading-relaxed px-1">
-                    Checks shown are those recorded for this snapshot at capture time (not necessarily every
-                    check enabled in current settings).
+                    Result source: snapshot at capture time. Threshold text below uses the current saved
+                    evaluation settings, so it may differ if settings changed later.
                   </p>
                 ) : null}
                 {useOverride && displayEvalRows.length > 0 ? (
                   <p className="text-[11px] text-slate-500 text-center leading-relaxed px-1">
-                    Expanded rows use current eval settings; statuses come from the re-run or override
-                    context.
+                    Result source: replay or override context. Threshold text below uses the current saved
+                    evaluation settings.
                   </p>
                 ) : null}
               </div>

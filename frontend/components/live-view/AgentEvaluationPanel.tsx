@@ -4,128 +4,35 @@ import React, { useMemo, useState, useEffect, useRef } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import clsx from "clsx";
 import {
-  AlertTriangle,
   CheckCircle2,
-  Clock,
-  Code2,
-  ShieldAlert,
   ShieldCheck,
-  SlidersHorizontal,
-  XCircle,
   Plus,
   Save,
   RotateCcw,
-  Repeat,
-  FileCheck,
-  FileText,
-  Lock,
   CircleHelp,
+  Clock,
+  SlidersHorizontal,
 } from "lucide-react";
 import { liveViewAPI, behaviorAPI, type BehaviorRule } from "@/lib/api";
 import { PolicyRuleModal } from "@/components/live-view/PolicyRuleModal";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  EVAL_CHECK_ICONS,
+  EVAL_CHECK_LABELS,
+  formatEvalRuleSummary,
+  normalizeEvalConfig,
+  type EvalConfigShape,
+} from "@/lib/evalPresentation";
 
 // --- Types ---
 
-// Configuration Schema
-type EvalConfig = {
-  enabled?: boolean;
-  empty?: { enabled?: boolean; min_chars?: number };
-  latency?: { enabled?: boolean; fail_ms?: number };
-  status_code?: { enabled?: boolean; fail_from?: number };
-  json?: { enabled?: boolean; mode?: "if_json" | "always" | "off" };
-  refusal?: { enabled?: boolean };
-  length?: { enabled?: boolean; fail_ratio?: number };
-  repetition?: { enabled?: boolean; fail_line_repeats?: number };
-  required?: { enabled?: boolean; keywords_csv?: string; json_fields_csv?: string };
-  format?: { enabled?: boolean; sections_csv?: string };
-  leakage?: { enabled?: boolean };
-  tool_use_policy?: { enabled?: boolean }; // behavior rules (tool order/allowlist/forbidden)
-};
-
-const DEFAULT_EVAL: Required<EvalConfig> = {
-  enabled: true,
-  empty: { enabled: true, min_chars: 16 },
-  latency: { enabled: true, fail_ms: 5000 },
-  status_code: { enabled: true, fail_from: 500 },
-  json: { enabled: true, mode: "if_json" },
-  refusal: { enabled: true },
-  length: { enabled: false, fail_ratio: 0.75 },
-  repetition: { enabled: false, fail_line_repeats: 6 },
-  required: { enabled: false, keywords_csv: "", json_fields_csv: "" },
-  format: { enabled: false, sections_csv: "" },
-  leakage: { enabled: false },
-  tool_use_policy: { enabled: true },
-};
+type EvalConfig = EvalConfigShape;
 
 // --- Helpers ---
-
-function normalizeEvalConfig(input?: Partial<EvalConfig> | null): Required<EvalConfig> {
-  const cfg = (input || {}) as Partial<EvalConfig>;
-  return {
-    enabled: cfg.enabled ?? DEFAULT_EVAL.enabled,
-    empty: { ...DEFAULT_EVAL.empty, ...(cfg.empty || {}) },
-    latency: { ...DEFAULT_EVAL.latency, ...(cfg.latency || {}) },
-    status_code: { ...DEFAULT_EVAL.status_code, ...(cfg.status_code || {}) },
-    json: { ...DEFAULT_EVAL.json, ...(cfg.json || {}) },
-    refusal: { ...DEFAULT_EVAL.refusal, ...(cfg.refusal || {}) },
-    length: { ...DEFAULT_EVAL.length, ...(cfg.length || {}) },
-    repetition: { ...DEFAULT_EVAL.repetition, ...(cfg.repetition || {}) },
-    required: { ...DEFAULT_EVAL.required, ...(cfg.required || {}) },
-    format: { ...DEFAULT_EVAL.format, ...(cfg.format || {}) },
-    leakage: { ...DEFAULT_EVAL.leakage, ...(cfg.leakage || {}) },
-    tool_use_policy: { ...DEFAULT_EVAL.tool_use_policy, ...(cfg.tool_use_policy || {}) },
-  };
-}
 
 function clampNumber(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, value));
-}
-
-/** One-line summary of saved config for a rule (shown when enabled). */
-function getEvalRuleSummary(id: string, config: any): string {
-  if (!config || config.enabled === false) return "";
-  switch (id) {
-    case "empty":
-      return typeof config.min_chars === "number" ? `min ${config.min_chars} chars` : "";
-    case "latency": {
-      const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}s` : `${n}ms`);
-      const f = config.fail_ms;
-      return typeof f === "number" ? `fail ≥ ${fmt(f)}` : "";
-    }
-    case "status_code": {
-      const f = config.fail_from;
-      return typeof f === "number" ? `fail ≥${f}` : "";
-    }
-    case "json":
-      return config.mode === "always"
-        ? "always enforce"
-        : config.mode === "if_json"
-          ? "auto-detect"
-          : "";
-    case "refusal":
-      return "On";
-    case "length": {
-      const fr = config.fail_ratio;
-      const pct = (r: number) => `${Math.round(r * 100)}%`;
-      return typeof fr === "number" ? `fail ±${pct(fr)} vs baseline` : "";
-    }
-    case "repetition": {
-      const f = config.fail_line_repeats;
-      return typeof f === "number" ? `fail ≥ ${f} repeats` : "";
-    }
-    case "required":
-      return config.keywords_csv?.trim() || config.json_fields_csv?.trim()
-        ? "keywords/fields set"
-        : "On";
-    case "format":
-      return config.sections_csv?.trim() ? "sections set" : "On";
-    case "leakage":
-      return "On";
-    default:
-      return "";
-  }
 }
 
 // --- Components ---
@@ -623,11 +530,11 @@ export function AgentEvaluationPanel({
           {/* 1. Empty Answers */}
           <SignalCard
             id="empty"
-            label="Empty / Short Answers"
-            icon={AlertTriangle}
+            label={EVAL_CHECK_LABELS.empty}
+            icon={EVAL_CHECK_ICONS.empty}
             config={safeDraft.empty}
             onUpdate={c => updateConfig("empty", c)}
-            summary={getEvalRuleSummary("empty", safeDraft.empty)}
+            summary={formatEvalRuleSummary("empty", safeDraft.empty)}
             renderSettings={(cfg, update) => (
               <div>
                 <FieldLabel
@@ -652,11 +559,11 @@ export function AgentEvaluationPanel({
           {/* 2. Latency */}
           <SignalCard
             id="latency"
-            label="Latency Spikes"
-            icon={Clock}
+            label={EVAL_CHECK_LABELS.latency}
+            icon={EVAL_CHECK_ICONS.latency}
             config={safeDraft.latency}
             onUpdate={c => updateConfig("latency", c)}
-            summary={getEvalRuleSummary("latency", safeDraft.latency)}
+            summary={formatEvalRuleSummary("latency", safeDraft.latency)}
             renderSettings={(cfg, update) => (
               <div>
                 <FieldLabel
@@ -681,11 +588,11 @@ export function AgentEvaluationPanel({
           {/* 3. HTTP Errors */}
           <SignalCard
             id="status_code"
-            label="HTTP Error Codes"
-            icon={XCircle}
+            label={EVAL_CHECK_LABELS.status_code}
+            icon={EVAL_CHECK_ICONS.status_code}
             config={safeDraft.status_code}
             onUpdate={c => updateConfig("status_code", c)}
-            summary={getEvalRuleSummary("status_code", safeDraft.status_code)}
+            summary={formatEvalRuleSummary("status_code", safeDraft.status_code)}
             renderSettings={(cfg, update) => (
               <div>
                 <FieldLabel
@@ -710,16 +617,16 @@ export function AgentEvaluationPanel({
           {/* 4. JSON Validity */}
           <SignalCard
             id="json"
-            label="JSON Validity"
-            icon={Code2}
+            label={EVAL_CHECK_LABELS.json}
+            icon={EVAL_CHECK_ICONS.json}
             config={safeDraft.json}
             onUpdate={c => updateConfig("json", c)}
-            summary={getEvalRuleSummary("json", safeDraft.json)}
+            summary={formatEvalRuleSummary("json", safeDraft.json)}
             renderSettings={(cfg, update) => (
               <div>
                 <FieldLabel
                   label="Mode"
-                  help="if_json: only validate when output looks like JSON. always: always enforce JSON validity."
+                  help="Auto-detect JSON only checks outputs that look like JSON. Always validate JSON enforces JSON validity on every response."
                 />
                 <select
                   className={InputCls}
@@ -740,11 +647,11 @@ export function AgentEvaluationPanel({
           {/* 5. Required Fields */}
           <SignalCard
             id="required"
-            label="Required Keywords / Fields"
-            icon={FileCheck}
+            label={EVAL_CHECK_LABELS.required}
+            icon={EVAL_CHECK_ICONS.required}
             config={safeDraft.required}
             onUpdate={c => updateConfig("required", c)}
-            summary={getEvalRuleSummary("required", safeDraft.required)}
+            summary={formatEvalRuleSummary("required", safeDraft.required)}
             renderSettings={(cfg, update) => (
               <div className="space-y-3">
                 <div>
@@ -784,7 +691,7 @@ export function AgentEvaluationPanel({
                   More eval checks
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  Optional eval checks for stricter monitoring. Keep collapsed for simpler setup.
+                  Optional checks for stricter monitoring. Expand this only when you want tighter output guarantees.
                 </p>
               </div>
               <button
@@ -802,11 +709,11 @@ export function AgentEvaluationPanel({
               {/* Refusal */}
               <SignalCard
                 id="refusal"
-                label="Refusal / Non-Answer"
-                icon={ShieldAlert}
+                label={EVAL_CHECK_LABELS.refusal}
+                icon={EVAL_CHECK_ICONS.refusal}
                 config={safeDraft.refusal}
                 onUpdate={c => updateConfig("refusal", c)}
-                summary={getEvalRuleSummary("refusal", safeDraft.refusal)}
+                summary={formatEvalRuleSummary("refusal", safeDraft.refusal)}
                 renderSettings={(cfg, update) => (
                   <div className="space-y-2">
                     <FieldLabel
@@ -828,11 +735,11 @@ export function AgentEvaluationPanel({
               {/* Output Length Drift */}
               <SignalCard
                 id="length"
-                label="Output Length Drift"
-                icon={SlidersHorizontal}
+                label={EVAL_CHECK_LABELS.length}
+                icon={EVAL_CHECK_ICONS.length}
                 config={safeDraft.length}
                 onUpdate={c => updateConfig("length", c)}
-                summary={getEvalRuleSummary("length", safeDraft.length)}
+                summary={formatEvalRuleSummary("length", safeDraft.length)}
                 renderSettings={(cfg, update) => (
                   <div>
                     <FieldLabel
@@ -858,11 +765,11 @@ export function AgentEvaluationPanel({
               {/* Repetition */}
               <SignalCard
                 id="repetition"
-                label="Repetition / Loops"
-                icon={Repeat}
+                label={EVAL_CHECK_LABELS.repetition}
+                icon={EVAL_CHECK_ICONS.repetition}
                 config={safeDraft.repetition}
                 onUpdate={c => updateConfig("repetition", c)}
-                summary={getEvalRuleSummary("repetition", safeDraft.repetition)}
+                summary={formatEvalRuleSummary("repetition", safeDraft.repetition)}
                 renderSettings={(cfg, update) => (
                   <div>
                     <FieldLabel
@@ -890,11 +797,11 @@ export function AgentEvaluationPanel({
               {/* Format Contract */}
               <SignalCard
                 id="format"
-                label="Format Contract"
-                icon={FileText}
+                label={EVAL_CHECK_LABELS.format}
+                icon={EVAL_CHECK_ICONS.format}
                 config={safeDraft.format}
                 onUpdate={c => updateConfig("format", c)}
-                summary={getEvalRuleSummary("format", safeDraft.format)}
+                summary={formatEvalRuleSummary("format", safeDraft.format)}
                 renderSettings={(cfg, update) => (
                   <div>
                     <FieldLabel
@@ -915,11 +822,11 @@ export function AgentEvaluationPanel({
               {/* PII Leakage */}
               <SignalCard
                 id="leakage"
-                label="PII Leakage Shield"
-                icon={Lock}
+                label={EVAL_CHECK_LABELS.leakage}
+                icon={EVAL_CHECK_ICONS.leakage}
                 config={safeDraft.leakage}
                 onUpdate={c => updateConfig("leakage", c)}
-                summary={getEvalRuleSummary("leakage", safeDraft.leakage)}
+                summary={formatEvalRuleSummary("leakage", safeDraft.leakage)}
                 renderSettings={(cfg, update) => (
                   <div className="space-y-2">
                     <FieldLabel
@@ -980,12 +887,12 @@ export function AgentEvaluationPanel({
                   <div className="flex items-center gap-2 mt-0.5">
                     <p className="text-[11px] text-slate-500 font-mono">
                       {safeDraft.tool_use_policy?.enabled !== false
-                        ? `Project: ${projectRules.length} · Agent: ${agentRules.length}`
+                        ? `Project rules ${projectRules.length} · Agent overrides ${agentRules.length}`
                         : "Disabled"}
                     </p>
                     {safeDraft.tool_use_policy?.enabled !== false && (
                       <span className="text-[10px] text-slate-500 font-medium px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors">
-                        {showToolPolicyDetails ? "Hide details" : "Show details"}
+                        {showToolPolicyDetails ? "Hide rules" : "Show rules"}
                       </span>
                     )}
                   </div>

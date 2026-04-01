@@ -28,6 +28,7 @@ import { SnapshotDetailModal } from "@/components/shared/SnapshotDetailModal";
 import { useToast } from "@/components/ToastContainer";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { logger } from "@/lib/logger";
+import { getEnabledCheckIdsFromConfig, getEvalDetail } from "@/lib/evalPresentation";
 
 interface EvaluationMetric {
   score: number;
@@ -117,33 +118,6 @@ type EvalResponse = {
   checks?: EvalCheckSummary[];
   per_snapshot?: EvalPerSnapshot[];
 };
-
-// Must match AgentEvaluationPanel labels so eval names are consistent (Evaluation tab ↔ Clinical Log / logic).
-const EVAL_CHECK_LABELS: Record<string, string> = {
-  empty: "Empty / Short Answers",
-  latency: "Latency Spikes",
-  status_code: "HTTP Error Codes",
-  refusal: "Refusal / Non-Answer",
-  json: "JSON Validity",
-  length: "Output Length Drift",
-  repetition: "Repetition / Loops",
-  required: "Required Keywords / Fields",
-  format: "Format Contract",
-  leakage: "PII Leakage Shield",
-  tool: "Tool Use Policy",
-};
-
-function normalizeEvalConfigKey(key: string): string {
-  return key === "tool_use_policy" ? "tool" : key;
-}
-
-function isEvalSettingEnabled(value: unknown): boolean {
-  if (typeof value === "boolean") return value;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return true;
-  const enabled = (value as { enabled?: unknown }).enabled;
-  if (typeof enabled === "boolean") return enabled;
-  return true;
-}
 
 function formatPrettyTime(value?: string): string {
   if (!value) return "-";
@@ -344,93 +318,6 @@ function getRequestShapeBadges(snapshot: ClinicalSnapshot): Array<{ label: strin
   return badges;
 }
 
-/** Build "actual vs config" line for an eval check from snapshot + saved eval config. */
-function getEvalDetail(
-  s: ClinicalSnapshot,
-  checkId: string,
-  savedEvalConfig: Record<string, any>
-): { actualStr: string; configStr: string } {
-  const toFiniteNumber = (value: unknown, fallback: number) => {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : fallback;
-  };
-  const cfg = (savedEvalConfig[checkId] || {}) as Record<string, any>;
-  const res = (s.response_text || s.response || "").trim();
-  const len = res.length;
-  let actualStr = "—";
-  let configStr = "—";
-  switch (checkId) {
-    case "empty": {
-      const minChars = toFiniteNumber(cfg?.min_chars, 16);
-      configStr = `min ${minChars} chars`;
-      return { actualStr: `${len} chars`, configStr };
-    }
-    case "latency": {
-      const failMs = toFiniteNumber(cfg?.fail_ms ?? cfg?.crit_ms ?? cfg?.warn_ms, 5000);
-      configStr = `fail ≥ ${failMs}ms`;
-      const ms = s.latency_ms ?? 0;
-      return { actualStr: `${ms}ms`, configStr };
-    }
-    case "status_code": {
-      const failFrom = toFiniteNumber(cfg?.fail_from ?? cfg?.crit_from ?? cfg?.warn_from, 500);
-      configStr = `fail ≥ ${failFrom}`;
-      const code = s.status_code ?? 200;
-      return { actualStr: String(code), configStr };
-    }
-    case "length": {
-      const failR = toFiniteNumber(cfg?.fail_ratio ?? cfg?.crit_ratio ?? cfg?.warn_ratio, 0.75);
-      configStr = `fail ±${Math.round(failR * 100)}% vs baseline`;
-      actualStr = `${len} chars (vs baseline window)`;
-      return { actualStr, configStr };
-    }
-    case "repetition": {
-      const failR = toFiniteNumber(
-        cfg?.fail_line_repeats ?? cfg?.crit_line_repeats ?? cfg?.warn_line_repeats,
-        6
-      );
-      configStr = `fail ≥ ${failR} repeats`;
-      const lines = res
-        .split("\n")
-        .map(l => l.trim())
-        .filter(l => l.length >= 4);
-      const counts: Record<string, number> = {};
-      let maxRep = 0;
-      for (const line of lines) {
-        counts[line] = (counts[line] || 0) + 1;
-        if (counts[line] > maxRep) maxRep = counts[line];
-      }
-      return { actualStr: maxRep ? `${maxRep} max repeats` : "—", configStr };
-    }
-    case "json":
-      configStr = (cfg?.mode || "if_json") === "if_json" ? "if_json" : "always";
-      return { actualStr, configStr };
-    case "refusal": {
-      configStr = "auto-detect refusal / non-answer patterns";
-      return { actualStr, configStr };
-    }
-    case "required": {
-      const keywordsCsv = String(cfg?.keywords_csv || "");
-      const jsonFieldsCsv = String(cfg?.json_fields_csv || "");
-      const keywordCount = keywordsCsv.split(",").filter(part => part.trim().length > 0).length;
-      const fieldCount = jsonFieldsCsv.split(",").filter(part => part.trim().length > 0).length;
-      configStr = `keywords: ${keywordCount}, json fields: ${fieldCount}`;
-      return { actualStr, configStr };
-    }
-    case "format": {
-      const sectionsCsv = String(cfg?.sections_csv || "");
-      const sectionCount = sectionsCsv.split(",").filter(part => part.trim().length > 0).length;
-      configStr = `required sections: ${sectionCount}`;
-      return { actualStr, configStr };
-    }
-    case "leakage": {
-      configStr = "scan for PII (email, phone) & API keys";
-      return { actualStr, configStr };
-    }
-    default:
-      return { actualStr, configStr };
-  }
-}
-
 export const ClinicalLog: React.FC<ClinicalLogProps> = ({
   projectId,
   agentId,
@@ -625,13 +512,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
       .filter((c: EvalCheckSummary) => c.enabled)
       .map((c: EvalCheckSummary) => c.id);
     if (enabled.length > 0) return enabled;
-    const fromSaved = Object.entries(savedEvalConfig)
-      .filter(([key, value]) => {
-        const normalized = normalizeEvalConfigKey(key);
-        if (!(normalized in EVAL_CHECK_LABELS)) return false;
-        return isEvalSettingEnabled(value);
-      })
-      .map(([key]) => normalizeEvalConfigKey(key));
+    const fromSaved = getEnabledCheckIdsFromConfig(savedEvalConfig);
     if (fromSaved.length > 0) return Array.from(new Set(fromSaved));
     return [];
   }, [evalRuntime?.checks, savedEvalConfig]);

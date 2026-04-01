@@ -1,16 +1,9 @@
 /** Release Gate eval signal checks. Tool Use Policy is tracked separately as a policy check. */
-export const LIVE_VIEW_CHECK_ORDER = [
-  "empty",
-  "latency",
-  "status_code",
-  "refusal",
-  "json",
-  "length",
-  "repetition",
-  "required",
-  "format",
-  "leakage",
-] as const;
+import {
+  DEFAULT_EVAL_CHECK_VALUE,
+  LIVE_VIEW_EVAL_CHECK_IDS as LIVE_VIEW_CHECK_ORDER,
+  isEvalSettingEnabled as shouldShowEvalSetting,
+} from "@/lib/evalPresentation";
 
 export const POLICY_CHECK_IDS = ["tool"] as const;
 
@@ -23,28 +16,6 @@ export const RUNTIME_ONLY_EVAL_CHECK_IDS = [
 const CANONICAL_EVAL_CHECK_ID_SET = new Set<string>(LIVE_VIEW_CHECK_ORDER);
 const POLICY_CHECK_ID_SET = new Set<string>(POLICY_CHECK_IDS);
 const RUNTIME_ONLY_EVAL_CHECK_ID_SET = new Set<string>(RUNTIME_ONLY_EVAL_CHECK_IDS);
-
-/** Defaults for each check so missing keys in old saved config still appear. */
-export const DEFAULT_EVAL_CHECK_VALUE: Record<string, { enabled: boolean }> = {
-  empty: { enabled: true },
-  latency: { enabled: true },
-  status_code: { enabled: true },
-  refusal: { enabled: true },
-  json: { enabled: true },
-  length: { enabled: true },
-  repetition: { enabled: true },
-  required: { enabled: false },
-  format: { enabled: false },
-  leakage: { enabled: false },
-};
-
-export function shouldShowEvalSetting(value: unknown): boolean {
-  if (typeof value === "boolean") return value;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return true;
-  const obj = value as Record<string, unknown>;
-  if (typeof obj.enabled === "boolean") return obj.enabled;
-  return true;
-}
 
 export function isCanonicalEvalCheckId(id: string): boolean {
   return CANONICAL_EVAL_CHECK_ID_SET.has(String(id || "").trim());

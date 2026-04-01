@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 
 import type { ReleaseGateResult } from "@/lib/api";
+import { normalizeEvalConfigKey } from "@/lib/evalPresentation";
 
 import { EVAL_CHECK_LABELS, getEvalCheckParams } from "./releaseGateExpandedHelpers";
 import { sanitizePayloadForPreview } from "./releaseGatePageContent.lib";
@@ -26,7 +27,9 @@ export function buildExpandedMapActiveChecksCards(
     const label =
       EVAL_CHECK_LABELS[id] ??
       id.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase());
-    const checkConfig = agentEvalConfig?.[id] as Record<string, unknown> | undefined;
+    const checkConfig = agentEvalConfig?.[normalizeEvalConfigKey(id)] as
+      | Record<string, unknown>
+      | undefined;
     const params = getEvalCheckParams(id, checkConfig);
     return { id, label, params };
   });
@@ -202,7 +205,7 @@ export function buildReleaseGateMapRgDetails(
   const toolsCount = requestTools.length;
   const agentEvalConfig = p.agentEvalData?.config as Record<string, unknown> | undefined;
   const activeChecksCards = buildExpandedMapActiveChecksCards(p.runEvalElements, agentEvalConfig);
-  const toolPolicyConfig = agentEvalConfig?.tool as Record<string, unknown> | undefined;
+  const toolPolicyConfig = agentEvalConfig?.tool_use_policy as Record<string, unknown> | undefined;
   const toolPolicyEnabled = toolPolicyConfig?.enabled !== false;
   const policyCheckCards = toolPolicyEnabled
     ? [
