@@ -67,7 +67,7 @@ class TestReleaseGateHistoryApi:
         payload = res.json()
         assert payload["total"] == 1
         assert len(payload["items"]) == 1
-        assert payload["items"][0]["id"] == release_gate_report_id
+        assert payload["items"][0]["id"] == f"{release_gate_report_id}:0"
 
     async def test_history_maps_input_level_counts_from_release_gate_summary(
         self, async_client, auth_headers, test_project, db
@@ -84,12 +84,38 @@ class TestReleaseGateHistoryApi:
                     "release_gate": {
                         "mode": "replay_test",
                         "repeat_runs": 3,
-                        "total_inputs": 5,
+                        "total_inputs": 2,
                         "failed_inputs": 2,
-                        "flaky_inputs": 1,
-                        "passed_attempts": 9,
-                        "total_attempts": 15,
+                        "flaky_inputs": 0,
+                        "passed_attempts": 1,
+                        "total_attempts": 6,
                         "thresholds": {"fail_rate_max": 0.2},
+                        "case_results": [
+                            {
+                                "run_index": 1,
+                                "trace_id": "rg-trace-counts-a",
+                                "snapshot_id": 101,
+                                "case_status": "flaky",
+                                "summary": {"pass_ratio": 0.3333},
+                                "attempts": [
+                                    {"pass": True},
+                                    {"pass": False},
+                                    {"pass": False},
+                                ],
+                            },
+                            {
+                                "run_index": 2,
+                                "trace_id": "rg-trace-counts-b",
+                                "snapshot_id": 102,
+                                "case_status": "fail",
+                                "summary": {"pass_ratio": 0.0},
+                                "attempts": [
+                                    {"pass": False},
+                                    {"pass": False},
+                                    {"pass": False},
+                                ],
+                            },
+                        ],
                     }
                 },
                 violations_json=[],
@@ -104,12 +130,21 @@ class TestReleaseGateHistoryApi:
         )
         assert res.status_code == status.HTTP_200_OK
         payload = res.json()
-        item = next(entry for entry in payload["items"] if entry["id"] == report_id)
-        assert item["total_inputs"] == 5
-        assert item["failed_runs"] == 3
-        assert item["passed_runs"] == 2
-        assert item["passed_attempts"] == 9
-        assert item["total_attempts"] == 15
+        assert payload["total"] == 2
+        assert [entry["id"] for entry in payload["items"]] == [f"{report_id}:0", f"{report_id}:1"]
+        assert [entry["status"] for entry in payload["items"]] == ["flaky", "fail"]
+        assert [entry["trace_id"] for entry in payload["items"]] == [
+            "rg-trace-counts-a",
+            "rg-trace-counts-b",
+        ]
+        assert payload["items"][0]["input_label"] == "Input 1"
+        assert payload["items"][0]["passed_attempts"] == 1
+        assert payload["items"][0]["failed_attempts"] == 2
+        assert payload["items"][0]["total_attempts"] == 3
+        assert payload["items"][0]["session_total_inputs"] == 2
+        assert payload["items"][1]["passed_attempts"] == 0
+        assert payload["items"][1]["failed_attempts"] == 3
+        assert payload["items"][1]["total_attempts"] == 3
 
     async def test_history_can_scope_results_to_selected_agent_without_read_model_backfill(
         self, async_client, auth_headers, test_project, db
@@ -123,7 +158,20 @@ class TestReleaseGateHistoryApi:
                     trace_id="rg-trace-agent-a-1",
                     agent_id="agent-a",
                     status="pass",
-                    summary_json={"release_gate": {"mode": "replay_test", "total_inputs": 1}},
+                    summary_json={
+                        "release_gate": {
+                            "mode": "replay_test",
+                            "total_inputs": 1,
+                            "case_results": [
+                                {
+                                    "run_index": 1,
+                                    "trace_id": "rg-trace-agent-a-1",
+                                    "case_status": "pass",
+                                    "attempts": [{"pass": True}],
+                                }
+                            ],
+                        }
+                    },
                     violations_json=[],
                     created_at=now - timedelta(minutes=3),
                 ),
@@ -133,7 +181,26 @@ class TestReleaseGateHistoryApi:
                     trace_id="rg-trace-agent-a-2",
                     agent_id="agent-a",
                     status="fail",
-                    summary_json={"release_gate": {"mode": "replay_test", "total_inputs": 2}},
+                    summary_json={
+                        "release_gate": {
+                            "mode": "replay_test",
+                            "total_inputs": 2,
+                            "case_results": [
+                                {
+                                    "run_index": 1,
+                                    "trace_id": "rg-trace-agent-a-2a",
+                                    "case_status": "fail",
+                                    "attempts": [{"pass": False}],
+                                },
+                                {
+                                    "run_index": 2,
+                                    "trace_id": "rg-trace-agent-a-2b",
+                                    "case_status": "flaky",
+                                    "attempts": [{"pass": True}, {"pass": False}],
+                                },
+                            ],
+                        }
+                    },
                     violations_json=[],
                     created_at=now - timedelta(minutes=2),
                 ),
@@ -143,7 +210,20 @@ class TestReleaseGateHistoryApi:
                     trace_id="rg-trace-agent-b",
                     agent_id="agent-b",
                     status="pass",
-                    summary_json={"release_gate": {"mode": "replay_test", "total_inputs": 1}},
+                    summary_json={
+                        "release_gate": {
+                            "mode": "replay_test",
+                            "total_inputs": 1,
+                            "case_results": [
+                                {
+                                    "run_index": 1,
+                                    "trace_id": "rg-trace-agent-b",
+                                    "case_status": "pass",
+                                    "attempts": [{"pass": True}],
+                                }
+                            ],
+                        }
+                    },
                     violations_json=[],
                     created_at=now - timedelta(minutes=1),
                 ),
@@ -161,11 +241,12 @@ class TestReleaseGateHistoryApi:
         assert res.status_code == status.HTTP_200_OK
         payload = res.json()
 
-        assert payload["total"] == 2
-        assert [item["agent_id"] for item in payload["items"]] == ["agent-a", "agent-a"]
+        assert payload["total"] == 3
+        assert [item["agent_id"] for item in payload["items"]] == ["agent-a", "agent-a", "agent-a"]
         assert {item["trace_id"] for item in payload["items"]} == {
             "rg-trace-agent-a-1",
-            "rg-trace-agent-a-2",
+            "rg-trace-agent-a-2a",
+            "rg-trace-agent-a-2b",
         }
         assert db.query(ReleaseGateRun).count() == 0
 

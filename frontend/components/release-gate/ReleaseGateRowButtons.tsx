@@ -4,10 +4,10 @@ import React from "react";
 import clsx from "clsx";
 import { Activity } from "lucide-react";
 import {
-  formatDateTime,
   shortText,
   summarizeGroundingForCase,
 } from "@/app/organizations/[orgId]/projects/[projectId]/release-gate/releaseGateExpandedHelpers";
+import type { ReleaseGateHistoryItem } from "@/lib/api/types";
 
 export function ResultCaseRowButton({
   run,
@@ -154,16 +154,7 @@ export function HistoryRunRowButton({
   onClick,
   testId,
 }: {
-  item: {
-    id: string;
-    status?: string;
-    trace_id?: string | null;
-    created_at?: string | null;
-    repeat_runs?: number | null;
-    total_inputs?: number | null;
-    passed_runs?: number | null;
-    failed_runs?: number | null;
-  };
+  item: ReleaseGateHistoryItem;
   selected: boolean;
   loading?: boolean;
   onClick: () => void;
@@ -175,13 +166,22 @@ export function HistoryRunRowButton({
   const caseIsPass = rawStatus === "pass";
   const caseIsFlaky = rawStatus === "flaky";
   const caseStatusLabel = caseIsPass ? "Healthy" : caseIsFlaky ? "Flaky" : "Flagged";
-  const passedInputs = Number(item.passed_runs ?? 0);
-  const failedInputs = Number(item.failed_runs ?? 0);
-  const explicitInputTotal = Number(item.total_inputs ?? 0);
-  const inputTotal = passedInputs + failedInputs || explicitInputTotal;
-  const repeatRuns = Number(item.repeat_runs ?? 0);
-  const hasExplicitPassSummary = passedInputs + failedInputs > 0;
-  const preview = item.trace_id ? shortText(String(item.trace_id), "", 48) : "";
+  const repeatRuns = Number(item.repeat_runs ?? item.session_repeat_runs ?? 0);
+  const totalAttempts = Math.max(0, Number(item.total_attempts ?? 0)) || repeatRuns || 1;
+  const passedAttempts =
+    item.passed_attempts != null
+      ? Math.max(0, Math.min(totalAttempts, Number(item.passed_attempts)))
+      : caseIsPass
+        ? totalAttempts
+        : 0;
+  const preview = shortText(item.input_preview || item.trace_id || "", "", 96);
+  const inputIndexNumber =
+    Number.isFinite(Number(item.input_index)) && Number(item.input_index) > 0
+      ? Number(item.input_index)
+      : Number(item.case_index ?? 0) + 1;
+  const inputLabel = String(item.input_label || `Input ${inputIndexNumber}`);
+  const tracePreview = item.trace_id ? shortText(String(item.trace_id), "", 48) : "";
+  const attemptSummaryLabel = `${passedAttempts}/${totalAttempts} healthy`;
 
   return (
     <button
@@ -216,8 +216,8 @@ export function HistoryRunRowButton({
           >
             {caseStatusLabel}
           </span>
-          <span className="text-[12px] font-medium text-slate-300">
-            {formatDateTime(item.created_at)}
+          <span className="text-sm font-semibold text-slate-100">
+            {inputLabel}
           </span>
         </div>
         <div className="flex shrink-0 items-center">
@@ -233,21 +233,36 @@ export function HistoryRunRowButton({
       </div>
 
       <div className="flex min-w-0 flex-col gap-2.5 w-full">
+        {preview ? (
+          <div className="truncate text-[12px] text-slate-300 bg-black/20 border border-white/5 rounded-lg px-2.5 py-1.5 max-w-full">
+            {preview}
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          <span
+            className={clsx(
+              "rounded-full border px-2.5 py-1 font-medium",
+              passedAttempts === totalAttempts
+                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
+                : "border-rose-500/20 bg-rose-500/10 text-rose-200"
+            )}
+          >
+            {attemptSummaryLabel}
+          </span>
           {repeatRuns > 0 ? (
             <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 font-medium text-slate-300">
               <strong className="text-slate-100">{repeatRuns}x</strong> each
             </span>
           ) : null}
-          {!hasExplicitPassSummary && inputTotal <= 0 ? (
-            <span className="text-[11px] text-slate-500 italic">
-              Legacy run: breakdown unavailable
+          {item.session_total_inputs && item.session_total_inputs > 1 ? (
+            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 font-medium text-slate-400">
+              {item.session_total_inputs} inputs in session
             </span>
           ) : null}
         </div>
-        {preview ? (
-          <div className="truncate text-xs text-slate-400 font-mono bg-black/20 border border-white/5 rounded-lg px-2.5 py-1.5 self-start max-w-full">
-            {preview}
+        {tracePreview ? (
+          <div className="truncate text-xs text-slate-500 font-mono bg-black/20 border border-white/5 rounded-lg px-2.5 py-1.5 self-start max-w-full">
+            {tracePreview}
           </div>
         ) : null}
       </div>

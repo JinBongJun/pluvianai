@@ -170,10 +170,13 @@ export function useReleaseGateExpandedViewModel({
   const mutateHistory = ctx.mutateHistory;
   const selectedRunId = ctx.selectedRunId;
   const setSelectedRunId = ctx.setSelectedRunId;
+  const selectedRunCaseIndex = ctx.selectedRunCaseIndex;
+  const setSelectedRunCaseIndex = ctx.setSelectedRunCaseIndex;
   const selectedRunReport = ctx.selectedRunReport;
   const selectedRunReportLoading = ctx.selectedRunReportLoading;
   const selectedRunReportError = ctx.selectedRunReportError;
 
+  const expandedHistoryId = ctx.expandedHistoryId;
   const setExpandedHistoryId = ctx.setExpandedHistoryId;
   const runDataProvider = ctx.runDataProvider;
   const runDataModel = ctx.runDataModel;
@@ -208,6 +211,8 @@ export function useReleaseGateExpandedViewModel({
     tab,
     selectedRunId,
     setSelectedRunId,
+    selectedRunCaseIndex,
+    setSelectedRunCaseIndex,
     selectedRunReport,
     selectedRunReportLoading,
     selectedRunReportError,
@@ -227,8 +232,10 @@ export function useReleaseGateExpandedViewModel({
     setSettingsPanelOpen,
     setDetailAttemptView,
     setExpandedCaseIndex,
+    setExpandedHistoryId,
     clearHistoryOverlayPending,
     setSelectedRunId,
+    setSelectedRunCaseIndex,
     setRepeatDropdownOpen,
   });
 
@@ -476,6 +483,7 @@ export function useReleaseGateExpandedViewModel({
     runLocked,
     runSnapshotIds,
     selectHistoryRun,
+    expandedHistoryId,
     selectedAgent: resolvedSelectedAgent,
     selectedRunId,
     selectedRunReportLoading,

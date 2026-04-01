@@ -8,7 +8,10 @@ import {
   HistoryRunRowButton,
   ResultCaseRowButton,
 } from "@/components/release-gate/ReleaseGateRowButtons";
+import type { ReleaseGateHistoryItem } from "@/lib/api/types";
 import {
+  formatDateTime,
+  groupHistoryItemsBySession,
   type ResultCaseFilter,
   type VisibleResultCase,
   type FixHint,
@@ -48,7 +51,7 @@ export type ReleaseGateRunOutputSidePanelProps = {
     } | null>
   >;
   historyLoading: boolean;
-  nodeHistoryItems: any[];
+  nodeHistoryItems: ReleaseGateHistoryItem[];
   historyTotal: number;
   historyFilterSummary: string[];
   historyStatus: "all" | "pass" | "fail";
@@ -60,9 +63,9 @@ export type ReleaseGateRunOutputSidePanelProps = {
   mutateHistory: () => void;
   /** Shared with main History tab; used only to detect “default” filters for empty copy. */
   historyTraceId: string;
-  selectedRunId: string | null;
+  expandedHistoryId: string | null;
   selectedRunReportLoading: boolean;
-  selectHistoryRun: (id: string) => void;
+  selectHistoryRun: (item: ReleaseGateHistoryItem) => void;
 };
 
 export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePanelProps) {
@@ -92,13 +95,14 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
     historyRefreshing,
     mutateHistory,
     historyTraceId,
-    selectedRunId,
+    expandedHistoryId,
     selectedRunReportLoading,
     selectHistoryRun,
   } = props;
 
   const historyFiltersAreDefault =
     historyStatus === "all" && historyDatePreset === "all" && !historyTraceId.trim();
+  const groupedHistoryItems = groupHistoryItemsBySession(nodeHistoryItems);
 
   return (
     <RailwaySidePanel
@@ -316,18 +320,18 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                 <div className="flex flex-col gap-4">
                   <div className="min-w-0">
                     <div className="text-[11px] font-medium text-emerald-400/90 uppercase tracking-widest mb-1.5">
-                      Run history
+                      Validation history
                     </div>
                     <div className="text-sm font-semibold text-white">
-                      Recent retained runs for this agent
+                      Inputs from recent validation sessions
                     </div>
                     <div className="mt-1.5 text-xs leading-relaxed text-white/40">
-                      This list is scoped to the selected agent, so the total, filters, and paging all
-                      reflect only retained Release Gate runs for the selected agent.
+                      This list is scoped to the selected agent and shows each retained input exactly as
+                      it was run, grouped by validation session.
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-white/40 items-center">
                       <span className="font-medium text-white/60">
-                        {historyTotal} runs
+                        {historyTotal} inputs
                       </span>
                       {historyFilterSummary.map(part => (
                         <span
@@ -409,21 +413,29 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                     <Flag className="mx-auto mb-2 h-10 w-10 text-slate-600" />
                     <p className="text-sm text-white/30">
                       {historyFiltersAreDefault
-                        ? "No retained runs yet for this agent."
-                        : "No retained runs match these filters. Try All or widen the date range."}
+                        ? "No retained inputs yet for this agent."
+                        : "No retained inputs match these filters. Try All or widen the date range."}
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {nodeHistoryItems.map(item => (
-                      <HistoryRunRowButton
-                        key={item.id}
-                        item={item}
-                        selected={selectedRunId === item.id}
-                        loading={selectedRunReportLoading && selectedRunId === item.id}
-                        onClick={() => selectHistoryRun(String(item.id))}
-                        testId={`rg-node-history-row-${item.id}`}
-                      />
+                    {groupedHistoryItems.map(group => (
+                      <div key={group.id} className="space-y-2">
+                        <div className="px-1 pt-2 text-[10px] uppercase tracking-[0.18em] text-white/35">
+                          {formatDateTime(group.createdAt)} · {group.totalInputs} inputs
+                          {group.repeatRuns ? ` · ${group.repeatRuns}x each` : ""}
+                        </div>
+                        {group.items.map(item => (
+                          <HistoryRunRowButton
+                            key={item.id}
+                            item={item}
+                            selected={expandedHistoryId === item.id}
+                            loading={selectedRunReportLoading && expandedHistoryId === item.id}
+                            onClick={() => selectHistoryRun(item)}
+                            testId={`rg-node-history-row-${item.id}`}
+                          />
+                        ))}
+                      </div>
                     ))}
                   </div>
                 )}

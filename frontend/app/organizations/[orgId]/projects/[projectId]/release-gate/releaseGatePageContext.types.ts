@@ -218,6 +218,8 @@ export interface ReleaseGatePageContextValue {
   mutateHistory: () => void;
   selectedRunId: string | null;
   setSelectedRunId: (id: string | null) => void;
+  selectedRunCaseIndex: number | null;
+  setSelectedRunCaseIndex: (n: number | null) => void;
   selectedRunReport: unknown;
   selectedRunReportLoading: boolean;
   selectedRunReportError: unknown;

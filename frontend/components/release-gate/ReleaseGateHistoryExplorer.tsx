@@ -4,6 +4,11 @@ import type { Dispatch, SetStateAction } from "react";
 import clsx from "clsx";
 import { Flag, RefreshCcw } from "lucide-react";
 import { HistoryRunRowButton } from "@/components/release-gate/ReleaseGateRowButtons";
+import {
+  formatDateTime,
+  groupHistoryItemsBySession,
+} from "@/app/organizations/[orgId]/projects/[projectId]/release-gate/releaseGateExpandedHelpers";
+import type { ReleaseGateHistoryItem } from "@/lib/api/types";
 
 export type ReleaseGateHistoryExplorerProps = {
   historyStatus: "all" | "pass" | "fail";
@@ -16,11 +21,11 @@ export type ReleaseGateHistoryExplorerProps = {
   mutateHistory: () => void;
   historyDateSummary: string;
   historyLoading: boolean;
-  historyItems: any[];
+  historyItems: ReleaseGateHistoryItem[];
   historyTotal: number;
-  selectedRunId: string | null;
+  expandedHistoryId: string | null;
   selectedRunReportLoading: boolean;
-  selectHistoryRun: (id: string) => void;
+  selectHistoryRun: (item: ReleaseGateHistoryItem) => void;
   historyOffset: number;
   historyLimit: number;
   setHistoryOffset: Dispatch<SetStateAction<number>>;
@@ -39,21 +44,22 @@ export function ReleaseGateHistoryExplorer({
   historyLoading,
   historyItems,
   historyTotal,
-  selectedRunId,
+  expandedHistoryId,
   selectedRunReportLoading,
   selectHistoryRun,
   historyOffset,
   historyLimit,
   setHistoryOffset,
 }: ReleaseGateHistoryExplorerProps) {
+  const groupedHistoryItems = groupHistoryItemsBySession(historyItems);
   return (
     <div className="mx-6 mt-24 space-y-6 rounded-3xl border border-white/5 bg-[#111216] p-7 shadow-xl pointer-events-auto">
       <div className="space-y-2">
         <div className="text-[11px] font-medium text-slate-400">History explorer</div>
-        <div className="text-lg font-semibold text-white">Search and reopen validation runs</div>
+        <div className="text-lg font-semibold text-white">Search and reopen validation inputs</div>
         <p className="max-w-3xl text-sm leading-6 text-slate-400">
-          Use filters here for full run browsing across this project, including trace search and paginated
-          history results.
+          Use filters here for full input-level browsing across this project. Results are grouped by
+          validation session and reopen the exact input you clicked.
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
@@ -149,26 +155,34 @@ export function ReleaseGateHistoryExplorer({
       ) : historyItems.length === 0 ? (
         <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
           <Flag className="mx-auto mb-2 h-10 w-10 text-slate-600" />
-          <p className="text-sm text-slate-500">No validation runs yet.</p>
+          <p className="text-sm text-slate-500">No validation inputs yet.</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {historyItems.map(item => (
-            <HistoryRunRowButton
-              key={item.id}
-              item={item}
-              selected={selectedRunId === item.id}
-              loading={selectedRunReportLoading && selectedRunId === item.id}
-              onClick={() => selectHistoryRun(String(item.id))}
-              testId={`rg-main-history-row-${item.id}`}
-            />
+          {groupedHistoryItems.map(group => (
+            <div key={group.id} className="space-y-2">
+              <div className="px-1 pt-2 text-[10px] uppercase tracking-[0.18em] text-white/35">
+                {formatDateTime(group.createdAt)} · {group.totalInputs} inputs
+                {group.repeatRuns ? ` · ${group.repeatRuns}x each` : ""}
+              </div>
+              {group.items.map(item => (
+                <HistoryRunRowButton
+                  key={item.id}
+                  item={item}
+                  selected={expandedHistoryId === item.id}
+                  loading={selectedRunReportLoading && expandedHistoryId === item.id}
+                  onClick={() => selectHistoryRun(item)}
+                  testId={`rg-main-history-row-${item.id}`}
+                />
+              ))}
+            </div>
           ))}
         </div>
       )}
       {!historyLoading && historyItems.length > 0 && (
         <div className="flex items-center justify-between border-t border-white/10 pt-2 text-xs text-slate-400">
           <span>
-            {historyTotal} {historyTotal === 1 ? "run" : "runs"}
+            {historyTotal} {historyTotal === 1 ? "input" : "inputs"}
           </span>
           <div className="flex gap-2">
             <button

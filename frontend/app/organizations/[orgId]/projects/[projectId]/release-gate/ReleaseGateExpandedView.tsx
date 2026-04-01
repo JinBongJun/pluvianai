@@ -157,7 +157,7 @@ export function ReleaseGateExpandedView() {
               historyRefreshing={m.historyRefreshing}
               mutateHistory={m.mutateHistory}
               historyTraceId={m.historyTraceId}
-              selectedRunId={m.selectedRunId}
+              expandedHistoryId={m.expandedHistoryId}
               selectedRunReportLoading={m.selectedRunReportLoading}
               selectHistoryRun={m.selectHistoryRun}
             />

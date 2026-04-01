@@ -18,8 +18,10 @@ export type UseReleaseGateExpandedAgentResetParams = {
   setSettingsPanelOpen: (b: boolean) => void;
   setDetailAttemptView: Dispatch<SetStateAction<ExpandedDetailAttemptView>>;
   setExpandedCaseIndex: (n: number | null) => void;
+  setExpandedHistoryId: (id: string | null) => void;
   clearHistoryOverlayPending: () => void;
   setSelectedRunId: (id: string | null) => void;
+  setSelectedRunCaseIndex: (n: number | null) => void;
   setRepeatDropdownOpen: (b: boolean) => void;
 };
 
@@ -33,8 +35,10 @@ export function useReleaseGateExpandedAgentReset({
   setSettingsPanelOpen,
   setDetailAttemptView,
   setExpandedCaseIndex,
+  setExpandedHistoryId,
   clearHistoryOverlayPending,
   setSelectedRunId,
+  setSelectedRunCaseIndex,
   setRepeatDropdownOpen,
 }: UseReleaseGateExpandedAgentResetParams): void {
   const previousAgentIdRef = useRef(agentId);
@@ -50,8 +54,10 @@ export function useReleaseGateExpandedAgentReset({
     setSettingsPanelOpen(false);
     setDetailAttemptView(null);
     setExpandedCaseIndex(null);
+    setExpandedHistoryId(null);
     clearHistoryOverlayPending();
     setSelectedRunId(null);
+    setSelectedRunCaseIndex(null);
     setRepeatDropdownOpen(false);
   }, [
     agentId,
@@ -59,11 +65,13 @@ export function useReleaseGateExpandedAgentReset({
     setDataPanelTab,
     setDetailAttemptView,
     setExpandedCaseIndex,
+    setExpandedHistoryId,
     setTab,
     setRepeatDropdownOpen,
     setResultCaseFilter,
     setRightPanelTab,
     setSelectedRunId,
+    setSelectedRunCaseIndex,
     setSettingsPanelOpen,
     tab,
   ]);
