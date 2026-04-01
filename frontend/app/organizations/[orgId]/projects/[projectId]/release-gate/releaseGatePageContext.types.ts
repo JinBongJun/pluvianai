@@ -38,6 +38,7 @@ export interface ReleaseGatePageContextValue {
   orgId: string;
   projectId: number;
   project: { name?: string } | undefined;
+  agentId: string;
   tab: GateTab;
   setTab: (t: GateTab) => void;
   setViewMode: (m: "map" | "expanded") => void;

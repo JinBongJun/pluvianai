@@ -36,6 +36,7 @@ export function useReleaseGateExpandedViewModel({
   const orgId = ctx.orgId;
   const projectId = ctx.projectId;
   const project = ctx.project;
+  const rawAgentId = ctx.agentId;
   const tab = ctx.tab;
   const setTab = ctx.setTab;
   const setViewMode = ctx.setViewMode;
@@ -176,8 +177,14 @@ export function useReleaseGateExpandedViewModel({
   const runDataModel = ctx.runDataModel;
   const projectName = project?.name;
   const REPLAY_THRESHOLD_PRESETS = ctx.REPLAY_THRESHOLD_PRESETS;
-
-  const agentId = selectedAgent?.agent_id ?? "";
+  const agentId = rawAgentId?.trim() || "";
+  const resolvedSelectedAgent = useMemo(
+    () =>
+      selectedAgent?.agent_id === agentId
+        ? selectedAgent
+        : agents.find(agent => agent.agent_id === agentId) ?? null,
+    [selectedAgent, agentId, agents]
+  );
   const [dataPanelTab, setDataPanelTab] = useState<"logs" | "datasets">("logs");
   const [rightPanelTab, setRightPanelTab] = useState<"results" | "history">("results");
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
@@ -464,7 +471,7 @@ export function useReleaseGateExpandedViewModel({
     runLocked,
     runSnapshotIds,
     selectHistoryRun,
-    selectedAgent,
+    selectedAgent: resolvedSelectedAgent,
     selectedRunId,
     selectedRunReportLoading,
     setBaselineDetailSnapshot,

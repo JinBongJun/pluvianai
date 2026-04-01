@@ -475,8 +475,8 @@ export function LiveViewContent() {
           />
         )}
         {!showLoadingOverlay && !showAccessDeniedOverlay && resolvedProjectAccess ? (
-          <div className="absolute left-6 top-6 z-20 max-w-[560px]">
-            <ProjectAccessContextBanner project={resolvedProjectAccess} />
+          <div className="absolute left-6 top-[92px] z-20 max-w-[430px]">
+            <ProjectAccessContextBanner project={resolvedProjectAccess} variant="compact" />
           </div>
         ) : null}
 
