@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { SearchCode } from "lucide-react";
 
 import { formatProviderLabel } from "./releaseGateConfigPanelHelpers";
 import type { ReleaseGateConfigPanelPreviewTabProps } from "./releaseGateConfigPanelModel.types";
