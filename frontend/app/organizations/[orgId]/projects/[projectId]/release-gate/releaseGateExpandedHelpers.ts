@@ -2,6 +2,9 @@
  * Pure helpers and labels for Release Gate expanded view (keeps ReleaseGateExpandedView.tsx smaller).
  */
 
+export { EVAL_CHECK_LABELS, getEvalCheckParams } from "@/lib/evalPresentation";
+import { EVAL_CHECK_LABELS } from "@/lib/evalPresentation";
+
 export type GateTab = "validate" | "history";
 export type ThresholdPreset = "strict" | "default" | "lenient" | "custom";
 export type ResultCaseFilter = "all" | "failed" | "passed";
@@ -19,22 +22,6 @@ export type FixHint = {
 export type VisibleResultCase = {
   run: any;
   caseIndex: number;
-};
-
-export const EVAL_CHECK_LABELS: Record<string, string> = {
-  empty: "Empty / Short Answers",
-  latency: "Latency Spikes",
-  status_code: "HTTP Error Codes",
-  refusal: "Refusal / Non-Answer",
-  json: "JSON Validity",
-  length: "Output Length Drift",
-  repetition: "Repetition / Loops",
-  required: "Required Keywords / Fields",
-  format: "Format Contract",
-  leakage: "PII Leakage Shield",
-  tool: "Tool Use Policy",
-  tool_use_policy: "Tool Use Policy",
-  tool_grounding: "Tool Result Grounding",
 };
 
 export const RULE_FIX_HINTS: Record<string, string> = {
@@ -289,46 +276,6 @@ export function summarizeRunToolGroundingFromCases(resultCases: any[]): {
 
   if (withTools === 0) return null;
   return { withTools, pass, fail, semanticOk, semanticOff };
-}
-
-export function getEvalCheckParams(id: string, config: Record<string, unknown> | undefined): string {
-  if (!config || typeof config !== "object") return "";
-  const c = config as Record<string, unknown>;
-  switch (id) {
-    case "latency": {
-      const w = c.warn_ms;
-      const v = c.crit_ms;
-      const parts: string[] = [];
-      if (typeof w === "number") parts.push(`warn_ms: ${w}`);
-      if (typeof v === "number") parts.push(`crit_ms: ${v}`);
-      return parts.join(", ");
-    }
-    case "json":
-      return typeof c.mode === "string" ? `mode: ${c.mode}` : "";
-    case "status_code": {
-      const w = c.warn_from;
-      const v = c.crit_from;
-      const parts: string[] = [];
-      if (typeof w === "number") parts.push(`warn_from: ${w}`);
-      if (typeof v === "number") parts.push(`crit_from: ${v}`);
-      return parts.join(", ");
-    }
-    case "empty":
-      return typeof c.min_chars === "number" ? `min_chars: ${c.min_chars}` : "";
-    case "length":
-      return (
-        [c.warn_ratio, c.crit_ratio]
-          .filter(Number.isFinite)
-          .map((r, i) => `${i ? "crit" : "warn"}_ratio: ${r}`)
-          .join(", ") || ""
-      );
-    case "repetition":
-      return [c.warn_line_repeats, c.crit_line_repeats].filter(Number.isFinite).length
-        ? `warn_line_repeats: ${c.warn_line_repeats ?? "—"}, crit_line_repeats: ${c.crit_line_repeats ?? "—"}`
-        : "";
-    default:
-      return "";
-  }
 }
 
 export function formatDateTime(value: unknown): string {
