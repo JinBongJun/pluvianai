@@ -291,7 +291,7 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
             <div className="flex flex-1 min-h-0 gap-8">
               {/* Left Column: Eval Checks */}
               <div className="w-[280px] flex flex-col min-h-0 shrink-0 pr-2">
-                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-slate-500 mb-5 shrink-0">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-white/40 mb-5 shrink-0">
                   <ShieldCheck className="w-4 h-4 text-emerald-500/70" />
                   Eval Checks
                 </div>
@@ -308,13 +308,13 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
                           <li key={card.id} className="flex flex-col gap-1.5 group/check">
                             <div className="flex items-center gap-2.5">
                               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                              <span className="text-[13px] font-semibold text-slate-200 tracking-wide group-hover/check:text-white transition-colors truncate">
+                              <span className="text-[13px] font-semibold text-white/90 tracking-wide group-hover/check:text-white transition-colors truncate">
                                 {card.label}
                               </span>
                             </div>
                             {card.params ? (
                               <div className="pl-[26px]">
-                                <span className="text-xs font-mono text-slate-500 bg-white/[0.03] px-2 py-1 rounded-md line-clamp-2">
+                                <span className="text-xs font-mono text-white/40 bg-white/[0.02] px-2 py-1 rounded-md line-clamp-2">
                                   {card.params}
                                 </span>
                               </div>
@@ -328,21 +328,21 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
                       {rgDetails.activeChecks.map((name: string, i: number) => (
                         <li key={`${name}-${i}`} className="flex items-center gap-2.5">
                           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span className="text-[13px] font-semibold text-slate-200 tracking-wide truncate">
+                          <span className="text-[13px] font-semibold text-white/90 tracking-wide truncate">
                             {name.replace(/_/g, " ")}
                           </span>
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-sm text-slate-500 bg-white/[0.02] p-4 rounded-xl border border-white/5 border-dashed">
+                    <p className="text-sm text-white/40 p-4 rounded-xl border border-white/5 border-dashed">
                       No active checks configured.
                     </p>
                   )}
                 </div>
 
                 <div className="mt-6 shrink-0">
-                  <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 mb-3">
+                  <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/40 mb-3">
                     <ShieldCheck className="w-3.5 h-3.5 text-amber-400/70" />
                     Policy Checks
                   </div>
@@ -353,13 +353,13 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
                           <li key={card.id} className="flex flex-col gap-1.5">
                             <div className="flex items-center gap-2.5">
                               <CheckCircle2 className="w-4 h-4 text-amber-300 shrink-0" />
-                              <span className="text-[13px] font-semibold text-slate-200 tracking-wide truncate">
+                              <span className="text-[13px] font-semibold text-white/90 tracking-wide truncate">
                                 {card.label}
                               </span>
                             </div>
                             {card.detail ? (
                               <div className="pl-[26px]">
-                                <span className="text-xs text-slate-500 bg-white/[0.03] px-2 py-1 rounded-md line-clamp-2">
+                                <span className="text-xs text-white/40 bg-white/[0.02] px-2 py-1 rounded-md line-clamp-2">
                                   {card.detail}
                                 </span>
                               </div>
@@ -369,7 +369,7 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
                       )}
                     </ul>
                   ) : (
-                    <p className="text-xs text-slate-500 bg-white/[0.02] px-3 py-2 rounded-xl border border-white/5 border-dashed">
+                    <p className="text-xs text-white/40 px-3 py-2 rounded-xl border border-white/5 border-dashed">
                       No policy checks enabled.
                     </p>
                   )}
@@ -379,38 +379,38 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
               {/* Right Column: Config summary */}
               <div className="flex-1 flex flex-col min-h-0 min-w-0">
                 <div className="flex items-center justify-between mb-3 shrink-0">
-                  <div className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+                  <div className="text-xs font-black uppercase tracking-[0.2em] text-white/40">
                     Config Summary
                   </div>
                   {configSourceLabel ? (
-                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium text-slate-300">
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium text-white/70">
                       {configSourceLabel}
                     </span>
                   ) : null}
                 </div>
 
-                <div className="flex-1 rounded-2xl border border-white/10 bg-[#0a0c10] shadow-inner overflow-hidden flex flex-col p-4 gap-3">
+                <div className="flex-1 flex flex-col gap-4 min-h-0">
                   <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2">
-                      <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500">Model</div>
-                      <div className="mt-1 text-slate-200 truncate" title={modelLabel}>
+                    <div className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">Model</div>
+                      <div className="mt-1 text-white/90 truncate" title={modelLabel}>
                         {modelLabel}
                       </div>
                     </div>
-                    <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2">
-                      <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500">Provider</div>
-                      <div className="mt-1 text-slate-200 truncate" title={providerLabel}>
+                    <div className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">Provider</div>
+                      <div className="mt-1 text-white/90 truncate" title={providerLabel}>
                         {providerLabel}
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500">
+                  <div className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">
                       System prompt
                     </div>
                     <p
-                      className="mt-1 text-[11px] text-slate-200 leading-relaxed line-clamp-2"
+                      className="mt-1 text-[11px] text-white/90 leading-relaxed line-clamp-2"
                       title={promptPreview || "No system prompt configured."}
                     >
                       {promptPreview || "No system prompt configured."}
@@ -418,23 +418,23 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
                   </div>
 
                   <div className="grid grid-cols-1 gap-2 text-[11px]">
-                    <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-300">
-                      <span className="text-slate-500">Sampling:</span>{" "}
+                    <div className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-3 py-2 text-white/80">
+                      <span className="text-white/40">Sampling:</span>{" "}
                       {samplingSummaryText || "Using provider defaults"}
                     </div>
-                    <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-300">
-                      <span className="text-slate-500">Tools:</span> {toolsSummaryText || "No tools configured"}
+                    <div className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-3 py-2 text-white/80">
+                      <span className="text-white/40">Tools:</span> {toolsSummaryText || "No tools configured"}
                     </div>
-                    <div className="rounded-xl border border-white/8 bg-black/30 px-3 py-2 text-slate-300">
-                      <span className="text-slate-500">Override:</span> {overrideSummaryText || "Using detected model"}
+                    <div className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-3 py-2 text-white/80">
+                      <span className="text-white/40">Override:</span> {overrideSummaryText || "Using detected model"}
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-white/8 bg-black/30 p-3 flex-1 min-h-0">
-                    <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500 mb-1">
+                  <div className="pt-3 border-t border-white/5 flex-1 min-h-0">
+                    <div className="text-[10px] uppercase tracking-[0.15em] text-white/40 mb-1">
                       Payload (raw preview)
                     </div>
-                    <pre className="h-full overflow-auto text-[11px] leading-relaxed text-slate-400 font-mono whitespace-pre-wrap break-words custom-scrollbar">
+                    <pre className="h-full overflow-auto text-[11px] leading-relaxed text-white/60 font-mono whitespace-pre-wrap break-words custom-scrollbar">
                       {String(rgConfig.originalPayloadPreview || "{}")}
                     </pre>
                   </div>
@@ -448,7 +448,7 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
             <div className="mt-6 pt-5 border-t border-white/10 shrink-0 flex items-center justify-between gap-4">
               {/* Footer Left: Messages & Status */}
               <div className="flex items-center gap-4 flex-1 min-w-0">
-                <span className="text-sm font-medium text-slate-400 shrink-0">
+                <span className="text-sm font-medium text-white/60 shrink-0">
                   {baselineSummaryText}
                 </span>
 
@@ -472,7 +472,7 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
                         "Running",
                         "Canceling",
                       ].includes(lastRunStatusLabel) &&
-                        "text-slate-400 border-white/10 bg-white/5"
+                        "text-white/60 border-white/10 bg-white/5"
                     )}
                   >
                     {lastRunStatusLabel}
@@ -483,12 +483,12 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
                 )}
 
                 {startBlockedReason ? (
-                  <span className="text-[13px] font-medium text-amber-400/90 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20 truncate">
+                  <span className="text-[13px] font-medium text-amber-100/90 bg-amber-500/5 px-3 py-1.5 border-l-2 border-amber-500/50 truncate">
                     {startBlockedReason}
                   </span>
                 ) : runError ? (
                   <div
-                    className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-[13px] font-medium text-rose-200 truncate"
+                    className="border-l-2 border-rose-500/50 bg-rose-500/5 px-3 py-1.5 text-[13px] font-medium text-rose-100 truncate"
                     title={runError}
                   >
                     {runError}
@@ -512,7 +512,7 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
                       "inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-black uppercase transition",
                       rgConfig.isHeavyRepeat
                         ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
-                        : "border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.08]",
+                        : "border-white/10 bg-white/[0.02] text-white/90 hover:bg-white/[0.08]",
                       rgConfig.isValidating && "opacity-50 cursor-not-allowed"
                     )}
                   >
@@ -543,7 +543,7 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
                             className={clsx(
                               "flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold transition",
                               isActive && "bg-fuchsia-500/20 text-fuchsia-100",
-                              !isActive && !heavy && "text-slate-200 hover:bg-white/[0.05]",
+                              !isActive && !heavy && "text-white/90 hover:bg-white/[0.05]",
                               !isActive &&
                                 heavy &&
                                 "bg-rose-500/10 text-rose-200 hover:bg-rose-500/20",
