@@ -2,6 +2,7 @@
 
 import useSWR from "swr";
 
+import type { OrganizationProject } from "@/lib/api";
 import { orgKeys } from "@/lib/queryKeys";
 import { organizationsAPI, projectsAPI } from "@/lib/api";
 
@@ -30,6 +31,12 @@ export function useReleaseGatePageBootstrap(
   const { data: org } = useSWR(orgId ? orgKeys.detail(orgId) : null, () =>
     organizationsAPI.get(orgId)
   );
+  const { data: orgProjects } = useSWR<OrganizationProject[]>(
+    orgId ? orgKeys.projects(orgId, "") : null,
+    ([, , id]) => organizationsAPI.listProjects(String(id), { includeStats: false })
+  );
+  const projectSummary =
+    orgProjects?.find(candidate => String(candidate.id) === String(projectId)) ?? undefined;
 
-  return { project, org };
+  return { project, projectSummary, org };
 }

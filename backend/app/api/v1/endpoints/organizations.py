@@ -15,6 +15,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.logging_config import logger
 from app.core.decorators import handle_errors
+from app.core.permissions import get_project_access_context
 from app.core.dependencies import get_organization_service, get_project_service, get_user_service
 from app.middleware.usage_middleware import check_organization_limit
 from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
@@ -158,6 +159,13 @@ class OrgProjectSummary(BaseModel):
     quality: Optional[float]
     alerts_open: int
     drift: bool
+    role: Optional[str] = None
+    org_role: Optional[str] = None
+    access_source: Optional[str] = None
+    created_by_me: Optional[bool] = None
+    has_project_access: Optional[bool] = None
+    owner_name: Optional[str] = None
+    entitlement_scope: Optional[str] = None
 
 class OrganizationMemberRole(str, Enum):
     OWNER = "owner"
@@ -923,8 +931,10 @@ def list_org_projects(
             except Exception as e:
                 logger.warning(f"Failed to query drift alerts: {str(e)}", exc_info=True)
 
+        current_org_role = _get_org_role(db, org_id, current_user, org)
         results: List[OrgProjectSummary] = []
         for p in projects:
+            access_context = get_project_access_context(p, current_user.id, db)
             results.append(
                 OrgProjectSummary(
                     id=p.id,
@@ -935,6 +945,13 @@ def list_org_projects(
                     quality=quality_map.get(p.id),
                     alerts_open=alerts_map.get(p.id, 0),
                     drift=drift_map.get(p.id, False),
+                    role=access_context.get("role"),
+                    org_role=access_context.get("org_role") or current_org_role,
+                    access_source=access_context.get("access_source"),
+                    created_by_me=access_context.get("created_by_me"),
+                    has_project_access=access_context.get("has_project_access"),
+                    owner_name=getattr(getattr(p, "owner", None), "full_name", None),
+                    entitlement_scope=access_context.get("entitlement_scope"),
                 )
             )
 

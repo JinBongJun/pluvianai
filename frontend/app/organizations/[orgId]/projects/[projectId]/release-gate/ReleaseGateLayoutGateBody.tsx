@@ -1,16 +1,19 @@
 "use client";
 
-import React, { memo } from "react";
+import React, { memo, useMemo } from "react";
 import type { AgentForPicker } from "@/components/release-gate/AgentPickerCard";
 import { ReleaseGateMap } from "@/components/release-gate/ReleaseGateMap";
+import { ProjectAccessContextBanner } from "@/components/project-access/ProjectAccessContextBanner";
 import { ReleaseGateExpandedView } from "./ReleaseGateExpandedView";
 import { ReleaseGateStatusPanel } from "./ReleaseGateStatusPanel";
+import { getProjectAccessErrorCopy, type AccessAwareProject } from "@/lib/projectAccess";
 
 export type ReleaseGateLayoutGateBodyProps = {
   showGateLoadingState: boolean;
   showGateAccessDeniedState: boolean;
   showGateApiErrorState: boolean;
   showGateEmptyState: boolean;
+  agentsError: unknown;
   viewMode: "map" | "expanded";
   mutateAgents: () => void;
   liveViewHref: string;
@@ -19,6 +22,7 @@ export type ReleaseGateLayoutGateBodyProps = {
   onSelectAgent: (id: string) => void;
   projectId: number;
   projectName?: string;
+  projectAccess?: AccessAwareProject;
 };
 
 function ReleaseGateLayoutGateBodyInner({
@@ -26,6 +30,7 @@ function ReleaseGateLayoutGateBodyInner({
   showGateAccessDeniedState,
   showGateApiErrorState,
   showGateEmptyState,
+  agentsError,
   viewMode,
   mutateAgents,
   liveViewHref,
@@ -34,7 +39,18 @@ function ReleaseGateLayoutGateBodyInner({
   onSelectAgent,
   projectId,
   projectName,
+  projectAccess,
 }: ReleaseGateLayoutGateBodyProps) {
+  const releaseGateAccessCopy = useMemo(
+    () =>
+      getProjectAccessErrorCopy({
+        featureLabel: "Release Gate",
+        project: projectAccess,
+        error: agentsError,
+      }),
+    [agentsError, projectAccess]
+  );
+
   if (showGateLoadingState) {
     return (
       <ReleaseGateStatusPanel
@@ -46,8 +62,8 @@ function ReleaseGateLayoutGateBodyInner({
   if (showGateAccessDeniedState) {
     return (
       <ReleaseGateStatusPanel
-        title="Access Denied"
-        description="You do not have access to this project. Ask a project owner or admin to update your role before using Release Gate."
+        title={releaseGateAccessCopy.title}
+        description={releaseGateAccessCopy.description}
         tone="warning"
         primaryActionLabel="Retry"
         onPrimaryAction={() => void mutateAgents()}
@@ -87,16 +103,32 @@ function ReleaseGateLayoutGateBodyInner({
   }
   if (viewMode === "map") {
     return (
-      <ReleaseGateMap
-        agents={agents}
-        agentsLoaded={agentsLoaded}
-        onSelectAgent={onSelectAgent}
-        projectId={projectId}
-        projectName={projectName}
-      />
+      <div className="relative h-full">
+        {projectAccess ? (
+          <div className="absolute left-6 top-6 z-30 max-w-[560px]">
+            <ProjectAccessContextBanner project={projectAccess} />
+          </div>
+        ) : null}
+        <ReleaseGateMap
+          agents={agents}
+          agentsLoaded={agentsLoaded}
+          onSelectAgent={onSelectAgent}
+          projectId={projectId}
+          projectName={projectName}
+        />
+      </div>
     );
   }
-  return <ReleaseGateExpandedView />;
+  return (
+    <div className="relative h-full">
+      {projectAccess ? (
+        <div className="absolute left-6 top-6 z-30 max-w-[560px]">
+          <ProjectAccessContextBanner project={projectAccess} />
+        </div>
+      ) : null}
+      <ReleaseGateExpandedView />
+    </div>
+  );
 }
 
 export const ReleaseGateLayoutGateBody = memo(ReleaseGateLayoutGateBodyInner);

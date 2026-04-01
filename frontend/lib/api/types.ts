@@ -34,6 +34,13 @@ export interface OrganizationProject {
   quality?: number | null;
   alerts?: number;
   drift?: boolean;
+  role?: "owner" | "admin" | "member" | "viewer" | null;
+  org_role?: "owner" | "admin" | "member" | "viewer" | null;
+  access_source?: "owned" | "project_member" | "organization_member" | null;
+  created_by_me?: boolean;
+  has_project_access?: boolean;
+  owner_name?: string | null;
+  entitlement_scope?: "account" | "organization" | null;
 }
 
 export interface Project {
@@ -42,7 +49,13 @@ export interface Project {
   description: string | null;
   owner_id: number;
   is_active: boolean;
-  role?: "owner" | "admin" | "member" | "viewer";
+  role?: "owner" | "admin" | "member" | "viewer" | null;
+  org_role?: "owner" | "admin" | "member" | "viewer" | null;
+  access_source?: "owned" | "project_member" | "organization_member" | null;
+  created_by_me?: boolean;
+  has_project_access?: boolean;
+  owner_name?: string | null;
+  entitlement_scope?: "account" | "organization" | null;
   organization_id?: number | null;
 }
 

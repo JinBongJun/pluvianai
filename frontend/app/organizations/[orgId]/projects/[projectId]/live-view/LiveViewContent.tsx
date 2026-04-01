@@ -35,8 +35,10 @@ import { AgentEvaluationPanel } from "@/components/live-view/AgentEvaluationPane
 import { ClinicalLogDataSection } from "@/components/live-view/ClinicalLogDataSection";
 import { AgentSettingsPanel } from "@/components/live-view/AgentSettingsPanel";
 import { useToast } from "@/components/ToastContainer";
+import { ProjectAccessContextBanner } from "@/components/project-access/ProjectAccessContextBanner";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
+import { getProjectAccessErrorCopy } from "@/lib/projectAccess";
 import {
   LIVE_VIEW_BASE_POLL_MS,
   LIVE_VIEW_MAX_POLL_MS,
@@ -84,16 +86,17 @@ export function LiveViewContent() {
   } = useLiveViewSseRefs();
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 
-  const { project, org, agentsData, agentsLoading, agentsError, mutateAgents } = useLiveViewCoreData({
-    projectId,
-    orgId,
-    routerReplace: href => router.replace(href),
-    selectedAgentId,
-    agentsPollIntervalMs,
-    isPageVisible,
-    sseConnected,
-    sseBackoffUntilRef,
-  });
+  const { project, projectSummary, org, agentsData, agentsLoading, agentsError, mutateAgents } =
+    useLiveViewCoreData({
+      projectId,
+      orgId,
+      routerReplace: href => router.replace(href),
+      selectedAgentId,
+      agentsPollIntervalMs,
+      isPageVisible,
+      sseConnected,
+      sseBackoffUntilRef,
+    });
   const [panelTab, setPanelTab] = useState<"logs" | "eval" | "data" | "settings">("logs");
   const [restoringAgentId, setRestoringAgentId] = useState<string | null>(null);
   const [hardDeletingAgents, setHardDeletingAgents] = useState(false);
@@ -370,6 +373,16 @@ export function LiveViewContent() {
     orgId,
     agentId: selectedAgentId || "",
   };
+  const resolvedProjectAccess = project ?? projectSummary;
+  const liveViewAccessCopy = useMemo(
+    () =>
+      getProjectAccessErrorCopy({
+        featureLabel: "Live View",
+        project: resolvedProjectAccess,
+        error: agentsError,
+      }),
+    [resolvedProjectAccess, agentsError]
+  );
 
   return (
     <LiveViewPageLayout
@@ -435,8 +448,8 @@ export function LiveViewContent() {
         {showLoadingOverlay && <LiveViewLoadingState />}
         {showAccessDeniedOverlay && (
           <LiveViewErrorState
-            title="Access Denied"
-            description="You do not have access to this project. Ask a project owner or admin to update your role."
+            title={liveViewAccessCopy.title}
+            description={liveViewAccessCopy.description}
             onRetry={() => void mutateAgents()}
           />
         )}
@@ -461,6 +474,11 @@ export function LiveViewContent() {
             hardDeleting={hardDeletingAgents}
           />
         )}
+        {!showLoadingOverlay && !showAccessDeniedOverlay && resolvedProjectAccess ? (
+          <div className="absolute left-6 top-6 z-20 max-w-[560px]">
+            <ProjectAccessContextBanner project={resolvedProjectAccess} />
+          </div>
+        ) : null}
 
         <div className="absolute bottom-10 left-10 z-0 pointer-events-none select-none opacity-20">
           <div className="flex flex-col gap-1">

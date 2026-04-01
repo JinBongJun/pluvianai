@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import useSWR, { useSWRConfig } from "swr";
 
 import { liveViewAPI, organizationsAPI, projectsAPI } from "@/lib/api";
+import type { OrganizationProject } from "@/lib/api";
 import {
   liveViewAgentsPayloadSignature,
   releaseGateAgentsSwrKey,
@@ -71,6 +72,13 @@ export function useLiveViewCoreData(options: {
     () => organizationsAPI.get(orgId),
     LIVE_VIEW_SWR_DEFAULT_OPTIONS
   );
+  const { data: orgProjects } = useSWR<OrganizationProject[]>(
+    orgId ? orgKeys.projects(orgId, "") : null,
+    ([, , id]) => organizationsAPI.listProjects(String(id), { includeStats: false }),
+    LIVE_VIEW_SWR_DEFAULT_OPTIONS
+  );
+  const projectSummary =
+    orgProjects?.find(candidate => String(candidate.id) === String(projectId)) ?? undefined;
 
   const {
     data: agentsData,
@@ -108,6 +116,7 @@ export function useLiveViewCoreData(options: {
 
   return {
     project,
+    projectSummary,
     org,
     agentsData,
     agentsLoading,

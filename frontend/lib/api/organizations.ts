@@ -42,16 +42,27 @@ const normalizeOrganizationDetail = (org: any): OrganizationDetail => {
   };
 };
 
-const normalizeOrganizationProject = (project: any): OrganizationProject => ({
-  id: project?.id,
-  name: project?.name || "Untitled project",
-  description: project?.description || null,
-  calls24h: project?.calls_24h ?? project?.calls24h ?? 0,
-  cost7d: project?.cost_7d ?? project?.cost7d ?? 0,
-  quality: project?.quality ?? project?.quality_score ?? null,
-  alerts: project?.alerts_open ?? project?.alerts ?? 0,
-  drift: project?.drift_detected ?? project?.drift ?? false,
-});
+const normalizeOrganizationProject = (project: any): OrganizationProject => {
+  const role = project?.role ?? null;
+  const createdByMe = project?.created_by_me ?? role === "owner";
+  return {
+    id: project?.id,
+    name: project?.name || "Untitled project",
+    description: project?.description || null,
+    calls24h: project?.calls_24h ?? project?.calls24h ?? 0,
+    cost7d: project?.cost_7d ?? project?.cost7d ?? 0,
+    quality: project?.quality ?? project?.quality_score ?? null,
+    alerts: project?.alerts_open ?? project?.alerts ?? 0,
+    drift: project?.drift_detected ?? project?.drift ?? false,
+    role,
+    org_role: project?.org_role ?? null,
+    access_source: project?.access_source ?? null,
+    created_by_me: createdByMe,
+    has_project_access: project?.has_project_access ?? Boolean(role),
+    owner_name: project?.owner_name ?? null,
+    entitlement_scope: project?.entitlement_scope ?? "account",
+  };
+};
 
 export const organizationsAPI = {
   create: async (data: { name: string; description?: string | null; plan_type?: PlanType }) => {

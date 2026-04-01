@@ -5,11 +5,13 @@ import { useMemo } from "react";
 import type { ReleaseGateLayoutGateBodyProps } from "./ReleaseGateLayoutGateBody";
 import type { ReleaseGateValidateRunContextValue } from "./ReleaseGateValidateRunContext";
 import type { AgentForPicker } from "@/components/release-gate/AgentPickerCard";
+import type { OrganizationProject, Project } from "@/lib/api";
 
 export type UseReleaseGatePageModelReturnParams = {
   orgId: string;
   projectId: number;
-  project: { name?: string } | undefined;
+  project: Project | undefined;
+  projectSummary: OrganizationProject | undefined;
   isValidating: boolean;
   activeJobId: string | null;
   cancelRequested: boolean;
@@ -25,6 +27,7 @@ export type UseReleaseGatePageModelReturnParams = {
   showGateAccessDeniedState: boolean;
   showGateApiErrorState: boolean;
   showGateEmptyState: boolean;
+  agentsError: unknown;
   viewMode: "map" | "expanded";
   mutateAgents: () => unknown;
   agents: AgentForPicker[];
@@ -38,6 +41,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
     orgId,
     projectId,
     project,
+    projectSummary,
     isValidating,
     activeJobId,
     cancelRequested,
@@ -53,6 +57,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
     showGateAccessDeniedState,
     showGateApiErrorState,
     showGateEmptyState,
+    agentsError,
     viewMode,
     mutateAgents,
     agents,
@@ -95,6 +100,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
       showGateAccessDeniedState,
       showGateApiErrorState,
       showGateEmptyState,
+      agentsError,
       viewMode,
       mutateAgents,
       liveViewHref,
@@ -103,12 +109,14 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
       onSelectAgent: onMapSelectAgent,
       projectId,
       projectName: project?.name,
+      projectAccess: project ?? projectSummary,
     }),
     [
       showGateLoadingState,
       showGateAccessDeniedState,
       showGateApiErrorState,
       showGateEmptyState,
+      agentsError,
       viewMode,
       mutateAgents,
       liveViewHref,
@@ -116,7 +124,8 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
       agentsLoaded,
       onMapSelectAgent,
       projectId,
-      project?.name,
+      project,
+      projectSummary,
     ]
   );
 

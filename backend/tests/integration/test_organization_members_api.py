@@ -195,3 +195,53 @@ def test_team_member_limit_error_has_normalized_details(client, db, test_user):
     assert nested_payload.get("limit") == 3
     assert nested_payload.get("remaining") == 0
     assert nested_payload.get("reset_at") is None
+
+
+def test_org_projects_list_exposes_access_context_for_org_only_visibility(client, db, test_user):
+    owner = test_user
+    viewer = User(
+        email="org-project-list-viewer@example.com",
+        hashed_password=get_password_hash("password123"),
+        full_name="Org Project List Viewer",
+        is_active=True,
+    )
+    db.add(viewer)
+    db.commit()
+    db.refresh(viewer)
+
+    org = Organization(name="Visibility Org", owner_id=owner.id, plan_type="free")
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    db.add_all(
+        [
+            OrganizationMember(organization_id=org.id, user_id=owner.id, role="owner"),
+            OrganizationMember(organization_id=org.id, user_id=viewer.id, role="viewer"),
+        ]
+    )
+    db.commit()
+
+    _as_user(owner)
+    response = client.post(
+        "/api/v1/projects",
+        json={
+            "name": "Org Visible Project",
+            "description": "Visible through organization membership",
+            "organization_id": org.id,
+        },
+    )
+    assert response.status_code == 201
+    project = response.json()
+
+    _as_user(viewer)
+    response = client.get(f"/api/v1/organizations/{org.id}/projects")
+    assert response.status_code == 200
+    items = response.json()
+    match = next(item for item in items if item["id"] == project["id"])
+    assert match["access_source"] == "organization_member"
+    assert match["role"] is None
+    assert match["org_role"] == "viewer"
+    assert match["has_project_access"] is False
+    assert match["created_by_me"] is False
+    assert match["entitlement_scope"] == "account"
