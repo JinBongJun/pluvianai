@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import ReactFlow, {
   Background,
@@ -34,10 +35,6 @@ import {
 } from "@/lib/projectAccess";
 import RailwaySidePanel from "@/components/shared/RailwaySidePanel";
 import { NodeFocusHandler } from "@/components/shared/NodeFocusHandler";
-import { ClinicalLog } from "@/components/live-view/ClinicalLog";
-import { AgentEvaluationPanel } from "@/components/live-view/AgentEvaluationPanel";
-import { ClinicalLogDataSection } from "@/components/live-view/ClinicalLogDataSection";
-import { AgentSettingsPanel } from "@/components/live-view/AgentSettingsPanel";
 import { useToast } from "@/components/ToastContainer";
 import { ProjectAccessInlineStrip } from "@/components/project-access/ProjectAccessInlineStrip";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
@@ -63,6 +60,36 @@ import {
   LABORATORY_REFRESH_EVENT,
   type LaboratoryRefreshDetail,
 } from "@/lib/laboratoryLabRefresh";
+
+const ClinicalLog = dynamic(() => import("@/components/live-view/ClinicalLog"), {
+  ssr: false,
+  loading: () => <div className="h-full min-h-[240px] animate-pulse rounded-2xl bg-white/[0.03]" />,
+});
+const AgentEvaluationPanel = dynamic(
+  () =>
+    import("@/components/live-view/AgentEvaluationPanel").then(mod => mod.AgentEvaluationPanel),
+  {
+    ssr: false,
+    loading: () => <div className="h-full min-h-[240px] animate-pulse rounded-2xl bg-white/[0.03]" />,
+  }
+);
+const ClinicalLogDataSection = dynamic(
+  () =>
+    import("@/components/live-view/ClinicalLogDataSection").then(
+      mod => mod.ClinicalLogDataSection
+    ),
+  {
+    ssr: false,
+    loading: () => <div className="h-full min-h-[240px] animate-pulse rounded-2xl bg-white/[0.03]" />,
+  }
+);
+const AgentSettingsPanel = dynamic(
+  () => import("@/components/live-view/AgentSettingsPanel").then(mod => mod.AgentSettingsPanel),
+  {
+    ssr: false,
+    loading: () => <div className="h-full min-h-[240px] animate-pulse rounded-2xl bg-white/[0.03]" />,
+  }
+);
 
 export function LiveViewContent() {
   const params = useParams();

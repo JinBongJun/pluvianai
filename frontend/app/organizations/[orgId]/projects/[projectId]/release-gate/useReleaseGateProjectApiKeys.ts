@@ -53,8 +53,11 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
     agentId,
   } = p;
 
+  const normalizedAgentId = agentId.trim();
   const projectUserApiKeysKey =
-    projectId && !isNaN(projectId) ? projectKeys.userApiKeys(projectId) : null;
+    projectId && !isNaN(projectId) && normalizedAgentId
+      ? projectKeys.userApiKeys(projectId)
+      : null;
   const {
     data: projectUserApiKeysData,
     isLoading: projectUserApiKeysLoading,

@@ -323,7 +323,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                     </div>
                     <div className="mt-1.5 text-xs leading-relaxed text-white/40">
                       This list is scoped to the selected agent, so the total, filters, and paging all
-                      reflect only this agent's retained Release Gate runs.
+                      reflect only retained Release Gate runs for the selected agent.
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-white/40 items-center">
                       <span className="font-medium text-white/60">
