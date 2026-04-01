@@ -27,7 +27,7 @@ from app.core.security import (
     TokenValidationError,
 )
 from app.core.dependencies import get_snapshot_service
-from app.core.permissions import check_project_access, ProjectRole
+from app.core.permissions import check_project_access, ProjectRole, get_user_organization_role
 from app.core.usage_limits import check_snapshot_limit, get_limit_status
 from app.models.user import User
 from app.models.snapshot import Snapshot
@@ -287,6 +287,7 @@ def _ensure_live_view_hot_path_access(project_id: int, user_id: int, db: Session
         db.query(
             Project.id.label("project_id"),
             Project.owner_id.label("owner_id"),
+            Project.organization_id.label("organization_id"),
             Project.canvas_nodes.label("canvas_nodes"),
             Project.is_active.label("is_active"),
             Project.is_deleted.label("is_deleted"),
@@ -308,7 +309,8 @@ def _ensure_live_view_hot_path_access(project_id: int, user_id: int, db: Session
             )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
-    allowed = int(row.owner_id or 0) == user_id or bool(row.member_role)
+    org_role = get_user_organization_role(getattr(row, "organization_id", None), user_id, db)
+    allowed = int(row.owner_id or 0) == user_id or bool(row.member_role) or bool(org_role)
     if cache_service.enabled:
         cache_service.set(
             _live_view_hot_access_cache_key(project_id, user_id),

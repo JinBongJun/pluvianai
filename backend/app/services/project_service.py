@@ -121,18 +121,37 @@ class ProjectService:
         """
         from sqlalchemy import or_
         from app.models.project_member import ProjectMember
+        from app.models.organization import Organization, OrganizationMember
         
         # Get owned projects
         owned_query = self.db.query(Project).filter(
             Project.owner_id == user_id,
             Project.is_active.is_(True)
         )
-        
-        # Get member projects
+
+        # Get direct shared projects (legacy / non-organization projects)
         member_query = (
             self.db.query(Project)
             .join(ProjectMember)
             .filter(ProjectMember.user_id == user_id, Project.is_active.is_(True))
+        )
+
+        # Get organization projects where the user inherits access from org membership
+        org_query = (
+            self.db.query(Project)
+            .join(Organization, Organization.id == Project.organization_id)
+            .outerjoin(
+                OrganizationMember,
+                (
+                    (OrganizationMember.organization_id == Organization.id)
+                    & (OrganizationMember.user_id == user_id)
+                ),
+            )
+            .filter(
+                Project.is_active.is_(True),
+                Project.organization_id.is_not(None),
+                or_(Organization.owner_id == user_id, OrganizationMember.user_id == user_id),
+            )
         )
         
         # Apply search filter if provided
@@ -143,13 +162,15 @@ class ProjectService:
             )
             owned_query = owned_query.filter(search_filter)
             member_query = member_query.filter(search_filter)
+            org_query = org_query.filter(search_filter)
         
         # Get projects
         owned_projects = owned_query.all()
         member_projects = member_query.all()
+        org_projects = org_query.all()
         
         # Combine and remove duplicates
-        all_projects_dict = {p.id: p for p in owned_projects + member_projects}
+        all_projects_dict = {p.id: p for p in owned_projects + member_projects + org_projects}
         return list(all_projects_dict.values())
 
     def update_project(

@@ -11,7 +11,6 @@ import {
 import {
   AccessSourceBadge,
   EntitlementScopeBadge,
-  OrganizationRoleBadge,
   ProjectRoleBadge,
 } from "@/components/project-access/AccessBadges";
 
@@ -29,8 +28,6 @@ export function ProjectAccessContextBanner({
   const summary = getProjectAccessSummary(project);
   const entitlementHelpText = getEntitlementScopeHelpText(project.entitlement_scope);
   const roleContextSummary = getProjectRoleContextSummary(project);
-  const showOrgRoleBadge =
-    Boolean(project.org_role) && (!project.role || project.org_role !== project.role);
   const isCompact = variant === "compact";
 
   return (
@@ -44,8 +41,7 @@ export function ProjectAccessContextBanner({
     >
       <div className="flex flex-wrap items-center gap-2">
         <AccessSourceBadge source={project.access_source} />
-        <ProjectRoleBadge role={project.role} prefix="Project" />
-        {showOrgRoleBadge ? <OrganizationRoleBadge role={project.org_role} /> : null}
+        <ProjectRoleBadge role={project.role ?? project.org_role} />
         <EntitlementScopeBadge scope={project.entitlement_scope} />
       </div>
       <p className={clsx("mt-2 leading-relaxed text-slate-200", isCompact ? "text-xs" : "text-sm")}>

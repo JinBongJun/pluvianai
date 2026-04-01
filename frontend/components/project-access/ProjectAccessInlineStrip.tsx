@@ -11,7 +11,6 @@ import {
 import {
   AccessSourceBadge,
   EntitlementScopeBadge,
-  OrganizationRoleBadge,
   ProjectRoleBadge,
 } from "@/components/project-access/AccessBadges";
 
@@ -24,8 +23,6 @@ export function ProjectAccessInlineStrip({
 }) {
   if (!project) return null;
 
-  const showOrgRoleBadge =
-    Boolean(project.org_role) && (!project.role || project.org_role !== project.role);
   const tooltip = [
     getProjectAccessSummary(project),
     getProjectRoleContextSummary(project),
@@ -44,8 +41,7 @@ export function ProjectAccessInlineStrip({
       title={tooltip}
     >
       <AccessSourceBadge source={project.access_source} />
-      <ProjectRoleBadge role={project.role} prefix="Project" emptyLabel="Role unknown" />
-      {showOrgRoleBadge ? <OrganizationRoleBadge role={project.org_role} /> : null}
+      <ProjectRoleBadge role={project.role ?? project.org_role} emptyLabel="Role unavailable" />
       <EntitlementScopeBadge scope={project.entitlement_scope} />
     </div>
   );

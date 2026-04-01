@@ -108,7 +108,7 @@ class TestProjectsAPI:
         assert data["has_project_access"] is True
         assert data["entitlement_scope"] == "account"
 
-    async def test_org_member_without_project_membership_gets_structured_project_denial(
+    async def test_org_member_inherits_project_access_from_organization_role(
         self, async_client, auth_headers, db, test_project, test_user
     ):
         org = Organization(name="Structured Access Org", owner_id=test_user.id, plan_type="free")
@@ -141,17 +141,50 @@ class TestProjectsAPI:
         finally:
             app.dependency_overrides.pop(get_current_user, None)
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_200_OK
         body = response.json()
-        payload = body.get("detail") or body.get("error") or {}
-        assert payload.get("code") == "PROJECT_ACCESS_DENIED"
-        assert "visible because you belong to the organization" in payload.get("message", "").lower()
-        details = payload.get("details") or {}
-        if isinstance(details.get("details"), dict):
-            details = details["details"]
-        assert details.get("access_source") == "organization_member"
-        assert details.get("org_role") == "viewer"
-        assert details.get("has_project_access") is False
+        assert body["role"] == "viewer"
+        assert body["org_role"] == "viewer"
+        assert body["access_source"] == "organization_member"
+        assert body["has_project_access"] is True
+
+    async def test_list_projects_includes_org_projects_for_org_members(
+        self, async_client, auth_headers, db, test_project, test_user
+    ):
+        org = Organization(name="Org Project List Access", owner_id=test_user.id, plan_type="free")
+        db.add(org)
+        db.commit()
+        db.refresh(org)
+
+        test_project.organization_id = org.id
+        db.add(OrganizationMember(organization_id=org.id, user_id=test_user.id, role="owner"))
+
+        org_member = User(
+            email="org-project-list-member@example.com",
+            hashed_password=get_password_hash("password123"),
+            full_name="Org Project List Member",
+            is_active=True,
+        )
+        db.add(org_member)
+        db.commit()
+        db.refresh(org_member)
+
+        db.add(OrganizationMember(organization_id=org.id, user_id=org_member.id, role="member"))
+        db.commit()
+
+        app.dependency_overrides[get_current_user] = lambda: org_member
+        try:
+            response = await async_client.get("/api/v1/projects", headers=auth_headers)
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
+
+        assert response.status_code == status.HTTP_200_OK
+        items = response.json()
+        match = next(item for item in items if item["id"] == test_project.id)
+        assert match["role"] == "member"
+        assert match["org_role"] == "member"
+        assert match["access_source"] == "organization_member"
+        assert match["has_project_access"] is True
     
     async def test_get_nonexistent_project(self, async_client, auth_headers):
         """Test getting a project that doesn't exist"""

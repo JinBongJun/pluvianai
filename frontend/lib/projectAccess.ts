@@ -47,7 +47,7 @@ export const SOURCE_LABELS: Record<AccessSource, string> = {
 };
 
 export function getProjectRoleLabel(role?: string | null): string {
-  if (!role) return "No project role";
+  if (!role) return "Role unavailable";
   const normalized = role.toLowerCase() as ProjectRole;
   return ROLE_LABELS[normalized] ?? role;
 }
@@ -71,20 +71,14 @@ export function getEntitlementScopeHelpText(scope?: string | null): string {
 export function getProjectRoleContextSummary(project?: AccessAwareProject | null): string {
   if (!project) return "Role details unavailable.";
 
-  const projectRoleLabel = project.role ? getProjectRoleLabel(project.role) : null;
-  const orgRoleLabel = project.org_role ? getProjectRoleLabel(project.org_role) : null;
+  const effectiveRoleLabel = project.role
+    ? getProjectRoleLabel(project.role)
+    : project.org_role
+      ? getProjectRoleLabel(project.org_role)
+      : null;
 
-  if (projectRoleLabel && orgRoleLabel && projectRoleLabel !== orgRoleLabel) {
-    return `Project role: ${projectRoleLabel}. Organization role: ${orgRoleLabel}.`;
-  }
-  if (projectRoleLabel && orgRoleLabel) {
-    return `Project role: ${projectRoleLabel}. Organization role: ${orgRoleLabel}.`;
-  }
-  if (projectRoleLabel) {
-    return `Project role: ${projectRoleLabel}.`;
-  }
-  if (orgRoleLabel) {
-    return `Organization role: ${orgRoleLabel}.`;
+  if (effectiveRoleLabel) {
+    return `Role: ${effectiveRoleLabel}.`;
   }
   return "Role details unavailable.";
 }
@@ -98,9 +92,7 @@ export function getProjectAccessSummary(project?: AccessAwareProject | null): st
     return "You have direct project access to this project.";
   }
   if (project.access_source === "organization_member") {
-    return project.has_project_access === false
-      ? "This project is visible because you belong to the organization, but you have not been added to the project itself."
-      : "This project is visible through your organization membership.";
+    return "You can access this project through your organization membership.";
   }
   return "Access details unavailable.";
 }
@@ -135,26 +127,12 @@ export function getProjectAccessErrorCopy(options: {
   const roleText = currentRole ? getProjectRoleLabel(currentRole) : null;
   const ownerName = project?.owner_name?.trim() || "a project owner";
 
-  if (accessSource === "organization_member" && project?.has_project_access === false) {
-    return {
-      title: "Project Access Required",
-      description: `This project appears because you belong to the organization, but you have not been added to the project itself. Ask ${ownerName} or another project admin to grant project access before using ${featureLabel}.`,
-    };
-  }
-
   if (parsed.code === "PROJECT_ROLE_INSUFFICIENT" && currentRole) {
     const requiredText =
       requiredRoles.length > 0 ? requiredRoles.map(getProjectRoleLabel).join(" or ") : "a higher role";
     return {
       title: `${featureLabel} Needs More Access`,
       description: `Your current role is ${roleText}. ${featureLabel} requires ${requiredText}. Ask ${ownerName} or another project admin to update your project role.`,
-    };
-  }
-
-  if (parsed.code === "PROJECT_ACCESS_DENIED" && accessSource === "organization_member") {
-    return {
-      title: "Project Access Required",
-      description: `This project is visible through organization membership, but you do not currently have project-level access. Ask ${ownerName} or another project admin to add you before using ${featureLabel}.`,
     };
   }
 
