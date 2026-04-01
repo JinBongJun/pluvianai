@@ -64,11 +64,10 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
       data-testid="rg-replay-request-meta"
     >
       <div className="text-[9px] font-black uppercase tracking-[0.2em] text-cyan-300/90">
-        Request body overrides (this run)
+        Added request data
       </div>
       <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-        For each key in <span className="font-mono text-slate-400">replay_overrides</span>: value on
-        the <span className="text-slate-400">first baseline log</span> vs merged for replay.
+        Compare shared request fields from the baseline snapshot with the values used for replay.
       </p>
 
       {rows.length > 0 ? (
@@ -91,7 +90,7 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
                 </div>
                 <div>
                   <div className="text-[9px] font-bold uppercase tracking-wider text-cyan-400/80">
-                    Applied · {key}
+                    Replay · {key}
                   </div>
                   <pre className="mt-1 max-h-32 overflow-x-auto text-[10px] leading-snug text-slate-200 custom-scrollbar whitespace-pre">
                     {previewJson(appliedVal)}
@@ -106,7 +105,7 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
       {perSnapshotApplied.length > 0 ? (
         <div className="mt-3 space-y-2">
           <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-            Per-log overrides (applied)
+            Snapshot-specific additions
           </div>
           {perSnapshotApplied.map(({ sid, keys }) => {
             const block = meta.replay_overrides_by_snapshot_id_applied?.[sid];
@@ -135,7 +134,7 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
       {hasSampling ? (
         <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/15 px-2 py-2">
           <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-            Sampling overrides
+            Sampling changes
           </div>
           <pre className="mt-1 overflow-x-auto text-[10px] text-slate-300 custom-scrollbar whitespace-pre">
             {previewJson(meta.sampling_overrides)}
@@ -146,7 +145,7 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
       {meta.has_new_system_prompt ? (
         <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/15 px-2 py-2">
           <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-            System prompt override (preview)
+            System prompt preview
           </div>
           <pre className="mt-1 max-h-28 overflow-x-auto text-[10px] text-slate-300 custom-scrollbar whitespace-pre">
             {meta.new_system_prompt_preview || "—"}

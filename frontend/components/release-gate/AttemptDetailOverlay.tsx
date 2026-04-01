@@ -9,10 +9,9 @@ import {
   normalizeViolationRuleId,
   toHumanRuleLabel,
 } from "@/app/organizations/[orgId]/projects/[projectId]/release-gate/releaseGateExpandedHelpers";
-import { formatDurationMs, percentFromRate } from "@/app/organizations/[orgId]/projects/[projectId]/release-gate/releaseGateViewUtils";
+import { percentFromRate } from "@/app/organizations/[orgId]/projects/[projectId]/release-gate/releaseGateViewUtils";
 import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel";
 import type { LiveViewToolTimelineRow } from "@/lib/api/live-view";
-import { formatSnapshotTokens } from "@/lib/snapshotMetrics";
 import {
   getConfiguredEvalCheckIds,
   getConfiguredPolicyCheckIds,
@@ -75,23 +74,6 @@ export function AttemptDetailOverlay({
     baselineSnapshot?.user_message ?? baselineSnapshot?.request_prompt ?? "No input text captured."
   ).trim();
   const baselineModel = String(baselineSnapshot?.model ?? "—").trim() || "—";
-
-  const replayUsage = useMemo(() => {
-    const r =
-      attempt?.replay && typeof attempt.replay === "object" && !Array.isArray(attempt.replay)
-        ? (attempt.replay as Record<string, unknown>)
-        : {};
-    const ni = (v: unknown): number | null => {
-      if (v == null || !Number.isFinite(Number(v))) return null;
-      return Math.round(Number(v));
-    };
-    return {
-      input_tokens: ni(r.input_tokens),
-      output_tokens: ni(r.output_tokens),
-      tokens_total: ni(r.tokens_total),
-      used_credits: ni(r.used_credits),
-    };
-  }, [attempt]);
 
   const attemptViolations = Array.isArray(attempt?.violations) ? attempt.violations : [];
   type PolicyRow = {
@@ -359,6 +341,92 @@ export function AttemptDetailOverlay({
     return `${statusLead} Evidence unavailable for this check.`;
   };
 
+  const formatSignalMetric = (id: string, raw: unknown): string | null => {
+    const d = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+    if (!d) return null;
+    const toNum = (value: unknown): number | null => {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    if (id === "empty") {
+      const actualChars = toNum(d.actual_chars);
+      const minChars = toNum(d.min_chars);
+      if (actualChars !== null && minChars !== null) {
+        return `${Math.round(actualChars)} chars / min ${Math.round(minChars)}`;
+      }
+      return null;
+    }
+
+    if (id === "latency") {
+      const actualMs = toNum(d.actual_ms);
+      const failMs = toNum(d.fail_ms);
+      if (actualMs !== null && failMs !== null) {
+        const margin = failMs - actualMs;
+        return `${Math.round(actualMs)}ms / ${Math.round(failMs)}ms${margin >= 0 ? ` (${Math.round(margin)}ms headroom)` : ""}`;
+      }
+      return null;
+    }
+
+    if (id === "status_code") {
+      const actualStatus = toNum(d.actual_status);
+      const failFrom = toNum(d.fail_from);
+      if (actualStatus !== null && failFrom !== null) {
+        return `${Math.round(actualStatus)} / fails from ${Math.round(failFrom)}`;
+      }
+      return null;
+    }
+
+    if (id === "refusal") {
+      if (typeof d.matched === "boolean") {
+        return d.matched ? "Matched refusal pattern" : "No refusal pattern";
+      }
+      return null;
+    }
+
+    if (id === "json") {
+      const mode = String(d.mode ?? "default").trim() || "default";
+      const parsed =
+        typeof d.parsed_ok === "boolean" ? (d.parsed_ok ? "parsed" : "parse failed") : "parse unknown";
+      return `${mode} mode · ${parsed}`;
+    }
+
+    if (id === "length") {
+      const baselineLen = toNum(d.baseline_len);
+      const actualChars = toNum(d.actual_chars);
+      const failRatio = toNum(d.fail_ratio);
+      if (baselineLen !== null && actualChars !== null) {
+        const maxAllowed = Math.round(
+          baselineLen * (1 + (failRatio !== null ? failRatio : 0.5))
+        );
+        const deltaPct =
+          baselineLen > 0 ? (((actualChars - baselineLen) / baselineLen) * 100).toFixed(1) : null;
+        return `${Math.round(actualChars)} / max ${maxAllowed}${deltaPct ? ` (${Number(deltaPct) >= 0 ? "+" : ""}${deltaPct}%)` : ""}`;
+      }
+      return null;
+    }
+
+    if (id === "repetition") {
+      const maxRepeats = toNum(d.max_line_repeats);
+      const failRepeats = toNum(d.fail_line_repeats);
+      if (maxRepeats !== null && failRepeats !== null) {
+        return `${Math.round(maxRepeats)} repeats / fail ${Math.round(failRepeats)}`;
+      }
+      return null;
+    }
+
+    if (id === "tool_grounding") {
+      const groundedRows = toNum(d.grounded_rows);
+      const evaluatedRows = toNum(d.evaluated_rows);
+      if (groundedRows !== null && evaluatedRows !== null) {
+        return `${Math.round(groundedRows)} / ${Math.round(evaluatedRows)} grounded`;
+      }
+      return null;
+    }
+
+    return null;
+  };
+
   const candidateSnapshot =
     attempt?.candidate_snapshot &&
     typeof attempt.candidate_snapshot === "object" &&
@@ -590,11 +658,7 @@ export function AttemptDetailOverlay({
   );
 
   const pass = Boolean(attempt?.pass);
-  const decisionReasons: string[] = Array.isArray(attempt?.failure_reasons)
-    ? (attempt.failure_reasons as string[])
-    : [];
   const failedSignals = canonicalSignalRows.filter(r => r.status === "fail");
-  const replayLatencyLabel = formatDurationMs((attempt?.replay ?? {}).avg_latency_ms);
   const sequenceEdits = Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0);
   const toolDivergencePct = Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0);
   const toolDivergenceLabel = percentFromRate(toolDivergencePct / 100);
@@ -606,15 +670,12 @@ export function AttemptDetailOverlay({
     ? ((candidateSnapshot as any)?.response_data_keys as unknown[]).map(key => String(key))
     : [];
   const hasProviderError = Boolean(providerErrorPreview || providerErrorMessage);
+  const inputChanged = baselineInput !== candidateInput;
+  const baselineInputLineCount = baselineInput ? baselineInput.split("\n").length : 0;
+  const candidateInputLineCount = candidateInput ? candidateInput.split("\n").length : 0;
   const baselineLineCount = baselineResponse ? baselineResponse.split("\n").length : 0;
   const candidateLineCount = candidateResponse ? candidateResponse.split("\n").length : 0;
-  const diffAddedCount = responseDiffLines.filter(line => line.startsWith("+")).length;
   const diffRemovedCount = responseDiffLines.filter(line => line.startsWith("-")).length;
-  const diffConfidenceLabel = (() => {
-    if (baselineResponse && candidateResponse) return "High";
-    if (baselineResponse || candidateResponse) return "Low";
-    return "Unavailable";
-  })();
   const diffConfidenceMessage = (() => {
     if (baselineResponse && candidateResponse) return "Both responses captured.";
     if (!baselineResponse && !candidateResponse) return "Both response previews are missing.";
@@ -668,201 +729,15 @@ export function AttemptDetailOverlay({
       toneClass: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
     };
   })();
-  type SeverityRank = 0 | 1 | 2 | 3;
-  type DecisionSeverity = "low" | "medium" | "high" | "critical";
-  type DecisionIssue = {
-    source: "policy" | "gate" | "reason";
-    severity: DecisionSeverity;
-    message: string;
-  };
-  const normalizeSeverity = (
-    value: unknown,
-    fallback: DecisionSeverity = "medium"
-  ): DecisionSeverity => {
-    const s = String(value ?? "").trim().toLowerCase();
-    if (s === "critical" || s === "high" || s === "medium" || s === "low") return s;
-    return fallback;
-  };
-  const severityRank = (value: unknown): SeverityRank => {
-    const s = String(value ?? "").trim().toLowerCase();
-    if (s === "critical") return 3;
-    if (s === "high") return 2;
-    if (s === "medium") return 1;
-    return 0;
-  };
-  const gateRows: Array<{
-    id: "tool_integrity" | "latency" | "regression_diff";
-    label: string;
-    status: "pass" | "fail" | "not_applicable";
-    reason: string;
-  }> = [
-    {
-      id: "tool_integrity",
-      label: "Tool Integrity",
-      status: policyRows.length > 0 ? "fail" : "pass",
-      reason:
-        policyRows.length > 0
-          ? policyRows[0]?.message || `${policyRows.length} policy violation(s) detected`
-          : "No policy violations detected.",
-    },
-    {
-      id: "latency",
-      label: "Latency",
-      status: (() => {
-        const v = String((signalsChecksRaw as any)?.latency ?? "").trim().toLowerCase();
-        if (v === "pass" || v === "fail" || v === "not_applicable") return v;
-        return "not_applicable";
-      })(),
-      reason:
-        formatSignalWhy("latency", (signalsDetailsRaw as any)?.latency) ||
-        "Latency evidence missing; decision relied on other blocking checks.",
-    },
-    {
-      id: "regression_diff",
-      label: "Regression Diff",
-      status:
-        Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0) > 0 ||
-        Number((attempt?.behavior_diff ?? {}).tool_divergence_pct ?? 0) > 0
-          ? "fail"
-          : "pass",
-      reason:
-        Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0) > 0
-          ? `Sequence edits ${Number((attempt?.behavior_diff ?? {}).sequence_edit_distance ?? 0)}`
-          : "No meaningful behavior diff detected.",
-    },
-  ];
-  const failedGates = gateRows.filter(g => g.status === "fail");
-  const decisionHeadline = (() => {
-    const toHeadline = (reason: string) => `Reason: ${reason}`;
-    if (pass) return toHeadline("No blocking regressions detected.");
-    const gateSeverityMap: Record<(typeof gateRows)[number]["id"], DecisionSeverity> = {
-      tool_integrity: "critical",
-      latency: "high",
-      regression_diff: "high",
-    };
-    const issues: DecisionIssue[] = [];
-    policyRows.forEach(row => {
-      issues.push({
-        source: "policy",
-        severity: normalizeSeverity(row.severity, "high"),
-        message: row.message || row.label,
-      });
-    });
-    gateRows
-      .filter(g => g.status === "fail")
-      .forEach(g => {
-        issues.push({
-          source: "gate",
-          severity: gateSeverityMap[g.id] ?? "medium",
-          message: g.reason || `${g.label} failed`,
-        });
-      });
-    if (issues.length === 0 && decisionReasons.length > 0) {
-      decisionReasons.forEach(reason => {
-        issues.push({
-          source: "reason",
-          severity: "medium",
-          message: String(reason ?? "").trim(),
-        });
-      });
-    }
-    const sorted = issues
-      .filter(i => Boolean(i.message))
-      .sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
-    const top = sorted[0];
-    if (top && severityRank(top.severity) >= 2) {
-      return toHeadline(top.message);
-    }
-    const failCount = gateRows.filter(g => g.status === "fail").length + policyRows.length;
-    if (failCount > 1) return toHeadline(`${failCount} blocking checks failed.`);
-    if (top?.message) return toHeadline(top.message);
-    return toHeadline("Blocking issues detected.");
-  })();
-  const comparisonPrimaryChanges = useMemo(() => {
-    const items: string[] = [];
-    if (candidateLineCount > baselineLineCount) {
-      items.push(`Candidate response is longer by ${candidateLineCount - baselineLineCount} line${candidateLineCount - baselineLineCount === 1 ? "" : "s"}.`);
-    } else if (baselineLineCount > candidateLineCount) {
-      items.push(`Candidate response is shorter by ${baselineLineCount - candidateLineCount} line${baselineLineCount - candidateLineCount === 1 ? "" : "s"}.`);
-    }
-    if (diffAddedCount > 0) {
-      items.push(`${diffAddedCount} added or modified line${diffAddedCount === 1 ? "" : "s"} detected on the candidate side.`);
-    }
-    if (diffRemovedCount > 0) {
-      items.push(`${diffRemovedCount} baseline line${diffRemovedCount === 1 ? "" : "s"} are missing from the candidate output.`);
-    }
-    if (sequenceEdits > 0) {
-      items.push(`Behavior diff reports ${sequenceEdits} sequence edit${sequenceEdits === 1 ? "" : "s"}.`);
-    }
-    if (items.length === 0) {
-      items.push("No meaningful response shape changes were detected in this attempt.");
-    }
-    return items.slice(0, 3);
-  }, [candidateLineCount, baselineLineCount, diffAddedCount, diffRemovedCount, sequenceEdits]);
-  const comparisonImpactItems = useMemo(() => {
-    const items: string[] = [];
+  const decisionSummary = (() => {
+    if (evalTotalCount === 0) return "No configured eval checks were returned for this attempt.";
+    if (pass) return `All ${evalTotalCount} configured eval checks passed.`;
+    const fragments = [`${failedSignals.length} of ${evalTotalCount} eval checks failed.`];
     if (policyRows.length > 0) {
-      items.push(`${policyRows.length} policy violation${policyRows.length === 1 ? "" : "s"} are attached to this attempt.`);
-    } else {
-      items.push("No policy regressions were attached to this attempt.");
+      fragments.push(`${policyRows.length} tool policy issue${policyRows.length === 1 ? "" : "s"} also need review.`);
     }
-    if (toolDivergencePct > 0) {
-      items.push(`Tool divergence is ${toolDivergenceLabel}, so tool behavior changed beyond a pure wording edit.`);
-    } else {
-      items.push("Tool behavior stayed aligned with the baseline for this attempt.");
-    }
-    if (hasProviderError) {
-      items.push("Provider warnings were captured, so inspect the debug trace before trusting subtle output differences.");
-    } else if (diffConfidenceLabel === "High") {
-      items.push("Both response previews were captured, so the line diff is safe to review directly.");
-    } else {
-      items.push("Response capture is partial, so treat the diff as directional rather than complete.");
-    }
-    return items.slice(0, 3);
-  }, [
-    policyRows.length,
-    toolDivergencePct,
-    toolDivergenceLabel,
-    hasProviderError,
-    diffConfidenceLabel,
-  ]);
-  const runContextItems = useMemo(() => {
-    const { tokens_total, input_tokens, output_tokens } = replayUsage;
-    let replayValue = "—";
-    if (tokens_total != null) {
-      replayValue = `${formatSnapshotTokens(tokens_total)} tokens`;
-    } else if (input_tokens != null || output_tokens != null) {
-      replayValue = `${formatSnapshotTokens((input_tokens ?? 0) + (output_tokens ?? 0))} tokens`;
-    }
-    const replayDetailParts: string[] = [];
-    if (input_tokens != null) replayDetailParts.push(`in ${formatSnapshotTokens(input_tokens)}`);
-    if (output_tokens != null) replayDetailParts.push(`out ${formatSnapshotTokens(output_tokens)}`);
-    const replayDetail =
-      replayDetailParts.length > 0
-        ? `Provider tokens · ${replayDetailParts.join(" · ")}`
-        : tokens_total != null
-          ? "Total provider tokens for this replay"
-          : undefined;
-
-    const items: Array<{ label: string; value: string; detail?: string }> = [
-      {
-        label: "Models",
-        value: `${baselineModel} → ${candidateModel}`,
-        detail: candidateProvider || undefined,
-      },
-      {
-        label: "Replay tokens",
-        value: replayValue,
-        detail: replayDetail,
-      },
-    ];
-    return items;
-  }, [
-    baselineModel,
-    candidateModel,
-    candidateProvider,
-    replayUsage,
-  ]);
+    return fragments.join(" ");
+  })();
   const attentionItems = useMemo(() => {
     const items: Array<{
       key: string;
@@ -916,7 +791,6 @@ export function AttemptDetailOverlay({
     if (tone === "warning") return "border-amber-500/20 bg-amber-500/[0.05]";
     return "border-white/6 bg-black/20";
   };
-  const fixFirstItems = attentionItems.slice(0, 3);
   const toolBehaviorToneClass =
     policyRows.length > 0 || toolGroundingStatus === "fail"
       ? "border-rose-500/20 bg-rose-500/[0.05]"
@@ -1022,7 +896,7 @@ export function AttemptDetailOverlay({
   const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>) => {
     ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
-  const changeSummaryRows = useMemo(() => {
+  const inputSetupRows = useMemo(() => {
     const rows: Array<{
       id: string;
       label: string;
@@ -1032,6 +906,17 @@ export function AttemptDetailOverlay({
       tone?: "default" | "changed";
       action?: "diff" | "details" | "tools";
     }> = [];
+
+    rows.push({
+      id: "user-input",
+      label: "User input",
+      summary: inputChanged ? "Replay input changed from baseline" : "Matches baseline input",
+      meta: inputChanged
+        ? `${baselineInputLineCount} -> ${candidateInputLineCount} lines`
+        : `${candidateInputLineCount} lines`,
+      scope: "Run-wide",
+      tone: inputChanged ? "changed" : "default",
+    });
 
     if (baselineModel !== candidateModel) {
       rows.push({
@@ -1044,49 +929,8 @@ export function AttemptDetailOverlay({
     }
 
     rows.push({
-      id: "shape",
-      label: "Output shape",
-      summary: `${baselineLineCount} -> ${candidateLineCount} lines`,
-      meta:
-        baselineLineCount === candidateLineCount
-          ? "Line count matched"
-          : `${Math.abs(candidateLineCount - baselineLineCount)} line${Math.abs(candidateLineCount - baselineLineCount) === 1 ? "" : "s"} changed`,
-      scope: "Run-wide",
-      tone: baselineLineCount === candidateLineCount ? "default" : "changed",
-      action: "diff",
-    });
-
-    if (replayUsage.tokens_total != null || replayUsage.input_tokens != null || replayUsage.output_tokens != null) {
-      const totalTokens =
-        replayUsage.tokens_total ?? (replayUsage.input_tokens ?? 0) + (replayUsage.output_tokens ?? 0);
-      const tokenMeta = [
-        replayUsage.input_tokens != null ? `in ${formatSnapshotTokens(replayUsage.input_tokens)}` : null,
-        replayUsage.output_tokens != null ? `out ${formatSnapshotTokens(replayUsage.output_tokens)}` : null,
-      ]
-        .filter(Boolean)
-        .join(" · ");
-      rows.push({
-        id: "tokens",
-        label: "Replay tokens",
-        summary: `${formatSnapshotTokens(totalTokens)} total`,
-        meta: tokenMeta || undefined,
-        scope: "Run-wide",
-      });
-    }
-
-    if (replayLatencyLabel && replayLatencyLabel !== "—") {
-      rows.push({
-        id: "latency",
-        label: "Latency",
-        summary: replayLatencyLabel,
-        meta: hasProviderError ? "Provider warning attached" : undefined,
-        scope: "Run-wide",
-      });
-    }
-
-    rows.push({
       id: "tool-calls",
-      label: "Tool calls",
+      label: "Tool behavior",
       summary: `${toolRecordedCount} -> ${toolTotalCalls}`,
       meta:
         toolFailedCount > 0
@@ -1102,19 +946,19 @@ export function AttemptDetailOverlay({
     if (replayOverrideCount > 0 || replayPerLogOverrideCount > 0) {
       rows.push({
         id: "extra-request",
-        label: "Extra request JSON",
+        label: "Added request data",
         summary:
           replayOverrideCount > 0 && replayPerLogOverrideCount > 0
-            ? `Shared changed, ${replayPerLogOverrideCount} logs customized`
+            ? `Shared changed, ${replayPerLogOverrideCount} snapshots customized`
             : replayOverrideCount > 0
               ? `Shared changed (${replayOverrideCount} key${replayOverrideCount === 1 ? "" : "s"})`
-              : `${replayPerLogOverrideCount} logs customized`,
+              : `${replayPerLogOverrideCount} snapshots customized`,
         meta:
           replayOverrideKeys.length > 0
             ? replayOverrideKeys.slice(0, 3).join(", ")
             : replayPerLogOverrideEntries
                 .slice(0, 2)
-                .map(([sid, value]) => `log ${sid} (${Object.keys(value).length})`)
+                .map(([sid, value]) => `snapshot ${sid} (${Object.keys(value).length})`)
                 .join(" · "),
         scope:
           replayOverrideCount > 0 && replayPerLogOverrideCount > 0
@@ -1130,7 +974,7 @@ export function AttemptDetailOverlay({
     if (hasToolContextDetails) {
       rows.push({
         id: "extra-context",
-        label: "Extra system context",
+        label: "System context",
         summary: toolContextSummary,
         meta:
           toolContextModeValue === "inject"
@@ -1176,13 +1020,11 @@ export function AttemptDetailOverlay({
 
     return rows;
   }, [
+    inputChanged,
+    baselineInputLineCount,
+    candidateInputLineCount,
     baselineModel,
     candidateModel,
-    baselineLineCount,
-    candidateLineCount,
-    replayUsage,
-    replayLatencyLabel,
-    hasProviderError,
     toolRecordedCount,
     toolTotalCalls,
     toolFailedCount,
@@ -1280,62 +1122,12 @@ export function AttemptDetailOverlay({
           if (secondAdded) examples.push({ tone: "added", label: "Nearby changed line", text: secondAdded });
         } else if (row.id === "empty") {
           if (firstRemoved) examples.push({ tone: "removed", label: "Expected baseline content", text: firstRemoved });
-        } else {
-          if (firstAdded) examples.push({ tone: "added", label: "Candidate change", text: firstAdded });
-          if (secondRemoved || firstRemoved) {
-            examples.push({
-              tone: "removed",
-              label: "Baseline reference",
-              text: secondRemoved || firstRemoved,
-            });
-          }
         }
 
         return [row.id, examples.slice(0, 2)];
       })
     ) as Record<string, DiffExample[]>;
   }, [failedSignals, addedDiffPreviewLines, removedDiffPreviewLines]);
-  const failedSignalChangeItems = useMemo(() => {
-    if (failedSignals.length === 0) return [] as string[];
-
-    return failedSignals.slice(0, 3).map(row => {
-      const example = diffExamplesBySignal[row.id]?.[0]?.text;
-      const focus = diffFocusBySignal[row.id];
-      if (example) {
-        return `${row.label}: ${focus} Example: ${example}`;
-      }
-      return `${row.label}: ${focus || "Inspect the changed output below."}`;
-    });
-  }, [failedSignals, diffExamplesBySignal, diffFocusBySignal]);
-  const failedSignalImpactItems = useMemo(() => {
-    if (failedSignals.length === 0) return [] as string[];
-
-    return failedSignals.slice(0, 3).map(row => {
-      if (row.id === "required") {
-        return `${row.label}: the candidate dropped content the gate expects to remain present in the baseline response.`;
-      }
-      if (row.id === "format" || row.id === "json") {
-        return `${row.label}: the response shape changed, so downstream consumers may no longer parse or trust the output.`;
-      }
-      if (row.id === "length") {
-        return `${row.label}: the response drifted in size enough that it no longer matches the baseline shape.`;
-      }
-      if (row.id === "repetition") {
-        return `${row.label}: repeated candidate lines suggest a loop or degraded response quality rather than a clean rewrite.`;
-      }
-      if (row.id === "empty") {
-        return `${row.label}: the candidate response is too short to preserve the baseline answer intent.`;
-      }
-      if (row.id === "latency") {
-        return `${row.label}: replay latency crossed the configured limit, so the response may be acceptable in content but still fail operationally.`;
-      }
-      return `${row.label}: this changed output is material enough to block the gate and should be reviewed before trusting the replay.`;
-    });
-  }, [failedSignals]);
-  const effectiveComparisonPrimaryChanges =
-    failedSignalChangeItems.length > 0 ? failedSignalChangeItems : comparisonPrimaryChanges;
-  const effectiveComparisonImpactItems =
-    failedSignalImpactItems.length > 0 ? failedSignalImpactItems : comparisonImpactItems;
 
   useEffect(() => {
     if (!open) return;
@@ -1344,7 +1136,6 @@ export function AttemptDetailOverlay({
 
   if (!open) return null;
 
-  const inputPreview = candidateInput || baselineInput;
   const detailTabs = [
     { id: "review" as const, label: "Review" },
     { id: "debug" as const, label: "Diagnostics" },
@@ -1354,7 +1145,7 @@ export function AttemptDetailOverlay({
   const headerMeta = [
     `Input ${inputIndex + 1}`,
     attemptLabel,
-    replayLatencyLabel,
+    evalTotalCount > 0 ? `${failedSignals.length} failed` : "No evals",
     `${baselineModel} → ${candidateModel}`,
   ];
 
@@ -1378,9 +1169,7 @@ export function AttemptDetailOverlay({
                   {pass ? "Passed" : "Failed"}
                 </span>
               </div>
-              <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">
-                {decisionHeadline.replace(/^Reason:\s*/i, "")}
-              </p>
+              <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">{decisionSummary}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {headerMeta.map(item => (
                   <span
@@ -1562,36 +1351,102 @@ export function AttemptDetailOverlay({
             <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 md:p-7 xl:p-8">
               {detailMainTab === "review" ? (
                 <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5">
-                  <section className="rounded-2xl border border-white/5 bg-white/[0.02] px-5 py-5">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div className="max-w-4xl">
-                        <div className="text-xs font-medium text-slate-400">Review</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">Base vs replay comparison</h3>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                        <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
-                          Eval {evalTotalCount > 0 ? `${evalPassCount}/${evalTotalCount}` : "—"}
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
-                          {baselineLineCount} {"->"} {candidateLineCount} lines
-                        </span>
-                      </div>
-                    </div>
-                  </section>
-
                   <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="text-xs font-medium text-slate-400">What changed from base</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">Change summary</h3>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Input &amp; setup diff</h3>
                       </div>
-                      <div className="text-[11px] text-slate-500">Inputs and settings only.</div>
+                      <div className="text-[11px] text-slate-500">Review the exact replay input before reading eval results.</div>
+                    </div>
+                    <div className={clsx("mt-4 rounded-xl border px-4 py-4", gateConfidence.toneClass)}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-medium text-white">{decisionSummary}</div>
+                        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                          <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-slate-100">
+                            Eval {evalTotalCount > 0 ? `${evalPassCount}/${evalTotalCount}` : "—"}
+                          </span>
+                          <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-slate-100">
+                            Output {baselineLineCount} {"->"} {candidateLineCount} lines
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-[11px] leading-relaxed text-slate-200/80">{gateConfidence.detail}</div>
+                    </div>
+                    <div className="mt-4">
+                      {inputChanged ? (
+                        <div className="grid gap-4 xl:grid-cols-2">
+                          <div className="rounded-xl border border-white/5 bg-[#0a0a0c]">
+                            <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
+                              <span className="text-[11px] font-semibold text-slate-400">Baseline input</span>
+                              <span className="text-[10px] text-slate-500">{baselineInputLineCount} lines</span>
+                            </div>
+                            <pre
+                              className={clsx(
+                                "custom-scrollbar whitespace-pre-wrap break-words px-4 py-4 text-sm leading-relaxed text-slate-300",
+                                !userInputExpanded && "line-clamp-6"
+                              )}
+                            >
+                              {baselineInput}
+                            </pre>
+                          </div>
+                          <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05]">
+                            <div className="flex items-center justify-between border-b border-fuchsia-500/10 px-4 py-3">
+                              <span className="text-[11px] font-semibold text-fuchsia-100">Replay input</span>
+                              <span className="rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-semibold text-fuchsia-100">
+                                Changed
+                              </span>
+                            </div>
+                            <pre
+                              className={clsx(
+                                "custom-scrollbar whitespace-pre-wrap break-words px-4 py-4 text-sm leading-relaxed text-slate-100",
+                                !userInputExpanded && "line-clamp-6"
+                              )}
+                            >
+                              {candidateInput}
+                            </pre>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <div className="text-sm font-medium text-white">User input matched the baseline.</div>
+                              <div className="mt-1 text-[11px] text-slate-500">
+                                Same prompt text was replayed for this attempt.
+                              </div>
+                            </div>
+                            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-slate-300">
+                              {candidateInputLineCount} lines
+                            </span>
+                          </div>
+                          <pre
+                            className={clsx(
+                              "custom-scrollbar mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-300",
+                              !userInputExpanded && "line-clamp-6"
+                            )}
+                          >
+                            {candidateInput}
+                          </pre>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setUserInputExpanded(v => !v)}
+                        className="mt-3 text-[11px] font-medium text-fuchsia-400/80 transition-colors hover:text-fuchsia-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                      >
+                        {userInputExpanded ? "Collapse input preview" : "Expand input preview"}
+                      </button>
                     </div>
                     <div className="mt-4 overflow-hidden rounded-xl border border-white/5">
-                      {changeSummaryRows.length > 0 ? (
-                        changeSummaryRows.map((row, idx) => {
+                      {inputSetupRows.length > 0 ? (
+                        inputSetupRows.map((row, idx) => {
                           const actionLabel =
-                            row.action === "diff" ? "Diff" : row.action === "tools" ? "Tool" : "Detail";
+                            row.action === "tools"
+                              ? "View tools"
+                              : row.action === "details"
+                                ? "View details"
+                                : null;
                           const Container = row.action ? "button" : "div";
                           return (
                             <Container
@@ -1635,7 +1490,7 @@ export function AttemptDetailOverlay({
                                 >
                                   {row.scope}
                                 </span>
-                                {row.action ? (
+                                {actionLabel ? (
                                   <span className="text-[11px] font-medium text-slate-400">{actionLabel}</span>
                                 ) : null}
                               </div>
@@ -1694,13 +1549,20 @@ export function AttemptDetailOverlay({
                             signalsDetailsRaw
                               ? formatSignalWhy(row.id, (signalsDetailsRaw as any)?.[row.id])
                               : "Evidence unavailable for this check.";
+                          const metricText =
+                            signalsDetailsRaw
+                              ? formatSignalMetric(row.id, (signalsDetailsRaw as any)?.[row.id])
+                              : null;
                           const diffFocus = diffFocusBySignal[row.id];
                           const diffExamples = diffExamplesBySignal[row.id] ?? [];
+                          const showsDiffEvidence = ["required", "format", "json", "length", "repetition", "empty"].includes(
+                            row.id
+                          );
                           if (!failed) {
                             return (
                               <div
                                 key={row.id}
-                                className="grid gap-3 rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3 md:grid-cols-[minmax(0,180px)_80px_minmax(0,1fr)] md:items-center"
+                                className="grid gap-3 rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3 md:grid-cols-[minmax(0,180px)_80px_minmax(0,1fr)_minmax(0,220px)] md:items-center"
                               >
                                 <div className="text-sm font-medium text-slate-100">{row.label}</div>
                                 <div>
@@ -1708,7 +1570,8 @@ export function AttemptDetailOverlay({
                                     Pass
                                   </span>
                                 </div>
-                                <div className="min-w-0 text-sm text-slate-500">Passed on this attempt.</div>
+                                <div className="min-w-0 text-sm text-slate-400">{evidenceText}</div>
+                                <div className="text-xs text-slate-500">{metricText || "Within threshold"}</div>
                               </div>
                             );
                           }
@@ -1718,7 +1581,7 @@ export function AttemptDetailOverlay({
                               className="rounded-xl border border-rose-500/20 bg-[#0a0a0c]"
                             >
                               <summary className="list-none cursor-pointer px-4 py-3 [&::-webkit-details-marker]:hidden">
-                                <div className="grid gap-3 md:grid-cols-[minmax(0,180px)_80px_minmax(0,1fr)_auto] md:items-center">
+                                <div className="grid gap-3 md:grid-cols-[minmax(0,180px)_80px_minmax(0,1fr)_minmax(0,220px)_auto] md:items-center">
                                   <div className="text-sm font-medium text-slate-100">{row.label}</div>
                                   <div>
                                     <span
@@ -1733,19 +1596,34 @@ export function AttemptDetailOverlay({
                                     </span>
                                   </div>
                                   <div className="min-w-0 line-clamp-2 text-sm text-slate-300">{evidenceText}</div>
-                                  <div className="text-[11px] font-medium text-slate-500">Open</div>
+                                  <div className="text-xs text-slate-500">{metricText || "See evidence"}</div>
+                                  <div className="text-[11px] font-medium text-slate-500">
+                                    {showsDiffEvidence ? "Review" : "Details"}
+                                  </div>
                                 </div>
                               </summary>
                               <div className="border-t border-white/5 px-4 py-4">
-                                {barNode ? <div>{barNode}</div> : null}
                                 <div className="space-y-3">
-                                  {diffFocus ? (
+                                  <div className="grid gap-3 md:grid-cols-2">
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
+                                      <div className="text-xs font-semibold text-slate-400">Evidence</div>
+                                      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">{evidenceText}</p>
+                                    </div>
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
+                                      <div className="text-xs font-semibold text-slate-400">Metric</div>
+                                      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">
+                                        {metricText || "Structured metric unavailable for this check."}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  {barNode ? <div>{barNode}</div> : null}
+                                  {showsDiffEvidence && diffFocus ? (
                                     <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
                                       <div className="text-xs font-semibold text-slate-400">Diff focus</div>
                                       <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">{diffFocus}</p>
                                     </div>
                                   ) : null}
-                                  {diffExamples.length > 0 ? (
+                                  {showsDiffEvidence && diffExamples.length > 0 ? (
                                     <div className="grid gap-2 md:grid-cols-2">
                                       {diffExamples.map((example, idx) => (
                                         <div
@@ -1772,13 +1650,15 @@ export function AttemptDetailOverlay({
                                       ))}
                                     </div>
                                   ) : null}
-                                  <button
-                                    type="button"
-                                    onClick={() => scrollToSection(diffSectionRef)}
-                                    className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
-                                  >
-                                    Jump to diff
-                                  </button>
+                                  {showsDiffEvidence ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => scrollToSection(diffSectionRef)}
+                                      className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                                    >
+                                      Jump to diff
+                                    </button>
+                                  ) : null}
                                 </div>
                               </div>
                             </details>
@@ -1894,13 +1774,45 @@ export function AttemptDetailOverlay({
                     <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
                       <div>
                         <div className="text-xs font-medium text-slate-400">Details</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">Expanded comparison detail</h3>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Expandable detail</h3>
                       </div>
                       <div className="mt-4 space-y-3">
+                        {attentionItems.length > 0 ? (
+                          <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
+                            <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
+                              Run warnings
+                              <span className="ml-2 text-[11px] font-normal text-slate-500">
+                                {attentionItems.length} item{attentionItems.length === 1 ? "" : "s"}
+                              </span>
+                            </summary>
+                            <div className="mt-3 space-y-2">
+                              {attentionItems.map(item => (
+                                <div key={item.key} className={clsx("rounded-lg border px-3 py-3", riskToneClass(item.tone))}>
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-sm font-medium text-slate-200">{item.label}</span>
+                                    <span
+                                      className={clsx(
+                                        "text-xs font-semibold",
+                                        item.tone === "danger"
+                                          ? "text-rose-400"
+                                          : item.tone === "warning"
+                                            ? "text-amber-400"
+                                            : "text-emerald-400"
+                                      )}
+                                    >
+                                      {item.tone === "danger" ? "Review" : item.tone === "warning" ? "Watch" : "Stable"}
+                                    </span>
+                                  </div>
+                                  <p className="mt-2 text-[11px] leading-relaxed text-slate-300">{item.detail}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        ) : null}
                         {hasConfigurationChanges ? (
                           <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
                             <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
-                              Extra request JSON details
+                              Added request data details
                               <span className="ml-2 text-[11px] font-normal text-slate-500">
                                 {replayOverrideCount > 0
                                   ? `${replayOverrideCount} shared key${replayOverrideCount === 1 ? "" : "s"}`
@@ -1917,7 +1829,7 @@ export function AttemptDetailOverlay({
                         {hasToolContextDetails ? (
                           <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
                             <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
-                              Extra system context details
+                              System context details
                               <span className="ml-2 text-[11px] font-normal text-slate-500">{toolContextSummary}</span>
                             </summary>
                             <div className="mt-3 space-y-3">
@@ -1971,116 +1883,6 @@ export function AttemptDetailOverlay({
                             </div>
                           </details>
                         ) : null}
-
-                        {(fixFirstItems.length > 0 ||
-                          effectiveComparisonPrimaryChanges.length > 0 ||
-                          effectiveComparisonImpactItems.length > 0) && (
-                          <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
-                            <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
-                              Review notes
-                              <span className="ml-2 text-[11px] font-normal text-slate-500">
-                                {fixFirstItems.length > 0 ? `${fixFirstItems.length} note(s)` : "Summary"}
-                              </span>
-                            </summary>
-                            <div className="mt-3 space-y-3">
-                              {fixFirstItems.length > 0 ? (
-                                <div className="space-y-2">
-                                  {fixFirstItems.map(item => (
-                                    <div key={item.key} className={clsx("rounded-lg border px-3 py-3", riskToneClass(item.tone))}>
-                                      <div className="flex items-center justify-between gap-3">
-                                        <span className="text-sm font-medium text-slate-200">{item.label}</span>
-                                        <span
-                                          className={clsx(
-                                            "text-xs font-semibold",
-                                            item.tone === "danger"
-                                              ? "text-rose-400"
-                                              : item.tone === "warning"
-                                                ? "text-amber-400"
-                                                : "text-emerald-400"
-                                          )}
-                                        >
-                                          {item.tone === "danger" ? "Review" : item.tone === "warning" ? "Watch" : "Stable"}
-                                        </span>
-                                      </div>
-                                      <p className="mt-2 text-[11px] leading-relaxed text-slate-300">{item.detail}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : null}
-                              {effectiveComparisonPrimaryChanges.length > 0 ? (
-                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                  <div className="text-[11px] font-medium text-slate-500">What changed</div>
-                                  <div className="mt-2 space-y-1.5">
-                                    {effectiveComparisonPrimaryChanges.map(item => (
-                                      <div key={item} className="text-sm leading-relaxed text-slate-300">
-                                        {item}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : null}
-                              {effectiveComparisonImpactItems.length > 0 ? (
-                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                  <div className="text-[11px] font-medium text-slate-500">What it means</div>
-                                  <div className="mt-2 space-y-1.5">
-                                    {effectiveComparisonImpactItems.map(item => (
-                                      <div key={item} className="text-sm leading-relaxed text-slate-300">
-                                        {item}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : null}
-                            </div>
-                          </details>
-                        )}
-
-                        <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
-                          <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
-                            Replay context
-                          </summary>
-                          <div className="mt-3 grid gap-3">
-                            {runContextItems.map(item => (
-                              <div
-                                key={item.label}
-                                className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3"
-                              >
-                                <div className="text-[11px] font-medium text-slate-500">{item.label}</div>
-                                <div className="mt-1 text-sm font-medium text-slate-100 break-words">{item.value}</div>
-                                {item.detail ? (
-                                  <div className="mt-1 text-xs text-slate-400 break-words">{item.detail}</div>
-                                ) : null}
-                              </div>
-                            ))}
-                            {providerErrorMessage ? (
-                              <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-3 text-sm text-amber-100">
-                                <div className="text-[11px] font-semibold text-amber-400">Replay warning</div>
-                                <p className="mt-1 leading-relaxed text-amber-100/85">{providerErrorMessage}</p>
-                              </div>
-                            ) : null}
-                          </div>
-                        </details>
-
-                        <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
-                          <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
-                            User input
-                          </summary>
-                          <p
-                            className={clsx(
-                              "mt-3 text-sm leading-relaxed text-slate-300 whitespace-pre-wrap break-words",
-                              !userInputExpanded && "line-clamp-5"
-                            )}
-                          >
-                            {inputPreview}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => setUserInputExpanded(v => !v)}
-                            className="mt-3 text-[11px] font-medium text-fuchsia-400/80 transition-colors hover:text-fuchsia-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
-                          >
-                            {userInputExpanded ? "Collapse" : "Expand"}
-                          </button>
-                        </details>
                       </div>
                     </section>
 
