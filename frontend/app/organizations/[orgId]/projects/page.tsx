@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import {
   getEntitlementScopeLabel,
+  getProjectAccessSummary,
 } from "@/lib/projectAccess";
 import {
   AccessSourceBadge,
