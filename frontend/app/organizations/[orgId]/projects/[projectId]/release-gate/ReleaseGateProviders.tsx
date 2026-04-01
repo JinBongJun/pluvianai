@@ -25,6 +25,7 @@ export type ReleaseGateProvidersProps = {
     projectId: number;
     projectName?: string;
     orgName?: string;
+    topRailMeta?: ReactNode;
     onAction: (actionId: string) => void;
   };
   readonly children: ReactNode;
@@ -47,6 +48,7 @@ export function ReleaseGateProviders({
             projectId={layout.projectId}
             projectName={layout.projectName}
             orgName={layout.orgName}
+            topRailMeta={layout.topRailMeta}
             onAction={layout.onAction}
           >
             {children}

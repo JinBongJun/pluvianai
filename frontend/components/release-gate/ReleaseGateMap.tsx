@@ -131,7 +131,6 @@ export function ReleaseGateMapContent({
   projectId,
   projectName,
   selectedNodeId = null,
-  rgDetails = null,
 }: {
   agents: any[];
   agentsLoaded?: boolean;
@@ -139,7 +138,6 @@ export function ReleaseGateMapContent({
   projectId: number;
   projectName?: string;
   selectedNodeId?: string | null;
-  rgDetails?: any;
 }) {
   const { fitView, setCenter } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -227,7 +225,6 @@ export function ReleaseGateMapContent({
             driftStatus: agent.drift_status || "official",
             signals: agent.signals,
             theme: "releaseGate",
-            rgDetails: isSelected ? rgDetails : undefined,
             blur: !!selectedNodeId && !isSelected,
           },
           position: existingNode?.position || savedPos || defaultPos,
@@ -237,9 +234,9 @@ export function ReleaseGateMapContent({
 
       return updatedNodes;
     });
-  }, [agentsKey, agents, agentsLoaded, selectedNodeId, rgDetails, setNodes, projectName]);
+  }, [agentsKey, agents, agentsLoaded, selectedNodeId, setNodes, projectName]);
 
-  // Keep node.selected, rgDetails, and blur in sync when selectedNodeId changes (skip during drag to avoid node jump)
+  // Keep node.selected and blur in sync when selectedNodeId changes (skip during drag to avoid node jump)
   useEffect(() => {
     if (isDraggingRef.current) return;
     setNodes(current =>
@@ -248,12 +245,11 @@ export function ReleaseGateMapContent({
         selected: n.id === selectedNodeId,
         data: {
           ...n.data,
-          rgDetails: n.id === selectedNodeId ? rgDetails : undefined,
           blur: !!selectedNodeId && n.id !== selectedNodeId,
         },
       }))
     );
-  }, [selectedNodeId, rgDetails, setNodes, dragEndCounter, isDraggingRef]);
+  }, [selectedNodeId, setNodes, dragEndCounter, isDraggingRef]);
 
   // Camera zoom & pan to selected node
   useEffect(() => {
@@ -424,7 +420,6 @@ export function ReleaseGateMap({
   projectId,
   projectName,
   selectedNodeId = null,
-  rgDetails = null,
 }: {
   agents: any[];
   agentsLoaded?: boolean;
@@ -432,7 +427,6 @@ export function ReleaseGateMap({
   projectId: number;
   projectName?: string;
   selectedNodeId?: string | null;
-  rgDetails?: any;
 }) {
   return (
     <ReactFlowProvider>
@@ -443,7 +437,6 @@ export function ReleaseGateMap({
         projectId={projectId}
         projectName={projectName}
         selectedNodeId={selectedNodeId}
-        rgDetails={rgDetails}
       />
     </ReactFlowProvider>
   );

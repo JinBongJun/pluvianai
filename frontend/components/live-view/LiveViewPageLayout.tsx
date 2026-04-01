@@ -9,6 +9,7 @@ export type LiveViewPageLayoutProps = {
   readonly projectId: number;
   readonly projectName?: string;
   readonly orgName?: string;
+  readonly topRailMeta?: ReactNode;
   /** Right-rail (`RailwaySidePanel` + tab panels). */
   readonly rightPanel: ReactNode;
   /** Main canvas column (background, overlays, `ReactFlow`). */
@@ -23,6 +24,7 @@ export function LiveViewPageLayout({
   projectId,
   projectName,
   orgName,
+  topRailMeta,
   rightPanel,
   children,
 }: LiveViewPageLayoutProps) {
@@ -32,6 +34,7 @@ export function LiveViewPageLayout({
       projectId={projectId}
       projectName={projectName}
       orgName={orgName}
+      topRailMeta={topRailMeta}
       activeTab="live-view"
       showTelemetry={false}
       navigationVariant="side"

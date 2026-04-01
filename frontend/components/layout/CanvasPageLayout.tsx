@@ -19,6 +19,7 @@ interface CanvasPageLayoutProps {
   projectId?: string | number;
   projectName?: string;
   orgName?: string;
+  topRailMeta?: React.ReactNode;
   activeTab?: string;
   leftPanel?: React.ReactNode;
   rightPanel?: React.ReactNode;
@@ -35,6 +36,7 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
   children,
   orgId,
   projectId,
+  topRailMeta,
   leftPanel,
   rightPanel,
   showTelemetry = true,
@@ -100,6 +102,7 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
               <div className="absolute left-6 top-6 z-[100] flex flex-wrap items-center gap-3">
                 <LaboratoryNavbar orgId={orgId!} projectId={effectiveProjectId!} variant="side" />
                 <AccountUsageStrip />
+                {topRailMeta}
               </div>
               <LaboratoryRefreshButton projectId={effectiveProjectId!} />
             </>
