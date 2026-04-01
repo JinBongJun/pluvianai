@@ -892,11 +892,48 @@ export function AttemptDetailOverlay({
         ).filter(([, value]) => value && typeof value === "object" && Object.keys(value).length > 0)
       : [];
   const replayPerLogOverrideCount = replayPerLogOverrideEntries.length;
-  const replaySamplingKeys =
-    replayRequestMeta?.sampling_overrides &&
-    typeof replayRequestMeta.sampling_overrides === "object"
-      ? Object.keys(replayRequestMeta.sampling_overrides as Record<string, unknown>).sort()
-      : [];
+  const replaySamplingSummary = useMemo(() => {
+    const overrides =
+      replayRequestMeta?.sampling_overrides &&
+      typeof replayRequestMeta.sampling_overrides === "object"
+        ? (replayRequestMeta.sampling_overrides as Record<string, unknown>)
+        : null;
+    if (!overrides) return null;
+    const formatSamplingLabel = (key: string, value: unknown): string => {
+      const text = String(value ?? "").trim();
+      if (!text) return key;
+      if (key === "temperature") return `Temp ${text}`;
+      if (key === "max_tokens") return `Max ${text}`;
+      if (key === "top_p") return `Top p ${text}`;
+      if (key === "presence_penalty") return `Presence ${text}`;
+      if (key === "frequency_penalty") return `Frequency ${text}`;
+      return `${key.replace(/_/g, " ")} ${text}`;
+    };
+    return Object.entries(overrides)
+      .filter(([, value]) => value != null && String(value).trim().length > 0)
+      .map(([key, value]) => formatSamplingLabel(key, value));
+  }, [replayRequestMeta]);
+  const overrideSummary = useMemo(() => {
+    if (Boolean(replayRequestMeta?.has_new_system_prompt)) {
+      return {
+        summary: "System prompt override applied",
+        meta: String(replayRequestMeta?.new_system_prompt_preview ?? "").trim() || undefined,
+        tone: "changed" as const,
+      };
+    }
+    if (baselineModel !== candidateModel) {
+      return {
+        summary: "Model override applied",
+        meta: `${baselineModel} -> ${candidateModel}`,
+        tone: "changed" as const,
+      };
+    }
+    return {
+      summary: "Using detected model",
+      meta: baselineModel,
+      tone: "default" as const,
+    };
+  }, [replayRequestMeta, baselineModel, candidateModel]);
   const normalizedToolContext =
     toolContext && typeof toolContext === "object" && !Array.isArray(toolContext)
       ? (toolContext as Record<string, unknown>)
@@ -943,7 +980,7 @@ export function AttemptDetailOverlay({
         : "Shared extra system text configured";
     }
     const parts = [
-      `Extra text added for ${toolContextCustomEntries.length} log${toolContextCustomEntries.length === 1 ? "" : "s"}`,
+      `Extra text added for ${toolContextCustomEntries.length} snapshot${toolContextCustomEntries.length === 1 ? "" : "s"}`,
     ];
     if (toolContextGlobalText) parts.push("shared fallback present");
     return parts.join(", ");
@@ -979,29 +1016,51 @@ export function AttemptDetailOverlay({
       tone: inputChanged ? "changed" : "default",
     });
 
-    if (baselineModel !== candidateModel) {
-      rows.push({
-        id: "model",
-        label: "Model",
-        summary: `${baselineModel} -> ${candidateModel}`,
-        scope: "Run-wide",
-        tone: "changed",
-      });
-    }
+    rows.push({
+      id: "sampling",
+      label: "Sampling",
+      summary:
+        replaySamplingSummary && replaySamplingSummary.length > 0
+          ? replaySamplingSummary.slice(0, 3).join(" · ")
+          : "Recorded defaults",
+      meta:
+        replaySamplingSummary && replaySamplingSummary.length > 3
+          ? replaySamplingSummary.slice(3).join(" · ")
+          : undefined,
+      scope: "Run-wide",
+      tone: replaySamplingSummary && replaySamplingSummary.length > 0 ? "changed" : "default",
+      action: replaySamplingSummary && replaySamplingSummary.length > 0 ? "details" : undefined,
+    });
 
     rows.push({
-      id: "tool-calls",
-      label: "Tool behavior",
-      summary: `${toolRecordedCount} -> ${toolTotalCalls}`,
+      id: "tools",
+      label: "Tools",
+      summary:
+        toolTotalCalls > 0
+          ? `${toolTotalCalls} tool call${toolTotalCalls === 1 ? "" : "s"} detected`
+          : toolPolicyEnabled
+            ? "Tool policy enabled"
+            : "No tools configured",
       meta:
-        toolFailedCount > 0
+        toolTotalCalls > 0
           ? `${toolFailedCount} failed`
-          : toolSimulatedCount > 0
-            ? `${toolSimulatedCount} simulated`
-            : "Recorded vs replayed",
+          : undefined,
       scope: toolRecordedCount !== toolTotalCalls ? "Mixed" : "Run-wide",
       tone: toolRecordedCount !== toolTotalCalls || toolFailedCount > 0 ? "changed" : "default",
       action: "tools",
+    });
+
+    rows.push({
+      id: "override",
+      label: "Override",
+      summary: overrideSummary.summary,
+      meta: overrideSummary.meta,
+      scope: "Run-wide",
+      tone: overrideSummary.tone,
+      action:
+        Boolean(replayRequestMeta?.has_new_system_prompt) || baselineModel !== candidateModel
+          ? "details"
+          : undefined,
     });
 
     if (replayOverrideCount > 0 || replayPerLogOverrideCount > 0) {
@@ -1010,16 +1069,16 @@ export function AttemptDetailOverlay({
         label: "Extra request fields",
         summary:
           replayOverrideCount > 0 && replayPerLogOverrideCount > 0
-            ? `Shared fields changed, ${replayPerLogOverrideCount} logs customized`
+            ? `Shared fields changed, ${replayPerLogOverrideCount} snapshots customized`
             : replayOverrideCount > 0
               ? `Shared fields changed (${replayOverrideCount} key${replayOverrideCount === 1 ? "" : "s"})`
-              : `${replayPerLogOverrideCount} logs customized`,
+              : `${replayPerLogOverrideCount} snapshots customized`,
         meta:
           replayOverrideKeys.length > 0
             ? replayOverrideKeys.slice(0, 3).join(", ")
             : replayPerLogOverrideEntries
                 .slice(0, 2)
-                .map(([sid, value]) => `log ${sid} (${Object.keys(value).length})`)
+                .map(([sid, value]) => `snapshot ${sid} (${Object.keys(value).length})`)
                 .join(" · "),
         scope:
           replayOverrideCount > 0 && replayPerLogOverrideCount > 0
@@ -1056,29 +1115,6 @@ export function AttemptDetailOverlay({
       });
     }
 
-    if (Boolean(replayRequestMeta?.has_new_system_prompt)) {
-      rows.push({
-        id: "system-prompt",
-        label: "System prompt",
-        summary: "Override applied",
-        meta: String(replayRequestMeta?.new_system_prompt_preview ?? "").trim() || undefined,
-        scope: "Run-wide",
-        tone: "changed",
-        action: "details",
-      });
-    }
-
-    if (replaySamplingKeys.length > 0) {
-      rows.push({
-        id: "sampling",
-        label: "Sampling",
-        summary: replaySamplingKeys.join(", "),
-        scope: "Run-wide",
-        tone: "changed",
-        action: "details",
-      });
-    }
-
     return rows;
   }, [
     inputChanged,
@@ -1086,10 +1122,13 @@ export function AttemptDetailOverlay({
     candidateInputLineCount,
     baselineModel,
     candidateModel,
+    replaySamplingSummary,
+    toolPolicyEnabled,
     toolRecordedCount,
     toolTotalCalls,
     toolFailedCount,
     toolSimulatedCount,
+    overrideSummary,
     replayOverrideCount,
     replayPerLogOverrideCount,
     replayOverrideKeys,
@@ -1100,7 +1139,6 @@ export function AttemptDetailOverlay({
     toolContextScopeValue,
     toolContextGlobalText,
     replayRequestMeta,
-    replaySamplingKeys,
   ]);
   const diffFocusBySignal = useMemo(() => {
     const preview = (lines: string[]): string | null =>
@@ -1222,12 +1260,6 @@ export function AttemptDetailOverlay({
   ];
   const decisionLabel = pass ? "Gate passed" : "Gate failed";
   const attemptLabel = `Attempt ${navIndex + 1}${attemptCount > 1 ? ` of ${attemptCount}` : ""}`;
-  const headerMeta = [
-    `Input ${inputIndex + 1}`,
-    attemptLabel,
-    evalTotalCount > 0 ? `${failedSignals.length} failed` : "No evals",
-    `${baselineModel} → ${candidateModel}`,
-  ];
 
   return (
     <div className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-md sm:p-6">
@@ -1250,16 +1282,6 @@ export function AttemptDetailOverlay({
                 </span>
               </div>
               <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">{decisionSummary}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {headerMeta.map(item => (
-                  <span
-                    key={item}
-                    className="inline-flex rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs text-slate-400"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
@@ -1668,7 +1690,6 @@ export function AttemptDetailOverlay({
                           const showsDiffEvidence = [
                             "required",
                             "format",
-                            "json",
                             "length",
                             "repetition",
                             "empty",
@@ -1760,32 +1781,25 @@ export function AttemptDetailOverlay({
                                     </div>
                                   ) : null}
                                   {showsDiffEvidence && diffExamples.length > 0 ? (
-                                    <div className="grid gap-2 md:grid-cols-2">
-                                      {diffExamples.map((example, idx) => (
-                                        <div
-                                          key={`${row.id}-${example.tone}-${idx}`}
-                                          className={clsx(
-                                            "rounded-xl border px-3 py-3",
-                                            example.tone === "added"
-                                              ? "border-emerald-500/20 bg-emerald-500/[0.05]"
-                                              : "border-rose-500/20 bg-rose-500/[0.05]"
-                                          )}
-                                        >
-                                          <div
-                                            className={clsx(
-                                              "text-xs font-semibold",
-                                              example.tone === "added"
-                                                ? "text-emerald-400"
-                                                : "text-rose-400"
-                                            )}
-                                          >
-                                            {example.label}
-                                          </div>
-                                          <p className="mt-2 line-clamp-3 text-[11px] leading-relaxed text-slate-200">
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
+                                      <div className="text-xs font-semibold text-slate-400">Relevant lines</div>
+                                      <div className="mt-2 space-y-1.5">
+                                        {diffExamples.slice(0, 1).map((example, idx) => (
+                                          <div key={`${row.id}-${example.tone}-${idx}`} className="text-[11px] leading-relaxed text-slate-300">
+                                            <span
+                                              className={clsx(
+                                                "mr-1 font-semibold",
+                                                example.tone === "added"
+                                                  ? "text-emerald-400"
+                                                  : "text-rose-400"
+                                              )}
+                                            >
+                                              {example.label}:
+                                            </span>
                                             {example.text}
-                                          </p>
-                                        </div>
-                                      ))}
+                                          </div>
+                                        ))}
+                                      </div>
                                     </div>
                                   ) : null}
                                   {showsDiffEvidence ? (
