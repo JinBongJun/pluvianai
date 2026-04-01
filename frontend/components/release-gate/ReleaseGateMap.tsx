@@ -48,7 +48,7 @@ function RGMapToolbar({
   const { zoomIn, zoomOut, fitView } = useReactFlow();
 
   const groupBase =
-    "flex flex-col bg-[#1C1C1E] border border-[#3A3A3C] shadow-lg rounded-[14px] overflow-hidden relative group transition-all duration-300";
+    "flex flex-col bg-[#1C1C1E]/70 backdrop-blur-md border border-[#3A3A3C]/50 shadow-lg rounded-[14px] overflow-hidden relative group transition-all duration-300";
   const btnBase =
     "flex items-center justify-center w-[40px] h-[40px] text-[#8E8E93] hover:text-white hover:bg-white/[0.05] transition-all duration-200 relative z-10";
 

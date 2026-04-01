@@ -152,27 +152,27 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                 </div>
                 {dataPanelTab === "logs" && (
                   <div className="flex h-full flex-col" data-testid="rg-data-panel-logs">
-                    <div className="space-y-2 border-b border-white/[0.06] bg-black/30 px-4 py-3">
+                    <div className="space-y-2 border-b border-white/[0.06] bg-transparent px-4 py-3">
                       <div className="min-w-0 space-y-0.5">
-                        <div className="text-[11px] font-medium leading-snug text-slate-300">
+                        <div className="text-[11px] font-medium leading-snug text-white/70">
                           Showing{" "}
-                          <span className="font-mono text-slate-100">
+                          <span className="font-mono text-white/90">
                             {filteredRecentSnapshots.length}
                           </span>{" "}
                           of{" "}
-                          <span className="font-mono text-slate-100">{logsMatchCount}</span>{" "}
+                          <span className="font-mono text-white/90">{logsMatchCount}</span>{" "}
                           logs
                           {logsMatchCount > logsShowLimit ? (
                             <span className="text-slate-500"> · cap {logsShowLimit}</span>
                           ) : null}
                         </div>
-                        <div className="text-[10px] leading-snug text-slate-500">
+                        <div className="text-[10px] leading-snug text-white/40">
                           Loaded {recentSnapshots.length}
                           {typeof recentSnapshotsTotalAvailable === "number"
                             ? ` of ${recentSnapshotsTotalAvailable} on server`
                             : ""}
                         </div>
-                        <div className="text-[10px] font-semibold text-fuchsia-300/90">
+                        <div className="text-[10px] font-semibold text-white/80">
                           {dataSource === "datasets"
                             ? runDatasetIds.length > 0
                               ? `Run source: ${runDatasetIds.length} saved dataset${runDatasetIds.length === 1 ? "" : "s"}`
@@ -184,7 +184,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                       </div>
 
                       <div className="flex flex-wrap items-stretch gap-2">
-                        <div className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-black/40 transition-colors hover:border-white/20 focus-within:border-fuchsia-500/60">
+                        <div className="min-w-0 flex-1 rounded-lg border-b border-white/[0.05] bg-transparent hover:bg-white/[0.02] focus-within:bg-white/[0.04] transition-colors">
                           <label className="sr-only" htmlFor="rg-logs-status-filter">
                             Filter logs by status
                           </label>
@@ -195,7 +195,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                             onChange={e =>
                               setLogsStatusFilter(e.target.value as LogsStatusFilter)
                             }
-                            className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold tracking-[0.08em] text-slate-300 outline-none"
+                            className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold tracking-[0.08em] text-white/60 hover:text-white/80 outline-none"
                             title="All, Flagged, or Healthy logs"
                           >
                             <option value="all" className="bg-[#18191e] text-slate-200">
@@ -209,7 +209,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                             </option>
                           </select>
                         </div>
-                        <div className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-black/40 transition-colors hover:border-white/20 focus-within:border-fuchsia-500/60">
+                        <div className="min-w-0 flex-1 rounded-lg border-b border-white/[0.05] bg-transparent hover:bg-white/[0.02] focus-within:bg-white/[0.04] transition-colors">
                           <label className="sr-only" htmlFor="rg-logs-show-limit">
                             Max rows to show
                           </label>
@@ -222,7 +222,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                                 Number(e.target.value) as 10 | 20 | 30 | 50 | 100 | 200
                               )
                             }
-                            className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold tracking-[0.08em] text-slate-300 outline-none"
+                            className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold tracking-[0.08em] text-white/60 hover:text-white/80 outline-none"
                             title="How many matching logs to list"
                           >
                             <option value={10} className="bg-[#18191e] text-slate-200">
@@ -245,7 +245,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                             </option>
                           </select>
                         </div>
-                        <div className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-black/40 transition-colors hover:border-white/20 focus-within:border-fuchsia-500/60">
+                        <div className="min-w-0 flex-1 rounded-lg border-b border-white/[0.05] bg-transparent hover:bg-white/[0.02] focus-within:bg-white/[0.04] transition-colors">
                           <label className="sr-only" htmlFor="rg-logs-sort">
                             Sort order
                           </label>
@@ -254,7 +254,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                             data-testid="rg-logs-sort"
                             value={logsSortMode}
                             onChange={e => setLogsSortMode(e.target.value as "newest" | "oldest")}
-                            className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold tracking-[0.08em] text-slate-300 outline-none"
+                            className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold tracking-[0.08em] text-white/60 hover:text-white/80 outline-none"
                           >
                             <option value="newest" className="bg-[#18191e] text-slate-200">
                               Newest
@@ -533,7 +533,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                                           Tap to expand snapshots
                                         </div>
                                       </div>
-                                      <div className="shrink-0 rounded-full border border-white/10 bg-black/30 px-2 py-0.5 text-[10px] text-slate-200">
+                                      <div className="shrink-0 rounded-full border border-white/10 bg-transparent px-2 py-0.5 text-[10px] text-slate-200">
                                         {count} snaps
                                       </div>
                                     </div>

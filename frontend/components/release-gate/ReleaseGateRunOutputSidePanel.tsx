@@ -145,7 +145,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                             "min-w-0 flex-1 rounded-lg px-1.5 py-1.5 text-center text-[10px] font-semibold leading-tight transition sm:text-[11px] sm:px-2",
                             resultCaseFilter === option.id
                               ? "bg-white/[0.12] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]"
-                              : "text-slate-400 hover:bg-white/[0.05] hover:text-slate-200"
+                              : "text-white/40 hover:bg-white/[0.05] hover:text-white/80"
                           )}
                         >
                           {option.label}
@@ -155,9 +155,9 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
 
                     {!result ? (
                       <div className="flex flex-col items-center justify-center py-14 text-center opacity-70">
-                        <Activity className="mb-4 h-8 w-8 text-slate-400" />
-                        <div className="text-sm font-semibold text-slate-300">Awaiting run</div>
-                        <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                        <Activity className="mb-4 h-8 w-8 text-white/40" />
+                        <div className="text-sm font-semibold text-white/60">Awaiting run</div>
+                        <p className="mt-1 text-[11px] leading-relaxed text-white/30">
                           Select logs or datasets in the left panel, adjust options on the agent card,
                           then press Start. Gate status and per-input rows show up here.
                         </p>
@@ -169,8 +169,8 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                           className={clsx(
                             "flex flex-col gap-2 rounded-2xl border px-4 py-3",
                             result.pass
-                              ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-                              : "border-rose-500/25 bg-rose-500/10 text-rose-300"
+                              ? "border-l-2 border-emerald-500/50 bg-emerald-500/5 text-emerald-100"
+                              : "border-l-2 border-rose-500/50 bg-rose-500/5 text-rose-100"
                           )}
                         >
                           <div className="flex items-center justify-between">
@@ -194,10 +194,10 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                           </div>
                           {toolGroundingRunSummary ? (
                             <div className="mt-2 rounded-xl border border-white/8 bg-black/25 px-3 py-2">
-                              <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+                              <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30">
                                 Tool grounding
                               </div>
-                              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-300">
+                              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-white/60">
                                 <span>
                                   With tools:{" "}
                                   <span className="font-semibold text-white/90">
@@ -217,7 +217,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                                 ) : null}
                                 {toolGroundingRunSummary.semanticOff > 0 ? (
                                   <span
-                                    className="text-slate-500"
+                                    className="text-white/30"
                                     title="Semantic judge did not run (e.g. no OpenAI key)."
                                   >
                                     Semantic judge off {toolGroundingRunSummary.semanticOff}
@@ -229,7 +229,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                         </div>
 
                         {!result.pass && whatToFixHints.length > 0 && (
-                          <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4">
+                          <div className="border-l-2 border-amber-500/50 bg-amber-500/5 px-4 py-3">
                             <div className="text-[11px] font-medium text-amber-200">What to fix first</div>
                             <div className="mt-3 flex flex-col gap-2">
                               {whatToFixHints.map((hint, idx) => (
@@ -251,7 +251,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
 
                         <div className="flex flex-col gap-2">
                           {visibleResultCases.length === 0 ? (
-                            <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-4 text-sm text-slate-500">
+                            <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-4 text-sm text-white/30">
                               {resultCaseFilter === "failed"
                                 ? "No failed or flaky inputs in this run."
                                 : resultCaseFilter === "passed"
@@ -312,15 +312,15 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                       <>
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="text-[11px] font-medium text-slate-400">Recent retained runs</div>
+                            <div className="text-[11px] font-medium text-white/40">Recent retained runs</div>
                             <div className="mt-1 text-sm font-semibold text-white">
                               Quick scan for this agent
                             </div>
-                            <div className="mt-1 text-xs leading-relaxed text-slate-500">
+                            <div className="mt-1 text-xs leading-relaxed text-white/30">
                               Use this panel to reopen recent retained runs for this agent. Switch to the
                               main History tab for project-wide trace search and full browsing.
                             </div>
-                            <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-slate-500">
+                            <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-white/30">
                               <span>
                                 {nodeHistoryItems.length}
                                 {historyTotal !== nodeHistoryItems.length ? ` of ${historyTotal}` : ""} runs
@@ -328,7 +328,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                               {historyFilterSummary.map(part => (
                                 <span
                                   key={part}
-                                  className="rounded-full border border-white/8 bg-white/[0.03] px-2 py-0.5 text-slate-400"
+                                  className="rounded-full border border-white/8 bg-white/[0.03] px-2 py-0.5 text-white/40"
                                 >
                                   {part}
                                 </span>
@@ -347,15 +347,15 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                                   setHistoryStatus(e.target.value as "all" | "pass" | "fail");
                                   setHistoryOffset(0);
                                 }}
-                                className="w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[11px] font-bold tracking-[0.08em] text-slate-200 outline-none"
+                                className="w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[11px] font-bold tracking-[0.08em] text-white/80 outline-none"
                               >
-                                <option value="all" className="bg-[#18191e] text-slate-200">
+                                <option value="all" className="bg-[#18191e] text-white/80">
                                   All
                                 </option>
-                                <option value="pass" className="bg-[#18191e] text-slate-200">
+                                <option value="pass" className="bg-[#18191e] text-white/80">
                                   Healthy
                                 </option>
-                                <option value="fail" className="bg-[#18191e] text-slate-200">
+                                <option value="fail" className="bg-[#18191e] text-white/80">
                                   Flagged
                                 </option>
                               </select>
@@ -373,18 +373,18 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                                   );
                                   setHistoryOffset(0);
                                 }}
-                                className="w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[11px] font-bold tracking-[0.08em] text-slate-200 outline-none"
+                                className="w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[11px] font-bold tracking-[0.08em] text-white/80 outline-none"
                               >
-                                <option value="all" className="bg-[#18191e] text-slate-200">
+                                <option value="all" className="bg-[#18191e] text-white/80">
                                   All dates
                                 </option>
-                                <option value="24h" className="bg-[#18191e] text-slate-200">
+                                <option value="24h" className="bg-[#18191e] text-white/80">
                                   Last 24h
                                 </option>
-                                <option value="7d" className="bg-[#18191e] text-slate-200">
+                                <option value="7d" className="bg-[#18191e] text-white/80">
                                   Last 7d
                                 </option>
-                                <option value="30d" className="bg-[#18191e] text-slate-200">
+                                <option value="30d" className="bg-[#18191e] text-white/80">
                                   Last 30d
                                 </option>
                               </select>
@@ -393,7 +393,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                               type="button"
                               onClick={() => mutateHistory()}
                               disabled={historyRefreshing}
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:bg-white/5 disabled:opacity-60"
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-[11px] font-semibold text-white/80 hover:bg-white/5 disabled:opacity-60"
                             >
                               <RefreshCcw
                                 className={clsx(
@@ -408,7 +408,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                         {nodeHistoryItems.length === 0 ? (
                           <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
                             <Flag className="mx-auto mb-2 h-10 w-10 text-slate-600" />
-                            <p className="text-sm text-slate-500">
+                            <p className="text-sm text-white/30">
                               {historyFiltersAreDefault
                                 ? "No retained runs yet for this agent."
                                 : "No runs match these filters. Try All or widen the date range."}
