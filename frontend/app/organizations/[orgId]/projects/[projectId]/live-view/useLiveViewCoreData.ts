@@ -1,15 +1,12 @@
 "use client";
 
 import type { MutableRefObject } from "react";
-import { useEffect, useRef } from "react";
-import useSWR, { useSWRConfig } from "swr";
+import { useRef } from "react";
+import useSWR from "swr";
 
 import { liveViewAPI } from "@/lib/api";
 import { useLaboratoryPageBootstrap } from "@/hooks/useLaboratoryPageBootstrap";
-import {
-  liveViewAgentsPayloadSignature,
-  releaseGateAgentsSwrKey,
-} from "@/lib/laboratoryLabRefresh";
+import { liveViewAgentsSwrKey } from "@/lib/laboratoryLabRefresh";
 
 import {
   LIVE_VIEW_FOCUSED_POLL_MS,
@@ -38,19 +35,14 @@ export function useLiveViewCoreData(options: {
     sseConnected,
     sseBackoffUntilRef,
   } = options;
-
-  const { mutate: cacheMutate } = useSWRConfig();
-  const lastLvAgentsSigRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    lastLvAgentsSigRef.current = null;
-  }, [projectId]);
+  const lastAgentsSuccessAtRef = useRef(0);
 
   const { project, org, organizations, orgProjects, projectSummary } = useLaboratoryPageBootstrap({
     orgId,
     projectId,
     routerReplace,
     swrOptions: LIVE_VIEW_SWR_DEFAULT_OPTIONS,
+    deferSwitcherData: true,
   });
 
   const {
@@ -59,8 +51,8 @@ export function useLiveViewCoreData(options: {
     isLoading: agentsLoading,
     error: agentsError,
   } = useSWR(
-    projectId && !isNaN(projectId) && projectId > 0 ? ["live-view-agents", projectId] : null,
-    () => liveViewAPI.getAgents(projectId, 30, true, true),
+    projectId && !isNaN(projectId) && projectId > 0 ? liveViewAgentsSwrKey(projectId) : null,
+    () => liveViewAPI.getAgents(projectId, 50, true, true),
     {
       refreshInterval: (() => {
         if (!isPageVisible) return 0;
@@ -71,17 +63,8 @@ export function useLiveViewCoreData(options: {
           : agentsPollIntervalMs;
       })(),
       shouldRetryOnError: false,
-      onSuccess: (data: unknown) => {
-        if (!projectId || projectId <= 0 || Number.isNaN(projectId)) return;
-        const sig = liveViewAgentsPayloadSignature(data);
-        if (
-          lastLvAgentsSigRef.current !== null &&
-          sig === lastLvAgentsSigRef.current
-        ) {
-          return;
-        }
-        lastLvAgentsSigRef.current = sig;
-        void cacheMutate(releaseGateAgentsSwrKey(projectId));
+      onSuccess: () => {
+        lastAgentsSuccessAtRef.current = Date.now();
       },
       ...LIVE_VIEW_SWR_DEFAULT_OPTIONS,
     }
@@ -97,5 +80,6 @@ export function useLiveViewCoreData(options: {
     agentsLoading,
     agentsError,
     mutateAgents,
+    agentsLastUpdatedAt: lastAgentsSuccessAtRef.current,
   };
 }

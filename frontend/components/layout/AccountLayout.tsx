@@ -5,7 +5,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import useSWR from "swr";
 import { organizationsAPI } from "@/lib/api";
 import { orgKeys } from "@/lib/queryKeys";
-import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
+import type { OrganizationSummary } from "@/lib/api/types";
 import { useRouter, usePathname } from "next/navigation";
 import { clsx } from "clsx";
 
@@ -29,11 +29,6 @@ const AccountLayout: React.FC<AccountLayoutProps> = ({ children, breadcrumb, act
       revalidateOnFocus: false,
       dedupingInterval: 10_000,
     }
-  );
-
-  const { data: projects } = useSWR<OrganizationProject[]>(
-    null,
-    null as any
   );
 
   const tabs = [
@@ -60,7 +55,6 @@ const AccountLayout: React.FC<AccountLayoutProps> = ({ children, breadcrumb, act
         userName={currentUser?.full_name || ""}
         userEmail={currentUser?.email || ""}
         organizations={organizations}
-        projects={projects}
       />
 
       <main className="relative z-10 pt-[90px]">

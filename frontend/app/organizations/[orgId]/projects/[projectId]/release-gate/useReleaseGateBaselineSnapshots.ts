@@ -162,6 +162,10 @@ export function useReleaseGateBaselineSnapshots(options: {
     () => (baselineSeedSnapshot?.id != null ? String(baselineSeedSnapshot.id) : null),
     [baselineSeedSnapshot]
   );
+  const liveNodeLatestSnapshot = useMemo(() => {
+    const first = baselineSnapshotPool[0];
+    return first && typeof first === "object" ? (first as Record<string, unknown>) : null;
+  }, [baselineSnapshotPool]);
 
   const representativeBaselinePickerOptions = useMemo(() => {
     const rows: Record<string, unknown>[] = [];
@@ -191,6 +195,7 @@ export function useReleaseGateBaselineSnapshots(options: {
     effectiveRepresentativeBaselineSnapshotId,
     baselineSeedSnapshot,
     baselineSeedSnapshotId,
+    liveNodeLatestSnapshot,
     representativeBaselinePickerOptions,
   };
 }

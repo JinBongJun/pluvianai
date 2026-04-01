@@ -2,6 +2,21 @@
 const { withSentryConfig } = require("@sentry/nextjs");
 
 const isProduction = process.env.NODE_ENV === "production";
+const scriptSrc = ["'self'", "'unsafe-inline'", "https:"];
+const connectSrc = ["'self'", "https:", "https://app.posthog.com", "https://*.posthog.com", "https://*.ingest.sentry.io"];
+
+if (!isProduction) {
+  // Next.js dev server relies on eval and websocket HMR.
+  scriptSrc.splice(2, 0, "'unsafe-eval'");
+  connectSrc.push(
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "ws://localhost:3000",
+    "ws://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000"
+  );
+}
 
 const contentSecurityPolicy = [
   "default-src 'self' https:",
@@ -9,11 +24,11 @@ const contentSecurityPolicy = [
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  "script-src 'self' 'unsafe-inline' https:",
+  `script-src ${scriptSrc.join(" ")}`,
   "style-src 'self' 'unsafe-inline' https:",
   "img-src 'self' data: https:",
   "font-src 'self' data: https:",
-  "connect-src 'self' https: https://app.posthog.com https://*.posthog.com https://*.ingest.sentry.io",
+  `connect-src ${connectSrc.join(" ")}`,
 ].join("; ");
 
 const securityHeaders = [

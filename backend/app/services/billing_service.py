@@ -17,7 +17,7 @@ from app.core.config import settings
 from app.core.logging_config import logger
 from app.core.metrics import billing_webhook_events_total
 from app.core.subscription_limits import PLAN_LIMITS, normalize_plan_type
-from app.core.usage_limits import get_usage_period_bounds_utc
+from app.core.usage_limits import get_snapshots_count_this_month, get_usage_period_bounds_utc
 from app.models.billing_event import BillingEvent
 from app.models.entitlement_snapshot import EntitlementSnapshot
 from app.models.subscription import Subscription
@@ -630,12 +630,10 @@ class BillingService:
         daily_key = f"user:{user_id}:usage:daily:{today}"
         monthly_key = f"user:{user_id}:usage:period:{period_tag}"
         judge_calls_key = f"user:{user_id}:judge_calls:period:{period_tag}"
-        snapshots_key = f"user:{user_id}:snapshots:period:{period_tag}"
-
         daily_usage = int(cache_service.redis_client.get(daily_key) or 0) if cache_service.enabled else 0
         monthly_usage = int(cache_service.redis_client.get(monthly_key) or 0) if cache_service.enabled else 0
         judge_calls = int(cache_service.redis_client.get(judge_calls_key) or 0) if cache_service.enabled else 0
-        snapshots = int(cache_service.redis_client.get(snapshots_key) or 0) if cache_service.enabled else 0
+        snapshots = get_snapshots_count_this_month(self.db, user_id)
 
         from app.services.subscription_service import SubscriptionService
 

@@ -62,6 +62,13 @@ export const releaseGateAPI = {
     return response.data;
   },
 
+  getAgentEvaluation: async (projectId: number, agentId: string) => {
+    const response = await apiClient.get(
+      `/projects/${projectId}/live-view/agents/${encodeURIComponent(agentId)}/evaluation`
+    );
+    return response.data;
+  },
+
   getRecentSnapshots: async (
     projectId: number,
     agentId: string,

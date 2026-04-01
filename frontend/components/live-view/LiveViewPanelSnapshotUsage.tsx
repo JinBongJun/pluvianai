@@ -6,7 +6,7 @@ import clsx from "clsx";
 import { computeAccountUsageMetrics, formatUsageLimit } from "@/lib/accountUsage";
 import { useAccountUsage } from "@/hooks/useAccountUsage";
 
-/** Compact snapshot quota next to the Live View agent panel title (same data as Settings → Usage). */
+/** Compact account snapshot quota next to the Live View agent panel title. */
 export function LiveViewPanelSnapshotUsage() {
   const { data, isLoading } = useAccountUsage();
   const metrics = computeAccountUsageMetrics(data);
@@ -27,7 +27,7 @@ export function LiveViewPanelSnapshotUsage() {
             : "border-white/10 bg-black/20"
       )}
     >
-      <span className="text-slate-500">Snapshots </span>
+      <span className="text-slate-500">Account snapshots </span>
       <span className="text-slate-100">
         {metrics.snapshotsUsed}/{formatUsageLimit(metrics.snapshotsLimit)}
       </span>

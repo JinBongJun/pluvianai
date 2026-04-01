@@ -61,6 +61,9 @@ import {
   type LaboratoryRefreshDetail,
 } from "@/lib/laboratoryLabRefresh";
 
+const LIVE_VIEW_FLOW_NODE_TYPES = LIVE_VIEW_NODE_TYPES;
+const LIVE_VIEW_FLOW_EDGE_TYPES = LIVE_VIEW_EDGE_TYPES;
+
 const ClinicalLog = dynamic(() => import("@/components/live-view/ClinicalLog"), {
   ssr: false,
   loading: () => <div className="h-full min-h-[240px] animate-pulse rounded-2xl bg-white/[0.03]" />,
@@ -94,8 +97,6 @@ const AgentSettingsPanel = dynamic(
 export function LiveViewContent() {
   const params = useParams();
   const router = useRouter();
-  const nodeTypes = useMemo(() => LIVE_VIEW_NODE_TYPES, []);
-  const edgeTypes = useMemo(() => LIVE_VIEW_EDGE_TYPES, []);
   const orgId = params?.orgId as string;
   const rawProjectId = params?.projectId;
   const projectIdStr = Array.isArray(rawProjectId) ? rawProjectId[0] : rawProjectId;
@@ -126,6 +127,7 @@ export function LiveViewContent() {
     agentsLoading,
     agentsError,
     mutateAgents,
+    agentsLastUpdatedAt,
   } = useLiveViewCoreData({
     projectId,
     orgId,
@@ -179,6 +181,7 @@ export function LiveViewContent() {
   } = useLiveViewGraphState(projectId);
 
   const prevAgentIdsRef = useRef<Set<string>>(new Set());
+  const prevAgentsVisualSignatureRef = useRef<string | null>(null);
   const agentsSyncProjectIdRef = useRef<number | null>(null);
 
   const allAgents = useMemo(() => {
@@ -197,6 +200,7 @@ export function LiveViewContent() {
   const deletedAgents = useMemo(() => {
     return allAgents.filter((a: { is_deleted?: boolean }) => a.is_deleted);
   }, [allAgents]);
+  const agentsVisualSignature = useMemo(() => JSON.stringify(agentsList), [agentsList]);
 
   const handleHardDeleteAgents = async (agentIds: string[]) => {
     if (!projectId || Number.isNaN(projectId) || agentIds.length === 0) return;
@@ -242,10 +246,12 @@ export function LiveViewContent() {
     if (agentsSyncProjectIdRef.current !== projectId) {
       agentsSyncProjectIdRef.current = projectId;
       prevAgentIdsRef.current = new Set();
+      prevAgentsVisualSignatureRef.current = null;
     }
 
     if (agentsList.length === 0) {
       prevAgentIdsRef.current = new Set();
+      prevAgentsVisualSignatureRef.current = agentsVisualSignature;
       setHistory([]);
       setHistoryIndex(-1);
       setNodes([]);
@@ -255,10 +261,15 @@ export function LiveViewContent() {
     const saved = loadLvPositions(projectId);
     const currentAgentIds = new Set(agentsList.map((a: any) => String(a.agent_id)));
     const prevAgentIds = prevAgentIdsRef.current;
+    const samePayload = prevAgentsVisualSignatureRef.current === agentsVisualSignature;
+    prevAgentsVisualSignatureRef.current = agentsVisualSignature;
     if (prevAgentIds.size > 0) {
       const sameAgentSet =
         prevAgentIds.size === currentAgentIds.size &&
         Array.from(currentAgentIds).every(id => prevAgentIds.has(id));
+      if (sameAgentSet && samePayload) {
+        return;
+      }
       if (!sameAgentSet) {
         setHistory([]);
         setHistoryIndex(-1);
@@ -296,6 +307,7 @@ export function LiveViewContent() {
   }, [
     agentsData,
     agentsList,
+    agentsVisualSignature,
     selectedAgentId,
     projectId,
     fitView,
@@ -388,8 +400,9 @@ export function LiveViewContent() {
     const becameVisible = !wasPageVisibleRef.current && isPageVisible;
     wasPageVisibleRef.current = isPageVisible;
     if (!becameVisible) return;
+    if (Date.now() - agentsLastUpdatedAt < 15_000) return;
     void mutateAgents();
-  }, [isPageVisible, mutateAgents, projectId]);
+  }, [agentsLastUpdatedAt, isPageVisible, mutateAgents, projectId]);
 
   const handleRestoreAgent = useCallback(
     async (agentId: string) => {
@@ -440,8 +453,8 @@ export function LiveViewContent() {
       projectId={projectId}
       projectName={project?.name}
       orgName={org?.name}
-      organizations={organizations ?? []}
-      projects={orgProjects ?? []}
+      organizations={organizations}
+      projects={orgProjects}
       topRailMeta={
         !showLoadingOverlay && !showAccessDeniedOverlay && resolvedProjectAccess ? (
           <ProjectAccessInlineStrip project={resolvedProjectAccess} />
@@ -557,8 +570,8 @@ export function LiveViewContent() {
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
+          nodeTypes={LIVE_VIEW_FLOW_NODE_TYPES}
+          edgeTypes={LIVE_VIEW_FLOW_EDGE_TYPES}
           onNodeDragStart={() => {
             isDraggingRef.current = true;
           }}

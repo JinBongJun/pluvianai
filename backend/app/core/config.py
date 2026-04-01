@@ -169,6 +169,9 @@ class Settings(BaseSettings):
     FEATURE_FLAG_ENHANCED_ANALYTICS: bool = False
     FEATURE_FLAG_BETA_FEATURES: bool = False
     FEATURE_FLAG_EXPERIMENTAL_API: bool = False
+    FEATURE_FLAG_SNAPSHOT_USAGE_LEDGER: bool = True
+    FEATURE_FLAG_SNAPSHOT_USAGE_LEDGER_SHADOW_COMPARE: bool = True
+    FEATURE_FLAG_SNAPSHOT_USAGE_LEDGER_BACKFILL_ON_READ: bool = True
 
     # Release Gate policy flags
     # When False (default), production Release Gate should enforce pinned-only model ids for reproducibility.

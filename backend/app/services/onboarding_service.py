@@ -163,6 +163,7 @@ class OnboardingService:
             ValueError: If project not found or access denied
         """
         from app.models.trace import Trace
+        from app.services.subscription_service import SubscriptionService
         
         project = self.db.query(Project).filter(
             Project.id == project_id,
@@ -197,6 +198,18 @@ class OnboardingService:
                 status_code=200,
             )
             self.db.add(snapshot)
+            self.db.flush()
+            SubscriptionService(self.db).append_usage(
+                user_id=user_id,
+                metric_type="snapshots",
+                amount=1,
+                project_id=project_id,
+                source_type="snapshot",
+                source_id=str(snapshot.id),
+                idempotency_key=f"snapshot:{snapshot.id}",
+                timestamp=getattr(snapshot, "created_at", None),
+                commit=False,
+            )
             created_snapshots.append({
                 "id": i,
                 "message": message["content"],

@@ -175,7 +175,8 @@ class StreamProcessor:
         try:
             # Pre-check hard limits before inserting (if enabled)
             from app.models.project import Project
-            from app.services.billing_service import BillingService
+            from app.core.usage_limits import check_snapshot_limit
+            from app.services.subscription_service import SubscriptionService
             
             # Group by project_id to check limits per owner
             project_owners = {}  # project_id -> owner_id
@@ -197,36 +198,36 @@ class StreamProcessor:
             # Filter snapshots based on hard limit (if enabled)
             filtered_snapshots = []
             skipped_count = 0
-            billing_service = BillingService(db)
             
             for owner_id, owner_snapshots in snapshots_by_owner.items():
-                if settings.ENABLE_FREE_PLAN_HARD_LIMIT:
-                    # Check limit before processing
-                    for snapshot_data, project_id, message_id in owner_snapshots:
-                        # Pre-check: try to increment and see if allowed
-                        is_allowed, warning = billing_service.increment_usage(owner_id, "snapshots", 1)
-                        if not is_allowed:
-                            skipped_count += 1
-                            logger.warning(
-                                f"Skipping snapshot {message_id} for user {owner_id}: {warning}"
-                            )
-                            continue
-                        filtered_snapshots.append((snapshot_data, project_id, message_id))
-                else:
-                    # No hard limit, process all
-                    filtered_snapshots.extend(owner_snapshots)
+                accepted_for_owner = 0
+                for snapshot_data, project_id, message_id in owner_snapshots:
+                    is_allowed, warning = check_snapshot_limit(
+                        db,
+                        owner_id,
+                        amount=accepted_for_owner + 1,
+                    )
+                    if not is_allowed:
+                        skipped_count += 1
+                        logger.warning(
+                            f"Skipping snapshot {message_id} for user {owner_id}: {warning}"
+                        )
+                        continue
+                    accepted_for_owner += 1
+                    filtered_snapshots.append((snapshot_data, project_id, message_id, owner_id))
             
             # Also include snapshots without project_id (they won't be tracked)
             for snapshot_data, project_id, message_id in snapshots_data:
                 if not project_id:
-                    filtered_snapshots.append((snapshot_data, project_id, message_id))
+                    filtered_snapshots.append((snapshot_data, project_id, message_id, None))
             
             if skipped_count > 0:
                 logger.info(f"Skipped {skipped_count} snapshots due to hard limit from {stream_key}")
             
             # Insert filtered snapshots
             inserted_count = 0
-            for snapshot_data, project_id, message_id in filtered_snapshots:
+            inserted_rows = []
+            for snapshot_data, project_id, message_id, owner_id in filtered_snapshots:
                 try:
                     # Isolate malformed rows so one bad snapshot doesn't roll back the whole stream batch.
                     with db.begin_nested():
@@ -258,7 +259,20 @@ class StreamProcessor:
                         db.add(snapshot)
                         restore_agent_if_soft_deleted(db, project_id, snapshot_data.get("agent_id"))
                         db.flush()
+                        if project_id and owner_id is not None:
+                            SubscriptionService(db).append_usage(
+                                user_id=int(owner_id),
+                                metric_type="snapshots",
+                                amount=1,
+                                project_id=project_id,
+                                source_type="snapshot",
+                                source_id=str(snapshot.id),
+                                idempotency_key=f"snapshot:{snapshot.id}",
+                                timestamp=getattr(snapshot, "created_at", None),
+                                commit=False,
+                            )
                     inserted_count += 1
+                    inserted_rows.append((snapshot_data, project_id, owner_id))
                 except Exception as e:
                     logger.error(f"Error inserting snapshot {message_id}: {str(e)}")
                     continue
@@ -271,7 +285,7 @@ class StreamProcessor:
                 # Notify Live View dashboards (SSE) that agent lists changed.
                 try:
                     by_project = {}
-                    for snapshot_data, proj_id, _ in filtered_snapshots:
+                    for snapshot_data, proj_id, _ in inserted_rows:
                         if not proj_id:
                             continue
                         aid = snapshot_data.get("agent_id")
@@ -308,7 +322,7 @@ class StreamProcessor:
                     import asyncio
                     from app.api.v1.endpoints.behavior import run_behavior_validation_for_trace
                     unique_traces = set()
-                    for snapshot_data, proj_id, _ in filtered_snapshots:
+                    for snapshot_data, proj_id, _ in inserted_rows:
                         if proj_id and snapshot_data.get("trace_id"):
                             unique_traces.add((proj_id, snapshot_data["trace_id"]))
                     loop = asyncio.get_event_loop()
@@ -324,32 +338,6 @@ class StreamProcessor:
                         loop.run_in_executor(None, run_validation, pid, tid)
                 except Exception as e:
                     logger.debug("Policy validation scheduling after stream failed: %s", e)
-
-                # Track snapshot usage for subscription limits (after successful insert)
-                # Only track if hard limit was not pre-checked (to avoid double counting)
-                if not settings.ENABLE_FREE_PLAN_HARD_LIMIT:
-                    # Group by project_id to track usage per project owner
-                    project_owners = {}  # project_id -> owner_id
-                    for snapshot_data, project_id, _ in filtered_snapshots:
-                        if project_id and project_id not in project_owners:
-                            project = db.query(Project).filter(Project.id == project_id).first()
-                            if project:
-                                project_owners[project_id] = project.owner_id
-
-                    # Track usage per owner (count snapshots per owner)
-                    owner_counts = {}
-                    for snapshot_data, project_id, _ in filtered_snapshots:
-                        if project_id and project_id in project_owners:
-                            owner_id = project_owners[project_id]
-                            owner_counts[owner_id] = owner_counts.get(owner_id, 0) + 1
-
-                    # Increment usage for each owner
-                    billing_service = BillingService(db)
-                    for owner_id, count in owner_counts.items():
-                        try:
-                            billing_service.increment_usage(owner_id, "snapshots", count)
-                        except Exception as e:
-                            logger.warning(f"Failed to track snapshot usage for user {owner_id}: {str(e)}")
         except Exception as e:
             logger.error(f"Error in batch insert: {str(e)}", exc_info=True)
             db.rollback()

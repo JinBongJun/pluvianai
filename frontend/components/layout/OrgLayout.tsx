@@ -33,10 +33,11 @@ interface OrgLayoutProps {
   orgId?: string | number;
   breadcrumb?: Breadcrumb[];
   tabs?: Tab[];
+  projects?: OrganizationProject[];
   children: React.ReactNode;
 }
 
-const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children }) => {
+const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, projects, children }) => {
   const params = useParams();
   const pathname = usePathname();
   const router = useRouter();
@@ -48,14 +49,6 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
   const { data: organizations } = useSWR<OrganizationSummary[]>(
     hasToken ? orgKeys.list() : null,
     () => organizationsAPI.list({ includeStats: false }),
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 10_000,
-    }
-  );
-  const { data: projects } = useSWR<OrganizationProject[]>(
-    hasToken && resolvedOrgKey ? orgKeys.projects(resolvedOrgKey, "") : null,
-    ([, , id]) => organizationsAPI.listProjects(id as string, { includeStats: false }),
     {
       revalidateOnFocus: false,
       dedupingInterval: 10_000,

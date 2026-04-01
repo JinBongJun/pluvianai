@@ -243,6 +243,7 @@ class BackgroundTaskService:
                         eval_config_version=eval_config_version,
                     )
                     db.add(snapshot)
+                    db.flush()
                     restore_agent_if_soft_deleted(db, project_id, agent_id)
             except Exception as snap_err:
                 logger.warning(f"Failed to create snapshot for Live View (non-fatal): {snap_err}")
@@ -253,6 +254,18 @@ class BackgroundTaskService:
 
                 if project_owner_id is not None:
                     subscription_service = SubscriptionService(db)
+                    if 'snapshot' in locals() and snapshot is not None and getattr(snapshot, "id", None) is not None:
+                        subscription_service.append_usage(
+                            user_id=project_owner_id,
+                            metric_type="snapshots",
+                            amount=1,
+                            project_id=project_id,
+                            source_type="snapshot",
+                            source_id=str(snapshot.id),
+                            idempotency_key=f"snapshot:{snapshot.id}",
+                            timestamp=getattr(snapshot, "created_at", None),
+                            commit=False,
+                        )
                     subscription_service.increment_usage(
                         user_id=project_owner_id, metric_type="api_calls", amount=1, project_id=project_id
                     )

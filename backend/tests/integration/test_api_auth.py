@@ -375,6 +375,15 @@ class TestAuthAPI:
             Usage(
                 user_id=test_user.id,
                 project_id=test_project.id,
+                metric_name="snapshots",
+                quantity=23,
+                unit="count",
+            )
+        )
+        db.add(
+            Usage(
+                user_id=test_user.id,
+                project_id=test_project.id,
                 metric_name="guard_credits_replay",
                 quantity=125,
                 unit="credits",
@@ -407,6 +416,8 @@ class TestAuthAPI:
         assert data["limits"]["release_gate_attempts_per_month"] == 60
         assert data["limits"]["platform_replay_credits_per_month"] == 60
         assert data["limits"]["guard_credits_per_month"] == 10000
+        assert data["usage_this_month"]["snapshots"] == 23
+        assert data["usage_current_period"]["snapshots"] == 23
         assert data["usage_this_month"]["release_gate_attempts"] == 17
         assert data["usage_current_period"]["release_gate_attempts"] == 17
         assert data["usage_this_month"]["platform_replay_credits"] == 125

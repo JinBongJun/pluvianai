@@ -74,9 +74,8 @@ export default function OrgProjectsPage() {
     isValidating: projectsLoading,
     mutate: refetchProjects,
   } = useSWR<OrganizationProject[]>(
-    orgId ? orgKeys.projects(orgId, debouncedProjectQuery) : null,
-    ([, , id, search]) =>
-      organizationsAPI.listProjects(id as string, { includeStats: false, search: search as string })
+    orgId ? orgKeys.projects(orgId, "") : null,
+    ([, , id]) => organizationsAPI.listProjects(id as string, { includeStats: false })
   );
 
   const { data: myUsage } = useAccountUsage(Boolean(orgId));
@@ -126,6 +125,7 @@ export default function OrgProjectsPage() {
   return (
     <OrgLayout
       orgId={orgId}
+      projects={projects}
       breadcrumb={[
         { label: "Organizations", href: "/organizations" },
         { label: org?.name || "Organization" },

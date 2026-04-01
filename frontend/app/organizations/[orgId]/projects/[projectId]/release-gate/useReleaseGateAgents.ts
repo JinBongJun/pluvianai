@@ -1,26 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
-import useSWR, { useSWRConfig } from "swr";
+import { useMemo } from "react";
+import useSWR from "swr";
 import type { AgentForPicker } from "@/components/release-gate/AgentPickerCard";
-import { releaseGateAPI } from "@/lib/api";
-import {
-  liveViewAgentsSwrKey,
-  releaseGateAgentsPayloadSignature,
-} from "@/lib/laboratoryLabRefresh";
+import { liveViewAPI } from "@/lib/api";
+import { liveViewAgentsSwrKey } from "@/lib/laboratoryLabRefresh";
 
 export function useReleaseGateAgents(options: { projectId: number; runLocked: boolean }) {
   const { projectId, runLocked } = options;
 
-  const { mutate: cacheMutate } = useSWRConfig();
-  const lastRgAgentsSigRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    lastRgAgentsSigRef.current = null;
-  }, [projectId]);
-
   const agentsKey =
-    projectId && !isNaN(projectId) ? ["release-gate-agents", projectId] : null;
+    projectId && !isNaN(projectId) ? liveViewAgentsSwrKey(projectId) : null;
   const {
     data: agentsData,
     isLoading: agentsLoading,
@@ -28,31 +18,22 @@ export function useReleaseGateAgents(options: { projectId: number; runLocked: bo
     mutate: mutateAgents,
   } = useSWR(
     agentsKey,
-    () => releaseGateAPI.getAgents(projectId, 50),
+    () => liveViewAPI.getAgents(projectId, 50, true, true),
     {
       isPaused: () => runLocked,
-      onSuccess: (data: unknown) => {
-        if (!projectId || projectId <= 0 || Number.isNaN(projectId)) return;
-        const sig = releaseGateAgentsPayloadSignature(data);
-        if (
-          lastRgAgentsSigRef.current !== null &&
-          sig === lastRgAgentsSigRef.current
-        ) {
-          return;
-        }
-        lastRgAgentsSigRef.current = sig;
-        void cacheMutate(liveViewAgentsSwrKey(projectId));
-      },
     }
   );
   const agentsLoaded = agentsKey !== null && typeof agentsData !== "undefined";
   const agents = useMemo<AgentForPicker[]>(() => {
-    const list = agentsData?.items ?? [];
+    const list = Array.isArray((agentsData as { agents?: unknown[] } | undefined)?.agents)
+      ? ((agentsData as { agents: Array<{ agent_id?: string; display_name?: string; model?: string | null; is_deleted?: boolean }> }).agents)
+      : [];
     return list
-      .map((a: { agent_id?: string; display_name?: string }) => ({
+      .filter(a => !a?.is_deleted)
+      .map(a => ({
         agent_id: a.agent_id ?? "",
         display_name: a.display_name || a.agent_id || "Agent",
-        model: null,
+        model: a.model ?? null,
         worst_count: 0,
         is_ghost: false,
       }))

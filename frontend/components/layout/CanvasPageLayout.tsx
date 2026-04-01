@@ -1,16 +1,12 @@
 "use client";
 
 import React from "react";
-import useSWR from "swr";
 import TopHeader from "./TopHeader";
 import { LaboratoryNavbar } from "./LaboratoryNavbar";
 import { LaboratoryRefreshButton } from "./LaboratoryRefreshButton";
 import { AccountUsageStrip } from "./AccountUsageStrip";
 import { TelemetryHUD, type TelemetryStat } from "./TelemetryHUD";
 import clsx from "clsx";
-import { organizationsAPI } from "@/lib/api";
-import { orgKeys } from "@/lib/queryKeys";
-import { useAuthSession } from "@/hooks/useAuthSession";
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
 
 interface CanvasPageLayoutProps {
@@ -54,31 +50,13 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
   // Ensure projectId is consistently handled for the navbar
   const effectiveProjectId = projectId ? Number(projectId) : undefined;
   const hasValidProject = orgId && effectiveProjectId !== undefined && !isNaN(effectiveProjectId);
-  const { isAuthenticated } = useAuthSession();
-
-  const { data: organizations } = useSWR<OrganizationSummary[]>(
-    isAuthenticated && !providedOrganizations ? orgKeys.list() : null,
-    () => organizationsAPI.list({ includeStats: false }),
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 10_000,
-    }
-  );
-  const { data: projects } = useSWR<OrganizationProject[]>(
-    isAuthenticated && orgId && !providedProjects ? orgKeys.projects(orgId, "") : null,
-    ([, , id]) => organizationsAPI.listProjects(String(id), { includeStats: false }),
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 10_000,
-    }
-  );
 
   return (
     <div className="h-screen w-screen bg-[#0a0a0c] overflow-hidden flex flex-col font-sans text-slate-200">
       {/* Global Top Header - Fixed at 90px */}
       <TopHeader
-        organizations={providedOrganizations ?? organizations}
-        projects={providedProjects ?? projects}
+        organizations={providedOrganizations}
+        projects={providedProjects}
         nav={
           navigationVariant === "top" &&
           hasValidProject && <LaboratoryNavbar orgId={orgId!} projectId={effectiveProjectId!} />

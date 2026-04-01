@@ -692,7 +692,26 @@ def list_agents(
         sentinel_agents = visibility.sentinel_agents
         has_drift = visibility.has_drift
         settings_map = visibility.settings_map
-        rows_by_agent_id = {(r.agent_id or "unknown"): r for r in rows}
+        rows_by_agent_id = {}
+        for row in rows:
+            agent_key = row.agent_id or "unknown"
+            existing = rows_by_agent_id.get(agent_key)
+            if existing is None:
+                rows_by_agent_id[agent_key] = {
+                    "agent_id": agent_key,
+                    "model": row.model,
+                    "total": int(row.total or 0),
+                    "worst_count": int(row.worst_count or 0),
+                    "last_seen": row.last_seen,
+                }
+                continue
+            existing["total"] += int(row.total or 0)
+            existing["worst_count"] += int(row.worst_count or 0)
+            row_last_seen = row.last_seen
+            existing_last_seen = existing.get("last_seen")
+            if row_last_seen and (existing_last_seen is None or row_last_seen >= existing_last_seen):
+                existing["last_seen"] = row_last_seen
+                existing["model"] = row.model
         sentinel_by_id = {
             str(node.get("id") or "").strip(): node
             for node in sentinel_agents
@@ -701,21 +720,21 @@ def list_agents(
         now_iso = _iso(datetime.now(timezone.utc))
 
         def serialize(row):
-            agent_id = row.agent_id or "unknown"
+            agent_id = str(row.get("agent_id") or "unknown")
             setting = settings_map.get(agent_id)
             soft_deleted = is_agent_soft_deleted(settings_map, agent_id)
             payload = {
                 "agent_id": agent_id,
                 "display_name": setting.display_name if setting and setting.display_name else (agent_id or "Agent"),
-                "model": row.model,
-                "total": row.total,
-                "worst_count": int(row.worst_count or 0),
+                "model": row.get("model"),
+                "total": int(row.get("total") or 0),
+                "worst_count": int(row.get("worst_count") or 0),
                 "node_type": setting.node_type if setting else "agentCard",
                 "is_deleted": soft_deleted,
                 "deleted_at": _iso(setting.deleted_at) if setting and soft_deleted else None,
             }
             if not compact:
-                payload["last_seen"] = _iso(row.last_seen)
+                payload["last_seen"] = _iso(row.get("last_seen"))
                 payload["signals"] = {}
             return payload
 
@@ -740,9 +759,9 @@ def list_agents(
             payload = {
                 "agent_id": node_id,
                 "display_name": node.get('data', {}).get('label') or "Official Agent",
-                "model": node.get('data', {}).get('model') or (stat.model if stat else "NEURAL_UNIT"),
-                "total": stat.total if stat else 0,
-                "worst_count": int(stat.worst_count or 0) if stat else 0,
+                "model": node.get('data', {}).get('model') or (stat.get("model") if stat else "NEURAL_UNIT"),
+                "total": stat.get("total") if stat else 0,
+                "worst_count": int(stat.get("worst_count") or 0) if stat else 0,
                 "node_type": "agentCard",
                 "is_official": True,
                 "drift_status": "official",
@@ -752,7 +771,7 @@ def list_agents(
                 else None,
             }
             if not compact:
-                payload["last_seen"] = _iso(stat.last_seen) if stat else now_iso
+                payload["last_seen"] = _iso(stat.get("last_seen")) if stat else now_iso
                 payload["signals"] = {}
             final_agents.append(payload)
             processed_ids.add(node_id)
@@ -772,9 +791,9 @@ def list_agents(
             payload = {
                 "agent_id": s_id,
                 "display_name": f"Ghost: {s_id}",
-                "model": s_node.get("model") or (stat.model if stat else "UNKNOWN"),
-                "total": stat.total if stat else 0,
-                "worst_count": int(stat.worst_count or 0) if stat else 0,
+                "model": s_node.get("model") or (stat.get("model") if stat else "UNKNOWN"),
+                "total": stat.get("total") if stat else 0,
+                "worst_count": int(stat.get("worst_count") or 0) if stat else 0,
                 "node_type": "agentCard",
                 "is_official": False,
                 "drift_status": "ghost",
@@ -785,20 +804,20 @@ def list_agents(
                 else None,
             }
             if not compact:
-                payload["last_seen"] = _iso(stat.last_seen) if stat else now_iso
+                payload["last_seen"] = _iso(stat.get("last_seen")) if stat else now_iso
                 payload["signals"] = {}
             final_agents.append(payload)
             processed_ids.add(s_id)
 
         # 3. Add any other detected snapshots (Probabilistic fallback)
-        for row in rows:
-            if row.agent_id not in processed_ids:
-                if is_agent_hard_deleted(settings_map, row.agent_id or "unknown"):
+        for agent_id, row in rows_by_agent_id.items():
+            if agent_id not in processed_ids:
+                if is_agent_hard_deleted(settings_map, agent_id):
                     continue
-                if is_agent_soft_deleted(settings_map, row.agent_id or "unknown") and not include_deleted:
+                if is_agent_soft_deleted(settings_map, agent_id) and not include_deleted:
                     continue
                 final_agents.append(serialize(row))
-                processed_ids.add(row.agent_id or "unknown")
+                processed_ids.add(agent_id)
 
         # 4. Add setting-only nodes (no snapshots, not in blueprint/sentinel)
         for setting_agent_id, setting in settings_map.items():

@@ -14,7 +14,7 @@ export function liveViewAgentsSwrKey(projectId: number) {
 }
 
 export function releaseGateAgentsSwrKey(projectId: number) {
-  return ["release-gate-agents", projectId] as const;
+  return liveViewAgentsSwrKey(projectId);
 }
 
 /** Stable signature for Live View `getAgents` payload (ids + deleted flag) to detect list changes without extra RG fetches on unchanged polls. */
@@ -31,13 +31,7 @@ export function liveViewAgentsPayloadSignature(data: unknown): string {
 }
 
 export function releaseGateAgentsPayloadSignature(data: unknown): string {
-  const items = Array.isArray((data as { items?: unknown })?.items)
-    ? (data as { items: { agent_id?: string }[] }).items
-    : [];
-  return items
-    .map(a => String(a.agent_id ?? ""))
-    .sort()
-    .join("|");
+  return liveViewAgentsPayloadSignature(data);
 }
 
 /** Revalidate both Live View and Release Gate agent-list SWR caches for a project. */

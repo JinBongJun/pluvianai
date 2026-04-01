@@ -13,7 +13,9 @@ from app.utils.secret_redaction import redact_secrets
 
 from app.core.diagnostics import calculate_diagnostic_scores
 from app.domain.live_view_release_gate import restore_agent_if_soft_deleted
+from app.core.usage_limits import check_snapshot_limit
 from app.services.live_eval_service import evaluate_one_snapshot_at_save, eval_config_version_hash
+from app.services.subscription_service import SubscriptionService
 from app.utils.tool_calls import extract_tool_calls_summary
 from app.utils.agent_signature import build_node_key
 
@@ -335,6 +337,23 @@ class SnapshotService:
         # Fallback: If Redis is not available, save directly to DB (synchronous)
         # This is less ideal but ensures data is not lost
         logger.warning("Redis not available, saving snapshot directly to DB (synchronous)")
+        project_owner_id: Optional[int] = None
+        if project_id:
+            try:
+                from app.models.project import Project
+
+                project = self.db.query(Project).filter(Project.id == project_id).first()
+                project_owner_id = project.owner_id if project else None
+            except Exception as e:
+                logger.warning(f"Failed to resolve project owner for snapshot usage: {str(e)}")
+        if project_owner_id is not None:
+            is_allowed, warning = check_snapshot_limit(self.db, project_owner_id)
+            if not is_allowed:
+                logger.warning(
+                    f"Snapshot creation blocked for project {project_id} (user {project_owner_id}): {warning}"
+                )
+                return None
+
         snapshot = Snapshot(
             trace_id=trace_id,
             project_id=project_id,
@@ -360,30 +379,21 @@ class SnapshotService:
         )
         saved_snapshot = self.snapshot_repo.save(snapshot)
         restore_agent_if_soft_deleted(self.db, project_id, saved_snapshot.agent_id)
-        
-        # Track snapshot usage for subscription limits (only in fallback mode)
-        if project_id:
+        if project_owner_id is not None:
             try:
-                from app.models.project import Project
-                from app.services.billing_service import BillingService
-                
-                project = self.db.query(Project).filter(Project.id == project_id).first()
-                if project:
-                    billing_service = BillingService(self.db)
-                    is_allowed, warning = billing_service.increment_usage(project.owner_id, "snapshots", 1)
-                    
-                    # Check if hard limit is enabled and limit exceeded
-                    if not is_allowed:
-                        logger.warning(
-                            f"Snapshot creation blocked for project {project_id} (user {project.owner_id}): {warning}"
-                        )
-                        # Don't save snapshot if hard limit is exceeded
-                        # Return None to indicate failure
-                        return None
-                    
-                    if warning:
-                        logger.info(f"Snapshot usage warning for project {project_id}: {warning}")
+                SubscriptionService(self.db).append_usage(
+                    user_id=project_owner_id,
+                    metric_type="snapshots",
+                    amount=1,
+                    project_id=project_id,
+                    source_type="snapshot",
+                    source_id=str(saved_snapshot.id),
+                    idempotency_key=f"snapshot:{saved_snapshot.id}",
+                    timestamp=getattr(saved_snapshot, "created_at", None),
+                    commit=False,
+                )
             except Exception as e:
                 logger.warning(f"Failed to track snapshot usage: {str(e)}")
+                raise
         
         return saved_snapshot

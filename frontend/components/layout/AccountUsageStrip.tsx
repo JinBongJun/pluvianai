@@ -8,7 +8,7 @@ import { computeAccountUsageMetrics, formatUsageLimit } from "@/lib/accountUsage
 import { useAccountUsage } from "@/hooks/useAccountUsage";
 
 /**
- * Next to Live View / Release Gate toggles: monthly snapshot and hosted replay usage (same source as Settings → Usage).
+ * Next to Live View / Release Gate toggles: account quota usage (same source as Settings → Usage).
  */
 export function AccountUsageStrip() {
   const pathname = usePathname();
@@ -45,7 +45,7 @@ export function AccountUsageStrip() {
     >
       {isLiveView && (
         <span className="font-mono normal-case tracking-normal text-slate-300">
-          Snapshots{" "}
+          Account snapshots{" "}
           <span className="text-slate-100">
             {metrics.snapshotsUsed}/{formatUsageLimit(metrics.snapshotsLimit)}
           </span>
@@ -61,7 +61,7 @@ export function AccountUsageStrip() {
       )}
       {isReleaseGate && (
         <span className="font-mono normal-case tracking-normal text-slate-300">
-          Hosted replays{" "}
+          Release Gate attempts{" "}
           <span className="text-slate-100">
             {metrics.replayUsed}/{formatUsageLimit(metrics.replayLimit)}
           </span>

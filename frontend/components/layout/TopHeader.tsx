@@ -19,12 +19,8 @@ import {
 } from "lucide-react";
 import FeedbackModal from "@/components/modals/FeedbackModal";
 import { motion, AnimatePresence } from "framer-motion";
-import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
-import { organizationsAPI } from "@/lib/api";
-import { orgKeys } from "@/lib/queryKeys";
 import { authAPI } from "@/lib/api/auth";
-import { useAuthSession } from "@/hooks/useAuthSession";
 import SwitcherDropdown from "@/components/ui/SwitcherDropdown";
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
 import { canManageOrganization } from "@/lib/organizationAccess";
@@ -55,31 +51,8 @@ const TopHeader: React.FC<TopHeaderProps> = ({
 
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const { isAuthenticated } = useAuthSession();
-  const shouldFetchOrganizations = !providedOrganizations;
-  const shouldFetchProjects = !providedProjects;
-
-  const { data: fetchedOrganizations } = useSWR(
-    isAuthenticated && shouldFetchOrganizations ? orgKeys.list() : null,
-    () => organizationsAPI.list({ includeStats: false }),
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 10_000,
-    }
-  );
-  const { data: projects } = useSWR(
-    isAuthenticated && currentOrgId && shouldFetchProjects
-      ? orgKeys.projects(currentOrgId as string, "")
-      : null,
-    ([, , id]) => organizationsAPI.listProjects(id as string, { includeStats: false }),
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 10_000,
-    }
-  );
-
-  const organizations = providedOrganizations ?? fetchedOrganizations;
-  const resolvedProjects = providedProjects ?? projects;
+  const organizations = providedOrganizations;
+  const resolvedProjects = providedProjects;
 
   const activeOrg = organizations?.find(o => String(o.id) === String(currentOrgId));
   const activeProject = resolvedProjects?.find(p => String(p.id) === String(currentProjectId));
@@ -105,6 +78,8 @@ const TopHeader: React.FC<TopHeaderProps> = ({
   // Derive context labels
   const isDocs = pathname?.includes("/docs");
   const isOrgsList = pathname === "/organizations";
+  const orgLabel = activeOrg?.name || (currentOrgId ? "Organization" : "Organizations");
+  const projectLabel = activeProject?.name || (currentProjectId ? "Project" : "Projects");
 
   return (
     <>
@@ -149,7 +124,7 @@ const TopHeader: React.FC<TopHeaderProps> = ({
               ) : (
                 <>
                   <SwitcherDropdown
-                    label={activeOrg?.name || "Loading Org..."}
+                    label={orgLabel}
                     items={orgSwitcherItems}
                     activeId={currentOrgId as string}
                     badge={activeOrg?.plan?.toUpperCase()}
@@ -164,7 +139,7 @@ const TopHeader: React.FC<TopHeaderProps> = ({
                     <>
                       <div className="w-[1.5px] h-6 bg-white/10 mx-2" />
                       <SwitcherDropdown
-                        label={activeProject?.name || "Loading Project..."}
+                        label={projectLabel}
                         items={projectSwitcherItems}
                         activeId={currentProjectId as string}
                         icon={LayoutGrid}
