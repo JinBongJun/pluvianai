@@ -43,7 +43,7 @@ export const ROLE_DESCRIPTIONS: Record<ProjectRole, string> = {
 export const SOURCE_LABELS: Record<AccessSource, string> = {
   owned: "Created by you",
   project_member: "Shared directly with you",
-  organization_member: "Visible through Team & Access",
+  organization_member: "Visible via organization",
 };
 
 export function getProjectRoleLabel(role?: string | null): string {
@@ -138,7 +138,7 @@ export function getProjectAccessErrorCopy(options: {
   if (accessSource === "organization_member" && project?.has_project_access === false) {
     return {
       title: "Project Access Required",
-      description: `This project appears in your organization because of Team & Access, but you have not been added to the project itself. Ask ${ownerName} or another project admin to grant project access before using ${featureLabel}.`,
+      description: `This project appears because you belong to the organization, but you have not been added to the project itself. Ask ${ownerName} or another project admin to grant project access before using ${featureLabel}.`,
     };
   }
 
@@ -147,14 +147,14 @@ export function getProjectAccessErrorCopy(options: {
       requiredRoles.length > 0 ? requiredRoles.map(getProjectRoleLabel).join(" or ") : "a higher role";
     return {
       title: `${featureLabel} Needs More Access`,
-      description: `Your current role is ${roleText}. ${featureLabel} requires ${requiredText}. Ask ${ownerName} or another project admin to update your role in Team & Access.`,
+      description: `Your current role is ${roleText}. ${featureLabel} requires ${requiredText}. Ask ${ownerName} or another project admin to update your project role.`,
     };
   }
 
   if (parsed.code === "PROJECT_ACCESS_DENIED" && accessSource === "organization_member") {
     return {
       title: "Project Access Required",
-      description: `This project is visible through Team & Access, but you do not currently have project-level access. Ask ${ownerName} or another project admin to add you before using ${featureLabel}.`,
+      description: `This project is visible through organization membership, but you do not currently have project-level access. Ask ${ownerName} or another project admin to add you before using ${featureLabel}.`,
     };
   }
 

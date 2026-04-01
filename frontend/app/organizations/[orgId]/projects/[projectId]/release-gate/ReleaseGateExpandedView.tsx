@@ -14,6 +14,7 @@ import { ReleaseGateExpandedMainTabs } from "./ReleaseGateExpandedMainTabs";
 import { ReleaseGateConfigPanel } from "./ReleaseGateConfigPanel";
 import { ReleaseGateSelectedAgentSurface } from "./ReleaseGateSelectedAgentSurface";
 import { useReleaseGateExpandedViewModel } from "./useReleaseGateExpandedViewModel";
+import { getReleaseGateMainViewState } from "./releaseGateMainViewState";
 import { ReleaseGateMap } from "@/components/release-gate/ReleaseGateMap";
 import { AttemptDetailOverlay } from "@/components/release-gate/AttemptDetailOverlay";
 import { ReleaseGateHistoryExplorer } from "@/components/release-gate/ReleaseGateHistoryExplorer";
@@ -32,6 +33,7 @@ export function ReleaseGateExpandedView() {
   }
 
   const m = useReleaseGateExpandedViewModel({ ctx, vctx, keysCtx });
+  const viewState = getReleaseGateMainViewState({ agentId: m.agentId, tab: m.tab });
 
   return (
     <div className="relative flex-1 min-h-0 flex flex-col">
@@ -47,14 +49,14 @@ export function ReleaseGateExpandedView() {
       </div>
       <div className="absolute inset-0 z-[9999] pointer-events-none overflow-y-auto">
         <ReleaseGateExpandedMainTabs tab={m.tab} setTab={m.setTab} />
-        {m.agentId && m.tab === "validate" ? (
+        {viewState.showSelectedAgentSurface ? (
           <ReleaseGateSelectedAgentSurface
             agentLabel={m.selectedAgent?.display_name || m.agentId}
             rgDetails={m.rgDetails}
           />
         ) : null}
 
-        {m.agentId && (
+        {viewState.hasSelectedAgent && (
           <ClientPortal>
             <ReleaseGateRunDataSidePanel
               leftPanelTitle={m.selectedAgent?.display_name || m.agentId}
@@ -158,7 +160,7 @@ export function ReleaseGateExpandedView() {
           onClose={() => m.setSettingsPanelOpen(false)}
         />
 
-        {m.tab === "history" && (
+        {viewState.showHistoryExplorer && (
           <ReleaseGateHistoryExplorer
             historyStatus={m.historyStatus}
             setHistoryStatus={m.setHistoryStatus}

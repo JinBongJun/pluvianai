@@ -68,7 +68,7 @@ def test_organization_members_list_add_remove_flow(client, db, test_user):
     assert members[0]["email"] == owner.email
 
 
-def test_organization_member_mutation_requires_owner_or_admin(client, db, test_user):
+def test_organization_member_listing_and_mutation_require_owner_or_admin(client, db, test_user):
     owner = test_user
     viewer = User(
         email="viewer@example.com",
@@ -103,7 +103,8 @@ def test_organization_member_mutation_requires_owner_or_admin(client, db, test_u
     _as_user(viewer)
 
     response = client.get(f"/api/v1/organizations/{org.id}/members")
-    assert response.status_code == 200
+    assert response.status_code == 403
+    assert "Current role: viewer" in response.text
 
     response = client.post(
         f"/api/v1/organizations/{org.id}/members",
@@ -195,6 +196,115 @@ def test_team_member_limit_error_has_normalized_details(client, db, test_user):
     assert nested_payload.get("limit") == 3
     assert nested_payload.get("remaining") == 0
     assert nested_payload.get("reset_at") is None
+
+
+def test_list_organizations_includes_membership_metadata(client, db, test_user):
+    owner = test_user
+    invited = User(
+        email="org-list-invited@example.com",
+        hashed_password=get_password_hash("password123"),
+        full_name="Org List Invited",
+        is_active=True,
+    )
+    db.add(invited)
+    db.commit()
+    db.refresh(invited)
+
+    owned_org = Organization(name="Owned Org", owner_id=owner.id, plan_type="free")
+    invited_org = Organization(name="Invited Org", owner_id=owner.id, plan_type="free")
+    db.add_all([owned_org, invited_org])
+    db.commit()
+    db.refresh(owned_org)
+    db.refresh(invited_org)
+
+    db.add_all(
+        [
+            OrganizationMember(organization_id=owned_org.id, user_id=owner.id, role="owner"),
+            OrganizationMember(organization_id=invited_org.id, user_id=owner.id, role="owner"),
+            OrganizationMember(organization_id=invited_org.id, user_id=invited.id, role="viewer"),
+        ]
+    )
+    db.commit()
+
+    _as_user(invited)
+    response = client.get("/api/v1/organizations?include_stats=false")
+    assert response.status_code == 200
+    items = response.json()
+    assert len(items) == 1
+    assert items[0]["name"] == "Invited Org"
+    assert items[0]["current_user_role"] == "viewer"
+    assert items[0]["membership_source"] == "invited"
+
+
+def test_org_viewer_cannot_create_project_in_shared_org(client, db, test_user):
+    owner = test_user
+    viewer = User(
+        email="org-viewer-project-create@example.com",
+        hashed_password=get_password_hash("password123"),
+        full_name="Org Viewer Create Project",
+        is_active=True,
+    )
+    db.add(viewer)
+    db.commit()
+    db.refresh(viewer)
+
+    org = Organization(name="Create Guard Org", owner_id=owner.id, plan_type="free")
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    db.add_all(
+        [
+            OrganizationMember(organization_id=org.id, user_id=owner.id, role="owner"),
+            OrganizationMember(organization_id=org.id, user_id=viewer.id, role="viewer"),
+        ]
+    )
+    db.commit()
+
+    _as_user(viewer)
+    response = client.post(
+        "/api/v1/projects",
+        json={
+            "name": "Viewer Should Not Create",
+            "description": "should fail",
+            "organization_id": org.id,
+        },
+    )
+    assert response.status_code == 403
+    assert "permission" in response.text.lower()
+
+
+def test_get_organization_includes_membership_metadata(client, db, test_user):
+    owner = test_user
+    invited = User(
+        email="org-detail-invited@example.com",
+        hashed_password=get_password_hash("password123"),
+        full_name="Org Detail Invited",
+        is_active=True,
+    )
+    db.add(invited)
+    db.commit()
+    db.refresh(invited)
+
+    org = Organization(name="Detail Visibility Org", owner_id=owner.id, plan_type="free")
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    db.add_all(
+        [
+            OrganizationMember(organization_id=org.id, user_id=owner.id, role="owner"),
+            OrganizationMember(organization_id=org.id, user_id=invited.id, role="member"),
+        ]
+    )
+    db.commit()
+
+    _as_user(invited)
+    response = client.get(f"/api/v1/organizations/{org.id}?include_stats=false")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["current_user_role"] == "member"
+    assert body["membership_source"] == "invited"
 
 
 def test_org_projects_list_exposes_access_context_for_org_only_visibility(client, db, test_user):

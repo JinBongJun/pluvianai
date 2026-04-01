@@ -12,6 +12,8 @@ export interface OrganizationSummary {
   cost7d?: number;
   alertsOpen?: number;
   driftDetected?: boolean;
+  currentUserRole?: "owner" | "admin" | "member" | "viewer" | null;
+  membershipSource?: "owned" | "invited" | null;
 }
 
 export interface OrganizationDetail extends OrganizationSummary {

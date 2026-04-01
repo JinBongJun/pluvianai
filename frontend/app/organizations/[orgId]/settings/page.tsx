@@ -35,6 +35,7 @@ import {
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { H1, Text } from "@/components/ui/Typography";
+import { canManageOrganization } from "@/lib/organizationAccess";
 
 export default function OrgSettingsPage() {
   const router = useRouter();
@@ -53,6 +54,11 @@ export default function OrgSettingsPage() {
     async () => {
       try {
         const data = await organizationsAPI.get(orgId, { includeStats: false });
+        if (!canManageOrganization(data.currentUserRole)) {
+          toast.showToast("Organization settings require owner or admin access.", "warning");
+          router.replace(`/organizations/${orgId}/projects`);
+          return null;
+        }
         setOrgName(data.name || "");
         return data;
       } catch (error: any) {
@@ -66,6 +72,10 @@ export default function OrgSettingsPage() {
       }
     }
   );
+
+  if (!org) {
+    return null;
+  }
 
   const handleSave = async () => {
     if (!orgName.trim()) {

@@ -1,13 +1,17 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import type { ResultCaseFilter } from "./releaseGateExpandedHelpers";
+import type { GateTab } from "./releaseGateExpandedHelpers";
 import type { ExpandedDetailAttemptView } from "./useReleaseGateExpandedHistoryOverlay";
+import { shouldResetReleaseGateMainTab } from "./releaseGateMainViewState";
 
 export type UseReleaseGateExpandedAgentResetParams = {
   agentId: string;
+  tab: GateTab;
+  setTab: (t: GateTab) => void;
   setDataPanelTab: (t: "logs" | "datasets") => void;
   setRightPanelTab: (t: "results" | "history") => void;
   setResultCaseFilter: (f: ResultCaseFilter) => void;
@@ -21,6 +25,8 @@ export type UseReleaseGateExpandedAgentResetParams = {
 
 export function useReleaseGateExpandedAgentReset({
   agentId,
+  tab,
+  setTab,
   setDataPanelTab,
   setRightPanelTab,
   setResultCaseFilter,
@@ -31,7 +37,13 @@ export function useReleaseGateExpandedAgentReset({
   setSelectedRunId,
   setRepeatDropdownOpen,
 }: UseReleaseGateExpandedAgentResetParams): void {
+  const previousAgentIdRef = useRef(agentId);
+
   useEffect(() => {
+    if (shouldResetReleaseGateMainTab(previousAgentIdRef.current, agentId) && tab !== "validate") {
+      setTab("validate");
+    }
+    previousAgentIdRef.current = agentId;
     setDataPanelTab("logs");
     setRightPanelTab("results");
     setResultCaseFilter("all");
@@ -47,10 +59,12 @@ export function useReleaseGateExpandedAgentReset({
     setDataPanelTab,
     setDetailAttemptView,
     setExpandedCaseIndex,
+    setTab,
     setRepeatDropdownOpen,
     setResultCaseFilter,
     setRightPanelTab,
     setSelectedRunId,
     setSettingsPanelOpen,
+    tab,
   ]);
 }

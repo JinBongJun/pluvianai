@@ -27,6 +27,7 @@ import { authAPI } from "@/lib/api/auth";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import SwitcherDropdown from "@/components/ui/SwitcherDropdown";
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
+import { canManageOrganization } from "@/lib/organizationAccess";
 
 interface TopHeaderProps {
   breadcrumb?: { label: string; href?: string }[];
@@ -82,6 +83,7 @@ const TopHeader: React.FC<TopHeaderProps> = ({
 
   const activeOrg = organizations?.find(o => String(o.id) === String(currentOrgId));
   const activeProject = resolvedProjects?.find(p => String(p.id) === String(currentProjectId));
+  const canCreateProjects = canManageOrganization(activeOrg?.currentUserRole);
 
   const orgSwitcherItems =
     organizations?.map(org => ({
@@ -92,11 +94,13 @@ const TopHeader: React.FC<TopHeaderProps> = ({
     })) || [];
 
   const projectSwitcherItems =
-    resolvedProjects?.map(p => ({
-      id: p.id,
-      name: p.name,
-      href: `/organizations/${currentOrgId}/projects/${p.id}`,
-    })) || [];
+    resolvedProjects
+      ?.filter(p => p.has_project_access !== false)
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        href: `/organizations/${currentOrgId}/projects/${p.id}`,
+      })) || [];
 
   // Derive context labels
   const isDocs = pathname?.includes("/docs");
@@ -170,11 +174,15 @@ const TopHeader: React.FC<TopHeaderProps> = ({
                             href: `/organizations/${currentOrgId}/projects`,
                             icon: LayoutGrid,
                           },
-                          {
-                            label: "New Project",
-                            href: `/organizations/${currentOrgId}/projects/new`,
-                            icon: Plus,
-                          },
+                          ...(canCreateProjects
+                            ? [
+                                {
+                                  label: "New Project",
+                                  href: `/organizations/${currentOrgId}/projects/new`,
+                                  icon: Plus,
+                                },
+                              ]
+                            : []),
                         ]}
                       />
                     </>

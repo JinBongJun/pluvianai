@@ -185,6 +185,8 @@ export const OrganizationSchema = z
     stats: z.any().optional(),
     projects_count: z.number().optional(),
     projects: z.number().optional(),
+    current_user_role: z.enum(["owner", "admin", "member", "viewer"]).nullable().optional(),
+    membership_source: z.enum(["owned", "invited"]).nullable().optional(),
   })
   .passthrough();
 

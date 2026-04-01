@@ -211,6 +211,8 @@ export function useReleaseGateExpandedViewModel({
 
   useReleaseGateExpandedAgentReset({
     agentId,
+    tab,
+    setTab,
     setDataPanelTab,
     setRightPanelTab,
     setResultCaseFilter: resultPanel.setResultCaseFilter,

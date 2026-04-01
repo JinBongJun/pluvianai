@@ -16,6 +16,7 @@ import { orgKeys } from "@/lib/queryKeys";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
 import { logger } from "@/lib/logger";
+import { canManageOrganization } from "@/lib/organizationAccess";
 
 interface Breadcrumb {
   label: string;
@@ -77,21 +78,25 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
       dedupingInterval: 10_000,
     }
   );
+  const activeOrg = organizations?.find(o => String(o.id) === String(resolvedOrgKey));
+  const canManageOrganizationNav = canManageOrganization(activeOrg?.currentUserRole);
 
-  const orgNavItems = [
-    {
-      label: "Organization Settings",
-      desc: "Org & model configuration",
-      href: `/organizations/${resolvedOrgId}/settings`,
-      icon: Settings,
-    },
-    {
-      label: "Team & Access",
-      desc: "Members & roles",
-      href: `/organizations/${resolvedOrgId}/team`,
-      icon: Users,
-    },
-  ];
+  const orgNavItems = canManageOrganizationNav
+    ? [
+        {
+          label: "Organization Settings",
+          desc: "Org & model configuration",
+          href: `/organizations/${resolvedOrgId}/settings`,
+          icon: Settings,
+        },
+        {
+          label: "Team & Access",
+          desc: "Members & roles",
+          href: `/organizations/${resolvedOrgId}/team`,
+          icon: Users,
+        },
+      ]
+    : [];
 
   const navItems = [
     {
