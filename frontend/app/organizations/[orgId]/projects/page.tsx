@@ -423,10 +423,10 @@ export default function OrgProjectsPage() {
                       router.push(`/organizations/${orgId}/projects/${p.id}`);
                     }
                   }}
-                  className="relative z-20 flex-1 p-4.5 flex items-center gap-3.5 cursor-pointer"
+                  className="relative z-20 flex-1 p-4 flex items-center gap-3.5 cursor-pointer"
                 >
                   <div className="h-10 w-10 rounded-full flex items-center justify-center bg-white/[0.05] border border-white/10 group-hover:scale-105 group-hover:border-emerald-500/30 transition-all duration-500 text-emerald-400 flex-shrink-0 shadow-inner">
-                    <Building2 className="w-4.5 h-4.5" />
+                    <Building2 className="w-4 h-4" />
                   </div>
 
                   <div className="min-w-0 flex-1">
