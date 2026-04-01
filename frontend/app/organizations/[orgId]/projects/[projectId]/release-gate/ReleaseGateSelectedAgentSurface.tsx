@@ -99,6 +99,21 @@ export function ReleaseGateSelectedAgentSurface({
     }
     return "";
   })();
+  const cancelDisabled = rgConfig.cancelRequested || rgConfig.cancelLocked;
+  const cancelLabel = rgConfig.cancelRequested
+    ? "Canceling…"
+    : rgConfig.cancelLocked
+      ? "Usage Counted"
+      : rgConfig.activeJobId
+        ? "Cancel"
+        : "Cancel (starting…)";
+  const cancelTitle = rgConfig.cancelLocked
+    ? "This run has already started and usage has been counted."
+    : undefined;
+  const startDisabled =
+    !rgConfig.canRunValidate ||
+    rgConfig.isValidating ||
+    (typeof rgConfig.selectedBaselineCount === "number" && rgConfig.selectedBaselineCount === 0);
   const promptPreview = String(resolvedDetails.prompt || "")
     .trim()
     .replace(/\s+/g, " ");
@@ -351,7 +366,7 @@ export function ReleaseGateSelectedAgentSurface({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-4 border-t border-white/[0.08] px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between gap-4 border-t border-white/[0.08] bg-black/20 px-6 py-5 shadow-[0_-14px_30px_rgba(0,0,0,0.18)] backdrop-blur-xl">
           <div className="flex min-w-0 flex-1 items-center gap-4">
             <span className="shrink-0 text-sm font-medium text-white/60">{baselineSummaryText}</span>
             {lastRunStatusLabel ? (
@@ -407,7 +422,7 @@ export function ReleaseGateSelectedAgentSurface({
                 disabled={rgConfig.isValidating}
                 data-testid="rg-repeat-trigger"
                 className={clsx(
-                  "inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-black uppercase transition",
+                  "inline-flex min-h-[52px] items-center gap-2 rounded-xl border px-4 py-3 text-sm font-black uppercase transition",
                   rgConfig.isHeavyRepeat
                     ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
                     : "border-white/10 bg-white/[0.02] text-white/90 hover:bg-white/[0.08]",
@@ -459,53 +474,50 @@ export function ReleaseGateSelectedAgentSurface({
               <button
                 type="button"
                 onClick={handleCancelClick}
-                disabled={rgConfig.cancelRequested}
+                disabled={cancelDisabled}
+                title={cancelTitle}
                 data-testid="rg-run-cancel-btn"
                 className={clsx(
-                  "inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-2.5 text-sm font-bold uppercase tracking-wider text-white transition hover:bg-white/20",
-                  rgConfig.cancelRequested && "cursor-not-allowed opacity-50"
+                  "inline-flex min-h-[52px] items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-bold uppercase tracking-wider text-white transition",
+                  cancelDisabled
+                    ? "cursor-not-allowed opacity-50"
+                    : "hover:bg-white/20"
                 )}
               >
                 <X className="h-4 w-4" />
-                {rgConfig.cancelRequested
-                  ? "Canceling…"
-                  : rgConfig.activeJobId
-                    ? "Cancel"
-                    : "Cancel (starting…)"}
+                {cancelLabel}
               </button>
             ) : null}
 
-            <button
-              type="button"
-              onClick={handleStartClick}
-              data-testid="rg-run-start-btn"
-              disabled={
-                !rgConfig.canRunValidate ||
-                rgConfig.isValidating ||
-                (typeof rgConfig.selectedBaselineCount === "number" &&
-                  rgConfig.selectedBaselineCount === 0)
-              }
-              className={clsx(
-                "inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-fuchsia-600 px-7 py-2.5 text-sm font-bold uppercase tracking-wider text-white transition-all hover:from-indigo-500 hover:to-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.3)] hover:shadow-[0_0_25px_rgba(217,70,239,0.5)]",
-                (!rgConfig.canRunValidate ||
-                  rgConfig.isValidating ||
-                  (typeof rgConfig.selectedBaselineCount === "number" &&
-                    rgConfig.selectedBaselineCount === 0)) &&
-                  "cursor-not-allowed opacity-50 shadow-none"
-              )}
-            >
-              {rgConfig.isValidating ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Validating
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4 fill-current" />
-                  Start
-                </>
-              )}
-            </button>
+            <div className="flex flex-col items-end gap-1.5">
+              <button
+                type="button"
+                onClick={handleStartClick}
+                data-testid="rg-run-start-btn"
+                disabled={startDisabled}
+                className={clsx(
+                  "inline-flex min-h-[56px] min-w-[152px] items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 px-8 py-3.5 text-base font-black uppercase tracking-[0.18em] text-white transition-all shadow-[0_0_24px_rgba(217,70,239,0.34)] hover:from-indigo-500 hover:via-violet-500 hover:to-fuchsia-500 hover:shadow-[0_0_30px_rgba(217,70,239,0.48)]",
+                  startDisabled && "cursor-not-allowed opacity-50 shadow-none"
+                )}
+              >
+                {rgConfig.isValidating ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Validating
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-5 w-5 fill-current" />
+                    Start
+                  </>
+                )}
+              </button>
+              {rgConfig.cancelLocked ? (
+                <span className="text-[11px] font-medium text-amber-200/85">
+                  Usage already counted for this run.
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>

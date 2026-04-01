@@ -128,6 +128,7 @@ export type BuildReleaseGateMapRgDetailsInput = {
   result: ReleaseGateResult | null;
   isValidating: boolean;
   cancelRequested: boolean;
+  cancelLocked: boolean;
   runError: string;
   configSourceLabel: string;
   selectedBaselineCount: number;
@@ -189,6 +190,7 @@ export type ReleaseGateMapRgDetails = {
     handleValidate: () => void;
     activeJobId: string | null;
     cancelRequested: boolean;
+    cancelLocked: boolean;
     handleCancel: (() => void) | undefined;
     handleRepeatSelect: (runs: number) => void;
     modelSource: "detected" | "hosted" | "custom";
@@ -272,6 +274,7 @@ export function buildReleaseGateMapRgDetails(
       handleValidate: p.handleValidate,
       activeJobId: p.activeJobId,
       cancelRequested: p.cancelRequested,
+      cancelLocked: p.cancelLocked,
       handleCancel: p.handleCancelActiveJob,
       handleRepeatSelect: p.handleRepeatSelect,
       modelSource: p.modelSource,
