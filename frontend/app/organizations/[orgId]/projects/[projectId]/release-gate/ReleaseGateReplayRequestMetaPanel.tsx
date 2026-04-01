@@ -67,7 +67,7 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
         Extra request fields
       </div>
       <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-        Compare the baseline snapshot's shared fields with the values replay used.
+        Compare the baseline snapshot&apos;s shared fields with the values replay used.
       </p>
 
       {rows.length > 0 ? (

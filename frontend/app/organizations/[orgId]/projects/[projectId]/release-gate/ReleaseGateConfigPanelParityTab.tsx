@@ -319,7 +319,7 @@ export function ReleaseGateConfigPanelParityTab({
                   Only add fields that are different for this log. Matching values are hidden so you
                   do not edit the same thing twice. Empty{" "}
                   <code className="text-slate-400">{"{}"}</code> means “use the shared fields only.”
-                  Replay still applies shared fields first, then this log's fields.
+                  Replay still applies shared fields first, then this log&apos;s fields.
                 </p>
               </div>
               <button
