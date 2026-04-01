@@ -727,6 +727,16 @@ export function SnapshotDetailModal({
                     {evalContextLabel}
                   </p>
                 )}
+                {displayEvalRows.length > 0 ? (
+                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70">
+                      {useOverride ? "Results from replay or override" : "Results from captured snapshot"}
+                    </span>
+                    <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-100/90">
+                      Thresholds from current saved settings
+                    </span>
+                  </div>
+                ) : null}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {effectiveEvalEnabled &&
                     displayEvalRows.map(row => {
@@ -769,28 +779,34 @@ export function SnapshotDetailModal({
                           <div className="flex-1" />
                           {(detail.actualStr !== "—" || detail.configStr !== "—") && (
                             <div className="flex flex-col items-center gap-1 text-xs font-mono mb-2">
-                              <span
-                                className={clsx(
-                                  row.status === "fail" && "font-bold",
-                                  row.status === "fail"
-                                    ? isSavedAppearance
-                                      ? "text-rose-300"
-                                      : "text-rose-400"
-                                    : isSavedAppearance
-                                      ? "text-slate-400"
-                                      : "text-slate-300"
-                                )}
-                              >
-                                {detail.actualStr}
-                              </span>
-                              <span
-                                className={clsx(
-                                  "text-[10px]",
-                                  isSavedAppearance ? "text-slate-500" : "text-slate-500"
-                                )}
-                              >
-                                ({detail.configStr})
-                              </span>
+                              {detail.actualStr !== "—" ? (
+                                <span
+                                  className={clsx(
+                                    row.status === "fail" && "font-bold",
+                                    row.status === "fail"
+                                      ? isSavedAppearance
+                                        ? "text-rose-300"
+                                        : "text-rose-400"
+                                      : isSavedAppearance
+                                        ? "text-slate-400"
+                                        : "text-slate-300"
+                                  )}
+                                >
+                                  {detail.actualStr}
+                                </span>
+                              ) : null}
+                              {detail.configStr !== "—" ? (
+                                <span
+                                  className={clsx(
+                                    "text-[10px]",
+                                    isSavedAppearance ? "text-slate-500" : "text-slate-500"
+                                  )}
+                                >
+                                  {detail.actualStr !== "—"
+                                    ? `Threshold: ${detail.configStr}`
+                                    : detail.configStr}
+                                </span>
+                              ) : null}
                             </div>
                           )}
                           <span

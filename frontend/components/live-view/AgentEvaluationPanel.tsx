@@ -624,7 +624,7 @@ export function AgentEvaluationPanel({
               <div>
                 <FieldLabel
                   label="Mode"
-                  help="if_json: only validate when output looks like JSON. always: always enforce JSON validity."
+                  help="Auto-detect JSON only checks outputs that look like JSON. Always validate JSON enforces JSON validity on every response."
                 />
                 <select
                   className={InputCls}
@@ -689,7 +689,7 @@ export function AgentEvaluationPanel({
                   More eval checks
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  Optional eval checks for stricter monitoring. Keep collapsed for simpler setup.
+                  Optional checks for stricter monitoring. Expand this only when you want tighter output guarantees.
                 </p>
               </div>
               <button
@@ -885,12 +885,12 @@ export function AgentEvaluationPanel({
                   <div className="flex items-center gap-2 mt-0.5">
                     <p className="text-[11px] text-slate-500 font-mono">
                       {safeDraft.tool_use_policy?.enabled !== false
-                        ? `Project: ${projectRules.length} · Agent: ${agentRules.length}`
+                        ? `Project rules ${projectRules.length} · Agent overrides ${agentRules.length}`
                         : "Disabled"}
                     </p>
                     {safeDraft.tool_use_policy?.enabled !== false && (
                       <span className="text-[10px] text-slate-500 font-medium px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors">
-                        {showToolPolicyDetails ? "Hide details" : "Show details"}
+                        {showToolPolicyDetails ? "Hide rules" : "Show rules"}
                       </span>
                     )}
                   </div>

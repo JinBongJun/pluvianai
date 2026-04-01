@@ -137,6 +137,10 @@ function formatMsThreshold(value: number): string {
   return value >= 1000 ? `${(value / 1000).toFixed(1)}s` : `${value}ms`;
 }
 
+function formatCountLabel(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 function getResponseLength(input: EvalDetailSnapshotInput): number {
   return String((input.response_text ?? input.response ?? "") || "").trim().length;
 }
@@ -233,9 +237,9 @@ export function formatEvalRuleSummary(checkId: string, config: Record<string, un
     }
     case "json":
       return config.mode === "always"
-        ? "always enforce"
+        ? "always validate JSON"
         : config.mode === "if_json"
-          ? "auto-detect"
+          ? "auto-detect JSON"
           : "";
     case "refusal":
       return "On";
@@ -252,10 +256,10 @@ export function formatEvalRuleSummary(checkId: string, config: Record<string, un
     }
     case "required":
       return String(config.keywords_csv || "").trim() || String(config.json_fields_csv || "").trim()
-        ? "keywords/fields set"
+        ? "required content set"
         : "On";
     case "format":
-      return String(config.sections_csv || "").trim() ? "sections set" : "On";
+      return String(config.sections_csv || "").trim() ? "required sections set" : "On";
     case "leakage":
       return "On";
     case "tool":
@@ -272,17 +276,34 @@ export function getEvalCheckParams(
   if (!config || typeof config !== "object") return "";
   switch (normalizeEvalDisplayId(checkId)) {
     case "json":
-      return typeof config.mode === "string" ? `mode: ${config.mode}` : "";
+      return typeof config.mode === "string"
+        ? config.mode === "always"
+          ? "always validate JSON"
+          : config.mode === "if_json"
+            ? "auto-detect JSON"
+            : ""
+        : "";
     case "required": {
-      const keywords = String(config.keywords_csv || "").trim();
-      const fields = String(config.json_fields_csv || "").trim();
-      if (keywords && fields) return "keywords + json fields";
-      if (keywords) return "keywords set";
-      if (fields) return "json fields set";
-      return "";
+      const keywordCount = String(config.keywords_csv || "")
+        .split(",")
+        .filter(part => part.trim().length > 0).length;
+      const fieldCount = String(config.json_fields_csv || "")
+        .split(",")
+        .filter(part => part.trim().length > 0).length;
+      const parts = [];
+      if (keywordCount > 0) parts.push(formatCountLabel(keywordCount, "keyword"));
+      if (fieldCount > 0) parts.push(formatCountLabel(fieldCount, "JSON field"));
+      return parts.join(" + ");
     }
     case "format":
-      return String(config.sections_csv || "").trim() ? "sections set" : "";
+      return String(config.sections_csv || "").trim()
+        ? formatCountLabel(
+            String(config.sections_csv || "")
+              .split(",")
+              .filter(part => part.trim().length > 0).length,
+            "required section"
+          )
+        : "";
     default:
       return formatEvalRuleSummary(checkId, config);
   }
@@ -342,10 +363,13 @@ export function getEvalDetail(
     }
     case "json": {
       const mode = String(cfg.mode || "if_json");
-      return { actualStr: "—", configStr: mode === "if_json" ? "if_json" : "always" };
+      return {
+        actualStr: "—",
+        configStr: mode === "if_json" ? "auto-detect JSON" : "always validate JSON",
+      };
     }
     case "refusal":
-      return { actualStr: "—", configStr: "auto-detect refusal / non-answer patterns" };
+      return { actualStr: "—", configStr: "built-in refusal and non-answer detection" };
     case "required": {
       const keywordCount = String(cfg.keywords_csv || "")
         .split(",")
@@ -353,20 +377,23 @@ export function getEvalDetail(
       const fieldCount = String(cfg.json_fields_csv || "")
         .split(",")
         .filter(part => part.trim().length > 0).length;
-      return { actualStr: "—", configStr: `keywords: ${keywordCount}, json fields: ${fieldCount}` };
+      return {
+        actualStr: "—",
+        configStr: `${formatCountLabel(keywordCount, "keyword")} · ${formatCountLabel(fieldCount, "JSON field")}`,
+      };
     }
     case "format": {
       const sectionCount = String(cfg.sections_csv || "")
         .split(",")
         .filter(part => part.trim().length > 0).length;
-      return { actualStr: "—", configStr: `required sections: ${sectionCount}` };
+      return { actualStr: "—", configStr: formatCountLabel(sectionCount, "required section") };
     }
     case "leakage":
-      return { actualStr: "—", configStr: "scan for PII (email, phone) & API keys" };
+      return { actualStr: "—", configStr: "scan for emails, phone numbers, and API keys" };
     case "tool":
       return {
         actualStr: "—",
-        configStr: "Tool Use Policy validates policy only; it is not a substitute for a captured tool trace.",
+        configStr: "policy-only check; use the tool trace for execution details",
       };
     default:
       return { actualStr: "—", configStr: "—" };
