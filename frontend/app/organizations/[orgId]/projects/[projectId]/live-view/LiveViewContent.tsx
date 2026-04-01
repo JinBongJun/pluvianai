@@ -411,7 +411,7 @@ export function LiveViewContent() {
       }
       rightPanel={
         <RailwaySidePanel
-          title={selectedAgentId || "Agent Diagnostics"}
+          title=""
           headerActions={selectedAgentId ? <LiveViewPanelSnapshotUsage /> : undefined}
           isOpen={!!selectedAgentId}
           width={760}
