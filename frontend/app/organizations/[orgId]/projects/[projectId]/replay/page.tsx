@@ -18,6 +18,7 @@ import useSWR from "swr";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { PlanLimitBanner } from "@/components/PlanLimitBanner";
 import { logger } from "@/lib/logger";
+import { getProjectPermissionToast } from "@/lib/projectAccess";
 import type { ReplayProvider } from "../release-gate/releaseGatePageContent.lib";
 import {
   DEFAULT_REPLAY_PROVIDER_MODEL_LIBRARY,
@@ -180,7 +181,14 @@ export default function ReplayPage() {
           "warning"
         );
       } else {
-        toast.showToast(detail || "Replay failed", "error");
+        const permissionToast = getProjectPermissionToast({
+          featureLabel: "Running replay",
+          error: err,
+        });
+        toast.showToast(
+          permissionToast?.message ?? detail ?? "Replay failed",
+          permissionToast?.tone ?? "error"
+        );
       }
     } finally {
       setReplaying(false);
@@ -203,7 +211,14 @@ export default function ReplayPage() {
       setNewRubricPrompt("");
       loadRubrics();
     } catch (err) {
-      toast.showToast("Failed to create rubric", "error");
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Creating replay rubrics",
+        error: err,
+      });
+      toast.showToast(
+        permissionToast?.message ?? "Failed to create rubric",
+        permissionToast?.tone ?? "error"
+      );
     }
   };
 

@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.permissions import check_project_access
+from app.core.permissions import check_project_access, check_project_write_access
 from app.core.security import get_current_user
 from app.schemas.test_run import TestRunCreate, TestRunResponse
 from app.models.user import User
@@ -22,7 +22,7 @@ async def create_test_run(
     Execute a Test Lab graph.
     Recieves nodes and edges, topologically sorts them, and executes the chain.
     """
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Running Test Lab")
     print(f"Received Test Run for Project {project_id}")
     print(f"Nodes: {len(run_data.get('nodes', []))}, Edges: {len(run_data.get('edges', []))}")
     

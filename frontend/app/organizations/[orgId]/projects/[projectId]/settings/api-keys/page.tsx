@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Plus, Trash2 } from "lucide-react";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { logger } from "@/lib/logger";
+import { getProjectPermissionToast } from "@/lib/projectAccess";
 
 interface UserApiKeyItem {
   id: number;
@@ -77,8 +78,15 @@ export default function ProjectApiKeysPage() {
       setFormName("");
       loadKeys();
     } catch (err: any) {
-      const msg = err?.response?.data?.detail ?? "Failed to add API key";
-      toast.showToast(typeof msg === "string" ? msg : JSON.stringify(msg), "error");
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Adding project API keys",
+        error: err,
+      });
+      const msg = permissionToast?.message ?? err?.response?.data?.detail ?? "Failed to add API key";
+      toast.showToast(
+        typeof msg === "string" ? msg : JSON.stringify(msg),
+        permissionToast?.tone ?? "error"
+      );
     } finally {
       setAdding(false);
     }
@@ -97,8 +105,15 @@ export default function ProjectApiKeysPage() {
       setConfirmDeleteKeyId(null);
       loadKeys();
     } catch (err: unknown) {
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Removing project API keys",
+        error: err,
+      });
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.showToast(typeof msg === "string" ? msg : "Failed to remove key", "error");
+      toast.showToast(
+        permissionToast?.message ?? (typeof msg === "string" ? msg : "Failed to remove key"),
+        permissionToast?.tone ?? "error"
+      );
     } finally {
       setRemovingKeyId(null);
     }

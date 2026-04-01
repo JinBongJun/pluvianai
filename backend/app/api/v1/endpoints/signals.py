@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.core.permissions import check_project_access, ProjectRole
+from app.core.permissions import check_project_access, check_project_write_access, ProjectRole
 from app.models.user import User
 from app.models.project import Project
 from app.services.signal_detection_service import SignalDetectionService
@@ -258,7 +258,7 @@ async def detect_signals(
     Run all enabled signal detectors on the given response text.
     Returns detected signals and overall status (safe/regressed/critical).
     """
-    project = check_project_access(project_id, current_user, db)
+    project = check_project_write_access(project_id, current_user, db, action_label="Detecting signals")
     
     service = SignalDetectionService(db)
     result = service.detect_all_signals(

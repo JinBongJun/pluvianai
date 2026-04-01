@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/Label";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { orgKeys } from "@/lib/queryKeys";
 import { deleteProject, revalidateOrganizationProjectLists } from "@/lib/orgProjectMutations";
+import { getProjectPermissionToast } from "@/lib/projectAccess";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export default function ProjectGeneralSettingsPage() {
@@ -99,7 +100,14 @@ export default function ProjectGeneralSettingsPage() {
       if (orgId) await revalidateOrganizationProjectLists(mutate, orgId);
       showToast("Project updated", "success");
     } catch (err: any) {
-      showToast(err?.response?.data?.detail ?? "Failed to update project", "error");
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Updating project settings",
+        error: err,
+      });
+      showToast(
+        permissionToast?.message ?? err?.response?.data?.detail ?? "Failed to update project",
+        permissionToast?.tone ?? "error"
+      );
     } finally {
       setSaving(false);
     }
@@ -121,7 +129,14 @@ export default function ProjectGeneralSettingsPage() {
       });
       setDeleted(true);
     } catch (err: any) {
-      showToast(err?.response?.data?.detail ?? "Failed to delete project", "error");
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Deleting this project",
+        error: err,
+      });
+      showToast(
+        permissionToast?.message ?? err?.response?.data?.detail ?? "Failed to delete project",
+        permissionToast?.tone ?? "error"
+      );
     } finally {
       setDeleting(false);
     }
@@ -150,11 +165,16 @@ export default function ProjectGeneralSettingsPage() {
       setSelectedDeletedIds(new Set());
       await mutateDeletedSnapshots();
     } catch (error: any) {
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Restoring deleted logs",
+        error,
+      });
       const message =
+        permissionToast?.message ||
         error?.response?.data?.detail?.message ||
         error?.response?.data?.detail ||
         "Failed to restore deleted logs.";
-      showToast(message, "error");
+      showToast(message, permissionToast?.tone ?? "error");
     } finally {
       setIsRestoringDeleted(false);
     }
@@ -180,11 +200,16 @@ export default function ProjectGeneralSettingsPage() {
       setSelectedDeletedIds(new Set());
       await mutateDeletedSnapshots();
     } catch (error: any) {
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Permanently deleting logs",
+        error,
+      });
       const message =
+        permissionToast?.message ||
         error?.response?.data?.detail?.message ||
         error?.response?.data?.detail ||
         "Failed to permanently delete logs.";
-      showToast(message, "error");
+      showToast(message, permissionToast?.tone ?? "error");
     } finally {
       setIsPermanentlyDeleting(false);
     }

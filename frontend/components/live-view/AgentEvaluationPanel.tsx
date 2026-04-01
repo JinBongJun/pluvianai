@@ -16,6 +16,7 @@ import {
 import { liveViewAPI, behaviorAPI, type BehaviorRule } from "@/lib/api";
 import { PolicyRuleModal } from "@/components/live-view/PolicyRuleModal";
 import { motion, AnimatePresence } from "framer-motion";
+import { getProjectPermissionToast } from "@/lib/projectAccess";
 import {
   EVAL_CHECK_ICONS,
   EVAL_CHECK_LABELS,
@@ -335,8 +336,12 @@ export function AgentEvaluationPanel({
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2000);
     } catch (e) {
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Saving evaluation settings",
+        error: e,
+      });
       setSaveStatus("error");
-      setSaveError("Save failed. Try again.");
+      setSaveError(permissionToast?.message ?? "Save failed. Try again.");
     } finally {
       onSaveEnd?.();
     }

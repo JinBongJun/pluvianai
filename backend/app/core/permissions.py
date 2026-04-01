@@ -114,7 +114,11 @@ def get_user_project_role(project_id: int, user_id: int, db: Session) -> Optiona
 
 
 def check_project_access(
-    project_id: int, user: User, db: Session, required_roles: Optional[List[str]] = None
+    project_id: int,
+    user: User,
+    db: Session,
+    required_roles: Optional[List[str]] = None,
+    action_label: Optional[str] = None,
 ) -> Project:
     """
     Check if user has access to project
@@ -167,26 +171,62 @@ def check_project_access(
     if required_roles:
         if current_role not in required_roles:
             required_roles_text = ", ".join(sorted(set(required_roles)))
+            if (
+                current_role == ProjectRole.VIEWER.value
+                and ProjectRole.VIEWER.value not in required_roles
+            ):
+                message = (
+                    f"{action_label or 'This action'} is outside your project permissions. "
+                    "Your current role is 'viewer', which is read-only. "
+                    "Ask a project owner or admin if you need edit access."
+                )
+                code = "PROJECT_ROLE_READ_ONLY"
+                reason = "read_only_role"
+            else:
+                message = (
+                    f"This action requires one of: {required_roles_text}. "
+                    f"Your role is '{current_role}'. "
+                    "Ask a project owner or admin to update your role if needed."
+                )
+                code = "PROJECT_ROLE_INSUFFICIENT"
+                reason = "insufficient_role"
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
-                    "code": "PROJECT_ROLE_INSUFFICIENT",
-                    "message": (
-                        f"This action requires one of: {required_roles_text}. "
-                        f"Your role is '{current_role}'. "
-                        "Ask a project owner or admin to update your role if needed."
-                    ),
+                    "code": code,
+                    "message": message,
                     "details": {
-                        "reason": "insufficient_role",
+                        "reason": reason,
                         "project_id": project_id,
                         "current_role": str(current_role),
                         "required_roles": sorted(set(required_roles)),
+                        "action_label": action_label,
                         **access_context,
                     },
                 },
             )
 
     return project
+
+
+def check_project_write_access(
+    project_id: int,
+    user: User,
+    db: Session,
+    action_label: Optional[str] = None,
+) -> Project:
+    """Require a non-viewer project role for write or run actions."""
+    return check_project_access(
+        project_id,
+        user,
+        db,
+        required_roles=[
+            ProjectRole.OWNER.value,
+            ProjectRole.ADMIN.value,
+            ProjectRole.MEMBER.value,
+        ],
+        action_label=action_label,
+    )
 
 
 def get_project_with_access(project_id: int, required_roles: Optional[List[str]] = None):

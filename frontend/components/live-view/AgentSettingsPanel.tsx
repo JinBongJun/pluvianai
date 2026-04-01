@@ -7,6 +7,7 @@ import { AlertCircle, KeyRound, Save, Trash2 } from "lucide-react";
 
 import { liveViewAPI, projectUserApiKeysAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
+import { getProjectPermissionToast } from "@/lib/projectAccess";
 
 type ReplayProvider = "openai" | "anthropic" | "google";
 
@@ -173,8 +174,15 @@ export function AgentSettingsPanel({
       onAgentUpdated?.();
       toast.showToast("Node name updated.", "success");
     } catch (err: unknown) {
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Renaming nodes",
+        error: err,
+      });
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.showToast(typeof msg === "string" ? msg : "Failed to update node name.", "error");
+      toast.showToast(
+        permissionToast?.message ?? (typeof msg === "string" ? msg : "Failed to update node name."),
+        permissionToast?.tone ?? "error"
+      );
     } finally {
       setIsSavingName(false);
     }
@@ -189,8 +197,15 @@ export function AgentSettingsPanel({
       onAgentDeleted?.();
       toast.showToast("Node removed from Live View.", "success");
     } catch (err: unknown) {
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Removing nodes from Live View",
+        error: err,
+      });
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.showToast(typeof msg === "string" ? msg : "Failed to remove node.", "error");
+      toast.showToast(
+        permissionToast?.message ?? (typeof msg === "string" ? msg : "Failed to remove node."),
+        permissionToast?.tone ?? "error"
+      );
     } finally {
       setIsDeletingNode(false);
       setConfirmDeleteNode(false);
@@ -211,8 +226,15 @@ export function AgentSettingsPanel({
       toast.showToast(`${PROVIDER_LABEL[targetProvider]} key saved. Check the identifier below.`, "success");
       onAgentUpdated?.();
     } catch (err: unknown) {
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Saving project API keys",
+        error: err,
+      });
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.showToast(typeof msg === "string" ? msg : "Failed to save API key.", "error");
+      toast.showToast(
+        permissionToast?.message ?? (typeof msg === "string" ? msg : "Failed to save API key."),
+        permissionToast?.tone ?? "error"
+      );
     } finally {
       setIsSavingKey(false);
     }
@@ -229,8 +251,15 @@ export function AgentSettingsPanel({
       toast.showToast(`${PROVIDER_LABEL[provider]} key removed.`, "success");
       onAgentUpdated?.();
     } catch (err: unknown) {
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Removing project API keys",
+        error: err,
+      });
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.showToast(typeof msg === "string" ? msg : "Failed to remove API key.", "error");
+      toast.showToast(
+        permissionToast?.message ?? (typeof msg === "string" ? msg : "Failed to remove API key."),
+        permissionToast?.tone ?? "error"
+      );
     } finally {
       setDeletingKeyProvider(null);
     }

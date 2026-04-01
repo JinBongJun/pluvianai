@@ -6,7 +6,7 @@ from datetime import datetime
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.core.permissions import check_project_access
+from app.core.permissions import check_project_access, check_project_write_access
 from app.models.user import User
 from app.core.dependencies import get_alert_service
 from app.models.alert import Alert
@@ -102,5 +102,5 @@ def resolve_alert(
     alert = alert_service.get_alert_by_id(alert_id)
     if not alert or alert.project_id != project_id:
         raise HTTPException(status_code=404, detail="Alert not found")
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Resolving alerts")
     return alert_service.resolve_alert(alert_id, current_user.id)

@@ -185,6 +185,48 @@ class TestProjectsAPI:
         assert match["org_role"] == "member"
         assert match["access_source"] == "organization_member"
         assert match["has_project_access"] is True
+
+    async def test_org_viewer_inherits_read_only_project_restrictions(
+        self, async_client, auth_headers, db, test_project, test_user
+    ):
+        org = Organization(name="Org Viewer Read Only", owner_id=test_user.id, plan_type="free")
+        db.add(org)
+        db.commit()
+        db.refresh(org)
+
+        test_project.organization_id = org.id
+        db.add(OrganizationMember(organization_id=org.id, user_id=test_user.id, role="owner"))
+
+        org_viewer = User(
+            email="org-viewer-readonly@example.com",
+            hashed_password=get_password_hash("password123"),
+            full_name="Org Viewer Read Only",
+            is_active=True,
+        )
+        db.add(org_viewer)
+        db.commit()
+        db.refresh(org_viewer)
+
+        db.add(OrganizationMember(organization_id=org.id, user_id=org_viewer.id, role="viewer"))
+        db.commit()
+
+        app.dependency_overrides[get_current_user] = lambda: org_viewer
+        try:
+            response = await async_client.post(
+                f"/api/v1/test-runs/runs?project_id={test_project.id}",
+                json={"nodes": [{"id": "node-1"}], "edges": []},
+                headers=auth_headers,
+            )
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        payload = response.json()["error"]
+        assert payload["code"] == "PROJECT_ROLE_READ_ONLY"
+        assert payload["details"]["details"]["current_role"] == "viewer"
+        assert payload["details"]["details"]["access_source"] == "organization_member"
+        assert payload["details"]["details"]["org_role"] == "viewer"
+        assert "read-only" in payload["message"].lower()
     
     async def test_get_nonexistent_project(self, async_client, auth_headers):
         """Test getting a project that doesn't exist"""

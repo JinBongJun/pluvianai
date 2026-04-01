@@ -29,6 +29,7 @@ import { useToast } from "@/components/ToastContainer";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { logger } from "@/lib/logger";
 import { getEnabledCheckIdsFromConfig, getEvalDetail } from "@/lib/evalPresentation";
+import { getProjectPermissionToast } from "@/lib/projectAccess";
 
 interface EvaluationMetric {
   score: number;
@@ -441,6 +442,15 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
         },
       });
       await mutateSettings();
+    } catch (error) {
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Updating Live View log settings",
+        error,
+      });
+      toast.showToast(
+        permissionToast?.message ?? "Failed to update Live View log settings.",
+        permissionToast?.tone ?? "error"
+      );
     } finally {
       // Keep UI responsive; no extra local draft state to reset.
     }
@@ -692,7 +702,14 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
       await Promise.resolve(onLogsMutated?.()).catch(() => undefined);
     } catch (error) {
       logger.error("Failed to delete snapshots", error);
-      toast.showToast("Failed to delete selected logs. Please try again.", "error");
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Deleting logs",
+        error,
+      });
+      toast.showToast(
+        permissionToast?.message ?? "Failed to delete selected logs. Please try again.",
+        permissionToast?.tone ?? "error"
+      );
     } finally {
       setIsDeletingSnapshots(false);
     }
@@ -824,10 +841,18 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
       setIsSelectMode(false);
       setIsSaveModalOpen(false);
     } catch (e: unknown) {
+      const permissionToast = getProjectPermissionToast({
+        featureLabel: "Saving logs to datasets",
+        error: e,
+      });
       const msg =
+        permissionToast?.message ??
         (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
         "Failed to save logs to datasets";
-      toast.showToast(typeof msg === "string" ? msg : "Failed to save logs to datasets", "error");
+      toast.showToast(
+        typeof msg === "string" ? msg : "Failed to save logs to datasets",
+        permissionToast?.tone ?? "error"
+      );
     } finally {
       setIsSavingToDatasets(false);
     }

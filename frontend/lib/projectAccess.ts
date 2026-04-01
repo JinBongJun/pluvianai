@@ -114,6 +114,15 @@ function parsePermissionError(error: unknown): PermissionErrorDetails {
   return { code, message, currentRole, requiredRoles, accessSource, orgRole };
 }
 
+export function isProjectPermissionError(error: unknown): boolean {
+  const parsed = parsePermissionError(error);
+  return (
+    parsed.code === "PROJECT_ACCESS_DENIED" ||
+    parsed.code === "PROJECT_ROLE_INSUFFICIENT" ||
+    parsed.code === "PROJECT_ROLE_READ_ONLY"
+  );
+}
+
 export function getProjectAccessErrorCopy(options: {
   featureLabel: string;
   project?: AccessAwareProject | null;
@@ -126,6 +135,16 @@ export function getProjectAccessErrorCopy(options: {
   const requiredRoles = parsed.requiredRoles;
   const roleText = currentRole ? getProjectRoleLabel(currentRole) : null;
   const ownerName = project?.owner_name?.trim() || "a project owner";
+
+  if (
+    parsed.code === "PROJECT_ROLE_READ_ONLY" ||
+    (currentRole === "viewer" && requiredRoles.length > 0 && !requiredRoles.includes("viewer"))
+  ) {
+    return {
+      title: `${featureLabel} Is Outside Your Role`,
+      description: `Your current role is Viewer. ${featureLabel} is read-only for your role, so you can review project data but cannot change or run this action. Ask ${ownerName} or another project admin if you need edit access.`,
+    };
+  }
 
   if (parsed.code === "PROJECT_ROLE_INSUFFICIENT" && currentRole) {
     const requiredText =
@@ -147,4 +166,14 @@ export function getProjectAccessErrorCopy(options: {
     title: "Access Denied",
     description: `You do not have access to ${featureLabel}. Ask ${ownerName} or another project admin to review your role.`,
   };
+}
+
+export function getProjectPermissionToast(options: {
+  featureLabel: string;
+  project?: AccessAwareProject | null;
+  error?: unknown;
+}): { message: string; tone: "warning" } | null {
+  if (!isProjectPermissionError(options.error)) return null;
+  const copy = getProjectAccessErrorCopy(options);
+  return { message: copy.description, tone: "warning" };
 }

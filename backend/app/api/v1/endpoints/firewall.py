@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.core.permissions import check_project_access
+from app.core.permissions import check_project_access, check_project_write_access
 from app.models.user import User
 from app.models.firewall_rule import FirewallRule, FirewallRuleType, FirewallAction, FirewallSeverity
 from app.services.firewall_service import firewall_service
@@ -65,7 +65,7 @@ def create_rule(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new firewall rule."""
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Creating firewall rules")
     rule = FirewallRule(
         project_id=project_id,
         name=payload.name,
@@ -90,7 +90,7 @@ def update_rule(
     current_user: User = Depends(get_current_user),
 ):
     """Update an existing firewall rule; rule must belong to the given project."""
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Updating firewall rules")
     rule = (
         db.query(FirewallRule)
         .filter(FirewallRule.project_id == project_id, FirewallRule.id == rule_id)
@@ -113,7 +113,7 @@ def delete_rule(
     current_user: User = Depends(get_current_user),
 ):
     """Delete a firewall rule; rule must belong to the given project."""
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Deleting firewall rules")
     rule = (
         db.query(FirewallRule)
         .filter(FirewallRule.project_id == project_id, FirewallRule.id == rule_id)
@@ -134,7 +134,7 @@ def toggle_rule(
     current_user: User = Depends(get_current_user),
 ):
     """Toggle a firewall rule enabled/disabled status; rule must belong to the given project."""
-    check_project_access(project_id, current_user, db)
+    check_project_write_access(project_id, current_user, db, action_label="Updating firewall rules")
     rule = (
         db.query(FirewallRule)
         .filter(FirewallRule.project_id == project_id, FirewallRule.id == rule_id)
