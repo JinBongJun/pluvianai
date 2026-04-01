@@ -27,13 +27,12 @@ export default function OrganizationsPage() {
   const debouncedQuery = useDebouncedValue(query, 300);
   const isAuthenticated = useRequireAuth();
   const { data: currentUser, isLoading: currentUserLoading } = useCurrentUser(isAuthenticated);
-  const authReady = isAuthenticated && !currentUserLoading;
 
   // Same SWR key as TopHeader so one request only (no duplicate 401)
-  const { data: orgs, mutate } = useSWR(authReady ? orgKeys.list() : null, () =>
+  const { data: orgs, mutate } = useSWR(isAuthenticated ? orgKeys.list() : null, () =>
     organizationsAPI.list({ includeStats: false })
   );
-  const { data: myUsage } = useAccountUsage(authReady);
+  const { data: myUsage } = useAccountUsage(isAuthenticated);
 
   const filtered = useMemo(() => {
     if (!orgs) return [];

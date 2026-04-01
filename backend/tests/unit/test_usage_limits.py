@@ -6,6 +6,7 @@ from app.core.usage_limits import (
     check_release_gate_attempts_limit,
     check_snapshot_limit,
     check_platform_replay_credits_limit,
+    get_snapshots_count_this_month,
     get_release_gate_attempts_this_month,
     get_platform_replay_credits_this_month,
     get_usage_period_bounds_utc,
@@ -81,6 +82,49 @@ class TestUsageLimits:
         assert message is not None
         assert "replay attempt" in message.lower()
         assert "release gate" in message.lower()
+
+    def test_get_snapshots_count_this_month_sums_usage_rows(self, db, test_user, test_project):
+        db.add(Subscription(user_id=test_user.id, plan_type="starter", status="active"))
+        db.add(
+            Usage(
+                user_id=test_user.id,
+                project_id=test_project.id,
+                metric_name="snapshots",
+                quantity=12,
+                unit="count",
+            )
+        )
+        db.add(
+            Usage(
+                user_id=test_user.id,
+                project_id=test_project.id,
+                metric_name="snapshots",
+                quantity=8,
+                unit="count",
+            )
+        )
+        db.commit()
+
+        assert get_snapshots_count_this_month(db, test_user.id) == 20
+
+    def test_check_snapshot_limit_uses_amount_for_batch_precheck(self, db, test_user, test_project):
+        db.add(Subscription(user_id=test_user.id, plan_type="free", status="active"))
+        db.add(
+            Usage(
+                user_id=test_user.id,
+                project_id=test_project.id,
+                metric_name="snapshots",
+                quantity=9_999,
+                unit="count",
+            )
+        )
+        db.commit()
+
+        allowed, message = check_snapshot_limit(db, test_user.id, amount=2)
+
+        assert allowed is False
+        assert message is not None
+        assert "snapshot limit reached" in message.lower()
 
     def test_superuser_skips_release_gate_attempt_limit(self, db, test_user, test_project):
         db.add(Subscription(user_id=test_user.id, plan_type="free", status="active"))

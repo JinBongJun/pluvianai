@@ -14,6 +14,7 @@ from app.models.billing_event import BillingEvent
 from app.models.entitlement_snapshot import EntitlementSnapshot
 from app.models.user import User
 from app.models.subscription import Subscription
+from app.models.usage import Usage
 from app.services.cache_service import cache_service
 
 
@@ -46,11 +47,19 @@ class TestBillingService:
             status="active"
         )
         db.add(subscription)
+        db.add(
+            Usage(
+                user_id=test_user.id,
+                metric_name="snapshots",
+                quantity=50,
+                unit="count",
+            )
+        )
         db.commit()
         
         with patch.object(cache_service, 'enabled', True):
             with patch.object(cache_service, 'redis_client', mock_redis):
-                mock_redis.get.side_effect = ["100", "500", "10", "50"]  # daily, monthly, judge, snapshots
+                mock_redis.get.side_effect = ["100", "500", "10"]  # daily, monthly, judge
                 
                 result = service.get_current_usage(test_user.id)
                 
@@ -58,6 +67,7 @@ class TestBillingService:
                 assert "monthly_usage" in result
                 assert "judge_calls" in result
                 assert "snapshots" in result
+                assert result["snapshots"] == 50
                 assert result["plan_type"] == "free"
                 assert "limits" in result
                 assert "soft_caps" in result
@@ -187,12 +197,19 @@ class TestBillingService:
             status="active"
         )
         db.add(subscription)
+        db.add(
+            Usage(
+                user_id=test_user.id,
+                metric_name="snapshots",
+                quantity=501,
+                unit="count",
+            )
+        )
         db.commit()
         
         with patch.object(cache_service, 'enabled', True):
             with patch.object(cache_service, 'redis_client', mock_redis):
-                # Set snapshots to exceed soft cap (500 for free)
-                mock_redis.get.side_effect = ["0", "0", "0", "501"]
+                mock_redis.get.side_effect = ["0", "0", "0"]
                 
                 exceeded, message = service.check_soft_cap_exceeded(test_user.id, "snapshots")
                 
@@ -210,11 +227,19 @@ class TestBillingService:
             status="active"
         )
         db.add(subscription)
+        db.add(
+            Usage(
+                user_id=test_user.id,
+                metric_name="snapshots",
+                quantity=100,
+                unit="count",
+            )
+        )
         db.commit()
         
         with patch.object(cache_service, 'enabled', True):
             with patch.object(cache_service, 'redis_client', mock_redis):
-                mock_redis.get.side_effect = ["0", "0", "0", "100"]  # Under limit
+                mock_redis.get.side_effect = ["0", "0", "0"]  # Under limit
                 
                 exceeded, message = service.check_soft_cap_exceeded(test_user.id, "snapshots")
                 

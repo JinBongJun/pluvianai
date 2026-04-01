@@ -1,6 +1,7 @@
 from app.models.subscription import Subscription
 from app.models.organization import Organization
 from app.models.project import Project
+from app.models.usage import Usage
 from app.core.usage_limits import get_limit_status
 from app.services.subscription_service import SubscriptionService
 from datetime import datetime, timezone
@@ -19,6 +20,14 @@ def test_get_user_plan_includes_organizations_limit(db, test_user):
 
 def test_get_limit_status_uses_paid_plan_limits(db, test_user):
     db.add(Subscription(user_id=test_user.id, plan_type="starter", status="active"))
+    db.add(
+        Usage(
+            user_id=test_user.id,
+            metric_name="snapshots",
+            quantity=12,
+            unit="count",
+        )
+    )
     db.commit()
 
     snapshots_status = get_limit_status(db, test_user.id, "snapshots")
@@ -27,8 +36,8 @@ def test_get_limit_status_uses_paid_plan_limits(db, test_user):
 
     assert snapshots_status["plan_type"] == "starter"
     assert snapshots_status["limit"] == 50_000
-    assert snapshots_status["current"] == 0
-    assert snapshots_status["remaining"] == 50_000
+    assert snapshots_status["current"] == 12
+    assert snapshots_status["remaining"] == 49_988
 
     assert replay_status["plan_type"] == "starter"
     assert replay_status["limit"] == 600

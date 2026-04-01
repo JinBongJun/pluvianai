@@ -5,7 +5,6 @@ import useSWR from "swr";
 
 import {
   behaviorAPI,
-  liveViewAPI,
   releaseGateAPI,
 } from "@/lib/api";
 import {
@@ -29,6 +28,7 @@ export type UseReleaseGateRunDataDerivationsParams = {
   selectedRunId: string | null;
   runLocked: boolean;
   baselineSeedSnapshot: BaselineSeedSnapshot;
+  liveNodeLatestSnapshot: Record<string, unknown> | null;
   runSnapshotIds: string[];
   runDatasetIds: string[];
 };
@@ -43,6 +43,7 @@ export function useReleaseGateRunDataDerivations(p: UseReleaseGateRunDataDerivat
     selectedRunId,
     runLocked,
     baselineSeedSnapshot,
+    liveNodeLatestSnapshot,
     runSnapshotIds,
     runDatasetIds,
   } = p;
@@ -71,26 +72,9 @@ export function useReleaseGateRunDataDerivations(p: UseReleaseGateRunDataDerivat
     agentId?.trim() && projectId && !isNaN(projectId) ? ["agent-eval", projectId, agentId] : null;
   const { data: agentEvalData } = useSWR(
     singleSnapshotEvalKey,
-    () => liveViewAPI.getAgentEvaluation(projectId, agentId),
+    () => releaseGateAPI.getAgentEvaluation(projectId, agentId),
     { isPaused: () => runLocked }
   );
-
-  const liveNodeLatestKey =
-    agentId?.trim() && projectId && !isNaN(projectId)
-      ? ["release-gate-live-node-latest", projectId, agentId.trim()]
-      : null;
-  const { data: liveNodeLatestData } = useSWR(
-    liveNodeLatestKey,
-    () => liveViewAPI.listSnapshots(projectId, { agent_id: agentId.trim(), limit: 1, offset: 0 }),
-    { isPaused: () => runLocked }
-  );
-
-  const liveNodeLatestSnapshot = useMemo(() => {
-    const items = (liveNodeLatestData as Record<string, unknown> | undefined)?.items;
-    if (!Array.isArray(items) || items.length === 0) return null;
-    const first = items[0];
-    return first && typeof first === "object" ? (first as Record<string, unknown>) : null;
-  }, [liveNodeLatestData]);
 
   const liveNodeLatestPayload = useMemo(() => {
     const raw = asPayloadObject(liveNodeLatestSnapshot?.payload);

@@ -3,8 +3,7 @@
 import AccountLayout from "@/components/layout/AccountLayout";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { usePathname, useSearchParams } from "next/navigation";
-import useSWR, { useSWRConfig } from "swr";
-import { apiClient } from "@/lib/api/client";
+import { useSWRConfig } from "swr";
 import { billingAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
 import { useEffect, useState } from "react";
@@ -19,6 +18,13 @@ import {
   type PlanChangeTarget,
 } from "@/components/billing/PlanChangeConfirmModal";
 import { SUPPORT_EMAIL, supportMailtoHref } from "@/lib/supportContact";
+import {
+  ACCOUNT_USAGE_SWR_KEY,
+  computeAccountUsageMetrics,
+  getUsagePeriodPayload,
+  getUsageWindowMeta,
+} from "@/lib/accountUsage";
+import { useAccountUsage } from "@/hooks/useAccountUsage";
 
 type UsageResponse = {
   plan_type: string;
@@ -60,22 +66,18 @@ export default function AccountBillingPage() {
   const { mutate } = useSWRConfig();
   const [upgradeBusy, setUpgradeBusy] = useState<string | null>(null);
   const [planChangeTarget, setPlanChangeTarget] = useState<PlanChangeTarget | null>(null);
-  const { data } = useSWR<UsageResponse>(
-    hasToken ? "/auth/me/usage" : null,
-    async () => {
-      const res = await apiClient.get("/auth/me/usage");
-      return res.data as UsageResponse;
-    }
-  );
+  const { data } = useAccountUsage(hasToken) as { data?: UsageResponse };
 
   const currentPlanId = (data?.display_plan_type || data?.plan_type || "free").toLowerCase();
   const subscriptionStatus = String(data?.subscription_status || "active").toLowerCase();
   const entitlementStatus = String(data?.entitlement_status || "active").toLowerCase();
-  const currentPeriodStart = data?.current_period_start || null;
-  const currentPeriodEnd = data?.current_period_end || data?.entitlement_effective_to || null;
-  const nextResetAt = data?.next_reset_at || currentPeriodEnd || null;
-  const usageWindowType = data?.usage_window_type || null;
-  const usage = data?.usage_current_period ?? data?.usage_this_month ?? {};
+  const usageWindow = getUsageWindowMeta(data as any);
+  const currentPeriodStart = usageWindow.currentPeriodStart;
+  const currentPeriodEnd = usageWindow.currentPeriodEnd || data?.entitlement_effective_to || null;
+  const nextResetAt = usageWindow.nextResetAt || currentPeriodEnd || null;
+  const usageWindowType = usageWindow.usageWindowType;
+  const usage = getUsagePeriodPayload(data as any);
+  const metrics = computeAccountUsageMetrics(data as any);
   const formatDate = (value: string | null | undefined) =>
     value ? new Date(value).toLocaleDateString() : "Unknown";
   const usagePeriodLabel =
@@ -96,20 +98,10 @@ export default function AccountBillingPage() {
     if (id === "pro") return 2;
     return 0;
   };
-  const snapshotsUsed = Number(usage.snapshots ?? 0);
+  const snapshotsUsed = metrics?.snapshotsUsed ?? Number(usage.snapshots ?? 0);
   const snapshotsLimit = Number(data?.limits?.snapshots_per_month ?? -1);
-  const replayUsed = Number(
-    usage.release_gate_attempts ??
-      usage.platform_replay_credits ??
-      usage.guard_credits ??
-      0
-  );
-  const replayLimit = Number(
-    data?.limits?.release_gate_attempts_per_month ??
-      data?.limits?.platform_replay_credits_per_month ??
-      data?.limits?.guard_credits_per_month ??
-      -1
-  );
+  const replayUsed = metrics?.replayUsed ?? 0;
+  const replayLimit = metrics?.replayLimit ?? -1;
   const snapshotsExhausted = snapshotsLimit > 0 && snapshotsUsed >= snapshotsLimit;
   const replayExhausted = replayLimit > 0 && replayUsed >= replayLimit;
   const snapshotsNearLimit =
@@ -123,7 +115,7 @@ export default function AccountBillingPage() {
 
     const refreshBillingState = () =>
       Promise.allSettled([
-        mutate("/auth/me/usage"),
+        mutate(ACCOUNT_USAGE_SWR_KEY),
         mutate("/billing/usage"),
         mutate("/billing/limits"),
       ]);
@@ -150,7 +142,7 @@ export default function AccountBillingPage() {
   const refreshAfterPlanChange = () => {
     toast.showToast("Plan updated. Refreshing billing status...", "success");
     void Promise.allSettled([
-      mutate("/auth/me/usage"),
+      mutate(ACCOUNT_USAGE_SWR_KEY),
       mutate("/billing/usage"),
       mutate("/billing/limits"),
       mutate("/billing/subscription"),

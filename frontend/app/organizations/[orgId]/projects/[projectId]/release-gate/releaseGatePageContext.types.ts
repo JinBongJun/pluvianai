@@ -203,6 +203,7 @@ export interface ReleaseGatePageContextValue {
   runEvalElements: Array<{ name: string; value: unknown }>;
   historyStatus: "all" | "pass" | "fail";
   setHistoryStatus: (s: "all" | "pass" | "fail") => void;
+  setHistoryActivated: (enabled: boolean) => void;
   historyTraceId: string;
   setHistoryTraceId: (s: string) => void;
   historyDatePreset: ReleaseGateHistoryDatePreset;

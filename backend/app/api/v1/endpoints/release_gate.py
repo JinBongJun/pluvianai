@@ -4074,57 +4074,82 @@ async def list_release_gate_history(
         created_to = created_to.replace(tzinfo=timezone.utc)
 
     normalized_agent_id = (agent_id or "").strip() or None
-
-    _backfill_release_gate_run_records(
-        db,
-        project_id=project_id,
-        cutoff=cutoff,
-        status_filter=status_filter,
-        trace_id=trace_id,
-        created_from=created_from,
-        created_to=created_to,
-        agent_id=normalized_agent_id,
-    )
-
     query = (
-        db.query(ReleaseGateRun)
+        db.query(BehaviorReport)
         .filter(
-            ReleaseGateRun.project_id == project_id,
-            ReleaseGateRun.created_at >= cutoff,
+            BehaviorReport.project_id == project_id,
+            BehaviorReport.trace_id.isnot(None),
+            BehaviorReport.created_at >= cutoff,
+            cast(BehaviorReport.summary_json, String).contains('"release_gate"'),
         )
-        .order_by(ReleaseGateRun.created_at.desc())
+        .order_by(BehaviorReport.created_at.desc())
     )
     if status_filter in {"pass", "fail"}:
-        query = query.filter(ReleaseGateRun.status == status_filter)
-    if normalized_agent_id:
-        query = query.filter(ReleaseGateRun.agent_id == normalized_agent_id)
+        query = query.filter(BehaviorReport.status == status_filter)
     if trace_id:
-        query = query.filter(ReleaseGateRun.trace_id == trace_id)
+        query = query.filter(BehaviorReport.trace_id == trace_id)
     if created_from:
-        query = query.filter(ReleaseGateRun.created_at >= created_from)
+        query = query.filter(BehaviorReport.created_at >= created_from)
     if created_to:
-        query = query.filter(ReleaseGateRun.created_at <= created_to)
+        query = query.filter(BehaviorReport.created_at <= created_to)
 
-    total = query.count()
-    page_rows = query.offset(offset).limit(limit).all()
+    matched_rows: List[Dict[str, Any]] = []
+    for report in query.all():
+        gate_meta = _release_gate_meta(report.summary_json)
+        if not gate_meta:
+            continue
+        resolved_agent_id = _resolve_release_gate_run_agent_id(db, report)
+        if normalized_agent_id and resolved_agent_id != normalized_agent_id:
+            continue
+
+        total_inputs = _coerce_optional_int(gate_meta.get("total_inputs"))
+        failed_inputs = _coerce_optional_int(gate_meta.get("failed_inputs")) or 0
+        flaky_inputs = _coerce_optional_int(gate_meta.get("flaky_inputs")) or 0
+        failed_runs = failed_inputs + flaky_inputs if total_inputs is not None else None
+        passed_runs = (
+            max(total_inputs - failed_runs, 0)
+            if total_inputs is not None and failed_runs is not None
+            else None
+        )
+        matched_rows.append(
+            {
+                "id": report.id,
+                "status": report.status,
+                "trace_id": report.trace_id,
+                "baseline_trace_id": report.baseline_run_ref,
+                "agent_id": resolved_agent_id,
+                "created_at": _iso(report.created_at),
+                "mode": str(gate_meta.get("mode") or "replay_test"),
+                "repeat_runs": _coerce_optional_int(gate_meta.get("repeat_runs")),
+                "total_inputs": total_inputs,
+                "passed_runs": passed_runs,
+                "failed_runs": failed_runs,
+                "passed_attempts": _coerce_optional_int(gate_meta.get("passed_attempts")),
+                "total_attempts": _coerce_optional_int(gate_meta.get("total_attempts")),
+                "thresholds": gate_meta.get("thresholds"),
+            }
+        )
+
+    total = len(matched_rows)
+    page_rows = matched_rows[offset : offset + limit]
     items: List[Dict[str, Any]] = []
     for row in page_rows:
         items.append(
             {
-                "id": row.report_id,
-                "status": row.status,
-                "trace_id": row.trace_id,
-                "baseline_trace_id": row.baseline_trace_id,
-                "agent_id": row.agent_id,
-                "created_at": _iso(row.created_at),
-                "mode": row.mode,
-                "repeat_runs": row.repeat_runs,
-                "total_inputs": row.total_inputs,
-                "passed_runs": row.passed_runs,
-                "failed_runs": row.failed_runs,
-                "passed_attempts": row.passed_attempts,
-                "total_attempts": row.total_attempts,
-                "thresholds": row.thresholds_json,
+                "id": row["id"],
+                "status": row["status"],
+                "trace_id": row["trace_id"],
+                "baseline_trace_id": row["baseline_trace_id"],
+                "agent_id": row["agent_id"],
+                "created_at": row["created_at"],
+                "mode": row["mode"],
+                "repeat_runs": row["repeat_runs"],
+                "total_inputs": row["total_inputs"],
+                "passed_runs": row["passed_runs"],
+                "failed_runs": row["failed_runs"],
+                "passed_attempts": row["passed_attempts"],
+                "total_attempts": row["total_attempts"],
+                "thresholds": row["thresholds"],
             }
         )
 

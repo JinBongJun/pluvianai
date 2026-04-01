@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import useSWR from "swr";
 
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api";
@@ -11,10 +12,47 @@ type UseLaboratoryPageBootstrapOptions = {
   projectId: number;
   routerReplace: (href: string) => void;
   swrOptions?: Record<string, unknown>;
+  deferSwitcherData?: boolean;
 };
 
 export function useLaboratoryPageBootstrap(options: UseLaboratoryPageBootstrapOptions) {
-  const { orgId, projectId, routerReplace, swrOptions } = options;
+  const { orgId, projectId, routerReplace, swrOptions, deferSwitcherData = false } = options;
+  const [switcherFetchEnabled, setSwitcherFetchEnabled] = useState(
+    Boolean(orgId) && !deferSwitcherData
+  );
+
+  useEffect(() => {
+    if (!orgId) {
+      setSwitcherFetchEnabled(false);
+      return;
+    }
+    if (!deferSwitcherData) {
+      setSwitcherFetchEnabled(true);
+      return;
+    }
+
+    setSwitcherFetchEnabled(false);
+    let cancelled = false;
+    const enable = () => {
+      if (!cancelled) setSwitcherFetchEnabled(true);
+    };
+
+    if (typeof window !== "undefined" && typeof (window as any).requestIdleCallback === "function") {
+      const idleId = (window as any).requestIdleCallback(enable, { timeout: 1500 });
+      return () => {
+        cancelled = true;
+        if (typeof (window as any).cancelIdleCallback === "function") {
+          (window as any).cancelIdleCallback(idleId);
+        }
+      };
+    }
+
+    const timer = window.setTimeout(enable, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [deferSwitcherData, orgId, projectId]);
 
   const { data: project } = useSWR(
     projectId && !isNaN(projectId) ? projectKeys.detail(projectId) : null,
@@ -41,13 +79,13 @@ export function useLaboratoryPageBootstrap(options: UseLaboratoryPageBootstrapOp
   );
 
   const { data: organizations } = useSWR<OrganizationSummary[]>(
-    orgId ? orgKeys.list() : null,
+    orgId && switcherFetchEnabled ? orgKeys.list() : null,
     () => organizationsAPI.list({ includeStats: false }),
     swrOptions
   );
 
   const { data: orgProjects } = useSWR<OrganizationProject[]>(
-    orgId ? orgKeys.projects(orgId, "") : null,
+    orgId && switcherFetchEnabled ? orgKeys.projects(orgId, "") : null,
     ([, , id]) => organizationsAPI.listProjects(String(id), { includeStats: false }),
     swrOptions
   );

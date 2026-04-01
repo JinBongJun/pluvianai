@@ -54,7 +54,7 @@ function ReleaseGateLayoutGateBodyInner({
     return (
       <ReleaseGateStatusPanel
         title="Loading Release Gate"
-        description="Fetching agents and release history for this project..."
+        description="Fetching project details and available agents for this project..."
       />
     );
   }

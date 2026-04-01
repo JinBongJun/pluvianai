@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ReleaseGateKeysContextValue } from "./ReleaseGateKeysContext";
 import type { ReleaseGatePageContextValue } from "./releaseGatePageContext.types";
@@ -155,6 +155,7 @@ export function useReleaseGateExpandedViewModel({
 
   const historyStatus = ctx.historyStatus;
   const setHistoryStatus = ctx.setHistoryStatus;
+  const setHistoryActivated = ctx.setHistoryActivated;
   const historyTraceId = ctx.historyTraceId;
   const setHistoryTraceId = ctx.setHistoryTraceId;
   const historyDatePreset = ctx.historyDatePreset;
@@ -190,6 +191,12 @@ export function useReleaseGateExpandedViewModel({
   const [rightPanelTab, setRightPanelTab] = useState<"results" | "history">("results");
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [detailAttemptView, setDetailAttemptView] = useState<ExpandedDetailAttemptView>(null);
+
+  useEffect(() => {
+    if (rightPanelTab === "history") {
+      setHistoryActivated(true);
+    }
+  }, [rightPanelTab, setHistoryActivated]);
 
   const resultPanel = useReleaseGateExpandedResultPanel({
     result,

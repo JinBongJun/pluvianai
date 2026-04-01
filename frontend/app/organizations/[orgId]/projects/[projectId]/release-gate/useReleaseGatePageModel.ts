@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 
 import type { ReleaseGateLayoutGateBodyProps } from "./ReleaseGateLayoutGateBody";
@@ -199,6 +199,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
   } = lv;
   const modelOverrideEnabled = modelSource !== "detected";
   const replayModelMode = modelSource === "hosted" ? "hosted" : "custom";
+  const [historyActivated, setHistoryActivated] = useState(false);
 
   const {
     baselineDetailSnapshot,
@@ -207,6 +208,10 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
   } = useReleaseGateBaselineDetailSnapshot(projectId);
 
   const runLocked = isValidating || Boolean(activeJobId);
+  useEffect(() => {
+    setHistoryActivated(false);
+  }, [agentId]);
+
   const {
     historyStatus,
     setHistoryStatus,
@@ -222,7 +227,12 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     historyItems,
     historyTotal,
     mutateHistory,
-  } = useReleaseGateHistory({ projectId, runLocked, agentId, enabled: Boolean(agentId.trim()) });
+  } = useReleaseGateHistory({
+    projectId,
+    runLocked,
+    agentId,
+    enabled: Boolean(agentId.trim()) && historyActivated,
+  });
   mutateHistoryRef.current = mutateHistory;
 
   const agentIdFromUrl = searchParams.get("agent_id")?.trim() ?? "";
@@ -304,6 +314,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     effectiveRepresentativeBaselineSnapshotId,
     baselineSeedSnapshot,
     baselineSeedSnapshotId,
+    liveNodeLatestSnapshot,
     representativeBaselinePickerOptions,
   } = useReleaseGateBaselineSnapshots({
     projectId,
@@ -354,6 +365,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     selectedRunId,
     runLocked,
     baselineSeedSnapshot,
+    liveNodeLatestSnapshot,
     runSnapshotIds,
     runDatasetIds,
   });
@@ -711,6 +723,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       hostedReplayCreditsExhausted,
       historyStatus,
       setHistoryStatus,
+      setHistoryActivated,
       historyTraceId,
       setHistoryTraceId,
       historyDatePreset,
@@ -786,6 +799,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       hostedReplayCreditsExhausted,
       historyStatus,
       setHistoryStatus,
+      setHistoryActivated,
       historyTraceId,
       setHistoryTraceId,
       historyDatePreset,

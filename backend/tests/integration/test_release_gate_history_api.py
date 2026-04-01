@@ -111,7 +111,7 @@ class TestReleaseGateHistoryApi:
         assert item["passed_attempts"] == 9
         assert item["total_attempts"] == 15
 
-    async def test_history_can_scope_results_to_selected_agent_and_backfill_read_model(
+    async def test_history_can_scope_results_to_selected_agent_without_read_model_backfill(
         self, async_client, auth_headers, test_project, db
     ):
         now = datetime.now(timezone.utc)
@@ -167,9 +167,9 @@ class TestReleaseGateHistoryApi:
             "rg-trace-agent-a-1",
             "rg-trace-agent-a-2",
         }
-        assert db.query(ReleaseGateRun).count() == 3
+        assert db.query(ReleaseGateRun).count() == 0
 
-    async def test_history_backfill_recovers_agent_from_snapshot_when_report_agent_is_missing(
+    async def test_history_recovers_agent_from_snapshot_when_report_agent_is_missing(
         self, async_client, auth_headers, test_project, db
     ):
         trace_id = "rg-trace-missing-agent"

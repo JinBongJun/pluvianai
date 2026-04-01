@@ -16,6 +16,8 @@ from typing import Any, Dict, Tuple
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.core.logging_config import logger
 from app.core.subscription_limits import PLAN_LIMITS, normalize_plan_type
 from app.models.organization import Organization
 from app.models.project import Project
@@ -175,10 +177,23 @@ def get_usage_period_query_bounds(db: Session, user_id: int) -> Tuple[datetime, 
     return _coerce_bound_for_db(db, start), _coerce_bound_for_db(db, end)
 
 
-def get_snapshots_count_this_month(db: Session, user_id: int) -> int:
-    """
-    Count snapshots in the current usage window.
-    """
+def _sum_usage_metric_this_period(db: Session, user_id: int, metric_name: str) -> int:
+    start, end = get_usage_period_query_bounds(db, user_id)
+    row = (
+        db.query(func.coalesce(func.sum(Usage.quantity), 0))
+        .filter(
+            Usage.user_id == user_id,
+            Usage.metric_name == metric_name,
+            Usage.timestamp >= start,
+            Usage.timestamp <= end,
+        )
+        .first()
+    )
+    return int(row[0]) if row and row[0] is not None else 0
+
+
+def get_legacy_snapshots_count_this_month(db: Session, user_id: int) -> int:
+    """Legacy snapshot row count for migration compare/backfill."""
     start, end = get_usage_period_query_bounds(db, user_id)
     count = (
         db.query(Snapshot.id)
@@ -193,22 +208,67 @@ def get_snapshots_count_this_month(db: Session, user_id: int) -> int:
     return count or 0
 
 
+def ensure_snapshot_usage_backfill_current_window(db: Session, user_id: int) -> int:
+    """Backfill the active usage window from legacy snapshot rows once per window."""
+    ledger_count = _sum_usage_metric_this_period(db, user_id, "snapshots")
+    if not settings.FEATURE_FLAG_SNAPSHOT_USAGE_LEDGER_BACKFILL_ON_READ:
+        return ledger_count
+
+    legacy_count = get_legacy_snapshots_count_this_month(db, user_id)
+    diff = max(0, legacy_count - ledger_count)
+    if diff <= 0:
+        return ledger_count
+
+    window = get_usage_window(db, user_id)
+    window_token = f"{int(window.period_start.timestamp())}:{int(window.period_end.timestamp())}"
+    idempotency_key = f"snapshot-backfill:{user_id}:{window_token}"
+
+    from app.services.subscription_service import SubscriptionService
+
+    SubscriptionService(db).append_usage(
+        user_id=user_id,
+        metric_type="snapshots",
+        amount=diff,
+        source_type="snapshot_backfill_window",
+        source_id=window_token,
+        idempotency_key=idempotency_key,
+        timestamp=window.period_start,
+        commit=False,
+    )
+    logger.info(
+        "Backfilled snapshot usage for user %s window %s with delta=%s",
+        user_id,
+        window_token,
+        diff,
+    )
+    return ledger_count + diff
+
+
+def get_snapshots_count_this_month(db: Session, user_id: int) -> int:
+    """
+    Count snapshots in the current usage window using the durable usage ledger.
+    """
+    ledger_count = ensure_snapshot_usage_backfill_current_window(db, user_id)
+    legacy_count = None
+    if settings.FEATURE_FLAG_SNAPSHOT_USAGE_LEDGER_SHADOW_COMPARE:
+        legacy_count = get_legacy_snapshots_count_this_month(db, user_id)
+        if legacy_count != ledger_count:
+            logger.warning(
+                "Snapshot usage drift detected for user %s: ledger=%s legacy=%s",
+                user_id,
+                ledger_count,
+                legacy_count,
+            )
+    if settings.FEATURE_FLAG_SNAPSHOT_USAGE_LEDGER:
+        return ledger_count
+    return legacy_count if legacy_count is not None else get_legacy_snapshots_count_this_month(db, user_id)
+
+
 def get_guard_credits_this_month(db: Session, user_id: int) -> int:
     """
     Sum hosted replay credits (guard_credits_replay) in the current usage window.
     """
-    start, end = get_usage_period_query_bounds(db, user_id)
-    row = (
-        db.query(func.coalesce(func.sum(Usage.quantity), 0))
-        .filter(
-            Usage.user_id == user_id,
-            Usage.metric_name == "guard_credits_replay",
-            Usage.timestamp >= start,
-            Usage.timestamp <= end,
-        )
-        .first()
-    )
-    return int(row[0]) if row and row[0] is not None else 0
+    return _sum_usage_metric_this_period(db, user_id, "guard_credits_replay")
 
 
 def get_platform_replay_credits_this_month(db: Session, user_id: int) -> int:
@@ -220,18 +280,7 @@ def get_release_gate_attempts_this_month(db: Session, user_id: int) -> int:
     """
     Sum replay attempts (selected snapshots x repeats) in the current usage window.
     """
-    start, end = get_usage_period_query_bounds(db, user_id)
-    row = (
-        db.query(func.coalesce(func.sum(Usage.quantity), 0))
-        .filter(
-            Usage.user_id == user_id,
-            Usage.metric_name == "release_gate_attempts",
-            Usage.timestamp >= start,
-            Usage.timestamp <= end,
-        )
-        .first()
-    )
-    return int(row[0]) if row and row[0] is not None else 0
+    return _sum_usage_metric_this_period(db, user_id, "release_gate_attempts")
 
 
 def _resolve_user_plan_type(db: Session | None, user_id: int) -> str:
@@ -326,7 +375,9 @@ def get_limit_status(db: Session | None, user_id: int, metric: str) -> Dict[str,
     }
 
 
-def check_snapshot_limit(db: Session, user_id: int, is_superuser: bool = False) -> Tuple[bool, str | None]:
+def check_snapshot_limit(
+    db: Session, user_id: int, amount: int = 1, is_superuser: bool = False
+) -> Tuple[bool, str | None]:
     """
     Returns (allowed, error_message). If not allowed, error_message is the 403 detail.
     """
@@ -337,7 +388,7 @@ def check_snapshot_limit(db: Session, user_id: int, is_superuser: bool = False) 
     if cap == -1:
         return (True, None)
     current = get_snapshots_count_this_month(db, user_id)
-    if current + 1 > cap:
+    if current + amount > cap:
         return (
             False,
             f"Snapshot limit reached: {current} / {cap} for this billing period. Upgrade or wait until the period resets.",

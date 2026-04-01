@@ -23,6 +23,9 @@ class FeatureFlags:
             "enhanced_analytics": False,
             "beta_features": False,
             "experimental_api": False,
+            "snapshot_usage_ledger": settings.FEATURE_FLAG_SNAPSHOT_USAGE_LEDGER,
+            "snapshot_usage_ledger_shadow_compare": settings.FEATURE_FLAG_SNAPSHOT_USAGE_LEDGER_SHADOW_COMPARE,
+            "snapshot_usage_ledger_backfill_on_read": settings.FEATURE_FLAG_SNAPSHOT_USAGE_LEDGER_BACKFILL_ON_READ,
         }
 
         # Load from environment variables (format: FEATURE_FLAG_<NAME>=true/false)

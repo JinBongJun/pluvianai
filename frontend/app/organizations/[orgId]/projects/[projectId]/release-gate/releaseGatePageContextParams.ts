@@ -65,6 +65,7 @@ export type ReleaseGatePageContextRestSlice = Pick<
   | "mutateProjectUserApiKeys"
   | "historyStatus"
   | "setHistoryStatus"
+  | "setHistoryActivated"
   | "historyTraceId"
   | "setHistoryTraceId"
   | "historyDatePreset"

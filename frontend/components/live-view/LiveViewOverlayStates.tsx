@@ -8,7 +8,7 @@ export function LiveViewLoadingState() {
           Loading Live View
         </p>
         <p className="mt-2 text-sm text-slate-300">
-          Fetching agents and snapshots for this project...
+          Fetching project details and active agents...
         </p>
       </div>
     </div>

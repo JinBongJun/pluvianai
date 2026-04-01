@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from app.models.user import User
 from app.models.subscription import Subscription
 from app.models.usage import Usage
@@ -91,20 +92,7 @@ class SubscriptionService:
         plan_type = normalize_plan_type(plan_info["plan_type"])
         limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["free"])
 
-        period_start, period_end = get_usage_period_query_bounds(self.db, user_id)
-        metric_name = self._usage_metric_name(metric_type)
-        current_usage = (
-            self.db.query(func.coalesce(func.sum(Usage.quantity), 0))
-            .filter(
-                Usage.user_id == user_id,
-                Usage.metric_name == metric_name,
-                Usage.timestamp >= period_start,
-                Usage.timestamp <= period_end,
-            )
-            .scalar()
-            or 0
-        )
-        current_usage = int(current_usage)
+        current_usage = self.get_metric_usage_current_period(user_id, metric_type)
         limit = limits.get(f"{metric_type}_per_month")
 
         # Handle unlimited (-1)
@@ -135,21 +123,90 @@ class SubscriptionService:
 
         return bool(features.get(feature_name, False))
 
-    def increment_usage(
-        self, user_id: int, metric_type: str, amount: int = 1, project_id: Optional[int] = None
-    ) -> None:
-        """Increment usage counter for a metric"""
+    def get_metric_usage_current_period(self, user_id: int, metric_type: str) -> int:
+        period_start, period_end = get_usage_period_query_bounds(self.db, user_id)
         metric_name = self._usage_metric_name(metric_type)
+        current_usage = (
+            self.db.query(func.coalesce(func.sum(Usage.quantity), 0))
+            .filter(
+                Usage.user_id == user_id,
+                Usage.metric_name == metric_name,
+                Usage.timestamp >= period_start,
+                Usage.timestamp <= period_end,
+            )
+            .scalar()
+            or 0
+        )
+        return int(current_usage)
+
+    def append_usage(
+        self,
+        user_id: int,
+        metric_type: str,
+        amount: int = 1,
+        project_id: Optional[int] = None,
+        *,
+        unit: str = "count",
+        source_type: Optional[str] = None,
+        source_id: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+        timestamp: Optional[datetime] = None,
+        commit: bool = True,
+    ) -> Usage:
+        """Append a durable usage event for a metric."""
+        metric_name = self._usage_metric_name(metric_type)
+        if idempotency_key:
+            existing = (
+                self.db.query(Usage)
+                .filter(Usage.idempotency_key == str(idempotency_key))
+                .first()
+            )
+            if existing is not None:
+                return existing
+
         usage = Usage(
             user_id=user_id,
             project_id=project_id,
             metric_name=metric_name,
             quantity=int(amount),
-            unit="count",
+            unit=unit,
+            source_type=str(source_type) if source_type is not None else None,
+            source_id=str(source_id) if source_id is not None else None,
+            idempotency_key=str(idempotency_key) if idempotency_key is not None else None,
         )
+        if timestamp is not None:
+            usage.timestamp = timestamp
         self.db.add(usage)
+        try:
+            if commit:
+                self.db.commit()
+                self.db.refresh(usage)
+            else:
+                self.db.flush()
+        except IntegrityError:
+            self.db.rollback()
+            if idempotency_key:
+                existing = (
+                    self.db.query(Usage)
+                    .filter(Usage.idempotency_key == str(idempotency_key))
+                    .first()
+                )
+                if existing is not None:
+                    return existing
+            raise
+        return usage
 
-        self.db.commit()
+    def increment_usage(
+        self, user_id: int, metric_type: str, amount: int = 1, project_id: Optional[int] = None
+    ) -> Usage:
+        """Increment usage counter for a metric."""
+        return self.append_usage(
+            user_id=user_id,
+            metric_type=metric_type,
+            amount=amount,
+            project_id=project_id,
+            commit=True,
+        )
 
     def get_usage_summary(self, user_id: int) -> Dict[str, Any]:
         """Get current usage vs limits for all metrics"""
