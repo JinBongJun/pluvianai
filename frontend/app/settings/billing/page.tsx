@@ -27,6 +27,8 @@ type UsageResponse = {
   entitlement_status?: string;
   current_period_start?: string | null;
   current_period_end?: string | null;
+  next_reset_at?: string | null;
+  usage_window_type?: string | null;
   entitlement_effective_from?: string | null;
   entitlement_effective_to?: string | null;
   limits?: {
@@ -34,6 +36,12 @@ type UsageResponse = {
     release_gate_attempts_per_month?: number;
     guard_credits_per_month?: number;
     platform_replay_credits_per_month?: number;
+  };
+  usage_current_period?: {
+    snapshots?: number;
+    release_gate_attempts?: number;
+    guard_credits?: number;
+    platform_replay_credits?: number;
   };
   usage_this_month?: {
     snapshots?: number;
@@ -63,7 +71,23 @@ export default function AccountBillingPage() {
   const currentPlanId = (data?.display_plan_type || data?.plan_type || "free").toLowerCase();
   const subscriptionStatus = String(data?.subscription_status || "active").toLowerCase();
   const entitlementStatus = String(data?.entitlement_status || "active").toLowerCase();
+  const currentPeriodStart = data?.current_period_start || null;
   const currentPeriodEnd = data?.current_period_end || data?.entitlement_effective_to || null;
+  const nextResetAt = data?.next_reset_at || currentPeriodEnd || null;
+  const usageWindowType = data?.usage_window_type || null;
+  const usage = data?.usage_current_period ?? data?.usage_this_month ?? {};
+  const formatDate = (value: string | null | undefined) =>
+    value ? new Date(value).toLocaleDateString() : "Unknown";
+  const usagePeriodLabel =
+    currentPeriodStart && currentPeriodEnd
+      ? `${formatDate(currentPeriodStart)} - ${formatDate(currentPeriodEnd)}`
+      : "Current usage period";
+  const resetRuleLabel =
+    usageWindowType === "anniversary_monthly"
+      ? "Free usage resets monthly from your account start date."
+      : usageWindowType === "billing_period"
+        ? "Usage resets each billing cycle."
+        : "Usage resets each calendar month (UTC).";
   const showManageSubscription =
     currentPlanId === "starter" || currentPlanId === "pro" || subscriptionStatus === "cancelled";
 
@@ -72,12 +96,12 @@ export default function AccountBillingPage() {
     if (id === "pro") return 2;
     return 0;
   };
-  const snapshotsUsed = Number(data?.usage_this_month?.snapshots ?? 0);
+  const snapshotsUsed = Number(usage.snapshots ?? 0);
   const snapshotsLimit = Number(data?.limits?.snapshots_per_month ?? -1);
   const replayUsed = Number(
-    data?.usage_this_month?.release_gate_attempts ??
-      data?.usage_this_month?.platform_replay_credits ??
-      data?.usage_this_month?.guard_credits ??
+    usage.release_gate_attempts ??
+      usage.platform_replay_credits ??
+      usage.guard_credits ??
       0
   );
   const replayLimit = Number(
@@ -234,6 +258,16 @@ export default function AccountBillingPage() {
           <br />
           Subscriptions auto-renew unless canceled before the next billing cycle.
         </p>
+        <div className="mb-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-xs text-slate-300">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-white">Current usage period</p>
+          <p className="mt-2 text-sm font-semibold text-white">{usagePeriodLabel}</p>
+          <p className="mt-1 text-slate-400">{resetRuleLabel}</p>
+          {nextResetAt ? (
+            <p className="mt-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+              Next reset: {formatDate(nextResetAt)}
+            </p>
+          ) : null}
+        </div>
         {(entitlementStatus === "active_until_period_end" || subscriptionStatus === "cancelled") && currentPeriodEnd && (
           <div className="mb-6 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-sky-200">

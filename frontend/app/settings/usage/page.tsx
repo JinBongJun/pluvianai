@@ -9,6 +9,8 @@ import {
   ACCOUNT_USAGE_SWR_KEY,
   accountUsageAsNumber,
   computeAccountUsageMetrics,
+  getUsagePeriodPayload,
+  getUsageWindowMeta,
   usageQuotaPercent,
 } from "@/lib/accountUsage";
 import { BarChart3, Zap, Building2 } from "lucide-react";
@@ -26,10 +28,26 @@ export default function AccountUsagePage() {
   const planType = (data?.display_plan_type || data?.plan_type || "free").toLowerCase();
   const subscriptionStatus = String(data?.subscription_status || "active").toLowerCase();
   const entitlementStatus = String(data?.entitlement_status || "active").toLowerCase();
-  const currentPeriodEnd = data?.current_period_end || data?.entitlement_effective_to || null;
+  const usageWindow = getUsageWindowMeta(data);
+  const currentPeriodStart = usageWindow.currentPeriodStart;
+  const currentPeriodEnd = usageWindow.currentPeriodEnd || data?.entitlement_effective_to || null;
+  const nextResetAt = usageWindow.nextResetAt;
+  const usageWindowType = usageWindow.usageWindowType;
   const limits = data?.limits || {};
-  const usage = (data?.usage_this_month || {}) as Record<string, unknown>;
+  const usage = getUsagePeriodPayload(data);
   const fb = ACCOUNT_USAGE_FALLBACK_BY_PLAN[planType] ?? ACCOUNT_USAGE_FALLBACK_BY_PLAN.free;
+  const formatDate = (value: string | null | undefined) =>
+    value ? new Date(value).toLocaleDateString() : "Unknown";
+  const usagePeriodLabel =
+    currentPeriodStart && currentPeriodEnd
+      ? `${formatDate(currentPeriodStart)} - ${formatDate(currentPeriodEnd)}`
+      : "Current usage period";
+  const resetRuleLabel =
+    usageWindowType === "anniversary_monthly"
+      ? "Resets monthly from your account start date."
+      : usageWindowType === "billing_period"
+        ? "Resets each billing cycle."
+        : "Resets each calendar month (UTC).";
 
   const metrics = computeAccountUsageMetrics(data);
   const snapshotsUsed = metrics?.snapshotsUsed ?? 0;
@@ -69,6 +87,16 @@ export default function AccountUsagePage() {
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-8 max-w-2xl leading-relaxed relative z-10">
           Release Gate usage is counted by replay attempt: selected logs x repeats.
         </p>
+        <div className="mb-8 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-xs text-slate-300">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-white">Current usage period</p>
+          <p className="mt-2 text-sm font-semibold text-white">{usagePeriodLabel}</p>
+          <p className="mt-1 text-slate-400">{resetRuleLabel}</p>
+          {nextResetAt ? (
+            <p className="mt-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+              Next reset: {formatDate(nextResetAt)}
+            </p>
+          ) : null}
+        </div>
         {(entitlementStatus === "active_until_period_end" || subscriptionStatus === "cancelled") && currentPeriodEnd && (
           <div className="mb-8 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-sky-200">
@@ -100,10 +128,10 @@ export default function AccountUsagePage() {
             <p className="mt-1 text-xs text-white/90">
               {snapshotsExhausted || replayExhausted
                   ? snapshotsExhausted && replayExhausted
-                  ? "Snapshots and Release Gate usage are exhausted for this billing period."
+                  ? "Snapshots and Release Gate usage are exhausted for the current usage period."
                   : snapshotsExhausted
-                    ? "Snapshots are exhausted for this billing period."
-                    : "Release Gate usage is exhausted for this billing period."
+                    ? "Snapshots are exhausted for the current usage period."
+                    : "Release Gate usage is exhausted for the current usage period."
                 : snapshotsNearLimit && replayNearLimit
                   ? "Snapshots and Release Gate usage are above 80% usage."
                   : snapshotsNearLimit
@@ -131,10 +159,10 @@ export default function AccountUsagePage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-white uppercase tracking-widest">
-                    Snapshots this month
+                    Snapshots
                   </h3>
                   <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">
-                    All projects, current billing period
+                    {usagePeriodLabel}
                   </p>
                 </div>
               </div>
@@ -188,7 +216,7 @@ export default function AccountUsagePage() {
                     Release Gate usage
                   </h3>
                   <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">
-                    Replay attempts this billing period
+                    {usagePeriodLabel}
                   </p>
                 </div>
               </div>

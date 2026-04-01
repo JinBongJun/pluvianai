@@ -21,8 +21,12 @@ export default function BillingPage() {
     display_plan_type?: string;
     subscription_status?: string;
     entitlement_status?: string;
+    current_period_start?: string | null;
     current_period_end?: string | null;
+    next_reset_at?: string | null;
+    usage_window_type?: string | null;
     limits?: Record<string, number>;
+    usage_current_period?: Record<string, number>;
     usage_this_month?: Record<string, number>;
   } | null>(null);
 
@@ -74,7 +78,23 @@ export default function BillingPage() {
   ).toLowerCase();
   const subscriptionStatus = String(effectiveUsage?.subscription_status || "active").toLowerCase();
   const entitlementStatus = String(effectiveUsage?.entitlement_status || "active").toLowerCase();
+  const currentPeriodStart = effectiveUsage?.current_period_start || null;
   const currentPeriodEnd = effectiveUsage?.current_period_end || null;
+  const nextResetAt = effectiveUsage?.next_reset_at || currentPeriodEnd || null;
+  const usageWindowType = effectiveUsage?.usage_window_type || null;
+  const usage = effectiveUsage?.usage_current_period || effectiveUsage?.usage_this_month || {};
+  const formatDate = (value: string | null | undefined) =>
+    value ? new Date(value).toLocaleDateString() : "Unknown";
+  const usagePeriodLabel =
+    currentPeriodStart && currentPeriodEnd
+      ? `${formatDate(currentPeriodStart)} - ${formatDate(currentPeriodEnd)}`
+      : "Current usage period";
+  const resetRuleLabel =
+    usageWindowType === "anniversary_monthly"
+      ? "Free usage resets monthly from the account start date."
+      : usageWindowType === "billing_period"
+        ? "Usage resets each billing cycle."
+        : "Usage resets each calendar month (UTC).";
 
   // Org-scoped usage view – limits come from account-level plan;
   // we only need light defaults here for visualization.
@@ -111,23 +131,23 @@ export default function BillingPage() {
 
   const limitData = usageLimits[currentPlanId as keyof typeof usageLimits] || usageLimits.free;
 
-  const monthlyCallsUsedRaw = effectiveUsage?.usage_this_month?.api_calls;
+  const monthlyCallsUsedRaw = usage.api_calls;
   const hasMonthlyCalls = typeof monthlyCallsUsedRaw === "number";
   const callsUsed = hasMonthlyCalls ? Number(monthlyCallsUsedRaw) : (org?.calls7d || 0);
   const callsLimit =
     (effectiveUsage?.limits?.api_calls_per_month as number | undefined) ?? limitData.calls;
   const projectsUsed = org?.projects || 0;
   const platformReplayCreditsUsed =
-    effectiveUsage?.usage_this_month?.release_gate_attempts ??
-    effectiveUsage?.usage_this_month?.platform_replay_credits ??
-    effectiveUsage?.usage_this_month?.guard_credits ??
+    usage.release_gate_attempts ??
+    usage.platform_replay_credits ??
+    usage.guard_credits ??
     0;
   const platformReplayCreditsLimit =
     (effectiveUsage?.limits?.release_gate_attempts_per_month as number | undefined) ??
     (effectiveUsage?.limits?.platform_replay_credits_per_month as number | undefined) ??
     (effectiveUsage?.limits?.guard_credits_per_month as number | undefined) ??
     limitData.platformReplayCredits;
-  const snapshotsUsed = effectiveUsage?.usage_this_month?.snapshots ?? 0;
+  const snapshotsUsed = usage.snapshots ?? 0;
   const snapshotsLimit =
     (effectiveUsage?.limits?.snapshots_per_month as number | undefined) ?? limitData.snapshots;
   const snapshotsExhausted = snapshotsLimit > 0 && snapshotsUsed >= snapshotsLimit;
@@ -243,6 +263,16 @@ export default function BillingPage() {
           <p className="text-slate-500 text-xs font-semibold uppercase tracking-widest mt-4 max-w-2xl leading-relaxed">
             Release Gate usage is counted by replay attempt: selected logs x repeats.
           </p>
+          <div className="mt-4 max-w-3xl rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-xs text-slate-300">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-white">Current usage period</p>
+            <p className="mt-2 text-sm font-semibold text-white">{usagePeriodLabel}</p>
+            <p className="mt-1 text-slate-400">{resetRuleLabel}</p>
+            {nextResetAt ? (
+              <p className="mt-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                Next reset: {formatDate(nextResetAt)}
+              </p>
+            ) : null}
+          </div>
           {(entitlementStatus === "active_until_period_end" || subscriptionStatus === "cancelled") &&
             currentPeriodEnd && (
               <div className="mt-4 max-w-3xl rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4">

@@ -78,6 +78,9 @@ export const authAPI = {
     entitlement_status?: string;
     current_period_start?: string | null;
     current_period_end?: string | null;
+    next_reset_at?: string | null;
+    usage_window_type?: string | null;
+    usage_anchor_source?: string | null;
     entitlement_effective_from?: string | null;
     entitlement_effective_to?: string | null;
     limits: {
@@ -86,6 +89,16 @@ export const authAPI = {
       guard_credits_per_month?: number;
       platform_replay_credits_per_month?: number;
       [k: string]: unknown;
+    };
+    usage_current_period?: {
+      snapshots: number;
+      release_gate_attempts?: number;
+      guard_credits: number;
+      platform_replay_credits?: number;
+      api_calls?: number;
+      projects_used?: number;
+      organizations_used?: number;
+      api_calls_limit?: number | null;
     };
     usage_this_month: {
       snapshots: number;

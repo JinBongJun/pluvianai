@@ -18,6 +18,7 @@ class Subscription(Base):
     paddle_customer_id = Column(String(255), nullable=True, index=True)
     provider = Column(String(32), nullable=False, server_default="paddle")
     provider_environment = Column(String(16), nullable=False, server_default="unknown")
+    free_usage_anchor_at = Column(DateTime(timezone=True), nullable=True)
     current_period_start = Column(DateTime(timezone=True), nullable=True)
     current_period_end = Column(DateTime(timezone=True), nullable=True)
     canceled_at = Column(DateTime(timezone=True), nullable=True)
