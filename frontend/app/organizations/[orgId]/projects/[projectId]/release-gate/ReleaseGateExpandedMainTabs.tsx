@@ -13,8 +13,8 @@ export function ReleaseGateExpandedMainTabs({
   setTab: (t: GateTab) => void;
 }) {
   return (
-    <div className="absolute top-6 left-6 right-6 flex items-start justify-end pointer-events-none z-[10000]">
-      <div className="mt-[70px] flex rounded-2xl border border-white/10 bg-[#1a1a1e]/90 p-1.5 shadow-2xl pointer-events-auto">
+    <div className="absolute top-6 left-[344px] right-[344px] flex items-start justify-center pointer-events-none z-[10000]">
+      <div className="mt-4 flex rounded-2xl border border-white/10 bg-[#1a1a1e]/90 p-1.5 shadow-2xl pointer-events-auto">
         <button
           type="button"
           onClick={() => setTab("validate")}
