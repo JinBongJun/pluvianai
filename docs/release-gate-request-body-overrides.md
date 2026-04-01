@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Baseline logs may omit or corrupt **non–user-text** parts of the provider request (attachments, RAG blobs, custom keys). Release Gate settings include optional **additional request body fields** merged into `replay_overrides` **after** the configuration JSON. You can also set **per-log** fields: the validate API accepts `replay_overrides_by_snapshot_id` (map of snapshot id → JSON object). The worker merges **`replay_overrides` first**, then the object for that snapshot id (per-log keys win on conflict).
+Baseline logs may omit or corrupt **non-user-text** parts of the provider request (attachments, RAG blobs, custom keys). Release Gate settings include optional **extra request fields** merged into `replay_overrides` **after** the configuration JSON. You can also set **per-log** fields: the validate API accepts `replay_overrides_by_snapshot_id` (map of snapshot id -> JSON object). The worker merges **`replay_overrides` first**, then the object for that snapshot id (per-log keys win on conflict).
 
 ## Rules
 

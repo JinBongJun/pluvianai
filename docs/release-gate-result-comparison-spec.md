@@ -148,8 +148,8 @@ Model                 gpt-4.1 -> claude-3.7              Run-wide
 Output tokens         420 -> 690                         +64%
 Latency               3.2s -> 5.8s                       Slower
 Tool calls            1 -> 4                             Mixed
-Extra request JSON    Shared changed, 3 logs customized  Mixed
-Extra system context  Append enabled, 4 logs customized  Per-log
+Extra request fields  Shared changed, 3 logs customized  Mixed
+Extra system text     Extra text added for 4 logs     Per-log
 System prompt         Override applied                   Run-wide
 Sampling              temperature, max_tokens changed    Run-wide
 ```
@@ -227,8 +227,8 @@ Example wireframe:
 ```text
 Details
 
-> Extra request JSON details
-> Extra system context details
+> Extra request fields details
+> Extra system text details
 > Tool behavior details
 > System prompt preview
 > Sampling details
@@ -286,7 +286,7 @@ Recommended mobile order:
 Example mobile change row:
 
 ```text
-Extra request JSON
+Extra request fields
 Shared changed, 3 logs customized
 [Mixed]
 ```
@@ -392,8 +392,8 @@ Each row should use the following shape:
 - `Output tokens`
 - `Latency`
 - `Tool calls`
-- `Extra request JSON`
-- `Extra system context`
+- `Extra request fields`
+- `Extra system text`
 - `System prompt`
 - `Sampling`
 - `Tool behavior`
@@ -404,8 +404,8 @@ Each row should use the following shape:
 - `Output tokens | changed | run-wide | 420 -> 690 | +64% vs base`
 - `Latency | changed | run-wide | 3.2s -> 5.8s`
 - `Tool calls | changed | mixed | 1 -> 4`
-- `Extra request JSON | changed | mixed | shared changed, 3 logs customized`
-- `Extra system context | changed | per-log | append enabled, 4 logs customized`
+- `Extra request fields | changed | mixed | shared changed, 3 logs customized`
+- `Extra system text | changed | per-log | add enabled, 4 logs customized`
 - `System prompt | changed | run-wide | override applied`
 - `Sampling | changed | run-wide | temperature, max_tokens changed`
 
@@ -533,8 +533,8 @@ Preserve power-user detail without making the main review surface heavy.
 
 These sections should be collapsed by default:
 
-- `Extra request JSON details`
-- `Extra system context details`
+- `Extra request fields details`
+- `Extra system text details`
 - `Tool behavior details`
 - `System prompt preview`
 - `Sampling detail`
@@ -559,11 +559,11 @@ Already supported in result metadata:
 
 Example summary:
 
-- `Extra request JSON | changed | mixed | shared changed, 3 logs customized`
+- `Extra request fields | changed | mixed | shared changed, 3 logs customized`
 
 ### Expanded content
 
-#### Shared extras
+#### Shared fields
 
 Show:
 
@@ -574,10 +574,10 @@ Show:
 
 Example:
 
-- `Shared extras`
+- `Shared fields`
 - `attachments, metadata changed`
 
-#### Per-log extras
+#### Per-log fields
 
 Show only logs with custom overrides.
 
@@ -595,7 +595,7 @@ Example:
 
 ---
 
-## Detail Spec: Extra System Context
+## Detail Spec: Extra System Text
 
 ### Why it matters
 
@@ -624,19 +624,19 @@ Relevant concepts:
 
 Example summary:
 
-- `Extra system context | changed | per-log | append enabled, 4 logs customized`
+- `Extra system text | changed | per-log | add enabled, 4 logs customized`
 
 Other valid states:
 
-- `Extra system context | same | run-wide | recorded only`
-- `Extra system context | changed | run-wide | shared appended text added`
-- `Extra system context | changed | mixed | per-log context with fallback`
+- `Extra system text | same | run-wide | use recorded request only`
+- `Extra system text | changed | run-wide | shared extra text added`
+- `Extra system text | changed | mixed | per-log text with fallback`
 
 ### Expanded content
 
 Show:
 
-- `Mode | Recorded only` or `Append to system prompt`
+- `Mode | Use recorded request only` or `Add extra system text`
 - `Scope | Shared` or `Per-log`
 - `Fallback | Present / Missing`
 - `Customized logs | N`
@@ -768,7 +768,7 @@ Use short judgment-oriented phrases:
 ### Good examples
 
 - `Shared changed, 3 logs customized`
-- `Append enabled, fallback present`
+- `Extra text enabled, fallback present`
 - `18 lines -> 42 lines`
 - `extra tool call detected`
 

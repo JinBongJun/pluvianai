@@ -64,10 +64,10 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
       data-testid="rg-replay-request-meta"
     >
       <div className="text-[9px] font-black uppercase tracking-[0.2em] text-cyan-300/90">
-        Added request data
+        Extra request fields
       </div>
       <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-        Compare shared request fields from the baseline snapshot with the values used for replay.
+        Compare the baseline snapshot&apos;s shared fields with the values replay used.
       </p>
 
       {rows.length > 0 ? (
@@ -105,7 +105,7 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
       {perSnapshotApplied.length > 0 ? (
         <div className="mt-3 space-y-2">
           <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-            Snapshot-specific additions
+            Per-log fields
           </div>
           {perSnapshotApplied.map(({ sid, keys }) => {
             const block = meta.replay_overrides_by_snapshot_id_applied?.[sid];
