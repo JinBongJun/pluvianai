@@ -72,8 +72,8 @@ export function ReleaseGateConfigPanel({
                 Release Gate configuration
               </h2>
               <p className="mt-1.5 text-sm text-slate-400">
-                Choose a baseline, tune the candidate on the tabs, then open Preview to verify the final request
-                payload.
+                Choose a baseline, tune the candidate on the tabs, then open Preview to verify the
+                final request payload.
               </p>
             </div>
             <div className="flex shrink-0 items-start gap-3">
@@ -92,67 +92,64 @@ export function ReleaseGateConfigPanel({
 
           <div className="flex-1 overflow-y-auto overscroll-y-contain p-8 custom-scrollbar">
             <div className="flex flex-col gap-6">
-              {selectedBaselineCount === 0 && (
-                <div className="w-full rounded-xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-200/90 font-medium flex items-center gap-3">
-                  <SearchCode className="w-5 h-5 text-amber-400 shrink-0" />
-                  <span>
-                    No baseline data selected. First, send traffic to Live View, then choose baseline snapshots
-                    from Live Logs or Saved Data before running a Release Gate.
-                  </span>
-                </div>
-              )}
-
               <div className="grid gap-8 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)] items-start">
-                <ReleaseGateConfigPanelBaselineColumn m={baselineColumn} />
+                <div className="bg-[#0a0c10] xl:bg-[#0f1115]/50 xl:rounded-2xl xl:border xl:border-white/[0.03] xl:p-6 h-full flex flex-col min-w-0">
+                  <ReleaseGateConfigPanelBaselineColumn m={baselineColumn} />
+                </div>
 
-                <section className="min-w-0 space-y-4 pb-8">
-                  {!runLocked && selectedBaselineCount === 0 ? (
-                    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-400">
-                      You can tune candidate settings now, but Release Gate needs at least one baseline snapshot on
-                      the main screen before you can run a real validation.
+                <section className="min-w-0 space-y-4 pb-8 h-full flex flex-col">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                    <div
+                      className="flex flex-wrap gap-2"
+                      role="tablist"
+                      aria-label="Release Gate setup sections"
+                    >
+                      {(
+                        [
+                          { id: "core" as const, label: "Core setup" },
+                          { id: "parity" as const, label: "Advanced settings" },
+                          { id: "preview" as const, label: "Preview" },
+                        ] as const
+                      ).map(tab => (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={configTab === tab.id}
+                          id={`rg-config-tab-${tab.id}`}
+                          onClick={() => setConfigTab(tab.id)}
+                          className={clsx(
+                            "rounded-xl border px-4 py-2 text-xs font-bold uppercase tracking-[0.08em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/60",
+                            configTab === tab.id
+                              ? "border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-100"
+                              : "border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/20 hover:text-slate-200"
+                          )}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
                     </div>
-                  ) : null}
-
-                  <div
-                    className="flex flex-wrap gap-2 border-b border-white/10 pb-3"
-                    role="tablist"
-                    aria-label="Release Gate setup sections"
-                  >
-                    {(
-                      [
-                        { id: "core" as const, label: "Core setup" },
-                        { id: "parity" as const, label: "Environment parity" },
-                        { id: "preview" as const, label: "Preview" },
-                      ] as const
-                    ).map(tab => (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={configTab === tab.id}
-                        id={`rg-config-tab-${tab.id}`}
-                        onClick={() => setConfigTab(tab.id)}
-                        className={clsx(
-                          "rounded-xl border px-4 py-2 text-xs font-bold uppercase tracking-[0.08em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/60",
-                          configTab === tab.id
-                            ? "border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-100"
-                            : "border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/20 hover:text-slate-200"
-                        )}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
+                    {!runLocked && selectedBaselineCount === 0 ? (
+                      <div className="text-xs text-amber-400/90 font-medium flex items-center gap-1.5 px-2">
+                        <SearchCode className="w-4 h-4" />
+                        <span>Baseline required to run</span>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div
                     role="tabpanel"
                     id={`rg-config-panel-${configTab}`}
                     aria-labelledby={`rg-config-tab-${configTab}`}
-                    className="space-y-6"
+                    className="space-y-6 flex-1 min-h-0"
                   >
-                    {configTab === "preview" ? <ReleaseGateConfigPanelPreviewTab m={previewTab} /> : null}
+                    {configTab === "preview" ? (
+                      <ReleaseGateConfigPanelPreviewTab m={previewTab} />
+                    ) : null}
                     {configTab === "core" ? <ReleaseGateConfigPanelCoreTab m={coreTab} /> : null}
-                    {configTab === "parity" ? <ReleaseGateConfigPanelParityTab m={parityTab} /> : null}
+                    {configTab === "parity" ? (
+                      <ReleaseGateConfigPanelParityTab m={parityTab} />
+                    ) : null}
                   </div>
                 </section>
               </div>
@@ -188,7 +185,9 @@ export function ReleaseGateConfigPanel({
         <div className="fixed inset-0 z-[10100] flex items-center justify-center bg-black/80 p-6 backdrop-blur-md">
           <div className="flex max-h-[85vh] w-full max-w-5xl flex-col rounded-[24px] border border-white/10 bg-[#0a0c10] shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/5 px-6 py-5">
-              <h3 className="text-xl font-bold text-white tracking-tight">Final candidate payload (full)</h3>
+              <h3 className="text-xl font-bold text-white tracking-tight">
+                Final candidate payload (full)
+              </h3>
               <button
                 type="button"
                 onClick={() => setShowExpandedCandidatePreview(false)}

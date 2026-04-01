@@ -5,7 +5,11 @@ import React from "react";
 import { formatProviderLabel } from "./releaseGateConfigPanelHelpers";
 import type { ReleaseGateConfigPanelPreviewTabProps } from "./releaseGateConfigPanelModel.types";
 
-export function ReleaseGateConfigPanelPreviewTab({ m }: { m: ReleaseGateConfigPanelPreviewTabProps }) {
+export function ReleaseGateConfigPanelPreviewTab({
+  m,
+}: {
+  m: ReleaseGateConfigPanelPreviewTabProps;
+}) {
   const {
     setShowExpandedCandidatePreview,
     validateOverridePreview,
@@ -39,8 +43,8 @@ export function ReleaseGateConfigPanelPreviewTab({ m }: { m: ReleaseGateConfigPa
       </div>
       {selectedBaselineCount > 1 && representativeBaselineId ? (
         <div className="border-b border-white/5 px-5 py-3 text-xs text-slate-400">
-          Representative preview uses log #{representativeBaselineId} (newest by default, or your pick above).
-          The candidate run still applies to all selected logs.
+          Representative preview uses log #{representativeBaselineId} (newest by default, or your
+          pick above). The candidate run still applies to all selected logs.
         </div>
       ) : null}
 
@@ -49,7 +53,9 @@ export function ReleaseGateConfigPanelPreviewTab({ m }: { m: ReleaseGateConfigPa
           <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1.5">
             Using model
           </div>
-          <div className="text-sm font-mono text-slate-200 truncate">{usingModel || "Not specified"}</div>
+          <div className="text-sm font-mono text-slate-200 truncate">
+            {usingModel || "Not specified"}
+          </div>
         </div>
         <div className="bg-[#0f1115] p-4">
           <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1.5">
@@ -60,32 +66,50 @@ export function ReleaseGateConfigPanelPreviewTab({ m }: { m: ReleaseGateConfigPa
       </div>
 
       <div className="p-5">
-        <div className="mb-4 rounded-xl border border-white/5 bg-black/20 p-4">
-          <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">
-            Candidate request summary
+        <div className="mb-4 rounded-xl border border-white/5 bg-[#0a0c10] p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/5">
+            <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+              <SearchCode className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-emerald-300/90">
+                Candidate shape summary
+              </div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                Overview of the request payload structure
+              </div>
+            </div>
           </div>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            <div className="text-xs text-slate-400">
-              Messages preserved
-              <div className="mt-1 text-sm font-semibold text-slate-200">
+          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4 text-center">
+              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1">
+                Messages
+              </div>
+              <div className="text-xl font-bold text-slate-200">
                 {candidateRequestOverview.messageCount}
               </div>
             </div>
-            <div className="text-xs text-slate-400">
-              Tools
-              <div className="mt-1 text-sm font-semibold text-slate-200">
+            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4 text-center">
+              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1">
+                Tools
+              </div>
+              <div className="text-xl font-bold text-slate-200">
                 {candidateRequestOverview.toolsCount}
               </div>
             </div>
-            <div className="text-xs text-slate-400">
-              Extended context keys
-              <div className="mt-1 text-sm font-semibold text-slate-200">
+            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4 text-center">
+              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1">
+                Ext. Keys
+              </div>
+              <div className="text-xl font-bold text-slate-200">
                 {candidateRequestOverview.extendedContextKeys.length || "0"}
               </div>
             </div>
-            <div className="text-xs text-slate-400">
-              Additional request keys
-              <div className="mt-1 text-sm font-semibold text-slate-200">
+            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4 text-center">
+              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mb-1">
+                Add. Keys
+              </div>
+              <div className="text-xl font-bold text-slate-200">
                 {candidateRequestOverview.additionalRequestKeys.length || "0"}
               </div>
             </div>
@@ -119,17 +143,38 @@ export function ReleaseGateConfigPanelPreviewTab({ m }: { m: ReleaseGateConfigPa
             </div>
           ) : selectedBaselineCount > 0 ? (
             <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 text-xs text-emerald-100">
-              Candidate replay still includes the key request shape detected on the baseline node call.
+              Candidate replay still includes the key request shape detected on the baseline node
+              call.
             </div>
           ) : null}
         </div>
-        <pre className="min-h-[160px] max-h-[min(360px,45vh)] rounded-xl border border-white/5 bg-[#0a0c10] p-4 text-[12px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-all overflow-auto custom-scrollbar shadow-inner">
-          {validateOverridePreview
-            ? finalCandidateJson
-            : selectedBaselineCount === 0
-              ? "Select a baseline on the main screen to build a preview payload."
-              : "No override payload available yet. Adjust Core setup, then check again."}
-        </pre>
+        {validateOverridePreview ? (
+          <div className="relative group">
+            <div className="absolute top-0 right-0 p-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                type="button"
+                className="bg-[#0f1115]/80 backdrop-blur-sm border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:text-white hover:bg-white/10 transition-all flex items-center gap-1.5"
+                onClick={() => navigator.clipboard.writeText(finalCandidateJson)}
+                title="Copy to clipboard"
+              >
+                Copy JSON
+              </button>
+            </div>
+            <pre className="min-h-[160px] max-h-[min(360px,45vh)] rounded-xl border border-white/5 bg-[#0a0c10] p-4 pt-5 text-[12px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-all overflow-auto custom-scrollbar shadow-inner">
+              {finalCandidateJson}
+            </pre>
+          </div>
+        ) : (
+          <div className="min-h-[160px] max-h-[min(360px,45vh)] rounded-xl border border-white/5 border-dashed bg-[#0a0c10]/50 p-8 flex flex-col items-center justify-center text-center">
+            <SearchCode className="w-8 h-8 text-slate-500 mb-3 opacity-50" />
+            <div className="text-sm font-medium text-slate-300 mb-1">Preview not available</div>
+            <div className="text-xs text-slate-500 max-w-[280px]">
+              {selectedBaselineCount === 0
+                ? "Select a baseline on the main screen to build a preview payload."
+                : "No override payload available yet. Adjust Core setup, then check again."}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

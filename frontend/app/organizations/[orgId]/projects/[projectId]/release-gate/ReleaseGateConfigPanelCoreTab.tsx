@@ -196,28 +196,32 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
             : "Custom (BYOK): choose a provider, enter a model id, paste an API key for one run, or save it below for reuse. Live View node keys apply to Detected mode only."}
       </div>
 
-      <div className="rounded-2xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/[0.08] to-transparent p-5">
-        <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-fuchsia-300/90 mb-2">
-          Candidate run (all selected logs)
-        </div>
-        <p className="text-xs text-slate-400 leading-relaxed">
-          One candidate per run: the same model, system prompt, sampling, thresholds, and config
-          JSON apply to every selected log. Use Environment parity only when some logs need
-          different attachments, metadata, or extra system text.
-        </p>
-        {repeatRuns > 0 ? (
-          <p className="mt-2 text-[11px] text-slate-500">
-            Repeat runs: <span className="font-mono text-slate-300">{repeatRuns}×</span> (from the
-            run controls on the main screen)
+      <div className="rounded-2xl border border-fuchsia-500/25 bg-[#0a0c10] p-6 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-fuchsia-500/50 to-fuchsia-500/10" />
+        <div className="pl-2">
+          <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-fuchsia-300/90 mb-2">
+            1. Candidate run (all selected logs)
+          </div>
+          <p className="text-sm text-slate-400 leading-relaxed">
+            One candidate per run: the same model, system prompt, sampling, thresholds, and config
+            JSON apply to every selected log. Use Advanced settings only when some logs need
+            different attachments, metadata, or extra system text.
           </p>
-        ) : null}
+          {repeatRuns > 0 ? (
+            <p className="mt-3 text-xs text-slate-500 flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-fuchsia-500/50" />
+              Repeat runs: <strong className="text-slate-300 font-mono">{repeatRuns}×</strong> (from
+              the run controls on the main screen)
+            </p>
+          ) : null}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm">
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
-              Strictness
+              2. Strictness
             </div>
             <div className="text-base font-semibold text-white">Release Gate Thresholds</div>
           </div>
@@ -315,7 +319,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
-              Model Settings
+              3. Model Settings
             </div>
             <div className="flex items-center gap-3">
               <div className="text-base font-semibold text-white">
@@ -713,7 +717,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
 
       <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm flex flex-col">
         <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-3 block">
-          System Prompt
+          4. System Prompt
         </div>
         <textarea
           value={requestSystemPrompt}
@@ -744,7 +748,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
       <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm">
         <div className="mb-5">
           <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
-            Sampling
+            5. Sampling
           </div>
           <div className="text-sm text-slate-400">
             Adjust candidate generation knobs without changing snapshot content.
@@ -803,7 +807,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
           <div>
             <div className="flex items-center gap-3 mb-1">
               <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400">
-                Config-only JSON
+                6. Config-only JSON
               </div>
               {isJsonModified && (
                 <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-amber-400 border border-amber-500/20">
