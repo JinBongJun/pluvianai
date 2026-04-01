@@ -129,6 +129,13 @@ export const ProjectSchema = z
     owner_id: z.number(),
     is_active: z.boolean(),
     created_at: dateLike,
+    role: z.enum(["owner", "admin", "member", "viewer"]).nullable().optional(),
+    org_role: z.enum(["owner", "admin", "member", "viewer"]).nullable().optional(),
+    access_source: z.enum(["owned", "project_member", "organization_member"]).nullable().optional(),
+    created_by_me: z.boolean().optional(),
+    has_project_access: z.boolean().optional(),
+    owner_name: z.string().nullable().optional(),
+    entitlement_scope: z.enum(["account", "organization"]).nullable().optional(),
   })
   .passthrough();
 
@@ -198,6 +205,13 @@ export const OrganizationProjectStatsSchema = z
     alerts: z.number().optional(),
     drift_detected: z.boolean().optional(),
     drift: z.boolean().optional(),
+    role: z.enum(["owner", "admin", "member", "viewer"]).nullable().optional(),
+    org_role: z.enum(["owner", "admin", "member", "viewer"]).nullable().optional(),
+    access_source: z.enum(["owned", "project_member", "organization_member"]).nullable().optional(),
+    created_by_me: z.boolean().optional(),
+    has_project_access: z.boolean().optional(),
+    owner_name: z.string().nullable().optional(),
+    entitlement_scope: z.enum(["account", "organization"]).nullable().optional(),
   })
   .passthrough();
 

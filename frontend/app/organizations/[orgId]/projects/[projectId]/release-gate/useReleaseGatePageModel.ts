@@ -85,7 +85,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
   const projectIdStr = Array.isArray(rawProjectId) ? rawProjectId[0] : rawProjectId;
   const projectId = projectIdStr ? Number(projectIdStr) : 0;
 
-  const { project, org } = useReleaseGatePageBootstrap(orgId, projectId, href =>
+  const { project, projectSummary, org } = useReleaseGatePageBootstrap(orgId, projectId, href =>
     router.replace(href)
   );
   const { data: myUsage } = useSWR(projectId ? ACCOUNT_USAGE_SWR_KEY : null, () => authAPI.getMyUsage(), {
@@ -816,6 +816,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       orgId,
       projectId,
       project,
+      projectSummary,
       isValidating,
       activeJobId,
       cancelRequested,
@@ -827,6 +828,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       keyIssueBlocked,
       keyRegistrationMessage,
       missingProviderKeyDetails,
+      agentsError,
       showGateLoadingState,
       showGateAccessDeniedState,
       showGateApiErrorState,

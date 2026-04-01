@@ -27,6 +27,14 @@ import {
   Settings,
   Check,
 } from "lucide-react";
+import {
+  getEntitlementScopeLabel,
+  getProjectAccessSummary,
+} from "@/lib/projectAccess";
+import {
+  AccessSourceBadge,
+  ProjectRoleBadge,
+} from "@/components/project-access/AccessBadges";
 
 export type AlertFilter = "all" | "with_alerts" | "no_alerts";
 
@@ -391,10 +399,16 @@ export default function OrgProjectsPage() {
                   type="button"
                   onClick={e => {
                     e.stopPropagation();
+                    if (p.has_project_access === false) return;
                     router.push(`/organizations/${orgId}/projects/${p.id}/settings/general`);
                   }}
+                  disabled={p.has_project_access === false}
                   className="absolute top-4 right-4 z-30 w-10 h-10 rounded-full bg-[#05070c]/80 border border-white/15 flex items-center justify-center text-slate-400 hover:text-white hover:border-emerald-500/40 transition-all"
-                  title="Project settings"
+                  title={
+                    p.has_project_access === false
+                      ? "Project settings require project-level access."
+                      : "Project settings"
+                  }
                 >
                   <Settings className="w-4 h-4" />
                 </button>
@@ -439,6 +453,10 @@ export default function OrgProjectsPage() {
                     <h3 className="text-2xl font-semibold text-white mb-3 tracking-tight uppercase group-hover:text-emerald-50 transition-colors leading-none">
                       {p.name}
                     </h3>
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <AccessSourceBadge source={p.access_source} className="px-2.5 py-1" />
+                      <ProjectRoleBadge role={p.role} className="px-2.5 py-1" />
+                    </div>
                     {p.description ? (
                       <p className="text-slate-400 text-sm font-medium line-clamp-1 opacity-60 group-hover:opacity-100 transition-opacity">
                         {p.description}
@@ -448,6 +466,13 @@ export default function OrgProjectsPage() {
                         No description
                       </p>
                     )}
+                    <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                      {getProjectAccessSummary(p)}
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-600">
+                      {getEntitlementScopeLabel(p.entitlement_scope)}
+                      {p.owner_name ? ` · Owner: ${p.owner_name}` : ""}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -482,6 +507,13 @@ export default function OrgProjectsPage() {
                           <div className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">
                             ID: P-{String(p.id).padStart(4, "0")}
                           </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <AccessSourceBadge source={p.access_source} className="px-2.5 py-1" />
+                            <ProjectRoleBadge role={p.role} className="px-2.5 py-1" />
+                          </div>
+                          <div className="mt-2 text-xs text-slate-500">
+                            {getProjectAccessSummary(p)}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -504,9 +536,14 @@ export default function OrgProjectsPage() {
                       </div>
                     </td>
                     <td className="px-10 py-8 text-right">
-                      <span className="text-[10px] font-black bg-white/5 border border-white/10 px-4 py-2 rounded-full text-slate-400 group-hover:text-white transition-colors">
-                        PROTOCOL-#{p.id}
-                      </span>
+                      <div className="space-y-2">
+                        <span className="inline-flex text-[10px] font-black bg-white/5 border border-white/10 px-4 py-2 rounded-full text-slate-400 group-hover:text-white transition-colors">
+                          PROTOCOL-#{p.id}
+                        </span>
+                        <div className="text-[11px] text-slate-500">
+                          {getEntitlementScopeLabel(p.entitlement_scope)}
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 ))}

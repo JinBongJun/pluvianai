@@ -5,7 +5,9 @@ import pytest
 from fastapi import status
 from unittest.mock import patch
 
-from app.core.security import get_password_hash
+from app.main import app
+from app.core.security import get_current_user, get_password_hash
+from app.models.organization import Organization, OrganizationMember
 from app.models.project_member import ProjectMember
 from app.models.user import User
 
@@ -100,6 +102,56 @@ class TestProjectsAPI:
         data = response.json()
         assert data["id"] == test_project.id
         assert data["name"] == test_project.name
+        assert data["role"] == "owner"
+        assert data["access_source"] == "owned"
+        assert data["created_by_me"] is True
+        assert data["has_project_access"] is True
+        assert data["entitlement_scope"] == "account"
+
+    async def test_org_member_without_project_membership_gets_structured_project_denial(
+        self, async_client, auth_headers, db, test_project, test_user
+    ):
+        org = Organization(name="Structured Access Org", owner_id=test_user.id, plan_type="free")
+        db.add(org)
+        db.commit()
+        db.refresh(org)
+
+        test_project.organization_id = org.id
+        db.add(OrganizationMember(organization_id=org.id, user_id=test_user.id, role="owner"))
+
+        org_viewer = User(
+            email="org-only-project-visibility@example.com",
+            hashed_password=get_password_hash("password123"),
+            full_name="Org Only Viewer",
+            is_active=True,
+        )
+        db.add(org_viewer)
+        db.commit()
+        db.refresh(org_viewer)
+
+        db.add(OrganizationMember(organization_id=org.id, user_id=org_viewer.id, role="viewer"))
+        db.commit()
+
+        app.dependency_overrides[get_current_user] = lambda: org_viewer
+        try:
+            response = await async_client.get(
+                f"/api/v1/projects/{test_project.id}",
+                headers=auth_headers,
+            )
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        body = response.json()
+        payload = body.get("detail") or body.get("error") or {}
+        assert payload.get("code") == "PROJECT_ACCESS_DENIED"
+        assert "visible because you belong to the organization" in payload.get("message", "").lower()
+        details = payload.get("details") or {}
+        if isinstance(details.get("details"), dict):
+            details = details["details"]
+        assert details.get("access_source") == "organization_member"
+        assert details.get("org_role") == "viewer"
+        assert details.get("has_project_access") is False
     
     async def test_get_nonexistent_project(self, async_client, auth_headers):
         """Test getting a project that doesn't exist"""

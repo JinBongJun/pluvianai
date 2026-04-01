@@ -268,6 +268,18 @@ export default function AccountBillingPage() {
             </p>
           ) : null}
         </div>
+        <div className="mb-6 rounded-2xl border border-white/10 bg-black/20 p-4 text-xs leading-relaxed text-slate-300">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-white">
+            Shared project policy
+          </p>
+          <p className="mt-2">
+            These account limits also apply when you access projects shared through Team & Access.
+          </p>
+          <p className="mt-2 text-slate-400">
+            Organization membership can make a project visible, but your project role still decides
+            whether you can actually use Live View, Release Gate, and other protected actions.
+          </p>
+        </div>
         {(entitlementStatus === "active_until_period_end" || subscriptionStatus === "cancelled") && currentPeriodEnd && (
           <div className="mb-6 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-sky-200">

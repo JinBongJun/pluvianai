@@ -1,3 +1,4 @@
+import type { Project } from "./types";
 import { apiClient, unwrapResponse, logWarn } from "./client";
 import { validateArrayResponse } from "@/lib/validate";
 import { ProjectSchema } from "@/lib/schemas";
@@ -9,7 +10,7 @@ export const projectsAPI = {
     return validateArrayResponse(ProjectSchema, response.data, "/projects");
   },
 
-  get: async (id: number) => {
+  get: async (id: number): Promise<Project> => {
     const response = await apiClient.get(`/projects/${id}`);
     try {
       return ProjectSchema.parse(response.data);

@@ -10,7 +10,11 @@ from sqlalchemy import or_
 from pydantic import BaseModel, ConfigDict, Field
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.core.permissions import check_project_access, ProjectRole, get_user_project_role
+from app.core.permissions import (
+    check_project_access,
+    ProjectRole,
+    get_project_access_context,
+)
 from app.core.decorators import handle_errors
 from app.core.logging_config import logger
 from app.core.dependencies import get_project_service, get_evaluation_rubric_repository, get_audit_service
@@ -84,9 +88,37 @@ class ProjectResponse(BaseModel):
     owner_id: int
     is_active: bool
     role: str | None = None  # user's role in this project
+    org_role: str | None = None  # user's role in the parent organization
+    access_source: str | None = None  # owned | project_member | organization_member
+    created_by_me: bool | None = None
+    has_project_access: bool | None = None
+    owner_name: str | None = None
+    entitlement_scope: str | None = None
     organization_id: int | None = None  # organization this project belongs to
     usage_mode: str = "full"  # "full" | "test_only" (Design 5.1.5)
     diagnostic_config: dict | None = {}
+
+
+def _build_project_response(project: Project, current_user: User, db: Session) -> ProjectResponse:
+    access_context = get_project_access_context(project, current_user.id, db)
+    owner_name = getattr(getattr(project, "owner", None), "full_name", None)
+    return ProjectResponse(
+        id=project.id,
+        name=project.name,
+        description=project.description,
+        owner_id=project.owner_id,
+        is_active=project.is_active,
+        role=access_context.get("role"),
+        org_role=access_context.get("org_role"),
+        access_source=access_context.get("access_source"),
+        created_by_me=access_context.get("created_by_me"),
+        has_project_access=access_context.get("has_project_access"),
+        owner_name=owner_name,
+        entitlement_scope=access_context.get("entitlement_scope"),
+        organization_id=project.organization_id,
+        usage_mode=getattr(project, "usage_mode", "full") or "full",
+        diagnostic_config=getattr(project, "diagnostic_config", {}) or {},
+    )
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 @handle_errors
@@ -243,17 +275,7 @@ async def list_projects(
 
     # Convert to response models
     result = [
-        ProjectResponse(
-            id=p.id,
-            name=p.name,
-            description=p.description,
-            owner_id=p.owner_id,
-            is_active=p.is_active,
-            role=get_user_project_role(p.id, current_user.id, db),
-            organization_id=p.organization_id,
-            usage_mode=getattr(p, "usage_mode", "full") or "full",
-            diagnostic_config=getattr(p, "diagnostic_config", {}) or {},
-        )
+        _build_project_response(p, current_user, db)
         for p in all_projects
     ]
 
@@ -267,18 +289,7 @@ async def list_projects(
 async def get_project(project_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get a specific project (any member can view)"""
     project = check_project_access(project_id, current_user, db)
-    role = get_user_project_role(project_id, current_user.id, db)
-    return ProjectResponse(
-        id=project.id,
-        name=project.name,
-        description=project.description,
-        owner_id=project.owner_id,
-        is_active=project.is_active,
-        role=role,
-        organization_id=project.organization_id,
-        usage_mode=getattr(project, "usage_mode", "full") or "full",
-        diagnostic_config=getattr(project, "diagnostic_config", {}) or {},
-    )
+    return _build_project_response(project, current_user, db)
 
 
 @router.get("/{project_id}/data-retention-summary")
@@ -395,20 +406,9 @@ async def update_project(
         user_agent=user_agent
     )
 
-    role = get_user_project_role(project_id, current_user.id, db)
     logger.info(f"Project updated successfully: {project_id}")
 
-    return ProjectResponse(
-        id=project.id,
-        name=project.name,
-        description=project.description,
-        owner_id=project.owner_id,
-        is_active=project.is_active,
-        role=role,
-        organization_id=project.organization_id,
-        usage_mode=getattr(project, "usage_mode", "full") or "full",
-        diagnostic_config=getattr(project, "diagnostic_config", {}) or {},
-    )
+    return _build_project_response(project, current_user, db)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -641,18 +641,7 @@ async def apply_project_patch(
     invalidate_agent_visibility_cache(project_id)
     publish_agents_changed(project_id, force_refresh=True)
     
-    role = get_user_project_role(project_id, current_user.id, db)
-    
-    return ProjectResponse(
-        id=project.id,
-        name=project.name,
-        description=project.description,
-        owner_id=project.owner_id,
-        is_active=project.is_active,
-        role=role,
-        organization_id=project.organization_id,
-        usage_mode=getattr(project, "usage_mode", "full") or "full",
-    )
+    return _build_project_response(project, current_user, db)
 
 
 @router.post("/{project_id}/behavior-datasets/{dataset_id}/delete")
