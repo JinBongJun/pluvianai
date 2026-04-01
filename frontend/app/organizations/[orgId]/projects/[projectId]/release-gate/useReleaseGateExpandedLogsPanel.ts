@@ -18,64 +18,75 @@ export type UseReleaseGateExpandedLogsPanelParams = {
 };
 
 export function useReleaseGateExpandedLogsPanel(p: UseReleaseGateExpandedLogsPanelParams) {
+  const {
+    recentSnapshots,
+    baselineSnapshotsById,
+    snapshotEvalFailed,
+    recentSnapshotsError,
+    datasetsError,
+    expandedDatasetSnapshots404,
+    datasetSnapshots404,
+    expandedDatasetSnapshotsError,
+    datasetSnapshotsError,
+  } = p;
   const [logsStatusFilter, setLogsStatusFilter] = useState<LogsStatusFilter>("all");
   const [logsSortMode, setLogsSortMode] = useState<"newest" | "oldest">("newest");
   const [logsShowLimit, setLogsShowLimit] = useState<10 | 20 | 30 | 50 | 100 | 200>(30);
 
   const recentSnapshotsErrorMessage = useMemo(
     () =>
-      p.recentSnapshotsError
+      recentSnapshotsError
         ? extractErrorMessage(
-            p.recentSnapshotsError,
+            recentSnapshotsError,
             "Unable to load recent snapshots right now. Retry in a few seconds."
           )
         : "",
-    [p.recentSnapshotsError]
+    [recentSnapshotsError]
   );
 
   const datasetsErrorMessage = useMemo(
     () =>
-      p.datasetsError
-        ? extractErrorMessage(p.datasetsError, "Unable to load saved datasets right now. Please retry.")
+      datasetsError
+        ? extractErrorMessage(datasetsError, "Unable to load saved datasets right now. Please retry.")
         : "",
-    [p.datasetsError]
+    [datasetsError]
   );
 
   const expandedDatasetErrorMessage = useMemo(() => {
-    if (p.expandedDatasetSnapshots404 || p.datasetSnapshots404) {
+    if (expandedDatasetSnapshots404 || datasetSnapshots404) {
       return "This dataset is no longer available (it may have been deleted).";
     }
-    if (p.expandedDatasetSnapshotsError) {
+    if (expandedDatasetSnapshotsError) {
       return extractErrorMessage(
-        p.expandedDatasetSnapshotsError,
+        expandedDatasetSnapshotsError,
         "Unable to load snapshots in this dataset right now. Please retry."
       );
     }
-    if (p.datasetSnapshotsError) {
+    if (datasetSnapshotsError) {
       return extractErrorMessage(
-        p.datasetSnapshotsError,
+        datasetSnapshotsError,
         "Unable to resolve dataset snapshots for this run. Please retry."
       );
     }
     return "";
   }, [
-    p.expandedDatasetSnapshots404,
-    p.datasetSnapshots404,
-    p.expandedDatasetSnapshotsError,
-    p.datasetSnapshotsError,
+    expandedDatasetSnapshots404,
+    datasetSnapshots404,
+    expandedDatasetSnapshotsError,
+    datasetSnapshotsError,
   ]);
 
   const logsFilteredSorted = useMemo((): Record<string, unknown>[] => {
-    const items: Record<string, unknown>[] = Array.isArray(p.recentSnapshots)
-      ? (p.recentSnapshots as Record<string, unknown>[])
+    const items: Record<string, unknown>[] = Array.isArray(recentSnapshots)
+      ? (recentSnapshots as Record<string, unknown>[])
       : [];
     const filtered = items.filter(item => {
       const rowId = String(item.id ?? "");
       const full =
-        (rowId ? p.baselineSnapshotsById.get(rowId) : undefined) ??
+        (rowId ? baselineSnapshotsById.get(rowId) : undefined) ??
         item;
       if (logsStatusFilter === "all") return true;
-      const failed = p.snapshotEvalFailed(full);
+      const failed = snapshotEvalFailed(full);
       if (logsStatusFilter === "failed") return failed;
       return !failed;
     });
@@ -86,9 +97,9 @@ export function useReleaseGateExpandedLogsPanel(p: UseReleaseGateExpandedLogsPan
     });
     return filtered;
   }, [
-    p.baselineSnapshotsById,
-    p.recentSnapshots,
-    p.snapshotEvalFailed,
+    baselineSnapshotsById,
+    recentSnapshots,
+    snapshotEvalFailed,
     logsSortMode,
     logsStatusFilter,
   ]);

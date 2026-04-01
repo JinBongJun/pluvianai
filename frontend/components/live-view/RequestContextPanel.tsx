@@ -93,13 +93,16 @@ function messageContentPreview(m: Record<string, unknown>): string {
  */
 export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnapshot }) {
   const meta = snapshot.request_context_meta;
-  const payload = (snapshot.payload || {}) as Record<string, unknown>;
-  const req = getRequestObject(payload) ?? undefined;
+  const payload = useMemo(
+    () => ((snapshot.payload || {}) as Record<string, unknown>),
+    [snapshot.payload]
+  );
+  const req = useMemo(() => getRequestObject(payload) ?? undefined, [payload]);
   const messages = useMemo(() => {
     const raw = req?.messages;
     if (Array.isArray(raw)) return raw.filter(m => m && typeof m === "object") as Record<string, unknown>[];
     return null;
-  }, [payload]);
+  }, [req?.messages]);
 
   const extendedBlocks = useMemo(() => {
     const blocks: { key: string; label: string; value: unknown }[] = [];

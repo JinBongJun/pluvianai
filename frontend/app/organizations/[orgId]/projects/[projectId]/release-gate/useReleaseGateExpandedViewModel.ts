@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import type { ReleaseGateKeysContextValue } from "./ReleaseGateKeysContext";
 import type { ReleaseGatePageContextValue } from "./releaseGatePageContext.types";
@@ -247,7 +247,7 @@ export function useReleaseGateExpandedViewModel({
     return parts;
   }, [historyDateSummary, historyStatus, historyTraceId]);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     setViewMode("map");
     setAgentId("");
     setSelectedAgent(null);
@@ -261,9 +261,23 @@ export function useReleaseGateExpandedViewModel({
     clearHistoryOverlayPending();
     setSelectedRunId(null);
     setRepeatDropdownOpen(false);
-  };
+  }, [
+    setViewMode,
+    setAgentId,
+    setSelectedAgent,
+    setDatasetIds,
+    setSnapshotIds,
+    setRunSnapshotIds,
+    setRunDatasetIds,
+    setExpandedDatasetId,
+    setDetailAttemptView,
+    setExpandedCaseIndex,
+    clearHistoryOverlayPending,
+    setSelectedRunId,
+    setRepeatDropdownOpen,
+  ]);
 
-  const handleRepeatSelect = (runs: number) => {
+  const handleRepeatSelect = useCallback((runs: number) => {
     if (isValidating || activeJobId) return;
     if ((runs === 50 || runs === 100) && typeof window !== "undefined") {
       const approved = window.confirm(
@@ -273,7 +287,7 @@ export function useReleaseGateExpandedViewModel({
     }
     setRepeatRuns(runs);
     setRepeatDropdownOpen(false);
-  };
+  }, [isValidating, activeJobId, setRepeatRuns, setRepeatDropdownOpen]);
 
   const runLocked = isValidating || Boolean(activeJobId);
 

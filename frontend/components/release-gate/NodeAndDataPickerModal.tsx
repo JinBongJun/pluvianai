@@ -463,7 +463,7 @@ export function NodeAndDataPickerModal({
                               ? "border-fuchsia-500/60 bg-fuchsia-500/10"
                               : "border-white/10 bg-white/[0.02] hover:border-white/30 hover:bg-white/5"
                           }`}
-                          aria-checked={isSelected}
+                          aria-pressed={isSelected}
                         >
                           <div
                             className={`mt-0.5 shrink-0 ${isSelected ? "text-fuchsia-400" : "text-slate-600"}`}
@@ -536,7 +536,7 @@ export function NodeAndDataPickerModal({
                               type="button"
                               onClick={() => toggleDataset(dataset.id)}
                               className="flex items-start gap-3 min-w-0 flex-1 text-left"
-                              aria-checked={isSelected}
+                              aria-pressed={isSelected}
                             >
                               <div
                                 className={`mt-0.5 shrink-0 ${isSelected ? "text-fuchsia-400" : "text-slate-600"}`}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import useSWR from "swr";
 import { useRouter } from "next/navigation";
@@ -70,7 +70,7 @@ export default function ProjectGeneralSettingsPage() {
       errorRetryCount: 0,
     }
   );
-  const deletedSnapshots = deletedSnapshotsData?.items ?? [];
+  const deletedSnapshots = useMemo(() => deletedSnapshotsData?.items ?? [], [deletedSnapshotsData?.items]);
 
   useEffect(() => {
     if (!deletedSnapshots.length) {

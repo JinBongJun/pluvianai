@@ -22,10 +22,13 @@ export function useReleaseGateBehaviorDatasets(options: {
 }) {
   const { projectId, agentId, runLocked, expandedDatasetId, runDatasetIds } = options;
 
-  const datasetsKey =
-    projectId && !isNaN(projectId) && agentId?.trim()
-      ? ["behavior-datasets", projectId, agentId.trim()]
-      : null;
+  const datasetsKey = useMemo(
+    () =>
+      projectId && !isNaN(projectId) && agentId?.trim()
+        ? ["behavior-datasets", projectId, agentId.trim()]
+        : null,
+    [projectId, agentId]
+  );
   const {
     data: datasetsData,
     isLoading: datasetsLoading,
@@ -43,10 +46,13 @@ export function useReleaseGateBehaviorDatasets(options: {
     [runDatasetIds]
   );
 
-  const datasetSnapshotsKey =
-    projectId && !isNaN(projectId) && normalizedRunDatasetIds.length > 0
-      ? ["behavior-dataset-snapshots", projectId, normalizedRunDatasetIds.join(",")]
-      : null;
+  const datasetSnapshotsKey = useMemo(
+    () =>
+      projectId && !isNaN(projectId) && normalizedRunDatasetIds.length > 0
+        ? ["behavior-dataset-snapshots", projectId, normalizedRunDatasetIds.join(",")]
+        : null,
+    [projectId, normalizedRunDatasetIds]
+  );
   const {
     data: datasetSnapshotsData,
     isLoading: datasetSnapshotsLoading,
@@ -113,10 +119,13 @@ export function useReleaseGateBehaviorDatasets(options: {
     return normalizedRunDatasetIds.length > 0 && missingCount === normalizedRunDatasetIds.length;
   })();
 
-  const expandedDatasetSnapshotsKey =
-    projectId && !isNaN(projectId) && expandedDatasetId
-      ? ["dataset-snapshots-expanded", projectId, expandedDatasetId]
-      : null;
+  const expandedDatasetSnapshotsKey = useMemo(
+    () =>
+      projectId && !isNaN(projectId) && expandedDatasetId
+        ? ["dataset-snapshots-expanded", projectId, expandedDatasetId]
+        : null,
+    [projectId, expandedDatasetId]
+  );
   const {
     data: expandedDatasetSnapshotsData,
     isLoading: expandedDatasetSnapshotsLoading,

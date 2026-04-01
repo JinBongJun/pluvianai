@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 export type UseReleaseGateRunSelectionMirrorParams = {
@@ -13,12 +13,22 @@ export type UseReleaseGateRunSelectionMirrorParams = {
 /** Mirrors picker `datasetIds` / `snapshotIds` into frozen run lists used by baseline + validate. */
 export function useReleaseGateRunSelectionMirror(p: UseReleaseGateRunSelectionMirrorParams) {
   const { datasetIds, snapshotIds, setRunDatasetIds, setRunSnapshotIds } = p;
+  const datasetIdsKey = useMemo(() => datasetIds.join(","), [datasetIds]);
+  const snapshotIdsKey = useMemo(() => snapshotIds.join(","), [snapshotIds]);
+  const mirroredDatasetIds = useMemo(
+    () => (datasetIdsKey ? datasetIdsKey.split(",") : []),
+    [datasetIdsKey]
+  );
+  const mirroredSnapshotIds = useMemo(
+    () => (snapshotIdsKey ? snapshotIdsKey.split(",") : []),
+    [snapshotIdsKey]
+  );
 
   useEffect(() => {
-    setRunDatasetIds(datasetIds.length ? [...datasetIds] : []);
-  }, [datasetIds.join(","), setRunDatasetIds]);
+    setRunDatasetIds(mirroredDatasetIds);
+  }, [mirroredDatasetIds, setRunDatasetIds]);
 
   useEffect(() => {
-    setRunSnapshotIds(snapshotIds.length ? [...snapshotIds] : []);
-  }, [snapshotIds.join(","), setRunSnapshotIds]);
+    setRunSnapshotIds(mirroredSnapshotIds);
+  }, [mirroredSnapshotIds, setRunSnapshotIds]);
 }
