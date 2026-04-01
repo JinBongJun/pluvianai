@@ -105,8 +105,8 @@ function ReleaseGateLayoutGateBodyInner({
     return (
       <div className="relative h-full">
         {projectAccess ? (
-          <div className="absolute left-6 top-6 z-30 max-w-[560px]">
-            <ProjectAccessContextBanner project={projectAccess} />
+          <div className="absolute left-6 top-[92px] z-30 max-w-[430px]">
+            <ProjectAccessContextBanner project={projectAccess} variant="compact" />
           </div>
         ) : null}
         <ReleaseGateMap
@@ -122,8 +122,8 @@ function ReleaseGateLayoutGateBodyInner({
   return (
     <div className="relative h-full">
       {projectAccess ? (
-        <div className="absolute left-6 top-6 z-30 max-w-[560px]">
-          <ProjectAccessContextBanner project={projectAccess} />
+        <div className="absolute left-6 top-[92px] z-30 max-w-[430px]">
+          <ProjectAccessContextBanner project={projectAccess} variant="compact" />
         </div>
       ) : null}
       <ReleaseGateExpandedView />

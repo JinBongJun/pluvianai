@@ -68,13 +68,34 @@ export function getEntitlementScopeHelpText(scope?: string | null): string {
     : "Limits for this shared project currently follow the signed-in member's account plan.";
 }
 
+export function getProjectRoleContextSummary(project?: AccessAwareProject | null): string {
+  if (!project) return "Role details unavailable.";
+
+  const projectRoleLabel = project.role ? getProjectRoleLabel(project.role) : null;
+  const orgRoleLabel = project.org_role ? getProjectRoleLabel(project.org_role) : null;
+
+  if (projectRoleLabel && orgRoleLabel && projectRoleLabel !== orgRoleLabel) {
+    return `Project role: ${projectRoleLabel}. Organization role: ${orgRoleLabel}.`;
+  }
+  if (projectRoleLabel && orgRoleLabel) {
+    return `Project role: ${projectRoleLabel}. Organization role: ${orgRoleLabel}.`;
+  }
+  if (projectRoleLabel) {
+    return `Project role: ${projectRoleLabel}.`;
+  }
+  if (orgRoleLabel) {
+    return `Organization role: ${orgRoleLabel}.`;
+  }
+  return "Role details unavailable.";
+}
+
 export function getProjectAccessSummary(project?: AccessAwareProject | null): string {
   if (!project) return "Access details unavailable.";
   if (project.access_source === "owned") {
     return "You created this project and have full project access.";
   }
   if (project.access_source === "project_member") {
-    return `You have direct project access as ${getProjectRoleLabel(project.role).toLowerCase()}.`;
+    return "You have direct project access to this project.";
   }
   if (project.access_source === "organization_member") {
     return project.has_project_access === false

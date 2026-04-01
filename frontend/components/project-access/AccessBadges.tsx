@@ -48,12 +48,15 @@ const ROLE_STYLES: Record<
 export function ProjectRoleBadge({
   role,
   emptyLabel = "No project role",
+  prefix,
   className,
 }: {
   role?: string | null;
   emptyLabel?: string;
+  prefix?: string;
   className?: string;
 }) {
+  const withPrefix = (label: string) => (prefix ? `${prefix}: ${label}` : label);
   if (!role) {
     return (
       <span
@@ -63,7 +66,7 @@ export function ProjectRoleBadge({
         )}
       >
         <UserRound className="h-3 w-3 text-slate-400" />
-        {emptyLabel}
+        {withPrefix(emptyLabel)}
       </span>
     );
   }
@@ -78,7 +81,7 @@ export function ProjectRoleBadge({
           className
         )}
       >
-        {role}
+        {withPrefix(role)}
       </span>
     );
   }
@@ -93,9 +96,19 @@ export function ProjectRoleBadge({
       )}
     >
       <Icon className={clsx("h-3 w-3", style.iconClassName)} />
-      {getProjectRoleLabel(role)}
+      {withPrefix(getProjectRoleLabel(role))}
     </span>
   );
+}
+
+export function OrganizationRoleBadge({
+  role,
+  className,
+}: {
+  role?: string | null;
+  className?: string;
+}) {
+  return <ProjectRoleBadge role={role} emptyLabel="No org role" prefix="Org" className={className} />;
 }
 
 export function AccessSourceBadge({

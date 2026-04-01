@@ -89,6 +89,7 @@ export function buildReleaseGatePageContextParams(
   const replayModelMode = lv.modelSource === "hosted" ? "hosted" : "custom";
   return {
     ...rest,
+    agentId: lv.agentId,
     tab: lv.tab,
     setTab: lv.setTab,
     setViewMode: lv.setViewMode,

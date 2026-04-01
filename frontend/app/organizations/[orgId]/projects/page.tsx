@@ -33,6 +33,7 @@ import {
 } from "@/lib/projectAccess";
 import {
   AccessSourceBadge,
+  OrganizationRoleBadge,
   ProjectRoleBadge,
 } from "@/components/project-access/AccessBadges";
 
@@ -455,7 +456,10 @@ export default function OrgProjectsPage() {
                     </h3>
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                       <AccessSourceBadge source={p.access_source} className="px-2.5 py-1" />
-                      <ProjectRoleBadge role={p.role} className="px-2.5 py-1" />
+                      <ProjectRoleBadge role={p.role} prefix="Project" className="px-2.5 py-1" />
+                      {p.org_role && (!p.role || p.org_role !== p.role) ? (
+                        <OrganizationRoleBadge role={p.org_role} className="px-2.5 py-1" />
+                      ) : null}
                     </div>
                     {p.description ? (
                       <p className="text-slate-400 text-sm font-medium line-clamp-1 opacity-60 group-hover:opacity-100 transition-opacity">
@@ -509,7 +513,10 @@ export default function OrgProjectsPage() {
                           </div>
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             <AccessSourceBadge source={p.access_source} className="px-2.5 py-1" />
-                            <ProjectRoleBadge role={p.role} className="px-2.5 py-1" />
+                            <ProjectRoleBadge role={p.role} prefix="Project" className="px-2.5 py-1" />
+                            {p.org_role && (!p.role || p.org_role !== p.role) ? (
+                              <OrganizationRoleBadge role={p.org_role} className="px-2.5 py-1" />
+                            ) : null}
                           </div>
                           <div className="mt-2 text-xs text-slate-500">
                             {getProjectAccessSummary(p)}
