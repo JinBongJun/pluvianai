@@ -113,10 +113,12 @@ export function useReleaseGateValidateRun(options: {
   const [error, setError] = useState("");
   const [planError, setPlanError] = useState<PlanLimitError | null>(null);
   const [runValidateCooldownUntilMs, setRunValidateCooldownUntilMs] = useState(0);
+  const runLocked = isValidating || Boolean(activeJobId);
 
   const cancelRequestedRef = useRef(false);
   const pollNowRef = useRef<null | (() => void)>(null);
   const cancelBurstRemainingRef = useRef(0);
+  const pendingHistoryRefreshRef = useRef(false);
 
   useEffect(() => {
     cancelRequestedRef.current = cancelRequested;
@@ -142,6 +144,13 @@ export function useReleaseGateValidateRun(options: {
     pollNowRef.current?.();
   }, [isPageVisible]);
 
+  useEffect(() => {
+    if (runLocked) return;
+    if (!pendingHistoryRefreshRef.current) return;
+    pendingHistoryRefreshRef.current = false;
+    void mutateHistoryRef.current?.();
+  }, [runLocked, mutateHistoryRef]);
+
   const clearRunUi = useCallback(() => {
     setResult(null);
     setError("");
@@ -150,6 +159,7 @@ export function useReleaseGateValidateRun(options: {
     setCancelLocked(false);
     setIsValidating(false);
     cancelRequestedRef.current = false;
+    pendingHistoryRefreshRef.current = false;
   }, []);
 
   const handleCancelActiveJob = useCallback(async () => {
@@ -243,16 +253,20 @@ export function useReleaseGateValidateRun(options: {
       if (status === "succeeded") {
         setResult(finalResult);
         setError("");
-        void mutateHistoryRef.current?.();
-      } else if (status === "canceled") {
-        setResult(null);
-        setError("Run canceled.");
-      } else {
+        pendingHistoryRefreshRef.current = true;
+      } else if (status === "failed") {
         const jobError = finalJob?.error_detail as any;
         setResult(null);
         setError(
           String(jobError?.message || jobError?.detail || "Release Gate validation failed.")
         );
+        pendingHistoryRefreshRef.current = true;
+      } else if (status === "canceled") {
+        setResult(null);
+        setError("Run canceled.");
+      } else {
+        setResult(null);
+        setError("Release Gate validation failed.");
       }
       setActiveJobId(null);
       setIsValidating(false);

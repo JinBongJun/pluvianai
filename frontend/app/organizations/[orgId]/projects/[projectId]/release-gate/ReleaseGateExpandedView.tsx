@@ -6,19 +6,45 @@
  * (see docs/live-view-context-privacy-plan.md).
  */
 import React, { useContext } from "react";
+import dynamic from "next/dynamic";
 import { ReleaseGateKeysContext } from "./ReleaseGateKeysContext";
 import { ReleaseGatePageContext } from "./ReleaseGatePageContext";
 import { ReleaseGateValidateRunContext } from "./ReleaseGateValidateRunContext";
-import { ReleaseGateExpandedBaselineDetailPortal } from "./ReleaseGateExpandedBaselineDetailPortal";
-import { ReleaseGateConfigPanel } from "./ReleaseGateConfigPanel";
 import { ReleaseGateSelectedAgentSurface } from "./ReleaseGateSelectedAgentSurface";
 import { useReleaseGateExpandedViewModel } from "./useReleaseGateExpandedViewModel";
 import { getReleaseGateMainViewState } from "./releaseGateMainViewState";
 import { ReleaseGateMap } from "@/components/release-gate/ReleaseGateMap";
-import { AttemptDetailOverlay } from "@/components/release-gate/AttemptDetailOverlay";
-import { ReleaseGateRunDataSidePanel } from "@/components/release-gate/ReleaseGateRunDataSidePanel";
-import { ReleaseGateRunOutputSidePanel } from "@/components/release-gate/ReleaseGateRunOutputSidePanel";
 import { ClientPortal } from "@/components/shared/ClientPortal";
+
+const ReleaseGateRunDataSidePanel = dynamic(
+  () =>
+    import("@/components/release-gate/ReleaseGateRunDataSidePanel").then(
+      mod => mod.ReleaseGateRunDataSidePanel
+    ),
+  { ssr: false }
+);
+const ReleaseGateRunOutputSidePanel = dynamic(
+  () =>
+    import("@/components/release-gate/ReleaseGateRunOutputSidePanel").then(
+      mod => mod.ReleaseGateRunOutputSidePanel
+    ),
+  { ssr: false }
+);
+const AttemptDetailOverlay = dynamic(
+  () => import("@/components/release-gate/AttemptDetailOverlay").then(mod => mod.AttemptDetailOverlay),
+  { ssr: false }
+);
+const ReleaseGateConfigPanel = dynamic(
+  () => import("./ReleaseGateConfigPanel").then(mod => mod.ReleaseGateConfigPanel),
+  { ssr: false }
+);
+const ReleaseGateExpandedBaselineDetailPortal = dynamic(
+  () =>
+    import("./ReleaseGateExpandedBaselineDetailPortal").then(
+      mod => mod.ReleaseGateExpandedBaselineDetailPortal
+    ),
+  { ssr: false }
+);
 
 export function ReleaseGateExpandedView() {
   const ctx = useContext(ReleaseGatePageContext);

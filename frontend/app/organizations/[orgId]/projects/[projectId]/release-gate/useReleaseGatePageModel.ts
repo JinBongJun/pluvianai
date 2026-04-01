@@ -2,14 +2,12 @@
 
 import { useCallback, useMemo } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import useSWR from "swr";
 
 import type { ReleaseGateLayoutGateBodyProps } from "./ReleaseGateLayoutGateBody";
 import type { ReleaseGatePageContextValue } from "./releaseGatePageContext.types";
 import type { ReleaseGateValidateRunContextValue } from "./ReleaseGateValidateRunContext";
 import type { PlanLimitError } from "@/lib/planErrors";
-import { authAPI } from "@/lib/api/auth";
-import { ACCOUNT_USAGE_SWR_KEY } from "@/lib/accountUsage";
+import { computeAccountUsageMetrics } from "@/lib/accountUsage";
 import { useReleaseGatePageModelReturn } from "./useReleaseGatePageModelReturn";
 import { useReleaseGatePageContextValue } from "./useReleaseGatePageContextValue";
 import { useReleaseGatePageContextParams } from "./useReleaseGatePageContextParams";
@@ -42,6 +40,8 @@ import {
   editableRequestBodyWithoutTools,
   extractSystemPromptRawFromPayload,
 } from "./releaseGatePageContent.lib";
+import { useAccountUsage } from "@/hooks/useAccountUsage";
+import type { OrganizationProject, OrganizationSummary } from "@/lib/api";
 
 export type ReleaseGatePageModel = {
   validateRunContextValue: ReleaseGateValidateRunContextValue;
@@ -59,6 +59,8 @@ export type ReleaseGatePageModel = {
     projectId: number;
     projectName?: string;
     orgName?: string;
+    organizations?: OrganizationSummary[];
+    projects?: OrganizationProject[];
     onAction: (actionId: string) => void;
   };
 };
@@ -85,13 +87,13 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
   const projectIdStr = Array.isArray(rawProjectId) ? rawProjectId[0] : rawProjectId;
   const projectId = projectIdStr ? Number(projectIdStr) : 0;
 
-  const { project, projectSummary, org } = useReleaseGatePageBootstrap(orgId, projectId, href =>
-    router.replace(href)
+  const { project, projectSummary, org, organizations, orgProjects } = useReleaseGatePageBootstrap(
+    orgId,
+    projectId,
+    href =>
+      router.replace(href)
   );
-  const { data: myUsage } = useSWR(projectId ? ACCOUNT_USAGE_SWR_KEY : null, () => authAPI.getMyUsage(), {
-    revalidateOnFocus: true,
-    dedupingInterval: 30_000,
-  });
+  const { data: myUsage } = useAccountUsage(Boolean(projectId));
   const {
     mutateHistoryRef,
     validateRunDepsRef,
@@ -220,7 +222,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     historyItems,
     historyTotal,
     mutateHistory,
-  } = useReleaseGateHistory({ projectId, runLocked });
+  } = useReleaseGateHistory({ projectId, runLocked, agentId, enabled: Boolean(agentId.trim()) });
   mutateHistoryRef.current = mutateHistory;
 
   const agentIdFromUrl = searchParams.get("agent_id")?.trim() ?? "";
@@ -433,16 +435,9 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       agentId,
     });
 
-  const replayUsageUsed = Number(
-    myUsage?.usage_this_month?.release_gate_attempts ??
-      myUsage?.usage_this_month?.platform_replay_credits ??
-      myUsage?.usage_this_month?.guard_credits ??
-      0
-  );
-  const replayUsageLimitRaw =
-    myUsage?.limits?.release_gate_attempts_per_month ??
-    myUsage?.limits?.platform_replay_credits_per_month ??
-    myUsage?.limits?.guard_credits_per_month;
+  const accountUsageMetrics = computeAccountUsageMetrics(myUsage);
+  const replayUsageUsed = Number(accountUsageMetrics?.replayUsed ?? 0);
+  const replayUsageLimitRaw = accountUsageMetrics?.replayLimit ?? null;
   const replayUsageLimit =
     replayUsageLimitRaw == null || Number.isNaN(Number(replayUsageLimitRaw))
       ? null
@@ -453,7 +448,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
   const keyBlocked = providerKeyBlocked || replayUsageExhausted;
   const keyIssueBlocked = providerKeyIssueBlocked || replayUsageExhausted;
   const keyRegistrationMessage = replayUsageExhausted
-    ? `Release Gate usage exhausted (${replayUsageUsed}/${replayUsageLimit}). Reduce selected logs or repeats, or upgrade your plan.`
+    ? `Release Gate attempts exhausted (${replayUsageUsed}/${replayUsageLimit}). Reduce selected logs or repeats, or upgrade your plan.`
     : providerKeyRegistrationMessage;
 
   const modelSourceInvalid =
@@ -814,7 +809,6 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
 
   const { validateRunContextValue, gateBodyProps, releaseGateKeysContextValue } =
     useReleaseGatePageModelReturn({
-      cancelLocked,
       orgId,
       projectId,
       project,
@@ -822,6 +816,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       isValidating,
       activeJobId,
       cancelRequested,
+      cancelLocked,
       handleValidate,
       handleCancelActiveJob,
       error,
@@ -855,6 +850,8 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       projectId,
       projectName: project?.name,
       orgName: org?.name,
+      organizations: organizations ?? [],
+      projects: orgProjects ?? [],
       onAction: handleLayoutHudAction,
     },
   };

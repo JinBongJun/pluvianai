@@ -8,6 +8,7 @@ import { AlertCircle, KeyRound, Save, Trash2 } from "lucide-react";
 import { liveViewAPI, projectUserApiKeysAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
 import { getProjectPermissionToast } from "@/lib/projectAccess";
+import { projectKeys } from "@/lib/queryKeys";
 
 type ReplayProvider = "openai" | "anthropic" | "google";
 
@@ -72,7 +73,7 @@ export function AgentSettingsPanel({
     mutate: mutateKeys,
     isLoading: keysLoading,
   } = useSWR(
-    projectId ? ["project-user-api-keys-settings-panel", projectId] : null,
+    projectId ? projectKeys.userApiKeys(projectId) : null,
     () => projectUserApiKeysAPI.list(projectId),
     { revalidateOnFocus: false }
   );

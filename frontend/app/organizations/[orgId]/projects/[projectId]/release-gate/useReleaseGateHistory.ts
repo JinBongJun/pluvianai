@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { releaseGateAPI, type ReleaseGateHistoryResponse } from "@/lib/api";
 import {
@@ -13,27 +13,38 @@ const HISTORY_LIMIT = 20;
 
 export type ReleaseGateHistoryStatusFilter = "all" | "pass" | "fail";
 
-export function useReleaseGateHistory(options: { projectId: number; runLocked: boolean }) {
-  const { projectId, runLocked } = options;
+export function useReleaseGateHistory(options: {
+  projectId: number;
+  runLocked: boolean;
+  agentId: string;
+  enabled?: boolean;
+}) {
+  const { projectId, runLocked, agentId, enabled = true } = options;
 
   const [historyStatus, setHistoryStatus] = useState<ReleaseGateHistoryStatusFilter>("all");
   const [historyTraceId, setHistoryTraceId] = useState("");
   const [historyDatePreset, setHistoryDatePreset] = useState<HistoryDatePreset>("all");
   const [historyOffset, setHistoryOffset] = useState(0);
+  const normalizedAgentId = agentId.trim();
+
+  useEffect(() => {
+    setHistoryOffset(0);
+  }, [normalizedAgentId]);
 
   const historyKey = useMemo(
     () =>
-      projectId && !isNaN(projectId)
+      enabled && normalizedAgentId && projectId && !isNaN(projectId)
         ? [
             "release-gate-history",
             projectId,
+            normalizedAgentId,
             historyStatus,
             historyTraceId,
             historyDatePreset,
             historyOffset,
           ]
         : null,
-    [projectId, historyStatus, historyTraceId, historyDatePreset, historyOffset]
+    [enabled, normalizedAgentId, projectId, historyStatus, historyTraceId, historyDatePreset, historyOffset]
   );
 
   const historyDateParams = useMemo(
@@ -50,6 +61,7 @@ export function useReleaseGateHistory(options: { projectId: number; runLocked: b
     historyKey,
     () =>
       releaseGateAPI.listHistory(projectId, {
+        agent_id: normalizedAgentId,
         status: historyStatus === "all" ? undefined : historyStatus,
         trace_id: historyTraceId.trim() || undefined,
         created_from: historyDateParams.createdFrom,

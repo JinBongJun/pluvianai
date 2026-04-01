@@ -37,6 +37,7 @@ from .test_result import TestResult
 from .live_view_connection import LiveViewConnection
 from .replay_run import ReplayRun
 from .release_gate_job import ReleaseGateJob
+from .release_gate_run import ReleaseGateRun
 from .agent_display_setting import AgentDisplaySetting
 from .agent_eval_config_history import AgentEvalConfigHistory
 from .signal_detection import SignalDetection, SignalConfig
@@ -91,6 +92,7 @@ __all__ = [
     "LiveViewConnection",
     "ReplayRun",
     "ReleaseGateJob",
+    "ReleaseGateRun",
     "AgentDisplaySetting",
     "AgentEvalConfigHistory",
     "SignalDetection",

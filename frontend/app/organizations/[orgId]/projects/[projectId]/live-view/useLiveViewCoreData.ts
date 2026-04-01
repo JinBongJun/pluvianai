@@ -4,13 +4,12 @@ import type { MutableRefObject } from "react";
 import { useEffect, useRef } from "react";
 import useSWR, { useSWRConfig } from "swr";
 
-import { liveViewAPI, organizationsAPI, projectsAPI } from "@/lib/api";
-import type { OrganizationProject } from "@/lib/api";
+import { liveViewAPI } from "@/lib/api";
+import { useLaboratoryPageBootstrap } from "@/hooks/useLaboratoryPageBootstrap";
 import {
   liveViewAgentsPayloadSignature,
   releaseGateAgentsSwrKey,
 } from "@/lib/laboratoryLabRefresh";
-import { orgKeys } from "@/lib/queryKeys";
 
 import {
   LIVE_VIEW_FOCUSED_POLL_MS,
@@ -47,38 +46,12 @@ export function useLiveViewCoreData(options: {
     lastLvAgentsSigRef.current = null;
   }, [projectId]);
 
-  const { data: project } = useSWR(
-    projectId && !isNaN(projectId) ? ["project", projectId] : null,
-    async () => {
-      try {
-        return await projectsAPI.get(projectId);
-      } catch (e: unknown) {
-        const err = e as { response?: { status?: number; data?: { detail?: string; error?: { message?: string } } } };
-        const status = err?.response?.status;
-        const msg =
-          err?.response?.data?.detail ?? err?.response?.data?.error?.message ?? "";
-        if (status === 404 && (msg === "Project not found" || msg === "Not Found")) {
-          routerReplace(orgId ? `/organizations/${orgId}/projects` : "/organizations");
-          return undefined;
-        }
-        throw e;
-      }
-    },
-    LIVE_VIEW_SWR_DEFAULT_OPTIONS
-  );
-
-  const { data: org } = useSWR(
-    orgId ? orgKeys.detail(orgId) : null,
-    () => organizationsAPI.get(orgId),
-    LIVE_VIEW_SWR_DEFAULT_OPTIONS
-  );
-  const { data: orgProjects } = useSWR<OrganizationProject[]>(
-    orgId ? orgKeys.projects(orgId, "") : null,
-    ([, , id]) => organizationsAPI.listProjects(String(id), { includeStats: false }),
-    LIVE_VIEW_SWR_DEFAULT_OPTIONS
-  );
-  const projectSummary =
-    orgProjects?.find(candidate => String(candidate.id) === String(projectId)) ?? undefined;
+  const { project, org, organizations, orgProjects, projectSummary } = useLaboratoryPageBootstrap({
+    orgId,
+    projectId,
+    routerReplace,
+    swrOptions: LIVE_VIEW_SWR_DEFAULT_OPTIONS,
+  });
 
   const {
     data: agentsData,
@@ -118,6 +91,8 @@ export function useLiveViewCoreData(options: {
     project,
     projectSummary,
     org,
+    organizations,
+    orgProjects,
     agentsData,
     agentsLoading,
     agentsError,

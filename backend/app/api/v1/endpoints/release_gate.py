@@ -72,6 +72,7 @@ from app.models.behavior_rule import BehaviorRule
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.release_gate_job import ReleaseGateJob
+from app.models.release_gate_run import ReleaseGateRun
 from app.models.snapshot import Snapshot
 from app.models.user import User
 from app.models.user_api_key import UserApiKey
@@ -3158,6 +3159,10 @@ async def _run_release_gate(
             violations_json=primary_case.get("violations") or [],
         )
         db.add(report)
+        db.flush()
+        report_summary = _build_release_gate_run_record(db, report)
+        if report_summary is not None:
+            db.add(report_summary)
         db.commit()
         db.refresh(report)
 
@@ -3927,10 +3932,125 @@ async def suggest_release_gate_baseline(
     return {"baseline_trace_id": None, "source": None, "agent_id": effective_agent}
 
 
+def _coerce_optional_int(value: Any) -> Optional[int]:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _release_gate_meta(summary_json: Any) -> Dict[str, Any]:
+    if not isinstance(summary_json, dict):
+        return {}
+    gate_meta = summary_json.get("release_gate")
+    return gate_meta if isinstance(gate_meta, dict) else {}
+
+
+def _resolve_release_gate_run_agent_id(db: Session, report: BehaviorReport) -> Optional[str]:
+    normalized_agent_id = str(report.agent_id or "").strip() or None
+    if normalized_agent_id:
+        return normalized_agent_id
+    trace_id = str(report.trace_id or "").strip()
+    if not trace_id:
+        return None
+    latest_snapshot = (
+        db.query(Snapshot)
+        .filter(
+            Snapshot.project_id == report.project_id,
+            Snapshot.trace_id == trace_id,
+            Snapshot.is_deleted.is_(False),
+            Snapshot.agent_id.isnot(None),
+        )
+        .order_by(Snapshot.created_at.desc())
+        .first()
+    )
+    if latest_snapshot and latest_snapshot.agent_id:
+        return str(latest_snapshot.agent_id).strip() or None
+    return None
+
+
+def _build_release_gate_run_record(db: Session, report: BehaviorReport) -> Optional[ReleaseGateRun]:
+    gate_meta = _release_gate_meta(report.summary_json)
+    if not gate_meta:
+        return None
+
+    total_inputs = _coerce_optional_int(gate_meta.get("total_inputs"))
+    failed_inputs = _coerce_optional_int(gate_meta.get("failed_inputs")) or 0
+    flaky_inputs = _coerce_optional_int(gate_meta.get("flaky_inputs")) or 0
+    failed_runs = failed_inputs + flaky_inputs if total_inputs is not None else None
+    passed_runs = (
+        max(total_inputs - failed_runs, 0)
+        if total_inputs is not None and failed_runs is not None
+        else None
+    )
+
+    return ReleaseGateRun(
+        report_id=report.id,
+        project_id=report.project_id,
+        trace_id=report.trace_id,
+        baseline_trace_id=report.baseline_run_ref,
+        agent_id=_resolve_release_gate_run_agent_id(db, report),
+        status=report.status,
+        mode=str(gate_meta.get("mode") or "replay_test"),
+        repeat_runs=_coerce_optional_int(gate_meta.get("repeat_runs")),
+        total_inputs=total_inputs,
+        passed_runs=passed_runs,
+        failed_runs=failed_runs,
+        passed_attempts=_coerce_optional_int(gate_meta.get("passed_attempts")),
+        total_attempts=_coerce_optional_int(gate_meta.get("total_attempts")),
+        thresholds_json=gate_meta.get("thresholds"),
+        created_at=report.created_at or datetime.now(timezone.utc),
+    )
+
+
+def _backfill_release_gate_run_records(
+    db: Session,
+    *,
+    project_id: int,
+    cutoff: datetime,
+    status_filter: Optional[str] = None,
+    trace_id: Optional[str] = None,
+    created_from: Optional[datetime] = None,
+    created_to: Optional[datetime] = None,
+    agent_id: Optional[str] = None,
+) -> None:
+    query = (
+        db.query(BehaviorReport)
+        .outerjoin(ReleaseGateRun, ReleaseGateRun.report_id == BehaviorReport.id)
+        .filter(
+            BehaviorReport.project_id == project_id,
+            BehaviorReport.trace_id.isnot(None),
+            BehaviorReport.created_at >= cutoff,
+            ReleaseGateRun.report_id.is_(None),
+            cast(BehaviorReport.summary_json, String).contains('"release_gate"'),
+        )
+    )
+    if status_filter in {"pass", "fail"}:
+        query = query.filter(BehaviorReport.status == status_filter)
+    if trace_id:
+        query = query.filter(BehaviorReport.trace_id == trace_id)
+    if created_from:
+        query = query.filter(BehaviorReport.created_at >= created_from)
+    if created_to:
+        query = query.filter(BehaviorReport.created_at <= created_to)
+    created_rows = 0
+    for report in query.all():
+        record = _build_release_gate_run_record(db, report)
+        if record is None:
+            continue
+        db.add(record)
+        created_rows += 1
+    if created_rows:
+        db.commit()
+
+
 @router.get("/projects/{project_id}/release-gate/history")
 async def list_release_gate_history(
     project_id: int,
     status_filter: Optional[str] = Query(None, alias="status", description="pass | fail"),
+    agent_id: Optional[str] = Query(None),
     trace_id: Optional[str] = Query(None),
     created_from: Optional[datetime] = Query(None),
     created_to: Optional[datetime] = Query(None),
@@ -3953,57 +4073,58 @@ async def list_release_gate_history(
     if created_to and created_to.tzinfo is None:
         created_to = created_to.replace(tzinfo=timezone.utc)
 
+    normalized_agent_id = (agent_id or "").strip() or None
+
+    _backfill_release_gate_run_records(
+        db,
+        project_id=project_id,
+        cutoff=cutoff,
+        status_filter=status_filter,
+        trace_id=trace_id,
+        created_from=created_from,
+        created_to=created_to,
+        agent_id=normalized_agent_id,
+    )
+
     query = (
-        db.query(BehaviorReport)
+        db.query(ReleaseGateRun)
         .filter(
-            BehaviorReport.project_id == project_id,
-            BehaviorReport.trace_id.isnot(None),
-            BehaviorReport.created_at >= cutoff,
+            ReleaseGateRun.project_id == project_id,
+            ReleaseGateRun.created_at >= cutoff,
         )
-        .order_by(BehaviorReport.created_at.desc())
+        .order_by(ReleaseGateRun.created_at.desc())
     )
     if status_filter in {"pass", "fail"}:
-        query = query.filter(BehaviorReport.status == status_filter)
+        query = query.filter(ReleaseGateRun.status == status_filter)
+    if normalized_agent_id:
+        query = query.filter(ReleaseGateRun.agent_id == normalized_agent_id)
     if trace_id:
-        query = query.filter(BehaviorReport.trace_id == trace_id)
+        query = query.filter(ReleaseGateRun.trace_id == trace_id)
     if created_from:
-        query = query.filter(BehaviorReport.created_at >= created_from)
+        query = query.filter(ReleaseGateRun.created_at >= created_from)
     if created_to:
-        query = query.filter(BehaviorReport.created_at <= created_to)
+        query = query.filter(ReleaseGateRun.created_at <= created_to)
 
-    # Release-gate runs are marked in summary_json.release_gate.
-    # Filter in SQL so total/pagination reflect the full retained RG history.
-    rows_query = query.filter(cast(BehaviorReport.summary_json, String).contains('"release_gate"'))
-
-    total = rows_query.count()
-    page_rows = rows_query.offset(offset).limit(limit).all()
+    total = query.count()
+    page_rows = query.offset(offset).limit(limit).all()
     items: List[Dict[str, Any]] = []
     for row in page_rows:
-        gate_meta = row.summary_json.get("release_gate") if isinstance(row.summary_json, dict) else {}
-        total_inputs = gate_meta.get("total_inputs")
-        failed_inputs = gate_meta.get("failed_inputs")
-        flaky_inputs = gate_meta.get("flaky_inputs")
-        total_inputs_num = int(total_inputs or 0) if total_inputs is not None else 0
-        failed_inputs_num = int(failed_inputs or 0) if failed_inputs is not None else 0
-        flaky_inputs_num = int(flaky_inputs or 0) if flaky_inputs is not None else 0
-        failed_runs = failed_inputs_num + flaky_inputs_num
-        passed_runs = max(total_inputs_num - failed_runs, 0) if total_inputs is not None else None
         items.append(
             {
-                "id": row.id,
+                "id": row.report_id,
                 "status": row.status,
                 "trace_id": row.trace_id,
-                "baseline_trace_id": row.baseline_run_ref,
+                "baseline_trace_id": row.baseline_trace_id,
                 "agent_id": row.agent_id,
                 "created_at": _iso(row.created_at),
-                "mode": gate_meta.get("mode", "replay_test"),
-                "repeat_runs": gate_meta.get("repeat_runs"),
-                "total_inputs": total_inputs,
-                "passed_runs": passed_runs,
-                "failed_runs": failed_runs if total_inputs is not None else None,
-                "passed_attempts": gate_meta.get("passed_attempts"),
-                "total_attempts": gate_meta.get("total_attempts"),
-                "thresholds": gate_meta.get("thresholds"),
+                "mode": row.mode,
+                "repeat_runs": row.repeat_runs,
+                "total_inputs": row.total_inputs,
+                "passed_runs": row.passed_runs,
+                "failed_runs": row.failed_runs,
+                "passed_attempts": row.passed_attempts,
+                "total_attempts": row.total_attempts,
+                "thresholds": row.thresholds_json,
             }
         )
 

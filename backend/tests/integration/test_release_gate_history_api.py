@@ -5,6 +5,9 @@ import pytest
 from fastapi import status
 
 from app.models.behavior_report import BehaviorReport
+from app.models.release_gate_run import ReleaseGateRun
+from app.models.snapshot import Snapshot
+from app.models.trace import Trace
 
 
 @pytest.mark.integration
@@ -107,3 +110,104 @@ class TestReleaseGateHistoryApi:
         assert item["passed_runs"] == 2
         assert item["passed_attempts"] == 9
         assert item["total_attempts"] == 15
+
+    async def test_history_can_scope_results_to_selected_agent_and_backfill_read_model(
+        self, async_client, auth_headers, test_project, db
+    ):
+        now = datetime.now(timezone.utc)
+        db.add_all(
+            [
+                BehaviorReport(
+                    id=str(uuid.uuid4()),
+                    project_id=test_project.id,
+                    trace_id="rg-trace-agent-a-1",
+                    agent_id="agent-a",
+                    status="pass",
+                    summary_json={"release_gate": {"mode": "replay_test", "total_inputs": 1}},
+                    violations_json=[],
+                    created_at=now - timedelta(minutes=3),
+                ),
+                BehaviorReport(
+                    id=str(uuid.uuid4()),
+                    project_id=test_project.id,
+                    trace_id="rg-trace-agent-a-2",
+                    agent_id="agent-a",
+                    status="fail",
+                    summary_json={"release_gate": {"mode": "replay_test", "total_inputs": 2}},
+                    violations_json=[],
+                    created_at=now - timedelta(minutes=2),
+                ),
+                BehaviorReport(
+                    id=str(uuid.uuid4()),
+                    project_id=test_project.id,
+                    trace_id="rg-trace-agent-b",
+                    agent_id="agent-b",
+                    status="pass",
+                    summary_json={"release_gate": {"mode": "replay_test", "total_inputs": 1}},
+                    violations_json=[],
+                    created_at=now - timedelta(minutes=1),
+                ),
+            ]
+        )
+        db.commit()
+
+        assert db.query(ReleaseGateRun).count() == 0
+
+        res = await async_client.get(
+            f"/api/v1/projects/{test_project.id}/release-gate/history",
+            headers=auth_headers,
+            params={"agent_id": "agent-a"},
+        )
+        assert res.status_code == status.HTTP_200_OK
+        payload = res.json()
+
+        assert payload["total"] == 2
+        assert [item["agent_id"] for item in payload["items"]] == ["agent-a", "agent-a"]
+        assert {item["trace_id"] for item in payload["items"]} == {
+            "rg-trace-agent-a-1",
+            "rg-trace-agent-a-2",
+        }
+        assert db.query(ReleaseGateRun).count() == 3
+
+    async def test_history_backfill_recovers_agent_from_snapshot_when_report_agent_is_missing(
+        self, async_client, auth_headers, test_project, db
+    ):
+        trace_id = "rg-trace-missing-agent"
+        db.add(Trace(id=trace_id, project_id=test_project.id))
+        db.flush()
+        db.add(
+            Snapshot(
+                trace_id=trace_id,
+                project_id=test_project.id,
+                agent_id="agent-fallback",
+                provider="openai",
+                model="gpt-4o-mini",
+                payload={"messages": []},
+                is_sanitized=False,
+                status_code=200,
+            )
+        )
+        db.add(
+            BehaviorReport(
+                id=str(uuid.uuid4()),
+                project_id=test_project.id,
+                trace_id=trace_id,
+                agent_id=None,
+                status="pass",
+                summary_json={"release_gate": {"mode": "replay_test", "total_inputs": 1}},
+                violations_json=[],
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        db.commit()
+
+        res = await async_client.get(
+            f"/api/v1/projects/{test_project.id}/release-gate/history",
+            headers=auth_headers,
+            params={"agent_id": "agent-fallback"},
+        )
+        assert res.status_code == status.HTTP_200_OK
+        payload = res.json()
+        assert payload["total"] == 1
+        assert payload["items"][0]["agent_id"] == "agent-fallback"
+        assert payload["items"][0]["trace_id"] == trace_id

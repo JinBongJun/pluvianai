@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from app.services.data_lifecycle_service import DataLifecycleService
 from app.models.behavior_report import BehaviorReport
 from app.models.agent_display_setting import AgentDisplaySetting
+from app.models.release_gate_run import ReleaseGateRun
 from app.models.snapshot import Snapshot
 from app.models.trace import Trace
 from app.models.project import Project
@@ -297,6 +298,39 @@ class TestDataLifecycleService:
         assert db.query(BehaviorReport).filter(BehaviorReport.id == expired_release_gate.id).first() is None
         assert db.query(BehaviorReport).filter(BehaviorReport.id == expired_behavior.id).first() is not None
         assert db.query(BehaviorReport).filter(BehaviorReport.id == recent_release_gate.id).first() is not None
+
+    def test_delete_behavior_reports_removes_release_gate_read_model_rows(
+        self, db, test_project, service
+    ):
+        report = BehaviorReport(
+            project_id=test_project.id,
+            trace_id="trace-rg-summary",
+            agent_id="agent-1",
+            status="pass",
+            summary_json={"release_gate": {"mode": "replay_test"}},
+            violations_json=[],
+            created_at=_utcnow_naive() - timedelta(days=10),
+        )
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+
+        summary_row = ReleaseGateRun(
+            report_id=report.id,
+            project_id=test_project.id,
+            trace_id=report.trace_id,
+            agent_id=report.agent_id,
+            status=report.status,
+            created_at=report.created_at,
+        )
+        db.add(summary_row)
+        db.commit()
+
+        deleted = service.delete_behavior_reports([report.id])
+
+        assert deleted == 1
+        assert db.query(BehaviorReport).filter(BehaviorReport.id == report.id).first() is None
+        assert db.query(ReleaseGateRun).filter(ReleaseGateRun.report_id == report.id).first() is None
 
     def test_cleanup_expired_data_reports_snapshot_and_history_counts(self, db, test_user, test_project, service):
         """Test cleanup returns both snapshot and release-gate history deletion stats."""

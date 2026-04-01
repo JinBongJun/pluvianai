@@ -319,16 +319,15 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                       Run history
                     </div>
                     <div className="text-sm font-semibold text-white">
-                      Recent runs for this agent
+                      Recent retained runs for this agent
                     </div>
                     <div className="mt-1.5 text-xs leading-relaxed text-white/40">
-                      Use this panel to reopen recent retained runs for this agent. Switch to the
-                      main History tab for project-wide trace search and full browsing.
+                      This list is scoped to the selected agent, so the total, filters, and paging all
+                      reflect only retained Release Gate runs for the selected agent.
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-white/40 items-center">
                       <span className="font-medium text-white/60">
-                        {nodeHistoryItems.length}
-                        {historyTotal !== nodeHistoryItems.length ? ` of ${historyTotal}` : ""} runs
+                        {historyTotal} runs
                       </span>
                       {historyFilterSummary.map(part => (
                         <span
@@ -411,7 +410,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                     <p className="text-sm text-white/30">
                       {historyFiltersAreDefault
                         ? "No retained runs yet for this agent."
-                        : "No runs match these filters. Try All or widen the date range."}
+                        : "No retained runs match these filters. Try All or widen the date range."}
                     </p>
                   </div>
                 ) : (

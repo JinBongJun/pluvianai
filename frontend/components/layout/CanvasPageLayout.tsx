@@ -19,6 +19,8 @@ interface CanvasPageLayoutProps {
   projectId?: string | number;
   projectName?: string;
   orgName?: string;
+  organizations?: OrganizationSummary[];
+  projects?: OrganizationProject[];
   topRailMeta?: React.ReactNode;
   activeTab?: string;
   leftPanel?: React.ReactNode;
@@ -36,6 +38,8 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
   children,
   orgId,
   projectId,
+  organizations: providedOrganizations,
+  projects: providedProjects,
   topRailMeta,
   leftPanel,
   rightPanel,
@@ -53,7 +57,7 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
   const { isAuthenticated } = useAuthSession();
 
   const { data: organizations } = useSWR<OrganizationSummary[]>(
-    isAuthenticated ? orgKeys.list() : null,
+    isAuthenticated && !providedOrganizations ? orgKeys.list() : null,
     () => organizationsAPI.list({ includeStats: false }),
     {
       revalidateOnFocus: false,
@@ -61,7 +65,7 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
     }
   );
   const { data: projects } = useSWR<OrganizationProject[]>(
-    isAuthenticated && orgId ? orgKeys.projects(orgId, "") : null,
+    isAuthenticated && orgId && !providedProjects ? orgKeys.projects(orgId, "") : null,
     ([, , id]) => organizationsAPI.listProjects(String(id), { includeStats: false }),
     {
       revalidateOnFocus: false,
@@ -73,8 +77,8 @@ const CanvasPageLayout: React.FC<CanvasPageLayoutProps> = ({
     <div className="h-screen w-screen bg-[#0a0a0c] overflow-hidden flex flex-col font-sans text-slate-200">
       {/* Global Top Header - Fixed at 90px */}
       <TopHeader
-        organizations={organizations}
-        projects={projects}
+        organizations={providedOrganizations ?? organizations}
+        projects={providedProjects ?? projects}
         nav={
           navigationVariant === "top" &&
           hasValidProject && <LaboratoryNavbar orgId={orgId!} projectId={effectiveProjectId!} />

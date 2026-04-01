@@ -48,7 +48,9 @@ export function useReleaseGateRunDataDerivations(p: UseReleaseGateRunDataDerivat
   } = p;
 
   const { data: coreModelsData } = useSWR(
-    projectId && !isNaN(projectId) ? ["release-gate-core-models", projectId] : null,
+    agentId?.trim() && projectId && !isNaN(projectId)
+      ? ["release-gate-core-models", projectId]
+      : null,
     () => releaseGateAPI.getCoreModels(projectId),
     { isPaused: () => runLocked }
   );

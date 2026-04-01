@@ -1,17 +1,17 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import TopHeader from "@/components/layout/TopHeader";
-import { authAPI, organizationsAPI } from "@/lib/api";
-import { ACCOUNT_USAGE_SWR_KEY } from "@/lib/accountUsage";
+import { organizationsAPI } from "@/lib/api";
 import { orgKeys } from "@/lib/queryKeys";
 import { useDebouncedValue } from "@/hooks/useDebounce";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useAccountUsage } from "@/hooks/useAccountUsage";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Plus, Search, Building2, Briefcase } from "lucide-react";
 import { clsx } from "clsx";
-import { logger } from "@/lib/logger";
 import { canManageOrganization } from "@/lib/organizationAccess";
 
 const ORG_ROLE_LABELS = {
@@ -25,36 +25,15 @@ export default function OrganizationsPage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, 300);
-  const [userEmail, setUserEmail] = useState("");
-  const [userName, setUserName] = useState("");
-  const [authReady, setAuthReady] = useState(false);
   const isAuthenticated = useRequireAuth();
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const loadUser = async () => {
-      try {
-        const user = await authAPI.getCurrentUser();
-        setUserEmail(user?.email || "");
-        setUserName(user?.full_name || "");
-        setAuthReady(true);
-      } catch (error) {
-        logger.error("OrganizationsPage loadUser failed", error);
-        router.push("/login?reauth=1");
-      }
-    };
-
-    void loadUser();
-  }, [isAuthenticated, router]);
+  const { data: currentUser, isLoading: currentUserLoading } = useCurrentUser(isAuthenticated);
+  const authReady = isAuthenticated && !currentUserLoading;
 
   // Same SWR key as TopHeader so one request only (no duplicate 401)
   const { data: orgs, mutate } = useSWR(authReady ? orgKeys.list() : null, () =>
     organizationsAPI.list({ includeStats: false })
   );
-  const { data: myUsage } = useSWR(authReady ? ACCOUNT_USAGE_SWR_KEY : null, () => authAPI.getMyUsage(), {
-    revalidateOnFocus: false,
-  });
+  const { data: myUsage } = useAccountUsage(authReady);
 
   const filtered = useMemo(() => {
     if (!orgs) return [];
@@ -96,7 +75,7 @@ export default function OrganizationsPage() {
         <div className="absolute bottom-[35%] right-[15%] w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_10px_2px_rgba(16,185,129,0.8)] opacity-80" />
       </div>
 
-      <TopHeader userName={userName} userEmail={userEmail} />
+      <TopHeader userName={currentUser?.full_name || ""} userEmail={currentUser?.email || ""} />
 
       <main className="pt-36 pb-16 px-6 w-full max-w-7xl mx-auto relative z-10 space-y-8">
         <div className="space-y-4">

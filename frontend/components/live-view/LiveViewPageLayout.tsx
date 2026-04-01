@@ -3,12 +3,15 @@
 import type { ReactNode } from "react";
 
 import CanvasPageLayout from "@/components/layout/CanvasPageLayout";
+import type { OrganizationProject, OrganizationSummary } from "@/lib/api";
 
 export type LiveViewPageLayoutProps = {
   readonly orgId: string;
   readonly projectId: number;
   readonly projectName?: string;
   readonly orgName?: string;
+  readonly organizations?: OrganizationSummary[];
+  readonly projects?: OrganizationProject[];
   readonly topRailMeta?: ReactNode;
   /** Right-rail (`RailwaySidePanel` + tab panels). */
   readonly rightPanel: ReactNode;
@@ -24,6 +27,8 @@ export function LiveViewPageLayout({
   projectId,
   projectName,
   orgName,
+  organizations,
+  projects,
   topRailMeta,
   rightPanel,
   children,
@@ -34,6 +39,8 @@ export function LiveViewPageLayout({
       projectId={projectId}
       projectName={projectName}
       orgName={orgName}
+      organizations={organizations}
+      projects={projects}
       topRailMeta={topRailMeta}
       activeTab="live-view"
       showTelemetry={false}
