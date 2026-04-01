@@ -216,7 +216,7 @@ export function AttemptDetailOverlay({
 
       return (
         <div className="mt-2 space-y-1.5 w-full max-w-md">
-          <div className="flex justify-between text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+          <div className="flex justify-between text-[10px] uppercase tracking-wider font-semibold text-white/40">
             <span>Base {baselineLen} chars</span>
             <span className={pass ? "text-emerald-400" : "text-rose-400"}>
               Actual {actualChars} chars
@@ -241,9 +241,9 @@ export function AttemptDetailOverlay({
       const pct = Math.min(100, Math.max(0, (actualMs / failMs) * 100));
       return (
         <div className="mt-2 space-y-1.5 w-full max-w-md">
-          <div className="flex justify-between text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+          <div className="flex justify-between text-[10px] uppercase tracking-wider font-semibold text-white/40">
             <span>Actual {actualMs}ms</span>
-            <span className={pass ? "text-slate-400" : "text-rose-400"}>Limit {failMs}ms</span>
+            <span className={pass ? "text-white/40" : "text-rose-400"}>Limit {failMs}ms</span>
           </div>
           <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden flex">
             <div
@@ -779,27 +779,27 @@ export function AttemptDetailOverlay({
       return {
         label: "Final reply captured",
         detail: summarizeCompactPreview(candidateResponse, 240),
-        toneClass: "border-cyan-500/30 bg-cyan-500/10 text-cyan-100",
+        toneClass: "border-l-2 border-cyan-500/50 bg-cyan-500/5 text-white/90",
       };
     }
     if (candidateResponseStatus === "tool_calls_only") {
       return {
         label: "No final reply after the tool call",
         detail: "The tool action is the main outcome for this attempt.",
-        toneClass: "border-amber-500/30 bg-amber-500/10 text-amber-100",
+        toneClass: "border-l-2 border-amber-500/50 bg-amber-500/5 text-white/90",
       };
     }
     if (candidateResponseStatus === "empty") {
       return {
         label: "Final reply was empty",
         detail: "The attempt finished without a user-facing assistant message.",
-        toneClass: "border-amber-500/30 bg-amber-500/10 text-amber-100",
+        toneClass: "border-l-2 border-amber-500/50 bg-amber-500/5 text-white/90",
       };
     }
     return {
       label: "Final reply preview unavailable",
       detail: "Review tool execution details if the main outcome happened through a tool.",
-      toneClass: "border-white/10 bg-white/[0.03] text-slate-100",
+      toneClass: "border-white/10 bg-white/[0.03] text-white/90",
     };
   })();
   const visibleResponseDiffLines = useMemo(() => {
@@ -854,13 +854,13 @@ export function AttemptDetailOverlay({
       return {
         label: "Medium",
         detail: "Some evidence channels are missing or limited.",
-        toneClass: "border-amber-500/30 bg-amber-500/10 text-amber-100",
+        toneClass: "border-l-2 border-amber-500/50 bg-amber-500/5 text-white/90",
       };
     }
     return {
       label: "High",
       detail: "All core evidence channels are captured.",
-      toneClass: "border-cyan-500/30 bg-cyan-500/10 text-cyan-100",
+      toneClass: "border-l-2 border-cyan-500/50 bg-cyan-500/5 text-white/90",
     };
   })();
   const decisionSummary = (() => {
@@ -875,8 +875,8 @@ export function AttemptDetailOverlay({
     return fragments.join(" ");
   })();
   const resultToneClass = pass
-    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
-    : "border-rose-500/30 bg-rose-500/10 text-rose-100";
+    ? "border-l-2 border-emerald-500/50 bg-emerald-500/5 text-white/90"
+    : "border-l-2 border-rose-500/50 bg-rose-500/5 text-white/90";
   const attentionItems = useMemo(() => {
     const items: Array<{
       key: string;
@@ -1035,34 +1035,34 @@ export function AttemptDetailOverlay({
       return {
         label: "Tool execution needs review",
         detail: `${toolFailedCount} tool call${toolFailedCount === 1 ? "" : "s"} failed. ${toolEvidenceDetail}`,
-        toneClass: "border-rose-500/30 bg-rose-500/10 text-rose-100",
+        toneClass: "border-l-2 border-rose-500/50 bg-rose-500/5 text-white/90",
       };
     }
     if (toolGroundingStatus === "fail") {
       return {
         label: "Tool output was not grounded into a stable reply",
         detail: toolGroundingReason || toolEvidenceDetail,
-        toneClass: "border-amber-500/30 bg-amber-500/10 text-amber-100",
+        toneClass: "border-l-2 border-amber-500/50 bg-amber-500/5 text-white/90",
       };
     }
     if (toolSimulatedCount > 0 && toolExecutedCount === 0 && toolRecordedCount === 0) {
       return {
         label: "Only simulated tool evidence was captured",
         detail: toolEvidenceDetail,
-        toneClass: "border-amber-500/30 bg-amber-500/10 text-amber-100",
+        toneClass: "border-l-2 border-amber-500/50 bg-amber-500/5 text-white/90",
       };
     }
     if (toolExecutedCount > 0 || toolRecordedCount > 0 || toolResultCount > 0) {
       return {
         label: "Tool outcome captured",
         detail: toolEvidenceDetail,
-        toneClass: "border-cyan-500/30 bg-cyan-500/10 text-cyan-100",
+        toneClass: "border-l-2 border-cyan-500/50 bg-cyan-500/5 text-white/90",
       };
     }
     return {
       label: "Tool calls detected",
       detail: toolEvidenceDetail,
-      toneClass: "border-white/10 bg-white/[0.03] text-slate-100",
+      toneClass: "border-white/10 bg-white/[0.03] text-white/90",
     };
   })();
   const hasConfigurationChanges = useMemo(() => {
@@ -1511,7 +1511,7 @@ export function AttemptDetailOverlay({
         <div className="flex shrink-0 flex-col gap-4 border-b border-white/8 px-6 py-5 sm:px-7">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <div className="text-[11px] font-semibold text-slate-500">Attempt review</div>
+              <div className="text-[11px] font-semibold text-white/30">Attempt review</div>
               <div className="mt-2 flex flex-wrap items-center gap-2.5">
                 <h2 className="text-xl font-semibold text-white text-balance">{decisionLabel}</h2>
                 <span
@@ -1525,7 +1525,7 @@ export function AttemptDetailOverlay({
                   {pass ? "Passed" : "Failed"}
                 </span>
               </div>
-              <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">{decisionSummary}</p>
+              <p className="mt-3 max-w-4xl text-sm leading-6 text-white/60">{decisionSummary}</p>
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
@@ -1546,7 +1546,7 @@ export function AttemptDetailOverlay({
                         "rounded-lg px-4 py-1.5 text-[11px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70",
                         detailMainTab === tab.id
                           ? "bg-white/[0.12] text-white shadow-sm"
-                          : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
+                          : "text-white/40 hover:bg-white/[0.06] hover:text-white/80"
                       )}
                     >
                       {tab.label}
@@ -1557,7 +1557,7 @@ export function AttemptDetailOverlay({
               <button
                 type="button"
                 onClick={onClose}
-                className="shrink-0 rounded-xl border border-white/10 px-4 py-2 text-[11px] font-semibold text-slate-300 transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                className="shrink-0 rounded-xl border border-white/10 px-4 py-2 text-[11px] font-semibold text-white/60 transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
               >
                 Close
               </button>
@@ -1567,8 +1567,8 @@ export function AttemptDetailOverlay({
           {attemptCount > 1 && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
               <div className="min-w-0">
-                <div className="text-[11px] font-medium text-slate-200">{attemptLabel}</div>
-                <div className="mt-1 text-xs text-slate-500">
+                <div className="text-[11px] font-medium text-white/80">{attemptLabel}</div>
+                <div className="mt-1 text-xs text-white/30">
                   {failedOnly
                     ? "Showing failed attempts only."
                     : "Browsing all attempts for this input."}
@@ -1580,7 +1580,7 @@ export function AttemptDetailOverlay({
                   type="button"
                   onClick={() => setNavIndex(v => Math.max(0, v - 1))}
                   disabled={navIndex <= 0}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-slate-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-white/60 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label="Previous attempt"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -1589,12 +1589,12 @@ export function AttemptDetailOverlay({
                   <button
                     type="button"
                     onClick={() => setAttemptMenuOpen(!attemptMenuOpen)}
-                    className="flex min-w-[180px] items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/5"
+                    className="flex min-w-[180px] items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm font-medium text-white/80 transition hover:bg-white/5"
                   >
                     <span>{attemptLabel}</span>
                     <ChevronDown
                       className={clsx(
-                        "h-4 w-4 text-slate-400 transition-transform",
+                        "h-4 w-4 text-white/40 transition-transform",
                         attemptMenuOpen && "rotate-180"
                       )}
                     />
@@ -1603,7 +1603,7 @@ export function AttemptDetailOverlay({
                   {attemptMenuOpen && (
                     <div className="absolute left-0 top-full z-[12000] mt-2 w-72 rounded-xl border border-white/10 bg-[#1e2028] p-2 shadow-2xl">
                       <div className="mb-2 flex items-center justify-between px-2 pt-1">
-                        <span className="text-[11px] font-semibold text-slate-400">Attempts</span>
+                        <span className="text-[11px] font-semibold text-white/40">Attempts</span>
                         <button
                           type="button"
                           onClick={e => {
@@ -1614,7 +1614,7 @@ export function AttemptDetailOverlay({
                             "rounded-full border px-2.5 py-1 text-[10px] font-semibold transition",
                             failedOnly
                               ? "border-rose-500/30 bg-rose-500/20 text-rose-200"
-                              : "border-white/10 text-slate-400 hover:text-slate-200"
+                              : "border-white/10 text-white/40 hover:text-white/80"
                           )}
                         >
                           Failed only
@@ -1636,7 +1636,7 @@ export function AttemptDetailOverlay({
                                 "flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition",
                                 navIndex === i
                                   ? "bg-white/10 text-white"
-                                  : "text-slate-300 hover:bg-white/5"
+                                  : "text-white/60 hover:bg-white/5"
                               )}
                             >
                               <div className="flex items-center gap-2">
@@ -1648,7 +1648,7 @@ export function AttemptDetailOverlay({
                                 <span>{`Attempt ${i + 1}`}</span>
                               </div>
                               {navIndex === i ? (
-                                <span className="text-[10px] text-slate-500">Current</span>
+                                <span className="text-[10px] text-white/30">Current</span>
                               ) : null}
                             </button>
                           );
@@ -1661,7 +1661,7 @@ export function AttemptDetailOverlay({
                   type="button"
                   onClick={() => setNavIndex(v => Math.min(maxNav, v + 1))}
                   disabled={navIndex >= maxNav}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-slate-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-white/60 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label="Next attempt"
                 >
                   <ChevronRight className="h-4 w-4" />
@@ -1685,7 +1685,7 @@ export function AttemptDetailOverlay({
                   "rounded-lg px-3 py-1.5 text-[11px] font-semibold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70",
                   detailMainTab === tab.id
                     ? "bg-white/[0.12] text-white shadow-sm"
-                    : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
+                    : "text-white/40 hover:bg-white/[0.06] hover:text-white/80"
                 )}
               >
                 {tab.label}
@@ -1699,22 +1699,22 @@ export function AttemptDetailOverlay({
             <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 md:p-7 xl:p-8">
               {detailMainTab === "review" ? (
                 <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5">
-                  <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
+                  <section className="py-6 border-b border-white/5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <div className="text-xs font-medium text-slate-400">
+                        <div className="text-xs font-medium text-white/40">
                           What changed from base
                         </div>
                         <h3 className="mt-2 text-lg font-semibold text-white">
                           Input &amp; setup diff
                         </h3>
                       </div>
-                      <div className="text-[11px] text-slate-500">
+                      <div className="text-[11px] text-white/30">
                         Review the exact replay input before reading eval results.
                       </div>
                     </div>
                     <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
-                      <div className={clsx("rounded-xl border px-4 py-4", resultToneClass)}>
+                      <div className={clsx("rounded-r-lg px-4 py-4", resultToneClass)}>
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
                             <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
@@ -1725,17 +1725,17 @@ export function AttemptDetailOverlay({
                             </div>
                           </div>
                           <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                            <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-slate-100">
+                            <span className="inline-flex rounded-md bg-white/5 px-2.5 py-1 text-white/90">
                               Eval {evalTotalCount > 0 ? `${evalPassCount}/${evalTotalCount}` : "—"}
                             </span>
-                            <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-slate-100">
+                            <span className="inline-flex rounded-md bg-white/5 px-2.5 py-1 text-white/90">
                               Output {baselineLineCount} {"->"} {candidateLineCount} lines
                             </span>
                           </div>
                         </div>
                       </div>
                       <div
-                        className={clsx("rounded-xl border px-4 py-4", gateConfidence.toneClass)}
+                        className={clsx("rounded-r-lg px-4 py-4", gateConfidence.toneClass)}
                       >
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
                           Evidence quality
@@ -1743,7 +1743,7 @@ export function AttemptDetailOverlay({
                         <div className="mt-1 text-sm font-medium text-white">
                           {gateConfidence.label}
                         </div>
-                        <div className="mt-2 text-[11px] leading-relaxed text-slate-200/80">
+                        <div className="mt-2 text-[11px] leading-relaxed text-white/80/80">
                           {gateConfidence.detail}
                         </div>
                       </div>
@@ -1751,18 +1751,18 @@ export function AttemptDetailOverlay({
                     <div className="mt-4">
                       {inputChanged ? (
                         <div className="grid gap-4 xl:grid-cols-2">
-                          <div className="rounded-xl border border-white/5 bg-[#0a0a0c]">
+                          <div className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
                             <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
-                              <span className="text-[11px] font-semibold text-slate-400">
+                              <span className="text-[11px] font-semibold text-white/40">
                                 Baseline input
                               </span>
-                              <span className="text-[10px] text-slate-500">
+                              <span className="text-[10px] text-white/30">
                                 {baselineInputLineCount} lines
                               </span>
                             </div>
                             <pre
                               className={clsx(
-                                "custom-scrollbar whitespace-pre-wrap break-words px-4 py-4 text-sm leading-relaxed text-slate-300",
+                                "custom-scrollbar whitespace-pre-wrap break-words px-4 py-4 text-sm leading-relaxed text-white/60",
                                 !userInputExpanded && "line-clamp-6"
                               )}
                             >
@@ -1780,7 +1780,7 @@ export function AttemptDetailOverlay({
                             </div>
                             <pre
                               className={clsx(
-                                "custom-scrollbar whitespace-pre-wrap break-words px-4 py-4 text-sm leading-relaxed text-slate-100",
+                                "custom-scrollbar whitespace-pre-wrap break-words px-4 py-4 text-sm leading-relaxed text-white/90",
                                 !userInputExpanded && "line-clamp-6"
                               )}
                             >
@@ -1789,23 +1789,23 @@ export function AttemptDetailOverlay({
                           </div>
                         </div>
                       ) : (
-                        <div className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-4">
+                        <div className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-4">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div>
                               <div className="text-sm font-medium text-white">
                                 User input matched the baseline.
                               </div>
-                              <div className="mt-1 text-[11px] text-slate-500">
+                              <div className="mt-1 text-[11px] text-white/30">
                                 Same prompt text was replayed for this attempt.
                               </div>
                             </div>
-                            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-slate-300">
+                            <span className="rounded-md bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-white/60">
                               {candidateInputLineCount} lines
                             </span>
                           </div>
                           <pre
                             className={clsx(
-                              "custom-scrollbar mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-300",
+                              "custom-scrollbar mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-white/60",
                               !userInputExpanded && "line-clamp-6"
                             )}
                           >
@@ -1856,11 +1856,11 @@ export function AttemptDetailOverlay({
                                 row.tone === "changed" ? "bg-white/[0.01]" : "bg-transparent"
                               )}
                             >
-                              <div className="text-sm font-medium text-slate-200">{row.label}</div>
+                              <div className="text-sm font-medium text-white/80">{row.label}</div>
                               <div className="min-w-0">
-                                <div className="text-sm text-slate-100">{row.summary}</div>
+                                <div className="text-sm text-white/90">{row.summary}</div>
                                 {row.meta ? (
-                                  <div className="mt-1 line-clamp-2 text-xs text-slate-500">
+                                  <div className="mt-1 line-clamp-2 text-xs text-white/30">
                                     {row.meta}
                                   </div>
                                 ) : null}
@@ -1871,13 +1871,13 @@ export function AttemptDetailOverlay({
                                     "inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold",
                                     row.tone === "changed"
                                       ? "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-100"
-                                      : "border-white/10 bg-black/20 text-slate-400"
+                                      : "border-white/10 bg-black/20 text-white/40"
                                   )}
                                 >
                                   {row.scope}
                                 </span>
                                 {actionLabel ? (
-                                  <span className="text-[11px] font-medium text-slate-400">
+                                  <span className="text-[11px] font-medium text-white/40">
                                     {actionLabel}
                                   </span>
                                 ) : null}
@@ -1886,7 +1886,7 @@ export function AttemptDetailOverlay({
                           );
                         })
                       ) : (
-                        <div className="px-4 py-6 text-sm text-slate-500">
+                        <div className="px-4 py-6 text-sm text-white/30">
                           No meaningful base vs replay changes were captured.
                         </div>
                       )}
@@ -1894,28 +1894,28 @@ export function AttemptDetailOverlay({
                   </section>
 
                   {isToolDrivenAttempt ? (
-                    <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
+                    <section className="py-6 border-b border-white/5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="max-w-3xl">
-                          <div className="text-xs font-medium text-slate-400">Tool outcome</div>
+                          <div className="text-xs font-medium text-white/40">Tool outcome</div>
                           <h3 className="mt-2 text-lg font-semibold text-white">Action summary</h3>
-                          <p className="mt-2 text-sm leading-6 text-slate-300">
+                          <p className="mt-2 text-sm leading-6 text-white/60">
                             This attempt relied on tool execution, so review the action and outcome
                             before the final reply.
                           </p>
                         </div>
-                        <div className="flex flex-wrap gap-2 text-[11px] text-slate-400">
-                          <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                        <div className="flex flex-wrap gap-2 text-[11px] text-white/40">
+                          <span className="inline-flex items-center gap-1 rounded-md bg-white/5 px-2.5 py-1">
                             Calls {toolTotalCalls}
                           </span>
-                          <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                          <span className="inline-flex items-center gap-1 rounded-md bg-white/5 px-2.5 py-1">
                             Executed {toolExecutedCount}
                           </span>
-                          <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                          <span className="inline-flex items-center gap-1 rounded-md bg-white/5 px-2.5 py-1">
                             Results {toolResultCount}
                           </span>
                           {toolSimulatedCount > 0 ? (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-white/5 px-2.5 py-1">
                               Simulated {toolSimulatedCount}
                             </span>
                           ) : null}
@@ -1923,7 +1923,7 @@ export function AttemptDetailOverlay({
                       </div>
                       <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
                         <div
-                          className={clsx("rounded-xl border px-4 py-4", actionOutcome.toneClass)}
+                          className={clsx("rounded-r-lg px-4 py-4", actionOutcome.toneClass)}
                         >
                           <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
                             Action status
@@ -1931,13 +1931,13 @@ export function AttemptDetailOverlay({
                           <div className="mt-1 text-sm font-medium text-white">
                             {actionOutcome.label}
                           </div>
-                          <div className="mt-2 text-[11px] leading-relaxed text-slate-200/80">
+                          <div className="mt-2 text-[11px] leading-relaxed text-white/80/80">
                             {actionOutcome.detail}
                           </div>
                         </div>
                         <div
                           className={clsx(
-                            "rounded-xl border px-4 py-4",
+                            "rounded-r-lg px-4 py-4",
                             finalReplyOutcome.toneClass
                           )}
                         >
@@ -1947,35 +1947,35 @@ export function AttemptDetailOverlay({
                           <div className="mt-1 text-sm font-medium text-white">
                             {finalReplyOutcome.label}
                           </div>
-                          <div className="mt-2 text-[11px] leading-relaxed text-slate-200/80">
+                          <div className="mt-2 text-[11px] leading-relaxed text-white/80/80">
                             {finalReplyOutcome.detail}
                           </div>
                         </div>
                       </div>
                       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                        <div className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-4">
-                          <div className="text-[11px] font-medium text-slate-500">
+                        <div className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-4">
+                          <div className="text-[11px] font-medium text-white/30">
                             Primary action
                           </div>
-                          <div className="mt-2 text-sm font-medium text-slate-100">
+                          <div className="mt-2 text-sm font-medium text-white/90">
                             {primaryActionLabel}
                           </div>
-                          <div className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                          <div className="mt-2 text-[11px] leading-relaxed text-white/40">
                             {primaryActionMeta ||
                               "Execution metadata was not captured for the primary tool row."}
                           </div>
                         </div>
-                        <div className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-4">
-                          <div className="text-[11px] font-medium text-slate-500">
+                        <div className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-4">
+                          <div className="text-[11px] font-medium text-white/30">
                             Requested content
                           </div>
-                          <pre className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-300">
+                          <pre className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-white/60">
                             {actionRequestPreview}
                           </pre>
                         </div>
-                        <div className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-4">
-                          <div className="text-[11px] font-medium text-slate-500">Tool result</div>
-                          <pre className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-300">
+                        <div className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-4">
+                          <div className="text-[11px] font-medium text-white/30">Tool result</div>
+                          <pre className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-white/60">
                             {actionResultPreview}
                           </pre>
                         </div>
@@ -1984,7 +1984,7 @@ export function AttemptDetailOverlay({
                         <button
                           type="button"
                           onClick={() => scrollToSection(diffSectionRef)}
-                          className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                          className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-white/60 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
                         >
                           Jump to final reply
                         </button>
@@ -1995,7 +1995,7 @@ export function AttemptDetailOverlay({
                               setShowToolBehaviorDetails(true);
                               scrollToSection(toolBehaviorSectionRef);
                             }}
-                            className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                            className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-white/60 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
                           >
                             Open tool details
                           </button>
@@ -2004,17 +2004,17 @@ export function AttemptDetailOverlay({
                     </section>
                   ) : null}
 
-                  <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
+                  <section className="py-6 border-b border-white/5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <div className="text-xs font-medium text-slate-400">Evaluation results</div>
+                        <div className="text-xs font-medium text-white/40">Evaluation results</div>
                         <h3 className="mt-2 text-lg font-semibold text-white">Eval scoreboard</h3>
                       </div>
-                      <div className="text-[11px] text-slate-500">
+                      <div className="text-[11px] text-white/30">
                         All configured eval checks are shown below.
                       </div>
                     </div>
-                    <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-slate-400">
+                    <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-white/40">
                       <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 text-rose-200">
                         Failed {failedSignals.length}
                       </span>
@@ -2035,11 +2035,11 @@ export function AttemptDetailOverlay({
                       </div>
                     ) : null}
                     {!signalsChecksRaw ? (
-                      <div className="mt-4 rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-5 text-sm text-slate-500">
+                      <div className="mt-4 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-5 text-sm text-white/30">
                         No eval signals returned for this attempt.
                       </div>
                     ) : canonicalSignalRows.length === 0 ? (
-                      <div className="mt-4 rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-5 text-sm text-slate-500">
+                      <div className="mt-4 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-5 text-sm text-white/30">
                         No configured eval checks were returned for this attempt.
                       </div>
                     ) : (
@@ -2072,9 +2072,9 @@ export function AttemptDetailOverlay({
                             return (
                               <div
                                 key={row.id}
-                                className="grid gap-3 rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3 md:grid-cols-[minmax(0,180px)_80px_minmax(0,1fr)_minmax(0,220px)] md:items-center"
+                                className="grid gap-3 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-3 md:grid-cols-[minmax(0,180px)_80px_minmax(0,1fr)_minmax(0,220px)] md:items-center"
                               >
-                                <div className="text-sm font-medium text-slate-100">
+                                <div className="text-sm font-medium text-white/90">
                                   {row.label}
                                 </div>
                                 <div>
@@ -2082,8 +2082,8 @@ export function AttemptDetailOverlay({
                                     Pass
                                   </span>
                                 </div>
-                                <div className="min-w-0 text-sm text-slate-400">{evidenceText}</div>
-                                <div className="text-xs text-slate-500">
+                                <div className="min-w-0 text-sm text-white/40">{evidenceText}</div>
+                                <div className="text-xs text-white/30">
                                   {metricText || "Within threshold"}
                                 </div>
                               </div>
@@ -2096,7 +2096,7 @@ export function AttemptDetailOverlay({
                             >
                               <summary className="list-none cursor-pointer px-4 py-3 [&::-webkit-details-marker]:hidden">
                                 <div className="grid gap-3 md:grid-cols-[minmax(0,180px)_80px_minmax(0,1fr)_minmax(0,220px)_auto] md:items-center">
-                                  <div className="text-sm font-medium text-slate-100">
+                                  <div className="text-sm font-medium text-white/90">
                                     {row.label}
                                   </div>
                                   <div>
@@ -2111,13 +2111,13 @@ export function AttemptDetailOverlay({
                                       {failed ? "Fail" : "Pass"}
                                     </span>
                                   </div>
-                                  <div className="min-w-0 line-clamp-2 text-sm text-slate-300">
+                                  <div className="min-w-0 line-clamp-2 text-sm text-white/60">
                                     {evidenceText}
                                   </div>
-                                  <div className="text-xs text-slate-500">
+                                  <div className="text-xs text-white/30">
                                     {metricText || "See evidence"}
                                   </div>
-                                  <div className="text-[11px] font-medium text-slate-500">
+                                  <div className="text-[11px] font-medium text-white/30">
                                     {showsDiffEvidence ? "Review" : "Details"}
                                   </div>
                                 </div>
@@ -2126,18 +2126,18 @@ export function AttemptDetailOverlay({
                                 <div className="space-y-3">
                                   <div className="grid gap-3 md:grid-cols-2">
                                     <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
-                                      <div className="text-xs font-semibold text-slate-400">
+                                      <div className="text-xs font-semibold text-white/40">
                                         Evidence
                                       </div>
-                                      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">
+                                      <p className="mt-1.5 text-[11px] leading-relaxed text-white/60">
                                         {evidenceText}
                                       </p>
                                     </div>
                                     <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
-                                      <div className="text-xs font-semibold text-slate-400">
+                                      <div className="text-xs font-semibold text-white/40">
                                         Metric
                                       </div>
-                                      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">
+                                      <p className="mt-1.5 text-[11px] leading-relaxed text-white/60">
                                         {metricText ||
                                           "Structured metric unavailable for this check."}
                                       </p>
@@ -2146,24 +2146,24 @@ export function AttemptDetailOverlay({
                                   {barNode ? <div>{barNode}</div> : null}
                                   {showsDiffEvidence && diffFocus ? (
                                     <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
-                                      <div className="text-xs font-semibold text-slate-400">
+                                      <div className="text-xs font-semibold text-white/40">
                                         Diff focus
                                       </div>
-                                      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">
+                                      <p className="mt-1.5 text-[11px] leading-relaxed text-white/60">
                                         {diffFocus}
                                       </p>
                                     </div>
                                   ) : null}
                                   {showsDiffEvidence && diffExamples.length > 0 ? (
                                     <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
-                                      <div className="text-xs font-semibold text-slate-400">
+                                      <div className="text-xs font-semibold text-white/40">
                                         Relevant lines
                                       </div>
                                       <div className="mt-2 space-y-1.5">
                                         {diffExamples.slice(0, 1).map((example, idx) => (
                                           <div
                                             key={`${row.id}-${example.tone}-${idx}`}
-                                            className="text-[11px] leading-relaxed text-slate-300"
+                                            className="text-[11px] leading-relaxed text-white/60"
                                           >
                                             <span
                                               className={clsx(
@@ -2185,7 +2185,7 @@ export function AttemptDetailOverlay({
                                     <button
                                       type="button"
                                       onClick={() => scrollToSection(diffSectionRef)}
-                                      className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                                      className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-white/60 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
                                     >
                                       Jump to diff
                                     </button>
@@ -2205,29 +2205,29 @@ export function AttemptDetailOverlay({
                   >
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="max-w-3xl">
-                        <div className="text-xs font-medium text-slate-400">Final reply</div>
+                        <div className="text-xs font-medium text-white/40">Final reply</div>
                         <h3 className="mt-2 text-lg font-semibold text-white">
                           Assistant reply changes
                         </h3>
-                        <p className="mt-2 text-sm leading-6 text-slate-300">
+                        <p className="mt-2 text-sm leading-6 text-white/60">
                           Compare the user-facing assistant reply after the attempt finished.
                         </p>
                       </div>
                     </div>
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-slate-200">
+                        <p className="text-sm font-semibold text-white/80">
                           Compare baseline vs replay replies
                         </p>
-                        <p className="mt-1 text-[11px] text-slate-500">{diffConfidenceMessage}</p>
+                        <p className="mt-1 text-[11px] text-white/30">{diffConfidenceMessage}</p>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/40">
                         <span>Green marks the changed replay output.</span>
                         {isResponseDiffCollapsible ? (
                           <button
                             type="button"
                             onClick={() => setShowFullResponseDiff(v => !v)}
-                            className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-semibold text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                            className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-semibold text-white/60 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
                           >
                             {showFullResponseDiff ? "Collapse response" : "Show full response"}
                           </button>
@@ -2255,13 +2255,13 @@ export function AttemptDetailOverlay({
                       </div>
                     </div>
                     {isToolDrivenAttempt ? (
-                      <div className="mt-4 rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3 text-[11px] leading-relaxed text-slate-400">
+                      <div className="mt-4 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-3 text-[11px] leading-relaxed text-white/40">
                         This section only compares the user-facing assistant reply. Review Action
                         summary above if the main outcome happened through a tool call.
                       </div>
                     ) : null}
                     {isResponseDiffCollapsible && !showFullResponseDiff ? (
-                      <div className="mt-4 rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3 text-[11px] leading-relaxed text-slate-400">
+                      <div className="mt-4 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-3 text-[11px] leading-relaxed text-white/40">
                         Showing a shortened preview so long responses do not take over the review.
                         {hiddenResponseDiffLineCount > 0
                           ? ` Expand to inspect ${hiddenResponseDiffLineCount} more diff line${hiddenResponseDiffLineCount === 1 ? "" : "s"}.`
@@ -2278,10 +2278,10 @@ export function AttemptDetailOverlay({
                         )}
                       >
                         <div className="flex items-center justify-between border-b border-white/5 bg-black/40 px-4 py-3">
-                          <span className="text-[11px] font-semibold text-slate-400">Baseline</span>
-                          <span className="text-[10px] text-slate-500">{baselineModel}</span>
+                          <span className="text-[11px] font-semibold text-white/40">Baseline</span>
+                          <span className="text-[10px] text-white/30">{baselineModel}</span>
                         </div>
-                        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-5 font-mono text-[13px] leading-[1.75] text-slate-300 whitespace-pre-wrap break-words">
+                        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-5 font-mono text-[13px] leading-[1.75] text-white/60 whitespace-pre-wrap break-words">
                           {baselineResponseDisplay}
                         </div>
                       </div>
@@ -2294,16 +2294,16 @@ export function AttemptDetailOverlay({
                         )}
                       >
                         <div className="flex items-center justify-between border-b border-white/5 bg-black/40 px-4 py-3">
-                          <span className="text-[11px] font-semibold text-slate-400">Replay</span>
-                          <span className="text-[10px] text-slate-500">{candidateModel}</span>
+                          <span className="text-[11px] font-semibold text-white/40">Replay</span>
+                          <span className="text-[10px] text-white/30">{candidateModel}</span>
                         </div>
                         <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-0 font-mono text-[13px] leading-[1.75] whitespace-pre-wrap break-words">
                           {!candidateResponse ? (
-                            <div className="p-5 text-slate-500">{candidateResponseDisplay}</div>
+                            <div className="p-5 text-white/30">{candidateResponseDisplay}</div>
                           ) : responseDiffLines.length === 0 ? (
-                            <div className="p-5 text-slate-300">{candidateResponseDisplay}</div>
+                            <div className="p-5 text-white/60">{candidateResponseDisplay}</div>
                           ) : (
-                            <div className="flex flex-col py-3 text-slate-300">
+                            <div className="flex flex-col py-3 text-white/60">
                               {visibleResponseDiffLines.map((line, idx) => {
                                 const isAdded = line.startsWith("+");
                                 const isRemoved = line.startsWith("-");
@@ -2333,25 +2333,25 @@ export function AttemptDetailOverlay({
 
                   {hasAdditionalDetails ? (
                     <div ref={detailsSectionRef} className="grid gap-5">
-                      <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
+                      <section className="py-6 border-b border-white/5">
                         <div>
-                          <div className="text-xs font-medium text-slate-400">
+                          <div className="text-xs font-medium text-white/40">
                             Additional details
                           </div>
                           <h3 className="mt-2 text-lg font-semibold text-white">
                             Extra review context
                           </h3>
-                          <p className="mt-2 text-sm leading-6 text-slate-300">
+                          <p className="mt-2 text-sm leading-6 text-white/60">
                             Open these only when you need more setup context, tool evidence, or
                             warnings.
                           </p>
                         </div>
                         <div className="mt-4 space-y-3">
                           {attentionItems.length > 0 ? (
-                            <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
-                              <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
+                            <details className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-3">
+                              <summary className="cursor-pointer list-none text-sm font-medium text-white/90 [&::-webkit-details-marker]:hidden">
                                 Run warnings
-                                <span className="ml-2 text-[11px] font-normal text-slate-500">
+                                <span className="ml-2 text-[11px] font-normal text-white/30">
                                   {attentionItems.length} item
                                   {attentionItems.length === 1 ? "" : "s"}
                                 </span>
@@ -2366,7 +2366,7 @@ export function AttemptDetailOverlay({
                                     )}
                                   >
                                     <div className="flex items-center justify-between gap-3">
-                                      <span className="text-sm font-medium text-slate-200">
+                                      <span className="text-sm font-medium text-white/80">
                                         {item.label}
                                       </span>
                                       <span
@@ -2386,7 +2386,7 @@ export function AttemptDetailOverlay({
                                             : "Stable"}
                                       </span>
                                     </div>
-                                    <p className="mt-2 text-[11px] leading-relaxed text-slate-300">
+                                    <p className="mt-2 text-[11px] leading-relaxed text-white/60">
                                       {item.detail}
                                     </p>
                                   </div>
@@ -2398,28 +2398,28 @@ export function AttemptDetailOverlay({
                           {hasToolBehaviorDetails ? (
                             <div
                               ref={toolBehaviorSectionRef}
-                              className={clsx("rounded-xl border px-4 py-4", toolBehaviorToneClass)}
+                              className={clsx("rounded-r-lg px-4 py-4", toolBehaviorToneClass)}
                             >
                               <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div>
-                                  <div className="flex items-center gap-2 text-sm font-medium text-slate-100">
+                                  <div className="flex items-center gap-2 text-sm font-medium text-white/90">
                                     <div className="h-1.5 w-1.5 rounded-full bg-amber-300/80" />
                                     Tool execution details
                                   </div>
-                                  <p className="mt-2 text-[11px] leading-relaxed text-slate-300">
+                                  <p className="mt-2 text-[11px] leading-relaxed text-white/60">
                                     {toolBehaviorSummary}
                                   </p>
                                 </div>
                                 <button
                                   type="button"
                                   onClick={() => setShowToolBehaviorDetails(v => !v)}
-                                  className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                                  className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-white/60 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
                                 >
                                   {showToolBehaviorDetails ? "Hide details" : "Show details"}
                                 </button>
                               </div>
-                              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                                <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-white/40">
+                                <span className="inline-flex rounded-md bg-white/5 px-2.5 py-1">
                                   Policy{" "}
                                   {toolPolicyEnabled
                                     ? policyRows.length > 0
@@ -2427,16 +2427,16 @@ export function AttemptDetailOverlay({
                                       : "aligned"
                                     : "not enabled"}
                                 </span>
-                                <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                                <span className="inline-flex rounded-md bg-white/5 px-2.5 py-1">
                                   Calls {toolTotalCalls}
                                 </span>
-                                <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                                <span className="inline-flex rounded-md bg-white/5 px-2.5 py-1">
                                   Executed {toolExecutedCount}
                                 </span>
-                                <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                                <span className="inline-flex rounded-md bg-white/5 px-2.5 py-1">
                                   Recorded {toolRecordedCount}
                                 </span>
-                                <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                                <span className="inline-flex rounded-md bg-white/5 px-2.5 py-1">
                                   Results {toolResultCount}
                                 </span>
                                 {toolFailedCount > 0 ? (
@@ -2447,7 +2447,7 @@ export function AttemptDetailOverlay({
                               </div>
                               {showToolBehaviorDetails ? (
                                 <div className="mt-4 space-y-4">
-                                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
+                                  <div className="flex flex-wrap items-center gap-3 text-xs text-white/60">
                                     <span>
                                       Loop {toolLoopStatus}
                                       {toolLoopRounds > 0 ? ` (${toolLoopRounds} rounds)` : ""}
@@ -2502,10 +2502,10 @@ export function AttemptDetailOverlay({
                           ) : null}
 
                           {hasConfigurationChanges ? (
-                            <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
-                              <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
+                            <details className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-3">
+                              <summary className="cursor-pointer list-none text-sm font-medium text-white/90 [&::-webkit-details-marker]:hidden">
                                 Additional request data
-                                <span className="ml-2 text-[11px] font-normal text-slate-500">
+                                <span className="ml-2 text-[11px] font-normal text-white/30">
                                   {replayOverrideCount > 0
                                     ? `${replayOverrideCount} shared field${replayOverrideCount === 1 ? "" : "s"}`
                                     : "No shared fields"}
@@ -2523,63 +2523,63 @@ export function AttemptDetailOverlay({
                           ) : null}
 
                           {hasToolContextDetails ? (
-                            <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
-                              <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
+                            <details className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-3">
+                              <summary className="cursor-pointer list-none text-sm font-medium text-white/90 [&::-webkit-details-marker]:hidden">
                                 Extra system guidance
-                                <span className="ml-2 text-[11px] font-normal text-slate-500">
+                                <span className="ml-2 text-[11px] font-normal text-white/30">
                                   {toolContextSummary}
                                 </span>
                               </summary>
                               <div className="mt-3 space-y-3">
                                 <div className="grid gap-3 sm:grid-cols-2">
                                   <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                    <div className="text-[11px] font-medium text-slate-500">
+                                    <div className="text-[11px] font-medium text-white/30">
                                       Mode
                                     </div>
-                                    <div className="mt-1 text-sm text-slate-100">
+                                    <div className="mt-1 text-sm text-white/90">
                                       {toolContextModeValue === "inject"
                                         ? "Add extra system guidance"
                                         : "Use the recorded request only"}
                                     </div>
                                   </div>
                                   <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                    <div className="text-[11px] font-medium text-slate-500">
+                                    <div className="text-[11px] font-medium text-white/30">
                                       Scope
                                     </div>
-                                    <div className="mt-1 text-sm text-slate-100">
+                                    <div className="mt-1 text-sm text-white/90">
                                       {toolContextScopeLabel}
                                     </div>
                                   </div>
                                   <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                    <div className="text-[11px] font-medium text-slate-500">
+                                    <div className="text-[11px] font-medium text-white/30">
                                       Inputs with custom guidance
                                     </div>
-                                    <div className="mt-1 text-sm text-slate-100">
+                                    <div className="mt-1 text-sm text-white/90">
                                       {toolContextCustomEntries.length}
                                     </div>
                                   </div>
                                   <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                    <div className="text-[11px] font-medium text-slate-500">
+                                    <div className="text-[11px] font-medium text-white/30">
                                       Shared fallback text
                                     </div>
-                                    <div className="mt-1 text-sm text-slate-100">
+                                    <div className="mt-1 text-sm text-white/90">
                                       {toolContextGlobalText ? "Present" : "Not set"}
                                     </div>
                                   </div>
                                 </div>
                                 {toolContextGlobalText ? (
                                   <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                    <div className="text-[11px] font-medium text-slate-500">
+                                    <div className="text-[11px] font-medium text-white/30">
                                       Shared guidance preview
                                     </div>
-                                    <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-300 custom-scrollbar">
+                                    <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-white/60 custom-scrollbar">
                                       {toolContextGlobalText}
                                     </pre>
                                   </div>
                                 ) : null}
                                 {toolContextCustomEntries.length > 0 ? (
                                   <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                    <div className="text-[11px] font-medium text-slate-500">
+                                    <div className="text-[11px] font-medium text-white/30">
                                       Per-input guidance
                                     </div>
                                     <div className="mt-3 space-y-2">
@@ -2588,10 +2588,10 @@ export function AttemptDetailOverlay({
                                           key={sid}
                                           className="rounded-lg border border-white/5 bg-black/20 px-3 py-2"
                                         >
-                                          <summary className="cursor-pointer list-none text-[11px] font-medium text-slate-200 [&::-webkit-details-marker]:hidden">
+                                          <summary className="cursor-pointer list-none text-[11px] font-medium text-white/80 [&::-webkit-details-marker]:hidden">
                                             Input {sid}
                                           </summary>
-                                          <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-400 custom-scrollbar">
+                                          <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-white/40 custom-scrollbar">
                                             {String(value)}
                                           </pre>
                                         </details>
@@ -2614,19 +2614,19 @@ export function AttemptDetailOverlay({
                   <section className="rounded-2xl border border-white/5 bg-white/[0.02] px-5 py-5">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="max-w-3xl">
-                        <div className="text-xs font-medium text-slate-400">
+                        <div className="text-xs font-medium text-white/40">
                           Support and diagnostics
                         </div>
                         <h3 className="mt-2 text-lg font-semibold text-white">
                           Diagnostics payload
                         </h3>
-                        <p className="mt-2 text-sm leading-6 text-slate-300">
+                        <p className="mt-2 text-sm leading-6 text-white/60">
                           Use this only when the Review tab is not enough. This view exposes the raw
                           replay payload, provider metadata, extraction details, and tool evidence
                           so you can diagnose capture issues or provider-specific behavior.
                         </p>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-white/40">
                         <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
                           Provider {candidateProvider || "Unknown"}
                         </span>
@@ -2642,50 +2642,50 @@ export function AttemptDetailOverlay({
                   <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-10">
                     <div className="flex min-h-[400px] flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0c] xl:col-span-7">
                       <div className="flex items-center justify-between border-b border-white/5 bg-white/[0.02] px-5 py-3">
-                        <span className="text-[11px] font-medium text-slate-400">JSON payload</span>
+                        <span className="text-[11px] font-medium text-white/40">JSON payload</span>
                       </div>
-                      <pre className="custom-scrollbar min-h-0 flex-1 overflow-auto p-6 font-mono text-[12px] leading-[1.7] text-slate-300 whitespace-pre-wrap break-words">
+                      <pre className="custom-scrollbar min-h-0 flex-1 overflow-auto p-6 font-mono text-[12px] leading-[1.7] text-white/60 whitespace-pre-wrap break-words">
                         {candidatePayloadPreview}
                       </pre>
                     </div>
 
                     <div className="space-y-3 xl:col-span-3">
                       <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
-                        <div className="text-[11px] font-medium text-slate-400">Provider</div>
-                        <div className="mt-2 text-sm font-medium text-slate-100 break-words">
+                        <div className="text-[11px] font-medium text-white/40">Provider</div>
+                        <div className="mt-2 text-sm font-medium text-white/90 break-words">
                           {candidateProvider}
                         </div>
-                        <div className="mt-1 text-xs text-slate-400">{candidateModel}</div>
+                        <div className="mt-1 text-xs text-white/40">{candidateModel}</div>
                       </div>
                       <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
-                        <div className="text-[11px] font-medium text-slate-400">Payload health</div>
-                        <div className="mt-2 text-sm font-medium text-slate-100 break-words">
+                        <div className="text-[11px] font-medium text-white/40">Payload health</div>
+                        <div className="mt-2 text-sm font-medium text-white/90 break-words">
                           {hasProviderError
                             ? "Provider warning attached"
                             : "Structured payload captured"}
                         </div>
-                        <div className="mt-1 text-xs text-slate-400">
+                        <div className="mt-1 text-xs text-white/40">
                           {responseDataKeys.length > 0
                             ? `${responseDataKeys.length} keys captured`
                             : "No payload keys"}
                         </div>
                       </div>
                       <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
-                        <div className="text-[11px] font-medium text-slate-400">Tool evidence</div>
-                        <div className="mt-2 text-sm font-medium text-slate-100 break-words">
+                        <div className="text-[11px] font-medium text-white/40">Tool evidence</div>
+                        <div className="mt-2 text-sm font-medium text-white/90 break-words">
                           {toolTotalCalls > 0
                             ? `${toolTotalCalls} call${toolTotalCalls === 1 ? "" : "s"} detected`
                             : "No tool calls detected"}
                         </div>
-                        <div className="mt-1 text-xs text-slate-400">
+                        <div className="mt-1 text-xs text-white/40">
                           Executed {toolExecutedCount} / Recorded {toolRecordedCount} / Simulated{" "}
                           {toolSimulatedCount} / Skipped {toolSkippedCount}
                         </div>
-                        <div className="mt-1 text-xs text-slate-500">
+                        <div className="mt-1 text-xs text-white/30">
                           Loop {toolLoopStatus}
                           {toolLoopRounds > 0 ? ` (${toolLoopRounds} rounds)` : ""}
                         </div>
-                        <div className="mt-1 text-xs text-slate-500">
+                        <div className="mt-1 text-xs text-white/30">
                           Tool results captured {toolResultCount}
                         </div>
                         {flattenedToolLoopRows.length > 0 ? (
@@ -2696,10 +2696,10 @@ export function AttemptDetailOverlay({
                                 className="rounded-xl bg-black/20 px-3 py-2 ring-1 ring-white/5"
                               >
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[11px] font-medium text-slate-200">
+                                  <span className="text-[11px] font-medium text-white/80">
                                     Round {row.round || 1} · {row.name}
                                     {row.callId ? (
-                                      <span className="ml-1 font-mono text-[10px] font-normal text-slate-500">
+                                      <span className="ml-1 font-mono text-[10px] font-normal text-white/30">
                                         · id {row.callId}
                                       </span>
                                     ) : null}
@@ -2711,7 +2711,7 @@ export function AttemptDetailOverlay({
                                         ? "text-violet-300"
                                         : row.provenance === "missing"
                                           ? "text-amber-300"
-                                          : "text-slate-400"
+                                          : "text-white/40"
                                     )}
                                   >
                                     {row.provenance === "recorded"
@@ -2731,12 +2731,12 @@ export function AttemptDetailOverlay({
                                   </p>
                                 ) : null}
                                 {row.mode ? (
-                                  <p className="mt-1 text-[10px] text-slate-500">
+                                  <p className="mt-1 text-[10px] text-white/30">
                                     Mode: {row.mode}
                                   </p>
                                 ) : null}
                                 {row.argumentsPreview ? (
-                                  <p className="mt-1 line-clamp-2 text-[10px] text-slate-500">
+                                  <p className="mt-1 line-clamp-2 text-[10px] text-white/30">
                                     {row.argumentsPreview}
                                   </p>
                                 ) : null}
@@ -2746,13 +2746,13 @@ export function AttemptDetailOverlay({
                         ) : null}
                       </div>
                       <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
-                        <div className="text-[11px] font-medium text-slate-400">Extract path</div>
-                        <div className="mt-2 text-sm font-medium text-slate-100 break-words">
+                        <div className="text-[11px] font-medium text-white/40">Extract path</div>
+                        <div className="mt-2 text-sm font-medium text-white/90 break-words">
                           {String(
                             (candidateSnapshot as any)?.response_extract_path ?? "Not captured"
                           )}
                         </div>
-                        <div className="mt-1 text-xs text-slate-400 break-words">
+                        <div className="mt-1 text-xs text-white/40 break-words">
                           {String(
                             (candidateSnapshot as any)?.response_extract_reason ??
                               "No extraction warning"
@@ -2760,13 +2760,13 @@ export function AttemptDetailOverlay({
                         </div>
                       </div>
                       <div className="rounded-2xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/6">
-                        <div className="text-[11px] font-medium text-slate-400">Payload keys</div>
-                        <div className="mt-2 text-sm font-medium text-slate-100 break-words">
+                        <div className="text-[11px] font-medium text-white/40">Payload keys</div>
+                        <div className="mt-2 text-sm font-medium text-white/90 break-words">
                           {responseDataKeys.length > 0
                             ? responseDataKeys.slice(0, 10).join(", ")
                             : "None captured"}
                         </div>
-                        <div className="mt-1 text-xs text-slate-400">
+                        <div className="mt-1 text-xs text-white/40">
                           {providerErrorPreview
                             ? "Provider preview included"
                             : "Structured response payload"}
