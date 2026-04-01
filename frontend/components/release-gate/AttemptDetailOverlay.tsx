@@ -22,6 +22,26 @@ import { ReleaseGateReplayRequestMetaPanel } from "@/app/organizations/[orgId]/p
 
 export type AttemptDetailMainTab = "review" | "debug";
 
+const RESPONSE_PREVIEW_LINE_LIMIT = 36;
+const RESPONSE_PREVIEW_CHAR_LIMIT = 3200;
+const RESPONSE_DIFF_LINE_LIMIT = 80;
+
+function truncateResponsePreview(
+  text: string,
+  lineLimit = RESPONSE_PREVIEW_LINE_LIMIT,
+  charLimit = RESPONSE_PREVIEW_CHAR_LIMIT
+): string {
+  if (!text) return text;
+
+  const lines = text.split("\n");
+  const lineTrimmed = lines.slice(0, lineLimit).join("\n");
+  const charTrimmed =
+    lineTrimmed.length > charLimit ? lineTrimmed.slice(0, charLimit) : lineTrimmed;
+  const wasTrimmed = lines.length > lineLimit || text.length > charTrimmed.length;
+
+  return wasTrimmed ? charTrimmed.trimEnd() + "\n..." : charTrimmed;
+}
+
 export function AttemptDetailOverlay({
   open,
   onClose,
@@ -56,6 +76,7 @@ export function AttemptDetailOverlay({
 
   const [failedOnly, setFailedOnly] = useState(false);
   const [showToolBehaviorDetails, setShowToolBehaviorDetails] = useState(false);
+  const [showFullResponseDiff, setShowFullResponseDiff] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -65,6 +86,8 @@ export function AttemptDetailOverlay({
       setShowRemovedDiffLines(false);
       setNavIndex(safeInitial);
       setFailedOnly(false);
+      setShowToolBehaviorDetails(false);
+      setShowFullResponseDiff(false);
     }
   }, [open, inputIndex, safeInitial, attemptCount]);
 
@@ -717,10 +740,47 @@ export function AttemptDetailOverlay({
   const candidateLineCount = candidateResponse ? candidateResponse.split("\n").length : 0;
   const diffRemovedCount = responseDiffLines.filter(line => line.startsWith("-")).length;
   const diffConfidenceMessage = (() => {
-    if (baselineResponse && candidateResponse) return "Both responses captured.";
-    if (!baselineResponse && !candidateResponse) return "Both response previews are missing.";
-    return "One side is missing; compare with caution.";
+    if (baselineResponse && candidateResponse) return "Both final replies were captured.";
+    if (!baselineResponse && !candidateResponse)
+      return "Neither side produced a captured final reply.";
+    return "One side is missing a captured final reply, so compare with caution.";
   })();
+  const isResponseDiffCollapsible =
+    baselineLineCount > RESPONSE_PREVIEW_LINE_LIMIT ||
+    candidateLineCount > RESPONSE_PREVIEW_LINE_LIMIT ||
+    responseDiffLines.length > RESPONSE_DIFF_LINE_LIMIT ||
+    baselineResponse.length > RESPONSE_PREVIEW_CHAR_LIMIT ||
+    candidateResponse.length > RESPONSE_PREVIEW_CHAR_LIMIT;
+  const baselineResponseDisplay = baselineResponse
+    ? showFullResponseDiff || !isResponseDiffCollapsible
+      ? baselineResponse
+      : truncateResponsePreview(baselineResponse)
+    : baselineResponseStatus === "not_captured"
+      ? `Baseline response not captured (${baselineCaptureReason || "no reason given"}).`
+      : baselineResponseStatus === "empty"
+        ? "The baseline finished without a final assistant reply."
+        : "The baseline response preview is unavailable.";
+  const candidateResponseDisplay = candidateResponse
+    ? showFullResponseDiff || !isResponseDiffCollapsible
+      ? candidateResponse
+      : truncateResponsePreview(candidateResponse)
+    : candidateResponseStatus === "tool_calls_only"
+      ? "This attempt used tools but did not produce a final assistant reply."
+      : candidateResponseStatus === "empty"
+        ? "This attempt finished without a final assistant reply."
+        : "The replay response preview is unavailable.";
+  const visibleResponseDiffLines = useMemo(() => {
+    const visibleLines = responseDiffLines.filter(
+      line => showRemovedDiffLines || !line.startsWith("-")
+    );
+    if (showFullResponseDiff || !isResponseDiffCollapsible) return visibleLines;
+    return visibleLines.slice(0, RESPONSE_DIFF_LINE_LIMIT);
+  }, [responseDiffLines, showRemovedDiffLines, showFullResponseDiff, isResponseDiffCollapsible]);
+  const hiddenResponseDiffLineCount = Math.max(
+    0,
+    responseDiffLines.filter(line => showRemovedDiffLines || !line.startsWith("-")).length -
+      visibleResponseDiffLines.length
+  );
   const gateConfidence = (() => {
     if (toolGroundingStatus === "fail") {
       return {
@@ -845,10 +905,23 @@ export function AttemptDetailOverlay({
         : "border-white/6 bg-white/[0.02]";
   const toolBehaviorSummary =
     policyRows.length > 0
-      ? `${policyRows.length} policy violation${policyRows.length === 1 ? "" : "s"} require review.`
-      : toolPolicyEnabled
-        ? "Tool policy stayed aligned with the baseline for this attempt."
-        : "Tool policy was not enabled for this run.";
+      ? `${policyRows.length} tool policy issue${policyRows.length === 1 ? "" : "s"} need review.`
+      : toolTotalCalls > 0
+        ? `${toolTotalCalls} tool call${toolTotalCalls === 1 ? " was" : "s were"} captured for this attempt.`
+        : toolPolicyEnabled
+          ? "Tools were available for this attempt, but no tool calls were captured."
+          : "No tools were available for this attempt.";
+  const hasToolBehaviorDetails =
+    toolPolicyEnabled ||
+    toolTotalCalls > 0 ||
+    toolRecordedCount > 0 ||
+    toolExecutedCount > 0 ||
+    toolResultCount > 0 ||
+    toolSimulatedCount > 0 ||
+    toolSkippedCount > 0 ||
+    toolFailedCount > 0 ||
+    policyRows.length > 0 ||
+    gateToolTimelineRows.length > 0;
   const hasConfigurationChanges = useMemo(() => {
     if (!replayRequestMeta || typeof replayRequestMeta !== "object") return false;
     const overrides =
@@ -905,11 +978,11 @@ export function AttemptDetailOverlay({
     const formatSamplingLabel = (key: string, value: unknown): string => {
       const text = String(value ?? "").trim();
       if (!text) return key;
-      if (key === "temperature") return `Temp ${text}`;
-      if (key === "max_tokens") return `Max ${text}`;
-      if (key === "top_p") return `Top p ${text}`;
-      if (key === "presence_penalty") return `Presence ${text}`;
-      if (key === "frequency_penalty") return `Frequency ${text}`;
+      if (key === "temperature") return `Temperature ${text}`;
+      if (key === "max_tokens") return `Max tokens ${text}`;
+      if (key === "top_p") return `Top-p ${text}`;
+      if (key === "presence_penalty") return `Presence penalty ${text}`;
+      if (key === "frequency_penalty") return `Frequency penalty ${text}`;
       return `${key.replace(/_/g, " ")} ${text}`;
     };
     return Object.entries(overrides)
@@ -919,21 +992,21 @@ export function AttemptDetailOverlay({
   const overrideSummary = useMemo(() => {
     if (Boolean(replayRequestMeta?.has_new_system_prompt)) {
       return {
-        summary: "System prompt override applied",
+        summary: "This attempt used a system prompt override",
         meta: String(replayRequestMeta?.new_system_prompt_preview ?? "").trim() || undefined,
         tone: "changed" as const,
       };
     }
     if (baselineModel !== candidateModel) {
       return {
-        summary: "Model override applied",
-        meta: `${baselineModel} -> ${candidateModel}`,
+        summary: "This attempt used a model override",
+        meta: `Baseline ${baselineModel} -> replay ${candidateModel}`,
         tone: "changed" as const,
       };
     }
     return {
-      summary: "Using detected model",
-      meta: baselineModel,
+      summary: "No model or prompt override was applied",
+      meta: `Using model ${baselineModel}`,
       tone: "default" as const,
     };
   }, [replayRequestMeta, baselineModel, candidateModel]);
@@ -975,25 +1048,30 @@ export function AttemptDetailOverlay({
     toolContextGlobalText.length > 0 ||
     toolContextCustomEntries.length > 0;
   const toolContextSummary = (() => {
-    if (!hasToolContextDetails) return "Using recorded request only";
-    if (toolContextModeValue !== "inject") return "Using recorded request only";
+    if (!hasToolContextDetails) return "No extra system text was added.";
+    if (toolContextModeValue !== "inject") return "Using the recorded request only.";
     if (toolContextScopeValue === "global") {
       return toolContextGlobalText
-        ? "Shared extra system text added"
-        : "Shared extra system text configured";
+        ? "Shared extra system text was added for every replayed input."
+        : "Shared extra system text was configured for this run.";
     }
     const parts = [
-      `Extra text added for ${toolContextCustomEntries.length} snapshot${toolContextCustomEntries.length === 1 ? "" : "s"}`,
+      `${toolContextCustomEntries.length} input${toolContextCustomEntries.length === 1 ? "" : "s"} received extra system text`,
     ];
-    if (toolContextGlobalText) parts.push("shared fallback present");
+    if (toolContextGlobalText) parts.push("with shared fallback text");
     return parts.join(", ");
   })();
   const toolContextScopeLabel =
     toolContextModeValue !== "inject"
-      ? "not applicable"
+      ? "Not applicable"
       : toolContextScopeValue === "global"
-        ? "run-wide"
-        : "per-log";
+        ? "Entire run"
+        : "Per input";
+  const hasAdditionalDetails =
+    attentionItems.length > 0 ||
+    hasToolBehaviorDetails ||
+    hasConfigurationChanges ||
+    hasToolContextDetails;
   const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>) => {
     ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -1011,11 +1089,13 @@ export function AttemptDetailOverlay({
     rows.push({
       id: "user-input",
       label: "User input",
-      summary: inputChanged ? "Replay input changed from baseline" : "Matches baseline input",
+      summary: inputChanged
+        ? "Prompt text changed from the baseline"
+        : "Uses the same prompt as the baseline",
       meta: inputChanged
-        ? `${baselineInputLineCount} -> ${candidateInputLineCount} lines`
-        : `${candidateInputLineCount} lines`,
-      scope: "Run-wide",
+        ? `Baseline ${baselineInputLineCount} lines, replay ${candidateInputLineCount} lines`
+        : `${candidateInputLineCount} captured line${candidateInputLineCount === 1 ? "" : "s"}`,
+      scope: "Entire run",
       tone: inputChanged ? "changed" : "default",
     });
 
@@ -1024,41 +1104,52 @@ export function AttemptDetailOverlay({
       label: "Sampling",
       summary:
         replaySamplingSummary && replaySamplingSummary.length > 0
-          ? replaySamplingSummary.slice(0, 3).join(" · ")
-          : "Recorded defaults",
+          ? "Sampling settings were changed for this run"
+          : "Uses the same default sampling settings as the baseline",
       meta:
-        replaySamplingSummary && replaySamplingSummary.length > 3
-          ? replaySamplingSummary.slice(3).join(" · ")
+        replaySamplingSummary && replaySamplingSummary.length > 0
+          ? replaySamplingSummary.join(" · ")
           : undefined,
-      scope: "Run-wide",
+      scope: "Entire run",
       tone: replaySamplingSummary && replaySamplingSummary.length > 0 ? "changed" : "default",
       action: replaySamplingSummary && replaySamplingSummary.length > 0 ? "details" : undefined,
     });
+
+    const toolMetaParts: string[] = [];
+    if (toolTotalCalls > 0) {
+      toolMetaParts.push(`${toolExecutedCount} executed`);
+      toolMetaParts.push(`${toolRecordedCount} recorded`);
+      if (toolSimulatedCount > 0) toolMetaParts.push(`${toolSimulatedCount} simulated`);
+      if (toolFailedCount > 0) toolMetaParts.push(`${toolFailedCount} failed`);
+    } else if (toolPolicyEnabled) {
+      toolMetaParts.push("No tool calls were captured.");
+    }
 
     rows.push({
       id: "tools",
       label: "Tools",
       summary:
         toolTotalCalls > 0
-          ? `${toolTotalCalls} tool call${toolTotalCalls === 1 ? "" : "s"} detected`
+          ? `${toolTotalCalls} tool call${toolTotalCalls === 1 ? " was" : "s were"} captured for this attempt`
           : toolPolicyEnabled
-            ? "Tool policy enabled"
-            : "No tools configured",
-      meta:
-        toolTotalCalls > 0
-          ? `${toolFailedCount} failed`
-          : undefined,
-      scope: toolRecordedCount !== toolTotalCalls ? "Mixed" : "Run-wide",
-      tone: toolRecordedCount !== toolTotalCalls || toolFailedCount > 0 ? "changed" : "default",
-      action: "tools",
+            ? "Tools are available for this attempt"
+            : "No tools were available for this attempt",
+      meta: toolMetaParts.join(" · ") || undefined,
+      scope:
+        toolRecordedCount !== toolTotalCalls && toolTotalCalls > 0 ? "Mixed scope" : "Entire run",
+      tone:
+        toolFailedCount > 0 || (toolTotalCalls > 0 && toolRecordedCount !== toolTotalCalls)
+          ? "changed"
+          : "default",
+      action: hasToolBehaviorDetails ? "tools" : undefined,
     });
 
     rows.push({
       id: "override",
-      label: "Override",
+      label: "Overrides",
       summary: overrideSummary.summary,
       meta: overrideSummary.meta,
-      scope: "Run-wide",
+      scope: "Entire run",
       tone: overrideSummary.tone,
       action:
         Boolean(replayRequestMeta?.has_new_system_prompt) || baselineModel !== candidateModel
@@ -1069,26 +1160,29 @@ export function AttemptDetailOverlay({
     if (replayOverrideCount > 0 || replayPerLogOverrideCount > 0) {
       rows.push({
         id: "extra-request",
-        label: "Extra request fields",
+        label: "Additional request data",
         summary:
           replayOverrideCount > 0 && replayPerLogOverrideCount > 0
-            ? `Shared fields changed, ${replayPerLogOverrideCount} snapshots customized`
+            ? "Shared request data changed and some inputs use custom values"
             : replayOverrideCount > 0
-              ? `Shared fields changed (${replayOverrideCount} key${replayOverrideCount === 1 ? "" : "s"})`
-              : `${replayPerLogOverrideCount} snapshots customized`,
+              ? `Shared request data changed (${replayOverrideCount} field${replayOverrideCount === 1 ? "" : "s"})`
+              : `${replayPerLogOverrideCount} input${replayPerLogOverrideCount === 1 ? " uses" : "s use"} custom request values`,
         meta:
           replayOverrideKeys.length > 0
             ? replayOverrideKeys.slice(0, 3).join(", ")
             : replayPerLogOverrideEntries
                 .slice(0, 2)
-                .map(([sid, value]) => `snapshot ${sid} (${Object.keys(value).length})`)
+                .map(
+                  ([sid, value]) =>
+                    `Input ${sid} (${Object.keys(value).length} field${Object.keys(value).length === 1 ? "" : "s"})`
+                )
                 .join(" · "),
         scope:
           replayOverrideCount > 0 && replayPerLogOverrideCount > 0
-            ? "Mixed"
+            ? "Mixed scope"
             : replayPerLogOverrideCount > 0
-              ? "Per-log"
-              : "Run-wide",
+              ? "Per input"
+              : "Entire run",
         tone: "changed",
         action: "details",
       });
@@ -1098,21 +1192,22 @@ export function AttemptDetailOverlay({
       rows.push({
         id: "extra-context",
         label: "Extra system text",
-        summary: toolContextSummary,
+        summary:
+          toolContextScopeValue === "global"
+            ? "Shared system guidance was added for this run"
+            : `${toolContextCustomEntries.length} input${toolContextCustomEntries.length === 1 ? "" : "s"} received extra system guidance`,
         meta:
           toolContextModeValue === "inject"
-            ? toolContextScopeValue === "global"
-              ? "Shared extra text"
-              : toolContextGlobalText
-                ? "Per-log with fallback"
-                : "Per-log only"
-            : "Using recorded request only",
+            ? toolContextGlobalText
+              ? "Includes shared fallback text"
+              : "Only per-input guidance was added"
+            : "Using the recorded request only",
         scope:
           toolContextScopeValue === "global"
-            ? "Run-wide"
+            ? "Entire run"
             : toolContextModeValue === "inject"
-              ? "Per-log"
-              : "Run-wide",
+              ? "Per input"
+              : "Entire run",
         tone: toolContextModeValue === "inject" ? "changed" : "default",
         action: "details",
       });
@@ -1131,16 +1226,18 @@ export function AttemptDetailOverlay({
     toolTotalCalls,
     toolFailedCount,
     toolSimulatedCount,
+    toolExecutedCount,
     overrideSummary,
     replayOverrideCount,
     replayPerLogOverrideCount,
     replayOverrideKeys,
     replayPerLogOverrideEntries,
     hasToolContextDetails,
-    toolContextSummary,
+    hasToolBehaviorDetails,
     toolContextModeValue,
     toolContextScopeValue,
     toolContextGlobalText,
+    toolContextCustomEntries,
     replayRequestMeta,
   ]);
   const diffFocusBySignal = useMemo(() => {
@@ -1253,6 +1350,7 @@ export function AttemptDetailOverlay({
   useEffect(() => {
     if (!open) return;
     setShowToolBehaviorDetails(false);
+    setShowFullResponseDiff(false);
   }, [open, navIndex]);
 
   if (!open) return null;
@@ -1479,7 +1577,9 @@ export function AttemptDetailOverlay({
                             <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
                               Gate result
                             </div>
-                            <div className="mt-1 text-sm font-medium text-white">{decisionSummary}</div>
+                            <div className="mt-1 text-sm font-medium text-white">
+                              {decisionSummary}
+                            </div>
                           </div>
                           <div className="flex flex-wrap items-center gap-2 text-[11px]">
                             <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-slate-100">
@@ -1491,11 +1591,15 @@ export function AttemptDetailOverlay({
                           </div>
                         </div>
                       </div>
-                      <div className={clsx("rounded-xl border px-4 py-4", gateConfidence.toneClass)}>
+                      <div
+                        className={clsx("rounded-xl border px-4 py-4", gateConfidence.toneClass)}
+                      >
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
                           Evidence quality
                         </div>
-                        <div className="mt-1 text-sm font-medium text-white">{gateConfidence.label}</div>
+                        <div className="mt-1 text-sm font-medium text-white">
+                          {gateConfidence.label}
+                        </div>
                         <div className="mt-2 text-[11px] leading-relaxed text-slate-200/80">
                           {gateConfidence.detail}
                         </div>
@@ -1579,7 +1683,7 @@ export function AttemptDetailOverlay({
                         inputSetupRows.map((row, idx) => {
                           const actionLabel =
                             row.action === "tools"
-                              ? "View tools"
+                              ? "View tool details"
                               : row.action === "details"
                                 ? "View details"
                                 : null;
@@ -1594,6 +1698,7 @@ export function AttemptDetailOverlay({
                                       if (row.action === "diff") {
                                         scrollToSection(diffSectionRef);
                                       } else if (row.action === "tools") {
+                                        setShowToolBehaviorDetails(true);
                                         scrollToSection(toolBehaviorSectionRef);
                                       } else {
                                         scrollToSection(detailsSectionRef);
@@ -1671,7 +1776,8 @@ export function AttemptDetailOverlay({
                     {runtimeSignalRows.length > 0 ? (
                       <div className="mt-4 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] px-4 py-3 text-[11px] leading-relaxed text-fuchsia-100/85">
                         {runtimeSignalRows.length} extra runtime diagnostic
-                        {runtimeSignalRows.length === 1 ? "" : "s"} are shown for debugging only and do not count toward gate coverage.
+                        {runtimeSignalRows.length === 1 ? "" : "s"} are shown for debugging only and
+                        do not count toward gate coverage.
                       </div>
                     ) : null}
                     {!signalsChecksRaw ? (
@@ -1796,10 +1902,15 @@ export function AttemptDetailOverlay({
                                   ) : null}
                                   {showsDiffEvidence && diffExamples.length > 0 ? (
                                     <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
-                                      <div className="text-xs font-semibold text-slate-400">Relevant lines</div>
+                                      <div className="text-xs font-semibold text-slate-400">
+                                        Relevant lines
+                                      </div>
                                       <div className="mt-2 space-y-1.5">
                                         {diffExamples.slice(0, 1).map((example, idx) => (
-                                          <div key={`${row.id}-${example.tone}-${idx}`} className="text-[11px] leading-relaxed text-slate-300">
+                                          <div
+                                            key={`${row.id}-${example.tone}-${idx}`}
+                                            className="text-[11px] leading-relaxed text-slate-300"
+                                          >
                                             <span
                                               className={clsx(
                                                 "mr-1 font-semibold",
@@ -1840,21 +1951,31 @@ export function AttemptDetailOverlay({
                   >
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="max-w-3xl">
-                        <div className="text-xs font-medium text-slate-400">Response diff</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">
-                          Output changed like this
-                        </h3>
+                        <div className="text-xs font-medium text-slate-400">Response changes</div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Response diff</h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-300">
+                          Review how the final assistant reply changed from the baseline.
+                        </p>
                       </div>
                     </div>
-                    <div className="mt-4 flex items-center justify-between gap-3">
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-slate-200">
-                          Compare baseline vs candidate
+                          Compare baseline vs replay output
                         </p>
                         <p className="mt-1 text-[11px] text-slate-500">{diffConfidenceMessage}</p>
                       </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                        <span>Green marks changed candidate output.</span>
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                        <span>Green marks the changed replay output.</span>
+                        {isResponseDiffCollapsible ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowFullResponseDiff(v => !v)}
+                            className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-semibold text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                          >
+                            {showFullResponseDiff ? "Collapse response" : "Show full response"}
+                          </button>
+                        ) : null}
                         {diffRemovedCount > 0 ? (
                           <button
                             type="button"
@@ -1877,46 +1998,53 @@ export function AttemptDetailOverlay({
                         ) : null}
                       </div>
                     </div>
+                    {isResponseDiffCollapsible && !showFullResponseDiff ? (
+                      <div className="mt-4 rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3 text-[11px] leading-relaxed text-slate-400">
+                        Showing a shortened preview so long responses do not take over the review.
+                        {hiddenResponseDiffLineCount > 0
+                          ? ` Expand to inspect ${hiddenResponseDiffLineCount} more diff line${hiddenResponseDiffLineCount === 1 ? "" : "s"}.`
+                          : " Expand to inspect the full response body."}
+                      </div>
+                    ) : null}
                     <div className="mt-4 grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-                      <div className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0c]">
+                      <div
+                        className={clsx(
+                          "flex flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0c]",
+                          isResponseDiffCollapsible && !showFullResponseDiff
+                            ? "min-h-[280px]"
+                            : "min-h-[420px]"
+                        )}
+                      >
                         <div className="flex items-center justify-between border-b border-white/5 bg-black/40 px-4 py-3">
                           <span className="text-[11px] font-semibold text-slate-400">Baseline</span>
                           <span className="text-[10px] text-slate-500">{baselineModel}</span>
                         </div>
                         <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-5 font-mono text-[13px] leading-[1.75] text-slate-300 whitespace-pre-wrap break-words">
-                          {baselineResponse
-                            ? baselineResponse
-                            : baselineResponseStatus === "not_captured"
-                              ? `Baseline response not captured (${baselineCaptureReason || "no reason"}).`
-                              : baselineResponseStatus === "empty"
-                                ? "Baseline response is empty."
-                                : "Baseline response preview unavailable."}
+                          {baselineResponseDisplay}
                         </div>
                       </div>
-                      <div className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0c]">
+                      <div
+                        className={clsx(
+                          "flex flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0a0a0c]",
+                          isResponseDiffCollapsible && !showFullResponseDiff
+                            ? "min-h-[280px]"
+                            : "min-h-[420px]"
+                        )}
+                      >
                         <div className="flex items-center justify-between border-b border-white/5 bg-black/40 px-4 py-3">
-                          <span className="text-[11px] font-semibold text-slate-400">
-                            Candidate
-                          </span>
+                          <span className="text-[11px] font-semibold text-slate-400">Replay</span>
                           <span className="text-[10px] text-slate-500">{candidateModel}</span>
                         </div>
                         <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-0 font-mono text-[13px] leading-[1.75] whitespace-pre-wrap break-words">
                           {!candidateResponse ? (
-                            <div className="p-5 text-slate-500">
-                              {candidateResponseStatus === "tool_calls_only"
-                                ? "Candidate returned tool calls only (no assistant text)."
-                                : candidateResponseStatus === "empty"
-                                  ? "Candidate response text is empty."
-                                  : "—"}
-                            </div>
+                            <div className="p-5 text-slate-500">{candidateResponseDisplay}</div>
                           ) : responseDiffLines.length === 0 ? (
-                            <div className="p-5 text-slate-300">{candidateResponse}</div>
+                            <div className="p-5 text-slate-300">{candidateResponseDisplay}</div>
                           ) : (
                             <div className="flex flex-col py-3 text-slate-300">
-                              {responseDiffLines.map((line, idx) => {
+                              {visibleResponseDiffLines.map((line, idx) => {
                                 const isAdded = line.startsWith("+");
                                 const isRemoved = line.startsWith("-");
-                                if (isRemoved && !showRemovedDiffLines) return null;
                                 const content = line.substring(2);
                                 return (
                                   <div
@@ -1941,260 +2069,281 @@ export function AttemptDetailOverlay({
                     </div>
                   </section>
 
-                  <div
-                    ref={detailsSectionRef}
-                    className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]"
-                  >
-                    <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
-                      <div>
-                        <div className="text-xs font-medium text-slate-400">Details</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">Expandable detail</h3>
-                      </div>
-                      <div className="mt-4 space-y-3">
-                        {attentionItems.length > 0 ? (
-                          <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
-                            <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
-                              Run warnings
-                              <span className="ml-2 text-[11px] font-normal text-slate-500">
-                                {attentionItems.length} item{attentionItems.length === 1 ? "" : "s"}
-                              </span>
-                            </summary>
-                            <div className="mt-3 space-y-2">
-                              {attentionItems.map(item => (
-                                <div
-                                  key={item.key}
-                                  className={clsx(
-                                    "rounded-lg border px-3 py-3",
-                                    riskToneClass(item.tone)
-                                  )}
-                                >
-                                  <div className="flex items-center justify-between gap-3">
-                                    <span className="text-sm font-medium text-slate-200">
-                                      {item.label}
-                                    </span>
-                                    <span
-                                      className={clsx(
-                                        "text-xs font-semibold",
-                                        item.tone === "danger"
-                                          ? "text-rose-400"
-                                          : item.tone === "warning"
-                                            ? "text-amber-400"
-                                            : "text-emerald-400"
-                                      )}
-                                    >
-                                      {item.tone === "danger"
-                                        ? "Review"
-                                        : item.tone === "warning"
-                                          ? "Watch"
-                                          : "Stable"}
-                                    </span>
-                                  </div>
-                                  <p className="mt-2 text-[11px] leading-relaxed text-slate-300">
-                                    {item.detail}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        ) : null}
-                        {hasConfigurationChanges ? (
-                          <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
-                            <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
-                              Extra request fields details
-                              <span className="ml-2 text-[11px] font-normal text-slate-500">
-                                {replayOverrideCount > 0
-                                  ? `${replayOverrideCount} shared field${replayOverrideCount === 1 ? "" : "s"}`
-                                  : "No shared fields"}
-                                {replayPerLogOverrideCount > 0
-                                  ? ` · ${replayPerLogOverrideCount} customized log(s)`
-                                  : ""}
-                              </span>
-                            </summary>
-                            <div className="mt-3">
-                              <ReleaseGateReplayRequestMetaPanel meta={replayRequestMeta as any} />
-                            </div>
-                          </details>
-                        ) : null}
-
-                        {hasToolContextDetails ? (
-                          <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
-                            <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
-                              Extra system text details
-                              <span className="ml-2 text-[11px] font-normal text-slate-500">
-                                {toolContextSummary}
-                              </span>
-                            </summary>
-                            <div className="mt-3 space-y-3">
-                              <div className="grid gap-3 sm:grid-cols-2">
-                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                  <div className="text-[11px] font-medium text-slate-500">Mode</div>
-                                  <div className="mt-1 text-sm text-slate-100">
-                                    {toolContextModeValue === "inject"
-                                      ? "Add extra system text"
-                                      : "Use recorded request only"}
-                                  </div>
-                                </div>
-                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                  <div className="text-[11px] font-medium text-slate-500">
-                                    Scope
-                                  </div>
-                                  <div className="mt-1 text-sm text-slate-100">
-                                    {toolContextScopeLabel}
-                                  </div>
-                                </div>
-                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                  <div className="text-[11px] font-medium text-slate-500">
-                                    Customized logs
-                                  </div>
-                                  <div className="mt-1 text-sm text-slate-100">
-                                    {toolContextCustomEntries.length}
-                                  </div>
-                                </div>
-                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                  <div className="text-[11px] font-medium text-slate-500">
-                                    Shared fallback text
-                                  </div>
-                                  <div className="mt-1 text-sm text-slate-100">
-                                    {toolContextGlobalText ? "Present" : "Not set"}
-                                  </div>
-                                </div>
-                              </div>
-                              {toolContextGlobalText ? (
-                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                  <div className="text-[11px] font-medium text-slate-500">
-                                    Shared text / fallback preview
-                                  </div>
-                                  <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-300 custom-scrollbar">
-                                    {toolContextGlobalText}
-                                  </pre>
-                                </div>
-                              ) : null}
-                              {toolContextCustomEntries.length > 0 ? (
-                                <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
-                                  <div className="text-[11px] font-medium text-slate-500">
-                                    Per-log text
-                                  </div>
-                                  <div className="mt-3 space-y-2">
-                                    {toolContextCustomEntries.map(([sid, value]) => (
-                                      <details
-                                        key={sid}
-                                        className="rounded-lg border border-white/5 bg-black/20 px-3 py-2"
-                                      >
-                                        <summary className="cursor-pointer list-none text-[11px] font-medium text-slate-200 [&::-webkit-details-marker]:hidden">
-                                          Log {sid}
-                                        </summary>
-                                        <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-400 custom-scrollbar">
-                                          {String(value)}
-                                        </pre>
-                                      </details>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : null}
-                            </div>
-                          </details>
-                        ) : null}
-                      </div>
-                    </section>
-
-                    <section
-                      ref={toolBehaviorSectionRef}
-                      className={clsx("rounded-2xl border p-5", toolBehaviorToneClass)}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
+                  {hasAdditionalDetails ? (
+                    <div ref={detailsSectionRef} className="grid gap-5">
+                      <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
                         <div>
-                          <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-                            <div className="h-1.5 w-1.5 rounded-full bg-amber-300/80" />
-                            Tool behavior
+                          <div className="text-xs font-medium text-slate-400">
+                            Additional details
+                          </div>
+                          <h3 className="mt-2 text-lg font-semibold text-white">
+                            Extra review context
                           </h3>
-                          <p className="mt-2 text-sm font-medium text-slate-100">
-                            {toolBehaviorSummary}
+                          <p className="mt-2 text-sm leading-6 text-slate-300">
+                            Open these only when you need more setup context, tool evidence, or
+                            warnings.
                           </p>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                          <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
-                            Policy{" "}
-                            {toolPolicyEnabled
-                              ? policyRows.length > 0
-                                ? "failed"
-                                : "passed"
-                              : "off"}
-                          </span>
-                          <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
-                            Calls {toolTotalCalls}
-                          </span>
-                          <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
-                            Executed {toolExecutedCount}
-                          </span>
-                          <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
-                            Recorded {toolRecordedCount}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mt-4 flex items-center justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
-                          <span>
-                            Loop {toolLoopStatus}
-                            {toolLoopRounds > 0 ? ` (${toolLoopRounds} rounds)` : ""}
-                          </span>
-                          <span>Results {toolResultCount}</span>
-                          {toolSimulatedCount > 0 ? (
-                            <span>Simulated {toolSimulatedCount}</span>
-                          ) : null}
-                          {toolSkippedCount > 0 ? <span>Skipped {toolSkippedCount}</span> : null}
-                          {toolFailedCount > 0 ? <span>Failed {toolFailedCount}</span> : null}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setShowToolBehaviorDetails(v => !v)}
-                          className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
-                        >
-                          {showToolBehaviorDetails ? "Hide tool details" : "Show tool details"}
-                        </button>
-                      </div>
-                      {showToolBehaviorDetails ? (
-                        <>
-                          {policyRows.length > 0 ? (
-                            <div className="mt-4 space-y-2">
-                              {policyRows.map(row => (
-                                <div
-                                  key={row.key}
-                                  className="rounded-xl bg-black/25 px-3 py-3 ring-1 ring-white/5"
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-xs font-semibold text-rose-100">
-                                      {row.label}
-                                    </span>
-                                    {row.severity ? (
-                                      <span className="text-[10px] font-semibold text-rose-300">
-                                        {row.severity}
+                        <div className="mt-4 space-y-3">
+                          {attentionItems.length > 0 ? (
+                            <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
+                              <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
+                                Run warnings
+                                <span className="ml-2 text-[11px] font-normal text-slate-500">
+                                  {attentionItems.length} item
+                                  {attentionItems.length === 1 ? "" : "s"}
+                                </span>
+                              </summary>
+                              <div className="mt-3 space-y-2">
+                                {attentionItems.map(item => (
+                                  <div
+                                    key={item.key}
+                                    className={clsx(
+                                      "rounded-lg border px-3 py-3",
+                                      riskToneClass(item.tone)
+                                    )}
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <span className="text-sm font-medium text-slate-200">
+                                        {item.label}
                                       </span>
+                                      <span
+                                        className={clsx(
+                                          "text-xs font-semibold",
+                                          item.tone === "danger"
+                                            ? "text-rose-400"
+                                            : item.tone === "warning"
+                                              ? "text-amber-400"
+                                              : "text-emerald-400"
+                                        )}
+                                      >
+                                        {item.tone === "danger"
+                                          ? "Review"
+                                          : item.tone === "warning"
+                                            ? "Watch"
+                                            : "Stable"}
+                                      </span>
+                                    </div>
+                                    <p className="mt-2 text-[11px] leading-relaxed text-slate-300">
+                                      {item.detail}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          ) : null}
+
+                          {hasToolBehaviorDetails ? (
+                            <div
+                              ref={toolBehaviorSectionRef}
+                              className={clsx("rounded-xl border px-4 py-4", toolBehaviorToneClass)}
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                  <div className="flex items-center gap-2 text-sm font-medium text-slate-100">
+                                    <div className="h-1.5 w-1.5 rounded-full bg-amber-300/80" />
+                                    Tool execution details
+                                  </div>
+                                  <p className="mt-2 text-[11px] leading-relaxed text-slate-300">
+                                    {toolBehaviorSummary}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowToolBehaviorDetails(v => !v)}
+                                  className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                                >
+                                  {showToolBehaviorDetails ? "Hide details" : "Show details"}
+                                </button>
+                              </div>
+                              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                                <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                                  Policy{" "}
+                                  {toolPolicyEnabled
+                                    ? policyRows.length > 0
+                                      ? "needs review"
+                                      : "aligned"
+                                    : "not enabled"}
+                                </span>
+                                <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                                  Calls {toolTotalCalls}
+                                </span>
+                                <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                                  Executed {toolExecutedCount}
+                                </span>
+                                <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                                  Recorded {toolRecordedCount}
+                                </span>
+                                <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                                  Results {toolResultCount}
+                                </span>
+                                {toolFailedCount > 0 ? (
+                                  <span className="inline-flex rounded-full border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 text-rose-200">
+                                    Failed {toolFailedCount}
+                                  </span>
+                                ) : null}
+                              </div>
+                              {showToolBehaviorDetails ? (
+                                <div className="mt-4 space-y-4">
+                                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
+                                    <span>
+                                      Loop {toolLoopStatus}
+                                      {toolLoopRounds > 0 ? ` (${toolLoopRounds} rounds)` : ""}
+                                    </span>
+                                    {toolSimulatedCount > 0 ? (
+                                      <span>Simulated {toolSimulatedCount}</span>
+                                    ) : null}
+                                    {toolSkippedCount > 0 ? (
+                                      <span>Skipped {toolSkippedCount}</span>
                                     ) : null}
                                   </div>
-                                  {row.message ? (
-                                    <p className="mt-1 text-[11px] leading-relaxed text-rose-100/75">
-                                      {row.message}
-                                    </p>
+                                  {policyRows.length > 0 ? (
+                                    <div className="space-y-2">
+                                      {policyRows.map(row => (
+                                        <div
+                                          key={row.key}
+                                          className="rounded-xl bg-black/25 px-3 py-3 ring-1 ring-white/5"
+                                        >
+                                          <div className="flex items-center justify-between gap-2">
+                                            <span className="text-xs font-semibold text-rose-100">
+                                              {row.label}
+                                            </span>
+                                            {row.severity ? (
+                                              <span className="text-[10px] font-semibold text-rose-300">
+                                                {row.severity}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                          {row.message ? (
+                                            <p className="mt-1 text-[11px] leading-relaxed text-rose-100/75">
+                                              {row.message}
+                                            </p>
+                                          ) : null}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                  {gateToolTimelineRows.length > 0 ? (
+                                    <div className="border-t border-white/5 pt-4">
+                                      <ToolTimelinePanel
+                                        rows={gateToolTimelineRows}
+                                        title="Tool timeline"
+                                        subtitle="Compare recorded and replayed tool activity."
+                                        icon={Wrench}
+                                        variant="compact"
+                                      />
+                                    </div>
                                   ) : null}
                                 </div>
-                              ))}
+                              ) : null}
                             </div>
                           ) : null}
-                          {gateToolTimelineRows.length > 0 ? (
-                            <div className="mt-4 border-t border-white/5 pt-4">
-                              <ToolTimelinePanel
-                                rows={gateToolTimelineRows}
-                                title="Tool timeline"
-                                subtitle="Recorded vs replayed tool activity."
-                                icon={Wrench}
-                                variant="compact"
-                              />
-                            </div>
+
+                          {hasConfigurationChanges ? (
+                            <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
+                              <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
+                                Additional request data
+                                <span className="ml-2 text-[11px] font-normal text-slate-500">
+                                  {replayOverrideCount > 0
+                                    ? `${replayOverrideCount} shared field${replayOverrideCount === 1 ? "" : "s"}`
+                                    : "No shared fields"}
+                                  {replayPerLogOverrideCount > 0
+                                    ? ` · ${replayPerLogOverrideCount} input${replayPerLogOverrideCount === 1 ? "" : "s"} with custom values`
+                                    : ""}
+                                </span>
+                              </summary>
+                              <div className="mt-3">
+                                <ReleaseGateReplayRequestMetaPanel
+                                  meta={replayRequestMeta as any}
+                                />
+                              </div>
+                            </details>
                           ) : null}
-                        </>
-                      ) : null}
-                    </section>
-                  </div>
+
+                          {hasToolContextDetails ? (
+                            <details className="rounded-xl border border-white/5 bg-[#0a0a0c] px-4 py-3">
+                              <summary className="cursor-pointer list-none text-sm font-medium text-slate-100 [&::-webkit-details-marker]:hidden">
+                                Extra system guidance
+                                <span className="ml-2 text-[11px] font-normal text-slate-500">
+                                  {toolContextSummary}
+                                </span>
+                              </summary>
+                              <div className="mt-3 space-y-3">
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+                                    <div className="text-[11px] font-medium text-slate-500">
+                                      Mode
+                                    </div>
+                                    <div className="mt-1 text-sm text-slate-100">
+                                      {toolContextModeValue === "inject"
+                                        ? "Add extra system guidance"
+                                        : "Use the recorded request only"}
+                                    </div>
+                                  </div>
+                                  <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+                                    <div className="text-[11px] font-medium text-slate-500">
+                                      Scope
+                                    </div>
+                                    <div className="mt-1 text-sm text-slate-100">
+                                      {toolContextScopeLabel}
+                                    </div>
+                                  </div>
+                                  <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+                                    <div className="text-[11px] font-medium text-slate-500">
+                                      Inputs with custom guidance
+                                    </div>
+                                    <div className="mt-1 text-sm text-slate-100">
+                                      {toolContextCustomEntries.length}
+                                    </div>
+                                  </div>
+                                  <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+                                    <div className="text-[11px] font-medium text-slate-500">
+                                      Shared fallback text
+                                    </div>
+                                    <div className="mt-1 text-sm text-slate-100">
+                                      {toolContextGlobalText ? "Present" : "Not set"}
+                                    </div>
+                                  </div>
+                                </div>
+                                {toolContextGlobalText ? (
+                                  <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+                                    <div className="text-[11px] font-medium text-slate-500">
+                                      Shared guidance preview
+                                    </div>
+                                    <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-300 custom-scrollbar">
+                                      {toolContextGlobalText}
+                                    </pre>
+                                  </div>
+                                ) : null}
+                                {toolContextCustomEntries.length > 0 ? (
+                                  <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+                                    <div className="text-[11px] font-medium text-slate-500">
+                                      Per-input guidance
+                                    </div>
+                                    <div className="mt-3 space-y-2">
+                                      {toolContextCustomEntries.map(([sid, value]) => (
+                                        <details
+                                          key={sid}
+                                          className="rounded-lg border border-white/5 bg-black/20 px-3 py-2"
+                                        >
+                                          <summary className="cursor-pointer list-none text-[11px] font-medium text-slate-200 [&::-webkit-details-marker]:hidden">
+                                            Input {sid}
+                                          </summary>
+                                          <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-400 custom-scrollbar">
+                                            {String(value)}
+                                          </pre>
+                                        </details>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </details>
+                          ) : null}
+                        </div>
+                      </section>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
