@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import {
@@ -11,11 +11,11 @@ import {
 import { clsx } from "clsx";
 import TopHeader from "./TopHeader";
 import useSWR from "swr";
-import { authAPI, organizationsAPI } from "@/lib/api";
+import { organizationsAPI } from "@/lib/api";
 import { orgKeys } from "@/lib/queryKeys";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
-import { logger } from "@/lib/logger";
 import { canManageOrganization } from "@/lib/organizationAccess";
 
 interface Breadcrumb {
@@ -43,24 +43,7 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
   const resolvedOrgId = orgId || params.orgId;
   const resolvedOrgKey = resolvedOrgId ? String(resolvedOrgId) : null;
   const hasToken = useRequireAuth();
-
-  const [userName, setUserName] = useState("");
-  const [userEmail, setUserEmail] = useState("");
-
-  useEffect(() => {
-    if (!hasToken) return;
-
-    const loadUser = async () => {
-      try {
-        const user = await authAPI.getCurrentUser();
-        setUserName(user.full_name || "");
-        setUserEmail(user.email || "");
-      } catch (error) {
-        logger.error("Failed to load user info in OrgLayout", error);
-      }
-    };
-    loadUser();
-  }, [hasToken]);
+  const { data: currentUser } = useCurrentUser(hasToken);
 
   const { data: organizations } = useSWR<OrganizationSummary[]>(
     hasToken ? orgKeys.list() : null,
@@ -164,8 +147,8 @@ const OrgLayout: React.FC<OrgLayoutProps> = ({ orgId, breadcrumb, tabs, children
       </div>
 
       <TopHeader
-        userName={userName}
-        userEmail={userEmail}
+        userName={currentUser?.full_name || ""}
+        userEmail={currentUser?.email || ""}
         organizations={organizations}
         projects={projects}
       />

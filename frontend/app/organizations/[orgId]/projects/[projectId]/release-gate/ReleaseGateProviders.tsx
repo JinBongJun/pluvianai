@@ -10,6 +10,7 @@ import {
   ReleaseGateValidateRunContext,
   type ReleaseGateValidateRunContextValue,
 } from "./ReleaseGateValidateRunContext";
+import type { OrganizationProject, OrganizationSummary } from "@/lib/api";
 
 export type ReleaseGateProvidersProps = {
   readonly validateRun: ReleaseGateValidateRunContextValue;
@@ -25,6 +26,8 @@ export type ReleaseGateProvidersProps = {
     projectId: number;
     projectName?: string;
     orgName?: string;
+    organizations?: OrganizationSummary[];
+    projects?: OrganizationProject[];
     topRailMeta?: ReactNode;
     onAction: (actionId: string) => void;
   };
@@ -48,6 +51,8 @@ export function ReleaseGateProviders({
             projectId={layout.projectId}
             projectName={layout.projectName}
             orgName={layout.orgName}
+            organizations={layout.organizations}
+            projects={layout.projects}
             topRailMeta={layout.topRailMeta}
             onAction={layout.onAction}
           >

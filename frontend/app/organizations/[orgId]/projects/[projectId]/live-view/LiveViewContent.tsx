@@ -89,17 +89,26 @@ export function LiveViewContent() {
   } = useLiveViewSseRefs();
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 
-  const { project, projectSummary, org, agentsData, agentsLoading, agentsError, mutateAgents } =
-    useLiveViewCoreData({
-      projectId,
-      orgId,
-      routerReplace: href => router.replace(href),
-      selectedAgentId,
-      agentsPollIntervalMs,
-      isPageVisible,
-      sseConnected,
-      sseBackoffUntilRef,
-    });
+  const {
+    project,
+    projectSummary,
+    org,
+    organizations,
+    orgProjects,
+    agentsData,
+    agentsLoading,
+    agentsError,
+    mutateAgents,
+  } = useLiveViewCoreData({
+    projectId,
+    orgId,
+    routerReplace: href => router.replace(href),
+    selectedAgentId,
+    agentsPollIntervalMs,
+    isPageVisible,
+    sseConnected,
+    sseBackoffUntilRef,
+  });
   const [panelTab, setPanelTab] = useState<"logs" | "eval" | "data" | "settings">("logs");
   const [restoringAgentId, setRestoringAgentId] = useState<string | null>(null);
   const [hardDeletingAgents, setHardDeletingAgents] = useState(false);
@@ -404,6 +413,8 @@ export function LiveViewContent() {
       projectId={projectId}
       projectName={project?.name}
       orgName={org?.name}
+      organizations={organizations ?? []}
+      projects={orgProjects ?? []}
       topRailMeta={
         !showLoadingOverlay && !showAccessDeniedOverlay && resolvedProjectAccess ? (
           <ProjectAccessInlineStrip project={resolvedProjectAccess} />
@@ -411,7 +422,7 @@ export function LiveViewContent() {
       }
       rightPanel={
         <RailwaySidePanel
-          title=""
+          title={selectedAgentId || "Agent Diagnostics"}
           headerActions={selectedAgentId ? <LiveViewPanelSnapshotUsage /> : undefined}
           isOpen={!!selectedAgentId}
           width={760}

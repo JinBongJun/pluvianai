@@ -4,6 +4,7 @@ import { useCallback, useMemo } from "react";
 import useSWR from "swr";
 
 import { projectUserApiKeysAPI } from "@/lib/api";
+import { projectKeys } from "@/lib/queryKeys";
 import {
   describeMissingProviderKeyRequirements,
   inferProviderFromModelId,
@@ -53,7 +54,7 @@ export function useReleaseGateProjectApiKeys(p: UseReleaseGateProjectApiKeysPara
   } = p;
 
   const projectUserApiKeysKey =
-    projectId && !isNaN(projectId) ? ["project-user-api-keys", projectId] : null;
+    projectId && !isNaN(projectId) ? projectKeys.userApiKeys(projectId) : null;
   const {
     data: projectUserApiKeysData,
     isLoading: projectUserApiKeysLoading,

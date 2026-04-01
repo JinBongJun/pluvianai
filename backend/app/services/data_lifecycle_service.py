@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from app.models.behavior_report import BehaviorReport
 from app.models.agent_display_setting import AgentDisplaySetting
+from app.models.release_gate_run import ReleaseGateRun
 from app.models.snapshot import Snapshot
 from app.models.trace import Trace
 from app.models.project import Project
@@ -159,6 +160,7 @@ class DataLifecycleService:
         """Delete persisted behavior reports by id."""
         count = 0
         for report_id in report_ids:
+            self.db.query(ReleaseGateRun).filter(ReleaseGateRun.report_id == report_id).delete()
             report = self.db.query(BehaviorReport).filter(BehaviorReport.id == report_id).first()
             if report:
                 self.db.delete(report)

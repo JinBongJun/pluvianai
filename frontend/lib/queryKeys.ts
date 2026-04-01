@@ -14,4 +14,6 @@ export const orgKeys = {
 export const projectKeys = {
   root: ["projects"] as const,
   detail: (projectId: number) => [...projectKeys.root, "detail", Number(projectId)] as const,
+  userApiKeys: (projectId: number) =>
+    [...projectKeys.root, "user-api-keys", Number(projectId)] as const,
 };

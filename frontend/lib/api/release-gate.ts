@@ -240,6 +240,7 @@ export const releaseGateAPI = {
   listHistory: async (
     projectId: number,
     params?: {
+      agent_id?: string;
       status?: "pass" | "fail";
       trace_id?: string;
       created_from?: string;

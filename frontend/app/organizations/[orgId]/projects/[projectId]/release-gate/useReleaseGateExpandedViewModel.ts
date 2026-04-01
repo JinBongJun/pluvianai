@@ -237,14 +237,7 @@ export function useReleaseGateExpandedViewModel({
     datasetSnapshotsError,
   });
 
-  const nodeHistoryItems = useMemo(
-    () =>
-      historyItems.filter(item => {
-        const itemAgentId = String(item?.agent_id ?? "").trim();
-        return !itemAgentId || itemAgentId === agentId;
-      }),
-    [agentId, historyItems]
-  );
+  const nodeHistoryItems = historyItems;
   const historyDateSummary = useMemo(
     () => formatHistoryDateFilterSummary(historyDatePreset),
     [historyDatePreset]

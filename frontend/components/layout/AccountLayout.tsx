@@ -1,13 +1,13 @@
 import React from "react";
 import TopHeader from "./TopHeader";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import useSWR from "swr";
-import { authAPI, organizationsAPI } from "@/lib/api";
+import { organizationsAPI } from "@/lib/api";
 import { orgKeys } from "@/lib/queryKeys";
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
 import { useRouter, usePathname } from "next/navigation";
 import { clsx } from "clsx";
-import { logger } from "@/lib/logger";
 
 type AccountLayoutProps = {
   children: React.ReactNode;
@@ -20,23 +20,7 @@ const AccountLayout: React.FC<AccountLayoutProps> = ({ children, breadcrumb, act
   const hasToken = useRequireAuth();
   const router = useRouter();
   const pathname = usePathname();
-
-  const [userName, setUserName] = React.useState("");
-  const [userEmail, setUserEmail] = React.useState("");
-
-  React.useEffect(() => {
-    if (!hasToken) return;
-    const loadUser = async () => {
-      try {
-        const user = await authAPI.getCurrentUser();
-        setUserName(user.full_name || "");
-        setUserEmail(user.email || "");
-      } catch (error) {
-        logger.error("Failed to load user info in AccountLayout", error);
-      }
-    };
-    void loadUser();
-  }, [hasToken]);
+  const { data: currentUser } = useCurrentUser(hasToken);
 
   const { data: organizations } = useSWR<OrganizationSummary[]>(
     hasToken ? orgKeys.list() : null,
@@ -73,8 +57,8 @@ const AccountLayout: React.FC<AccountLayoutProps> = ({ children, breadcrumb, act
       </div>
 
       <TopHeader
-        userName={userName}
-        userEmail={userEmail}
+        userName={currentUser?.full_name || ""}
+        userEmail={currentUser?.email || ""}
         organizations={organizations}
         projects={projects}
       />

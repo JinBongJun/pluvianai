@@ -1,42 +1,11 @@
 "use client";
 
-import useSWR from "swr";
-
-import type { OrganizationProject } from "@/lib/api";
-import { orgKeys } from "@/lib/queryKeys";
-import { organizationsAPI, projectsAPI } from "@/lib/api";
+import { useLaboratoryPageBootstrap } from "@/hooks/useLaboratoryPageBootstrap";
 
 export function useReleaseGatePageBootstrap(
   orgId: string,
   projectId: number,
   routerReplace: (href: string) => void
 ) {
-  const { data: project } = useSWR(
-    projectId && !isNaN(projectId) ? ["project", projectId] : null,
-    async () => {
-      try {
-        return await projectsAPI.get(projectId);
-      } catch (e: any) {
-        const status = e?.response?.status;
-        const msg = e?.response?.data?.detail ?? e?.response?.data?.error?.message ?? "";
-        if (status === 404 && (msg === "Project not found" || msg === "Not Found")) {
-          routerReplace(orgId ? `/organizations/${orgId}/projects` : "/organizations");
-          return undefined;
-        }
-        throw e;
-      }
-    }
-  );
-
-  const { data: org } = useSWR(orgId ? orgKeys.detail(orgId) : null, () =>
-    organizationsAPI.get(orgId)
-  );
-  const { data: orgProjects } = useSWR<OrganizationProject[]>(
-    orgId ? orgKeys.projects(orgId, "") : null,
-    ([, , id]) => organizationsAPI.listProjects(String(id), { includeStats: false })
-  );
-  const projectSummary =
-    orgProjects?.find(candidate => String(candidate.id) === String(projectId)) ?? undefined;
-
-  return { project, projectSummary, org };
+  return useLaboratoryPageBootstrap({ orgId, projectId, routerReplace });
 }
