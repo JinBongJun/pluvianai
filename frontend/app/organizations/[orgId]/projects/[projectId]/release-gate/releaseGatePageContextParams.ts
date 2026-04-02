@@ -77,6 +77,8 @@ export type ReleaseGatePageContextRestSlice = Pick<
   | "historyRefreshing"
   | "historyItems"
   | "historyTotal"
+  | "deletingHistoryReportIds"
+  | "deleteHistorySession"
   | "mutateHistory"
   | "projectUserApiKeysForUi"
 >;

@@ -285,4 +285,19 @@ export const releaseGateAPI = {
     });
     return response.data;
   },
+
+  deleteHistorySession: async (
+    projectId: number,
+    reportId: string
+  ): Promise<{
+    ok: true;
+    report_id: string;
+    deleted: boolean;
+    deleted_inputs: number;
+  }> => {
+    const response = await apiClient.delete(
+      `/projects/${projectId}/release-gate/history/${encodeURIComponent(reportId)}`
+    );
+    return response.data;
+  },
 };

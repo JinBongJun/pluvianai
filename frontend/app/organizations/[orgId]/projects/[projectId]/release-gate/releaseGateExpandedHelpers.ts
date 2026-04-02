@@ -324,6 +324,7 @@ export function groupHistoryItemsBySession(items: ReleaseGateHistoryItem[]) {
     createdAt: string | null;
     totalInputs: number;
     repeatRuns: number | null;
+    sessionStatus: "pass" | "fail" | "flaky";
     items: ReleaseGateHistoryItem[];
   }> = [];
   const byReportId = new Map<string, (typeof groups)[number]>();
@@ -339,6 +340,7 @@ export function groupHistoryItemsBySession(items: ReleaseGateHistoryItem[]) {
       createdAt: item.session_created_at ?? item.created_at ?? null,
       totalInputs: Number(item.session_total_inputs ?? item.total_inputs ?? 0) || 1,
       repeatRuns: item.session_repeat_runs ?? item.repeat_runs ?? null,
+      sessionStatus: (item.session_status ?? item.status ?? "fail") as "pass" | "fail" | "flaky",
       items: [item],
     };
     byReportId.set(reportId, group);

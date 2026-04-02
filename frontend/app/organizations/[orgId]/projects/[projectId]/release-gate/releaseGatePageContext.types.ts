@@ -215,6 +215,13 @@ export interface ReleaseGatePageContextValue {
   historyRefreshing: boolean;
   historyItems: ReleaseGateHistoryItem[];
   historyTotal: number;
+  deletingHistoryReportIds: string[];
+  deleteHistorySession: (reportId: string) => Promise<{
+    ok: true;
+    report_id: string;
+    deleted: boolean;
+    deleted_inputs: number;
+  }>;
   mutateHistory: () => void;
   selectedRunId: string | null;
   setSelectedRunId: (id: string | null) => void;

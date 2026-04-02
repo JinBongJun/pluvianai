@@ -154,8 +154,11 @@ export function ReleaseGateExpandedView() {
               historyDatePreset={m.historyDatePreset}
               setHistoryDatePreset={m.setHistoryDatePreset}
               historyRefreshing={m.historyRefreshing}
+              historyDeleteLocked={m.runLocked}
               mutateHistory={m.mutateHistory}
               historyTraceId={m.historyTraceId}
+              deletingHistoryReportIds={m.deletingHistoryReportIds}
+              onDeleteHistorySession={m.handleDeleteHistorySession}
               expandedHistoryId={m.expandedHistoryId}
               selectedRunReportLoading={m.selectedRunReportLoading}
               selectHistoryRun={m.selectHistoryRun}

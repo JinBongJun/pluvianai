@@ -976,4 +976,93 @@ test.describe("Authenticated tool browser flow", () => {
       await api.dispose();
     }
   });
+
+  test("release gate history session can be hard deleted from history panel", async ({ page }) => {
+    test.setTimeout(600000);
+    requireCredentials();
+    requireRunOnlyApiKey();
+
+    const api = await playwrightRequest.newContext({ baseURL: API_BASE_URL });
+    const session = await loginToBackend(api);
+    const token = session.accessToken;
+    const { orgId, projectId } = await ensureOrgAndProject(api, token);
+    const seeded = await seedToolSnapshot(api, token, projectId, {
+      promptPrefix: "PW-RG-HISTORY-DELETE",
+    });
+    const savedKeyName = `[RG] PW History Delete Key ${Date.now()}`;
+
+    const savedKeyResponse = await authedJson(
+      api,
+      "POST",
+      `/api/v1/projects/${projectId}/user-api-keys`,
+      token,
+      {
+        provider: "openai",
+        api_key: RUN_ONLY_API_KEY,
+        name: savedKeyName,
+      }
+    );
+    expect(savedKeyResponse.ok()).toBeTruthy();
+    const savedKey = (await savedKeyResponse.json()) as { data?: { id?: number }; id?: number };
+    const savedKeyId = Number(savedKey?.data?.id || savedKey?.id || 0);
+    expect(savedKeyId).toBeGreaterThan(0);
+
+    try {
+      await loginWithSessionCookies(page, session);
+      await openReleaseGateFromSnapshot(page, {
+        orgId,
+        projectId,
+        agentId: seeded.snapshotAgentId,
+        snapshotId: seeded.snapshotId,
+      });
+      await openReleaseGateSettings(page);
+
+      await page.getByRole("tab", { name: "Core setup" }).click();
+      await page.getByLabel("Custom (BYOK)").check();
+      await page.locator('input[name="release-gate-custom-model-id"]').fill("gpt-4o-mini");
+
+      const savedKeyRow = page
+        .locator("div")
+        .filter({ has: page.getByText(savedKeyName.replace(/^\[RG\]\s*/, ""), { exact: false }) })
+        .first();
+      await expect(savedKeyRow.getByRole("button", { name: "Use for run" })).toBeVisible({
+        timeout: 15000,
+      });
+      await savedKeyRow.getByRole("button", { name: "Use for run" }).click();
+
+      await page.getByLabel("Close Release Gate settings").click();
+      await expect(page.getByTestId("rg-run-start-btn")).toBeEnabled({ timeout: 15000 });
+      await page.getByTestId("rg-run-start-btn").click();
+      await expect(page.getByText("Release Gate run completed.")).toBeVisible({ timeout: 300000 });
+
+      await page.getByTestId("rg-right-tab-history").click();
+      await expect(page.getByTestId("rg-history-report-0")).toBeVisible({ timeout: 30000 });
+
+      page.once("dialog", dialog => dialog.accept());
+      await page.getByLabel("Delete session").first().click();
+
+      await expect(page.getByText("Validation session deleted.")).toBeVisible({ timeout: 15000 });
+      await expect(page.getByText("No retained inputs yet for this agent.")).toBeVisible({
+        timeout: 30000,
+      });
+
+      await closeSelectedReleaseGatePanels(page);
+      await reopenReleaseGateNode(page, seeded.snapshotAgentId);
+      await page.getByTestId("rg-right-tab-history").click();
+      await expect(page.getByText("No retained inputs yet for this agent.")).toBeVisible({
+        timeout: 30000,
+      });
+    } finally {
+      if (savedKeyId > 0) {
+        const deleteResponse = await authedJson(
+          api,
+          "DELETE",
+          `/api/v1/projects/${projectId}/user-api-keys/${savedKeyId}`,
+          token
+        );
+        expect(deleteResponse.ok()).toBeTruthy();
+      }
+      await api.dispose();
+    }
+  });
 });

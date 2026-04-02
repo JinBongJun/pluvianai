@@ -1,7 +1,7 @@
 "use client";
 import type { Dispatch, SetStateAction } from "react";
 import clsx from "clsx";
-import { Activity, Flag, RefreshCcw, X } from "lucide-react";
+import { Activity, Flag, RefreshCcw, Trash2, X } from "lucide-react";
 import RailwaySidePanel from "@/components/shared/RailwaySidePanel";
 import {
   HistoryRunRowButton,
@@ -56,9 +56,12 @@ export type ReleaseGateRunOutputSidePanelProps = {
   historyDatePreset: "all" | "24h" | "7d" | "30d";
   setHistoryDatePreset: (p: "all" | "24h" | "7d" | "30d") => void;
   historyRefreshing: boolean;
+  historyDeleteLocked: boolean;
   mutateHistory: () => void;
   /** Shared with main History tab; used only to detect “default” filters for empty copy. */
   historyTraceId: string;
+  deletingHistoryReportIds: string[];
+  onDeleteHistorySession: (reportId: string) => void;
   expandedHistoryId: string | null;
   selectedRunReportLoading: boolean;
   selectHistoryRun: (item: ReleaseGateHistoryItem) => void;
@@ -88,8 +91,11 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
     historyDatePreset,
     setHistoryDatePreset,
     historyRefreshing,
+    historyDeleteLocked,
     mutateHistory,
     historyTraceId,
+    deletingHistoryReportIds,
+    onDeleteHistorySession,
     expandedHistoryId,
     selectedRunReportLoading,
     selectHistoryRun,
@@ -414,25 +420,86 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {groupedHistoryItems.map(group => (
-                      <div key={group.id} className="space-y-2">
-                        <div className="px-1 pt-2 text-[10px] uppercase tracking-[0.18em] text-white/35">
-                          {formatDateTime(group.createdAt)} · {group.totalInputs} inputs
-                          {group.repeatRuns ? ` · ${group.repeatRuns}x each` : ""}
+                  <div className="space-y-4">
+                    {groupedHistoryItems.map((group, groupIdx) => {
+                      const deleting = deletingHistoryReportIds.includes(group.id);
+                      const sessionIsPass = group.sessionStatus === "pass";
+                      const sessionIsFlaky = group.sessionStatus === "flaky";
+                      const sessionStatusLabel = sessionIsPass
+                        ? "Healthy session"
+                        : sessionIsFlaky
+                          ? "Flaky session"
+                          : "Flagged session";
+                      return (
+                        <div
+                          key={group.id}
+                          data-testid={`rg-history-report-${groupIdx}`}
+                          className="space-y-3 rounded-2xl border border-white/8 bg-white/[0.02] p-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">
+                                Validation session
+                              </div>
+                              <div className="mt-1 text-[11px] text-white/45">
+                                {formatDateTime(group.createdAt)}{group.repeatRuns ? ` · ${group.repeatRuns}x each` : ""}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              data-testid={`rg-history-delete-${group.id}`}
+                              onClick={() => onDeleteHistorySession(group.id)}
+                              disabled={historyDeleteLocked || deleting || selectedRunReportLoading}
+                              className="rounded-md border border-white/10 bg-black/20 p-1 text-white/45 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Delete session"
+                              aria-label="Delete session"
+                            >
+                              {deleting ? (
+                                <Activity className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          </div>
+
+                          <div
+                            className={clsx(
+                              "flex flex-col gap-2 rounded-2xl border px-4 py-3",
+                              sessionIsPass
+                                ? "border-l-2 border-emerald-500/50 bg-emerald-500/5 text-emerald-100"
+                                : sessionIsFlaky
+                                  ? "border-l-2 border-amber-500/50 bg-amber-500/5 text-amber-100"
+                                  : "border-l-2 border-rose-500/50 bg-rose-500/5 text-rose-100"
+                            )}
+                          >
+                            <div className="flex flex-wrap items-center gap-3 text-[11px] text-white/60">
+                              <span>{sessionStatusLabel}</span>
+                              <span className="h-1 w-1 rounded-full bg-white/20" />
+                              <span>Inputs: {group.totalInputs}</span>
+                              {group.repeatRuns ? (
+                                <>
+                                  <span className="h-1 w-1 rounded-full bg-white/20" />
+                                  <span>Repeats: {group.repeatRuns}</span>
+                                </>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-2">
+                            {group.items.map(item => (
+                              <HistoryRunRowButton
+                                key={item.id}
+                                item={item}
+                                selected={expandedHistoryId === item.id}
+                                loading={deleting || (selectedRunReportLoading && expandedHistoryId === item.id)}
+                                onClick={() => selectHistoryRun(item)}
+                                testId={`rg-node-history-row-${item.id}`}
+                              />
+                            ))}
+                          </div>
                         </div>
-                        {group.items.map(item => (
-                          <HistoryRunRowButton
-                            key={item.id}
-                            item={item}
-                            selected={expandedHistoryId === item.id}
-                            loading={selectedRunReportLoading && expandedHistoryId === item.id}
-                            onClick={() => selectHistoryRun(item)}
-                            testId={`rg-node-history-row-${item.id}`}
-                          />
-                        ))}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </>

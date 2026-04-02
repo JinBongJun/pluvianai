@@ -17,6 +17,7 @@ import {
   formatHistoryDateFilterSummary,
   snapshotHasPerLogBodyOverride,
 } from "./releaseGateViewUtils";
+import { useToast } from "@/components/ToastContainer";
 
 export type UseReleaseGateExpandedViewModelArgs = {
   ctx: ReleaseGatePageContextValue;
@@ -33,6 +34,7 @@ export function useReleaseGateExpandedViewModel({
   vctx,
   keysCtx,
 }: UseReleaseGateExpandedViewModelArgs) {
+  const toast = useToast();
   const orgId = ctx.orgId;
   const projectId = ctx.projectId;
   const project = ctx.project;
@@ -171,6 +173,8 @@ export function useReleaseGateExpandedViewModel({
   const historyRefreshing = ctx.historyRefreshing;
   const historyItems = ctx.historyItems;
   const historyTotal = ctx.historyTotal;
+  const deletingHistoryReportIds = ctx.deletingHistoryReportIds;
+  const deleteHistorySession = ctx.deleteHistorySession;
   const mutateHistory = ctx.mutateHistory;
   const selectedRunId = ctx.selectedRunId;
   const setSelectedRunId = ctx.setSelectedRunId;
@@ -267,6 +271,69 @@ export function useReleaseGateExpandedViewModel({
     if (historyTraceId.trim()) parts.push(`Trace ${historyTraceId.trim()}`);
     return parts;
   }, [historyDateSummary, historyStatus, historyTraceId]);
+
+  const clearHistorySelectionForReport = useCallback(
+    (reportId: string) => {
+      const normalizedReportId = String(reportId || "").trim();
+      if (!normalizedReportId) return;
+      clearHistoryOverlayPending();
+      setDetailAttemptView(null);
+      setExpandedHistoryId(current =>
+        current && current.startsWith(`${normalizedReportId}:`) ? null : current
+      );
+      if (selectedRunId === normalizedReportId) {
+        setSelectedRunId(null);
+        setSelectedRunCaseIndex(null);
+      }
+    },
+    [
+      clearHistoryOverlayPending,
+      selectedRunId,
+      setDetailAttemptView,
+      setExpandedHistoryId,
+      setSelectedRunCaseIndex,
+      setSelectedRunId,
+    ]
+  );
+
+  const handleDeleteHistorySession = useCallback(
+    async (reportId: string) => {
+      const normalizedReportId = String(reportId || "").trim();
+      if (!normalizedReportId) return;
+      if (runLocked) return;
+      if (selectedRunReportLoading) return;
+      if (deletingHistoryReportIds.includes(normalizedReportId)) return;
+      if (typeof window !== "undefined") {
+        const approved = window.confirm(
+          "Delete this validation session? This permanently deletes the retained Release Gate history for this run."
+        );
+        if (!approved) return;
+      }
+      clearHistorySelectionForReport(normalizedReportId);
+      try {
+        const response = await deleteHistorySession(normalizedReportId);
+        if (response.deleted) {
+          toast.showToast("Validation session deleted.", "success");
+        } else {
+          toast.showToast("Validation session was already deleted.", "info");
+        }
+      } catch (e: any) {
+        const message =
+          e?.response?.data?.detail ||
+          e?.message ||
+          "Failed to delete validation session.";
+        toast.showToast(String(message), "error");
+      }
+    },
+    [
+      clearHistorySelectionForReport,
+      deleteHistorySession,
+      deletingHistoryReportIds,
+      runLocked,
+      selectedRunReportLoading,
+      toast,
+    ]
+  );
 
   const handleBack = useCallback(() => {
     setViewMode("map");
@@ -463,6 +530,8 @@ export function useReleaseGateExpandedViewModel({
     historyStatus,
     historyTotal,
     historyTraceId,
+    deletingHistoryReportIds,
+    handleDeleteHistorySession,
     mutateDatasetSnapshots,
     mutateDatasets,
     mutateExpandedDatasetSnapshots,
