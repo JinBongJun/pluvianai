@@ -197,6 +197,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     clearRunUi,
     dismissedReportId,
     dismissLatestResult,
+    showingPersistedResultWhileRunning,
   } = useReleaseGateValidateBridge(projectId, agentId);
   const modelOverrideEnabled = modelSource !== "detected";
   const replayModelMode = modelSource === "hosted" ? "hosted" : "custom";
@@ -897,6 +898,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       result,
       dismissedReportId,
       dismissLatestResult,
+      showingPersistedResultWhileRunning,
       keyBlocked,
       keyIssueBlocked,
       keyRegistrationMessage,

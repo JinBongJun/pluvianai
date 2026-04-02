@@ -20,6 +20,7 @@ function vctxBase(overrides: Partial<ReleaseGateValidateRunContextValue> = {}): 
     result: null,
     dismissedReportId: null,
     dismissLatestResult: () => {},
+    showingPersistedResultWhileRunning: false,
     ...overrides,
   };
 }

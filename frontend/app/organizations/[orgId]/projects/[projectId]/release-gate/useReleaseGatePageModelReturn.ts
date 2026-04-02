@@ -23,6 +23,7 @@ export type UseReleaseGatePageModelReturnParams = {
   result: ReleaseGateValidateRunContextValue["result"];
   dismissedReportId: string | null;
   dismissLatestResult: () => void;
+  showingPersistedResultWhileRunning: boolean;
   keyBlocked: boolean;
   keyIssueBlocked: boolean;
   keyRegistrationMessage: string;
@@ -57,6 +58,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
     result,
     dismissedReportId,
     dismissLatestResult,
+    showingPersistedResultWhileRunning,
     keyBlocked,
     keyIssueBlocked,
     keyRegistrationMessage,
@@ -86,6 +88,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
       result,
       dismissedReportId,
       dismissLatestResult,
+      showingPersistedResultWhileRunning,
     }),
     [
       activeJobId,
@@ -99,6 +102,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
       isValidating,
       result,
       runLocked,
+      showingPersistedResultWhileRunning,
     ]
   );
 

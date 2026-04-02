@@ -16,6 +16,7 @@ export type ReleaseGateValidateRunContextValue = {
   result: ReleaseGateResult | null;
   dismissedReportId: string | null;
   dismissLatestResult: () => void;
+  showingPersistedResultWhileRunning: boolean;
 };
 
 export const ReleaseGateValidateRunContext = createContext<ReleaseGateValidateRunContextValue | null>(

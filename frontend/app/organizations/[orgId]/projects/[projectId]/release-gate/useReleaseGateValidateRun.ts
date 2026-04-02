@@ -586,10 +586,6 @@ export function useReleaseGateValidateRun(options: {
     setPlanError(null);
     setError("");
     setDismissedResult(prev => (prev?.agentId === ownerAgentId ? null : prev));
-    if (resultOwnerAgentId === ownerAgentId) {
-      setResult(null);
-      setResultOwnerAgentId(null);
-    }
     let startedAsyncJob = false;
     try {
       const built = buildReleaseGateValidateAsyncPayload(d);
@@ -713,6 +709,11 @@ export function useReleaseGateValidateRun(options: {
       : false;
   const visibleResult =
     Boolean(normalizedAgentId) && resultOwnerAgentId === normalizedAgentId ? result : null;
+  const showingPersistedResultWhileRunning =
+    Boolean(visibleResult) &&
+    Boolean(normalizedAgentId) &&
+    activeJobOwnerAgentId === normalizedAgentId &&
+    Boolean(activeJobId);
   const dismissedReportId =
     normalizedAgentId && dismissedResult?.agentId === normalizedAgentId
       ? dismissedResult.reportId
@@ -733,6 +734,7 @@ export function useReleaseGateValidateRun(options: {
     clearRunUi,
     dismissedReportId,
     dismissLatestResult,
+    showingPersistedResultWhileRunning,
   };
 }
 

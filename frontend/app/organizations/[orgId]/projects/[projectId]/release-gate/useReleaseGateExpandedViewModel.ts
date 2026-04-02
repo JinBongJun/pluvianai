@@ -124,6 +124,7 @@ export function useReleaseGateExpandedViewModel({
   const result = vctx.result;
   const dismissedReportId = vctx.dismissedReportId;
   const dismissLatestResult = vctx.dismissLatestResult;
+  const showingPersistedResultWhileRunning = vctx.showingPersistedResultWhileRunning;
   const setExpandedCaseIndex = ctx.setExpandedCaseIndex;
   const baselineDetailSnapshot = ctx.baselineDetailSnapshot;
   const agentEvalData = ctx.agentEvalData;
@@ -482,6 +483,7 @@ export function useReleaseGateExpandedViewModel({
     result,
     dismissedReportId,
     dismissLatestResult,
+    showingPersistedResultWhileRunning,
     rgDetails,
     rightPanelTab,
     runDatasetIds,

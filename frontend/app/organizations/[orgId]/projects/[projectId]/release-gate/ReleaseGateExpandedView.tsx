@@ -138,6 +138,7 @@ export function ReleaseGateExpandedView() {
               result={m.result}
               dismissedReportId={m.dismissedReportId}
               onDismissLatest={m.dismissLatestResult}
+              showingPersistedResultWhileRunning={m.showingPersistedResultWhileRunning}
               repeatRuns={m.repeatRuns}
               toolGroundingRunSummary={m.toolGroundingRunSummary}
               whatToFixHints={m.whatToFixHints}
