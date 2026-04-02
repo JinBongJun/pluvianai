@@ -45,7 +45,7 @@ from app.core.canonical import (
     response_to_canonical_steps,
     response_to_canonical_tool_calls_summary,
 )
-from app.core.database import get_db
+from app.core.database import SessionLocal, get_db
 from app.core.logging_config import logger
 from app.core.metrics import (
     realtime_stream_connections_active,
@@ -851,6 +851,143 @@ class _ResolvedReleaseGateInputs:
     trace_id: Optional[str]
     baseline_trace_id: Optional[str]
     snapshots: List[Snapshot]
+
+
+@dataclass(frozen=True)
+class _ReplayBatchResult:
+    run_index: int
+    replay_results: List[Dict[str, Any]]
+    batch_wall_ms: int
+    avg_snapshot_latency_ms: Optional[float]
+    succeeded: int
+    failed: int
+
+
+def _resolve_release_gate_parallel_repeat_limit(repeat_runs: int) -> int:
+    total_runs = max(1, int(repeat_runs or 1))
+    if not bool(getattr(app_settings, "RELEASE_GATE_ENABLE_PARALLEL_REPEATS", False)):
+        return 1
+
+    configured_limit = int(getattr(app_settings, "RELEASE_GATE_MAX_PARALLEL_REPEATS", 1) or 1)
+    return max(1, min(total_runs, configured_limit))
+
+
+async def _execute_release_gate_replay_batches(
+    *,
+    project_id: int,
+    payload: "ReleaseGateValidateRequest",
+    snapshots: List[Snapshot],
+    db: Session,
+    tool_context_payload: Optional[Dict[str, Any]],
+    replay_user_api_key_override: Optional[str],
+    use_platform_model: bool,
+    cancel_check: Optional[Callable[[], bool]] = None,
+    progress_hook: Optional[Callable[[int, Optional[int], Optional[str], Optional[Dict[str, Any]]], None]] = None,
+) -> List[_ReplayBatchResult]:
+    total_runs = max(1, int(payload.repeat_runs or 1))
+    max_parallel_repeats = _resolve_release_gate_parallel_repeat_limit(total_runs)
+    allow_env_fallback = bool(
+        use_platform_model
+        or app_settings.SELF_HOSTED_MODE
+        or str(app_settings.ENVIRONMENT).lower() != "production"
+    )
+    replay_overrides = _sanitize_replay_overrides(payload.replay_overrides)
+    replay_overrides_by_snapshot_id = _sanitize_replay_overrides_by_snapshot_id(
+        payload.replay_overrides_by_snapshot_id
+    )
+    progress_lock = asyncio.Lock()
+    progress_completed = 0
+    semaphore = asyncio.Semaphore(max_parallel_repeats)
+
+    async def _run_single_batch(run_index: int, run_db: Session) -> _ReplayBatchResult:
+        nonlocal progress_completed
+        t0 = time.monotonic()
+        replay_results = await replay_service.run_batch_replay(
+            snapshots=snapshots,
+            new_model=payload.new_model,
+            new_system_prompt=payload.new_system_prompt,
+            temperature=payload.replay_temperature,
+            max_tokens=payload.replay_max_tokens,
+            top_p=payload.replay_top_p,
+            replay_overrides=replay_overrides,
+            replay_overrides_by_snapshot_id=replay_overrides_by_snapshot_id,
+            tool_context=tool_context_payload,
+            replay_provider=payload.replay_provider,
+            api_key=replay_user_api_key_override if not use_platform_model else None,
+            rubric=None,
+            project_id=project_id,
+            db=run_db,
+            allow_environment_key=allow_env_fallback,
+            # Platform mode prefers env keys (hosted). Detected mode uses DB keys first,
+            # with env as a fallback (self-hosted/local convenience).
+            prefer_environment_key=use_platform_model,
+            track_platform_credits=use_platform_model,
+        )
+        wall_ms = int((time.monotonic() - t0) * 1000)
+        latencies = [
+            float(r.get("latency_ms"))
+            for r in replay_results
+            if r.get("latency_ms") is not None
+        ]
+        avg_latency_ms = (sum(latencies) / len(latencies)) if latencies else None
+        succeeded = sum(1 for r in replay_results if r.get("success"))
+        failed = len(replay_results) - succeeded
+
+        if progress_hook:
+            async with progress_lock:
+                progress_completed += 1
+                completed_count = progress_completed
+            try:
+                progress_hook(
+                    completed_count,
+                    total_runs or None,
+                    "replay",
+                    {
+                        "run_index": run_index,
+                        "batch_wall_ms": wall_ms,
+                        "avg_snapshot_latency_ms": avg_latency_ms,
+                    },
+                )
+            except Exception:
+                # Progress reporting must never fail the run.
+                pass
+
+        return _ReplayBatchResult(
+            run_index=run_index,
+            replay_results=replay_results,
+            batch_wall_ms=wall_ms,
+            avg_snapshot_latency_ms=avg_latency_ms,
+            succeeded=succeeded,
+            failed=failed,
+        )
+
+    async def _run_batch(run_index: int) -> Optional[_ReplayBatchResult]:
+        if cancel_check and cancel_check():
+            return None
+
+        if max_parallel_repeats <= 1:
+            return await _run_single_batch(run_index, db)
+
+        async with semaphore:
+            if cancel_check and cancel_check():
+                return None
+            with SessionLocal() as repeat_db:
+                return await _run_single_batch(run_index, repeat_db)
+
+    if max_parallel_repeats <= 1:
+        replay_batches: List[_ReplayBatchResult] = []
+        for run_index in range(1, total_runs + 1):
+            batch = await _run_batch(run_index)
+            if batch is None:
+                raise ReleaseGateCancelled()
+            replay_batches.append(batch)
+        return replay_batches
+
+    tasks = [asyncio.create_task(_run_batch(run_index)) for run_index in range(1, total_runs + 1)]
+    results = await asyncio.gather(*tasks)
+    if any(batch is None for batch in results):
+        raise ReleaseGateCancelled()
+    return [batch for batch in results if batch is not None]
 
 
 def _calculate_release_gate_attempts(
@@ -2359,9 +2496,7 @@ async def _run_release_gate(
         snapshot_by_id: Dict[int, Snapshot] = {s.id: s for s in snapshots}
         attempts_by_snapshot: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
         all_reasons: List[str] = []
-        perf_attempts: List[Dict[str, Any]] = []
         perf_started = time.monotonic()
-        perf_total = int(payload.repeat_runs or 0) or 0
 
         tool_context_payload: Optional[Dict[str, Any]] = (
             payload.tool_context.model_dump(exclude_none=True)
@@ -2369,72 +2504,32 @@ async def _run_release_gate(
             else None
         )
 
-        for run_idx in range(payload.repeat_runs):
-            if cancel_check and cancel_check():
-                raise ReleaseGateCancelled()
-            allow_env_fallback = bool(
-                use_platform_model
-                or app_settings.SELF_HOSTED_MODE
-                or str(app_settings.ENVIRONMENT).lower() != "production"
-            )
-            t0 = time.monotonic()
-            replay_results = await replay_service.run_batch_replay(
-                snapshots=snapshots,
-                new_model=payload.new_model,
-                new_system_prompt=payload.new_system_prompt,
-                temperature=payload.replay_temperature,
-                max_tokens=payload.replay_max_tokens,
-                top_p=payload.replay_top_p,
-                replay_overrides=_sanitize_replay_overrides(payload.replay_overrides),
-                replay_overrides_by_snapshot_id=_sanitize_replay_overrides_by_snapshot_id(
-                    payload.replay_overrides_by_snapshot_id
-                ),
-                tool_context=tool_context_payload,
-                replay_provider=payload.replay_provider,
-                api_key=replay_user_api_key_override if not use_platform_model else None,
-                rubric=None,
-                project_id=project_id,
-                db=db,
-                allow_environment_key=allow_env_fallback,
-                # Platform mode prefers env keys (hosted). Detected mode uses DB keys first,
-                # with env as a fallback (self-hosted/local convenience).
-                prefer_environment_key=use_platform_model,
-                track_platform_credits=use_platform_model,
-            )
-            wall_ms = int((time.monotonic() - t0) * 1000)
-            latencies = [
-                float(r.get("latency_ms"))
-                for r in replay_results
-                if r.get("latency_ms") is not None
-            ]
-            avg_latency_ms = (sum(latencies) / len(latencies)) if latencies else None
-            succeeded = sum(1 for r in replay_results if r.get("success"))
-            failed = len(replay_results) - succeeded
-            perf_attempts.append(
-                {
-                    "run_index": run_idx + 1,
-                    "batch_wall_ms": wall_ms,
-                    "snapshots": len(replay_results),
-                    "succeeded": succeeded,
-                    "failed": failed,
-                    "avg_snapshot_latency_ms": avg_latency_ms,
-                }
-            )
-            if progress_hook:
-                try:
-                    progress_hook(
-                        run_idx + 1,
-                        perf_total or None,
-                        "replay",
-                        {
-                            "run_index": run_idx + 1,
-                            "batch_wall_ms": wall_ms,
-                            "avg_snapshot_latency_ms": avg_latency_ms,
-                        },
-                    )
-                except Exception:
-                    # Progress reporting must never fail the run.
-                    pass
+        replay_batches = await _execute_release_gate_replay_batches(
+            project_id=project_id,
+            payload=payload,
+            snapshots=snapshots,
+            db=db,
+            tool_context_payload=tool_context_payload,
+            replay_user_api_key_override=replay_user_api_key_override,
+            use_platform_model=use_platform_model,
+            cancel_check=cancel_check,
+            progress_hook=progress_hook,
+        )
+        perf_attempts: List[Dict[str, Any]] = [
+            {
+                "run_index": replay_batch.run_index,
+                "batch_wall_ms": replay_batch.batch_wall_ms,
+                "snapshots": len(replay_batch.replay_results),
+                "succeeded": replay_batch.succeeded,
+                "failed": replay_batch.failed,
+                "avg_snapshot_latency_ms": replay_batch.avg_snapshot_latency_ms,
+            }
+            for replay_batch in replay_batches
+        ]
+
+        for replay_batch in replay_batches:
+            run_number = replay_batch.run_index
+            replay_results = replay_batch.replay_results
 
             for res in replay_results:
                 snapshot = snapshot_by_id.get(res.get("snapshot_id"))
@@ -2734,7 +2829,7 @@ async def _run_release_gate(
                     }
                     attempts_by_snapshot[snapshot.id].append(
                         {
-                            "run_index": run_idx + 1,
+                            "run_index": run_number,
                             "trace_id": snapshot.trace_id,
                             "pass": False,
                             "failure_reasons": reasons,
@@ -2820,7 +2915,7 @@ async def _run_release_gate(
                     provider_error_preview = _safe_preview_json(res.get("response_data"))
                     attempts_by_snapshot[snapshot.id].append(
                         {
-                            "run_index": run_idx + 1,
+                            "run_index": run_number,
                             "trace_id": snapshot.trace_id,
                             "pass": False,
                             "failure_reasons": [reason],
@@ -2939,7 +3034,7 @@ async def _run_release_gate(
                 )
                 attempts_by_snapshot[snapshot.id].append(
                     {
-                        "run_index": run_idx + 1,
+                        "run_index": run_number,
                         "trace_id": snapshot.trace_id,
                         "pass": run_pass,
                         "failure_reasons": reasons,
