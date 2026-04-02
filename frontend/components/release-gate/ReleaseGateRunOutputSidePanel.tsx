@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import clsx from "clsx";
-import { Activity, Flag, RefreshCcw } from "lucide-react";
+import { Activity, Flag, RefreshCcw, X } from "lucide-react";
 import RailwaySidePanel from "@/components/shared/RailwaySidePanel";
 import {
   HistoryRunRowButton,
@@ -103,6 +104,16 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
   const historyFiltersAreDefault =
     historyStatus === "all" && historyDatePreset === "all" && !historyTraceId.trim();
   const groupedHistoryItems = groupHistoryItemsBySession(nodeHistoryItems);
+  const [dismissedReportId, setDismissedReportId] = useState<string | null>(null);
+  const currentReportId = result?.report_id ? String(result.report_id) : null;
+  const resultVisible = Boolean(result) && currentReportId !== dismissedReportId;
+
+  useEffect(() => {
+    if (!currentReportId) return;
+    if (dismissedReportId && dismissedReportId !== currentReportId) {
+      setDismissedReportId(null);
+    }
+  }, [currentReportId, dismissedReportId]);
 
   return (
     <RailwaySidePanel
@@ -158,13 +169,16 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
               ))}
             </div>
 
-            {!result ? (
+            {!resultVisible ? (
               <div className="flex flex-col items-center justify-center py-14 text-center opacity-70">
                 <Activity className="mb-4 h-8 w-8 text-white/40" />
-                <div className="text-sm font-semibold text-white/60">Awaiting run</div>
+                <div className="text-sm font-semibold text-white/60">
+                  {!result ? "Awaiting run" : "Latest result hidden"}
+                </div>
                 <p className="mt-1 text-[11px] leading-relaxed text-white/30">
-                  Select logs or datasets in the left panel, adjust options on the agent card, then
-                  press Start. Gate status and per-input rows show up here.
+                  {!result
+                    ? "Select logs or datasets in the left panel, adjust options on the agent card, then press Start. Gate status and per-input rows show up here."
+                    : "Open History to inspect the completed run, or run again to generate a new result."}
                 </p>
               </div>
             ) : (
@@ -178,13 +192,19 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                       : "border-l-2 border-rose-500/50 bg-rose-500/5 text-rose-100"
                   )}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold">
-                      {result.pass ? "Healthy gate" : "Flagged gate"}
-                    </span>
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold text-white/70">
                       Failure rate {percentFromRate(result.fail_rate)}
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => setDismissedReportId(currentReportId)}
+                      className="rounded-md border border-white/10 bg-black/20 p-1 text-white/50 transition hover:text-white"
+                      title="Hide latest result"
+                      aria-label="Hide latest result"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                   <div className="flex flex-wrap items-center gap-3 text-[11px] text-white/60">
                     <span>Inputs: {Number(result.total_inputs ?? 0)}</span>

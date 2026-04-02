@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 
 import type { ReleaseGateLayoutGateBodyProps } from "./ReleaseGateLayoutGateBody";
@@ -131,6 +131,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     replayApiKey,
     setReplayApiKey,
     modelSource,
+    setModelSource,
     setModelProviderTab,
     requestBody,
     setRequestBody,
@@ -205,9 +206,69 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
   } = useReleaseGateBaselineDetailSnapshot(projectId);
 
   const runLocked = isValidating || Boolean(activeJobId);
+  const lastAutoResetReportIdRef = useRef<string | null>(null);
   useEffect(() => {
     setHistoryActivated(false);
   }, [agentId]);
+
+  useEffect(() => {
+    if (runLocked) return;
+    const reportId = result?.report_id ? String(result.report_id) : "";
+    if (!reportId) return;
+    if (lastAutoResetReportIdRef.current === reportId) return;
+    lastAutoResetReportIdRef.current = reportId;
+
+    // Reset run options after a completed run; keep selected node/data while running.
+    setRepeatRuns(1);
+    setRepeatDropdownOpen(false);
+    setThresholdPreset("default");
+    setFailRateMax(0.05);
+    setFlakyRateMax(0.03);
+    setModelSource("detected");
+    setModelProviderTab("openai");
+    setReplayProvider("openai");
+    setNewModel("");
+    setReplayUserApiKeyId(null);
+    setReplayApiKey("");
+    setRequestBodyOverrides({});
+    setBodyOverridesJsonDraft(null);
+    setBodyOverridesJsonError("");
+    setRequestBodyOverridesBySnapshotId({});
+    setBodyOverridesSnapshotDraftRaw({});
+    setBodyOverridesSnapshotJsonError({});
+    setToolContextMode("recorded");
+    setToolContextScope("per_snapshot");
+    setToolContextGlobalText("");
+    setToolContextBySnapshotId({});
+    setToolContextLoadBusy(false);
+    setRepresentativeBaselineUserSnapshotId(null);
+  }, [
+    runLocked,
+    result?.report_id,
+    setRepeatRuns,
+    setRepeatDropdownOpen,
+    setThresholdPreset,
+    setFailRateMax,
+    setFlakyRateMax,
+    setModelSource,
+    setModelProviderTab,
+    setReplayProvider,
+    setNewModel,
+    setReplayUserApiKeyId,
+    setReplayApiKey,
+    setRequestBodyOverrides,
+    setBodyOverridesJsonDraft,
+    setBodyOverridesJsonError,
+    setRequestBodyOverridesBySnapshotId,
+    setBodyOverridesSnapshotDraftRaw,
+    setBodyOverridesSnapshotJsonError,
+    setToolContextMode,
+    setToolContextScope,
+    setToolContextGlobalText,
+    setToolContextBySnapshotId,
+    setToolContextLoadBusy,
+    setRepresentativeBaselineUserSnapshotId,
+  ]);
 
   const {
     historyStatus,
