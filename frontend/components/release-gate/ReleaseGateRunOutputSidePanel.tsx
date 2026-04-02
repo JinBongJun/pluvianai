@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import clsx from "clsx";
-import { Activity, Flag, RefreshCcw, X } from "lucide-react";
+import { Activity, Flag, RefreshCcw } from "lucide-react";
 import RailwaySidePanel from "@/components/shared/RailwaySidePanel";
 import {
   HistoryRunRowButton,
@@ -19,7 +19,6 @@ import {
 } from "@/app/organizations/[orgId]/projects/[projectId]/release-gate/releaseGateExpandedHelpers";
 import {
   formatDurationMs,
-  percentFromRate,
 } from "@/app/organizations/[orgId]/projects/[projectId]/release-gate/releaseGateViewUtils";
 
 export type ToolGroundingRunSummary = {
@@ -77,7 +76,6 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
     result,
     repeatRuns,
     toolGroundingRunSummary,
-    whatToFixHints,
     resultCaseFilter,
     setResultCaseFilter,
     visibleResultCases,
@@ -192,20 +190,6 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                       : "border-l-2 border-rose-500/50 bg-rose-500/5 text-rose-100"
                   )}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-bold text-white/70">
-                      Failure rate {percentFromRate(result.fail_rate)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setDismissedReportId(currentReportId)}
-                      className="rounded-md border border-white/10 bg-black/20 p-1 text-white/50 transition hover:text-white"
-                      title="Hide latest result"
-                      aria-label="Hide latest result"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
                   <div className="flex flex-wrap items-center gap-3 text-[11px] text-white/60">
                     <span>Inputs: {Number(result.total_inputs ?? 0)}</span>
                     <span className="h-1 w-1 rounded-full bg-white/20" />
@@ -255,27 +239,6 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                   ) : null}
                 </div>
 
-                {!result.pass && whatToFixHints.length > 0 && (
-                  <div className="border-l-2 border-amber-500/50 bg-amber-500/5 px-4 py-3">
-                    <div className="text-[11px] font-medium text-amber-200">What to fix first</div>
-                    <div className="mt-3 flex flex-col gap-2">
-                      {whatToFixHints.map((hint, idx) => (
-                        <div
-                          key={hint.key}
-                          className="flex items-start justify-between gap-3 text-sm text-amber-100/90"
-                        >
-                          <span className="min-w-0 flex-1 truncate">
-                            {idx + 1}. {hint.label}
-                          </span>
-                          <span className="shrink-0 text-xs font-semibold text-amber-400">
-                            {hint.count}x
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 <div className="flex flex-col gap-2">
                   {visibleResultCases.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-4 text-sm text-white/30">
@@ -305,6 +268,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                           idx={idx}
                           repeatRunsFallback={result.repeat_runs ?? repeatRuns}
                           baselineSnapshotForRun={baselineSnapshotForRun}
+                          onDismissLatest={() => setDismissedReportId(currentReportId)}
                           onSelect={({ attempts, caseIndex, baselineSnapshot }) =>
                             setDetailAttemptView({
                               attempts,

@@ -2,7 +2,7 @@
 
 import React from "react";
 import clsx from "clsx";
-import { Activity } from "lucide-react";
+import { Activity, X } from "lucide-react";
 import {
   shortText,
   summarizeGroundingForCase,
@@ -15,6 +15,7 @@ export function ResultCaseRowButton({
   repeatRunsFallback,
   baselineSnapshotForRun,
   onSelect,
+  onDismissLatest,
   testId,
 }: {
   run: any;
@@ -26,6 +27,7 @@ export function ResultCaseRowButton({
     caseIndex: number;
     baselineSnapshot: Record<string, unknown> | null;
   }) => void;
+  onDismissLatest?: () => void;
   testId: string;
 }) {
   const attempts = Array.isArray(run?.attempts) ? run.attempts : [];
@@ -51,22 +53,30 @@ export function ResultCaseRowButton({
   ).trim();
   const caseGrounding = summarizeGroundingForCase(run);
   const attemptSummaryLabel = `${passedAttempts}/${totalAttempts} healthy`;
+  const handleOpenDetails = () => {
+    if (attempts.length > 0) {
+      onSelect({
+        attempts,
+        caseIndex: idx,
+        baselineSnapshot: baselineSnapshotForRun,
+      });
+    }
+  };
 
   return (
-    <button
-      type="button"
-      onClick={() => {
-        if (attempts.length > 0) {
-          onSelect({
-            attempts,
-            caseIndex: idx,
-            baselineSnapshot: baselineSnapshotForRun,
-          });
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleOpenDetails}
+      onKeyDown={event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          handleOpenDetails();
         }
       }}
       data-testid={testId}
       className={clsx(
-        "group flex w-full flex-col gap-2.5 rounded-xl border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg",
+        "group flex w-full cursor-pointer flex-col gap-2.5 rounded-xl border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-white/15",
         caseIsPass
           ? "border-emerald-500/20 bg-emerald-500/[0.03] hover:border-emerald-500/40 hover:bg-emerald-500/[0.08]"
           : caseIsFlaky
@@ -91,10 +101,23 @@ export function ResultCaseRowButton({
           <span className="text-sm font-semibold text-slate-100">Input {idx + 1}</span>
         </div>
         <div className="flex shrink-0 items-center">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 opacity-60 transition-all group-hover:text-white group-hover:opacity-100">
-            <span>View details</span>
-            <span className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
-          </div>
+          {onDismissLatest ? (
+            <button
+              type="button"
+              onClick={event => {
+                event.stopPropagation();
+                onDismissLatest();
+              }}
+              onKeyDown={event => {
+                event.stopPropagation();
+              }}
+              className="rounded-md border border-white/10 bg-black/20 p-1 text-white/45 transition hover:text-white"
+              title="Hide latest result"
+              aria-label="Hide latest result"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -142,7 +165,7 @@ export function ResultCaseRowButton({
           ) : null}
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
