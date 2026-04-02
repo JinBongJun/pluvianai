@@ -21,9 +21,9 @@ export type UseReleaseGatePageModelReturnParams = {
   handleCancelActiveJob: (() => void) | undefined;
   error: string;
   result: ReleaseGateValidateRunContextValue["result"];
-  dismissedReportId: string | null;
-  dismissLatestResult: () => void;
-  showingPersistedResultWhileRunning: boolean;
+  completedResults: ReleaseGateValidateRunContextValue["completedResults"];
+  hasCompletedResults: boolean;
+  dismissResult: (reportId: string) => void;
   keyBlocked: boolean;
   keyIssueBlocked: boolean;
   keyRegistrationMessage: string;
@@ -56,9 +56,9 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
     handleCancelActiveJob,
     error,
     result,
-    dismissedReportId,
-    dismissLatestResult,
-    showingPersistedResultWhileRunning,
+    completedResults,
+    hasCompletedResults,
+    dismissResult,
     keyBlocked,
     keyIssueBlocked,
     keyRegistrationMessage,
@@ -86,23 +86,23 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
       handleCancelActiveJob,
       error,
       result,
-      dismissedReportId,
-      dismissLatestResult,
-      showingPersistedResultWhileRunning,
+      completedResults,
+      hasCompletedResults,
+      dismissResult,
     }),
     [
       activeJobId,
       cancelLocked,
       cancelRequested,
-      dismissLatestResult,
-      dismissedReportId,
+      completedResults,
+      dismissResult,
       error,
+      hasCompletedResults,
       handleCancelActiveJob,
       handleValidate,
       isValidating,
       result,
       runLocked,
-      showingPersistedResultWhileRunning,
     ]
   );
 
