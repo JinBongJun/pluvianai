@@ -4,6 +4,7 @@
 
 export { EVAL_CHECK_LABELS, getEvalCheckParams } from "@/lib/evalPresentation";
 import { EVAL_CHECK_LABELS } from "@/lib/evalPresentation";
+import type { ReleaseGateHistoryItem } from "@/lib/api/types";
 
 export type GateTab = "validate" | "history";
 export type ThresholdPreset = "strict" | "default" | "lenient" | "custom";
@@ -315,4 +316,33 @@ export function findFirstCaseWithAttempts(cases: any[]): { run: any; caseIndex: 
     if (attempts.length > 0) return { run: cases[i], caseIndex: i };
   }
   return null;
+}
+
+export function groupHistoryItemsBySession(items: ReleaseGateHistoryItem[]) {
+  const groups: Array<{
+    id: string;
+    createdAt: string | null;
+    totalInputs: number;
+    repeatRuns: number | null;
+    items: ReleaseGateHistoryItem[];
+  }> = [];
+  const byReportId = new Map<string, (typeof groups)[number]>();
+  for (const item of items) {
+    const reportId = String(item.report_id || item.id);
+    const existing = byReportId.get(reportId);
+    if (existing) {
+      existing.items.push(item);
+      continue;
+    }
+    const group = {
+      id: reportId,
+      createdAt: item.session_created_at ?? item.created_at ?? null,
+      totalInputs: Number(item.session_total_inputs ?? item.total_inputs ?? 0) || 1,
+      repeatRuns: item.session_repeat_runs ?? item.repeat_runs ?? null,
+      items: [item],
+    };
+    byReportId.set(reportId, group);
+    groups.push(group);
+  }
+  return groups;
 }

@@ -3948,6 +3948,178 @@ def _release_gate_meta(summary_json: Any) -> Dict[str, Any]:
     return gate_meta if isinstance(gate_meta, dict) else {}
 
 
+def _release_gate_history_status(value: Any, *, fallback_pass: bool = False) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"pass", "fail", "flaky"}:
+        return normalized
+    return "pass" if fallback_pass else "fail"
+
+
+def _snapshot_history_input_preview(snapshot: Optional[Snapshot]) -> Optional[str]:
+    if snapshot is None:
+        return None
+    candidates: List[Any] = [
+        getattr(snapshot, "user_message", None),
+    ]
+    payload = getattr(snapshot, "payload", None)
+    if isinstance(payload, dict):
+        candidates.extend(
+            [
+                payload.get("user_message"),
+                payload.get("input"),
+                payload.get("prompt"),
+            ]
+        )
+        messages = payload.get("messages")
+        if isinstance(messages, list):
+            for msg in messages:
+                if not isinstance(msg, dict):
+                    continue
+                role = str(msg.get("role") or "").strip().lower()
+                if role != "user":
+                    continue
+                content = msg.get("content")
+                if isinstance(content, str) and content.strip():
+                    candidates.append(content)
+                    break
+                if isinstance(content, list):
+                    parts: List[str] = []
+                    for part in content:
+                        if not isinstance(part, dict):
+                            continue
+                        text = part.get("text")
+                        if isinstance(text, str) and text.strip():
+                            parts.append(text.strip())
+                    if parts:
+                        candidates.append("\n".join(parts))
+                        break
+    for candidate in candidates:
+        text = str(candidate or "").strip()
+        if text:
+            return _preview_text_snippet(text, 140)
+    return None
+
+
+def _build_release_gate_history_rows(
+    report: BehaviorReport,
+    gate_meta: Dict[str, Any],
+    resolved_agent_id: Optional[str],
+) -> List[Dict[str, Any]]:
+    repeat_runs = _coerce_optional_int(gate_meta.get("repeat_runs"))
+    session_total_inputs = _coerce_optional_int(gate_meta.get("total_inputs"))
+    session_status = _release_gate_history_status(report.status)
+    mode = str(gate_meta.get("mode") or "replay_test")
+    thresholds = gate_meta.get("thresholds")
+    created_at_iso = _iso(report.created_at)
+    case_results = gate_meta.get("case_results")
+    if not isinstance(case_results, list) or not case_results:
+        total_attempts = _coerce_optional_int(gate_meta.get("total_attempts"))
+        passed_attempts = _coerce_optional_int(gate_meta.get("passed_attempts"))
+        failed_attempts = (
+            max(total_attempts - passed_attempts, 0)
+            if total_attempts is not None and passed_attempts is not None
+            else None
+        )
+        return [
+            {
+                "id": f"{report.id}:0",
+                "report_id": report.id,
+                "case_index": 0,
+                "input_index": 1,
+                "input_label": "Input 1",
+                "input_preview": None,
+                "status": session_status,
+                "trace_id": report.trace_id,
+                "baseline_trace_id": report.baseline_run_ref,
+                "agent_id": resolved_agent_id,
+                "created_at": created_at_iso,
+                "session_created_at": created_at_iso,
+                "session_status": session_status,
+                "mode": mode,
+                "repeat_runs": repeat_runs,
+                "session_repeat_runs": repeat_runs,
+                "total_inputs": session_total_inputs,
+                "session_total_inputs": session_total_inputs,
+                "passed_attempts": passed_attempts,
+                "failed_attempts": failed_attempts,
+                "total_attempts": total_attempts,
+                "snapshot_id": None,
+                "thresholds": thresholds,
+            }
+        ]
+
+    rows: List[Dict[str, Any]] = []
+    computed_total_inputs = session_total_inputs or len(case_results)
+    for case_index, case_result in enumerate(case_results):
+        if not isinstance(case_result, dict):
+            continue
+        replay_meta = case_result.get("replay")
+        if not isinstance(replay_meta, dict):
+            replay_meta = {}
+        case_summary = case_result.get("summary")
+        if not isinstance(case_summary, dict):
+            case_summary = {}
+        case_status = _release_gate_history_status(
+            case_result.get("case_status"),
+            fallback_pass=bool(case_result.get("pass")),
+        )
+        attempts = case_result.get("attempts")
+        attempts_list = attempts if isinstance(attempts, list) else []
+        total_attempts = (
+            len(attempts_list)
+            or _coerce_optional_int(replay_meta.get("attempted"))
+            or repeat_runs
+        )
+        if attempts_list:
+            passed_attempts = sum(1 for attempt in attempts_list if bool((attempt or {}).get("pass")))
+        else:
+            pass_ratio = case_summary.get("pass_ratio")
+            if total_attempts is not None and pass_ratio is not None:
+                try:
+                    passed_attempts = max(
+                        0,
+                        min(total_attempts, int(round(float(pass_ratio) * total_attempts))),
+                    )
+                except (TypeError, ValueError):
+                    passed_attempts = total_attempts if case_status == "pass" else 0
+            else:
+                passed_attempts = total_attempts if case_status == "pass" else 0
+        failed_attempts = (
+            max(total_attempts - passed_attempts, 0)
+            if total_attempts is not None and passed_attempts is not None
+            else None
+        )
+        input_index = _coerce_optional_int(case_result.get("run_index")) or (case_index + 1)
+        rows.append(
+            {
+                "id": f"{report.id}:{case_index}",
+                "report_id": report.id,
+                "case_index": case_index,
+                "input_index": input_index,
+                "input_label": f"Input {input_index}",
+                "input_preview": None,
+                "status": case_status,
+                "trace_id": case_result.get("trace_id") or report.trace_id,
+                "baseline_trace_id": report.baseline_run_ref,
+                "agent_id": resolved_agent_id,
+                "created_at": created_at_iso,
+                "session_created_at": created_at_iso,
+                "session_status": session_status,
+                "mode": mode,
+                "repeat_runs": repeat_runs,
+                "session_repeat_runs": repeat_runs,
+                "total_inputs": computed_total_inputs,
+                "session_total_inputs": computed_total_inputs,
+                "passed_attempts": passed_attempts,
+                "failed_attempts": failed_attempts,
+                "total_attempts": total_attempts,
+                "snapshot_id": case_result.get("snapshot_id"),
+                "thresholds": thresholds,
+            }
+        )
+    return rows
+
+
 def _resolve_release_gate_run_agent_id(db: Session, report: BehaviorReport) -> Optional[str]:
     normalized_agent_id = str(report.agent_id or "").strip() or None
     if normalized_agent_id:
@@ -4084,10 +4256,6 @@ async def list_release_gate_history(
         )
         .order_by(BehaviorReport.created_at.desc())
     )
-    if status_filter in {"pass", "fail"}:
-        query = query.filter(BehaviorReport.status == status_filter)
-    if trace_id:
-        query = query.filter(BehaviorReport.trace_id == trace_id)
     if created_from:
         query = query.filter(BehaviorReport.created_at >= created_from)
     if created_to:
@@ -4101,54 +4269,67 @@ async def list_release_gate_history(
         resolved_agent_id = _resolve_release_gate_run_agent_id(db, report)
         if normalized_agent_id and resolved_agent_id != normalized_agent_id:
             continue
-
-        total_inputs = _coerce_optional_int(gate_meta.get("total_inputs"))
-        failed_inputs = _coerce_optional_int(gate_meta.get("failed_inputs")) or 0
-        flaky_inputs = _coerce_optional_int(gate_meta.get("flaky_inputs")) or 0
-        failed_runs = failed_inputs + flaky_inputs if total_inputs is not None else None
-        passed_runs = (
-            max(total_inputs - failed_runs, 0)
-            if total_inputs is not None and failed_runs is not None
-            else None
-        )
-        matched_rows.append(
-            {
-                "id": report.id,
-                "status": report.status,
-                "trace_id": report.trace_id,
-                "baseline_trace_id": report.baseline_run_ref,
-                "agent_id": resolved_agent_id,
-                "created_at": _iso(report.created_at),
-                "mode": str(gate_meta.get("mode") or "replay_test"),
-                "repeat_runs": _coerce_optional_int(gate_meta.get("repeat_runs")),
-                "total_inputs": total_inputs,
-                "passed_runs": passed_runs,
-                "failed_runs": failed_runs,
-                "passed_attempts": _coerce_optional_int(gate_meta.get("passed_attempts")),
-                "total_attempts": _coerce_optional_int(gate_meta.get("total_attempts")),
-                "thresholds": gate_meta.get("thresholds"),
-            }
-        )
+        history_rows = _build_release_gate_history_rows(report, gate_meta, resolved_agent_id)
+        for row in history_rows:
+            row_status = str(row.get("status") or "").strip().lower()
+            if status_filter == "pass" and row_status != "pass":
+                continue
+            if status_filter == "fail" and row_status not in {"fail", "flaky"}:
+                continue
+            row_trace_id = str(row.get("trace_id") or "").strip()
+            if trace_id and row_trace_id != trace_id:
+                continue
+            matched_rows.append(row)
 
     total = len(matched_rows)
     page_rows = matched_rows[offset : offset + limit]
+    snapshot_ids = {
+        int(snapshot_id)
+        for snapshot_id in (row.get("snapshot_id") for row in page_rows)
+        if snapshot_id is not None and str(snapshot_id).strip().isdigit()
+    }
+    snapshots_by_id: Dict[int, Snapshot] = {}
+    if snapshot_ids:
+        snapshots_by_id = {
+            snapshot.id: snapshot
+            for snapshot in db.query(Snapshot)
+            .filter(Snapshot.id.in_(snapshot_ids), Snapshot.is_deleted.is_(False))
+            .all()
+        }
     items: List[Dict[str, Any]] = []
     for row in page_rows:
+        snapshot_id = row.get("snapshot_id")
+        snapshot: Optional[Snapshot] = None
+        if snapshot_id is not None:
+            try:
+                snapshot = snapshots_by_id.get(int(snapshot_id))
+            except (TypeError, ValueError):
+                snapshot = None
+        input_preview = _snapshot_history_input_preview(snapshot)
         items.append(
             {
                 "id": row["id"],
+                "report_id": row["report_id"],
+                "case_index": row["case_index"],
+                "input_index": row["input_index"],
+                "input_label": row["input_label"],
+                "input_preview": input_preview,
                 "status": row["status"],
                 "trace_id": row["trace_id"],
                 "baseline_trace_id": row["baseline_trace_id"],
                 "agent_id": row["agent_id"],
                 "created_at": row["created_at"],
+                "session_created_at": row["session_created_at"],
+                "session_status": row["session_status"],
                 "mode": row["mode"],
                 "repeat_runs": row["repeat_runs"],
+                "session_repeat_runs": row["session_repeat_runs"],
                 "total_inputs": row["total_inputs"],
-                "passed_runs": row["passed_runs"],
-                "failed_runs": row["failed_runs"],
+                "session_total_inputs": row["session_total_inputs"],
                 "passed_attempts": row["passed_attempts"],
+                "failed_attempts": row["failed_attempts"],
                 "total_attempts": row["total_attempts"],
+                "snapshot_id": row["snapshot_id"],
                 "thresholds": row["thresholds"],
             }
         )

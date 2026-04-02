@@ -166,6 +166,8 @@ export function buildReleaseGatePageContextParams(
     setExpandedHistoryId: lv.setExpandedHistoryId,
     selectedRunId: lv.selectedRunId,
     setSelectedRunId: lv.setSelectedRunId,
+    selectedRunCaseIndex: lv.selectedRunCaseIndex,
+    setSelectedRunCaseIndex: lv.setSelectedRunCaseIndex,
     runSnapshotIds: lv.runSnapshotIds,
     runDatasetIds: lv.runDatasetIds,
     expandedDatasetId: lv.expandedDatasetId,

@@ -4,7 +4,8 @@ import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useRef } from "react";
 
 import type { GateTab } from "./releaseGateExpandedHelpers";
-import { findFirstCaseWithAttempts, getCasesFromReport } from "./releaseGateExpandedHelpers";
+import { getCasesFromReport } from "./releaseGateExpandedHelpers";
+import type { ReleaseGateHistoryItem } from "@/lib/api/types";
 
 export type ExpandedDetailAttemptView = {
   attempts: any[];
@@ -20,6 +21,8 @@ export type UseReleaseGateExpandedHistoryOverlayParams = {
   tab: GateTab;
   selectedRunId: string | null;
   setSelectedRunId: (id: string | null) => void;
+  selectedRunCaseIndex: number | null;
+  setSelectedRunCaseIndex: (n: number | null) => void;
   selectedRunReport: unknown;
   selectedRunReportLoading: boolean;
   selectedRunReportError: unknown;
@@ -35,6 +38,8 @@ export function useReleaseGateExpandedHistoryOverlay(p: UseReleaseGateExpandedHi
     tab,
     selectedRunId,
     setSelectedRunId,
+    selectedRunCaseIndex,
+    setSelectedRunCaseIndex,
     selectedRunReport,
     selectedRunReportLoading,
     selectedRunReportError,
@@ -43,38 +48,48 @@ export function useReleaseGateExpandedHistoryOverlay(p: UseReleaseGateExpandedHi
     setExpandedHistoryId,
     setDetailAttemptView,
   } = p;
-  const pendingRunIdRef = useRef<string | null>(null);
+  const pendingSelectionRef = useRef<{
+    rowId: string;
+    reportId: string;
+    caseIndex: number;
+  } | null>(null);
 
   const clearHistoryOverlayPending = useCallback(() => {
-    pendingRunIdRef.current = null;
+    pendingSelectionRef.current = null;
   }, []);
 
   const selectHistoryRun = useCallback(
-    (id: string) => {
-      pendingRunIdRef.current = id;
-      setSelectedRunId(id);
-      setExpandedHistoryId(id);
+    (item: ReleaseGateHistoryItem) => {
+      pendingSelectionRef.current = {
+        rowId: item.id,
+        reportId: item.report_id,
+        caseIndex: Number(item.case_index ?? 0),
+      };
+      setSelectedRunId(item.report_id);
+      setSelectedRunCaseIndex(Number(item.case_index ?? 0));
+      setExpandedHistoryId(item.id);
     },
-    [setSelectedRunId, setExpandedHistoryId]
+    [setSelectedRunId, setSelectedRunCaseIndex, setExpandedHistoryId]
   );
 
   useEffect(() => {
     if (rightPanelTab !== "history" && tab !== "history") {
-      pendingRunIdRef.current = null;
+      pendingSelectionRef.current = null;
     }
   }, [rightPanelTab, tab]);
 
   useEffect(() => {
-    if (!pendingRunIdRef.current || selectedRunReportLoading) return;
+    if (!pendingSelectionRef.current || selectedRunReportLoading) return;
     if (selectedRunReportError) {
-      pendingRunIdRef.current = null;
+      pendingSelectionRef.current = null;
       setSelectedRunId(null);
+      setSelectedRunCaseIndex(null);
     }
-  }, [selectedRunReportLoading, selectedRunReportError, setSelectedRunId]);
+  }, [selectedRunReportLoading, selectedRunReportError, setSelectedRunId, setSelectedRunCaseIndex]);
 
   useEffect(() => {
-    const pending = pendingRunIdRef.current;
-    if (!pending || String(pending) !== String(selectedRunId ?? "")) return;
+    const pending = pendingSelectionRef.current;
+    if (!pending || String(pending.reportId) !== String(selectedRunId ?? "")) return;
     if (selectedRunReportLoading || !selectedRunReport) return;
     const reportObj = selectedRunReport as Record<string, unknown>;
     if (String(reportObj.id) !== String(selectedRunId)) return;
@@ -82,15 +97,16 @@ export function useReleaseGateExpandedHistoryOverlay(p: UseReleaseGateExpandedHi
     if (!historyUiActive) return;
 
     const cases = getCasesFromReport(selectedRunReport);
-    const picked = findFirstCaseWithAttempts(cases);
-    pendingRunIdRef.current = null;
+    const caseIndex = Number.isInteger(selectedRunCaseIndex) ? Number(selectedRunCaseIndex) : pending.caseIndex;
+    const run = caseIndex >= 0 ? cases[caseIndex] : null;
+    pendingSelectionRef.current = null;
 
-    if (!picked || !Array.isArray(picked.run?.attempts) || picked.run.attempts.length === 0) {
+    if (!run || !Array.isArray(run?.attempts) || run.attempts.length === 0) {
       setSelectedRunId(null);
+      setSelectedRunCaseIndex(null);
       return;
     }
 
-    const { run, caseIndex } = picked;
     const baselineSnapshotForRun =
       (baselineSnapshotsById.get(String(run?.snapshot_id ?? "")) as
         | Record<string, unknown>
@@ -123,15 +139,18 @@ export function useReleaseGateExpandedHistoryOverlay(p: UseReleaseGateExpandedHi
           : null,
     });
     setSelectedRunId(null);
+    setSelectedRunCaseIndex(null);
   }, [
     selectedRunReport,
     selectedRunId,
+    selectedRunCaseIndex,
     selectedRunReportLoading,
     rightPanelTab,
     tab,
     baselineSnapshotsById,
     recentSnapshots,
     setSelectedRunId,
+    setSelectedRunCaseIndex,
     setDetailAttemptView,
   ]);
 

@@ -335,20 +335,30 @@ export interface ReleaseGateResult {
 
 export interface ReleaseGateHistoryItem {
   id: string;
+  report_id: string;
+  case_index: number;
+  input_index?: number | null;
+  input_label?: string | null;
+  input_preview?: string | null;
   status: "pass" | "fail" | "flaky";
   trace_id: string;
   baseline_trace_id?: string | null;
   agent_id?: string | null;
   created_at?: string | null;
+  session_created_at?: string | null;
+  session_status?: "pass" | "fail" | "flaky";
   mode?: "replay_test";
   repeat_runs?: number | null;
+  session_repeat_runs?: number | null;
   total_inputs?: number | null;
-  passed_runs?: number | null;
-  failed_runs?: number | null;
+  session_total_inputs?: number | null;
   /** Per-attempt pass count across all inputs (replay repeats). */
   passed_attempts?: number | null;
+  /** Per-attempt fail count for this input row. */
+  failed_attempts?: number | null;
   /** Total replay attempts across all inputs. */
   total_attempts?: number | null;
+  snapshot_id?: string | number | null;
   thresholds?: Record<string, number> | null;
 }
 

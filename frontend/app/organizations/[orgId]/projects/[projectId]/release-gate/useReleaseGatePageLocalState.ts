@@ -80,6 +80,7 @@ export function useReleaseGatePageLocalState() {
   } | null>(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedRunCaseIndex, setSelectedRunCaseIndex] = useState<number | null>(null);
 
   return useMemo(
     () => ({
@@ -169,6 +170,8 @@ export function useReleaseGatePageLocalState() {
       setExpandedHistoryId,
       selectedRunId,
       setSelectedRunId,
+      selectedRunCaseIndex,
+      setSelectedRunCaseIndex,
     }),
     [
       tab,
@@ -214,6 +217,7 @@ export function useReleaseGatePageLocalState() {
       selectedAttempt,
       expandedHistoryId,
       selectedRunId,
+      selectedRunCaseIndex,
     ]
   );
 }

@@ -192,8 +192,6 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     setExpandedCaseIndex,
     selectedAttempt,
     setSelectedAttempt,
-    expandedHistoryId,
-    setExpandedHistoryId,
     selectedRunId,
     setSelectedRunId,
   } = lv;
