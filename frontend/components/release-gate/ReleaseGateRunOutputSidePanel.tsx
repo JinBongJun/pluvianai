@@ -326,8 +326,8 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                       Inputs from recent validation sessions
                     </div>
                     <div className="mt-1.5 text-xs leading-relaxed text-white/40">
-                      This list is scoped to the selected agent and shows each retained input exactly as
-                      it was run, grouped by validation session.
+                      Scoped to this agent: one row per input from recent runs, grouped by validation
+                      session. Use input preview and trace to tell rows apart.
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-white/40 items-center">
                       <span className="font-medium text-white/60">

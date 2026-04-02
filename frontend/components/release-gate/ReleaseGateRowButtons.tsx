@@ -174,7 +174,8 @@ export function HistoryRunRowButton({
       : caseIsPass
         ? totalAttempts
         : 0;
-  const preview = shortText(item.input_preview || item.trace_id || "", "", 96);
+  const rawInputPreview = String(item.input_preview ?? "").trim();
+  const preview = rawInputPreview ? shortText(rawInputPreview, "", 96) : "";
   const inputIndexNumber =
     Number.isFinite(Number(item.input_index)) && Number(item.input_index) > 0
       ? Number(item.input_index)
@@ -234,8 +235,14 @@ export function HistoryRunRowButton({
 
       <div className="flex min-w-0 flex-col gap-2.5 w-full">
         {preview ? (
-          <div className="truncate text-[12px] text-slate-300 bg-black/20 border border-white/5 rounded-lg px-2.5 py-1.5 max-w-full">
-            {preview}
+          <div
+            className="max-w-full rounded-lg border border-white/5 bg-black/20 px-2.5 py-1.5"
+            title={rawInputPreview}
+          >
+            <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wider text-white/35">
+              Input preview
+            </div>
+            <div className="truncate text-[12px] text-slate-300">{preview}</div>
           </div>
         ) : null}
         <div className="flex flex-wrap items-center gap-2 text-[11px]">
@@ -261,8 +268,14 @@ export function HistoryRunRowButton({
           ) : null}
         </div>
         {tracePreview ? (
-          <div className="truncate text-xs text-slate-500 font-mono bg-black/20 border border-white/5 rounded-lg px-2.5 py-1.5 self-start max-w-full">
-            {tracePreview}
+          <div
+            className="max-w-full self-start rounded-lg border border-white/5 bg-black/20 px-2.5 py-1.5 font-mono text-xs text-slate-500"
+            title={item.trace_id ? String(item.trace_id) : undefined}
+          >
+            <div className="mb-0.5 text-[9px] font-sans font-semibold uppercase tracking-wider text-white/35">
+              Trace
+            </div>
+            <div className="truncate">{tracePreview}</div>
           </div>
         ) : null}
       </div>
