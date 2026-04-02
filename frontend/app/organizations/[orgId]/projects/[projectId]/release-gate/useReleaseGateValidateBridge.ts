@@ -10,7 +10,7 @@ import {
 /**
  * Owns validate-run deps ref + history mutate ref wiring for {@link useReleaseGateValidateRun}.
  */
-export function useReleaseGateValidateBridge(projectId: number) {
+export function useReleaseGateValidateBridge(projectId: number, agentId: string) {
   const mutateHistoryRef = useRef<(() => unknown) | undefined>(undefined);
   const validateRunDepsRef = useRef(createDefaultValidateRunDeps());
 
@@ -28,6 +28,7 @@ export function useReleaseGateValidateBridge(projectId: number) {
     clearRunUi,
   } = useReleaseGateValidateRun({
     projectId,
+    agentId,
     depsRef: validateRunDepsRef,
     mutateHistoryRef,
   });

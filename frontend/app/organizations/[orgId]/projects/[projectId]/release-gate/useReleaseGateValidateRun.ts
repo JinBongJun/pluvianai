@@ -38,6 +38,11 @@ const SSE_POLL_BACKOFF_MS = 30_000;
 /** Spread concurrent tabs / clients so polls do not align on the same second. */
 const POLL_JITTER_MS_MAX = 900;
 const TERMINAL_JOB_STATUSES = new Set(["succeeded", "failed", "canceled"]);
+const ACTIVE_JOB_STATUSES = new Set(["queued", "running"]);
+
+function releaseGateRunSessionKey(projectId: number, agentId: string): string {
+  return `release-gate:active-job:${projectId}:${agentId}`;
+}
 
 function pollDelayMs(baseMs: number): number {
   return baseMs + Math.floor(Math.random() * POLL_JITTER_MS_MAX);
@@ -99,10 +104,11 @@ export function createDefaultValidateRunDeps(): ReleaseGateValidateRunDeps {
 
 export function useReleaseGateValidateRun(options: {
   projectId: number;
+  agentId: string;
   depsRef: MutableRefObject<ReleaseGateValidateRunDeps>;
   mutateHistoryRef: MutableRefObject<(() => unknown) | undefined>;
 }) {
-  const { projectId, depsRef, mutateHistoryRef } = options;
+  const { projectId, agentId, depsRef, mutateHistoryRef } = options;
   const isPageVisible = usePageVisibility();
 
   const [isValidating, setIsValidating] = useState(false);
@@ -150,6 +156,79 @@ export function useReleaseGateValidateRun(options: {
     pendingHistoryRefreshRef.current = false;
     void mutateHistoryRef.current?.();
   }, [runLocked, mutateHistoryRef]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!projectId || isNaN(projectId)) return;
+    const normalizedAgentId = String(agentId || "").trim();
+    if (!normalizedAgentId) return;
+    const key = releaseGateRunSessionKey(projectId, normalizedAgentId);
+    if (activeJobId) {
+      window.sessionStorage.setItem(key, String(activeJobId));
+    } else {
+      window.sessionStorage.removeItem(key);
+    }
+  }, [projectId, agentId, activeJobId]);
+
+  useEffect(() => {
+    if (!projectId || isNaN(projectId)) return;
+    const normalizedAgentId = String(agentId || "").trim();
+    if (!normalizedAgentId) return;
+    if (activeJobId) return;
+    if (isValidating) return;
+    let cancelled = false;
+    const key = releaseGateRunSessionKey(projectId, normalizedAgentId);
+
+    const attach = (job: {
+      id?: string;
+      status?: string | null;
+      started_at?: string | null;
+      cancel_requested_at?: string | null;
+    }) => {
+      const id = String(job?.id || "").trim();
+      const status = String(job?.status || "").trim().toLowerCase();
+      if (!id || !ACTIVE_JOB_STATUSES.has(status)) return false;
+      setResult(null);
+      setError("");
+      setIsValidating(true);
+      setActiveJobId(id);
+      setCancelLocked(Boolean(job?.started_at));
+      const cancelReq = Boolean(job?.cancel_requested_at);
+      cancelRequestedRef.current = cancelReq;
+      setCancelRequested(cancelReq);
+      return true;
+    };
+
+    const resume = async () => {
+      const storedJobId =
+        typeof window !== "undefined" ? String(window.sessionStorage.getItem(key) || "").trim() : "";
+      if (storedJobId) {
+        try {
+          const byId = await releaseGateAPI.getJob(projectId, storedJobId, 0);
+          if (cancelled) return;
+          if (attach(byId?.job || {})) return;
+        } catch {
+          // Fall through to active-job lookup.
+        }
+      }
+      try {
+        const active = await releaseGateAPI.getActiveJob(projectId, {
+          agent_id: normalizedAgentId,
+          include_result: 0,
+        });
+        if (cancelled) return;
+        if (!attach(active?.job || {})) {
+          if (typeof window !== "undefined") window.sessionStorage.removeItem(key);
+        }
+      } catch {
+        // Keep the page usable; next manual run still works.
+      }
+    };
+    void resume();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, agentId, activeJobId, isValidating]);
 
   const clearRunUi = useCallback(() => {
     setResult(null);

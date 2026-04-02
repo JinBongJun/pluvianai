@@ -116,3 +116,75 @@ class TestReleaseGateAsyncJobs:
         )
 
         assert response.status_code == status.HTTP_202_ACCEPTED
+
+    async def test_get_active_job_returns_running_job_for_agent(
+        self, async_client, auth_headers, db, test_project, test_user
+    ):
+        older = ReleaseGateJob(
+            project_id=test_project.id,
+            user_id=test_user.id,
+            status="queued",
+            progress_done=0,
+            progress_total=1,
+            progress_phase="replay",
+            request_json={"evaluation_mode": "replay_test", "repeat_runs": 1, "agent_id": "agent-A"},
+        )
+        newer = ReleaseGateJob(
+            project_id=test_project.id,
+            user_id=test_user.id,
+            status="running",
+            progress_done=1,
+            progress_total=3,
+            progress_phase="replay",
+            request_json={"evaluation_mode": "replay_test", "repeat_runs": 3, "agent_id": "agent-B"},
+        )
+        db.add_all([older, newer])
+        db.commit()
+        db.refresh(newer)
+
+        response = await async_client.get(
+            f"/api/v1/projects/{test_project.id}/release-gate/active-job",
+            params={"agent_id": "agent-B"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body["job"]["id"] == str(newer.id)
+        assert body["job"]["status"] == "running"
+
+    async def test_get_active_job_filters_by_agent_id(
+        self, async_client, auth_headers, db, test_project, test_user
+    ):
+        job_a = ReleaseGateJob(
+            project_id=test_project.id,
+            user_id=test_user.id,
+            status="queued",
+            progress_done=0,
+            progress_total=2,
+            progress_phase="replay",
+            request_json={"evaluation_mode": "replay_test", "repeat_runs": 2, "agent_id": "agent-A"},
+        )
+        job_b = ReleaseGateJob(
+            project_id=test_project.id,
+            user_id=test_user.id,
+            status="running",
+            progress_done=1,
+            progress_total=3,
+            progress_phase="replay",
+            request_json={"evaluation_mode": "replay_test", "repeat_runs": 3, "agent_id": "agent-B"},
+        )
+        db.add_all([job_a, job_b])
+        db.commit()
+        db.refresh(job_a)
+
+        response = await async_client.get(
+            f"/api/v1/projects/{test_project.id}/release-gate/active-job",
+            params={"agent_id": "agent-A"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body["job"]["id"] == str(job_a.id)
+        assert body["job"]["status"] == "queued"

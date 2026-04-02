@@ -94,22 +94,6 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       router.replace(href)
   );
   const { data: myUsage } = useAccountUsage(Boolean(projectId));
-  const {
-    mutateHistoryRef,
-    validateRunDepsRef,
-    isValidating,
-    activeJobId,
-    cancelRequested,
-    cancelLocked,
-    result,
-    error,
-    planError,
-    runValidateCooldownUntilMs,
-    handleValidate,
-    handleCancelActiveJob,
-    clearRunUi,
-  } = useReleaseGateValidateBridge(projectId);
-
   const lv = useReleaseGatePageLocalState();
   const {
     tab,
@@ -195,6 +179,21 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     selectedRunId,
     setSelectedRunId,
   } = lv;
+  const {
+    mutateHistoryRef,
+    validateRunDepsRef,
+    isValidating,
+    activeJobId,
+    cancelRequested,
+    cancelLocked,
+    result,
+    error,
+    planError,
+    runValidateCooldownUntilMs,
+    handleValidate,
+    handleCancelActiveJob,
+    clearRunUi,
+  } = useReleaseGateValidateBridge(projectId, agentId);
   const modelOverrideEnabled = modelSource !== "detected";
   const replayModelMode = modelSource === "hosted" ? "hosted" : "custom";
   const [historyActivated, setHistoryActivated] = useState(false);
