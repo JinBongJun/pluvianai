@@ -172,6 +172,56 @@ class DataLifecycleService:
 
         return count
 
+    def delete_release_gate_history_session(self, project_id: int, report_id: str) -> Dict[str, Any]:
+        """
+        Hard-delete a single persisted release-gate history session by report id.
+
+        The operation is idempotent:
+        - missing report => deleted=False
+        - non-release-gate report => deleted=False
+        """
+        normalized_report_id = str(report_id or "").strip()
+        if not normalized_report_id:
+            return {
+                "ok": True,
+                "report_id": normalized_report_id,
+                "deleted": False,
+                "deleted_inputs": 0,
+            }
+
+        report = (
+            self.db.query(BehaviorReport)
+            .filter(
+                BehaviorReport.project_id == project_id,
+                BehaviorReport.id == normalized_report_id,
+            )
+            .first()
+        )
+        if not report or not self._is_release_gate_report(report):
+            return {
+                "ok": True,
+                "report_id": normalized_report_id,
+                "deleted": False,
+                "deleted_inputs": 0,
+            }
+
+        gate_meta = report.summary_json.get("release_gate") if isinstance(report.summary_json, dict) else {}
+        deleted_inputs = int(gate_meta.get("total_inputs") or 0) if isinstance(gate_meta, dict) else 0
+        self.db.query(ReleaseGateRun).filter(ReleaseGateRun.report_id == normalized_report_id).delete()
+        self.db.delete(report)
+        self.db.commit()
+        logger.info(
+            "Deleted release-gate history session report_id=%s project_id=%s",
+            normalized_report_id,
+            project_id,
+        )
+        return {
+            "ok": True,
+            "report_id": normalized_report_id,
+            "deleted": True,
+            "deleted_inputs": max(0, deleted_inputs),
+        }
+
     def purge_expired_release_gate_history(
         self,
         project_id: Optional[int] = None,

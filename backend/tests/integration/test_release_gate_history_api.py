@@ -292,3 +292,102 @@ class TestReleaseGateHistoryApi:
         assert payload["total"] == 1
         assert payload["items"][0]["agent_id"] == "agent-fallback"
         assert payload["items"][0]["trace_id"] == trace_id
+
+    async def test_delete_history_session_hard_deletes_release_gate_report_and_read_model(
+        self, async_client, auth_headers, test_project, db
+    ):
+        report_id = str(uuid.uuid4())
+        db.add(
+            BehaviorReport(
+                id=report_id,
+                project_id=test_project.id,
+                trace_id="rg-trace-delete",
+                agent_id="agent-delete",
+                status="pass",
+                summary_json={
+                    "release_gate": {
+                        "mode": "replay_test",
+                        "repeat_runs": 2,
+                        "total_inputs": 3,
+                        "case_results": [
+                            {"trace_id": "rg-trace-delete-a", "attempts": [{"pass": True}]},
+                            {"trace_id": "rg-trace-delete-b", "attempts": [{"pass": True}]},
+                            {"trace_id": "rg-trace-delete-c", "attempts": [{"pass": True}]},
+                        ],
+                    }
+                },
+                violations_json=[],
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        db.add(
+            ReleaseGateRun(
+                project_id=test_project.id,
+                agent_id="agent-delete",
+                trace_id="rg-trace-delete",
+                report_id=report_id,
+                status="pass",
+                total_inputs=3,
+                repeat_runs=2,
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        db.commit()
+
+        res = await async_client.delete(
+            f"/api/v1/projects/{test_project.id}/release-gate/history/{report_id}",
+            headers=auth_headers,
+        )
+        assert res.status_code == status.HTTP_200_OK
+        payload = res.json()
+        assert payload == {
+            "ok": True,
+            "report_id": report_id,
+            "deleted": True,
+            "deleted_inputs": 3,
+        }
+        assert db.query(BehaviorReport).filter(BehaviorReport.id == report_id).first() is None
+        assert db.query(ReleaseGateRun).filter(ReleaseGateRun.report_id == report_id).first() is None
+
+        res2 = await async_client.delete(
+            f"/api/v1/projects/{test_project.id}/release-gate/history/{report_id}",
+            headers=auth_headers,
+        )
+        assert res2.status_code == status.HTTP_200_OK
+        assert res2.json() == {
+            "ok": True,
+            "report_id": report_id,
+            "deleted": False,
+            "deleted_inputs": 0,
+        }
+
+    async def test_delete_history_session_does_not_delete_non_release_gate_report(
+        self, async_client, auth_headers, test_project, db
+    ):
+        report_id = str(uuid.uuid4())
+        db.add(
+            BehaviorReport(
+                id=report_id,
+                project_id=test_project.id,
+                trace_id="non-rg-trace-delete",
+                agent_id="agent-other",
+                status="pass",
+                summary_json={"policy": {"kind": "not-release-gate"}},
+                violations_json=[],
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        db.commit()
+
+        res = await async_client.delete(
+            f"/api/v1/projects/{test_project.id}/release-gate/history/{report_id}",
+            headers=auth_headers,
+        )
+        assert res.status_code == status.HTTP_200_OK
+        assert res.json() == {
+            "ok": True,
+            "report_id": report_id,
+            "deleted": False,
+            "deleted_inputs": 0,
+        }
+        assert db.query(BehaviorReport).filter(BehaviorReport.id == report_id).first() is not None

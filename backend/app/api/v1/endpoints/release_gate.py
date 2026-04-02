@@ -4550,3 +4550,15 @@ async def list_release_gate_history(
         "retention_days": retention_days,
     }
 
+
+@router.delete("/projects/{project_id}/release-gate/history/{report_id}")
+async def delete_release_gate_history(
+    project_id: int,
+    report_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    check_project_write_access(project_id, current_user, db)
+    lifecycle = DataLifecycleService(db)
+    return lifecycle.delete_release_gate_history_session(project_id, report_id)
+
