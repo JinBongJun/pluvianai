@@ -8,7 +8,6 @@ import type { EditableTool } from "./releaseGatePageContent.lib";
 export type UseReleaseGateAgentLifecycleParams = {
   agentIdFromUrl: string;
   agentId: string;
-  clearRunUi: () => void;
   setAgentId: (id: string) => void;
   setViewMode: (mode: "map" | "expanded") => void;
   setRequestBody: Dispatch<SetStateAction<Record<string, unknown>>>;
@@ -27,7 +26,6 @@ export function useReleaseGateAgentLifecycle(p: UseReleaseGateAgentLifecyclePara
   const {
     agentIdFromUrl,
     agentId,
-    clearRunUi,
     setAgentId,
     setViewMode,
     setRequestBody,
@@ -60,7 +58,6 @@ export function useReleaseGateAgentLifecycle(p: UseReleaseGateAgentLifecyclePara
       setToolContextBySnapshotId({});
       setToolContextLoadBusy(false);
       setRepresentativeBaselineUserSnapshotId(null);
-      clearRunUi();
       return;
     }
     setRequestBody({});
@@ -73,10 +70,8 @@ export function useReleaseGateAgentLifecycle(p: UseReleaseGateAgentLifecyclePara
     setToolContextBySnapshotId({});
     setToolContextLoadBusy(false);
     setRepresentativeBaselineUserSnapshotId(null);
-    clearRunUi();
   }, [
     agentId,
-    clearRunUi,
     setRequestBody,
     setRequestJsonDraft,
     setRequestJsonError,

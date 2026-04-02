@@ -136,6 +136,8 @@ export function ReleaseGateExpandedView() {
               rightPanelTab={m.rightPanelTab}
               setRightPanelTab={m.setRightPanelTab}
               result={m.result}
+              dismissedReportId={m.dismissedReportId}
+              onDismissLatest={m.dismissLatestResult}
               repeatRuns={m.repeatRuns}
               toolGroundingRunSummary={m.toolGroundingRunSummary}
               whatToFixHints={m.whatToFixHints}

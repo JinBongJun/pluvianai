@@ -112,21 +112,33 @@ export function useReleaseGateValidateRun(options: {
   const { projectId, agentId, depsRef, mutateHistoryRef } = options;
   const isPageVisible = usePageVisibility();
   const toast = useToast();
+  const normalizedAgentId = String(agentId || "").trim();
 
   const [isValidating, setIsValidating] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [activeJobOwnerAgentId, setActiveJobOwnerAgentId] = useState<string | null>(null);
   const [cancelRequested, setCancelRequested] = useState(false);
   const [cancelLocked, setCancelLocked] = useState(false);
   const [result, setResult] = useState<ReleaseGateResult | null>(null);
+  const [resultOwnerAgentId, setResultOwnerAgentId] = useState<string | null>(null);
+  const [dismissedResult, setDismissedResult] = useState<{
+    agentId: string;
+    reportId: string;
+  } | null>(null);
   const [error, setError] = useState("");
   const [planError, setPlanError] = useState<PlanLimitError | null>(null);
   const [runValidateCooldownUntilMs, setRunValidateCooldownUntilMs] = useState(0);
   const runLocked = isValidating || Boolean(activeJobId);
 
   const cancelRequestedRef = useRef(false);
+  const activeJobOwnerAgentIdRef = useRef<string | null>(null);
   const pollNowRef = useRef<null | (() => void)>(null);
   const cancelBurstRemainingRef = useRef(0);
   const pendingHistoryRefreshRef = useRef(false);
+
+  useEffect(() => {
+    activeJobOwnerAgentIdRef.current = activeJobOwnerAgentId;
+  }, [activeJobOwnerAgentId]);
 
   useEffect(() => {
     cancelRequestedRef.current = cancelRequested;
@@ -162,7 +174,6 @@ export function useReleaseGateValidateRun(options: {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!projectId || isNaN(projectId)) return;
-    const normalizedAgentId = String(agentId || "").trim();
     if (!normalizedAgentId) return;
     const key = releaseGateRunSessionKey(projectId, normalizedAgentId);
     if (activeJobId) {
@@ -174,7 +185,6 @@ export function useReleaseGateValidateRun(options: {
 
   useEffect(() => {
     if (!projectId || isNaN(projectId)) return;
-    const normalizedAgentId = String(agentId || "").trim();
     if (!normalizedAgentId) return;
     if (activeJobId) return;
     if (isValidating) return;
@@ -193,6 +203,7 @@ export function useReleaseGateValidateRun(options: {
       setError("");
       setIsValidating(true);
       setActiveJobId(id);
+      setActiveJobOwnerAgentId(normalizedAgentId);
       setCancelLocked(Boolean(job?.started_at));
       const cancelReq = Boolean(job?.cancel_requested_at);
       cancelRequestedRef.current = cancelReq;
@@ -232,15 +243,18 @@ export function useReleaseGateValidateRun(options: {
   }, [projectId, agentId, activeJobId, isValidating]);
 
   const clearRunUi = useCallback(() => {
-    setResult(null);
     setError("");
-    setActiveJobId(null);
-    setCancelRequested(false);
-    setCancelLocked(false);
-    setIsValidating(false);
-    cancelRequestedRef.current = false;
-    pendingHistoryRefreshRef.current = false;
   }, []);
+
+  const dismissLatestResult = useCallback(() => {
+    if (!normalizedAgentId) return;
+    const reportId = String(result?.report_id || "").trim();
+    if (!reportId || resultOwnerAgentId !== normalizedAgentId) return;
+    setDismissedResult({
+      agentId: normalizedAgentId,
+      reportId,
+    });
+  }, [normalizedAgentId, result?.report_id, resultOwnerAgentId]);
 
   const handleCancelActiveJob = useCallback(async () => {
     if (!projectId || isNaN(projectId)) return;
@@ -330,9 +344,12 @@ export function useReleaseGateValidateRun(options: {
       finalJob: any
     ) => {
       if (cancelled) return;
+      const ownerAgentId = String(activeJobOwnerAgentIdRef.current || "").trim();
       if (status === "succeeded") {
         toast.showToast("Release Gate run completed.", "success");
         setResult(finalResult);
+        setResultOwnerAgentId(ownerAgentId || null);
+        setDismissedResult(prev => (prev?.agentId === ownerAgentId ? null : prev));
         setError("");
         pendingHistoryRefreshRef.current = true;
       } else if (status === "failed") {
@@ -351,6 +368,8 @@ export function useReleaseGateValidateRun(options: {
         setError("Release Gate validation failed.");
       }
       setActiveJobId(null);
+      activeJobOwnerAgentIdRef.current = null;
+      setActiveJobOwnerAgentId(null);
       setIsValidating(false);
       setCancelRequested(false);
       setCancelLocked(false);
@@ -486,18 +505,24 @@ export function useReleaseGateValidateRun(options: {
             });
             setError("Session expired. Please log in again.");
             setActiveJobId(null);
+            activeJobOwnerAgentIdRef.current = null;
+            setActiveJobOwnerAgentId(null);
             setIsValidating(false);
             return;
           }
           if (statusCode === 403) {
             setError("You do not have access to this project.");
             setActiveJobId(null);
+            activeJobOwnerAgentIdRef.current = null;
+            setActiveJobOwnerAgentId(null);
             setIsValidating(false);
             return;
           }
           if (statusCode === 404) {
             setError("Job not found (it may have expired or been deleted).");
             setActiveJobId(null);
+            activeJobOwnerAgentIdRef.current = null;
+            setActiveJobOwnerAgentId(null);
             setIsValidating(false);
             setCancelRequested(false);
             return;
@@ -550,12 +575,21 @@ export function useReleaseGateValidateRun(options: {
         return;
       }
     }
+    const ownerAgentId = String(d.agentId || "").trim();
+    if (!ownerAgentId) return;
+    activeJobOwnerAgentIdRef.current = ownerAgentId;
+    setActiveJobOwnerAgentId(ownerAgentId);
     setIsValidating(true);
     setCancelRequested(false);
     setCancelLocked(false);
     cancelRequestedRef.current = false;
     setPlanError(null);
     setError("");
+    setDismissedResult(prev => (prev?.agentId === ownerAgentId ? null : prev));
+    if (resultOwnerAgentId === ownerAgentId) {
+      setResult(null);
+      setResultOwnerAgentId(null);
+    }
     let startedAsyncJob = false;
     try {
       const built = buildReleaseGateValidateAsyncPayload(d);
@@ -659,22 +693,46 @@ export function useReleaseGateValidateRun(options: {
         setError(detailMessage);
       }
     } finally {
-      if (!startedAsyncJob) setIsValidating(false);
+      if (!startedAsyncJob) {
+        setIsValidating(false);
+        activeJobOwnerAgentIdRef.current = null;
+        setActiveJobOwnerAgentId(null);
+      }
     }
-  }, [projectId, isValidating, activeJobId, depsRef, runValidateCooldownUntilMs]);
+  }, [projectId, isValidating, activeJobId, depsRef, runValidateCooldownUntilMs, resultOwnerAgentId]);
+
+  const visibleIsValidating =
+    Boolean(normalizedAgentId) && activeJobOwnerAgentId === normalizedAgentId ? isValidating : false;
+  const visibleActiveJobId =
+    Boolean(normalizedAgentId) && activeJobOwnerAgentId === normalizedAgentId ? activeJobId : null;
+  const visibleCancelLocked =
+    Boolean(normalizedAgentId) && activeJobOwnerAgentId === normalizedAgentId ? cancelLocked : false;
+  const visibleCancelRequested =
+    Boolean(normalizedAgentId) && activeJobOwnerAgentId === normalizedAgentId
+      ? cancelRequested
+      : false;
+  const visibleResult =
+    Boolean(normalizedAgentId) && resultOwnerAgentId === normalizedAgentId ? result : null;
+  const dismissedReportId =
+    normalizedAgentId && dismissedResult?.agentId === normalizedAgentId
+      ? dismissedResult.reportId
+      : null;
 
   return {
-    isValidating,
-    activeJobId,
-    cancelLocked,
-    cancelRequested,
-    result,
+    isValidating: visibleIsValidating,
+    activeJobId: visibleActiveJobId,
+    cancelLocked: visibleCancelLocked,
+    cancelRequested: visibleCancelRequested,
+    result: visibleResult,
     error,
     planError,
+    runLocked,
     runValidateCooldownUntilMs,
     handleValidate,
     handleCancelActiveJob,
     clearRunUi,
+    dismissedReportId,
+    dismissLatestResult,
   };
 }
 

@@ -16,6 +16,7 @@ export function useReleaseGateValidateBridge(projectId: number, agentId: string)
 
   const {
     isValidating,
+    runLocked,
     activeJobId,
     cancelRequested,
     cancelLocked,
@@ -26,6 +27,8 @@ export function useReleaseGateValidateBridge(projectId: number, agentId: string)
     handleValidate,
     handleCancelActiveJob,
     clearRunUi,
+    dismissedReportId,
+    dismissLatestResult,
   } = useReleaseGateValidateRun({
     projectId,
     agentId,
@@ -37,6 +40,7 @@ export function useReleaseGateValidateBridge(projectId: number, agentId: string)
     mutateHistoryRef,
     validateRunDepsRef,
     isValidating,
+    runLocked,
     activeJobId,
     cancelRequested,
     cancelLocked,
@@ -47,5 +51,7 @@ export function useReleaseGateValidateBridge(projectId: number, agentId: string)
     handleValidate,
     handleCancelActiveJob,
     clearRunUi,
+    dismissedReportId,
+    dismissLatestResult,
   };
 }
