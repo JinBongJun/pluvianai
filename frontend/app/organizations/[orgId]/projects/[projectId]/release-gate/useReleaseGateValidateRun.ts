@@ -73,6 +73,12 @@ export type ReleaseGateValidateRunDeps = ReleaseGateValidateAsyncPayloadInput & 
   keyRegistrationMessage: string;
 };
 
+export type CompletedReleaseGateResultEntry = {
+  reportId: string;
+  result: ReleaseGateResult;
+  completedAtMs: number;
+};
+
 export function createDefaultValidateRunDeps(): ReleaseGateValidateRunDeps {
   return {
     canValidate: false,
@@ -119,12 +125,12 @@ export function useReleaseGateValidateRun(options: {
   const [activeJobOwnerAgentId, setActiveJobOwnerAgentId] = useState<string | null>(null);
   const [cancelRequested, setCancelRequested] = useState(false);
   const [cancelLocked, setCancelLocked] = useState(false);
-  const [result, setResult] = useState<ReleaseGateResult | null>(null);
-  const [resultOwnerAgentId, setResultOwnerAgentId] = useState<string | null>(null);
-  const [dismissedResult, setDismissedResult] = useState<{
-    agentId: string;
-    reportId: string;
-  } | null>(null);
+  const [completedResultsByAgentId, setCompletedResultsByAgentId] = useState<
+    Record<string, CompletedReleaseGateResultEntry[]>
+  >({});
+  const [dismissedReportIdsByAgentId, setDismissedReportIdsByAgentId] = useState<
+    Record<string, string[]>
+  >({});
   const [error, setError] = useState("");
   const [planError, setPlanError] = useState<PlanLimitError | null>(null);
   const [runValidateCooldownUntilMs, setRunValidateCooldownUntilMs] = useState(0);
@@ -246,15 +252,19 @@ export function useReleaseGateValidateRun(options: {
     setError("");
   }, []);
 
-  const dismissLatestResult = useCallback(() => {
+  const dismissResult = useCallback((reportId: string) => {
     if (!normalizedAgentId) return;
-    const reportId = String(result?.report_id || "").trim();
-    if (!reportId || resultOwnerAgentId !== normalizedAgentId) return;
-    setDismissedResult({
-      agentId: normalizedAgentId,
-      reportId,
+    const normalizedReportId = String(reportId || "").trim();
+    if (!normalizedReportId) return;
+    setDismissedReportIdsByAgentId(prev => {
+      const current = prev[normalizedAgentId] ?? [];
+      if (current.includes(normalizedReportId)) return prev;
+      return {
+        ...prev,
+        [normalizedAgentId]: [...current, normalizedReportId],
+      };
     });
-  }, [normalizedAgentId, result?.report_id, resultOwnerAgentId]);
+  }, [normalizedAgentId]);
 
   const handleCancelActiveJob = useCallback(async () => {
     if (!projectId || isNaN(projectId)) return;
@@ -347,9 +357,32 @@ export function useReleaseGateValidateRun(options: {
       const ownerAgentId = String(activeJobOwnerAgentIdRef.current || "").trim();
       if (status === "succeeded") {
         toast.showToast("Release Gate run completed.", "success");
-        setResult(finalResult);
-        setResultOwnerAgentId(ownerAgentId || null);
-        setDismissedResult(prev => (prev?.agentId === ownerAgentId ? null : prev));
+        const reportId = String(finalResult?.report_id || "").trim();
+        if (ownerAgentId && reportId) {
+          setCompletedResultsByAgentId(prev => {
+            const current = prev[ownerAgentId] ?? [];
+            if (current.some(entry => entry.reportId === reportId)) return prev;
+            return {
+              ...prev,
+              [ownerAgentId]: [
+                {
+                  reportId,
+                  result: finalResult as ReleaseGateResult,
+                  completedAtMs: Date.now(),
+                },
+                ...current,
+              ],
+            };
+          });
+          setDismissedReportIdsByAgentId(prev => {
+            const current = prev[ownerAgentId] ?? [];
+            if (!current.includes(reportId)) return prev;
+            return {
+              ...prev,
+              [ownerAgentId]: current.filter(id => id !== reportId),
+            };
+          });
+        }
         setError("");
         pendingHistoryRefreshRef.current = true;
       } else if (status === "failed") {
@@ -585,7 +618,6 @@ export function useReleaseGateValidateRun(options: {
     cancelRequestedRef.current = false;
     setPlanError(null);
     setError("");
-    setDismissedResult(prev => (prev?.agentId === ownerAgentId ? null : prev));
     let startedAsyncJob = false;
     try {
       const built = buildReleaseGateValidateAsyncPayload(d);
@@ -695,7 +727,7 @@ export function useReleaseGateValidateRun(options: {
         setActiveJobOwnerAgentId(null);
       }
     }
-  }, [projectId, isValidating, activeJobId, depsRef, runValidateCooldownUntilMs, resultOwnerAgentId]);
+  }, [projectId, isValidating, activeJobId, depsRef, runValidateCooldownUntilMs]);
 
   const visibleIsValidating =
     Boolean(normalizedAgentId) && activeJobOwnerAgentId === normalizedAgentId ? isValidating : false;
@@ -707,24 +739,25 @@ export function useReleaseGateValidateRun(options: {
     Boolean(normalizedAgentId) && activeJobOwnerAgentId === normalizedAgentId
       ? cancelRequested
       : false;
-  const visibleResult =
-    Boolean(normalizedAgentId) && resultOwnerAgentId === normalizedAgentId ? result : null;
-  const showingPersistedResultWhileRunning =
-    Boolean(visibleResult) &&
-    Boolean(normalizedAgentId) &&
-    activeJobOwnerAgentId === normalizedAgentId &&
-    Boolean(activeJobId);
-  const dismissedReportId =
-    normalizedAgentId && dismissedResult?.agentId === normalizedAgentId
-      ? dismissedResult.reportId
-      : null;
+  const completedResults = normalizedAgentId
+    ? (completedResultsByAgentId[normalizedAgentId] ?? [])
+    : [];
+  const dismissedReportIds = normalizedAgentId
+    ? new Set(dismissedReportIdsByAgentId[normalizedAgentId] ?? [])
+    : new Set<string>();
+  const visibleCompletedResults = completedResults.filter(
+    entry => !dismissedReportIds.has(entry.reportId)
+  );
+  const latestResult = completedResults[0]?.result ?? null;
 
   return {
     isValidating: visibleIsValidating,
     activeJobId: visibleActiveJobId,
     cancelLocked: visibleCancelLocked,
     cancelRequested: visibleCancelRequested,
-    result: visibleResult,
+    result: latestResult,
+    completedResults: visibleCompletedResults,
+    hasCompletedResults: completedResults.length > 0,
     error,
     planError,
     runLocked,
@@ -732,9 +765,7 @@ export function useReleaseGateValidateRun(options: {
     handleValidate,
     handleCancelActiveJob,
     clearRunUi,
-    dismissedReportId,
-    dismissLatestResult,
-    showingPersistedResultWhileRunning,
+    dismissResult,
   };
 }
 

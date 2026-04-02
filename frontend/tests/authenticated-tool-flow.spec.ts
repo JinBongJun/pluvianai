@@ -863,8 +863,8 @@ test.describe("Authenticated tool browser flow", () => {
       await page.getByTestId("rg-run-start-btn").click();
 
       await expect(page.getByText(/Healthy gate|Flagged gate/)).toBeVisible({ timeout: 300000 });
-      await expect(page.getByTestId("rg-result-case-0")).toBeVisible({ timeout: 30000 });
-      await expect(page.getByTestId("rg-result-case-1")).toBeVisible({ timeout: 30000 });
+      await expect(page.getByTestId("rg-result-report-0-case-0")).toBeVisible({ timeout: 30000 });
+      await expect(page.getByTestId("rg-result-report-0-case-1")).toBeVisible({ timeout: 30000 });
     } finally {
       if (savedKeyId > 0) {
         const deleteResponse = await authedJson(
@@ -942,26 +942,27 @@ test.describe("Authenticated tool browser flow", () => {
       await expect(page.getByText("Release Gate run completed.")).toBeVisible({ timeout: 300000 });
 
       await reopenReleaseGateNode(page, seeded.snapshotAgentId);
-      await expect(page.getByTestId("rg-result-case-0")).toBeVisible({ timeout: 30000 });
+      await expect(page.getByTestId("rg-result-report-0-case-0")).toBeVisible({ timeout: 30000 });
       await expect(page.getByTestId("rg-run-start-btn")).toBeEnabled({ timeout: 15000 });
 
       await page.getByTestId("rg-run-start-btn").click();
       await expect(page.getByTestId("rg-run-start-btn")).toContainText("Validating", { timeout: 15000 });
-      await expect(page.getByTestId("rg-result-case-0")).toBeVisible({ timeout: 15000 });
-      await expect(page.getByTestId("rg-persisted-result-running-note")).toBeVisible({
-        timeout: 15000,
-      });
+      await expect(page.getByTestId("rg-result-report-0-case-0")).toBeVisible({ timeout: 15000 });
 
       await expect(page.getByText("Release Gate run completed.")).toBeVisible({ timeout: 300000 });
-      await expect(page.getByTestId("rg-result-case-0")).toBeVisible({ timeout: 30000 });
+      await expect(page.getByTestId("rg-result-report-0")).toBeVisible({ timeout: 30000 });
+      await expect(page.getByTestId("rg-result-report-1")).toBeVisible({ timeout: 30000 });
+      await expect(page.getByTestId("rg-result-report-0-case-0")).toBeVisible({ timeout: 30000 });
+      await expect(page.getByTestId("rg-result-report-1-case-0")).toBeVisible({ timeout: 30000 });
 
       await page.getByLabel("Hide latest result").first().click();
-      await expect(page.getByText("Latest result hidden")).toBeVisible({ timeout: 15000 });
+      await expect(page.getByTestId("rg-result-report-0")).toBeVisible({ timeout: 15000 });
+      await expect(page.getByTestId("rg-result-report-0-case-0")).toBeVisible({ timeout: 15000 });
 
       await closeSelectedReleaseGatePanels(page);
       await reopenReleaseGateNode(page, seeded.snapshotAgentId);
-      await expect(page.getByText("Latest result hidden")).toBeVisible({ timeout: 15000 });
-      await expect(page.getByTestId("rg-result-case-0")).toBeHidden();
+      await expect(page.getByTestId("rg-result-report-0")).toBeVisible({ timeout: 15000 });
+      await expect(page.getByTestId("rg-result-report-0-case-0")).toBeVisible();
     } finally {
       if (savedKeyId > 0) {
         const deleteResponse = await authedJson(

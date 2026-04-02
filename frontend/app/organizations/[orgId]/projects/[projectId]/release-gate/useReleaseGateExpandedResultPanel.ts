@@ -4,6 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { ReleaseGateResult } from "@/lib/api";
+import type { CompletedReleaseGateResultEntry } from "./useReleaseGateValidateRun";
 
 import {
   type ResultCaseFilter,
@@ -15,51 +16,60 @@ import {
 import type { ExpandedDetailAttemptView } from "./useReleaseGateExpandedHistoryOverlay";
 
 export type UseReleaseGateExpandedResultPanelParams = {
-  result: ReleaseGateResult | null;
+  completedResults: CompletedReleaseGateResultEntry[];
   setDetailAttemptView: Dispatch<SetStateAction<ExpandedDetailAttemptView>>;
 };
 
+export type CompletedResultPanelCard = {
+  reportId: string;
+  result: ReleaseGateResult;
+  completedAtMs: number;
+  visibleResultCases: VisibleResultCase[];
+  whatToFixHints: ReturnType<typeof buildWhatToFixHints>;
+  toolGroundingRunSummary: ReturnType<typeof summarizeRunToolGroundingFromCases>;
+};
+
 export function useReleaseGateExpandedResultPanel({
-  result,
+  completedResults,
   setDetailAttemptView,
 }: UseReleaseGateExpandedResultPanelParams) {
   const [resultCaseFilter, setResultCaseFilter] = useState<ResultCaseFilter>("all");
 
-  const resultCases = useMemo(() => {
-    if (Array.isArray(result?.run_results)) return result.run_results;
-    if (Array.isArray(result?.case_results)) return result.case_results;
-    return [];
-  }, [result]);
-
-  const visibleResultCases = useMemo(
+  const resultCards = useMemo<CompletedResultPanelCard[]>(
     () =>
-      resultCases
-        .map((run: any, caseIndex: number) => ({ run, caseIndex }))
-        .filter(({ run }: VisibleResultCase) => {
-          if (resultCaseFilter === "all") return true;
-          if (resultCaseFilter === "failed") return !isCasePassing(run);
-          return isCasePassing(run);
-        }),
-    [resultCases, resultCaseFilter]
-  );
+      completedResults.map(entry => {
+        const resultCases = Array.isArray(entry.result?.run_results)
+          ? entry.result.run_results
+          : Array.isArray(entry.result?.case_results)
+            ? entry.result.case_results
+            : [];
 
-  const whatToFixHints = useMemo(() => buildWhatToFixHints(result, resultCases), [result, resultCases]);
-
-  const toolGroundingRunSummary = useMemo(
-    () => summarizeRunToolGroundingFromCases(resultCases),
-    [resultCases]
+        return {
+          reportId: entry.reportId,
+          result: entry.result,
+          completedAtMs: entry.completedAtMs,
+          visibleResultCases: resultCases
+            .map((run: any, caseIndex: number) => ({ run, caseIndex }))
+            .filter(({ run }: VisibleResultCase) => {
+              if (resultCaseFilter === "all") return true;
+              if (resultCaseFilter === "failed") return !isCasePassing(run);
+              return isCasePassing(run);
+            }),
+          whatToFixHints: buildWhatToFixHints(entry.result, resultCases),
+          toolGroundingRunSummary: summarizeRunToolGroundingFromCases(resultCases),
+        };
+      }),
+    [completedResults, resultCaseFilter]
   );
 
   useEffect(() => {
     setResultCaseFilter("all");
     setDetailAttemptView(null);
-  }, [result?.report_id, setDetailAttemptView]);
+  }, [completedResults[0]?.reportId, setDetailAttemptView]);
 
   return {
     resultCaseFilter,
     setResultCaseFilter,
-    visibleResultCases,
-    whatToFixHints,
-    toolGroundingRunSummary,
+    resultCards,
   };
 }

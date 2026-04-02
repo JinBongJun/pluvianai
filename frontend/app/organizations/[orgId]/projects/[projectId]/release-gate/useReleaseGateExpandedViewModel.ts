@@ -122,9 +122,9 @@ export function useReleaseGateExpandedViewModel({
   const handleCancelActiveJob = vctx.handleCancelActiveJob ?? undefined;
   const runError = vctx.error || "";
   const result = vctx.result;
-  const dismissedReportId = vctx.dismissedReportId;
-  const dismissLatestResult = vctx.dismissLatestResult;
-  const showingPersistedResultWhileRunning = vctx.showingPersistedResultWhileRunning;
+  const completedResults = vctx.completedResults;
+  const hasCompletedResults = vctx.hasCompletedResults;
+  const dismissResult = vctx.dismissResult;
   const setExpandedCaseIndex = ctx.setExpandedCaseIndex;
   const baselineDetailSnapshot = ctx.baselineDetailSnapshot;
   const agentEvalData = ctx.agentEvalData;
@@ -206,7 +206,7 @@ export function useReleaseGateExpandedViewModel({
   }, [rightPanelTab, setHistoryActivated]);
 
   const resultPanel = useReleaseGateExpandedResultPanel({
-    result,
+    completedResults,
     setDetailAttemptView,
   });
 
@@ -481,9 +481,9 @@ export function useReleaseGateExpandedViewModel({
     repeatRuns,
     restorationBadgesBySnapshotId,
     result,
-    dismissedReportId,
-    dismissLatestResult,
-    showingPersistedResultWhileRunning,
+    completedResults,
+    hasCompletedResults,
+    dismissResult,
     rgDetails,
     rightPanelTab,
     runDatasetIds,

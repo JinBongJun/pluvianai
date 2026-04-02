@@ -18,9 +18,9 @@ function vctxBase(overrides: Partial<ReleaseGateValidateRunContextValue> = {}): 
     handleCancelActiveJob: undefined,
     error: "",
     result: null,
-    dismissedReportId: null,
-    dismissLatestResult: () => {},
-    showingPersistedResultWhileRunning: false,
+    completedResults: [],
+    hasCompletedResults: false,
+    dismissResult: () => {},
     ...overrides,
   };
 }
