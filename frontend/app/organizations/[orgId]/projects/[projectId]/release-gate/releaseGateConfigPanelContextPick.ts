@@ -94,7 +94,7 @@ export function pickReleaseGateConfigPanelContext(
     selectedDataSummary:
       ctx.selectedDataSummary ??
       'No baseline data yet. Select representative "good" snapshots from Live Logs or Saved Data.',
-    runLocked: vctx.isValidating || Boolean(vctx.activeJobId),
+    runLocked: vctx.runLocked,
     repeatRuns: ctx.repeatRuns,
     toolContextMode: ctx.toolContextMode,
     setToolContextMode: ctx.setToolContextMode,

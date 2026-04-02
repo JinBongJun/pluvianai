@@ -1,6 +1,4 @@
 "use client";
-
-import { useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import clsx from "clsx";
 import { Activity, Flag, RefreshCcw } from "lucide-react";
@@ -34,6 +32,8 @@ export type ReleaseGateRunOutputSidePanelProps = {
   rightPanelTab: "results" | "history";
   setRightPanelTab: Dispatch<SetStateAction<"results" | "history">>;
   result: any;
+  dismissedReportId: string | null;
+  onDismissLatest: () => void;
   repeatRuns: number;
   toolGroundingRunSummary: ToolGroundingRunSummary | null;
   whatToFixHints: FixHint[];
@@ -74,6 +74,8 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
     rightPanelTab,
     setRightPanelTab,
     result,
+    dismissedReportId,
+    onDismissLatest,
     repeatRuns,
     toolGroundingRunSummary,
     resultCaseFilter,
@@ -102,16 +104,8 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
   const historyFiltersAreDefault =
     historyStatus === "all" && historyDatePreset === "all" && !historyTraceId.trim();
   const groupedHistoryItems = groupHistoryItemsBySession(nodeHistoryItems);
-  const [dismissedReportId, setDismissedReportId] = useState<string | null>(null);
   const currentReportId = result?.report_id ? String(result.report_id) : null;
   const resultVisible = Boolean(result) && currentReportId !== dismissedReportId;
-
-  useEffect(() => {
-    if (!currentReportId) return;
-    if (dismissedReportId && dismissedReportId !== currentReportId) {
-      setDismissedReportId(null);
-    }
-  }, [currentReportId, dismissedReportId]);
 
   return (
     <RailwaySidePanel
@@ -268,7 +262,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                           idx={idx}
                           repeatRunsFallback={result.repeat_runs ?? repeatRuns}
                           baselineSnapshotForRun={baselineSnapshotForRun}
-                          onDismissLatest={() => setDismissedReportId(currentReportId)}
+                          onDismissLatest={currentReportId ? onDismissLatest : undefined}
                           onSelect={({ attempts, caseIndex, baselineSnapshot }) =>
                             setDetailAttemptView({
                               attempts,

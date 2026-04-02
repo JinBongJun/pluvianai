@@ -63,7 +63,7 @@ export function ReleaseGateSelectedAgentSurface({
 
   const resolvedDetails = rgDetails as ReleaseGateMapRgDetails;
   const rgConfig = resolvedDetails.config;
-  const runLocked = !!(rgConfig.isValidating || Boolean(rgConfig.activeJobId));
+  const runLocked = !!rgConfig.runLocked;
   const toolsCount = typeof resolvedDetails.toolsCount === "number" ? resolvedDetails.toolsCount : 0;
   const runError = typeof rgConfig.runError === "string" ? rgConfig.runError.trim() : "";
   const configSourceLabel =
@@ -82,6 +82,9 @@ export function ReleaseGateSelectedAgentSurface({
     if (rgConfig.isValidating) {
       if (rgConfig.cancelRequested) return "Canceling…";
       return "Run in progress.";
+    }
+    if (runLocked) {
+      return "Another Release Gate run is already in progress.";
     }
     if (rgConfig.keyIssueBlocked) {
       return String(
@@ -112,7 +115,7 @@ export function ReleaseGateSelectedAgentSurface({
     : undefined;
   const startDisabled =
     !rgConfig.canRunValidate ||
-    rgConfig.isValidating ||
+    runLocked ||
     (typeof rgConfig.selectedBaselineCount === "number" && rgConfig.selectedBaselineCount === 0);
   const promptPreview = String(resolvedDetails.prompt || "")
     .trim()
@@ -130,7 +133,7 @@ export function ReleaseGateSelectedAgentSurface({
   const handleStartClick = () => {
     const baselineCount =
       typeof rgConfig.selectedBaselineCount === "number" ? rgConfig.selectedBaselineCount : 0;
-    const isDisabled = !rgConfig.canRunValidate || rgConfig.isValidating || baselineCount === 0;
+    const isDisabled = !rgConfig.canRunValidate || runLocked || baselineCount === 0;
     if (isDisabled) return;
     rgConfig.handleValidate();
   };
@@ -423,17 +426,17 @@ export function ReleaseGateSelectedAgentSurface({
               <button
                 type="button"
                 onClick={() => {
-                  if (rgConfig.isValidating) return;
+                  if (runLocked) return;
                   rgConfig.setRepeatDropdownOpen(!rgConfig.repeatDropdownOpen);
                 }}
-                disabled={rgConfig.isValidating}
+                disabled={runLocked}
                 data-testid="rg-repeat-trigger"
                 className={clsx(
                   "inline-flex min-h-[56px] items-center gap-2 rounded-xl border px-4 py-3 text-sm font-black uppercase transition",
                   rgConfig.isHeavyRepeat
                     ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
                     : "border-white/10 bg-white/[0.02] text-white/90 hover:bg-white/[0.08]",
-                  rgConfig.isValidating && "cursor-not-allowed opacity-50"
+                  runLocked && "cursor-not-allowed opacity-50"
                 )}
               >
                 {rgConfig.repeatRuns}x
@@ -451,17 +454,17 @@ export function ReleaseGateSelectedAgentSurface({
                         key={option}
                         type="button"
                         onClick={() => {
-                          if (rgConfig.isValidating) return;
+                          if (runLocked) return;
                           rgConfig.handleRepeatSelect(option);
                         }}
-                        disabled={rgConfig.isValidating}
+                        disabled={runLocked}
                         data-testid={`rg-repeat-option-${option}`}
                         className={clsx(
                           "flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold transition",
                           isActive && "bg-fuchsia-500/20 text-fuchsia-100",
                           !isActive && !heavy && "text-white/90 hover:bg-white/[0.05]",
                           !isActive && heavy && "bg-rose-500/10 text-rose-200 hover:bg-rose-500/20",
-                          rgConfig.isValidating && "cursor-not-allowed opacity-50"
+                          runLocked && "cursor-not-allowed opacity-50"
                         )}
                       >
                         <span>{option}x</span>

@@ -184,6 +184,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     mutateHistoryRef,
     validateRunDepsRef,
     isValidating,
+    runLocked,
     activeJobId,
     cancelRequested,
     cancelLocked,
@@ -194,6 +195,8 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     handleValidate,
     handleCancelActiveJob,
     clearRunUi,
+    dismissedReportId,
+    dismissLatestResult,
   } = useReleaseGateValidateBridge(projectId, agentId);
   const modelOverrideEnabled = modelSource !== "detected";
   const replayModelMode = modelSource === "hosted" ? "hosted" : "custom";
@@ -205,7 +208,6 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     openBaselineDetailSnapshot,
   } = useReleaseGateBaselineDetailSnapshot(projectId);
 
-  const runLocked = isValidating || Boolean(activeJobId);
   const lastAutoResetReportIdRef = useRef<string | null>(null);
   useEffect(() => {
     setHistoryActivated(false);
@@ -297,7 +299,6 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
   useReleaseGateAgentLifecycle({
     agentIdFromUrl,
     agentId,
-    clearRunUi,
     setAgentId,
     setViewMode,
     setRequestBody,
@@ -886,6 +887,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       project,
       projectSummary,
       isValidating,
+      runLocked,
       activeJobId,
       cancelRequested,
       cancelLocked,
@@ -893,6 +895,8 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       handleCancelActiveJob,
       error,
       result,
+      dismissedReportId,
+      dismissLatestResult,
       keyBlocked,
       keyIssueBlocked,
       keyRegistrationMessage,

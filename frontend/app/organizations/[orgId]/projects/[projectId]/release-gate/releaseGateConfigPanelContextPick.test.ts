@@ -6,15 +6,20 @@ import type { ReleaseGatePageContextValue } from "./releaseGatePageContext.types
 import type { ReleaseGateValidateRunContextValue } from "./ReleaseGateValidateRunContext";
 
 function vctxBase(overrides: Partial<ReleaseGateValidateRunContextValue> = {}): ReleaseGateValidateRunContextValue {
+  const isValidating = overrides.isValidating ?? false;
+  const activeJobId = overrides.activeJobId ?? null;
   return {
-    isValidating: false,
-    activeJobId: null,
+    isValidating,
+    runLocked: overrides.runLocked ?? (isValidating || Boolean(activeJobId)),
+    activeJobId,
     cancelRequested: false,
     cancelLocked: false,
     handleValidate: () => {},
     handleCancelActiveJob: undefined,
     error: "",
     result: null,
+    dismissedReportId: null,
+    dismissLatestResult: () => {},
     ...overrides,
   };
 }

@@ -61,6 +61,7 @@ describe("releaseGateMainViewState", () => {
           keyIssueBlocked: false,
           keyRegistrationMessage: "",
           isValidating: false,
+          runLocked: false,
           handleValidate: () => {},
           activeJobId: null,
           cancelRequested: false,

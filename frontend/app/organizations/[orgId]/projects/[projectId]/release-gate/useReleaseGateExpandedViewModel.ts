@@ -114,6 +114,7 @@ export function useReleaseGateExpandedViewModel({
   const keyIssueBlocked = keysCtx.keyIssueBlocked;
   const keyRegistrationMessage = keysCtx.keyRegistrationMessage || "";
   const isValidating = vctx.isValidating;
+  const runLocked = vctx.runLocked;
   const activeJobId = vctx.activeJobId ?? null;
   const cancelRequested = vctx.cancelRequested;
   const cancelLocked = vctx.cancelLocked;
@@ -121,6 +122,8 @@ export function useReleaseGateExpandedViewModel({
   const handleCancelActiveJob = vctx.handleCancelActiveJob ?? undefined;
   const runError = vctx.error || "";
   const result = vctx.result;
+  const dismissedReportId = vctx.dismissedReportId;
+  const dismissLatestResult = vctx.dismissLatestResult;
   const setExpandedCaseIndex = ctx.setExpandedCaseIndex;
   const baselineDetailSnapshot = ctx.baselineDetailSnapshot;
   const agentEvalData = ctx.agentEvalData;
@@ -306,8 +309,6 @@ export function useReleaseGateExpandedViewModel({
     setRepeatDropdownOpen(false);
   }, [isValidating, activeJobId, setRepeatRuns, setRepeatDropdownOpen]);
 
-  const runLocked = isValidating || Boolean(activeJobId);
-
   const restorationBadgesBySnapshotId = useMemo(() => {
     const m = new Map<string, { body: boolean; ctx: boolean; sharedCtx: boolean }>();
     for (const sid of selectedSnapshotIdsForRun) {
@@ -377,6 +378,7 @@ export function useReleaseGateExpandedViewModel({
         keyIssueBlocked,
         keyRegistrationMessage,
         handleValidate,
+        runLocked,
         activeJobId,
         handleCancelActiveJob,
         handleRepeatSelect,
@@ -420,6 +422,7 @@ export function useReleaseGateExpandedViewModel({
       keyIssueBlocked,
       keyRegistrationMessage,
       handleValidate,
+      runLocked,
       activeJobId,
       handleCancelActiveJob,
       handleRepeatSelect,
@@ -477,6 +480,8 @@ export function useReleaseGateExpandedViewModel({
     repeatRuns,
     restorationBadgesBySnapshotId,
     result,
+    dismissedReportId,
+    dismissLatestResult,
     rgDetails,
     rightPanelTab,
     runDatasetIds,

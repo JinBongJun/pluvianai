@@ -13,6 +13,7 @@ export type UseReleaseGatePageModelReturnParams = {
   project: Project | undefined;
   projectSummary: OrganizationProject | undefined;
   isValidating: boolean;
+  runLocked: boolean;
   activeJobId: string | null;
   cancelRequested: boolean;
   cancelLocked: boolean;
@@ -20,6 +21,8 @@ export type UseReleaseGatePageModelReturnParams = {
   handleCancelActiveJob: (() => void) | undefined;
   error: string;
   result: ReleaseGateValidateRunContextValue["result"];
+  dismissedReportId: string | null;
+  dismissLatestResult: () => void;
   keyBlocked: boolean;
   keyIssueBlocked: boolean;
   keyRegistrationMessage: string;
@@ -44,6 +47,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
     project,
     projectSummary,
     isValidating,
+    runLocked,
     activeJobId,
     cancelRequested,
     cancelLocked,
@@ -51,6 +55,8 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
     handleCancelActiveJob,
     error,
     result,
+    dismissedReportId,
+    dismissLatestResult,
     keyBlocked,
     keyIssueBlocked,
     keyRegistrationMessage,
@@ -70,6 +76,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
   const validateRunContextValue = useMemo<ReleaseGateValidateRunContextValue>(
     () => ({
       isValidating,
+      runLocked,
       activeJobId,
       cancelRequested,
       cancelLocked,
@@ -77,16 +84,21 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
       handleCancelActiveJob,
       error,
       result,
+      dismissedReportId,
+      dismissLatestResult,
     }),
     [
       activeJobId,
       cancelLocked,
       cancelRequested,
+      dismissLatestResult,
+      dismissedReportId,
       error,
       handleCancelActiveJob,
       handleValidate,
       isValidating,
       result,
+      runLocked,
     ]
   );
 

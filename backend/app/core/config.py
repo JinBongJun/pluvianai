@@ -182,6 +182,9 @@ class Settings(BaseSettings):
     # Production-grade setup runs the job runner in a dedicated worker process,
     # not inside the web server process.
     RELEASE_GATE_JOB_RUNNER_ENABLED: bool = True
+    RELEASE_GATE_REPLAY_MAX_CONCURRENCY: int = 50
+    RELEASE_GATE_JOB_RUNNER_POLL_INTERVAL_MS: int = 500
+    RELEASE_GATE_JOB_RUNNER_LEASE_SECONDS: int = 90
 
     # Monitoring (optional, for production)
     GRAFANA_URL: Optional[str] = None
