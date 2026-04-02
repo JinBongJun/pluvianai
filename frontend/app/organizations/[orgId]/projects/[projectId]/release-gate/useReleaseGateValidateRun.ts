@@ -25,6 +25,7 @@ import {
   type ReleaseGateValidateAsyncPayloadInput,
 } from "./releaseGateValidateAsyncPayload";
 import { getProjectAccessErrorCopy, isProjectPermissionError } from "@/lib/projectAccess";
+import { useToast } from "@/components/ToastContainer";
 
 /** Fewer, slightly slower polls during cancel to reduce job_poll 429s. */
 const CANCEL_BURST_POLLS = 3;
@@ -110,6 +111,7 @@ export function useReleaseGateValidateRun(options: {
 }) {
   const { projectId, agentId, depsRef, mutateHistoryRef } = options;
   const isPageVisible = usePageVisibility();
+  const toast = useToast();
 
   const [isValidating, setIsValidating] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
@@ -188,7 +190,6 @@ export function useReleaseGateValidateRun(options: {
       const id = String(job?.id || "").trim();
       const status = String(job?.status || "").trim().toLowerCase();
       if (!id || !ACTIVE_JOB_STATUSES.has(status)) return false;
-      setResult(null);
       setError("");
       setIsValidating(true);
       setActiveJobId(id);
@@ -330,21 +331,23 @@ export function useReleaseGateValidateRun(options: {
     ) => {
       if (cancelled) return;
       if (status === "succeeded") {
+        toast.showToast("Release Gate run completed.", "success");
         setResult(finalResult);
         setError("");
         pendingHistoryRefreshRef.current = true;
       } else if (status === "failed") {
         const jobError = finalJob?.error_detail as any;
-        setResult(null);
-        setError(
-          String(jobError?.message || jobError?.detail || "Release Gate validation failed.")
+        const errorMessage = String(
+          jobError?.message || jobError?.detail || "Release Gate validation failed."
         );
+        toast.showToast(errorMessage, "error");
+        setError(errorMessage);
         pendingHistoryRefreshRef.current = true;
       } else if (status === "canceled") {
-        setResult(null);
+        toast.showToast("Release Gate run canceled.", "info");
         setError("Run canceled.");
       } else {
-        setResult(null);
+        toast.showToast("Release Gate validation failed.", "error");
         setError("Release Gate validation failed.");
       }
       setActiveJobId(null);
@@ -520,7 +523,7 @@ export function useReleaseGateValidateRun(options: {
       closeSse();
       if (pollNowRef.current) pollNowRef.current = null;
     };
-  }, [activeJobId, projectId, mutateHistoryRef, isPageVisible]);
+  }, [activeJobId, projectId, mutateHistoryRef, isPageVisible, toast]);
 
   const handleValidate = useCallback(async () => {
     const d = depsRef.current;
@@ -566,7 +569,6 @@ export function useReleaseGateValidateRun(options: {
       if (!jobId) {
         throw new Error("Failed to start Release Gate job.");
       }
-      setResult(null);
       setActiveJobId(jobId);
       setCancelLocked(Boolean(jobRes?.job?.started_at));
       startedAsyncJob = true;
@@ -587,7 +589,6 @@ export function useReleaseGateValidateRun(options: {
           parsedPlanError.message ||
             "You have used all included Release Gate usage for this billing period. Usage is counted by replay attempt (selected logs x repeats). Upgrade your plan to keep running Release Gate."
         );
-        setResult(null);
         return;
       }
       if (isRateLimitError(e)) {
@@ -605,7 +606,6 @@ export function useReleaseGateValidateRun(options: {
         } else {
           setError(`Too many requests right now. Please retry in about ${retryAfterSec}s.`);
         }
-        setResult(null);
         return;
       }
       const detail = e?.response?.data?.detail;
@@ -658,7 +658,6 @@ export function useReleaseGateValidateRun(options: {
       } else {
         setError(detailMessage);
       }
-      setResult(null);
     } finally {
       if (!startedAsyncJob) setIsValidating(false);
     }
