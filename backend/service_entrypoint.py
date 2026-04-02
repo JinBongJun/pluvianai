@@ -12,6 +12,7 @@ Default is web for safer production behavior.
 """
 
 import os
+import runpy
 import sys
 
 
@@ -47,7 +48,19 @@ def main() -> None:
 
     print(f"[service_entrypoint] SERVICE_ROLE={role} -> {label}", file=sys.stderr)
 
-    os.execvp(cmd[0], cmd)
+    if label == "ingest worker":
+        from app.workers.ingest_worker import main as ingest_worker_main
+
+        ingest_worker_main()
+        return
+
+    if label == "release gate worker":
+        from app.workers.release_gate_worker import main as release_gate_worker_main
+
+        release_gate_worker_main()
+        return
+
+    runpy.run_path("start.py", run_name="__main__")
 
 
 if __name__ == "__main__":
