@@ -1193,6 +1193,11 @@ class ReleaseGateJobGetResponse(BaseModel):
     result: Optional[Dict[str, Any]] = None
 
 
+class ReleaseGateJobActiveResponse(BaseModel):
+    job: Optional[ReleaseGateJobOut] = None
+    result: Optional[Dict[str, Any]] = None
+
+
 def _job_to_out(job: ReleaseGateJob) -> ReleaseGateJobOut:
     return ReleaseGateJobOut(
         id=str(job.id),
@@ -1357,6 +1362,35 @@ def _get_active_release_gate_job(
         .order_by(ReleaseGateJob.created_at.desc())
         .first()
     )
+
+
+def _get_active_release_gate_job_for_agent(
+    db: Session,
+    *,
+    project_id: int,
+    user_id: int,
+    agent_id: Optional[str],
+) -> Optional[ReleaseGateJob]:
+    normalized_agent_id = str(agent_id or "").strip()
+    query = (
+        db.query(ReleaseGateJob)
+        .filter(
+            ReleaseGateJob.project_id == project_id,
+            ReleaseGateJob.user_id == user_id,
+            ReleaseGateJob.status.in_(["queued", "running"]),
+        )
+        .order_by(ReleaseGateJob.created_at.desc())
+    )
+    jobs = query.limit(50).all()
+    if not normalized_agent_id:
+        return jobs[0] if jobs else None
+    for job in jobs:
+        req = getattr(job, "request_json", None)
+        req_obj = req if isinstance(req, dict) else {}
+        req_agent_id = str(req_obj.get("agent_id") or "").strip()
+        if req_agent_id and req_agent_id == normalized_agent_id:
+            return job
+    return None
 
 
 def _sanitize_release_gate_job_request(payload: ReleaseGateValidateRequest) -> Dict[str, Any]:
@@ -3550,6 +3584,33 @@ async def get_release_gate_job(
             payload.model_dump(),
             ttl=_release_gate_job_poll_cache_ttl(getattr(job, "status", None)),
         )
+    return payload
+
+
+@router.get(
+    "/projects/{project_id}/release-gate/active-job",
+    response_model=ReleaseGateJobActiveResponse,
+)
+async def get_active_release_gate_job(
+    project_id: int,
+    agent_id: Optional[str] = Query(None, description="Optional agent id for scoped resume."),
+    include_result: int = Query(0, ge=0, le=1),
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(_get_release_gate_hot_user_id),
+):
+    _ensure_release_gate_hot_path_access(project_id, current_user_id, db)
+    job = _get_active_release_gate_job_for_agent(
+        db,
+        project_id=project_id,
+        user_id=int(current_user_id),
+        agent_id=agent_id,
+    )
+    if not job:
+        return ReleaseGateJobActiveResponse(job=None, result=None)
+    payload = ReleaseGateJobActiveResponse(
+        job=_job_to_out(job),
+        result=job.result_json if include_result and isinstance(job.result_json, dict) else None,
+    )
     return payload
 
 

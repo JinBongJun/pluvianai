@@ -206,6 +206,30 @@ export const releaseGateAPI = {
     return response.data;
   },
 
+  getActiveJob: async (
+    projectId: number,
+    params?: { agent_id?: string; include_result?: 0 | 1 }
+  ): Promise<{
+    job: {
+      id: string;
+      status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+      created_at?: string | null;
+      started_at?: string | null;
+      finished_at?: string | null;
+      cancel_requested_at?: string | null;
+      progress: { done: number; total?: number | null; phase?: string | null };
+      report_id?: string | null;
+      error_detail?: Record<string, unknown> | null;
+    } | null;
+    result?: ReleaseGateResult | null;
+  }> => {
+    const response = await apiClient.get(`/projects/${projectId}/release-gate/active-job`, {
+      params,
+      timeout: 10000,
+    });
+    return response.data;
+  },
+
   cancelJob: async (
     projectId: number,
     jobId: string
