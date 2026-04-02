@@ -90,8 +90,15 @@ def _persist_replay_usage(
 class ReplayService:
     """Service for re-executing historical AI requests for testing"""
 
-    def __init__(self, max_concurrency: int = 50):
-        self.semaphore = asyncio.Semaphore(max_concurrency)
+    def __init__(self, max_concurrency: Optional[int] = None):
+        resolved_max_concurrency = int(
+            max_concurrency
+            if max_concurrency is not None
+            else getattr(settings, "RELEASE_GATE_REPLAY_MAX_CONCURRENCY", 50)
+        )
+        resolved_max_concurrency = max(1, resolved_max_concurrency)
+        self.max_concurrency = resolved_max_concurrency
+        self.semaphore = asyncio.Semaphore(resolved_max_concurrency)
         self.timeout = httpx.Timeout(60.0)
         # Provider adapters encapsulate request/response differences.
         # Shared normalization/classification stays in this service.

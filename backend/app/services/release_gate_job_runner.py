@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import or_, and_
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.logging_config import logger
 from app.models.release_gate_job import ReleaseGateJob
@@ -32,15 +33,33 @@ def _utcnow() -> datetime:
 
 
 class ReleaseGateJobRunner:
-    def __init__(self, poll_interval_seconds: float = 0.5, lease_seconds: int = 90):
-        self.poll_interval_seconds = poll_interval_seconds
-        self.lease_seconds = lease_seconds
+    def __init__(
+        self,
+        poll_interval_seconds: Optional[float] = None,
+        lease_seconds: Optional[int] = None,
+    ):
+        resolved_poll_interval_seconds = (
+            poll_interval_seconds
+            if poll_interval_seconds is not None
+            else max(100, int(getattr(settings, "RELEASE_GATE_JOB_RUNNER_POLL_INTERVAL_MS", 500))) / 1000.0
+        )
+        resolved_lease_seconds = int(
+            lease_seconds
+            if lease_seconds is not None
+            else getattr(settings, "RELEASE_GATE_JOB_RUNNER_LEASE_SECONDS", 90)
+        )
+        self.poll_interval_seconds = max(0.1, float(resolved_poll_interval_seconds))
+        self.lease_seconds = max(5, resolved_lease_seconds)
         self.running = False
         self.instance_id = f"{socket.gethostname()}:{os.getpid()}"
 
     async def start(self):
         self.running = True
-        logger.info("Release Gate job runner started")
+        logger.info(
+            "Release Gate job runner started (poll_interval_seconds=%s, lease_seconds=%s)",
+            self.poll_interval_seconds,
+            self.lease_seconds,
+        )
         while self.running:
             job_id = None
             try:
@@ -107,6 +126,7 @@ class ReleaseGateJobRunner:
             ReleaseGateValidateRequest,
             _run_release_gate,
             ReleaseGateCancelled,
+            _merge_result_perf_with_job_summary,
             _tool_evidence_stats_from_gate_result,
             _job_to_out_payload,
         )
@@ -222,6 +242,8 @@ class ReleaseGateJobRunner:
             # CAS: never let succeeded overwrite an in-flight cancel request.
             finished = _utcnow()
             result_json = result if isinstance(result, dict) else {"result": result}
+            if isinstance(result_json, dict):
+                result_json = _merge_result_perf_with_job_summary(result_json, job, finished)
             rid = result.get("report_id") if isinstance(result, dict) else None
             if isinstance(result, dict):
                 passed = bool(result.get("pass"))

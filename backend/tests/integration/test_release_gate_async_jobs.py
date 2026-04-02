@@ -1,5 +1,6 @@
 import pytest
 from fastapi import status
+from datetime import datetime, timedelta, timezone
 
 from app.api.v1.endpoints import release_gate as release_gate_module
 from app.models.release_gate_job import ReleaseGateJob
@@ -188,3 +189,43 @@ class TestReleaseGateAsyncJobs:
         body = response.json()
         assert body["job"]["id"] == str(job_a.id)
         assert body["job"]["status"] == "queued"
+
+    async def test_get_job_returns_perf_summary_for_terminal_job(
+        self, async_client, auth_headers, db, test_project, test_user
+    ):
+        created_at = datetime.now(timezone.utc) - timedelta(seconds=14)
+        started_at = created_at + timedelta(seconds=3)
+        finished_at = started_at + timedelta(seconds=8)
+        job = ReleaseGateJob(
+            project_id=test_project.id,
+            user_id=test_user.id,
+            status="succeeded",
+            created_at=created_at,
+            started_at=started_at,
+            finished_at=finished_at,
+            progress_done=2,
+            progress_total=2,
+            progress_phase="succeeded",
+            request_json={"evaluation_mode": "replay_test", "repeat_runs": 2, "agent_id": "agent-A"},
+            result_json={"report_id": "rep-1", "perf": {"avg_attempt_wall_ms": 4000}},
+            report_id="rep-1",
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        response = await async_client.get(
+            f"/api/v1/projects/{test_project.id}/release-gate/jobs/{job.id}",
+            params={"include_result": 1},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body["job"]["perf"] == {
+            "queue_wait_ms": 3000,
+            "execution_wall_ms": 8000,
+            "total_completion_ms": 11000,
+        }
+        assert body["result"]["perf"]["avg_attempt_wall_ms"] == 4000
+        assert "queue_wait_ms" not in body["result"]["perf"]
