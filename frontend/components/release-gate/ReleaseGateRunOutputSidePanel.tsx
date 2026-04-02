@@ -34,6 +34,7 @@ export type ReleaseGateRunOutputSidePanelProps = {
   result: any;
   dismissedReportId: string | null;
   onDismissLatest: () => void;
+  showingPersistedResultWhileRunning: boolean;
   repeatRuns: number;
   toolGroundingRunSummary: ToolGroundingRunSummary | null;
   whatToFixHints: FixHint[];
@@ -76,6 +77,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
     result,
     dismissedReportId,
     onDismissLatest,
+    showingPersistedResultWhileRunning,
     repeatRuns,
     toolGroundingRunSummary,
     resultCaseFilter,
@@ -175,6 +177,14 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
               </div>
             ) : (
               <>
+                {showingPersistedResultWhileRunning ? (
+                  <div
+                    data-testid="rg-persisted-result-running-note"
+                    className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-[11px] leading-relaxed text-indigo-100"
+                  >
+                    Showing the previous completed result while this run is still in progress.
+                  </div>
+                ) : null}
                 {/* Compact Global Status Banner */}
                 <div
                   className={clsx(

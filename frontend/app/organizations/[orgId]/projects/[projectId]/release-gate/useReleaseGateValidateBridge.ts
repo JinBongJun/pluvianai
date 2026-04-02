@@ -29,6 +29,7 @@ export function useReleaseGateValidateBridge(projectId: number, agentId: string)
     clearRunUi,
     dismissedReportId,
     dismissLatestResult,
+    showingPersistedResultWhileRunning,
   } = useReleaseGateValidateRun({
     projectId,
     agentId,
@@ -53,5 +54,6 @@ export function useReleaseGateValidateBridge(projectId: number, agentId: string)
     clearRunUi,
     dismissedReportId,
     dismissLatestResult,
+    showingPersistedResultWhileRunning,
   };
 }
