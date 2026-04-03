@@ -30,6 +30,7 @@ export function useReleaseGateValidateBridge(projectId: number, agentId: string)
     handleCancelActiveJob,
     clearRunUi,
     dismissResult,
+    removeCompletedResult,
   } = useReleaseGateValidateRun({
     projectId,
     agentId,
@@ -55,5 +56,6 @@ export function useReleaseGateValidateBridge(projectId: number, agentId: string)
     handleCancelActiveJob,
     clearRunUi,
     dismissResult,
+    removeCompletedResult,
   };
 }
