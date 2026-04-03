@@ -150,6 +150,8 @@ export function ReleaseGateMapContent({
   const [dragEndCounter, setDragEndCounter] = useState(0);
   historyIndexRef.current = historyIndex;
   const prevAgentsKeyRef = useRef("");
+  const pendingFitAfterNodesRef = useRef(false);
+  const pendingRefreshFallbackTimeoutRef = useRef<number | null>(null);
 
   const commitHistory = (newNodes: Node[]) => {
     const idx = historyIndexRef.current;
@@ -194,11 +196,23 @@ export function ReleaseGateMapContent({
       return;
     }
 
+    const previousAgentIds = new Set(
+      prevAgentsKeyRef.current
+        ? prevAgentsKeyRef.current.split(",").map(id => id.trim()).filter(Boolean)
+        : []
+    );
+    const nextAgentIds = new Set(
+      agents.map((agent: any) => String(agent?.agent_id ?? "").trim()).filter(Boolean)
+    );
+    const addedAgentIds = Array.from(nextAgentIds).filter(id => !previousAgentIds.has(id));
     if (prevAgentsKeyRef.current !== "" && prevAgentsKeyRef.current !== agentsKey) {
       setHistory([]);
       setHistoryIndex(-1);
     }
     prevAgentsKeyRef.current = agentsKey;
+    if (addedAgentIds.length > 0) {
+      pendingFitAfterNodesRef.current = true;
+    }
 
     const saved = loadSavedPositions(projectName);
 
@@ -285,11 +299,38 @@ export function ReleaseGateMapContent({
     const handler = (e: Event) => {
       const d = (e as CustomEvent<LaboratoryRefreshDetail>).detail;
       if (!d || d.projectId !== projectId) return;
-      window.setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 120);
+      pendingFitAfterNodesRef.current = true;
+      if (pendingRefreshFallbackTimeoutRef.current != null) {
+        window.clearTimeout(pendingRefreshFallbackTimeoutRef.current);
+      }
+      pendingRefreshFallbackTimeoutRef.current = window.setTimeout(() => {
+        if (!pendingFitAfterNodesRef.current) return;
+        pendingFitAfterNodesRef.current = false;
+        fitView({ duration: 800, padding: 0.2 });
+      }, 320);
     };
     window.addEventListener(LABORATORY_REFRESH_EVENT, handler as EventListener);
-    return () => window.removeEventListener(LABORATORY_REFRESH_EVENT, handler as EventListener);
+    return () => {
+      window.removeEventListener(LABORATORY_REFRESH_EVENT, handler as EventListener);
+      if (pendingRefreshFallbackTimeoutRef.current != null) {
+        window.clearTimeout(pendingRefreshFallbackTimeoutRef.current);
+      }
+    };
   }, [projectId, fitView]);
+
+  useEffect(() => {
+    if (!pendingFitAfterNodesRef.current) return;
+    if (nodes.length === 0) return;
+    pendingFitAfterNodesRef.current = false;
+    if (pendingRefreshFallbackTimeoutRef.current != null) {
+      window.clearTimeout(pendingRefreshFallbackTimeoutRef.current);
+      pendingRefreshFallbackTimeoutRef.current = null;
+    }
+    const t = window.setTimeout(() => {
+      fitView({ duration: 800, padding: 0.2 });
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [nodes, fitView]);
 
   useEffect(() => {
     if (nodes.length > 0 && history.length === 0) {

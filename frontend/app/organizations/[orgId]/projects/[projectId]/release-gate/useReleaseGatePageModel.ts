@@ -198,6 +198,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     clearRunUi,
     hasCompletedResults,
     dismissResult,
+    removeCompletedResult,
   } = useReleaseGateValidateBridge(projectId, agentId);
   const modelOverrideEnabled = modelSource !== "detected";
   const replayModelMode = modelSource === "hosted" ? "hosted" : "custom";
@@ -295,6 +296,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     runLocked,
     agentId,
     enabled: Boolean(agentId.trim()) && historyActivated,
+    onDeleteSession: removeCompletedResult,
   });
   mutateHistoryRef.current = mutateHistory;
 
@@ -905,6 +907,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       completedResults,
       hasCompletedResults,
       dismissResult,
+      removeCompletedResult,
       keyBlocked,
       keyIssueBlocked,
       keyRegistrationMessage,

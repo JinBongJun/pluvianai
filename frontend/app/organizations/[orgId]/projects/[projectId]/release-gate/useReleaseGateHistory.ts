@@ -110,7 +110,6 @@ export function useReleaseGateHistory(options: {
           deleted_inputs: 0,
         };
       }
-      onDeleteSession?.(normalizedReportId);
       setDeletingReportIds(prev => [...prev, normalizedReportId]);
       const rollbackData = historyData;
       const optimisticData = removeHistoryReport(historyData, normalizedReportId);
@@ -119,6 +118,7 @@ export function useReleaseGateHistory(options: {
       }
       try {
         const response = await releaseGateAPI.deleteHistorySession(projectId, normalizedReportId);
+        onDeleteSession?.(normalizedReportId);
         await mutateHistory();
         return response;
       } catch (error) {

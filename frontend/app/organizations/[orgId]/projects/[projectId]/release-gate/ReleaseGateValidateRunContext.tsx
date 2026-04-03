@@ -18,6 +18,7 @@ export type ReleaseGateValidateRunContextValue = {
   completedResults: CompletedReleaseGateResultEntry[];
   hasCompletedResults: boolean;
   dismissResult: (reportId: string) => void;
+  removeCompletedResult: (reportId: string) => void;
 };
 
 export const ReleaseGateValidateRunContext = createContext<ReleaseGateValidateRunContextValue | null>(

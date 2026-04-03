@@ -3,7 +3,7 @@
 import type { MutableRefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReleaseGateResult } from "@/lib/api";
-import { releaseGateAPI } from "@/lib/api";
+import { behaviorAPI, releaseGateAPI } from "@/lib/api";
 import {
   API_URL,
   getApiErrorCode,
@@ -38,6 +38,7 @@ const SSE_FALLBACK_POLL_MS = 15_000;
 const SSE_POLL_BACKOFF_MS = 30_000;
 /** Spread concurrent tabs / clients so polls do not align on the same second. */
 const POLL_JITTER_MS_MAX = 900;
+const RESULTS_REHYDRATE_LIMIT = 5;
 const TERMINAL_JOB_STATUSES = new Set(["succeeded", "failed", "canceled"]);
 const ACTIVE_JOB_STATUSES = new Set(["queued", "running"]);
 
@@ -78,6 +79,65 @@ export type CompletedReleaseGateResultEntry = {
   result: ReleaseGateResult;
   completedAtMs: number;
 };
+
+export function mergeCompletedReleaseGateEntries(
+  current: CompletedReleaseGateResultEntry[],
+  incoming: CompletedReleaseGateResultEntry[]
+): CompletedReleaseGateResultEntry[] {
+  const byReportId = new Map<string, CompletedReleaseGateResultEntry>();
+  for (const entry of current) {
+    const reportId = String(entry.reportId || "").trim();
+    if (!reportId) continue;
+    byReportId.set(reportId, entry);
+  }
+  for (const entry of incoming) {
+    const reportId = String(entry.reportId || "").trim();
+    if (!reportId) continue;
+    const previous = byReportId.get(reportId);
+    if (!previous || Number(entry.completedAtMs || 0) >= Number(previous.completedAtMs || 0)) {
+      byReportId.set(reportId, entry);
+    }
+  }
+  return Array.from(byReportId.values()).sort((a, b) => b.completedAtMs - a.completedAtMs);
+}
+
+function parseCompletedAtMs(value: unknown): number {
+  const raw = String(value ?? "").trim();
+  if (!raw) return Date.now();
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+export function mapExportedReportToCompletedReleaseGateEntry(
+  report: unknown,
+  fallbackCreatedAt?: string | null
+): CompletedReleaseGateResultEntry | null {
+  if (!report || typeof report !== "object") return null;
+  const reportObj = report as Record<string, unknown>;
+  const reportId = String(reportObj.id ?? "").trim();
+  const summary = reportObj.summary;
+  if (!reportId || !summary || typeof summary !== "object" || Array.isArray(summary)) return null;
+  const releaseGateSummary = (summary as Record<string, unknown>).release_gate;
+  if (
+    !releaseGateSummary ||
+    typeof releaseGateSummary !== "object" ||
+    Array.isArray(releaseGateSummary)
+  ) {
+    return null;
+  }
+  const result = {
+    ...(releaseGateSummary as Record<string, unknown>),
+    report_id: reportId,
+    case_results: Array.isArray(reportObj.case_results)
+      ? reportObj.case_results
+      : (releaseGateSummary as Record<string, unknown>).case_results,
+  } as ReleaseGateResult;
+  return {
+    reportId,
+    result,
+    completedAtMs: parseCompletedAtMs(reportObj.created_at ?? fallbackCreatedAt),
+  };
+}
 
 export function createDefaultValidateRunDeps(): ReleaseGateValidateRunDeps {
   return {
@@ -141,6 +201,21 @@ export function useReleaseGateValidateRun(options: {
   const pollNowRef = useRef<null | (() => void)>(null);
   const cancelBurstRemainingRef = useRef(0);
   const pendingHistoryRefreshRef = useRef(false);
+
+  const upsertCompletedResults = useCallback(
+    (ownerAgentId: string, entries: CompletedReleaseGateResultEntry[]) => {
+      const normalizedOwnerAgentId = String(ownerAgentId || "").trim();
+      if (!normalizedOwnerAgentId || entries.length === 0) return;
+      setCompletedResultsByAgentId(prev => ({
+        ...prev,
+        [normalizedOwnerAgentId]: mergeCompletedReleaseGateEntries(
+          prev[normalizedOwnerAgentId] ?? [],
+          entries
+        ),
+      }));
+    },
+    []
+  );
 
   useEffect(() => {
     activeJobOwnerAgentIdRef.current = activeJobOwnerAgentId;
@@ -266,6 +341,83 @@ export function useReleaseGateValidateRun(options: {
     });
   }, [normalizedAgentId]);
 
+  const removeCompletedResult = useCallback((reportId: string) => {
+    if (!normalizedAgentId) return;
+    const normalizedReportId = String(reportId || "").trim();
+    if (!normalizedReportId) return;
+    setCompletedResultsByAgentId(prev => {
+      const current = prev[normalizedAgentId] ?? [];
+      const next = current.filter(entry => entry.reportId !== normalizedReportId);
+      if (next.length === current.length) return prev;
+      return {
+        ...prev,
+        [normalizedAgentId]: next,
+      };
+    });
+    setDismissedReportIdsByAgentId(prev => {
+      const current = prev[normalizedAgentId] ?? [];
+      if (!current.includes(normalizedReportId)) return prev;
+      return {
+        ...prev,
+        [normalizedAgentId]: current.filter(id => id !== normalizedReportId),
+      };
+    });
+  }, [normalizedAgentId]);
+
+  useEffect(() => {
+    if (!projectId || isNaN(projectId)) return;
+    if (!normalizedAgentId) return;
+    if (activeJobId || isValidating) return;
+    let cancelled = false;
+
+    const hydrateCompletedResults = async () => {
+      try {
+        const history = await releaseGateAPI.listHistory(projectId, {
+          agent_id: normalizedAgentId,
+          limit: RESULTS_REHYDRATE_LIMIT,
+          offset: 0,
+        });
+        if (cancelled) return;
+        const seenReportIds = new Set<string>();
+        const reportsToHydrate = (history.items ?? [])
+          .map(item => ({
+            reportId: String(item.report_id || "").trim(),
+            createdAt: item.session_created_at ?? item.created_at ?? null,
+          }))
+          .filter(item => {
+            if (!item.reportId || seenReportIds.has(item.reportId)) return false;
+            seenReportIds.add(item.reportId);
+            return true;
+          })
+          .slice(0, RESULTS_REHYDRATE_LIMIT);
+        if (reportsToHydrate.length === 0) return;
+
+        const hydratedEntries = (
+          await Promise.all(
+            reportsToHydrate.map(async item => {
+              try {
+                const report = await behaviorAPI.exportReport(projectId, item.reportId, "json");
+                return mapExportedReportToCompletedReleaseGateEntry(report, item.createdAt);
+              } catch {
+                return null;
+              }
+            })
+          )
+        ).filter((entry): entry is CompletedReleaseGateResultEntry => Boolean(entry));
+
+        if (cancelled || hydratedEntries.length === 0) return;
+        upsertCompletedResults(normalizedAgentId, hydratedEntries);
+      } catch {
+        // Keep the page usable; hydration can retry on next visit or completion refresh.
+      }
+    };
+
+    void hydrateCompletedResults();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, normalizedAgentId, activeJobId, isValidating, upsertCompletedResults]);
+
   const handleCancelActiveJob = useCallback(async () => {
     if (!projectId || isNaN(projectId)) return;
     if (cancelLocked) return;
@@ -359,21 +511,13 @@ export function useReleaseGateValidateRun(options: {
         toast.showToast("Release Gate run completed.", "success");
         const reportId = String(finalResult?.report_id || "").trim();
         if (ownerAgentId && reportId) {
-          setCompletedResultsByAgentId(prev => {
-            const current = prev[ownerAgentId] ?? [];
-            if (current.some(entry => entry.reportId === reportId)) return prev;
-            return {
-              ...prev,
-              [ownerAgentId]: [
-                {
-                  reportId,
-                  result: finalResult as ReleaseGateResult,
-                  completedAtMs: Date.now(),
-                },
-                ...current,
-              ],
-            };
-          });
+          upsertCompletedResults(ownerAgentId, [
+            {
+              reportId,
+              result: finalResult as ReleaseGateResult,
+              completedAtMs: Date.now(),
+            },
+          ]);
           setDismissedReportIdsByAgentId(prev => {
             const current = prev[ownerAgentId] ?? [];
             if (!current.includes(reportId)) return prev;
@@ -581,7 +725,7 @@ export function useReleaseGateValidateRun(options: {
       closeSse();
       if (pollNowRef.current) pollNowRef.current = null;
     };
-  }, [activeJobId, projectId, mutateHistoryRef, isPageVisible, toast]);
+  }, [activeJobId, projectId, mutateHistoryRef, isPageVisible, toast, upsertCompletedResults]);
 
   const handleValidate = useCallback(async () => {
     const d = depsRef.current;
@@ -766,6 +910,7 @@ export function useReleaseGateValidateRun(options: {
     handleCancelActiveJob,
     clearRunUi,
     dismissResult,
+    removeCompletedResult,
   };
 }
 

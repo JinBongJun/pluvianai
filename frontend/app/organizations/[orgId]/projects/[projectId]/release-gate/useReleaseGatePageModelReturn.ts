@@ -24,6 +24,7 @@ export type UseReleaseGatePageModelReturnParams = {
   completedResults: ReleaseGateValidateRunContextValue["completedResults"];
   hasCompletedResults: boolean;
   dismissResult: (reportId: string) => void;
+  removeCompletedResult: (reportId: string) => void;
   keyBlocked: boolean;
   keyIssueBlocked: boolean;
   keyRegistrationMessage: string;
@@ -59,6 +60,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
     completedResults,
     hasCompletedResults,
     dismissResult,
+    removeCompletedResult,
     keyBlocked,
     keyIssueBlocked,
     keyRegistrationMessage,
@@ -89,6 +91,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
       completedResults,
       hasCompletedResults,
       dismissResult,
+      removeCompletedResult,
     }),
     [
       activeJobId,
@@ -101,6 +104,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
       handleCancelActiveJob,
       handleValidate,
       isValidating,
+      removeCompletedResult,
       result,
       runLocked,
     ]

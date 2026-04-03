@@ -21,6 +21,7 @@ function vctxBase(overrides: Partial<ReleaseGateValidateRunContextValue> = {}): 
     completedResults: [],
     hasCompletedResults: false,
     dismissResult: () => {},
+    removeCompletedResult: () => {},
     ...overrides,
   };
 }
