@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useRef } from "react";
-import { useEdgesState, useNodesState, useReactFlow } from "reactflow";
+import { useCallback, useRef, useState } from "react";
+import { useEdgesState, useNodesState } from "reactflow";
 
 import { LV_GRID_SPACING_X, LV_GRID_SPACING_Y, saveLvPositions } from "./liveViewGraphLayout";
 import { createDragAwareNodesChangeHandler } from "@/lib/react-flow/dragAwareNodeChanges";
@@ -9,9 +9,10 @@ import { buildGridLayout } from "@/lib/react-flow/graphNodes";
 import { useGraphHistory } from "@/lib/react-flow/useGraphHistory";
 
 export function useLiveViewGraphState(projectId: number) {
-  const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChangeBase] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [fitRequestVersion, setFitRequestVersion] = useState(0);
+  const [idleFitRequestVersion, setIdleFitRequestVersion] = useState(0);
   const {
     history,
     setHistory,
@@ -30,20 +31,14 @@ export function useLiveViewGraphState(projectId: number) {
   const didActuallyDragRef = useRef(false);
 
   function onAutoLayout() {
-    setNodes(currentNodes => {
-      const newNodes = buildGridLayout(currentNodes, {
-        spacingX: LV_GRID_SPACING_X,
-        spacingY: LV_GRID_SPACING_Y,
-      });
-
-      setTimeout(() => {
-        commitHistory(newNodes);
-        saveLvPositions(newNodes, projectId);
-        setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 50);
-      }, 0);
-
-      return newNodes;
+    const newNodes = buildGridLayout(nodes, {
+      spacingX: LV_GRID_SPACING_X,
+      spacingY: LV_GRID_SPACING_Y,
     });
+    setNodes(newNodes);
+    commitHistory(newNodes);
+    saveLvPositions(newNodes, projectId);
+    setFitRequestVersion(prev => prev + 1);
   }
 
   const onNodesChange = useCallback(
@@ -66,6 +61,14 @@ export function useLiveViewGraphState(projectId: number) {
     redo(setNodes);
   }, [redo, setNodes]);
 
+  const requestFitView = useCallback(() => {
+    setFitRequestVersion(prev => prev + 1);
+  }, []);
+
+  const requestIdleFitView = useCallback(() => {
+    setIdleFitRequestVersion(prev => prev + 1);
+  }, []);
+
   return {
     nodes,
     setNodes,
@@ -73,7 +76,10 @@ export function useLiveViewGraphState(projectId: number) {
     edges,
     setEdges,
     onEdgesChange,
-    fitView,
+    fitRequestVersion,
+    idleFitRequestVersion,
+    requestFitView,
+    requestIdleFitView,
     history,
     setHistory,
     historyIndex,

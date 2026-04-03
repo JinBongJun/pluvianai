@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import ReactFlow, {
   useReactFlow,
   ReactFlowProvider,
@@ -29,10 +29,11 @@ import {
   loadReleaseGateSavedPositions,
   saveReleaseGatePositions,
 } from "./releaseGateMapStorage";
+import { buildGraphAgentDigest } from "@/lib/react-flow/agentDigest";
 import { createDragAwareNodesChangeHandler } from "@/lib/react-flow/dragAwareNodeChanges";
 import { buildGridLayout, syncNodeSelectionState } from "@/lib/react-flow/graphNodes";
+import { useGraphCameraController } from "@/lib/react-flow/useGraphCameraController";
 import { useGraphHistory } from "@/lib/react-flow/useGraphHistory";
-import { useSelectedNodeCenter } from "@/lib/react-flow/useSelectedNodeCenter";
 
 const NODE_TYPES = { agentCard: AgentCardNode };
 const EDGE_TYPES = { default: DrawIOEdge };
@@ -43,6 +44,7 @@ const FOCUS_DURATION_MS = 800;
 /** Offset in graph coords: positive = node ends up higher on screen. Reduced so node sits below navbar. */
 /** Negative = center view above node so node appears lower on screen */
 const FOCUS_Y_OFFSET_UP = -1;
+const DRAG_CLICK_SUPPRESS_MS = 160;
 
 function RGMapToolbar({
   onAutoLayout,
@@ -127,6 +129,9 @@ export function ReleaseGateMapContent({
   const { fitView, setCenter } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, , onEdgesChange] = useEdgesState([]);
+  const [fitRequestVersion, setFitRequestVersion] = useState(0);
+  const [idleFitRequestVersion, setIdleFitRequestVersion] = useState(0);
+  const [suppressSelectedCenter, setSuppressSelectedCenter] = useState(false);
   const {
     commitHistory,
     resetHistory,
@@ -138,56 +143,58 @@ export function ReleaseGateMapContent({
   } = useGraphHistory();
   const isDraggingRef = useRef(false);
   const didActuallyDragRef = useRef(false);
-  const prevAgentsKeyRef = useRef("");
-  const pendingFitAfterNodesRef = useRef(false);
-  const pendingRefreshFallbackTimeoutRef = useRef<number | null>(null);
-  const suppressSelectedCenterRef = useRef(false);
+  const lastDragStopAtRef = useRef(0);
+  const prevAgentIdsRef = useRef<Set<string>>(new Set());
+  const prevAgentsDigestRef = useRef("");
 
   const onAutoLayout = () => {
-    setNodes(currentNodes => {
-      const newNodes = buildGridLayout(currentNodes, {
-        spacingX: RG_GRID_SPACING_X,
-        spacingY: RG_GRID_SPACING_Y,
-      });
-
-      setTimeout(() => {
-        commitHistory(newNodes);
-        saveReleaseGatePositions(newNodes, { projectId, projectName });
-        setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 50);
-      }, 0);
-
-      return newNodes;
+    const newNodes = buildGridLayout(nodes, {
+      spacingX: RG_GRID_SPACING_X,
+      spacingY: RG_GRID_SPACING_Y,
     });
+    setNodes(newNodes);
+    commitHistory(newNodes);
+    saveReleaseGatePositions(newNodes, { projectId, projectName });
+    setFitRequestVersion(prev => prev + 1);
   };
 
-  const agentsKey = agents?.length
-    ? [...agents.map((a: any) => String(a.agent_id))].sort().join(",")
-    : "";
+  const agentsDigest = buildGraphAgentDigest(Array.isArray(agents) ? agents : []);
   useEffect(() => {
     if (!Array.isArray(agents) || agents.length === 0) {
       if (agentsLoaded) {
         setNodes([]);
         resetHistory();
-        prevAgentsKeyRef.current = "";
+        prevAgentIdsRef.current = new Set();
+        prevAgentsDigestRef.current = "";
       }
       return;
     }
 
-    const previousAgentIds = new Set(
-      prevAgentsKeyRef.current
-        ? prevAgentsKeyRef.current.split(",").map(id => id.trim()).filter(Boolean)
-        : []
-    );
+    const previousAgentIds = prevAgentIdsRef.current;
     const nextAgentIds = new Set(
       agents.map((agent: any) => String(agent?.agent_id ?? "").trim()).filter(Boolean)
     );
     const addedAgentIds = Array.from(nextAgentIds).filter(id => !previousAgentIds.has(id));
-    if (prevAgentsKeyRef.current !== "" && prevAgentsKeyRef.current !== agentsKey) {
-      resetHistory();
+    const firstPopulation = previousAgentIds.size === 0 && nextAgentIds.size > 0;
+    const samePayload = prevAgentsDigestRef.current === agentsDigest;
+    if (previousAgentIds.size > 0) {
+      const sameAgentSet =
+        previousAgentIds.size === nextAgentIds.size &&
+        Array.from(nextAgentIds).every(id => previousAgentIds.has(id));
+      if (sameAgentSet && samePayload) {
+        return;
+      }
+      if (!sameAgentSet) {
+        resetHistory();
+      }
     }
-    prevAgentsKeyRef.current = agentsKey;
-    if (addedAgentIds.length > 0) {
-      pendingFitAfterNodesRef.current = true;
+    prevAgentIdsRef.current = nextAgentIds;
+    prevAgentsDigestRef.current = agentsDigest;
+    if ((addedAgentIds.length > 0 || firstPopulation) && !selectedNodeId) {
+      setIdleFitRequestVersion(prev => prev + 1);
+    } else if (addedAgentIds.length > 0) {
+      setSuppressSelectedCenter(true);
+      setFitRequestVersion(prev => prev + 1);
     }
 
     const saved = loadReleaseGateSavedPositions({ projectId, projectName });
@@ -200,7 +207,7 @@ export function ReleaseGateMapContent({
         saved,
       });
     });
-  }, [agentsKey, agents, agentsLoaded, selectedNodeId, setNodes, projectId, projectName, resetHistory]);
+  }, [agentsDigest, agents, agentsLoaded, selectedNodeId, setNodes, projectId, projectName, resetHistory]);
 
   // Keep node.selected and blur in sync when selectedNodeId changes (skip during drag to avoid node jump)
   useEffect(() => {
@@ -208,66 +215,33 @@ export function ReleaseGateMapContent({
     setNodes(current => syncNodeSelectionState(current, selectedNodeId));
   }, [selectedNodeId, setNodes, isDraggingRef]);
 
-  useSelectedNodeCenter({
-    selectedNodeId,
+  useGraphCameraController({
     nodes,
+    selectedNodeId,
+    fitView,
     setCenter,
-    zoom: FOCUS_ZOOM,
-    durationMs: FOCUS_DURATION_MS,
-    offsetY: FOCUS_Y_OFFSET_UP,
-    suppressRef: suppressSelectedCenterRef,
+    fitRequestVersion,
+    idleFitRequestVersion,
+    fitDurationMs: 800,
+    fitPadding: 0.2,
+    focusZoom: FOCUS_ZOOM,
+    focusDurationMs: FOCUS_DURATION_MS,
+    focusOffsetY: FOCUS_Y_OFFSET_UP,
+    suppressSelectedCenter,
+    onFitApplied: () => setSuppressSelectedCenter(false),
   });
-
-  useEffect(() => {
-    if (nodes.length === 0 || selectedNodeId) return;
-    const t = setTimeout(() => {
-      fitView({ duration: 800, padding: 0.2 });
-    }, 150);
-    return () => clearTimeout(t);
-  }, [nodes, selectedNodeId, fitView]);
 
   useEffect(() => {
     if (!projectId || Number.isNaN(projectId) || projectId <= 0) return;
     const handler = (e: Event) => {
       const d = (e as CustomEvent<LaboratoryRefreshDetail>).detail;
       if (!d || d.projectId !== projectId) return;
-      pendingFitAfterNodesRef.current = true;
-      suppressSelectedCenterRef.current = true;
-      if (pendingRefreshFallbackTimeoutRef.current != null) {
-        window.clearTimeout(pendingRefreshFallbackTimeoutRef.current);
-      }
-      pendingRefreshFallbackTimeoutRef.current = window.setTimeout(() => {
-        if (!pendingFitAfterNodesRef.current) return;
-        pendingFitAfterNodesRef.current = false;
-        suppressSelectedCenterRef.current = false;
-        fitView({ duration: 800, padding: 0.2 });
-      }, 320);
+      setSuppressSelectedCenter(true);
+      setFitRequestVersion(prev => prev + 1);
     };
     window.addEventListener(LABORATORY_REFRESH_EVENT, handler as EventListener);
-    return () => {
-      window.removeEventListener(LABORATORY_REFRESH_EVENT, handler as EventListener);
-      if (pendingRefreshFallbackTimeoutRef.current != null) {
-        window.clearTimeout(pendingRefreshFallbackTimeoutRef.current);
-      }
-    };
-  }, [projectId, fitView]);
-
-  useEffect(() => {
-    if (!pendingFitAfterNodesRef.current) return;
-    if (nodes.length === 0) return;
-    pendingFitAfterNodesRef.current = false;
-    if (pendingRefreshFallbackTimeoutRef.current != null) {
-      window.clearTimeout(pendingRefreshFallbackTimeoutRef.current);
-      pendingRefreshFallbackTimeoutRef.current = null;
-    }
-    const t = window.setTimeout(() => {
-      fitView({ duration: 800, padding: 0.2 });
-      window.setTimeout(() => {
-        suppressSelectedCenterRef.current = false;
-      }, 0);
-    }, 120);
-    return () => window.clearTimeout(t);
-  }, [nodes, fitView]);
+    return () => window.removeEventListener(LABORATORY_REFRESH_EVENT, handler as EventListener);
+  }, [projectId]);
 
   useEffect(() => {
     initializeHistory(nodes);
@@ -333,13 +307,13 @@ export function ReleaseGateMapContent({
           isDraggingRef.current = true;
         }}
         onNodeDragStop={() => {
-          setTimeout(() => {
-            isDraggingRef.current = false;
-            didActuallyDragRef.current = false;
-          }, 0);
+          isDraggingRef.current = false;
+          didActuallyDragRef.current = false;
+          lastDragStopAtRef.current = Date.now();
         }}
         onNodeClick={(_, node) => {
           if (didActuallyDragRef.current) return;
+          if (Date.now() - lastDragStopAtRef.current < DRAG_CLICK_SUPPRESS_MS) return;
           onSelectAgent(node.id);
         }}
         connectionMode={ConnectionMode.Loose}

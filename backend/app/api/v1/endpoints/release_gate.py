@@ -95,6 +95,12 @@ from app.services.subscription_service import SubscriptionService
 from app.services.user_api_key_service import UserApiKeyService
 from app.services.cache_service import cache_service
 from app.services.release_gate_job_support import merge_result_perf_with_job_summary
+from app.services.release_gate_preflight import resolve_release_gate_provider_context
+from app.services.release_gate_result_assembly import (
+    build_release_gate_case_result,
+    build_release_gate_final_payload,
+)
+from app.services.release_gate_signal_details import build_release_gate_signal_details
 from app.services.release_gate_events import (
     invalidate_release_gate_job_poll_cache,
     publish_release_gate_job_updated,
@@ -2163,191 +2169,23 @@ async def _run_release_gate(
     baseline_trace_id = resolved.baseline_trace_id
     snapshots = resolved.snapshots
 
+    provider_context = resolve_release_gate_provider_context(
+        project_id=project_id,
+        payload=payload,
+        db=db,
+        current_user=current_user,
+        snapshots=snapshots,
+        normalize_provider=_normalize_provider,
+        infer_provider_from_model=_infer_provider_from_model,
+        assert_provider_matches_model=_assert_provider_matches_model,
+        hosted_platform_policy_bypass=_hosted_platform_policy_bypass,
+        hosted_platform_model_allowed=_hosted_platform_model_allowed,
+        should_block_release_gate_custom_model=_should_block_release_gate_custom_model,
+        resolve_snapshot_provider=_resolve_snapshot_provider,
+    )
+    explicit_provider = provider_context.explicit_provider
+    replay_user_api_key_override = provider_context.replay_user_api_key_override
     use_platform_model = payload.model_source == "platform"
-
-    explicit_provider = _normalize_provider(payload.replay_provider)
-    if use_platform_model and str(payload.new_model or "").strip() and payload.replay_provider:
-        _assert_provider_matches_model(payload.replay_provider, payload.new_model)
-    if use_platform_model and not explicit_provider:
-        inferred_provider = _infer_provider_from_model(payload.new_model)
-        if inferred_provider:
-            explicit_provider = inferred_provider
-    if payload.replay_provider and not explicit_provider:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Unsupported replay_provider. Use one of: openai, anthropic, google.",
-        )
-    if use_platform_model and not explicit_provider:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Platform model mode requires replay_provider or provider-inferrable new_model.",
-        )
-
-    if (
-        use_platform_model
-        and explicit_provider
-        and str(payload.new_model or "").strip()
-        and not _hosted_platform_policy_bypass(current_user)
-        and not _hosted_platform_model_allowed(explicit_provider, payload.new_model)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail={
-                "error_code": "HOSTED_MODEL_NOT_ALLOWED",
-                "message": (
-                    "This model is not available for hosted (platform) runs. "
-                    "Pick a hosted quick-pick model or use Custom model ID with your saved API key (BYOK)."
-                ),
-                "provider": explicit_provider,
-                "model_id": str(payload.new_model or "").strip(),
-            },
-        )
-
-    # Enforce pinned-only model ids for Anthropic in production (Option A),
-    # with escape hatch for superusers or RELEASE_GATE_ALLOW_CUSTOM_MODELS=true.
-    if (
-        use_platform_model
-        and explicit_provider == "anthropic"
-        and str(payload.new_model or "").strip()
-        and _should_block_release_gate_custom_model(explicit_provider, payload.new_model, current_user)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail={
-                "error_code": "release_gate_requires_pinned_model",
-                "message": (
-                    "Release Gate requires a pinned Anthropic model id (ends with YYYYMMDD) for reproducibility."
-                ),
-                "provider": "anthropic",
-                "model_id": str(payload.new_model or "").strip(),
-            },
-        )
-
-    unresolved_snapshot_ids: List[int] = []
-    if not explicit_provider:
-        for snapshot in snapshots:
-            resolved = _resolve_snapshot_provider(snapshot)
-            if not resolved:
-                unresolved_snapshot_ids.append(snapshot.id)
-                continue
-
-    if unresolved_snapshot_ids:
-        unresolved_provider = explicit_provider or _resolve_snapshot_provider(snapshots[0]) or "unknown"
-        ops_alerting.observe_provider_error(
-            project_id=project_id,
-            provider=unresolved_provider,
-            error_code="provider_resolution_failed",
-            error_summary=f"unresolved_snapshot_ids={len(unresolved_snapshot_ids)}",
-        )
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail={
-                "error_code": "provider_resolution_failed",
-                "message": "Could not resolve provider for one or more selected snapshots.",
-                "snapshot_ids": unresolved_snapshot_ids[:20],
-            },
-        )
-
-    replay_user_api_key_override: Optional[str] = None
-    if not use_platform_model:
-        key_service = UserApiKeyService(db)
-        rid = getattr(payload, "replay_user_api_key_id", None)
-        if rid is not None:
-            row = (
-                db.query(UserApiKey)
-                .filter(
-                    UserApiKey.id == int(rid),
-                    UserApiKey.project_id == project_id,
-                    UserApiKey.is_active.is_(True),
-                )
-                .first()
-            )
-            if not row:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail={
-                        "error_code": "invalid_replay_user_api_key_id",
-                        "message": "Saved API key not found for this project.",
-                    },
-                )
-            row_provider = str(row.provider or "").strip().lower()
-            if explicit_provider and row_provider != explicit_provider:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail={
-                        "error_code": "replay_user_api_key_provider_mismatch",
-                        "message": "Selected saved API key does not match replay_provider.",
-                        "expected_provider": explicit_provider,
-                        "key_provider": row_provider,
-                    },
-                )
-            try:
-                replay_user_api_key_override = key_service.decrypt_key(row.encrypted_key)
-            except Exception:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail={
-                        "error_code": "invalid_replay_user_api_key_id",
-                        "message": "Could not use saved API key.",
-                    },
-                ) from None
-
-        key_presence_cache: Dict[Tuple[str, Optional[str]], bool] = {}
-
-        def _env_key_available(provider: str) -> bool:
-            """
-            In local dev / self-hosted, allow falling back to server .env keys
-            even in 'detected' mode to reduce setup friction.
-            """
-            if not (app_settings.SELF_HOSTED_MODE or str(app_settings.ENVIRONMENT).lower() != "production"):
-                return False
-            v = getattr(app_settings, f"{provider.upper()}_API_KEY", None)
-            return isinstance(v, str) and bool(v.strip())
-
-        def _has_effective_provider_key(provider: str, agent_id: Optional[str]) -> bool:
-            normalized_agent_id = str(agent_id or "").strip() or None
-            cache_key = (provider, normalized_agent_id)
-            if cache_key in key_presence_cache:
-                return key_presence_cache[cache_key]
-            exists = _env_key_available(provider) or bool(
-                key_service.get_user_api_key(project_id, provider, normalized_agent_id)
-            )
-            key_presence_cache[cache_key] = exists
-            return exists
-
-        missing_provider_keys_set: Set[str] = set()
-        if explicit_provider:
-            if replay_user_api_key_override:
-                pass
-            else:
-                for snapshot in snapshots:
-                    if not _has_effective_provider_key(explicit_provider, getattr(snapshot, "agent_id", None)):
-                        missing_provider_keys_set.add(explicit_provider)
-        else:
-            for snapshot in snapshots:
-                resolved_provider = _resolve_snapshot_provider(snapshot)
-                if not resolved_provider:
-                    continue
-                if not _has_effective_provider_key(resolved_provider, getattr(snapshot, "agent_id", None)):
-                    missing_provider_keys_set.add(resolved_provider)
-
-        missing_provider_keys = sorted(missing_provider_keys_set)
-        if missing_provider_keys:
-            for provider in missing_provider_keys:
-                ops_alerting.observe_provider_error(
-                    project_id=project_id,
-                    provider=provider,
-                    error_code="missing_provider_keys",
-                    error_summary="Missing API keys for required providers.",
-                )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "error_code": "missing_provider_keys",
-                    "missing_provider_keys": missing_provider_keys,
-                    "message": "Missing API keys for required providers.",
-                },
-            )
 
     rules_query = db.query(BehaviorRule).filter(BehaviorRule.project_id == project_id)
     if payload.rule_ids:
@@ -2575,99 +2413,15 @@ async def _run_release_gate(
                     )
                 except Exception:
                     signals_checks = {}
-                # Rich "why" details for UI: include thresholds + measured values per check.
-                signals_details: Dict[str, Any] = {}
                 try:
-                    cfg = normalize_eval_config(eval_config_signals or {})
-                    text_trimmed = str(candidate_response_preview or "").strip()
-                    actual_chars = len(text_trimmed)
-                    # empty
-                    if "empty" in (signals_checks or {}):
-                        signals_details["empty"] = {
-                            "status": signals_checks.get("empty"),
-                            "min_chars": cfg.get("empty", {}).get("min_chars"),
-                            "actual_chars": actual_chars,
-                        }
-                    # latency
-                    if "latency" in (signals_checks or {}):
-                        signals_details["latency"] = {
-                            "status": signals_checks.get("latency"),
-                            "fail_ms": cfg.get("latency", {}).get("fail_ms"),
-                            "actual_ms": latency_int,
-                        }
-                    # status_code
-                    if "status_code" in (signals_checks or {}):
-                        signals_details["status_code"] = {
-                            "status": signals_checks.get("status_code"),
-                            "fail_from": cfg.get("status_code", {}).get("fail_from"),
-                            "actual_status": status_code_int,
-                        }
-                    # refusal (best-effort heuristic; aligns with live_eval_service patterns)
-                    if "refusal" in (signals_checks or {}):
-                        t = text_trimmed.lower()
-                        refusal_markers = [
-                            "i cannot",
-                            "i can't",
-                            "unable to",
-                            "as an ai",
-                            "sorry, but i",
-                            "apologize",
-                        ]
-                        signals_details["refusal"] = {
-                            "status": signals_checks.get("refusal"),
-                            "matched": any(m in t for m in refusal_markers) if t else None,
-                        }
-                    # json
-                    if "json" in (signals_checks or {}):
-                        mode = (cfg.get("json") or {}).get("mode")
-                        looks_like_json = (
-                            (text_trimmed.startswith("{") and text_trimmed.endswith("}"))
-                            or (text_trimmed.startswith("[") and text_trimmed.endswith("]"))
-                        )
-                        parsed_ok: Optional[bool] = None
-                        if mode != "off" and (mode == "always" or looks_like_json):
-                            try:
-                                json.loads(text_trimmed)
-                                parsed_ok = True
-                            except Exception:
-                                parsed_ok = False
-                        signals_details["json"] = {
-                            "status": signals_checks.get("json"),
-                            "mode": mode,
-                            "checked": (mode != "off") and (mode == "always" or looks_like_json),
-                            "parsed_ok": parsed_ok,
-                        }
-                    # length drift
-                    if "length" in (signals_checks or {}):
-                        fail_ratio = (cfg.get("length") or {}).get("fail_ratio")
-                        ratio_val: Optional[float] = None
-                        if baseline_len and baseline_len > 0 and actual_chars > 0:
-                            ratio_val = abs(actual_chars - baseline_len) / float(baseline_len)
-                        signals_details["length"] = {
-                            "status": signals_checks.get("length"),
-                            "fail_ratio": fail_ratio,
-                            "baseline_len": baseline_len,
-                            "actual_chars": actual_chars,
-                            "ratio": ratio_val,
-                        }
-                    # repetition (max repeated line count)
-                    if "repetition" in (signals_checks or {}):
-                        lines = [ln.strip() for ln in text_trimmed.split("\n") if len(ln.strip()) >= 4]
-                        counts: Dict[str, int] = {}
-                        max_repeat = 0
-                        for ln in lines:
-                            counts[ln] = counts.get(ln, 0) + 1
-                            if counts[ln] > max_repeat:
-                                max_repeat = counts[ln]
-                        signals_details["repetition"] = {
-                            "status": signals_checks.get("repetition"),
-                            "fail_line_repeats": (cfg.get("repetition") or {}).get("fail_line_repeats"),
-                            "max_line_repeats": max_repeat,
-                        }
-                    # required/format/leakage/tool: keep minimal structure so UI can render status even if no details
-                    for k in ["required", "format", "leakage", "tool"]:
-                        if k in (signals_checks or {}):
-                            signals_details[k] = {"status": signals_checks.get(k)}
+                    signals_details = build_release_gate_signal_details(
+                        signals_checks=signals_checks or {},
+                        eval_config=normalize_eval_config(eval_config_signals or {}),
+                        candidate_response_preview=candidate_response_preview or "",
+                        latency_ms=latency_int,
+                        status_code=status_code_int,
+                        baseline_len=baseline_len,
+                    )
                 except Exception:
                     signals_details = {}
                 signals_obj = _build_release_gate_signals_payload(
@@ -3023,151 +2777,17 @@ async def _run_release_gate(
             )
             if not attempts:
                 continue
-
-            total_attempts = len(attempts)
-            passed_attempts = sum(1 for a in attempts if a.get("pass"))
-            failed_attempts = total_attempts - passed_attempts
-            if passed_attempts == total_attempts:
-                case_status = "pass"
-            elif failed_attempts == total_attempts:
-                case_status = "fail"
-            else:
-                case_status = "flaky"
-            is_flaky = case_status == "flaky"
-            is_consistently_failing = case_status == "fail"
-
-            latencies = [
-                float((a.get("replay") or {}).get("avg_latency_ms"))
-                for a in attempts
-                if (a.get("replay") or {}).get("avg_latency_ms") is not None
-            ]
-            latency_min_ms = min(latencies) if latencies else None
-            latency_max_ms = max(latencies) if latencies else None
-
-            sum_input_tokens = 0
-            sum_output_tokens = 0
-            sum_tokens_total = 0
-            sum_used_credits = 0
-            any_input_tokens = False
-            any_output_tokens = False
-            any_tokens_total = False
-            any_used_credits = False
-            for a in attempts:
-                rp = a.get("replay") or {}
-                if isinstance(rp, dict):
-                    if rp.get("input_tokens") is not None:
-                        any_input_tokens = True
-                        sum_input_tokens += int(rp.get("input_tokens") or 0)
-                    if rp.get("output_tokens") is not None:
-                        any_output_tokens = True
-                        sum_output_tokens += int(rp.get("output_tokens") or 0)
-                    if rp.get("tokens_total") is not None:
-                        any_tokens_total = True
-                        sum_tokens_total += int(rp.get("tokens_total") or 0)
-                    if rp.get("used_credits") is not None:
-                        any_used_credits = True
-                        sum_used_credits += int(rp.get("used_credits") or 0)
-
-            failed_rule_counts: Dict[str, int] = {}
-            failed_reasons: List[str] = []
-            replay_error_messages: List[str] = []
-            replay_error_codes: List[str] = []
-            missing_provider_keys: List[str] = []
-            all_violations: List[Dict[str, Any]] = []
-            error_attempt_count = 0
-
-            for a in attempts:
-                for msg in a.get("failure_reasons") or []:
-                    if msg and msg not in failed_reasons:
-                        failed_reasons.append(str(msg))
-                for msg in (a.get("replay") or {}).get("error_messages") or []:
-                    if msg and msg not in replay_error_messages:
-                        replay_error_messages.append(str(msg))
-                for code in (a.get("replay") or {}).get("error_codes") or []:
-                    code_str = str(code or "").strip()
-                    if code_str and code_str not in replay_error_codes:
-                        replay_error_codes.append(code_str)
-                for provider in (a.get("replay") or {}).get("missing_provider_keys") or []:
-                    provider_str = str(provider or "").strip()
-                    if provider_str and provider_str not in missing_provider_keys:
-                        missing_provider_keys.append(provider_str)
-                if int((a.get("replay") or {}).get("failed") or 0) > 0:
-                    error_attempt_count += 1
-                all_violations.extend(a.get("violations") or [])
-
-            for violation in all_violations:
-                rid = str(violation.get("rule_id") or "").strip()
-                if not rid:
-                    continue
-                failed_rule_counts[rid] = failed_rule_counts.get(rid, 0) + 1
-
-            eval_elements_failed = [
-                {
-                    "rule_id": rid,
-                    "rule_name": next(
-                        (
-                            v.get("rule_name")
-                            for v in all_violations
-                            if v.get("rule_id") == rid and v.get("rule_name")
-                        ),
-                        rid,
-                    ),
-                    "violation_count": count,
-                }
-                for rid, count in sorted(failed_rule_counts.items())
-            ]
-            pass_ratio = passed_attempts / total_attempts if total_attempts else 0.0
-
-            _ctx_layers: Dict[str, Any] = {
-                "A_captured_customer_material": _build_captured_customer_material_from_snapshot(
-                    snapshot
-                ),
-                "B_rg_injection": _build_rg_injection_report(tool_context_payload, snapshot.id),
-            }
-            _ctx_layers.update(_aggregate_tool_flow_from_attempts(attempts))
-
-            case_results.append(
-                {
-                    "run_index": len(case_results) + 1,
-                    "trace_id": snapshot.trace_id,
-                    "snapshot_id": snapshot.id,
-                    "pass": case_status == "pass",
-                    "case_status": case_status,
-                    "context": _ctx_layers,
-                    "failure_reasons": failed_reasons if case_status != "pass" else [],
-                    "violation_count_delta": 0,
-                    "severity_delta": {"critical": 0, "high": 0, "medium": 0, "low": 0},
-                    "summary": {
-                        "eval_mode": "replay_test",
-                        "case_status": case_status,
-                        "pass_ratio": round(pass_ratio, 4),
-                        "is_flaky": is_flaky,
-                        "is_consistently_failing": is_consistently_failing,
-                        "latency_min_ms": latency_min_ms,
-                        "latency_max_ms": latency_max_ms,
-                    },
-                    "violations": all_violations,
-                    "eval_elements_failed": eval_elements_failed,
-                    "top_regressed_rules": [],
-                    "first_broken_step": None,
-                    "replay": {
-                        "attempted": total_attempts,
-                        "succeeded": total_attempts - error_attempt_count,
-                        "failed": error_attempt_count,
-                        "avg_latency_ms": (sum(latencies) / len(latencies)) if latencies else None,
-                        "failed_snapshot_ids": [snapshot.id] if replay_error_messages else [],
-                        "error_messages": replay_error_messages,
-                        "error_codes": replay_error_codes,
-                        "missing_provider_keys": missing_provider_keys,
-                        "input_tokens_sum": sum_input_tokens if any_input_tokens else None,
-                        "output_tokens_sum": sum_output_tokens if any_output_tokens else None,
-                        "tokens_total_sum": sum_tokens_total if any_tokens_total else None,
-                        "used_credits_sum": sum_used_credits if any_used_credits else None,
-                    },
-                    "baseline_capture": _baseline_capture_usage(snapshot),
-                    "attempts": attempts,
-                }
+            case_result = build_release_gate_case_result(
+                snapshot=snapshot,
+                attempts=attempts,
+                tool_context_payload=tool_context_payload,
+                build_captured_customer_material_from_snapshot=_build_captured_customer_material_from_snapshot,
+                build_rg_injection_report=_build_rg_injection_report,
+                aggregate_tool_flow_from_attempts=_aggregate_tool_flow_from_attempts,
+                baseline_capture_usage=_baseline_capture_usage,
             )
+            case_result["run_index"] = len(case_results) + 1
+            case_results.append(case_result)
 
         if not case_results:
             raise HTTPException(
@@ -3175,63 +2795,26 @@ async def _run_release_gate(
                 detail="No snapshot data found to run Replay Test.",
             )
 
-        total_cases = len(case_results)
-        failed_cases = sum(1 for r in case_results if r.get("case_status") == "fail")
-        flaky_cases = sum(1 for r in case_results if r.get("case_status") == "flaky")
-        fail_rate = failed_cases / total_cases if total_cases else 0.0
-        flaky_rate = flaky_cases / total_cases if total_cases else 0.0
-        ratio_band = _ratio_band(fail_rate)
-        gate_pass = fail_rate <= payload.fail_rate_max and flaky_rate <= payload.flaky_rate_max
-
         # If cancellation was requested mid-run, do not persist a report.
         if cancel_check and cancel_check():
             raise ReleaseGateCancelled()
-
-        primary_case = next((r for r in case_results if r.get("case_status") != "pass"), case_results[0])
-        primary_summary = dict(primary_case.get("summary", {}))
-        primary_summary["target"] = {
-            "type": "release_gate_snapshot",
-            "trace_id": primary_case.get("trace_id") or trace_id,
-            "baseline_trace_id": baseline_trace_id,
-            "snapshot_id": primary_case.get("snapshot_id"),
-        }
         total_wall_ms = int((time.monotonic() - perf_started) * 1000)
-        avg_attempt_wall_ms = (
-            (sum(int(a.get("batch_wall_ms") or 0) for a in perf_attempts) / len(perf_attempts))
-            if perf_attempts
-            else None
-        )
-        total_attempts = sum(len(c.get("attempts") or []) for c in case_results)
-        passed_attempts = sum(
-            sum(1 for a in (c.get("attempts") or []) if a.get("pass")) for c in case_results
-        )
         replay_request_meta = _build_replay_request_meta(snapshots, payload)
-        primary_summary["release_gate"] = {
-            "mode": "replay_test",
-            "repeat_runs": payload.repeat_runs,
-            "total_inputs": total_cases,
-            "failed_inputs": failed_cases,
-            "flaky_inputs": flaky_cases,
-            "passed_attempts": passed_attempts,
-            "total_attempts": total_attempts,
-            "fail_rate": round(fail_rate, 4),
-            "flaky_rate": round(flaky_rate, 4),
-            "ratio_band": ratio_band,
-            "thresholds": {
-                "fail_rate_max": payload.fail_rate_max,
-                "flaky_rate_max": payload.flaky_rate_max,
-            },
-            "perf": {
-                "total_wall_ms": total_wall_ms,
-                "avg_attempt_wall_ms": avg_attempt_wall_ms,
-            },
-            "experiment": {
-                "tool_context": tool_context_payload,
-                "storage_policy": {"full_text_in_report": True},
-            },
-            "case_results": case_results,
-            "replay_request_meta": replay_request_meta,
-        }
+        finalized = build_release_gate_final_payload(
+            case_results=case_results,
+            all_reasons=all_reasons,
+            payload=payload,
+            trace_id=trace_id,
+            baseline_trace_id=baseline_trace_id,
+            replay_request_meta=replay_request_meta,
+            tool_context_payload=tool_context_payload,
+            perf_attempts=perf_attempts,
+            total_wall_ms=total_wall_ms,
+            ratio_band=_ratio_band,
+        )
+        gate_pass = bool(finalized["gate_pass"])
+        primary_case = finalized["primary_case"]
+        primary_summary = finalized["primary_summary"]
         report = BehaviorReport(
             project_id=project_id,
             trace_id=primary_case.get("trace_id") or trace_id,
@@ -3249,85 +2832,9 @@ async def _run_release_gate(
             db.add(report_summary)
         db.commit()
         db.refresh(report)
-
-        unique_reasons = list(dict.fromkeys(all_reasons))
-        replay_error_codes_global = list(
-            dict.fromkeys(
-                code
-                for run in case_results
-                for code in ((run.get("replay") or {}).get("error_codes") or [])
-                if code
-            )
-        )
-        missing_provider_keys_global = list(
-            dict.fromkeys(
-                provider
-                for run in case_results
-                for provider in ((run.get("replay") or {}).get("missing_provider_keys") or [])
-                if provider
-            )
-        )
-        failed_signals = list(
-            dict.fromkeys(
-                sig
-                for run in case_results
-                for a in (run.get("attempts") or [])
-                for sig in (((a.get("signals") or {}).get("failed")) or [])
-                if sig
-            )
-        )
-
-        threshold_text = (
-            f"fail<={int(payload.fail_rate_max * 100)}%, flaky<={int(payload.flaky_rate_max * 100)}%"
-        )
-        return {
-            "pass": gate_pass,
-            "summary": (
-                "Passed"
-                if gate_pass
-                else (
-                    f"Failed: fail_rate={fail_rate:.2%}, flaky_rate={flaky_rate:.2%} "
-                    f"exceed thresholds ({threshold_text})"
-                )
-            ),
-            "failed_signals": failed_signals,
-            "exit_code": 0 if gate_pass else 1,
-            "report_id": report.id,
-            "trace_id": primary_case.get("trace_id") or trace_id,
-            "baseline_trace_id": baseline_trace_id,
-            "failure_reasons": unique_reasons if not gate_pass else [],
-            "thresholds_used": {
-                "fail_rate_max": payload.fail_rate_max,
-                "flaky_rate_max": payload.flaky_rate_max,
-            },
-            "fail_rate": round(fail_rate, 4),
-            "flaky_rate": round(flaky_rate, 4),
-            "failed_inputs": failed_cases,
-            "flaky_inputs": flaky_cases,
-            "total_inputs": total_cases,
-            "repeat_runs": payload.repeat_runs,
-            "perf": {
-                "total_wall_ms": total_wall_ms,
-                "avg_attempt_wall_ms": avg_attempt_wall_ms,
-                "attempts": perf_attempts,
-            },
-            "replay_error_codes": replay_error_codes_global,
-            "missing_provider_keys": missing_provider_keys_global,
-            "experiment": {
-                "tool_context": tool_context_payload,
-                "storage_policy": {"full_text_in_report": True},
-            },
-            "replay_request_meta": replay_request_meta,
-            "case_results": case_results,
-            "evidence_pack": {
-                "top_regressed_rules": [],
-                "first_violations": (primary_case.get("violations") or [])[:5],
-                "failed_replay_snapshot_ids": (
-                    (primary_case.get("replay") or {}).get("failed_snapshot_ids") or []
-                ),
-                "sample_failure_reasons": unique_reasons[:5],
-            },
-        }
+        response_payload = dict(finalized["response_payload"])
+        response_payload["report_id"] = report.id
+        return response_payload
 
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,

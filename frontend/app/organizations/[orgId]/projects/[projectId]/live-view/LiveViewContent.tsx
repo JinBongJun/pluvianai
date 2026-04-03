@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import ReactFlow, {
@@ -55,6 +55,7 @@ import { useLiveViewDestructiveActions } from "./useLiveViewDestructiveActions";
 
 const LIVE_VIEW_FLOW_NODE_TYPES = LIVE_VIEW_NODE_TYPES;
 const LIVE_VIEW_FLOW_EDGE_TYPES = LIVE_VIEW_EDGE_TYPES;
+const DRAG_CLICK_SUPPRESS_MS = 160;
 
 const ClinicalLog = dynamic(() => import("@/components/live-view/ClinicalLog"), {
   ssr: false,
@@ -155,7 +156,8 @@ export function LiveViewContent() {
     onNodesChange,
     edges,
     onEdgesChange,
-    fitView,
+    fitRequestVersion,
+    idleFitRequestVersion,
     resetHistory,
     initializeHistory,
     onAutoLayout,
@@ -165,7 +167,9 @@ export function LiveViewContent() {
     canRedo,
     isDraggingRef,
     didActuallyDragRef,
+    requestIdleFitView,
   } = useLiveViewGraphState(projectId);
+  const lastDragStopAtRef = useRef(0);
 
   const allAgents = useMemo(() => {
     const raw = Array.isArray(agentsData?.agents)
@@ -203,16 +207,17 @@ export function LiveViewContent() {
     agentsData,
     agentsList,
     selectedAgentId,
-    fitView,
     setNodes,
     resetHistory,
     initializeHistory,
     isDraggingRef,
+    requestIdleFit: requestIdleFitView,
   });
 
   useLiveViewRefreshController({
     projectId,
-    fitView,
+    requestIdleFit: requestIdleFitView,
+    hasSelectedAgent: !!selectedAgentId,
     agentsLastUpdatedAt,
     isPageVisible,
     mutateAgents,
@@ -403,7 +408,13 @@ export function LiveViewContent() {
           canRedo={canRedo}
         />
 
-        <NodeFocusHandler selectedNodeId={selectedAgentId} isPanelOpen={!!selectedAgentId} />
+        <NodeFocusHandler
+          selectedNodeId={selectedAgentId}
+          isPanelOpen={!!selectedAgentId}
+          nodes={nodes}
+          fitRequestVersion={fitRequestVersion}
+          idleFitRequestVersion={idleFitRequestVersion}
+        />
 
         <ReactFlow
           nodes={nodes}
@@ -416,13 +427,13 @@ export function LiveViewContent() {
             isDraggingRef.current = true;
           }}
           onNodeDragStop={() => {
-            setTimeout(() => {
-              isDraggingRef.current = false;
-              didActuallyDragRef.current = false;
-            }, 0);
+            isDraggingRef.current = false;
+            didActuallyDragRef.current = false;
+            lastDragStopAtRef.current = Date.now();
           }}
           onNodeClick={(_, node) => {
             if (didActuallyDragRef.current) return;
+            if (Date.now() - lastDragStopAtRef.current < DRAG_CLICK_SUPPRESS_MS) return;
             setSelectedAgentId(String(node.id));
           }}
           connectionMode={ConnectionMode.Loose}

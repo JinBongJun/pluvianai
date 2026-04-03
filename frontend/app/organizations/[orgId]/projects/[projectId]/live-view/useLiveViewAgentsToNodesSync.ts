@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { MutableRefObject } from "react";
 import type { Node } from "reactflow";
 
+import { buildGraphAgentDigest } from "@/lib/react-flow/agentDigest";
 import { syncNodeSelectionState } from "@/lib/react-flow/graphNodes";
 import { loadLvPositions } from "./liveViewGraphLayout";
 import {
@@ -20,29 +21,29 @@ export function useLiveViewAgentsToNodesSync(options: {
   agentsData: unknown;
   agentsList: LiveViewAgentRow[];
   selectedAgentId: string | null;
-  fitView: (options?: { duration?: number; padding?: number }) => void;
   setNodes: SetNodes;
   resetHistory: () => void;
   initializeHistory: (nodes: Node[]) => void;
   isDraggingRef: MutableRefObject<boolean>;
+  requestIdleFit: () => void;
 }) {
   const {
     projectId,
     agentsData,
     agentsList,
     selectedAgentId,
-    fitView,
     setNodes,
     resetHistory,
     initializeHistory,
     isDraggingRef,
+    requestIdleFit,
   } = options;
 
   const prevAgentIdsRef = useRef<Set<string>>(new Set());
   const prevAgentsVisualSignatureRef = useRef<string | null>(null);
   const agentsSyncProjectIdRef = useRef<number | null>(null);
 
-  const agentsVisualSignature = useMemo(() => JSON.stringify(agentsList), [agentsList]);
+  const agentsDigest = buildGraphAgentDigest(agentsList);
 
   useEffect(() => {
     if (typeof agentsData === "undefined") return;
@@ -55,7 +56,7 @@ export function useLiveViewAgentsToNodesSync(options: {
 
     if (agentsList.length === 0) {
       prevAgentIdsRef.current = new Set();
-      prevAgentsVisualSignatureRef.current = agentsVisualSignature;
+      prevAgentsVisualSignatureRef.current = agentsDigest;
       resetHistory();
       setNodes([]);
       return;
@@ -64,8 +65,8 @@ export function useLiveViewAgentsToNodesSync(options: {
     const saved = loadLvPositions(projectId);
     const currentAgentIds = new Set(agentsList.map(agent => String(agent.agent_id)));
     const prevAgentIds = prevAgentIdsRef.current;
-    const samePayload = prevAgentsVisualSignatureRef.current === agentsVisualSignature;
-    prevAgentsVisualSignatureRef.current = agentsVisualSignature;
+    const samePayload = prevAgentsVisualSignatureRef.current === agentsDigest;
+    prevAgentsVisualSignatureRef.current = agentsDigest;
 
     if (prevAgentIds.size > 0) {
       const sameAgentSet =
@@ -96,20 +97,20 @@ export function useLiveViewAgentsToNodesSync(options: {
       return updatedNodes;
     });
 
-    if ((hasNewAgents || firstAgentPopulation) && !isDraggingRef.current) {
-      setTimeout(() => fitView({ duration: 600, padding: 0.2 }), 50);
+    if ((hasNewAgents || firstAgentPopulation) && !isDraggingRef.current && !selectedAgentId) {
+      requestIdleFit();
     }
   }, [
     agentsData,
     agentsList,
-    agentsVisualSignature,
+    agentsDigest,
     selectedAgentId,
     projectId,
-    fitView,
     setNodes,
     resetHistory,
     initializeHistory,
     isDraggingRef,
+    requestIdleFit,
   ]);
 
   useEffect(() => {

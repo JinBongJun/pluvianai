@@ -1,28 +1,39 @@
 "use client";
 
+import type { Node } from "reactflow";
 import { useReactFlow } from "reactflow";
 
-import { useSelectedNodeCenter } from "@/lib/react-flow/useSelectedNodeCenter";
+import { useGraphCameraController } from "@/lib/react-flow/useGraphCameraController";
 
 interface NodeFocusHandlerProps {
   selectedNodeId: string | null;
   isPanelOpen: boolean;
+  nodes: Node[];
+  fitRequestVersion?: number;
+  idleFitRequestVersion?: number;
 }
 
 export const NodeFocusHandler: React.FC<NodeFocusHandlerProps> = ({
   selectedNodeId,
   isPanelOpen,
+  nodes,
+  fitRequestVersion = 0,
+  idleFitRequestVersion = 0,
 }) => {
-  const { setCenter, getNodes } = useReactFlow();
-  const nodes = getNodes();
+  const { setCenter, fitView } = useReactFlow();
 
-  useSelectedNodeCenter({
-    selectedNodeId,
+  useGraphCameraController({
     nodes,
+    selectedNodeId,
+    fitView,
     setCenter,
-    zoom: 1.6,
-    durationMs: 800,
-    offsetX: isPanelOpen ? 240 : 0,
+    fitRequestVersion,
+    idleFitRequestVersion,
+    fitDurationMs: 800,
+    fitPadding: 0.2,
+    focusZoom: 1.6,
+    focusDurationMs: 800,
+    focusOffsetX: isPanelOpen ? 240 : 0,
   });
 
   return null;
