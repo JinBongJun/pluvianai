@@ -26,6 +26,10 @@ import {
   RG_GRID_SPACING_X,
   RG_GRID_SPACING_Y,
 } from "./mapAgentsToReleaseGateNodes";
+import {
+  loadReleaseGateSavedPositions,
+  saveReleaseGatePositions,
+} from "./releaseGateMapStorage";
 
 const NODE_TYPES = { agentCard: AgentCardNode };
 const EDGE_TYPES = { default: DrawIOEdge };
@@ -102,29 +106,6 @@ function RGMapToolbar({
   );
 }
 
-function getStorageKey(projectName?: string) {
-  return `rg-node-positions-${projectName || "default"}`;
-}
-
-function loadSavedPositions(projectName?: string): Record<string, { x: number; y: number }> {
-  try {
-    const raw = localStorage.getItem(getStorageKey(projectName));
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function savePositions(nodes: Node[], projectName?: string) {
-  try {
-    const map: Record<string, { x: number; y: number }> = {};
-    nodes.forEach(n => {
-      map[n.id] = { x: n.position.x, y: n.position.y };
-    });
-    localStorage.setItem(getStorageKey(projectName), JSON.stringify(map));
-  } catch {}
-}
-
 export function ReleaseGateMapContent({
   agents,
   agentsLoaded = false,
@@ -176,7 +157,7 @@ export function ReleaseGateMapContent({
 
       setTimeout(() => {
         commitHistory(newNodes);
-        savePositions(newNodes, projectName);
+        saveReleaseGatePositions(newNodes, { projectId, projectName });
         setTimeout(() => fitView({ duration: 800, padding: 0.2 }), 50);
       }, 0);
 
@@ -216,7 +197,7 @@ export function ReleaseGateMapContent({
       pendingFitAfterNodesRef.current = true;
     }
 
-    const saved = loadSavedPositions(projectName);
+    const saved = loadReleaseGateSavedPositions({ projectId, projectName });
 
     setNodes(currentNodes => {
       return mapAgentsToReleaseGateNodes({
@@ -226,7 +207,7 @@ export function ReleaseGateMapContent({
         saved,
       });
     });
-  }, [agentsKey, agents, agentsLoaded, selectedNodeId, setNodes, projectName]);
+  }, [agentsKey, agents, agentsLoaded, selectedNodeId, setNodes, projectId, projectName]);
 
   // Keep node.selected and blur in sync when selectedNodeId changes (skip during drag to avoid node jump)
   useEffect(() => {
@@ -340,7 +321,7 @@ export function ReleaseGateMapContent({
       setTimeout(() => {
         setNodes((currentNodes: Node[]) => {
           commitHistory(currentNodes);
-          savePositions(currentNodes, projectName);
+          saveReleaseGatePositions(currentNodes, { projectId, projectName });
           return currentNodes;
         });
       }, 0);

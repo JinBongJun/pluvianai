@@ -360,6 +360,7 @@ export interface ReleaseGateHistoryItem {
   total_attempts?: number | null;
   snapshot_id?: string | number | null;
   thresholds?: Record<string, number> | null;
+  session_result?: ReleaseGateResult | null;
 }
 
 export interface ReleaseGateHistoryResponse {

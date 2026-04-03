@@ -4328,6 +4328,60 @@ def _build_release_gate_history_rows(
     return rows
 
 
+def _build_release_gate_history_session_result(
+    report: BehaviorReport, gate_meta: Dict[str, Any]
+) -> Dict[str, Any]:
+    case_results = gate_meta.get("case_results")
+    if not isinstance(case_results, list):
+        case_results = []
+    failure_reasons = gate_meta.get("failure_reasons")
+    if not isinstance(failure_reasons, list):
+        failure_reasons = []
+    perf = gate_meta.get("perf")
+    perf_payload = perf if isinstance(perf, dict) else None
+    thresholds_used = gate_meta.get("thresholds_used")
+    if not isinstance(thresholds_used, dict):
+        thresholds_used = gate_meta.get("thresholds")
+    if not isinstance(thresholds_used, dict):
+        thresholds_used = {}
+    evidence_pack = gate_meta.get("evidence_pack")
+    if not isinstance(evidence_pack, dict):
+        evidence_pack = {
+            "top_regressed_rules": [],
+            "first_violations": [],
+            "failed_replay_snapshot_ids": [],
+            "sample_failure_reasons": failure_reasons[:5],
+        }
+    primary_case = next(
+        (case for case in case_results if isinstance(case, dict) and case.get("case_status") != "pass"),
+        next((case for case in case_results if isinstance(case, dict)), {}),
+    )
+    return {
+        "pass": _release_gate_history_status(report.status) == "pass",
+        "summary": gate_meta.get("summary"),
+        "experiment": gate_meta.get("experiment"),
+        "replay_request_meta": gate_meta.get("replay_request_meta"),
+        "failed_signals": gate_meta.get("failed_signals") or [],
+        "exit_code": 0 if _release_gate_history_status(report.status) == "pass" else 1,
+        "report_id": report.id,
+        "trace_id": str(primary_case.get("trace_id") or report.trace_id or ""),
+        "baseline_trace_id": str(report.baseline_run_ref or ""),
+        "failure_reasons": [str(reason) for reason in failure_reasons if str(reason).strip()],
+        "thresholds_used": thresholds_used,
+        "fail_rate": gate_meta.get("fail_rate"),
+        "flaky_rate": gate_meta.get("flaky_rate"),
+        "failed_inputs": gate_meta.get("failed_inputs"),
+        "flaky_inputs": gate_meta.get("flaky_inputs"),
+        "total_inputs": gate_meta.get("total_inputs"),
+        "repeat_runs": _coerce_optional_int(gate_meta.get("repeat_runs")) or 1,
+        "perf": perf_payload,
+        "replay_error_codes": gate_meta.get("replay_error_codes") or [],
+        "missing_provider_keys": gate_meta.get("missing_provider_keys") or [],
+        "case_results": case_results,
+        "evidence_pack": evidence_pack,
+    }
+
+
 def _resolve_release_gate_run_agent_id(db: Session, report: BehaviorReport) -> Optional[str]:
     normalized_agent_id = str(report.agent_id or "").strip() or None
     if normalized_agent_id:
@@ -4478,6 +4532,7 @@ async def list_release_gate_history(
         if normalized_agent_id and resolved_agent_id != normalized_agent_id:
             continue
         history_rows = _build_release_gate_history_rows(report, gate_meta, resolved_agent_id)
+        session_result = _build_release_gate_history_session_result(report, gate_meta)
         for row in history_rows:
             row_status = str(row.get("status") or "").strip().lower()
             if status_filter == "pass" and row_status != "pass":
@@ -4487,6 +4542,7 @@ async def list_release_gate_history(
             row_trace_id = str(row.get("trace_id") or "").strip()
             if trace_id and row_trace_id != trace_id:
                 continue
+            row["session_result"] = session_result
             matched_rows.append(row)
 
     total = len(matched_rows)
@@ -4539,6 +4595,7 @@ async def list_release_gate_history(
                 "total_attempts": row["total_attempts"],
                 "snapshot_id": row["snapshot_id"],
                 "thresholds": row["thresholds"],
+                "session_result": row.get("session_result"),
             }
         )
 
