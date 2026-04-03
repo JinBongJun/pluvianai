@@ -1,78 +1,79 @@
-# 2026.04 Week 1 (기함) — Average looks fine, but edge cases fail quietly
-
-## 목표(포지셔닝 고정)
-- 메인 메시지: `Nothing changed. That was the problem.`
-- 핵심 증거: `Before vs After` 케이스 1개(또는 소수) + `FAIL 이유` 1~2개 항목
-- 질문: 여러분은 배포 전에 롱테일/에지 회귀를 어떻게 잡나요?
-
-## 가정(시나리오)
-- 변경: 모델 업데이트(또는 모델이 암묵적으로 바뀐 상황) + 시스템 프롬프트를 더 간결하게/정확하게 다듬음
-- 관측: 평균 지표/대부분 케이스는 괜찮아 보이지만, 특정 의도(intent)에서만 조용한 회귀가 발생
-- 결과: 같은 요청이 baseline에서는 통과했는데, candidate에서는 `FAIL`로 잡힘
-
-## Before / After에 쓸 케이스(1개만 고정)
-- Before(기준 run): `성공(또는 통과)한 케이스 타입`
-- After(후보 run): `동일 케이스 타입의 FAIL`
-- FAIL 이유(게이트/결과 화면에서 실제로 잡힌 항목 1~2개를 그대로 채우기)
-  - 예시 라벨(실제 UI 라벨에 맞춰 교체): `refusal / format / json / required / leakage / tool`
-
-## 스크린샷 구성(Shot 우선)
-- Reddit: `Shot 1(훅) + Shot 3(평가 결과)` 최소
-- IH: `Shot 2b(재료가 쌓임) + Shot 6(FAIL 케이스 결과)` 중심(가능하면 Shot 3 1장 추가)
-- 캡션 원칙: “설정법”이 아니라 “배포 전에 막은 결과” 중심
-
----
-
-## Reddit (질문형) — 게시 초안
-
-**Title (EN):**  
-Model updates can look fine on average… then specific edge cases fail quietly — how do you catch this before deploy?
-
-**Body (초안):**
-I just shipped a model + system-prompt update for a small production support bot.
-
-For the first day, everything looked “fine” on aggregate metrics. No outage, no obvious quality collapse.
-But then we noticed a recurring pattern: only a couple of specific intents started failing, quietly—something that manual spot checks didn’t surface reliably.
-
-The tricky part is that this can look like “nothing changed” until you look at the exact requests that actually matter.
-
-In our case, here’s the simplest Before/After evidence:
-- **Before (baseline):** the refund-related request followed our expected behavior (handled as intended).
-- **After (candidate):** the *same request type* failed with **FAIL reason(s): [refusal / format / json / required / leakage / tool — fill 1~2 items]**.
-
-How do you handle this in practice?
-- Do you keep a test set that’s closer to real traffic (and updates it as you learn)?
-- If you replay production-like cases before every deploy, how do you keep it lightweight enough to run routinely?
-- When behavior varies run-to-run, how do you avoid mistaking flakiness for a real regression?
-
-**What’s your minimal routine to catch long-tail regressions (the “nothing changed… that was the problem” cases) before they reach users?**
-
----
-
-## Indie Hackers (상황/회고형) — 게시 초안
-
-**Title (EN):**  
-We changed a model + tightened the system prompt. Average metrics looked fine. Edge-case failures still slipped through.
-
-**Post (초안):**
-We made a routine LLM update for a small production support bot: model update + tighter system prompt.
-
-At first glance, everything was reassuring. Average behavior stayed stable, latency didn’t spike, and most conversations looked normal.
-
-Then we saw a small set of edge-case failures that didn’t show up in our “usual” checks. It wasn’t loud (no outage), and it wasn’t wide (most requests stayed fine). It was the classic long-tail regression: only specific intents went sideways.
-
-**Before/After (one concrete case):**
-- **Before:** the baseline configuration handled this request type as expected.
-- **After:** the candidate configuration produced a **FAIL** in the same case with **[FAIL reason 1]** and **[FAIL reason 2]**.
-
-Our core realization: output reviews aren’t enough when regressions appear as *behavior changes* in specific signals/steps. Even small prompt tightening can shift refusals, formatting constraints, required safety handling, or other policy-like behaviors—without moving the average much.
-
-So we changed our workflow:
-- Instead of treating validation like a one-off exercise, we re-run the same stored real requests as a baseline vs candidate comparison.
-- We repeat where needed to separate “real deterministic regression” from “flaky variation”.
-- If cases fail, we stop the release before shipping.
-
-Trade-off: we don’t replay everything all the time. We keep a tight set of high-signal stored cases that reflect what we actually learned from production.
-
-If you ship LLM changes regularly: **what do you use as the “before deploy” evidence when average looks fine but edge cases can still bite?**
-
+# 2026.04 Week 1 — Ops looks fine, but deploy replay showed long-tail risk
+
+## 목표(포지셔닝 고정)
+- 메인 메시지: **운영(Live)에서 보는 신호만으로는 “배포해도 된다”를 증명하기 어렵다. 저장된 실제 케이스를 배포 게이트에서 같은 입력으로 반복 실행하면 롱테일/불안정이 케이스 단위로 드러난다.**
+- 핵심 증거: **스냅샷이 쌓인 Live 한 장 + Gate 결과(HEALTHY n/10, FLAKY/FLAGGED, 대표 FAIL 이유 1~2개)**
+- 질문: 여러분은 배포 전에 **어떤 최소 증거**(케이스 세트, 반복 횟수, 실패 이유)를 요구하나요?
+
+## 가정(시나리오) — 이번 주 증거에 맞춤
+- **Live View:** 실트래픽 스냅샷이 들어오고, 운영용 eval(예: 짧은 답/지연/HTTP 등)으로 대부분은 “괜찮아 보이는” 그림이 나올 수 있음.
+- **Release Gate:** Live에서 쓰던 것과 **목적이 같은 eval만**이 아니라, 배포 기준(예: **Required keywords**, 강화된 short/length 등)을 **게이트에서** 켜고 같은 저장 케이스를 **repeat(예: 10회)** 로 돌림.
+- **결과:** 일부 intent에서만 **FLAKY** 또는 **FLAGGED**가 나오고, 전체 aggregate만 보면 놓치기 쉬운 패턴이 **케이스 단위**로 보임.
+
+### (선택) “변경 때문에 깨졌다”를 말하고 싶을 때
+- **같은 Gate eval + 같은 저장 케이스 + 같은 repeat** 으로 **baseline(기존 프롬프트/모델)** vs **candidate(후보 프롬프트/모델)** 를 각각 돌린 스크린샷이 있으면, 주장을 **회귀(regression)** 로 올릴 수 있음.
+- 그 스크린 한 쌍이 없으면, 본문에서는 **“새 배포 기준을 올렸더니 숨어 있던 리스크가 드러났다”** 로 정직하게 쓴다.
+
+## 증거에 채울 숫자(복붙용 체크리스트)
+- Snapshots: `____ / 10000` (또는 표시되는 한도)
+- Gate: 선택 로그 **4**개(예: refund/billing 계열 3 + 대조 1), repeat **`10`**
+- 결과 요약: 예) `FLAGGED (71.1%)`, 로그별 `9/10`, `4/10`, `0/10` 등 **실제 UI 숫자**
+- FAIL 이유 라벨(실제 표시에 맞춰 1~2개): 예) `required keywords`, `empty/short`, `latency`
+
+## 스크린샷 구성(Shot 우선)
+- Reddit: `Shot 1(Live 훅)` + `Shot 3 또는 Gate 결과(평가/집계)` 최소
+- IH: `Shot 2b(스냅샷/재료)` + `Shot 6(실패·FLAKY가 읽히는 결과)` 중심
+- 캡션 원칙: “클릭 경로”가 아니라 **무엇을 증명했는지** 한 줄
+
+---
+
+## Reddit — 권장 서브 & 제목
+
+- **1차:** `r/aiengineering`
+- **2차(선택):** `r/LLMDevs` — 훅만 “프로덕션 에이전트 배포 전 증거” 톤으로 바꿔 재게시 금지(복붙 금지)
+
+**Title (EN) 예시:**  
+Aggregate metrics looked fine in Live View—then a pre-deploy replay (same saved cases, 10× repeats) surfaced FLAKY/FLAGGED long-tail failures. How do you decide what counts as “enough evidence” before shipping?
+
+**Body (초안):**
+
+We run a small production-ish support bot demo and ingest real-ish traffic into Live View. At a glance, things look “okay” on the usual operational checks.
+
+The part that scared us wasn’t a loud outage—it was that **the scary cases only showed up when we replayed a tight set of saved real requests under a stricter deploy bar**, with repeats to separate “one-off weirdness” from instability.
+
+Here’s the concrete evidence we’re using this week:
+- **Live View:** snapshots are coming in; operational eval highlights are mostly broad-strokes.
+- **Release Gate:** we replay **4** saved cases with **10×** repeats and explicit checks (e.g., required keywords + short/empty + latency thresholds—use whatever your screenshot shows).
+- **Outcome:** mixed health across cases—some **FLAKY**, one line item looked **much worse** than the rest (paste your real numbers).
+
+**Question for the room:** when average looks fine, what’s your minimum deploy evidence—case set size, repeat count, and what failure modes you treat as ship-stoppers?
+
+*(Optional 1-sentence product line, last only:)* We run this loop in **PluvianAI** (capture → saved cases → pre-deploy replay), but I’m more interested in your routine than tooling.
+
+---
+
+## Indie Hackers — 제목 & 본문
+
+**Title (EN) 예시:**  
+Our dashboards looked fine—until we replayed saved production-like cases under a deploy gate with repeats.
+
+**Post (초안):**
+
+We’re building validation around LLM apps the same way we’d treat any production system: **you need evidence that matches the decision you’re about to make** (ship / don’t ship).
+
+In Live View, it’s easy to feel reassured: traffic is flowing, snapshots are accumulating, and operational signals look mostly healthy.
+
+But “mostly healthy on averages” isn’t the same thing as “safe to change the thing customers rely on.” So we took a small, high-signal slice of saved real requests and ran them in a pre-deploy gate with **repeat runs**. The result wasn’t “everything is broken”—it was closer to **long-tail risk**: a few intents looked unstable, and one looked consistently bad under the deploy checks (fill in your exact numbers).
+
+What we changed in how we work:
+- **Separate concerns:** operational monitoring vs deploy criteria (they’re not identical).
+- **Repeat on purpose:** same input multiple times to surface **FLAKY** vs deterministic failure.
+- **Case-level verdicts:** FAIL reasons as checklist items, not vibes.
+
+**CTA (고정 1개만 선택):**  
+- (A) 댓글로 “배포 전 최소 증거” 루틴 공유 요청  
+- (B) 트라이얼/웹사이트 1링크(문장 1개)  
+- (C) 이메일/캘린더 등 다음 스텝 1개
+
+If you ship LLM changes weekly: **what evidence would make you stop a release even when aggregate metrics look fine?**
+
