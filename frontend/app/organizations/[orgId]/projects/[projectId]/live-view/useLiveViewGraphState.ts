@@ -29,6 +29,7 @@ export function useLiveViewGraphState(projectId: number) {
 
   const isDraggingRef = useRef(false);
   const didActuallyDragRef = useRef(false);
+  const lastDragStopAtRef = useRef(0);
 
   function onAutoLayout() {
     const newNodes = buildGridLayout(nodes, {
@@ -49,6 +50,9 @@ export function useLiveViewGraphState(projectId: number) {
       persistPositions: currentNodes => saveLvPositions(currentNodes, projectId),
       isDraggingRef,
       didActuallyDragRef,
+      onPositionDragEnd: () => {
+        lastDragStopAtRef.current = Date.now();
+      },
     }),
     [onNodesChangeBase, setNodes, commitHistory, projectId]
   );
@@ -93,5 +97,6 @@ export function useLiveViewGraphState(projectId: number) {
     canRedo,
     isDraggingRef,
     didActuallyDragRef,
+    lastDragStopAtRef,
   };
 }
