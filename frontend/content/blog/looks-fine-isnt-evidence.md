@@ -36,6 +36,7 @@ We save a tight set of real production inputs. Synthetic data misses the weirdne
 **2. Multi-run Simulation (Catch the Flakiness)**
 A single spot check tells you nothing about variance. We run the old, known-good trace against the new candidate prompt multiple times—whether that's **10x for a quick sanity check, or 50x to 100x for a rigorous statistical threshold**.
 
+![Release Gate Dashboard](/images/screenshot.png)
 As you can see in our actual regression UI: Under a repeat test, some cases stay perfectly **Healthy (10/10)**. But one case suddenly failed 4 out of 10 times due to latency spikes and missing required keywords. 
 If we had only tested it 1 time (spot check), we would have had a 60% chance of passing it and shipping a broken sequence to production.
 
