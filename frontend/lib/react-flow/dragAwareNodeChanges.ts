@@ -8,6 +8,7 @@ export function createDragAwareNodesChangeHandler(options: {
   persistPositions: (nodes: Node[]) => void;
   isDraggingRef: MutableRefObject<boolean>;
   didActuallyDragRef: MutableRefObject<boolean>;
+  onPositionDragEnd?: () => void;
 }) {
   const {
     onNodesChangeBase,
@@ -16,6 +17,7 @@ export function createDragAwareNodesChangeHandler(options: {
     persistPositions,
     isDraggingRef,
     didActuallyDragRef,
+    onPositionDragEnd,
   } = options;
 
   return (changes: NodeChange[]) => {
@@ -25,6 +27,18 @@ export function createDragAwareNodesChangeHandler(options: {
     if (isDragging) {
       isDraggingRef.current = true;
       didActuallyDragRef.current = true;
+    }
+
+    const hasExplicitDragEnd = changes.some(
+      change =>
+        change.type === "position" && (change as { dragging?: boolean }).dragging === false
+    );
+    if (hasExplicitDragEnd) {
+      isDraggingRef.current = false;
+      onPositionDragEnd?.();
+      globalThis.setTimeout(() => {
+        didActuallyDragRef.current = false;
+      }, 0);
     }
 
     const filtered = changes.filter(change => {

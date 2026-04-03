@@ -73,4 +73,34 @@ describe("createDragAwareNodesChangeHandler", () => {
     expect(commitHistory).toHaveBeenCalledWith(currentNodes);
     expect(persistPositions).toHaveBeenCalledWith(currentNodes);
   });
+
+  it("clears drag refs when position commits with dragging:false and notifies drag end", () => {
+    vi.useFakeTimers();
+    const onPositionDragEnd = vi.fn();
+    const isDraggingRef = { current: true };
+    const didActuallyDragRef = { current: true };
+    const onNodesChangeBase = vi.fn();
+    const setNodes = vi.fn();
+    const commitHistory = vi.fn();
+    const persistPositions = vi.fn();
+
+    const handleChange = createDragAwareNodesChangeHandler({
+      onNodesChangeBase,
+      setNodes,
+      commitHistory,
+      persistPositions,
+      isDraggingRef,
+      didActuallyDragRef,
+      onPositionDragEnd,
+    });
+
+    handleChange([
+      { id: "a", type: "position", position: { x: 1, y: 2 }, dragging: false } as NodeChange,
+    ]);
+    expect(isDraggingRef.current).toBe(false);
+    expect(onPositionDragEnd).toHaveBeenCalledTimes(1);
+    expect(didActuallyDragRef.current).toBe(true);
+    vi.runAllTimers();
+    expect(didActuallyDragRef.current).toBe(false);
+  });
 });

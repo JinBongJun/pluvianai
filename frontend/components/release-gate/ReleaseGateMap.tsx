@@ -255,6 +255,9 @@ export function ReleaseGateMapContent({
       persistPositions: currentNodes => saveReleaseGatePositions(currentNodes, { projectId, projectName }),
       isDraggingRef,
       didActuallyDragRef,
+      onPositionDragEnd: () => {
+        lastDragStopAtRef.current = Date.now();
+      },
     }),
     [onNodesChange, setNodes, commitHistory, projectId, projectName]
   );
@@ -312,6 +315,9 @@ export function ReleaseGateMapContent({
           lastDragStopAtRef.current = Date.now();
         }}
         onNodeClick={(_, node) => {
+          if (didActuallyDragRef.current && !isDraggingRef.current) {
+            didActuallyDragRef.current = false;
+          }
           if (didActuallyDragRef.current) return;
           if (Date.now() - lastDragStopAtRef.current < DRAG_CLICK_SUPPRESS_MS) return;
           onSelectAgent(node.id);

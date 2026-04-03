@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import ReactFlow, {
@@ -167,9 +167,9 @@ export function LiveViewContent() {
     canRedo,
     isDraggingRef,
     didActuallyDragRef,
+    lastDragStopAtRef,
     requestIdleFitView,
   } = useLiveViewGraphState(projectId);
-  const lastDragStopAtRef = useRef(0);
 
   const allAgents = useMemo(() => {
     const raw = Array.isArray(agentsData?.agents)
@@ -432,6 +432,9 @@ export function LiveViewContent() {
             lastDragStopAtRef.current = Date.now();
           }}
           onNodeClick={(_, node) => {
+            if (didActuallyDragRef.current && !isDraggingRef.current) {
+              didActuallyDragRef.current = false;
+            }
             if (didActuallyDragRef.current) return;
             if (Date.now() - lastDragStopAtRef.current < DRAG_CLICK_SUPPRESS_MS) return;
             setSelectedAgentId(String(node.id));
