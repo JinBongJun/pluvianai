@@ -74,6 +74,32 @@ describe("createDragAwareNodesChangeHandler", () => {
     expect(persistPositions).toHaveBeenCalledWith(currentNodes);
   });
 
+  it("does not call onPositionDragEnd for layout-only position commits (no prior drag)", () => {
+    const onPositionDragEnd = vi.fn();
+    const isDraggingRef = { current: false };
+    const didActuallyDragRef = { current: false };
+    const onNodesChangeBase = vi.fn();
+    const setNodes = vi.fn();
+    const commitHistory = vi.fn();
+    const persistPositions = vi.fn();
+
+    const handleChange = createDragAwareNodesChangeHandler({
+      onNodesChangeBase,
+      setNodes,
+      commitHistory,
+      persistPositions,
+      isDraggingRef,
+      didActuallyDragRef,
+      onPositionDragEnd,
+    });
+
+    handleChange([
+      { id: "a", type: "position", position: { x: 0, y: 0 }, dragging: false } as NodeChange,
+    ]);
+
+    expect(onPositionDragEnd).not.toHaveBeenCalled();
+  });
+
   it("clears drag refs when position commits with dragging:false and notifies drag end", () => {
     vi.useFakeTimers();
     const onPositionDragEnd = vi.fn();
