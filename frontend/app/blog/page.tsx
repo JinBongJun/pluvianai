@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { getAllPosts } from '@/lib/blog';
+import { blogPostHref, getAllPosts } from '@/lib/blog';
 import { ArrowRight, Terminal } from 'lucide-react';
 import Header from '@/components/landing/Header';
 import Footer from '@/components/landing/Footer';
@@ -26,7 +26,7 @@ export default function BlogIndex() {
           <div className="space-y-10">
             {posts.map((post) => (
               <article key={post.slug} className="group relative bg-[#0f0f13] border border-pluvian-border rounded-xl p-8 hover:border-pluvian-protocol-500/30 transition-colors">
-                <Link href={`/blog/${post.slug}`} className="absolute inset-0 z-10">
+                <Link href={blogPostHref(post.slug)} className="absolute inset-0 z-10">
                   <span className="sr-only">View {post.metadata.title}</span>
                 </Link>
                 

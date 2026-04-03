@@ -1,5 +1,6 @@
 import { getPostBySlug, getAllPosts } from '@/lib/blog';
 import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
 import { notFound } from 'next/navigation';
 import Header from '@/components/landing/Header';
 import Footer from '@/components/landing/Footer';
@@ -56,7 +57,7 @@ export default function BlogPost({ params }: { params: { slug: string } }) {
                             prose-a:text-pluvian-protocol-400 hover:prose-a:text-pluvian-protocol-300
                             prose-strong:text-white prose-code:text-pluvian-eval-300
                             prose-pre:bg-[#0f0f13] prose-pre:border prose-pre:border-pluvian-border">
-              <ReactMarkdown>
+              <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
                 {post.content}
               </ReactMarkdown>
             </div>
