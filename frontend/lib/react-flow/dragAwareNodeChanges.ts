@@ -34,8 +34,14 @@ export function createDragAwareNodesChangeHandler(options: {
         change.type === "position" && (change as { dragging?: boolean }).dragging === false
     );
     if (hasExplicitDragEnd) {
+      // Only treat as "user drag ended" if we saw a real drag — not programmatic layout/fitView,
+      // which also emits position+dragging:false and would otherwise spam lastDragStopAtRef and
+      // block every onNodeClick behind the 160ms suppress window.
+      const hadUserDrag = didActuallyDragRef.current;
       isDraggingRef.current = false;
-      onPositionDragEnd?.();
+      if (hadUserDrag) {
+        onPositionDragEnd?.();
+      }
       globalThis.setTimeout(() => {
         didActuallyDragRef.current = false;
       }, 0);
