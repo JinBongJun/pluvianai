@@ -1,50 +1,40 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import type { Node, NodeChange } from "reactflow";
+import { useCallback, useRef } from "react";
 import { useEdgesState, useNodesState, useReactFlow } from "reactflow";
 
-import {
-  LV_GRID_SPACING_X,
-  LV_GRID_SPACING_Y,
-  saveLvPositions,
-} from "./liveViewGraphLayout";
-
-const HISTORY_CAP = 20;
-const MAX_HISTORY_INDEX = HISTORY_CAP - 1;
+import { LV_GRID_SPACING_X, LV_GRID_SPACING_Y, saveLvPositions } from "./liveViewGraphLayout";
+import { createDragAwareNodesChangeHandler } from "@/lib/react-flow/dragAwareNodeChanges";
+import { buildGridLayout } from "@/lib/react-flow/graphNodes";
+import { useGraphHistory } from "@/lib/react-flow/useGraphHistory";
 
 export function useLiveViewGraphState(projectId: number) {
   const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChangeBase] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-
-  const [history, setHistory] = useState<Node[][]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
+  const {
+    history,
+    setHistory,
+    historyIndex,
+    setHistoryIndex,
+    commitHistory,
+    resetHistory,
+    initializeHistory,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+  } = useGraphHistory();
 
   const isDraggingRef = useRef(false);
   const didActuallyDragRef = useRef(false);
-  const [dragEndCounter, setDragEndCounter] = useState(0);
-
-  function commitHistory(newNodes: Node[]) {
-    setHistory(prev => {
-      const newHistory = prev.slice(0, historyIndex + 1);
-      const snapshot = newNodes.map(n => ({ ...n, position: { ...n.position } }));
-      return [...newHistory, snapshot].slice(-HISTORY_CAP);
-    });
-    setHistoryIndex(prev => Math.min(prev + 1, MAX_HISTORY_INDEX));
-  }
 
   function onAutoLayout() {
     setNodes(currentNodes => {
-      const cols = Math.max(1, Math.ceil(Math.sqrt(currentNodes.length)));
-
-      const newNodes = currentNodes.map((n, idx) => ({
-        ...n,
-        position: {
-          x: LV_GRID_SPACING_X * (idx % cols),
-          y: LV_GRID_SPACING_Y * Math.floor(idx / cols),
-        },
-      }));
+      const newNodes = buildGridLayout(currentNodes, {
+        spacingX: LV_GRID_SPACING_X,
+        spacingY: LV_GRID_SPACING_Y,
+      });
 
       setTimeout(() => {
         commitHistory(newNodes);
@@ -56,52 +46,25 @@ export function useLiveViewGraphState(projectId: number) {
     });
   }
 
-  function onNodesChange(changes: NodeChange[]) {
-    const dragging = changes.some(
-      c => c.type === "position" && (c as { dragging?: boolean }).dragging
-    );
-    if (dragging) {
-      isDraggingRef.current = true;
-      didActuallyDragRef.current = true;
-    }
-    const filtered = changes.filter(c => {
-      if (c.type === "select" && isDraggingRef.current) return false;
-      return true;
-    });
-    onNodesChangeBase(filtered);
+  const onNodesChange = useCallback(
+    createDragAwareNodesChangeHandler({
+      onNodesChangeBase,
+      setNodes,
+      commitHistory,
+      persistPositions: currentNodes => saveLvPositions(currentNodes, projectId),
+      isDraggingRef,
+      didActuallyDragRef,
+    }),
+    [onNodesChangeBase, setNodes, commitHistory, projectId]
+  );
 
-    const hasPositionChange = changes.some(
-      c => c.type === "position" && !(c as { dragging?: boolean }).dragging
-    );
-    if (hasPositionChange) {
-      setTimeout(() => {
-        setNodes(currentNodes => {
-          commitHistory(currentNodes);
-          saveLvPositions(currentNodes, projectId);
-          return currentNodes;
-        });
-      }, 0);
-    }
-  }
+  const handleUndo = useCallback(() => {
+    undo(setNodes);
+  }, [undo, setNodes]);
 
-  const undo = useCallback(() => {
-    if (historyIndex > 0) {
-      const newIndex = historyIndex - 1;
-      setHistoryIndex(newIndex);
-      setNodes(history[newIndex]);
-    }
-  }, [historyIndex, history, setNodes]);
-
-  const redo = useCallback(() => {
-    if (historyIndex < history.length - 1) {
-      const newIndex = historyIndex + 1;
-      setHistoryIndex(newIndex);
-      setNodes(history[newIndex]);
-    }
-  }, [historyIndex, history, setNodes]);
-
-  const canUndo = historyIndex > 0;
-  const canRedo = historyIndex < history.length - 1;
+  const handleRedo = useCallback(() => {
+    redo(setNodes);
+  }, [redo, setNodes]);
 
   return {
     nodes,
@@ -115,14 +78,14 @@ export function useLiveViewGraphState(projectId: number) {
     setHistory,
     historyIndex,
     setHistoryIndex,
+    resetHistory,
+    initializeHistory,
     onAutoLayout,
-    undo,
-    redo,
+    undo: handleUndo,
+    redo: handleRedo,
     canUndo,
     canRedo,
     isDraggingRef,
     didActuallyDragRef,
-    dragEndCounter,
-    setDragEndCounter,
   };
 }
