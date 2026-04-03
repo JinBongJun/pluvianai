@@ -311,8 +311,11 @@ export function ReleaseGateMapContent({
         }}
         onNodeDragStop={() => {
           isDraggingRef.current = false;
+          const hadUserDrag = didActuallyDragRef.current;
           didActuallyDragRef.current = false;
-          lastDragStopAtRef.current = Date.now();
+          if (hadUserDrag) {
+            lastDragStopAtRef.current = Date.now();
+          }
         }}
         onNodeClick={(_, node) => {
           if (didActuallyDragRef.current && !isDraggingRef.current) {

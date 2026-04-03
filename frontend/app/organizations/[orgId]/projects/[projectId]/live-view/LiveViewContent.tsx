@@ -428,8 +428,12 @@ export function LiveViewContent() {
           }}
           onNodeDragStop={() => {
             isDraggingRef.current = false;
+            const hadUserDrag = didActuallyDragRef.current;
             didActuallyDragRef.current = false;
-            lastDragStopAtRef.current = Date.now();
+            // Only stamp suppress window after a real drag — RF still calls dragStop on many clicks.
+            if (hadUserDrag) {
+              lastDragStopAtRef.current = Date.now();
+            }
           }}
           onNodeClick={(_, node) => {
             if (didActuallyDragRef.current && !isDraggingRef.current) {
