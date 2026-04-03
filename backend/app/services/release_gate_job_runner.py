@@ -26,6 +26,7 @@ from app.models.release_gate_job import ReleaseGateJob
 from app.models.user import User
 from app.services.ops_alerting import ops_alerting
 from app.services.release_gate_events import publish_release_gate_job_updated
+from app.services.release_gate_job_support import merge_result_perf_with_job_summary
 
 
 def _utcnow() -> datetime:
@@ -126,7 +127,6 @@ class ReleaseGateJobRunner:
             ReleaseGateValidateRequest,
             _run_release_gate,
             ReleaseGateCancelled,
-            _merge_result_perf_with_job_summary,
             _tool_evidence_stats_from_gate_result,
             _job_to_out_payload,
         )
@@ -243,7 +243,7 @@ class ReleaseGateJobRunner:
             finished = _utcnow()
             result_json = result if isinstance(result, dict) else {"result": result}
             if isinstance(result_json, dict):
-                result_json = _merge_result_perf_with_job_summary(result_json, job, finished)
+                result_json = merge_result_perf_with_job_summary(result_json, job, finished)
             rid = result.get("report_id") if isinstance(result, dict) else None
             if isinstance(result, dict):
                 passed = bool(result.get("pass"))

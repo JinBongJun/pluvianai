@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import { useMemo, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import ReactFlow, {
@@ -21,7 +21,6 @@ import type { LiveViewPanelRouteContext } from "@/components/live-view/liveViewP
 import { LIVE_VIEW_EDGE_TYPES, LIVE_VIEW_NODE_TYPES } from "@/components/live-view/LiveViewFlowShell";
 import { LiveViewToolbar } from "@/components/live-view/LiveViewToolbar";
 import { LiveViewPanelSnapshotUsage } from "@/components/live-view/LiveViewPanelSnapshotUsage";
-import { liveViewAPI } from "@/lib/api";
 import {
   getApiErrorCode,
   getApiErrorMessage,
@@ -31,7 +30,6 @@ import {
 } from "@/lib/api/client";
 import {
   getProjectAccessErrorCopy,
-  getProjectPermissionToast,
 } from "@/lib/projectAccess";
 import RailwaySidePanel from "@/components/shared/RailwaySidePanel";
 import { NodeFocusHandler } from "@/components/shared/NodeFocusHandler";
@@ -50,16 +48,10 @@ import {
 } from "./useLiveViewSseLifecycle";
 import { useLiveViewCoreData } from "./useLiveViewCoreData";
 import { useLiveViewSseRefs } from "./useLiveViewSseRefs";
-import { loadLvPositions } from "./liveViewGraphLayout";
-import {
-  mapAgentsToLiveViewNodes,
-  type LiveViewAgentRow,
-} from "./mapAgentsToLiveViewNodes";
 import { useLiveViewGraphState } from "./useLiveViewGraphState";
-import {
-  LABORATORY_REFRESH_EVENT,
-  type LaboratoryRefreshDetail,
-} from "@/lib/laboratoryLabRefresh";
+import { useLiveViewAgentsToNodesSync } from "./useLiveViewAgentsToNodesSync";
+import { useLiveViewRefreshController } from "./useLiveViewRefreshController";
+import { useLiveViewDestructiveActions } from "./useLiveViewDestructiveActions";
 
 const LIVE_VIEW_FLOW_NODE_TYPES = LIVE_VIEW_NODE_TYPES;
 const LIVE_VIEW_FLOW_EDGE_TYPES = LIVE_VIEW_EDGE_TYPES;
@@ -107,7 +99,6 @@ export function LiveViewContent() {
   );
   const [agentsPlanError, setAgentsPlanError] = useState<PlanLimitError | null>(null);
   const isPageVisible = usePageVisibility();
-  const wasPageVisibleRef = useRef(isPageVisible);
   const {
     sseConnected,
     setSseConnected,
@@ -139,8 +130,6 @@ export function LiveViewContent() {
     sseBackoffUntilRef,
   });
   const [panelTab, setPanelTab] = useState<"logs" | "eval" | "data" | "settings">("logs");
-  const [restoringAgentId, setRestoringAgentId] = useState<string | null>(null);
-  const [hardDeletingAgents, setHardDeletingAgents] = useState(false);
 
   useLiveViewSseLifecycle({
     projectId,
@@ -167,8 +156,8 @@ export function LiveViewContent() {
     edges,
     onEdgesChange,
     fitView,
-    setHistory,
-    setHistoryIndex,
+    resetHistory,
+    initializeHistory,
     onAutoLayout,
     undo,
     redo,
@@ -176,13 +165,7 @@ export function LiveViewContent() {
     canRedo,
     isDraggingRef,
     didActuallyDragRef,
-    dragEndCounter,
-    setDragEndCounter,
   } = useLiveViewGraphState(projectId);
-
-  const prevAgentIdsRef = useRef<Set<string>>(new Set());
-  const prevAgentsVisualSignatureRef = useRef<string | null>(null);
-  const agentsSyncProjectIdRef = useRef<number | null>(null);
 
   const allAgents = useMemo(() => {
     const raw = Array.isArray(agentsData?.agents)
@@ -200,147 +183,40 @@ export function LiveViewContent() {
   const deletedAgents = useMemo(() => {
     return allAgents.filter((a: { is_deleted?: boolean }) => a.is_deleted);
   }, [allAgents]);
-  const agentsVisualSignature = useMemo(() => JSON.stringify(agentsList), [agentsList]);
+  const {
+    restoringAgentId,
+    hardDeletingAgents,
+    handleHardDeleteAgents,
+    handleRestoreAgent,
+  } = useLiveViewDestructiveActions({
+    projectId,
+    selectedAgentId,
+    setSelectedAgentId,
+    setPanelTab,
+    mutateAgents,
+    resetHistory,
+    toast,
+  });
 
-  const handleHardDeleteAgents = async (agentIds: string[]) => {
-    if (!projectId || Number.isNaN(projectId) || agentIds.length === 0) return;
-    const confirmed = window.confirm(
-      `Permanently purge ${agentIds.length} deleted node(s) and their Live View data? This action cannot be undone.`
-    );
-    if (!confirmed) return;
-
-    setHardDeletingAgents(true);
-    try {
-      const result = await liveViewAPI.hardDeleteAgents(projectId, agentIds);
-      if (selectedAgentId && agentIds.includes(selectedAgentId)) {
-        setSelectedAgentId(null);
-        setPanelTab("logs");
-      }
-      await mutateAgents(undefined, true);
-      setHistory([]);
-      setHistoryIndex(-1);
-      const deletedSnapshots = Number(result?.deleted_snapshots ?? 0);
-      toast.showToast(
-        agentIds.length === 1
-          ? `Permanently purged 1 deleted node${deletedSnapshots > 0 ? ` and ${deletedSnapshots} log${deletedSnapshots === 1 ? "" : "s"}` : ""}.`
-          : `Permanently purged ${agentIds.length} deleted nodes${deletedSnapshots > 0 ? ` and ${deletedSnapshots} logs` : ""}.`,
-        "success"
-      );
-    } catch (error: any) {
-      const permissionToast = getProjectPermissionToast({
-        featureLabel: "Permanently deleting nodes",
-        error,
-      });
-      const msg = permissionToast?.message
-        ?? error?.response?.data?.detail
-        ?? "Failed to permanently delete nodes. Please try again.";
-      toast.showToast(msg, permissionToast?.tone ?? "error");
-    } finally {
-      setHardDeletingAgents(false);
-    }
-  };
-
-  useEffect(() => {
-    if (typeof agentsData === "undefined") return;
-
-    if (agentsSyncProjectIdRef.current !== projectId) {
-      agentsSyncProjectIdRef.current = projectId;
-      prevAgentIdsRef.current = new Set();
-      prevAgentsVisualSignatureRef.current = null;
-    }
-
-    if (agentsList.length === 0) {
-      prevAgentIdsRef.current = new Set();
-      prevAgentsVisualSignatureRef.current = agentsVisualSignature;
-      setHistory([]);
-      setHistoryIndex(-1);
-      setNodes([]);
-      return;
-    }
-
-    const saved = loadLvPositions(projectId);
-    const currentAgentIds = new Set(agentsList.map((a: any) => String(a.agent_id)));
-    const prevAgentIds = prevAgentIdsRef.current;
-    const samePayload = prevAgentsVisualSignatureRef.current === agentsVisualSignature;
-    prevAgentsVisualSignatureRef.current = agentsVisualSignature;
-    if (prevAgentIds.size > 0) {
-      const sameAgentSet =
-        prevAgentIds.size === currentAgentIds.size &&
-        Array.from(currentAgentIds).every(id => prevAgentIds.has(id));
-      if (sameAgentSet && samePayload) {
-        return;
-      }
-      if (!sameAgentSet) {
-        setHistory([]);
-        setHistoryIndex(-1);
-      }
-    }
-    const hasNewAgents =
-      prevAgentIds.size > 0 &&
-      Array.from(currentAgentIds).some(id => !prevAgentIds.has(id));
-    const firstAgentPopulation =
-      prevAgentIds.size === 0 && currentAgentIds.size > 0;
-    prevAgentIdsRef.current = currentAgentIds;
-
-    setNodes(currentNodes => {
-      const updatedNodes = mapAgentsToLiveViewNodes({
-        agentsList: agentsList as LiveViewAgentRow[],
-        selectedAgentId,
-        currentNodes,
-        saved,
-      });
-
-      setHistory(prevHist => {
-        if (prevHist.length === 0 && updatedNodes.length > 0) {
-          queueMicrotask(() => setHistoryIndex(0));
-          return [updatedNodes.map(n => ({ ...n, position: { ...n.position } }))];
-        }
-        return prevHist;
-      });
-
-      return updatedNodes;
-    });
-
-    if ((hasNewAgents || firstAgentPopulation) && !isDraggingRef.current) {
-      setTimeout(() => fitView({ duration: 600, padding: 0.2 }), 50);
-    }
-  }, [
+  useLiveViewAgentsToNodesSync({
+    projectId,
     agentsData,
     agentsList,
-    agentsVisualSignature,
     selectedAgentId,
+    fitView,
+    setNodes,
+    resetHistory,
+    initializeHistory,
+    isDraggingRef,
+  });
+
+  useLiveViewRefreshController({
     projectId,
     fitView,
-    setHistory,
-    setHistoryIndex,
-    setNodes,
-    isDraggingRef,
-  ]);
-
-  useEffect(() => {
-    if (!projectId || Number.isNaN(projectId) || projectId <= 0) return;
-    const handler = (e: Event) => {
-      const d = (e as CustomEvent<LaboratoryRefreshDetail>).detail;
-      if (!d || d.projectId !== projectId) return;
-      window.setTimeout(() => fitView({ duration: 600, padding: 0.2 }), 120);
-    };
-    window.addEventListener(LABORATORY_REFRESH_EVENT, handler as EventListener);
-    return () => window.removeEventListener(LABORATORY_REFRESH_EVENT, handler as EventListener);
-  }, [projectId, fitView]);
-
-  useEffect(() => {
-    if (isDraggingRef.current) return;
-    setNodes(current =>
-      current.map(n => ({
-        ...n,
-        selected: n.id === selectedAgentId,
-        data: {
-          ...n.data,
-          blur: !!selectedAgentId && n.id !== selectedAgentId,
-        },
-      }))
-    );
-  }, [selectedAgentId, setNodes, dragEndCounter, isDraggingRef]);
+    agentsLastUpdatedAt,
+    isPageVisible,
+    mutateAgents,
+  });
 
   const agentsErrorStatus = Number((agentsError as any)?.response?.status ?? 0);
   const agentsErrorCode = getApiErrorCode(agentsError);
@@ -394,42 +270,6 @@ export function LiveViewContent() {
 
     setAgentsPollIntervalMs(current => Math.min(current * 2, LIVE_VIEW_MAX_POLL_MS));
   }, [agentsError, agentsRetryAfterSec, projectId]);
-
-  useEffect(() => {
-    if (!projectId || Number.isNaN(projectId) || projectId <= 0) return;
-    const becameVisible = !wasPageVisibleRef.current && isPageVisible;
-    wasPageVisibleRef.current = isPageVisible;
-    if (!becameVisible) return;
-    if (Date.now() - agentsLastUpdatedAt < 15_000) return;
-    void mutateAgents();
-  }, [agentsLastUpdatedAt, isPageVisible, mutateAgents, projectId]);
-
-  const handleRestoreAgent = useCallback(
-    async (agentId: string) => {
-      if (!projectId || !agentId) return;
-      setRestoringAgentId(agentId);
-      try {
-        await liveViewAPI.restoreAgent(projectId, agentId);
-        await mutateAgents(undefined, true);
-        setSelectedAgentId(agentId);
-        setPanelTab("logs");
-        toast.showToast("Node restored to Live View.", "success");
-      } catch (err: unknown) {
-        const permissionToast = getProjectPermissionToast({
-          featureLabel: "Restoring nodes",
-          error: err,
-        });
-        const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-        toast.showToast(
-          permissionToast?.message ?? (typeof msg === "string" ? msg : "Failed to restore node."),
-          permissionToast?.tone ?? "error"
-        );
-      } finally {
-        setRestoringAgentId(null);
-      }
-    },
-    [mutateAgents, projectId, toast]
-  );
 
   const panelCtx: LiveViewPanelRouteContext = {
     projectId,
@@ -579,7 +419,6 @@ export function LiveViewContent() {
             setTimeout(() => {
               isDraggingRef.current = false;
               didActuallyDragRef.current = false;
-              setDragEndCounter(c => c + 1);
             }, 0);
           }}
           onNodeClick={(_, node) => {

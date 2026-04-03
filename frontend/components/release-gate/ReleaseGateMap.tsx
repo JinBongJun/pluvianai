@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import ReactFlow, {
   useReactFlow,
   ReactFlowProvider,
@@ -9,7 +9,6 @@ import ReactFlow, {
   useEdgesState,
   Background,
   BackgroundVariant,
-  type Node,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { AgentCardNode } from "@/components/live-view/AgentCardNode";
@@ -30,6 +29,10 @@ import {
   loadReleaseGateSavedPositions,
   saveReleaseGatePositions,
 } from "./releaseGateMapStorage";
+import { createDragAwareNodesChangeHandler } from "@/lib/react-flow/dragAwareNodeChanges";
+import { buildGridLayout, syncNodeSelectionState } from "@/lib/react-flow/graphNodes";
+import { useGraphHistory } from "@/lib/react-flow/useGraphHistory";
+import { useSelectedNodeCenter } from "@/lib/react-flow/useSelectedNodeCenter";
 
 const NODE_TYPES = { agentCard: AgentCardNode };
 const EDGE_TYPES = { default: DrawIOEdge };
@@ -123,37 +126,29 @@ export function ReleaseGateMapContent({
 }) {
   const { fitView, setCenter } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [history, setHistory] = useState<Node[][]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const historyIndexRef = useRef(historyIndex);
+  const [edges, , onEdgesChange] = useEdgesState([]);
+  const {
+    commitHistory,
+    resetHistory,
+    initializeHistory,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+  } = useGraphHistory();
   const isDraggingRef = useRef(false);
   const didActuallyDragRef = useRef(false);
-  const [dragEndCounter, setDragEndCounter] = useState(0);
-  historyIndexRef.current = historyIndex;
   const prevAgentsKeyRef = useRef("");
   const pendingFitAfterNodesRef = useRef(false);
   const pendingRefreshFallbackTimeoutRef = useRef<number | null>(null);
   const suppressSelectedCenterRef = useRef(false);
 
-  const commitHistory = (newNodes: Node[]) => {
-    const idx = historyIndexRef.current;
-    const snapshot = newNodes.map(n => ({ ...n, position: { ...n.position } }));
-    setHistory(prev => [...prev.slice(0, idx + 1), snapshot].slice(-20));
-    setHistoryIndex(prev => Math.min(prev + 1, 19));
-  };
-
   const onAutoLayout = () => {
     setNodes(currentNodes => {
-      const cols = Math.max(1, Math.ceil(Math.sqrt(currentNodes.length)));
-
-      const newNodes = currentNodes.map((n, idx) => ({
-        ...n,
-        position: {
-          x: RG_GRID_SPACING_X * (idx % cols),
-          y: RG_GRID_SPACING_Y * Math.floor(idx / cols),
-        },
-      }));
+      const newNodes = buildGridLayout(currentNodes, {
+        spacingX: RG_GRID_SPACING_X,
+        spacingY: RG_GRID_SPACING_Y,
+      });
 
       setTimeout(() => {
         commitHistory(newNodes);
@@ -172,8 +167,7 @@ export function ReleaseGateMapContent({
     if (!Array.isArray(agents) || agents.length === 0) {
       if (agentsLoaded) {
         setNodes([]);
-        setHistory([]);
-        setHistoryIndex(-1);
+        resetHistory();
         prevAgentsKeyRef.current = "";
       }
       return;
@@ -189,8 +183,7 @@ export function ReleaseGateMapContent({
     );
     const addedAgentIds = Array.from(nextAgentIds).filter(id => !previousAgentIds.has(id));
     if (prevAgentsKeyRef.current !== "" && prevAgentsKeyRef.current !== agentsKey) {
-      setHistory([]);
-      setHistoryIndex(-1);
+      resetHistory();
     }
     prevAgentsKeyRef.current = agentsKey;
     if (addedAgentIds.length > 0) {
@@ -207,44 +200,23 @@ export function ReleaseGateMapContent({
         saved,
       });
     });
-  }, [agentsKey, agents, agentsLoaded, selectedNodeId, setNodes, projectId, projectName]);
+  }, [agentsKey, agents, agentsLoaded, selectedNodeId, setNodes, projectId, projectName, resetHistory]);
 
   // Keep node.selected and blur in sync when selectedNodeId changes (skip during drag to avoid node jump)
   useEffect(() => {
     if (isDraggingRef.current) return;
-    setNodes(current =>
-      current.map(n => ({
-        ...n,
-        selected: n.id === selectedNodeId,
-        data: {
-          ...n.data,
-          blur: !!selectedNodeId && n.id !== selectedNodeId,
-        },
-      }))
-    );
-  }, [selectedNodeId, setNodes, dragEndCounter, isDraggingRef]);
+    setNodes(current => syncNodeSelectionState(current, selectedNodeId));
+  }, [selectedNodeId, setNodes, isDraggingRef]);
 
-  // Camera zoom & pan to selected node
-  useEffect(() => {
-    if (!selectedNodeId) return;
-    if (suppressSelectedCenterRef.current) return;
-
-    const node = nodes.find(n => n.id === selectedNodeId);
-    if (!node) return;
-
-    // We want to center the camera on the *actual* rendered node.
-    // The previous hardcoded addition of 900/640 caused the camera to shoot way off to the bottom right
-    // because ReactFlow's node.position is the top-left corner.
-    // Let's use the actual current width/height of the node as reported by ReactFlow,
-    // or fallback to the base dimensions if it hasn't expanded yet.
-    const currentWidth = node.width ?? 340;
-    const currentHeight = node.height ?? 200;
-
-    const cx = node.position.x + currentWidth / 2;
-    const cy = node.position.y + currentHeight / 2 + FOCUS_Y_OFFSET_UP;
-
-    setCenter(cx, cy, { zoom: FOCUS_ZOOM, duration: FOCUS_DURATION_MS });
-  }, [selectedNodeId, nodes, setCenter]); // 'nodes' dependency added here
+  useSelectedNodeCenter({
+    selectedNodeId,
+    nodes,
+    setCenter,
+    zoom: FOCUS_ZOOM,
+    durationMs: FOCUS_DURATION_MS,
+    offsetY: FOCUS_Y_OFFSET_UP,
+    suppressRef: suppressSelectedCenterRef,
+  });
 
   useEffect(() => {
     if (nodes.length === 0 || selectedNodeId) return;
@@ -298,35 +270,20 @@ export function ReleaseGateMapContent({
   }, [nodes, fitView]);
 
   useEffect(() => {
-    if (nodes.length > 0 && history.length === 0) {
-      setHistory([nodes.map(n => ({ ...n, position: { ...n.position } }))]);
-      setHistoryIndex(0);
-    }
-  }, [nodes, history.length]);
+    initializeHistory(nodes);
+  }, [nodes, initializeHistory]);
 
-  const handleNodesChange = (changes: Parameters<typeof onNodesChange>[0]) => {
-    const isDragging = changes.some(c => c.type === "position" && (c as any).dragging);
-    if (isDragging) {
-      isDraggingRef.current = true;
-      didActuallyDragRef.current = true;
-    }
-    // Filter out ReactFlow's auto-select on drag to prevent color changes
-    const filtered = changes.filter(c => {
-      if (c.type === "select" && isDraggingRef.current) return false;
-      return true;
-    });
-    onNodesChange(filtered);
-    const hasPositionChange = changes.some(c => c.type === "position" && !(c as any).dragging);
-    if (hasPositionChange) {
-      setTimeout(() => {
-        setNodes((currentNodes: Node[]) => {
-          commitHistory(currentNodes);
-          saveReleaseGatePositions(currentNodes, { projectId, projectName });
-          return currentNodes;
-        });
-      }, 0);
-    }
-  };
+  const handleNodesChange = useCallback(
+    createDragAwareNodesChangeHandler({
+      onNodesChangeBase: onNodesChange,
+      setNodes,
+      commitHistory,
+      persistPositions: currentNodes => saveReleaseGatePositions(currentNodes, { projectId, projectName }),
+      isDraggingRef,
+      didActuallyDragRef,
+    }),
+    [onNodesChange, setNodes, commitHistory, projectId, projectName]
+  );
 
   return (
     <div className="flex-1 min-h-0 relative bg-[#090812] w-full h-full overflow-hidden">
@@ -359,22 +316,10 @@ export function ReleaseGateMapContent({
 
       <RGMapToolbar
         onAutoLayout={onAutoLayout}
-        onUndo={() => {
-          if (historyIndex > 0) {
-            const newIndex = historyIndex - 1;
-            setHistoryIndex(newIndex);
-            setNodes(history[newIndex]);
-          }
-        }}
-        onRedo={() => {
-          if (historyIndex < history.length - 1) {
-            const newIndex = historyIndex + 1;
-            setHistoryIndex(newIndex);
-            setNodes(history[newIndex]);
-          }
-        }}
-        canUndo={historyIndex > 0}
-        canRedo={historyIndex < history.length - 1}
+        onUndo={() => undo(setNodes)}
+        onRedo={() => redo(setNodes)}
+        canUndo={canUndo}
+        canRedo={canRedo}
       />
 
       <ReactFlow
@@ -391,7 +336,6 @@ export function ReleaseGateMapContent({
           setTimeout(() => {
             isDraggingRef.current = false;
             didActuallyDragRef.current = false;
-            setDragEndCounter(c => c + 1);
           }, 0);
         }}
         onNodeClick={(_, node) => {

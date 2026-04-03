@@ -5,7 +5,7 @@ import {
   mapHistoryItemToCompletedReleaseGateEntry,
   mergeCompletedReleaseGateEntries,
   type CompletedReleaseGateResultEntry,
-} from "./useReleaseGateValidateRun";
+} from "./releaseGateResultHydration";
 
 describe("useReleaseGateValidateRun helpers", () => {
   it("maps exported behavior report payload into completed result entry", () => {

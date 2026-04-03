@@ -79,12 +79,22 @@ from app.models.user_api_key import UserApiKey
 from app.models.validation_dataset import ValidationDataset
 from app.services.data_lifecycle_service import DataLifecycleService
 from app.domain.live_view_release_gate import build_agent_visibility_context, is_agent_hidden
+from app.domain.live_view_release_gate.hot_path_auth import resolve_hot_path_user_id
+from app.domain.live_view_release_gate.release_gate_history import (
+    build_release_gate_history_session_result as _history_build_release_gate_history_session_result,
+    build_release_gate_run_record as _history_build_release_gate_run_record,
+    resolve_release_gate_run_agent_id as _history_resolve_release_gate_run_agent_id,
+)
+from app.domain.live_view_release_gate.release_gate_hot_access import (
+    ensure_release_gate_hot_path_access as _domain_ensure_release_gate_hot_path_access,
+)
 from app.services.ops_alerting import ops_alerting
 from app.services.replay_service import replay_service, resolve_tool_context_injection_text
 from app.services.data_normalizer import DataNormalizer
 from app.services.subscription_service import SubscriptionService
 from app.services.user_api_key_service import UserApiKeyService
 from app.services.cache_service import cache_service
+from app.services.release_gate_job_support import merge_result_perf_with_job_summary
 from app.services.release_gate_events import (
     invalidate_release_gate_job_poll_cache,
     publish_release_gate_job_updated,
@@ -1368,22 +1378,7 @@ def _job_perf_summary(job: ReleaseGateJob) -> Optional[Dict[str, Optional[int]]]
 def _merge_result_perf_with_job_summary(
     result_json: Dict[str, Any], job: ReleaseGateJob, finished_at: Optional[datetime] = None
 ) -> Dict[str, Any]:
-    merged = dict(result_json)
-    created_at = getattr(job, "created_at", None)
-    started_at = getattr(job, "started_at", None)
-    effective_finished_at = finished_at or getattr(job, "finished_at", None)
-    perf_summary = {
-        "queue_wait_ms": _datetime_delta_ms(created_at, started_at),
-        "execution_wall_ms": _datetime_delta_ms(started_at, effective_finished_at),
-        "total_completion_ms": _datetime_delta_ms(created_at, effective_finished_at),
-    }
-    if all(value is None for value in perf_summary.values()):
-        return merged
-    current_perf = merged.get("perf")
-    perf_payload = dict(current_perf) if isinstance(current_perf, dict) else {}
-    perf_payload.update(perf_summary)
-    merged["perf"] = perf_payload
-    return merged
+    return merge_result_perf_with_job_summary(result_json, job, finished_at)
 
 
 def _job_to_out(job: ReleaseGateJob) -> ReleaseGateJobOut:
@@ -1420,119 +1415,27 @@ def _release_gate_job_poll_cache_ttl(status_value: Any) -> int:
     return RELEASE_GATE_JOB_POLL_CACHE_TTL_RUNNING_SEC
 
 
-def _release_gate_hot_access_cache_key(project_id: int, user_id: int) -> str:
-    return f"user:{int(user_id)}:project:{int(project_id)}:release_gate_hot_access"
-
-
-def _release_gate_hot_auth_cache_key(user_id: int) -> str:
-    return f"user:{int(user_id)}:release_gate_hot_auth"
-
-
 async def _get_release_gate_hot_user_id(
     request: Request,
     token: Optional[str] = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> int:
-    final_token = token or request.cookies.get("access_token")
-    if not final_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=auth_error_detail("no_token", "You need to sign in to access this page."),
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    try:
-        payload = decode_token_or_raise(final_token, expected_type="access")
-    except TokenValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=auth_error_detail(exc.code, exc.message),
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
-
-    user_id = payload.get("sub")
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=auth_error_detail(
-                "access_token_invalid",
-                "Your login session is no longer valid. Please sign in again.",
-            ),
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    user_id_int = int(user_id)
-
-    if hasattr(request, "state"):
-        request.state.auth_method = "jwt"
-        request.state.api_key_scope = None
-
-    if cache_service.enabled:
-        cached = cache_service.get(_release_gate_hot_auth_cache_key(user_id_int))
-        if isinstance(cached, dict) and cached.get("active") is True:
-            return user_id_int
-
-    user_row = db.query(User.id, User.is_active).filter(User.id == user_id_int).first()
-    if not user_row or not bool(user_row.is_active):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user account",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if cache_service.enabled:
-        cache_service.set(_release_gate_hot_auth_cache_key(user_id_int), {"active": True}, ttl=30)
-    return user_id_int
+    return resolve_hot_path_user_id(
+        request,
+        token,
+        db,
+        feature_name="release_gate",
+        auth_cache_ttl_sec=30,
+    )
 
 
 def _ensure_release_gate_hot_path_access(project_id: int, user_id: int, db: Session) -> None:
-    """
-    Hot-path permission check for Release Gate status/stream endpoints.
-
-    Uses a short Redis cache so repeated status reads do not re-run the same
-    project/member queries on every request.
-    """
-    if cache_service.enabled:
-        cached = cache_service.get(_release_gate_hot_access_cache_key(project_id, user_id))
-        if isinstance(cached, dict):
-            if cached.get("not_found"):
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-            if cached.get("allowed"):
-                return
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this project")
-
-    row = (
-        db.query(
-            Project.id.label("project_id"),
-            Project.owner_id.label("owner_id"),
-            Project.organization_id.label("organization_id"),
-            Project.is_active.label("is_active"),
-            Project.is_deleted.label("is_deleted"),
-            ProjectMember.role.label("member_role"),
-        )
-        .outerjoin(
-            ProjectMember,
-            and_(ProjectMember.project_id == Project.id, ProjectMember.user_id == user_id),
-        )
-        .filter(Project.id == project_id)
-        .first()
+    _domain_ensure_release_gate_hot_path_access(
+        project_id,
+        user_id,
+        db,
+        access_cache_ttl_sec=15,
     )
-    if not row or not row.is_active or row.is_deleted:
-        if cache_service.enabled:
-            cache_service.set(
-                _release_gate_hot_access_cache_key(project_id, user_id),
-                {"not_found": True, "allowed": False},
-                ttl=15,
-            )
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-
-    org_role = get_user_organization_role(getattr(row, "organization_id", None), user_id, db)
-    allowed = int(row.owner_id or 0) == user_id or bool(row.member_role) or bool(org_role)
-    if cache_service.enabled:
-        cache_service.set(
-            _release_gate_hot_access_cache_key(project_id, user_id),
-            {"not_found": False, "allowed": allowed},
-            ttl=15,
-        )
-    if not allowed:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this project")
 
 
 def _get_active_release_gate_job(
@@ -4331,111 +4234,24 @@ def _build_release_gate_history_rows(
 def _build_release_gate_history_session_result(
     report: BehaviorReport, gate_meta: Dict[str, Any]
 ) -> Dict[str, Any]:
-    case_results = gate_meta.get("case_results")
-    if not isinstance(case_results, list):
-        case_results = []
-    failure_reasons = gate_meta.get("failure_reasons")
-    if not isinstance(failure_reasons, list):
-        failure_reasons = []
-    perf = gate_meta.get("perf")
-    perf_payload = perf if isinstance(perf, dict) else None
-    thresholds_used = gate_meta.get("thresholds_used")
-    if not isinstance(thresholds_used, dict):
-        thresholds_used = gate_meta.get("thresholds")
-    if not isinstance(thresholds_used, dict):
-        thresholds_used = {}
-    evidence_pack = gate_meta.get("evidence_pack")
-    if not isinstance(evidence_pack, dict):
-        evidence_pack = {
-            "top_regressed_rules": [],
-            "first_violations": [],
-            "failed_replay_snapshot_ids": [],
-            "sample_failure_reasons": failure_reasons[:5],
-        }
-    primary_case = next(
-        (case for case in case_results if isinstance(case, dict) and case.get("case_status") != "pass"),
-        next((case for case in case_results if isinstance(case, dict)), {}),
+    return _history_build_release_gate_history_session_result(
+        report,
+        gate_meta,
+        release_gate_history_status=_release_gate_history_status,
+        coerce_optional_int=_coerce_optional_int,
     )
-    return {
-        "pass": _release_gate_history_status(report.status) == "pass",
-        "summary": gate_meta.get("summary"),
-        "experiment": gate_meta.get("experiment"),
-        "replay_request_meta": gate_meta.get("replay_request_meta"),
-        "failed_signals": gate_meta.get("failed_signals") or [],
-        "exit_code": 0 if _release_gate_history_status(report.status) == "pass" else 1,
-        "report_id": report.id,
-        "trace_id": str(primary_case.get("trace_id") or report.trace_id or ""),
-        "baseline_trace_id": str(report.baseline_run_ref or ""),
-        "failure_reasons": [str(reason) for reason in failure_reasons if str(reason).strip()],
-        "thresholds_used": thresholds_used,
-        "fail_rate": gate_meta.get("fail_rate"),
-        "flaky_rate": gate_meta.get("flaky_rate"),
-        "failed_inputs": gate_meta.get("failed_inputs"),
-        "flaky_inputs": gate_meta.get("flaky_inputs"),
-        "total_inputs": gate_meta.get("total_inputs"),
-        "repeat_runs": _coerce_optional_int(gate_meta.get("repeat_runs")) or 1,
-        "perf": perf_payload,
-        "replay_error_codes": gate_meta.get("replay_error_codes") or [],
-        "missing_provider_keys": gate_meta.get("missing_provider_keys") or [],
-        "case_results": case_results,
-        "evidence_pack": evidence_pack,
-    }
 
 
 def _resolve_release_gate_run_agent_id(db: Session, report: BehaviorReport) -> Optional[str]:
-    normalized_agent_id = str(report.agent_id or "").strip() or None
-    if normalized_agent_id:
-        return normalized_agent_id
-    trace_id = str(report.trace_id or "").strip()
-    if not trace_id:
-        return None
-    latest_snapshot = (
-        db.query(Snapshot)
-        .filter(
-            Snapshot.project_id == report.project_id,
-            Snapshot.trace_id == trace_id,
-            Snapshot.is_deleted.is_(False),
-            Snapshot.agent_id.isnot(None),
-        )
-        .order_by(Snapshot.created_at.desc())
-        .first()
-    )
-    if latest_snapshot and latest_snapshot.agent_id:
-        return str(latest_snapshot.agent_id).strip() or None
-    return None
+    return _history_resolve_release_gate_run_agent_id(db, report)
 
 
 def _build_release_gate_run_record(db: Session, report: BehaviorReport) -> Optional[ReleaseGateRun]:
-    gate_meta = _release_gate_meta(report.summary_json)
-    if not gate_meta:
-        return None
-
-    total_inputs = _coerce_optional_int(gate_meta.get("total_inputs"))
-    failed_inputs = _coerce_optional_int(gate_meta.get("failed_inputs")) or 0
-    flaky_inputs = _coerce_optional_int(gate_meta.get("flaky_inputs")) or 0
-    failed_runs = failed_inputs + flaky_inputs if total_inputs is not None else None
-    passed_runs = (
-        max(total_inputs - failed_runs, 0)
-        if total_inputs is not None and failed_runs is not None
-        else None
-    )
-
-    return ReleaseGateRun(
-        report_id=report.id,
-        project_id=report.project_id,
-        trace_id=report.trace_id,
-        baseline_trace_id=report.baseline_run_ref,
-        agent_id=_resolve_release_gate_run_agent_id(db, report),
-        status=report.status,
-        mode=str(gate_meta.get("mode") or "replay_test"),
-        repeat_runs=_coerce_optional_int(gate_meta.get("repeat_runs")),
-        total_inputs=total_inputs,
-        passed_runs=passed_runs,
-        failed_runs=failed_runs,
-        passed_attempts=_coerce_optional_int(gate_meta.get("passed_attempts")),
-        total_attempts=_coerce_optional_int(gate_meta.get("total_attempts")),
-        thresholds_json=gate_meta.get("thresholds"),
-        created_at=report.created_at or datetime.now(timezone.utc),
+    return _history_build_release_gate_run_record(
+        db,
+        report,
+        release_gate_meta=_release_gate_meta,
+        coerce_optional_int=_coerce_optional_int,
     )
 
 
