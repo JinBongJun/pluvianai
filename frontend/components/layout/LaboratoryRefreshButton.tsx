@@ -39,6 +39,7 @@ export function LaboratoryRefreshButton({ projectId }: { projectId: number }) {
     <div className="absolute left-6 top-[108px] z-[100]">
       <button
         type="button"
+        data-testid="laboratory-refresh-button"
         title="Refresh agent lists (Live View + Release Gate) and fit the map"
         onClick={() => void onClick()}
         className={clsx(

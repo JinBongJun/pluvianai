@@ -33,7 +33,13 @@ export function LiveViewToolbar({
   return (
     <div className="absolute left-6 top-[180px] z-50 flex flex-col gap-3.5">
       <div className={groupBase}>
-        <button type="button" className={btnBase} onClick={onAutoLayout} title="Auto Layout">
+        <button
+          type="button"
+          data-testid="live-view-auto-layout-btn"
+          className={btnBase}
+          onClick={onAutoLayout}
+          title="Auto Layout"
+        >
           <LayoutGrid className="w-[18px] h-[18px]" strokeWidth={1.5} />
         </button>
       </div>

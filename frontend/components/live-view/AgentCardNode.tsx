@@ -157,7 +157,7 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
           ? "bg-[#1C1C1E] border-rose-500/40 shadow-lg"
           : "bg-[#1C1C1E] border-[#3A3A3C] shadow-lg"
       )}
-      data-testid={isRG ? `rg-node-${id}` : undefined}
+      data-testid={isRG ? `rg-node-${id}` : `lv-node-${id}`}
       style={{ transformStyle: "preserve-3d", perspective: "1000px" }}
     >
       {/* Front Face */}

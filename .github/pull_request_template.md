@@ -18,6 +18,7 @@
 - [ ] Integration tests
 - [ ] E2E/manual checks
 - [ ] Dry-run in staging (if applicable)
+- [ ] Release Gate hydration / merge contract ([ADR-0001](../docs/adr/ADR-0001-release-gate-hydration-contract.md)) — applies only if this PR changes stacked results, history hydration, or related delete/dismiss flows
 
 Commands run:
 ```bash
