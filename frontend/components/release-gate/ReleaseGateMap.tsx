@@ -21,6 +21,11 @@ import {
   LABORATORY_REFRESH_EVENT,
   type LaboratoryRefreshDetail,
 } from "@/lib/laboratoryLabRefresh";
+import {
+  mapAgentsToReleaseGateNodes,
+  RG_GRID_SPACING_X,
+  RG_GRID_SPACING_Y,
+} from "./mapAgentsToReleaseGateNodes";
 
 const NODE_TYPES = { agentCard: AgentCardNode };
 const EDGE_TYPES = { default: DrawIOEdge };
@@ -97,10 +102,6 @@ function RGMapToolbar({
   );
 }
 
-const GRID_SPACING_X = 300;
-const GRID_SPACING_Y = 200;
-const GRID_COLS = 3;
-
 function getStorageKey(projectName?: string) {
   return `rg-node-positions-${projectName || "default"}`;
 }
@@ -152,6 +153,7 @@ export function ReleaseGateMapContent({
   const prevAgentsKeyRef = useRef("");
   const pendingFitAfterNodesRef = useRef(false);
   const pendingRefreshFallbackTimeoutRef = useRef<number | null>(null);
+  const suppressSelectedCenterRef = useRef(false);
 
   const commitHistory = (newNodes: Node[]) => {
     const idx = historyIndexRef.current;
@@ -167,8 +169,8 @@ export function ReleaseGateMapContent({
       const newNodes = currentNodes.map((n, idx) => ({
         ...n,
         position: {
-          x: GRID_SPACING_X * (idx % cols),
-          y: GRID_SPACING_Y * Math.floor(idx / cols),
+          x: RG_GRID_SPACING_X * (idx % cols),
+          y: RG_GRID_SPACING_Y * Math.floor(idx / cols),
         },
       }));
 
@@ -217,36 +219,12 @@ export function ReleaseGateMapContent({
     const saved = loadSavedPositions(projectName);
 
     setNodes(currentNodes => {
-      const updatedNodes = agents.map((agent: any, idx: number) => {
-        const existingNode = currentNodes.find(n => n.id === agent.agent_id);
-        const isSelected = agent.agent_id === selectedNodeId;
-        const savedPos = saved[agent.agent_id];
-        const defaultPos = {
-          x: GRID_SPACING_X * (idx % GRID_COLS),
-          y: GRID_SPACING_Y * Math.floor(idx / GRID_COLS),
-        };
-
-        return {
-          id: agent.agent_id,
-          type: "agentCard",
-          data: {
-            label: agent.display_name || agent.agent_id,
-            model: agent.model,
-            total: agent.total,
-            worstCount: agent.worst_count,
-            isOfficial: agent.is_official || false,
-            isGhost: agent.is_ghost || false,
-            driftStatus: agent.drift_status || "official",
-            signals: agent.signals,
-            theme: "releaseGate",
-            blur: !!selectedNodeId && !isSelected,
-          },
-          position: existingNode?.position || savedPos || defaultPos,
-          selected: isSelected,
-        };
+      return mapAgentsToReleaseGateNodes({
+        agents,
+        selectedNodeId,
+        currentNodes,
+        saved,
       });
-
-      return updatedNodes;
     });
   }, [agentsKey, agents, agentsLoaded, selectedNodeId, setNodes, projectName]);
 
@@ -268,6 +246,7 @@ export function ReleaseGateMapContent({
   // Camera zoom & pan to selected node
   useEffect(() => {
     if (!selectedNodeId) return;
+    if (suppressSelectedCenterRef.current) return;
 
     const node = nodes.find(n => n.id === selectedNodeId);
     if (!node) return;
@@ -300,12 +279,14 @@ export function ReleaseGateMapContent({
       const d = (e as CustomEvent<LaboratoryRefreshDetail>).detail;
       if (!d || d.projectId !== projectId) return;
       pendingFitAfterNodesRef.current = true;
+      suppressSelectedCenterRef.current = true;
       if (pendingRefreshFallbackTimeoutRef.current != null) {
         window.clearTimeout(pendingRefreshFallbackTimeoutRef.current);
       }
       pendingRefreshFallbackTimeoutRef.current = window.setTimeout(() => {
         if (!pendingFitAfterNodesRef.current) return;
         pendingFitAfterNodesRef.current = false;
+        suppressSelectedCenterRef.current = false;
         fitView({ duration: 800, padding: 0.2 });
       }, 320);
     };
@@ -328,6 +309,9 @@ export function ReleaseGateMapContent({
     }
     const t = window.setTimeout(() => {
       fitView({ duration: 800, padding: 0.2 });
+      window.setTimeout(() => {
+        suppressSelectedCenterRef.current = false;
+      }, 0);
     }, 120);
     return () => window.clearTimeout(t);
   }, [nodes, fitView]);
