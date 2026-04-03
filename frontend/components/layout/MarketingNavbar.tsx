@@ -6,7 +6,7 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useAuthSession } from "@/hooks/useAuthSession";
 
-type NavActive = "home" | "docs";
+type NavActive = "home" | "docs" | "blog";
 
 interface MarketingNavbarProps {
   active?: NavActive;
@@ -101,6 +101,16 @@ export default function MarketingNavbar({ active = "home" }: MarketingNavbarProp
             >
               Pricing
             </a>
+            <Link
+              href="/blog"
+              className={`text-lg font-extrabold transition-colors ${
+                active === "blog"
+                  ? "text-emerald-400 underline underline-offset-4"
+                  : "text-slate-400 hover:text-emerald-400"
+              }`}
+            >
+              Laboratory
+            </Link>
             <Link
               href="/docs"
               className={`text-lg font-extrabold transition-colors ${
