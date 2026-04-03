@@ -1065,4 +1065,46 @@ test.describe("Authenticated tool browser flow", () => {
       await api.dispose();
     }
   });
+
+  test("release gate refresh button reveals a newly added agent without auto layout", async ({
+    page,
+  }) => {
+    test.setTimeout(600000);
+    requireCredentials();
+
+    const api = await playwrightRequest.newContext({ baseURL: API_BASE_URL });
+    const session = await loginToBackend(api);
+    const token = session.accessToken;
+    const { orgId, projectId } = await ensureOrgAndProject(api, token);
+    const seeded = await seedToolSnapshot(api, token, projectId, {
+      promptPrefix: "PW-RG-REFRESH-BASE",
+    });
+    const newAgentId = `pw-rg-refresh-${Date.now()}`;
+
+    try {
+      await loginWithSessionCookies(page, session);
+      await openReleaseGateFromSnapshot(page, {
+        orgId,
+        projectId,
+        agentId: seeded.snapshotAgentId,
+        snapshotId: seeded.snapshotId,
+      });
+
+      await expect(page.getByTestId(`rg-node-${seeded.snapshotAgentId}`)).toBeVisible({
+        timeout: 30000,
+      });
+
+      await seedToolSnapshot(api, token, projectId, {
+        agentId: newAgentId,
+        promptPrefix: "PW-RG-REFRESH-NEW",
+      });
+
+      await expect(page.getByTestId(`rg-node-${newAgentId}`)).toHaveCount(0);
+      await page.getByTitle("Refresh agent lists (Live View + Release Gate) and fit the map").click();
+      await expect(page.getByTestId(`rg-node-${newAgentId}`)).toBeVisible({ timeout: 30000 });
+      await expect(page.getByTestId(`rg-node-${seeded.snapshotAgentId}`)).toBeVisible();
+    } finally {
+      await api.dispose();
+    }
+  });
 });

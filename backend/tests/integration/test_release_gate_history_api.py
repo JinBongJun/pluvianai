@@ -142,6 +142,60 @@ class TestReleaseGateHistoryApi:
         assert payload["items"][0]["failed_attempts"] == 2
         assert payload["items"][0]["total_attempts"] == 3
         assert payload["items"][0]["session_total_inputs"] == 2
+        assert payload["items"][0]["session_result"] == {
+            "pass": False,
+            "summary": None,
+            "experiment": None,
+            "replay_request_meta": None,
+            "failed_signals": [],
+            "exit_code": 1,
+            "report_id": report_id,
+            "trace_id": "rg-trace-counts-a",
+            "baseline_trace_id": "",
+            "failure_reasons": [],
+            "thresholds_used": {"fail_rate_max": 0.2},
+            "fail_rate": None,
+            "flaky_rate": None,
+            "failed_inputs": 2,
+            "flaky_inputs": 0,
+            "total_inputs": 2,
+            "repeat_runs": 3,
+            "perf": None,
+            "replay_error_codes": [],
+            "missing_provider_keys": [],
+            "case_results": [
+                {
+                    "run_index": 1,
+                    "trace_id": "rg-trace-counts-a",
+                    "snapshot_id": 101,
+                    "case_status": "flaky",
+                    "summary": {"pass_ratio": 0.3333},
+                    "attempts": [
+                        {"pass": True},
+                        {"pass": False},
+                        {"pass": False},
+                    ],
+                },
+                {
+                    "run_index": 2,
+                    "trace_id": "rg-trace-counts-b",
+                    "snapshot_id": 102,
+                    "case_status": "fail",
+                    "summary": {"pass_ratio": 0.0},
+                    "attempts": [
+                        {"pass": False},
+                        {"pass": False},
+                        {"pass": False},
+                    ],
+                },
+            ],
+            "evidence_pack": {
+                "top_regressed_rules": [],
+                "first_violations": [],
+                "failed_replay_snapshot_ids": [],
+                "sample_failure_reasons": [],
+            },
+        }
         assert payload["items"][1]["passed_attempts"] == 0
         assert payload["items"][1]["failed_attempts"] == 3
         assert payload["items"][1]["total_attempts"] == 3

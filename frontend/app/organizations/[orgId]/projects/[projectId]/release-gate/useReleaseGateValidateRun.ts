@@ -2,7 +2,7 @@
 
 import type { MutableRefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ReleaseGateResult } from "@/lib/api";
+import type { ReleaseGateHistoryItem, ReleaseGateResult } from "@/lib/api";
 import { behaviorAPI, releaseGateAPI } from "@/lib/api";
 import {
   API_URL,
@@ -136,6 +136,22 @@ export function mapExportedReportToCompletedReleaseGateEntry(
     reportId,
     result,
     completedAtMs: parseCompletedAtMs(reportObj.created_at ?? fallbackCreatedAt),
+  };
+}
+
+export function mapHistoryItemToCompletedReleaseGateEntry(
+  item: Pick<ReleaseGateHistoryItem, "report_id" | "created_at" | "session_created_at" | "session_result">
+): CompletedReleaseGateResultEntry | null {
+  const reportId = String(item?.report_id || "").trim();
+  const sessionResult = item?.session_result;
+  if (!reportId || !sessionResult || typeof sessionResult !== "object") return null;
+  return {
+    reportId,
+    result: {
+      ...(sessionResult as ReleaseGateResult),
+      report_id: reportId,
+    },
+    completedAtMs: parseCompletedAtMs(item.session_created_at ?? item.created_at),
   };
 }
 
@@ -383,6 +399,7 @@ export function useReleaseGateValidateRun(options: {
           .map(item => ({
             reportId: String(item.report_id || "").trim(),
             createdAt: item.session_created_at ?? item.created_at ?? null,
+            sessionResult: item.session_result ?? null,
           }))
           .filter(item => {
             if (!item.reportId || seenReportIds.has(item.reportId)) return false;
@@ -395,6 +412,13 @@ export function useReleaseGateValidateRun(options: {
         const hydratedEntries = (
           await Promise.all(
             reportsToHydrate.map(async item => {
+              const hydratedFromHistory = mapHistoryItemToCompletedReleaseGateEntry({
+                report_id: item.reportId,
+                created_at: item.createdAt,
+                session_created_at: item.createdAt,
+                session_result: item.sessionResult,
+              });
+              if (hydratedFromHistory) return hydratedFromHistory;
               try {
                 const report = await behaviorAPI.exportReport(projectId, item.reportId, "json");
                 return mapExportedReportToCompletedReleaseGateEntry(report, item.createdAt);

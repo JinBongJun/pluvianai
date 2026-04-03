@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   mapExportedReportToCompletedReleaseGateEntry,
+  mapHistoryItemToCompletedReleaseGateEntry,
   mergeCompletedReleaseGateEntries,
   type CompletedReleaseGateResultEntry,
 } from "./useReleaseGateValidateRun";
@@ -60,5 +61,39 @@ describe("useReleaseGateValidateRun helpers", () => {
     expect(merged.map(entry => entry.reportId)).toEqual(["rep-2", "rep-1"]);
     expect(merged[1]?.result.pass).toBe(true);
     expect(merged).toHaveLength(2);
+  });
+
+  it("maps history session payload into completed result entry without export call", () => {
+    const entry = mapHistoryItemToCompletedReleaseGateEntry({
+      report_id: "rep-2",
+      created_at: "2026-04-04T02:03:04.000Z",
+      session_created_at: "2026-04-04T02:03:04.000Z",
+      session_result: {
+        report_id: "rep-2",
+        pass: false,
+        exit_code: 1,
+        trace_id: "trace-2",
+        baseline_trace_id: "base-2",
+        failure_reasons: ["Missing required field"],
+        thresholds_used: { fail_rate_max: 0.2 },
+        repeat_runs: 2,
+        evidence_pack: {
+          top_regressed_rules: [],
+          first_violations: [],
+          failed_replay_snapshot_ids: [],
+          sample_failure_reasons: ["Missing required field"],
+        },
+      } as any,
+    });
+
+    expect(entry).toMatchObject({
+      reportId: "rep-2",
+      result: {
+        report_id: "rep-2",
+        pass: false,
+        trace_id: "trace-2",
+      },
+    });
+    expect(entry?.completedAtMs).toBe(Date.parse("2026-04-04T02:03:04.000Z"));
   });
 });
